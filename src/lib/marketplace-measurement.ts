@@ -12,6 +12,12 @@ export const MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS = [
   "marketplace_filter_applied",
   "marketplace_seed_template_selected",
   "marketplace_create_from_template_started",
+  "marketplace_intake_triage_routed",
+  "marketplace_public_receipt_previewed",
+  "marketplace_public_receipt_published",
+  "marketplace_public_receipt_revoked",
+  "marketplace_claim_correction_requested",
+  "marketplace_claim_correction_resolved",
 ] as const satisfies readonly FunnelEventType[];
 
 export const MARKETPLACE_KPI_KEYS = [
@@ -70,6 +76,12 @@ export const MARKETPLACE_KPI_KEYS = [
   "participant_confirmation_supersession_count",
   "renewed_confirmation_completion_rate",
   "consent_quality_failure_block_count",
+  "marketplace_intake_triage_route_count",
+  "public_receipt_preview_count",
+  "public_receipt_publication_count",
+  "public_receipt_revocation_count",
+  "claim_correction_request_count",
+  "claim_correction_resolution_count",
 ] as const;
 
 export type MarketplaceKpiKey = (typeof MARKETPLACE_KPI_KEYS)[number];
@@ -118,7 +130,7 @@ export interface MarketplaceLiveMetricExclusion {
   count: number;
   includedInLiveMetrics: false;
   reason: string;
-  source: "demo" | "rounds" | "seed_templates" | "worked_examples";
+  source: "demo" | "external_crecm" | "seed_templates" | "worked_examples";
 }
 
 export interface MarketplaceKpiSnapshot {
@@ -197,6 +209,82 @@ const MARKETPLACE_MEASUREMENT_EVENT_SPECS: MarketplaceMeasurementEventSpec[] = [
     eventType: "marketplace_create_from_template_started",
     source: "browser_funnel",
   },
+  {
+    allowedMetadata: [
+      "intakeRoute",
+      "liveMetricEligible",
+      "routeFamily",
+      "routeEligible",
+    ],
+    decisionUse:
+      "Measure which intake triage route visitors choose without recording exact wishes, private notes, or counterparty details.",
+    eventType: "marketplace_intake_triage_routed",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: [
+      "claimKind",
+      "liveMetricEligible",
+      "proofTier",
+      "publicationState",
+      "routeFamily",
+    ],
+    decisionUse:
+      "Measure opt-in public receipt preview interest while keeping receipt content private by default.",
+    eventType: "marketplace_public_receipt_previewed",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: [
+      "claimKind",
+      "liveMetricEligible",
+      "proofTier",
+      "publicationState",
+      "routeFamily",
+    ],
+    decisionUse:
+      "Count opt-in public receipt publication as a reviewed aggregate action, not proof of objective moral endorsement.",
+    eventType: "marketplace_public_receipt_published",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: [
+      "claimKind",
+      "liveMetricEligible",
+      "publicationState",
+      "revocationReasonBucket",
+      "routeFamily",
+    ],
+    decisionUse:
+      "Track public receipt revocation as a privacy and claim-hygiene signal using only bucketed reasons.",
+    eventType: "marketplace_public_receipt_revoked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: [
+      "claimKind",
+      "correctionReasonBucket",
+      "liveMetricEligible",
+      "routeFamily",
+    ],
+    decisionUse:
+      "Track claim correction requests with bucketed reason metadata and no receipt URLs, raw evidence, or contact data.",
+    eventType: "marketplace_claim_correction_requested",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: [
+      "claimKind",
+      "correctionReasonBucket",
+      "liveMetricEligible",
+      "resolutionStatus",
+      "routeFamily",
+    ],
+    decisionUse:
+      "Measure whether claim corrections resolve without exposing claimant identity, private evidence, or raw dispute text.",
+    eventType: "marketplace_claim_correction_resolved",
+    source: "browser_funnel",
+  },
 ];
 
 const COUNT_KPI_KEYS = new Set<MarketplaceKpiKey>([
@@ -210,16 +298,22 @@ const COUNT_KPI_KEYS = new Set<MarketplaceKpiKey>([
   "consent_quality_failure_block_count",
   "contact_consent_violation_block_count",
   "content_moderation_block_count",
+  "claim_correction_request_count",
+  "claim_correction_resolution_count",
   "demo_data_live_mix_block_count",
   "deployment_config_drift_block_count",
   "duplicate_identity_flags",
   "environment_data_promotion_block_count",
   "impact_claim_review_block_count",
   "live_offer_count",
+  "marketplace_intake_triage_route_count",
   "participant_confirmation_expired_block_count",
   "participant_confirmation_supersession_count",
   "privacy_access_log_count",
   "privacy_grant_missing_block_count",
+  "public_receipt_preview_count",
+  "public_receipt_publication_count",
+  "public_receipt_revocation_count",
   "review_default_approval_block_count",
   "reviewable_offer_count",
   "reviewer_overturns",
@@ -252,7 +346,9 @@ const KpiSourceTablesByPrefix: Array<[RegExp, string[]]> = [
   [/account|takeover/, ["account_security_events"]],
   [/backup|deployment|schema_migration|environment|demo_data|provider_event|user_facing_status/, ["release_gates", "environment_data_isolation_records"]],
   [/privacy/, ["privacy_grants", "privacy_access_logs"]],
-  [/impact_claim|transfer_as_impact/, ["impact_claim_records", "payout_milestones"]],
+  [/impact_claim|transfer_as_impact|claim_correction/, ["impact_claim_records", "claim_correction_records", "payout_milestones"]],
+  [/public_receipt/, ["public_receipt_cards", "claim_correction_records"]],
+  [/marketplace_intake/, ["marketplace_intake_triage_events"]],
   [/blocked_project|anti_threat|false_match|challenge_window/, ["dispute_cases", "appeal_cases"]],
   [/status_|opaque_blocker/, ["marketplace_state_events"]],
   [/consent_quality|renewed_confirmation/, ["consent_quality_records", "participant_confirmation_records"]],
@@ -377,10 +473,10 @@ function buildNonLiveExclusions(
       source: "worked_examples",
     },
     {
-      count: tabCounts.get("rounds") ?? 0,
+      count: tabCounts.get("external_crecm") ?? 0,
       includedInLiveMetrics: false,
-      reason: "Rounds are no-capture public-good previews until they clear release policy.",
-      source: "rounds",
+      reason: "The external CRECM module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
+      source: "external_crecm",
     },
     {
       count: tabCounts.get("demo") ?? 0,

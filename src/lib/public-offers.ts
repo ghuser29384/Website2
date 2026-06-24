@@ -39,7 +39,12 @@ export type PublicOfferReviewState =
   | "manual-review-required"
   | "reviewed"
   | "disputed";
-export type PublicMarketplaceTab = "live" | "rounds" | "worked_examples" | "demo";
+export type PublicMarketplaceTab =
+  | "live"
+  | "templates"
+  | "worked_examples"
+  | "demo"
+  | "external_crecm";
 export type PublicOffersTab = PublicMarketplaceTab | "all";
 export type PublicOffersSort =
   | "newest"
@@ -99,9 +104,10 @@ export interface PublicOffersTabSummary {
   href: string;
   source:
     | "live_offer_directory"
-    | "public_good_rounds"
+    | "reviewed_seed_templates"
     | "worked_example_directory"
-    | "demo_records";
+    | "demo_records"
+    | "external_crecm_module";
   noLiveAgreementCount: boolean;
   description: string;
 }
@@ -231,13 +237,15 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "The public offers API is not escrow, custody, legal advice, tax advice, or contract formation.",
   "Participant scores are participant-stated context, not platform moral rankings.",
   "Worked examples are not live liquidity and require manual review before reliance.",
+  "Moral public-goods and Common-Ground-Budget mechanism work belongs in the external CRECM module, not the non-public-goods marketplace offer contract.",
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
 const PUBLIC_MARKETPLACE_TAB_ORDER = [
   "live",
-  "rounds",
+  "templates",
   "worked_examples",
   "demo",
+  "external_crecm",
 ] as const satisfies readonly PublicMarketplaceTab[];
 const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
   ...PUBLIC_OFFER_NON_CLAIMS,
@@ -315,12 +323,26 @@ function clampPageSize(value: string) {
 function parseTab(searchParams: URLSearchParams, defaultTab: PublicOffersTab) {
   const value = readFirst(searchParams, "tab", "view");
 
-  if (value === "live" || value === "rounds" || value === "demo" || value === "all") {
+  if (
+    value === "live" ||
+    value === "templates" ||
+    value === "demo" ||
+    value === "external_crecm" ||
+    value === "all"
+  ) {
     return value;
   }
 
   if (value === "examples" || value === "worked-examples" || value === "worked_examples") {
     return "worked_examples";
+  }
+
+  if (value === "create" || value === "create-from-template" || value === "create_from_template") {
+    return "templates";
+  }
+
+  if (value === "rounds" || value === "crecm" || value === "mpgf" || value === "public-goods") {
+    return "external_crecm";
   }
 
   return defaultTab;
@@ -466,13 +488,13 @@ function buildPublicOffersTabSummaries({
       description: "Public offers remain review-gated before reliance, agreement creation, or payment.",
     },
     {
-      value: "rounds",
-      label: "Rounds",
-      count: getPublicMarketplaceRoundCount(),
-      href: "/offers?tab=rounds",
-      source: "public_good_rounds",
+      value: "templates",
+      label: "Create from template",
+      count: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+      href: "/offers?tab=templates",
+      source: "reviewed_seed_templates",
       noLiveAgreementCount: true,
-      description: "Common Ground Budget rounds are no-capture public-good previews, not offer listings.",
+      description: "Reviewed seed templates are non-reliance-bearing draft scaffolds, not live offers.",
     },
     {
       value: "worked_examples",
@@ -491,6 +513,16 @@ function buildPublicOffersTabSummaries({
       source: "demo_records",
       noLiveAgreementCount: true,
       description: "Demo records stay labeled as sandbox data and cannot inflate live offer metrics.",
+    },
+    {
+      value: "external_crecm",
+      label: "External CRECM module",
+      count: getPublicMarketplaceRoundCount(),
+      href: "/offers?tab=external_crecm",
+      source: "external_crecm_module",
+      noLiveAgreementCount: true,
+      description:
+        "Moral public-goods and Common-Ground-Budget mechanism work belongs to the external CRECM module, not live marketplace offers.",
     },
   ];
 }
@@ -884,7 +916,7 @@ export function buildPublicOffersCollectionPayload({
   const tabListings = allListings.filter((listing) => {
     if (tab === "live") return listing.source === "live";
     if (tab === "worked_examples") return listing.source === "worked_example";
-    if (tab === "rounds" || tab === "demo") return false;
+    if (tab === "templates" || tab === "demo" || tab === "external_crecm") return false;
     return true;
   });
   const facetScope = tabListings.filter((listing) => listingMatchesSearch(listing, query));
@@ -1071,13 +1103,22 @@ function reviewedSeedTemplatesSatisfyBootstrapPath(
   templates: readonly PublicReviewedSeedTemplateSummary[],
 ) {
   const donationOffsetCount = templates.filter((template) => template.format === "donation_offset").length;
-  const pledgeSwapCount = templates.filter((template) => template.format === "pledge_swap").length;
+  const pledgeSwapTemplates = templates.filter((template) => template.format === "pledge_swap");
+  const pledgeSwapCount = pledgeSwapTemplates.length;
+  const pledgeSwapTemplatesUseMicroPledgeDefaults = pledgeSwapTemplates.every(
+    (template) =>
+      template.microPledgeDefaults?.defaultDurations.includes("One meal") &&
+      template.microPledgeDefaults.defaultDurations.includes("A few days") &&
+      !template.microPledgeDefaults.defaultDurations.includes("30 days") &&
+      !/30-day/i.test(template.title),
+  );
 
   return (
     donationOffsetCount >= 2 &&
     donationOffsetCount <= 4 &&
     pledgeSwapCount >= 2 &&
     pledgeSwapCount <= 4 &&
+    pledgeSwapTemplatesUseMicroPledgeDefaults &&
     templates.every(
       (template) =>
         template.reviewStatus === "admin_reviewed" &&
@@ -1116,7 +1157,7 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live, rounds, worked examples, and demo lanes",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and external CRECM module lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1278,7 +1319,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live, rounds, worked examples, and demo lanes",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and external CRECM module lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),

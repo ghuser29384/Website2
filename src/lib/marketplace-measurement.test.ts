@@ -16,17 +16,25 @@ test("marketplace measurement contract covers privacy-safe events and KPI keys",
   const validation = validateMarketplaceMeasurementContract();
   const eventTypes = contract.eventSpecs.map((event) => event.eventType);
   const kpiKeys = contract.kpiDefinitions.map((kpi) => kpi.key);
+  const receiptPreviewSpec = contract.eventSpecs.find(
+    (event) => event.eventType === "marketplace_public_receipt_previewed",
+  );
 
   assert.equal(validation.status, "pass");
   assert.deepEqual(validation.blockers, []);
   assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.every((eventType) => eventTypes.includes(eventType)));
   assert.ok(MARKETPLACE_KPI_KEYS.every((key) => kpiKeys.includes(key)));
+  assert.ok(eventTypes.includes("marketplace_intake_triage_routed"));
+  assert.ok(eventTypes.includes("marketplace_claim_correction_resolved"));
+  assert.ok(kpiKeys.includes("public_receipt_preview_count"));
+  assert.ok(kpiKeys.includes("claim_correction_resolution_count"));
+  assert.ok(receiptPreviewSpec?.allowedMetadata.includes("publicationState"));
   assert.ok(contract.minimumPublicCount >= 3);
   assert.ok(contract.privacyRules.some((rule) => /raw wishes, private evidence, source notes/i.test(rule)));
   assert.ok(contract.contractTests.includes("marketplace_live_metric_exclusion"));
 });
 
-test("marketplace KPI snapshot excludes seed templates, worked examples, rounds, and demo records from live metrics", () => {
+test("marketplace KPI snapshot excludes seed templates, worked examples, external CRECM module, and demo records from live metrics", () => {
   const publicOffersPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=all"),
@@ -45,6 +53,7 @@ test("marketplace KPI snapshot excludes seed templates, worked examples, rounds,
   assert.equal(reviewableOfferCount?.publishedValue, 0);
   assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "seed_templates" && entry.count === 4));
   assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "worked_examples" && entry.count === 8));
+  assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "external_crecm" && entry.count === 1));
   assert.ok(snapshot.excludedNonLiveInputs.every((entry) => entry.includedInLiveMetrics === false));
 });
 

@@ -130,6 +130,8 @@ const marketplaceKpiKeys: MarketplaceKpiKey[] = [
   "common_ground_budget_activation_rate",
   "threshold_clear_rate",
   "sponsor_leverage_ratio",
+  "public_receipt_preview_count",
+  "claim_correction_resolution_count",
   "demo_data_live_mix_block_count",
   "privacy_leakage_incidents_target_zero",
 ];

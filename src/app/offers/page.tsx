@@ -82,7 +82,17 @@ const VERIFICATION_FILTERS = [
   "Public pledge",
 ] as const;
 
-const DURATION_FILTERS = ["30 days", "3 months", "6 months", "12 months", "Open-ended"] as const;
+const DURATION_FILTERS = [
+  "One meal",
+  "A few meals",
+  "One day",
+  "A few days",
+  "30 days",
+  "3 months",
+  "6 months",
+  "12 months",
+  "Open-ended",
+] as const;
 
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
@@ -91,17 +101,19 @@ const SORT_FILTER_CHIPS = [
 ] as const;
 
 const DIRECTORY_TABS = [
-  { label: "Live", value: "live" },
-  { label: "Rounds", value: "rounds" },
+  { label: "Live offers", value: "live" },
+  { label: "Create from template", value: "templates" },
   { label: "Worked examples", value: "worked_examples" },
-  { label: "Demo", value: "demo" },
+  { label: "Demo data", value: "demo" },
+  { label: "External CRECM module", value: "external_crecm" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
   "live",
-  "rounds",
+  "templates",
   "worked_examples",
   "demo",
+  "external_crecm",
 ] as const;
 
 const FORMAT_FILTERS = [
@@ -165,11 +177,20 @@ interface MarketplaceListing {
 
 const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
   all: "All listings",
-  demo: "Demo",
-  live: "Live",
-  rounds: "Rounds",
+  demo: "Demo data",
+  external_crecm: "External CRECM module",
+  live: "Live offers",
+  templates: "Create from template",
   worked_examples: "Worked examples",
 };
+
+const EXTERNAL_CRECM_MODULE = {
+  href: "/mpgf",
+  label: "External CRECM module",
+  sourceNote: "Moral public-goods and Common-Ground-Budget mechanism work belongs in moralpublicgoods102.md / CRECM v1.96.",
+  summary:
+    "Public-goods rounds are linked from this marketplace but are not specified, counted, or promoted as live non-public-goods offers.",
+} as const;
 
 function readParam(searchParams: Record<string, string | string[] | undefined>, key: string) {
   const value = searchParams[key];
@@ -193,12 +214,26 @@ function parsePage(value: string | string[] | undefined) {
 }
 
 function parseDirectoryView(value: string, fallback: DirectoryView = "live"): DirectoryView {
-  if (value === "live" || value === "rounds" || value === "demo" || value === "all") {
+  if (
+    value === "live" ||
+    value === "templates" ||
+    value === "demo" ||
+    value === "external_crecm" ||
+    value === "all"
+  ) {
     return value;
   }
 
   if (value === "examples" || value === "worked-examples" || value === "worked_examples") {
     return "worked_examples";
+  }
+
+  if (value === "create" || value === "create-from-template" || value === "create_from_template") {
+    return "templates";
+  }
+
+  if (value === "crecm" || value === "mpgf" || value === "public-goods" || value === "rounds") {
+    return "external_crecm";
   }
 
   return fallback;
@@ -406,7 +441,7 @@ function listingMatchesFilters(
     return false;
   }
 
-  if (filters.view === "rounds" || filters.view === "demo") {
+  if (filters.view === "templates" || filters.view === "demo" || filters.view === "external_crecm") {
     return false;
   }
 
@@ -680,8 +715,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   );
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
+    external_crecm: seedRoundCount,
     live: liveOfferCount,
-    rounds: seedRoundCount,
+    templates: seedTemplateCount,
     worked_examples: workedExampleCount,
   };
   const activeFilters = {
@@ -731,15 +767,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   });
   const activeViewLabel = DIRECTORY_VIEW_LABELS[view];
   const resultCountLabel =
-    view === "rounds"
-      ? `${seedRoundCount} ${seedRoundCount === 1 ? "round" : "rounds"}`
-      : view === "demo"
+    view === "templates"
+      ? `${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"}`
+      : view === "external_crecm"
+        ? `${seedRoundCount} external ${seedRoundCount === 1 ? "module" : "modules"}`
+        : view === "demo"
         ? `${seedRoundProjects.length} demo ${seedRoundProjects.length === 1 ? "record" : "records"}`
         : `${filteredListings.length} ${filteredListings.length === 1 ? "listing" : "listings"}`;
+  const toolbarResultCountLabel =
+    view === "templates"
+      ? `Showing ${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"} in ${activeViewLabel.toLowerCase()}.`
+      : view === "external_crecm"
+        ? `Showing ${seedRoundCount} linked external CRECM ${seedRoundCount === 1 ? "module" : "modules"}.`
+        : `Showing ${filteredListings.length} ${filteredListings.length === 1 ? "result" : "results"} in ${activeViewLabel.toLowerCase()}.`;
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
     if (view === "worked_examples" && listing.source !== "example") return false;
-    if (view === "rounds" || view === "demo") return false;
+    if (view === "templates" || view === "external_crecm" || view === "demo") return false;
     return listingMatchesSearch(listing, searchQuery);
   });
   const formatCounts = FORMAT_FILTERS.map((option) => ({
@@ -807,6 +851,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       label: "Worked examples",
     },
     {
+      active: view === "templates",
+      href: createTabHref(view === "templates" ? "live" : "templates", filterHrefParams),
+      label: "Reviewed templates",
+    },
+    {
       active: reviewStatus === "manual-review-required",
       href: buildOffersHref({
         ...filterHrefParams,
@@ -818,7 +867,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const bootstrapLanes = [
     {
       value: "live",
-      label: "Live",
+      label: "Live offers",
       href: createTabHref("live", filterHrefParams),
       count: String(liveOfferCount),
       status: liveOfferCount ? "Review-gated directory" : "None public yet",
@@ -826,13 +875,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         "Live offers remain separated from worked examples and still require review before reliance.",
     },
     {
-      value: "rounds",
-      label: "Rounds",
-      href: createTabHref("rounds", filterHrefParams),
-      count: String(seedRoundCount),
-      status: "Live rounds, no capture",
+      value: "templates",
+      label: "Create from template",
+      href: createTabHref("templates", filterHrefParams),
+      count: String(seedTemplateCount),
+      status: "Draft scaffolds only",
       description:
-        "Join the Public Goods Fund seed round by previewing a small no-capture Common Ground Budget.",
+        "Reviewed donation-offset and micro-pledge templates create bounded drafts, not live offers.",
     },
     {
       value: "worked_examples",
@@ -845,12 +894,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     },
     {
       value: "demo",
-      label: "Demo",
+      label: "Demo data",
       href: createTabHref("demo", filterHrefParams),
       count: String(seedRoundProjects.length),
       status: "Labeled sandbox records",
       description:
         "Demo rounds and seed projects stay clearly labeled and cannot inflate live offer or agreement counts.",
+    },
+    {
+      value: "external_crecm",
+      label: "External CRECM module",
+      href: createTabHref("external_crecm", filterHrefParams),
+      count: String(seedRoundCount),
+      status: "Separate mechanism brief",
+      description:
+        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the external CRECM module.",
     },
   ] satisfies Array<{
     value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
@@ -957,8 +1015,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="collection-header-copy">
             <h1>Browse offers</h1>
             <p className="hero-text">
-              Explore live offers and worked examples by cause area, format, evidence method, and
-              review state.
+              Explore live offers, reviewed templates, worked examples, demo data, and the external
+              CRECM public-goods module without mixing their counts.
             </p>
             <div className="collection-stats" aria-label="Marketplace counts">
               <span>
@@ -969,7 +1027,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 {workedExampleCount === 1 ? "example" : "examples"}
               </span>
               <span>
-                <strong>{seedRoundCount}</strong> {seedRoundCount === 1 ? "round" : "rounds"}
+                <strong>{seedRoundCount}</strong> external{" "}
+                {seedRoundCount === 1 ? "module" : "modules"}
               </span>
               <span>
                 <strong>{seedRoundProjects.length}</strong> demo{" "}
@@ -1005,9 +1064,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <details className="pilot-note panel">
           <summary>About this pilot</summary>
           <p>
-            Moral Trade currently prioritizes donation offsets, moral public goods, and bounded
-            pledge swaps because they have clearer baselines, evidence, and review states. Paid
-            action offers remain deferred while identity, dispute, and compliance workflows mature.
+            Moral Trade currently prioritizes donation offsets and bounded non-public-goods pledge
+            swaps on this page because they have clearer baselines, evidence, and review states.
+            Moral public-goods and Common-Ground-Budget mechanism work routes through the external
+            CRECM module and remains governed by moralpublicgoods102.md / CRECM v1.96.
           </p>
           <div className="pilot-note-links">
             <Link className="text-button" href="/donation-offsets">
@@ -1035,14 +1095,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="marketplace-bootstrap-head">
             <div>
               <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from a live round, a template, or a worked example.</h2>
+              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the external CRECM module.</h2>
               <p>
-                Live and demo surfaces are separated so the marketplace can build liquidity without
-                implying custody, escrow, completed trades, or automated clearing.
+                Live, template, worked-example, demo, and public-goods module surfaces stay
+                separated so the marketplace can build liquidity without implying custody, escrow,
+                completed trades, or automated clearing.
               </p>
             </div>
-            <Link className="button button-primary" href={seedRoundHref}>
-              Set Common Ground Budget
+            <Link className="button button-primary" href={EXTERNAL_CRECM_MODULE.href}>
+              Open external CRECM module
             </Link>
           </div>
 
@@ -1057,11 +1118,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <div className="marketplace-bootstrap-grid">
             <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-              <p className="eyebrow">Seed round</p>
+              <p className="eyebrow">External CRECM module</p>
               <h3>{demoMpgfAssuranceRound.name}</h3>
               <p>
-                {seedRoundProjects.length} admin-reviewed public-good projects are available for
-                no-capture budget preview. Settlement remains sandboxed until later release gates pass.
+                {EXTERNAL_CRECM_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
+                public-good projects are available for no-capture budget preview in that separate
+                module. Settlement remains sandboxed until later release gates pass.
               </p>
               <dl className="mpgf-summary-grid" aria-label="Seed round snapshot">
                 <div>
@@ -1089,8 +1151,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <Link className="button button-primary" href={seedRoundHref}>
                   Preview budget
                 </Link>
-                <Link className="button button-secondary" href="/mpgf">
-                  View fund
+                <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
+                  View external module
                 </Link>
               </div>
             </article>
@@ -1100,9 +1162,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <h3>Create from template</h3>
               <p>
                 {REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT} admin-reviewed donation-offset
-                templates and {REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT} pledge-swap templates are
-                visible, but remain draft or preview-only until review and later release gates
-                approve reliance.
+                templates and {REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT} micro-pledge swap
+                templates are visible, but remain draft or preview-only until review and later
+                release gates approve reliance.
               </p>
               <ul className="marketplace-bootstrap-projects" aria-label="Reviewed seed templates">
                 {seedTemplates.map((template) => (
@@ -1252,8 +1314,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <div className="toolbar-utility-row" aria-label="Result display controls">
             <p className="toolbar-result-count" role="status" aria-live="polite">
-              Showing {filteredListings.length} {filteredListings.length === 1 ? "result" : "results"} in{" "}
-              {activeViewLabel.toLowerCase()}.
+              {toolbarResultCountLabel}
             </p>
             <div className="view-toggle" aria-label="Listing layout">
               <Link
@@ -1444,7 +1505,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <section className="marketplace-results" aria-labelledby="results-heading">
               <div className="marketplace-results-head">
                 <div>
-                  <p className="eyebrow">{view === "rounds" || view === "demo" ? "Marketplace lane" : "Directory"}</p>
+                  <p className="eyebrow">
+                    {view === "templates" || view === "external_crecm" || view === "demo"
+                      ? "Marketplace lane"
+                      : "Directory"}
+                  </p>
                   <h2 id="results-heading">{resultCountLabel}</h2>
                 </div>
                 <p className="results-sort-note">Sorted by {findLabel(SORT_FILTER_CHIPS, directorySort).toLowerCase()}.</p>
@@ -1461,25 +1526,80 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               ) : null}
 
               <div className="listing-groups">
-                {view === "rounds" ? (
+                {view === "templates" ? (
                   <section
-                    aria-labelledby="marketplace-rounds-heading"
+                    aria-labelledby="marketplace-templates-heading"
                     className="listing-group marketplace-lane-results"
-                    id="marketplace-rounds-lane"
+                    id="marketplace-templates-lane"
                   >
                     <div className="listing-group-head">
-                      <h3 id="marketplace-rounds-heading">Common Ground Budget rounds</h3>
-                      <span>{seedRoundCount} no-capture round</span>
+                      <h3 id="marketplace-templates-heading">Reviewed non-public-goods templates</h3>
+                      <span>{seedTemplateCount} draft scaffolds</span>
+                    </div>
+                    <article className="marketplace-bootstrap-card">
+                      <p className="eyebrow">Template gallery</p>
+                      <h4>Create from a reviewed donation-offset or micro-pledge scaffold.</h4>
+                      <p>
+                        Templates stay non-reliance-bearing until a reviewer approves the frozen
+                        preview and the participant completes final-lock confirmation.
+                      </p>
+                      <dl className="mpgf-summary-grid" aria-label="Template lane snapshot">
+                        <div>
+                          <dt>Donation offsets</dt>
+                          <dd>{REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT}</dd>
+                        </div>
+                        <div>
+                          <dt>Pledge swaps</dt>
+                          <dd>{REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT}</dd>
+                        </div>
+                        <div>
+                          <dt>Live offer count</dt>
+                          <dd>not counted</dd>
+                        </div>
+                      </dl>
+                      <ul className="marketplace-bootstrap-projects" aria-label="Reviewed template lane records">
+                        {seedTemplates.map((template) => (
+                          <li key={`template-lane-${template.id}`}>
+                            <span>
+                              <Link href={getSeedTemplateHref(template.id, Boolean(viewer))}>
+                                {template.prefill.title}
+                              </Link>
+                            </span>
+                            <strong>
+                              {"microPledgeDefaults" in template
+                                ? "Micro-pledge default"
+                                : template.formatLabel}
+                            </strong>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="marketplace-bootstrap-actions">
+                        <Link className="button button-primary" href={createTemplateHref}>
+                          Start reviewed template
+                        </Link>
+                        <Link className="button button-secondary" href={createPledgeSwapTemplateHref}>
+                          Micro-pledge swap
+                        </Link>
+                      </div>
+                    </article>
+                  </section>
+                ) : view === "external_crecm" ? (
+                  <section
+                    aria-labelledby="marketplace-crecm-heading"
+                    className="listing-group marketplace-lane-results"
+                    id="marketplace-crecm-lane"
+                  >
+                    <div className="listing-group-head">
+                      <h3 id="marketplace-crecm-heading">{EXTERNAL_CRECM_MODULE.label}</h3>
+                      <span>{seedRoundCount} linked module</span>
                     </div>
                     <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-                      <p className="eyebrow">Rounds lane</p>
+                      <p className="eyebrow">Separate mechanism scope</p>
                       <h4>{demoMpgfAssuranceRound.name}</h4>
                       <p>
-                        This live round is a sandbox allocation preview. It can collect a Common
-                        Ground Budget preference, but payment capture and clearing stay disabled
-                        until capped-real-money release gates pass.
+                        {EXTERNAL_CRECM_MODULE.summary} {EXTERNAL_CRECM_MODULE.sourceNote}
                       </p>
-                      <dl className="mpgf-summary-grid" aria-label="Rounds lane snapshot">
+                      <dl className="mpgf-summary-grid" aria-label="External CRECM lane snapshot">
                         <div>
                           <dt>Reviewed projects</dt>
                           <dd>{seedRoundProjects.length}</dd>
@@ -1495,10 +1615,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </dl>
                       <div className="marketplace-bootstrap-actions">
                         <Link className="button button-primary" href={seedRoundHref}>
-                          Preview budget
+                          Preview external budget
                         </Link>
-                        <Link className="button button-secondary" href="/mpgf">
-                          View fund
+                        <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
+                          Open external module
                         </Link>
                       </div>
                     </article>

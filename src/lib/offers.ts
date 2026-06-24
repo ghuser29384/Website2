@@ -174,6 +174,10 @@ export const VERIFICATION_OPTIONS = [
 ] as const;
 
 export const DURATION_OPTIONS = [
+  "One meal",
+  "A few meals",
+  "One day",
+  "A few days",
   "30 days",
   "3 months",
   "6 months",

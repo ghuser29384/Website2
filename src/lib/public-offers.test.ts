@@ -35,13 +35,22 @@ test("public offers collection defaults to worked examples when live inventory i
   assert.equal(payload.meta.reviewedPledgeSwapTemplateCount, 2);
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
-    ["live", "rounds", "worked_examples", "demo"],
+    ["live", "templates", "worked_examples", "demo", "external_crecm"],
   );
   assert.deepEqual(
     payload.meta.reviewedSeedTemplates.map((template) => template.id),
     ["pure-opposed-cause", "market-mediated", "reciprocal-mixed", "bargained-coordination"],
   );
   assert.ok(payload.meta.reviewedSeedTemplates.every((template) => !template.liveMetricEligible));
+  assert.ok(
+    payload.meta.reviewedSeedTemplates
+      .filter((template) => template.format === "pledge_swap")
+      .every(
+        (template) =>
+          template.microPledgeDefaults?.defaultDurations.includes("One meal") &&
+          !template.microPledgeDefaults.defaultDurations.includes("30 days"),
+      ),
+  );
   assert.ok(
     payload.meta.availableTabs
       .filter((tab) => tab.value !== "live")
@@ -150,29 +159,46 @@ test("public offers live-mode parser maps public formats to internal offer modes
   );
 });
 
-test("public offers collection separates rounds and demo lanes from offer listings", () => {
-  const roundsPayload = buildPublicOffersCollectionPayload({
+test("public offers collection separates template, external CRECM, and demo lanes from offer listings", () => {
+  const externalCrecPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=external_crecm"),
+  });
+  const legacyRoundsPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=rounds"),
+  });
+  const templatesPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=templates"),
   });
   const demoPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=demo"),
   });
 
-  assert.equal(validatePublicOffersCollectionPayload(roundsPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(externalCrecPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(templatesPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
-  assert.equal(roundsPayload.meta.tab, "rounds");
+  assert.equal(externalCrecPayload.meta.tab, "external_crecm");
+  assert.equal(legacyRoundsPayload.meta.tab, "external_crecm");
+  assert.equal(templatesPayload.meta.tab, "templates");
   assert.equal(demoPayload.meta.tab, "demo");
-  assert.equal(roundsPayload.items.length, 0);
+  assert.equal(externalCrecPayload.items.length, 0);
+  assert.equal(templatesPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
-  assert.equal(roundsPayload.meta.reviewedSeedTemplateCount, 4);
-  assert.equal(roundsPayload.meta.availableTabs.find((tab) => tab.value === "rounds")?.count, 1);
+  assert.equal(externalCrecPayload.meta.reviewedSeedTemplateCount, 4);
+  assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count, 1);
+  assert.equal(templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.count, 4);
   assert.ok(
     (demoPayload.meta.availableTabs.find((tab) => tab.value === "demo")?.count ?? 0) > 0,
   );
   assert.equal(
-    roundsPayload.meta.availableTabs.find((tab) => tab.value === "rounds")?.noLiveAgreementCount,
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.noLiveAgreementCount,
+    true,
+  );
+  assert.equal(
+    templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.noLiveAgreementCount,
     true,
   );
 });
@@ -208,7 +234,7 @@ test("public offer facets endpoint payload hides zero-count options", () => {
   assert.equal(payload.meta.tab, "worked_examples");
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
-    ["live", "rounds", "worked_examples", "demo"],
+    ["live", "templates", "worked_examples", "demo", "external_crecm"],
   );
   assert.equal(payload.meta.reviewedSeedTemplateCount, 4);
   assert.ok(payload.meta.reviewedSeedTemplates.every((template) => !template.liveMetricEligible));
@@ -229,7 +255,7 @@ test("public offers API route returns validator-backed collection JSON", async (
   assert.equal(body.items.length, 3);
   assert.deepEqual(
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
-    ["live", "rounds", "worked_examples", "demo"],
+    ["live", "templates", "worked_examples", "demo", "external_crecm"],
   );
   assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.ok(
@@ -297,7 +323,7 @@ test("public offer facets API route returns validator-backed facets JSON", async
   assert.equal(body.meta.tab, "worked_examples");
   assert.deepEqual(
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
-    ["live", "rounds", "worked_examples", "demo"],
+    ["live", "templates", "worked_examples", "demo", "external_crecm"],
   );
   assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");

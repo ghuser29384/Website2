@@ -125,7 +125,7 @@ export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
       "searchParamKeys",
     ],
     decisionUse:
-      "Separate live inventory, rounds, worked examples, and demo views without counting non-live lanes as liquidity.",
+      "Separate live inventory, reviewed templates, worked examples, demo data, and external CRECM views without counting non-live lanes as liquidity.",
   },
   {
     eventType: "marketplace_filter_applied",
@@ -169,6 +169,54 @@ export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
     ],
     decisionUse:
       "Measure template-backed activation as reviewable activity, not completed agreements or sponsor leverage.",
+  },
+  {
+    eventType: "marketplace_intake_triage_routed",
+    stage: "activation",
+    question: "Which intake triage route do visitors choose before drafting terms?",
+    allowedMetadata: ["intakeRoute", "liveMetricEligible", "routeFamily", "routeEligible"],
+    decisionUse:
+      "Improve routing with aggregate route buckets while excluding exact wishes, private notes, or contact details.",
+  },
+  {
+    eventType: "marketplace_public_receipt_previewed",
+    stage: "activation",
+    question: "Do participants preview an opt-in public receipt before publication?",
+    allowedMetadata: ["claimKind", "liveMetricEligible", "proofTier", "publicationState", "routeFamily"],
+    decisionUse:
+      "Measure public receipt interest without publishing receipt content or private evidence by default.",
+  },
+  {
+    eventType: "marketplace_public_receipt_published",
+    stage: "activation",
+    question: "Do reviewed opt-in public receipts reach publication?",
+    allowedMetadata: ["claimKind", "liveMetricEligible", "proofTier", "publicationState", "routeFamily"],
+    decisionUse:
+      "Count reviewed receipt publication as an aggregate claim-hygiene signal, not platform endorsement.",
+  },
+  {
+    eventType: "marketplace_public_receipt_revoked",
+    stage: "trust",
+    question: "How often are opt-in public receipts revoked?",
+    allowedMetadata: ["claimKind", "liveMetricEligible", "publicationState", "revocationReasonBucket", "routeFamily"],
+    decisionUse:
+      "Monitor revocation with bucketed reasons while preserving participant privacy.",
+  },
+  {
+    eventType: "marketplace_claim_correction_requested",
+    stage: "trust",
+    question: "How often do participants request public claim correction?",
+    allowedMetadata: ["claimKind", "correctionReasonBucket", "liveMetricEligible", "routeFamily"],
+    decisionUse:
+      "Find claim-copy issues without storing raw correction text in funnel metadata.",
+  },
+  {
+    eventType: "marketplace_claim_correction_resolved",
+    stage: "trust",
+    question: "Are public claim corrections resolved cleanly?",
+    allowedMetadata: ["claimKind", "correctionReasonBucket", "liveMetricEligible", "resolutionStatus", "routeFamily"],
+    decisionUse:
+      "Track correction resolution with aggregate status buckets only.",
   },
   {
     eventType: "clone_example_action",

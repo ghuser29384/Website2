@@ -47,6 +47,12 @@ add constraint funnel_events_event_type_check check (
     'marketplace_tab_viewed',
     'marketplace_filter_applied',
     'marketplace_seed_template_selected',
-    'marketplace_create_from_template_started'
+    'marketplace_create_from_template_started',
+    'marketplace_intake_triage_routed',
+    'marketplace_public_receipt_previewed',
+    'marketplace_public_receipt_published',
+    'marketplace_public_receipt_revoked',
+    'marketplace_claim_correction_requested',
+    'marketplace_claim_correction_resolved'
   )
 );

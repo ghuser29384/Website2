@@ -52,29 +52,77 @@ function buildOfferCreationReturnTo(searchParams: Record<string, string | string
   return query ? `/offers/new?${query}` : "/offers/new";
 }
 
+const MARKETPLACE_INTAKE_TRIAGE_ROUTES = [
+  {
+    key: "donation_offset",
+    label: "Donation offset",
+    href: "/offers/new?mode=offset",
+    status: "Marketplace-eligible",
+    routeEligible: true,
+    summary:
+      "Use when two opposed baseline donations can redirect into a reviewed compromise destination.",
+  },
+  {
+    key: "micro_pledge_swap",
+    label: "Micro-pledge swap",
+    href: "/offers/new?template=reciprocal-mixed",
+    status: "Marketplace-eligible",
+    routeEligible: true,
+    summary:
+      "Use for one meal, a few meals, one day, or a few days with substitutes, health boundaries, and pre-performance lock.",
+  },
+  {
+    key: "external_crecm_public_goods",
+    label: "External CRECM public-goods module",
+    href: "/mpgf",
+    status: "Separate module",
+    routeEligible: false,
+    summary:
+      "Moral public-goods and Common-Ground-Budget mechanism work belongs in moralpublicgoods102.md / CRECM v1.96.",
+  },
+  {
+    key: "ordinary_paid_action",
+    label: "Ordinary paid action",
+    href: "/safety",
+    status: "Deferred",
+    routeEligible: false,
+    summary:
+      "Paid services, custody, escrow, tax, legal, investment, and pressure-bearing requests stay outside the public creation path.",
+  },
+  {
+    key: "unsupported_or_safety",
+    label: "Unsupported or safety review",
+    href: "/anti-threat-rules",
+    status: "Review first",
+    routeEligible: false,
+    summary:
+      "Threat creation, unsafe abstention, coercion, contact requests, or exact private wishes require review before any draft.",
+  },
+] as const;
+
 const MORAL_TRADE_TYPE_TEMPLATES: Record<string, OfferTemplate> = {
   "reciprocal-mixed": {
-    title: "Reciprocal mixed trade",
+    title: "One-meal food-abstention pledge swap",
     description:
-      "Two parties each take an action the other side values more than their own cost.",
+      "A short, reviewable food-abstention commitment in exchange for a reciprocal action.",
     mode: "pledge",
-    offeredCause: "Global poverty",
-    requestedCause: "Animal welfare",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
     compromiseCause: "Not needed",
     offerAction:
-      "I will give a bounded share of income or time to the counterparty's priority cause during the review period.",
+      "I will skip one covered animal-product meal after naming the meal context and an adequate substitute before lock.",
     requestAction:
-      "The counterparty will make a bounded diet, donation, or service pledge for the cause I prioritize.",
+      "The counterparty will make the bounded donation or pledge stated in the final preview after both sides lock terms.",
     baselineStatement:
-      "Without this trade, neither side would expect to take the specific reciprocal action on this timeline.",
+      "Without this trade, I would eat the covered meal normally and would not make this specific micro-pledge on this date.",
     exitCondition:
-      "If either side declines, misses evidence, or materially changes the scope before acceptance, the trade expires unresolved.",
+      "Either side can pause before the pre-performance lock. After lock, missed self-attestation creates an unresolved record rather than a completed one.",
     notes:
-      "Use this for mixed trades where each side sees the other action as worth more than their own sacrifice. Edit the causes, amounts, and evidence before publishing.",
+      "Default to one meal, a few meals, one day, or a few days. Name covered food, adequate substitutes, health boundaries, self-attestation level, per-unit cap, and no auto rollover before relying on the pledge.",
     offerImpact: "7",
     minCounterpartyImpact: "6",
     verification: "Public pledge",
-    duration: "30 days",
+    duration: "One meal",
     paymentIntervalUnit: "none",
     paymentIntervalValue: "1",
     trustLevel: "3",
@@ -170,28 +218,28 @@ const MORAL_TRADE_TYPE_TEMPLATES: Record<string, OfferTemplate> = {
     trustLevel: "3",
   },
   "bargained-coordination": {
-    title: "Bargained coordination",
+    title: "Few-day reciprocal micro-pledge sequence",
     description:
-      "Repeated structure, alternation, or batching makes a blocked deal acceptable.",
+      "A capped few-day sequence with pre-performance locks, explicit substitutes, and no automatic rollover.",
     mode: "pledge",
-    offeredCause: "Community service",
+    offeredCause: "Animal welfare",
     requestedCause: "Public health",
     compromiseCause: "Not needed",
     offerAction:
-      "I will support project A in the specified rounds if the counterparty supports project B in the paired rounds.",
+      "I will complete a few-day covered-food abstention sequence only after each day has a named substitute and lock confirmation.",
     requestAction:
-      "The counterparty will accept the alternation schedule or repeated-round rule before either side relies on the deal.",
+      "The counterparty will complete the paired bounded action only for locked days that clear the self-attestation and safety checks.",
     baselineStatement:
-      "A one-shot version is not acceptable to one side; the repeated structure is what makes cooperation feasible.",
+      "Without this trade, I would not make this specific few-day abstention sequence and would not publicly claim the action.",
     exitCondition:
-      "If either party misses a scheduled round or rejects the alternation rule, the remaining rounds pause until both reconfirm.",
+      "If either party misses attestation, hits a safety boundary, or rejects a day-specific lock, remaining days pause until both reconfirm.",
     notes:
-      "Use this for bargaining, turn-taking, and repeated coordination trades where the average package is better than the default.",
+      "Use this for short food-abstention sequences only. Record unit baseline, covered food, substitute, self-attestation ladder, per-unit amount band, sequence cap, and public receipt opt-in status. Thirty-day or longer pledges require manual exception review.",
     offerImpact: "7",
     minCounterpartyImpact: "6",
     verification: "Peer witness",
-    duration: "3 months",
-    paymentIntervalUnit: "month",
+    duration: "A few days",
+    paymentIntervalUnit: "day",
     paymentIntervalValue: "1",
     trustLevel: "3",
   },
@@ -505,6 +553,33 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-subtle" aria-labelledby="marketplace-intake-triage-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Marketplace intake triage</p>
+            <h2 id="marketplace-intake-triage-heading">Route the request before drafting terms.</h2>
+            <p>
+              This page is for reviewed non-public-goods donation offsets and bounded pledge swaps.
+              Public-goods CRECM work, ordinary paid services, autonomous outreach, and unsafe or
+              pressure-bearing requests route elsewhere.
+            </p>
+          </div>
+          <div className="teaser-grid">
+            {MARKETPLACE_INTAKE_TRIAGE_ROUTES.map((route) => (
+              <Link
+                className="panel teaser-card"
+                data-intake-route={route.key}
+                data-route-eligible={route.routeEligible ? "true" : "false"}
+                href={route.href}
+                key={route.key}
+              >
+                <span className="detail-kicker">{route.status}</span>
+                <h3>{route.label}</h3>
+                <p>{route.summary}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="section section-white">
           <div className="auth-grid offer-create-grid">
             {viewer ? (
@@ -567,6 +642,52 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   <p>Offsets with risk signals stay paused for review; paid action offers are deferred from the public creation path.</p>
                 </div>
               </div>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="public-receipt-preview-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Public receipt preview</p>
+            <h2 id="public-receipt-preview-heading">Receipts are private by default and opt-in only.</h2>
+            <p>
+              A public receipt card can summarize a reviewed donation offset or pledge swap after
+              final-lock evidence review, but it is not a ranking, badge, objective moral
+              endorsement, tax record, or platform preference over direct donation.
+            </p>
+          </div>
+          <div className="teaser-grid">
+            <article className="panel teaser-card">
+              <span className="detail-kicker">Default</span>
+              <h3>Private preview</h3>
+              <p>
+                Participants see the receipt preview before publication. Public display requires
+                explicit opt-in, reviewer approval, and a verification URL.
+              </p>
+            </article>
+            <article className="panel teaser-card">
+              <span className="detail-kicker">Claim hygiene</span>
+              <h3>No ranking or endorsement</h3>
+              <p>
+                Receipt copy must avoid leaderboards, gamification, objective moral endorsement,
+                and claims that Moral Trade prefers the trade over direct donation.
+              </p>
+            </article>
+            <article className="panel teaser-card">
+              <span className="detail-kicker">Privacy</span>
+              <h3>Sensitive action redaction</h3>
+              <p>
+                Exact wishes, private notes, raw evidence, contact details, and sensitive action
+                details stay out of public receipt cards.
+              </p>
+            </article>
+            <article className="panel teaser-card">
+              <span className="detail-kicker">Control</span>
+              <h3>Correction and revocation</h3>
+              <p>
+                Public receipt cards need net attribution notes and a correction or revocation path
+                if claim copy, evidence status, or participant consent changes.
+              </p>
             </article>
           </div>
         </section>

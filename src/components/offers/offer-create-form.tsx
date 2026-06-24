@@ -2419,6 +2419,22 @@ export function OfferCreateForm({
         })
       : null;
 
+  function getTemplateMaxObligationDays(duration: string) {
+    if (duration === "One meal" || duration === "A few meals" || duration === "One day") {
+      return "1";
+    }
+
+    if (duration === "A few days") {
+      return "4";
+    }
+
+    if (duration === "30 days") {
+      return "30";
+    }
+
+    return "90";
+  }
+
   function applyOfferTemplate(template: OfferTemplate) {
     setMode(template.mode);
     setOfferedCause(template.offeredCause);
@@ -2438,7 +2454,7 @@ export function OfferCreateForm({
     setTrustLevel(template.trustLevel);
 
     if (template.mode === "pledge") {
-      setPledgeMaxObligationDays(template.duration === "30 days" ? "30" : "90");
+      setPledgeMaxObligationDays(getTemplateMaxObligationDays(template.duration));
       setPledgeChallengeWindowDays("14");
       setPledgeReciprocalReleaseRule(defaultPledgeReciprocalReleaseRule);
       setPledgeWithdrawalBeforeLockRule(defaultPledgeWithdrawalBeforeLockRule);

@@ -486,7 +486,7 @@ test("global search and offers search expose real marketplace discovery", () => 
 test("home page is a focused pilot landing page with pilot metrics and example-first search", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
-  const heroIndex = homeSource.indexOf("Make voluntary trades across moral disagreement.");
+  const heroIndex = homeSource.indexOf("Moral trade could enable a mostly-great future.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
   const searchIndex = homeSource.indexOf("Find a worked example or live offer");
   const animationIndex = homeSource.indexOf("<MoralTradeAnimations");
@@ -705,7 +705,9 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
   assert.match(backgroundPage, /Capability gates/);
   assert.match(backgroundPage, /Open gate contract/);
-  assert.match(backgroundPage, /Private-overlap checks are governance-gated/);
+  assert.match(backgroundPage, /Private-overlap checks are currently a disabled design lane/);
+  assert.match(backgroundPage, /Current phase artifact/);
+  assert.match(backgroundPage, /validateBackgroundPhaseGateBundle/);
   assert.match(backgroundPage, /Private overlap contract/);
   assert.match(backgroundPage, /capabilityGateContract\.gates/);
   assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
@@ -828,6 +830,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   );
   const sourceSummaryApproveRoute = readRepoFile(
     "src/app/api/background/source-summaries/[id]/approve/route.ts",
+  );
+  const sourceSummaryConfirmTagsRoute = readRepoFile(
+    "src/app/api/background/source-summaries/[id]/confirm-tags/route.ts",
   );
   const sourceConnectionApproveBg16AliasRoute = readRepoFile(
     "src/app/api/background/source-connections/[id]/approve/route.ts",
@@ -997,8 +1002,11 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(sourceConnectionDraftRoute, /background_shadow_runs/);
   assert.match(sourceConnectionSummaryDraftBg16AliasRoute, /draft-summary\/route/);
   assert.match(sourceConnectionSummaryDraftAliasRoute, /draft-summary\/route/);
-  assert.match(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
-  assert.match(sourceSummaryApproveRoute, /approved_source_summary_promoted/);
+  assert.doesNotMatch(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
+  assert.match(sourceSummaryApproveRoute, /source_summary_approved_without_match_inputs/);
+  assert.match(sourceSummaryConfirmTagsRoute, /buildBackgroundProfileSignalRows/);
+  assert.match(sourceSummaryConfirmTagsRoute, /background\.source_summary\.confirm_tags/);
+  assert.match(sourceSummaryConfirmTagsRoute, /privateThirdPartyDataReviewed/);
   assert.match(sourceSummaryApproveRoute, /background_source_summary_enabled/);
   assert.match(sourceConnectionApproveBg16AliasRoute, /summaryId/);
   assert.match(sourceConnectionApproveBg16AliasRoute, /shadowRunId/);
@@ -1269,6 +1277,9 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(growthSource, /marketplace_filter_applied/);
   assert.match(growthSource, /marketplace_seed_template_selected/);
   assert.match(growthSource, /marketplace_create_from_template_started/);
+  assert.match(growthSource, /marketplace_intake_triage_routed/);
+  assert.match(growthSource, /marketplace_public_receipt_previewed/);
+  assert.match(growthSource, /marketplace_claim_correction_resolved/);
   assert.match(growthSource, /filterKeys/);
   assert.match(growthSource, /marketplaceTab/);
   assert.match(growthSource, /liveMetricEligible/);
@@ -1291,6 +1302,9 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(marketplaceMeasurementMigration, /marketplace_filter_applied/);
   assert.match(marketplaceMeasurementMigration, /marketplace_seed_template_selected/);
   assert.match(marketplaceMeasurementMigration, /marketplace_create_from_template_started/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_intake_triage_routed/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_public_receipt_revoked/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_claim_correction_requested/);
   assert.match(apiSource, /parseAttributionCookie/);
   assert.match(apiSource, /takeMoralTradeApiRateLimitSlot\(request, "analytics_ingest"\)/);
   assert.match(apiSource, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
@@ -1320,6 +1334,8 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(funnelTracker, /marketplace_filter_applied/);
   assert.match(funnelTracker, /marketplace_seed_template_selected/);
   assert.match(funnelTracker, /marketplace_create_from_template_started/);
+  assert.match(funnelTracker, /marketplace_intake_triage_routed/);
+  assert.match(funnelTracker, /dataset\.intakeRoute/);
   assert.doesNotMatch(funnelTracker, /window\.location\.search/);
   assert.match(funnelTracker, /metricValueBucket/);
   assert.match(funnelTracker, /CLS/);
@@ -1347,6 +1363,10 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   const marketplaceValidation = validateMarketplaceMeasurementContract();
   const measurementPage = readRepoFile("src/app/measurement/page.tsx");
   const marketplaceMeasurementSource = readRepoFile("src/lib/marketplace-measurement.ts");
+  const publicReceiptCardsSource = readRepoFile("src/lib/moral-trade/public-receipt-cards.ts");
+  const publicReceiptVerifyRoute = readRepoFile(
+    "src/app/api/moral-trade/public-receipts/[receiptId]/verify/route.ts",
+  );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const packageSource = readRepoFile("package.json");
   const routeBaselineScript = readRepoFile("scripts/check-public-route-baseline.mjs");
@@ -1356,8 +1376,12 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.ok(MARKETPLACE_KPI_KEYS.includes("live_offer_count"));
   assert.ok(MARKETPLACE_KPI_KEYS.includes("completed_agreement_count"));
   assert.ok(MARKETPLACE_KPI_KEYS.includes("privacy_leakage_incidents_target_zero"));
+  assert.ok(MARKETPLACE_KPI_KEYS.includes("public_receipt_preview_count"));
+  assert.ok(MARKETPLACE_KPI_KEYS.includes("claim_correction_resolution_count"));
   assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_tab_viewed"));
   assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_seed_template_selected"));
+  assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_intake_triage_routed"));
+  assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_public_receipt_published"));
   assert.deepEqual(validation.invalidEvents, []);
   assert.deepEqual(validation.duplicateEvents, []);
   assert.deepEqual(validation.sensitiveMetadata, []);
@@ -1376,6 +1400,8 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_tab_viewed"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_filter_applied"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_seed_template_selected"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_intake_triage_routed"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_public_receipt_revoked"));
   assert.match(MEASUREMENT_PERFORMANCE_BASELINE.command, /npm run measure:routes/);
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv, "MORALTRADE_BASE_URL");
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv, "MORALTRADE_BASELINE_OUTPUT");
@@ -1389,6 +1415,8 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(measurementPage, /buildMarketplaceKpiSnapshot/);
   assert.match(measurementPage, /validateMarketplaceKpiSnapshot/);
   assert.match(measurementPage, /live_offer_count/);
+  assert.match(measurementPage, /public_receipt_preview_count/);
+  assert.match(measurementPage, /claim_correction_resolution_count/);
   assert.match(measurementPage, /demo_data_live_mix_block_count/);
   assert.match(measurementPage, /Copilot and review metrics stay public/);
   assert.match(measurementPage, /getMoralTradeEvaluationProfile/);
@@ -1405,6 +1433,14 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(marketplaceMeasurementSource, /MARKETPLACE_KPI_KEYS/);
   assert.match(marketplaceMeasurementSource, /small-cell suppression/);
   assert.match(marketplaceMeasurementSource, /excludedNonLiveInputs/);
+  assert.match(publicReceiptCardsSource, /PUBLIC_RECEIPT_CARD_POLICY_VERSION/);
+  assert.match(publicReceiptCardsSource, /participant_opt_in_required/);
+  assert.match(publicReceiptCardsSource, /direct_donation_parity_note_required/);
+  assert.match(publicReceiptCardsSource, /gamification_or_ranking_claim/);
+  assert.match(publicReceiptCardsSource, /sensitive_action_redaction_required/);
+  assert.match(publicReceiptVerifyRoute, /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/);
+  assert.match(publicReceiptVerifyRoute, /contract_only_no_public_claim_loaded/);
+  assert.match(publicReceiptVerifyRoute, /buildPublicReceiptCardPreview/);
   assert.match(healthRoute, /getMarketplaceMeasurementContract/);
   assert.match(healthRoute, /marketplaceMeasurementKpiKeys/);
   assert.match(healthRoute, /marketplaceMeasurementEventTypes/);
@@ -2089,6 +2125,24 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
   assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
   assert.match(mpfgPage, /Coordinate around moral public goods/);
+  assert.equal(
+    mpfgPage.includes(
+      "It might not be necessary for everyone to have the same values, or agree on philosophical questions, to get a future which most views think is pretty great.",
+    ),
+    true,
+  );
+  assert.equal(
+    mpfgPage.includes(
+      "By coordinating to fund moral public goods, we could still get a mostly-great future even if people only broadly agree on what's valuable and even if most people are mostly self-interested.",
+    ),
+    true,
+  );
+  assert.equal(
+    mpfgPage.includes(
+      "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.",
+    ),
+    true,
+  );
   assert.match(priorityFundPage, /10% of verified donations plus 10% of verified member-to-member/);
   assert.match(priorityFundPage, /top 10% of karma/);
   assert.equal(joinedSources.includes("Escrow-backed"), false);
@@ -4935,11 +4989,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersSource, /buildPublicOffersFacetsPayload/);
   assert.match(publicOffersSource, /defaultedToWorkedExamples/);
   assert.match(publicOffersSource, /hiddenZeroCountFacets/);
-  assert.match(publicOffersSource, /PublicMarketplaceTab = "live" \| "rounds" \| "worked_examples" \| "demo"/);
+  assert.match(publicOffersSource, /\| "templates"/);
+  assert.match(publicOffersSource, /\| "external_crecm"/);
   assert.match(publicOffersSource, /availableTabs/);
   assert.match(publicOffersSource, /reviewedSeedTemplates/);
   assert.match(publicOffersSource, /reviewed-seed-templates/);
   assert.match(publicOffersSource, /marketplace-tab-separation/);
+  assert.match(publicOffersSource, /external CRECM module/);
   assert.match(publicOffersSource, /public-offer-listing/);
   assert.match(publicOffersSource, /validateMoralTradeJsonSchemaSubset/);
   assert.match(publicOffersSource, /listing-json-schema/);
@@ -5135,10 +5191,11 @@ test("offer creation form exposes preset templates without weakening validation"
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
   assert.match(offerForm, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
-  assert.match(seedTemplatesSource, /30-day reciprocal pledge swap/);
+  assert.match(seedTemplatesSource, /One-meal food-abstention pledge swap/);
   assert.match(seedTemplatesSource, /Direct donation-offset redirect/);
   assert.match(seedTemplatesSource, /Threshold offset pool/);
-  assert.match(seedTemplatesSource, /Bargained coordination/);
+  assert.match(seedTemplatesSource, /Few-day reciprocal micro-pledge sequence/);
+  assert.match(seedTemplatesSource, /Thirty-day or longer abstention pledges are manual exceptions/);
   assert.match(offerForm, /applyOfferTemplate/);
   assert.match(offerForm, /Templates focus on the launch wedge/);
   assert.match(offerForm, /applyOfferTemplate\(template\.prefill\)/);
@@ -5287,6 +5344,13 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(createRoute, /NewOfferPage/);
   assert.equal(createRoute.includes("redirect("), false);
   assert.match(newOfferPage, /Create an account to save and publish a structured trade proposal/);
+  assert.match(newOfferPage, /Marketplace intake triage/);
+  assert.match(newOfferPage, /MARKETPLACE_INTAKE_TRIAGE_ROUTES/);
+  assert.match(newOfferPage, /data-intake-route/);
+  assert.match(newOfferPage, /moralpublicgoods102\.md \/ CRECM v1\.96/);
+  assert.match(newOfferPage, /Public receipt preview/);
+  assert.match(newOfferPage, /Receipts are private by default and opt-in only/);
+  assert.match(newOfferPage, /Correction and revocation/);
   assert.match(newOfferPage, /buildOfferCreationReturnTo/);
   assert.match(newOfferPage, /encodeURIComponent\(offerCreationReturnTo\)/);
   assert.match(newOfferPage, /source_offer/);
@@ -5304,13 +5368,15 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
   assert.match(offersPage, /MARKETPLACE_BOOTSTRAP_TABS/);
-  assert.match(offersPage, /value: "rounds"/);
+  assert.match(offersPage, /value: "templates"/);
   assert.match(offersPage, /value: "worked_examples"/);
   assert.match(offersPage, /value: "demo"/);
+  assert.match(offersPage, /value: "external_crecm"/);
   assert.match(offersPage, /Start template/);
   assert.match(offersPage, /Demo records/);
   assert.match(offersPage, /Common Ground Marketplace/);
-  assert.match(offersPage, /Set Common Ground Budget/);
+  assert.match(offersPage, /Open external CRECM module/);
+  assert.match(offersPage, /moralpublicgoods102\.md \/ CRECM v1\.96/);
   assert.match(offersPage, /demoMpgfAssuranceRound/);
   assert.match(offersPage, /seedRoundProjects/);
   assert.match(offersPage, /common-ground-budget-preview/);
@@ -5320,11 +5386,11 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Reviewed seed templates/);
   assert.match(offersPage, /admin-reviewed donation-offset/);
   assert.match(offersPage, /Demo rounds and seed projects stay clearly labeled/);
-  assert.match(offersPage, /payment capture and clearing stay disabled/);
+  assert.match(offersPage, /final-lock confirmation/);
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);
   assert.match(offersPage, /<h1>Browse offers<\/h1>/);
-  assert.match(offersPage, /Explore live offers and worked examples/);
+  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the external/);
   assert.match(offersPage, /Create an offer/);
   assert.match(offersPage, /Save search/);
   assert.match(offersPage, /Worked example, not live liquidity/);

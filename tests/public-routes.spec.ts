@@ -132,7 +132,7 @@ test("/offers/new offset creation layout stays broad without mobile overflow", a
       const templateBox = await templateSection.boundingBox();
       expect(templateBox?.width ?? 0).toBeGreaterThan(900);
       expect((templateBox?.x ?? 0) + (templateBox?.width ?? 0)).toBeLessThanOrEqual(width + 1);
-      await expect(page.locator(".offer-template-button")).toHaveCount(3);
+      await expect(page.locator(".offer-template-button")).toHaveCount(4);
     }
   }
 });

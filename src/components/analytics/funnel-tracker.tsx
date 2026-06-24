@@ -25,6 +25,7 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/worked-examples") || href.includes("/offers?view=examples")) {
     return "worked_example_opened";
   }
+  if (target.dataset.intakeRoute) return "marketplace_intake_triage_routed";
   if (href.includes("/offers/new") && href.includes("template=")) {
     return "marketplace_seed_template_selected";
   }
@@ -40,9 +41,14 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
 }
 
 function normalizeMarketplaceTab(value: string | null) {
-  if (value === "live" || value === "rounds" || value === "demo") return value;
+  if (value === "live" || value === "templates" || value === "demo" || value === "external_crecm") {
+    return value;
+  }
   if (value === "worked_examples" || value === "worked-examples" || value === "examples") {
     return "worked_examples";
+  }
+  if (value === "rounds" || value === "crecm" || value === "mpgf" || value === "public-goods") {
+    return "external_crecm";
   }
   return "default";
 }
@@ -233,6 +239,14 @@ export function FunnelTracker() {
         label: target.textContent?.replace(/\s+/g, " ").trim() ?? "",
         ...(inferredEvent === "marketplace_seed_template_selected"
           ? getTemplateMetadata(target.href)
+          : {}),
+        ...(inferredEvent === "marketplace_intake_triage_routed"
+          ? {
+              intakeRoute: target.dataset.intakeRoute ?? "unknown",
+              liveMetricEligible: false,
+              routeEligible: target.dataset.routeEligible === "true",
+              routeFamily: "marketplace",
+            }
           : {}),
       });
     }

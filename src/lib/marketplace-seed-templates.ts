@@ -2,6 +2,20 @@ import type { OfferMode, PaymentIntervalUnit } from "@/lib/offers";
 
 type SeedTemplateFormat = "donation_offset" | "pledge_swap";
 
+export interface MarketplaceMicroPledgeDefaults {
+  defaultDurations: readonly string[];
+  coveredFoodPrompt: string;
+  adequateSubstitutePrompt: string;
+  healthSafetyBoundary: string;
+  selfAttestationLadder: readonly string[];
+  perUnitAmountBand: string;
+  cumulativeSequenceCap: string;
+  prePerformanceLockRequired: true;
+  noAutoRollover: true;
+  longerDurationHandling: string;
+  publicReceiptDefault: "private_by_default_opt_in_card";
+}
+
 export interface ReviewedMarketplaceSeedTemplatePrefill {
   title: string;
   description: string;
@@ -58,6 +72,7 @@ export interface ReviewedMarketplaceSeedTemplate {
   promotionControlLabel: string;
   templateHref: string;
   publicSummary: string;
+  microPledgeDefaults?: MarketplaceMicroPledgeDefaults;
   prefill: ReviewedMarketplaceSeedTemplatePrefill;
 }
 
@@ -72,7 +87,32 @@ export interface PublicReviewedSeedTemplateSummary {
   promotionBehavior: "reviewed_template_only";
   href: string;
   summary: string;
+  microPledgeDefaults?: MarketplaceMicroPledgeDefaults;
 }
+
+export const FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS = {
+  defaultDurations: ["One meal", "A few meals", "One day", "A few days"],
+  coveredFoodPrompt:
+    "State the covered food or meal context before lock; broad diet categories require manual review.",
+  adequateSubstitutePrompt:
+    "Name an adequate substitute or opt-out before the pledge starts so the action is not hunger, medical risk, or pressure.",
+  healthSafetyBoundary:
+    "Block or escalate pledges involving medical risk, eating-disorder risk, underage participants, coercion, or unavailable substitutes.",
+  selfAttestationLadder: [
+    "Private self-attestation",
+    "Timestamped private note",
+    "Optional receipt or meal photo",
+    "Optional witness attestation",
+  ],
+  perUnitAmountBand: "$1-$25 per meal or $5-$75 per day unless a reviewer approves a higher cap.",
+  cumulativeSequenceCap:
+    "Cap repeated micro-pledges before a new manual review; no sequence can silently become a 30-day pledge.",
+  prePerformanceLockRequired: true,
+  noAutoRollover: true,
+  longerDurationHandling:
+    "Thirty-day or longer abstention pledges are manual exceptions, not marketplace defaults.",
+  publicReceiptDefault: "private_by_default_opt_in_card",
+} as const satisfies MarketplaceMicroPledgeDefaults;
 
 export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
   {
@@ -203,29 +243,30 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     promotionControlLabel: "Promote only after reviewed live-template approval",
     templateHref: "/offers/new?template=reciprocal-mixed",
     publicSummary:
-      "Trade one bounded action for a counterparty action with matched evidence duties.",
+      "Trade one short food-abstention micro-pledge for a bounded counterparty action with matched evidence duties.",
+    microPledgeDefaults: FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS,
     prefill: {
-      title: "30-day reciprocal pledge swap",
+      title: "One-meal food-abstention pledge swap",
       description:
-        "A short, reviewable commitment in exchange for a reciprocal action.",
+        "A short, reviewable food-abstention commitment in exchange for a reciprocal action.",
       mode: "pledge",
       offeredCause: "Animal welfare",
       requestedCause: "Global poverty",
       compromiseCause: "Not needed",
       offerAction:
-        "I will follow a vegetarian diet for the review period and keep a simple public log of exceptions.",
+        "I will skip one covered animal-product meal after naming the meal context and an adequate substitute before lock.",
       requestAction:
-        "The counterparty will donate to an evidence-focused global health or poverty charity during the same period.",
+        "The counterparty will make the bounded donation or pledge stated in the final preview after both sides lock terms.",
       baselineStatement:
-        "Without this trade, I would not make this short diet commitment during the next 30 days.",
+        "Without this trade, I would eat the covered meal normally and would not make this specific micro-pledge on this date.",
       exitCondition:
-        "Either side can pause before the review period starts; after it starts, missed evidence creates an unresolved record rather than a completed one.",
+        "Either side can pause before the pre-performance lock. After lock, missed self-attestation creates an unresolved record rather than a completed one.",
       notes:
-        "This is a voluntary pledge swap. Each side should be free to decline, pause, or renegotiate if the burden becomes materially different from what was stated.",
+        "Default to one meal, a few meals, one day, or a few days. Name covered food, adequate substitutes, health boundaries, self-attestation level, per-unit cap, and no auto rollover before relying on the pledge. Public receipt cards are private by default and opt-in only.",
       offerImpact: "7",
       minCounterpartyImpact: "6",
       verification: "Public pledge",
-      duration: "30 days",
+      duration: "One meal",
       paymentIntervalUnit: "none",
       paymentIntervalValue: "1",
       trustLevel: "3",
@@ -247,30 +288,31 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     promotionControlLabel: "Promote only after reviewed live-template approval",
     templateHref: "/offers/new?template=bargained-coordination",
     publicSummary:
-      "Use repeated rounds or alternation when a one-shot trade would not clear.",
+      "Use a few-day micro-pledge sequence when a one-shot pledge would not clear.",
+    microPledgeDefaults: FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS,
     prefill: {
-      title: "Bargained coordination",
+      title: "Few-day reciprocal micro-pledge sequence",
       description:
-        "Repeated structure, alternation, or batching makes a blocked deal acceptable.",
+        "A capped few-day sequence with pre-performance locks, explicit substitutes, and no automatic rollover.",
       mode: "pledge",
-      offeredCause: "Community service",
+      offeredCause: "Animal welfare",
       requestedCause: "Public health",
       compromiseCause: "Not needed",
       offerAction:
-        "I will support project A in the specified rounds if the counterparty supports project B in the paired rounds.",
+        "I will complete a few-day covered-food abstention sequence only after each day has a named substitute and lock confirmation.",
       requestAction:
-        "The counterparty will accept the alternation schedule or repeated-round rule before either side relies on the deal.",
+        "The counterparty will complete the paired bounded action only for locked days that clear the self-attestation and safety checks.",
       baselineStatement:
-        "A one-shot version is not acceptable to one side; the repeated structure is what makes cooperation feasible.",
+        "Without this trade, I would not make this specific few-day abstention sequence and would not publicly claim the action.",
       exitCondition:
-        "If either party misses a scheduled round or rejects the alternation rule, the remaining rounds pause until both reconfirm.",
+        "If either party misses attestation, hits a safety boundary, or rejects a day-specific lock, remaining days pause until both reconfirm.",
       notes:
-        "Use this for bargaining, turn-taking, and repeated coordination trades where the average package is better than the default.",
+        "Use this for short food-abstention sequences only. Record unit baseline, covered food, substitute, self-attestation ladder, per-unit amount band, sequence cap, and public receipt opt-in status. Thirty-day or longer pledges require manual exception review.",
       offerImpact: "7",
       minCounterpartyImpact: "6",
       verification: "Peer witness",
-      duration: "3 months",
-      paymentIntervalUnit: "month",
+      duration: "A few days",
+      paymentIntervalUnit: "day",
       paymentIntervalValue: "1",
       trustLevel: "3",
     },
@@ -305,5 +347,7 @@ export function getPublicReviewedSeedTemplateSummaries(): PublicReviewedSeedTemp
     promotionBehavior: template.promotionBehavior,
     href: template.templateHref,
     summary: template.publicSummary,
+    microPledgeDefaults:
+      "microPledgeDefaults" in template ? template.microPledgeDefaults : undefined,
   }));
 }

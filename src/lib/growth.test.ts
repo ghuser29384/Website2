@@ -142,6 +142,9 @@ test("marketplace measurement metadata keeps template ids and filter buckets wit
   assert.equal(isFunnelEventType("marketplace_filter_applied"), true);
   assert.equal(isFunnelEventType("marketplace_seed_template_selected"), true);
   assert.equal(isFunnelEventType("marketplace_create_from_template_started"), true);
+  assert.equal(isFunnelEventType("marketplace_intake_triage_routed"), true);
+  assert.equal(isFunnelEventType("marketplace_public_receipt_previewed"), true);
+  assert.equal(isFunnelEventType("marketplace_claim_correction_requested"), true);
   assert.deepEqual(metadata.filterKeys, ["mode", "cause"]);
   assert.equal(metadata.liveMetricEligible, false);
   assert.equal(metadata.marketplaceTab, "worked_examples");
