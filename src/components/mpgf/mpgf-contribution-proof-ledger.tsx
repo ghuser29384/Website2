@@ -12,11 +12,17 @@ function formatStatus(status: { label: string; detail: string }) {
   return `${status.label}. ${status.detail}`;
 }
 
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function MpgfContributionProofLedger({
   ledger,
 }: {
   ledger: MpgfContributionProofLedger;
 }) {
+  const accounting = ledger.accounting;
+
   return (
     <div aria-labelledby="mpgf-contribution-proof-ledger-title">
       <div className="section-head">
@@ -26,6 +32,12 @@ export function MpgfContributionProofLedger({
           Contribution intents stay conditional: identity, threshold, destination-proof,
           challenge-window, and milestone-release gates must all clear before anything becomes
           payout-relevant.
+        </p>
+        <p>
+          Plain-language contribution summary: each accounting channel is labeled separately, so
+          gross captured, fees, net recipient-disbursed dollars, actual contributions, counted
+          dollars, match-eligible dollars, sponsor support, rewards, credits, and certificates are
+          never merged into one unlabeled impact number.
         </p>
       </div>
 
@@ -75,6 +87,57 @@ export function MpgfContributionProofLedger({
         </div>
       </dl>
 
+      <dl className="mpgf-summary-grid" aria-label="Separated accounting proof ledger">
+        <div>
+          <dt>Gross captured</dt>
+          <dd>{formatUsd(accounting.grossCapturedCents)}</dd>
+        </div>
+        <div>
+          <dt>Fees</dt>
+          <dd>{formatUsd(accounting.feeCents)}</dd>
+        </div>
+        <div>
+          <dt>Net recipient-disbursed</dt>
+          <dd>{formatUsd(accounting.netRecipientDisbursedCents)}</dd>
+        </div>
+        <div>
+          <dt>Actual contribution</dt>
+          <dd>{formatUsd(accounting.actualContributionCents)}</dd>
+        </div>
+        <div>
+          <dt>Counted contribution</dt>
+          <dd>{formatUsd(accounting.countedContributionCents)}</dd>
+        </div>
+        <div>
+          <dt>Match-eligible contribution</dt>
+          <dd>{formatUsd(accounting.matchEligibleContributionCents)}</dd>
+        </div>
+        <div>
+          <dt>Sponsor base match</dt>
+          <dd>{formatUsd(accounting.sponsorBaseMatchCents)}</dd>
+        </div>
+        <div>
+          <dt>Sponsor bonus match</dt>
+          <dd>{formatUsd(accounting.sponsorBonusMatchCents)}</dd>
+        </div>
+        <div>
+          <dt>Success rewards</dt>
+          <dd>{formatUsd(accounting.successRewardCents)}</dd>
+        </div>
+        <div>
+          <dt>Coordination credits</dt>
+          <dd>{formatCount(accounting.coordinationCreditCount, "credit")}</dd>
+        </div>
+        <div>
+          <dt>Impact certificates</dt>
+          <dd>{formatCount(accounting.impactCertificateCount, "certificate")}</dd>
+        </div>
+        <div>
+          <dt>Proof state</dt>
+          <dd>{accounting.proofState.replaceAll("_", " ")}</dd>
+        </div>
+      </dl>
+
       <div className="mpgf-table" aria-label="Participant route proof ledger">
         <div className="mpgf-table-row mpgf-table-head">
           <span>Route</span>
@@ -99,6 +162,44 @@ export function MpgfContributionProofLedger({
               {row.challengeWindowStatus.label}; {row.payoutMilestoneStatus.label}
             </span>
             <span>{row.payoutMilestoneStatus.nextAction}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="mpgf-table" aria-label="Route separated accounting proof ledger">
+        <div className="mpgf-table-row mpgf-table-head">
+          <span>Route</span>
+          <span>Gross / fee / net</span>
+          <span>Actual / counted / match-eligible</span>
+          <span>Sponsor / benefits</span>
+        </div>
+        {ledger.rows.length === 0 ? (
+          <div className="mpgf-table-row">
+            <span>No saved participant route</span>
+            <span>{formatUsd(0)} / {formatUsd(0)} / {formatUsd(0)}</span>
+            <span>{formatUsd(0)} / {formatUsd(0)} / {formatUsd(0)}</span>
+            <span>No sponsor, reward, credit, or certificate proof.</span>
+          </div>
+        ) : null}
+        {ledger.rows.map((row) => (
+          <div key={`accounting-${row.pledgeId}`} className="mpgf-table-row">
+            <span>{row.campaignTitle}</span>
+            <span>
+              {formatUsd(row.accounting.grossCapturedCents)} / {formatUsd(row.accounting.feeCents)} /{" "}
+              {formatUsd(row.accounting.netRecipientDisbursedCents)}
+            </span>
+            <span>
+              {formatUsd(row.accounting.actualContributionCents)} /{" "}
+              {formatUsd(row.accounting.countedContributionCents)} /{" "}
+              {formatUsd(row.accounting.matchEligibleContributionCents)}
+            </span>
+            <span>
+              Base {formatUsd(row.accounting.sponsorBaseMatchCents)}; bonus{" "}
+              {formatUsd(row.accounting.sponsorBonusMatchCents)}; rewards{" "}
+              {formatUsd(row.accounting.successRewardCents)};{" "}
+              {formatCount(row.accounting.coordinationCreditCount, "credit")};{" "}
+              {formatCount(row.accounting.impactCertificateCount, "certificate")}.
+            </span>
           </div>
         ))}
       </div>

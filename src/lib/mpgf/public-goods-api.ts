@@ -402,6 +402,7 @@ export function buildMpgfPublicGoodsRoundApi({
         sponsorPoolBacking: ecmRulebook.sponsorPoolBacking,
         simplifiedUserFlow: ecmRulebook.simplifiedUserFlow,
         participantIncentives: ecmRulebook.participantIncentives,
+        publicCopyValidation: ecmRulebook.publicCopyValidation,
         failureBonusControls: ecmRulebook.failureBonusControls,
         postClearCustodialState: ecmRulebook.custodyAndRelease.postClearCustodialState,
         escrowClaimAllowed: ecmRulebook.custodyAndRelease.escrowClaimAllowed,

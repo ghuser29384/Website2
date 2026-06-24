@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 
 import {
+  MPGF_COPY,
   demoMpgfAssuranceRound,
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
+import { validateMpgfCrecPublishedCopyBundle } from "./public-goods-crecm-copy";
 import {
   buildMpgfCrecV1125ClearingContractSummary,
 } from "./public-goods-crecm-v1125";
@@ -218,6 +220,7 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     impactCertificatesForCapturedSuccessfulContributionRowsOnly: true;
     noLateAccessForNonSignersOrLateSigners: true;
   };
+  publicCopyValidation: ReturnType<typeof validateMpgfCrecPublishedCopyBundle>;
   failureBonusControls: {
     thresholdFamilyFailureReasonsOnly: [
       "threshold_amount_shortfall",
@@ -502,6 +505,37 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       "reauthorize_only_after_clearance_reconfirmed_if_provider_authorization_expires",
     ] as MpgfPublicGoodsEcmRulebookReport["custodyAndRelease"]["donorFailureHandling"],
   };
+  const publicCopyValidation = validateMpgfCrecPublishedCopyBundle(
+    [
+      {
+        surface: "mpgf-real-money-terms",
+        text: `${MPGF_COPY.realMoneyContribution} ${MPGF_COPY.not_escrow} ${MPGF_COPY.not_guaranteed_effectiveness}`,
+      },
+      {
+        surface: "mpgf-common-ground-budget-review",
+        text:
+          "No charge now; saved payment methods or JIT authorizations are not escrow, custody, funds held, or payment protection.",
+      },
+      {
+        surface: "mpgf-contributor-benefits",
+        text:
+          "Contributor-only benefits require captured successful rows and never affect allocation power.",
+      },
+    ],
+    {
+      paymentCaptureAllowed: false,
+      escrowClaimAllowed: custodyAndRelease.escrowClaimAllowed,
+      custodyState: custodyAndRelease.postClearCustodialState,
+      baseMatchPoolBacked: sponsorPoolBacking.poolSpecificBackingRequired,
+      bonusMatchPoolBacked: sponsorPoolBacking.poolSpecificBackingRequired,
+      successRewardPoolFullyBacked: false,
+      coordinationCreditsEnabledForCapturedRows:
+        participantIncentives.coordinationCreditsNonTransferableAndNoAllocationPower,
+      impactCertificatesEnabledForCapturedRows:
+        participantIncentives.impactCertificatesForCapturedSuccessfulContributionRowsOnly,
+      capturedContributionRowsAvailable: false,
+    },
+  );
 
   return {
     ok: true,
@@ -538,6 +572,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     },
     simplifiedUserFlow,
     participantIncentives,
+    publicCopyValidation,
     failureBonusControls,
     identityAndAntiSybil: {
       publicPolicy: "unique_human_counting_payment_method_checks_and_anomaly_review_affect_subsidy_eligibility_only",
@@ -578,6 +613,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       sponsorPoolBacking,
       simplifiedUserFlow,
       participantIncentives,
+      publicCopyValidation,
       failureBonusControls,
       MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY,
       recipientRegistry.map((recipient) => [recipient.campaignId, recipient.registryStatus, recipient.payoutRail]),

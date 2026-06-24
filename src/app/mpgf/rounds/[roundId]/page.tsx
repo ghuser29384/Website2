@@ -749,6 +749,9 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 payload={commonGroundBudgetSavePayload}
                 paymentCaptureAllowed={commonGroundBudgetPreview.paymentCaptureAllowed}
                 releaseGateRequirementBundleHash={commonGroundBudgetPreview.releaseGateRequirementBundleHash}
+                rulebookHash={ecmRulebook.calcHash}
+                sourceSpec={ecmRulebook.mechanism.sourceSpec}
+                technicalLabel={ecmRulebook.mechanism.technicalLabel}
                 termsSnapshotHash={commonGroundBudgetPreview.termsSnapshotHash}
               />
               <div className="mpgf-pool-directory">
@@ -858,6 +861,14 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 {ecmRulebook.separatedAccounting.actualCountedMatchEligibleSeparated
                   ? "actual, counted, and match-eligible dollars separated"
                   : "not separated"}
+              </dd>
+            </div>
+            <div>
+              <dt>Copy validation</dt>
+              <dd>
+                {ecmRulebook.publicCopyValidation.ok
+                  ? `${ecmRulebook.publicCopyValidation.surfaceCount} surfaces checked against recorded CRECM state`
+                  : `${ecmRulebook.publicCopyValidation.blockedSurfaceCount} copy surfaces blocked`}
               </dd>
             </div>
             <div>

@@ -16,7 +16,7 @@ import type {
   MpgfPublicGoodsRoundAllocation,
 } from "./types";
 
-export const MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION = "mpgf-contribution-proof-ledger-v1";
+export const MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION = "mpgf-contribution-proof-ledger-v2";
 
 export type MpgfContributionProofLedgerTone = "passed" | "pending" | "paused" | "blocked" | "not_started";
 
@@ -39,6 +39,27 @@ export interface MpgfContributionProofLedgerMilestone {
   evidenceRequirements: string[];
 }
 
+export interface MpgfContributionProofLedgerAccounting {
+  grossCapturedCents: number;
+  feeCents: number;
+  netRecipientDisbursedCents: number;
+  actualContributionCents: number;
+  countedContributionCents: number;
+  matchEligibleContributionCents: number;
+  sponsorBaseMatchCents: number;
+  sponsorBonusMatchCents: number;
+  successRewardCents: number;
+  failureBonusOrCarryForwardCreditCents: number;
+  coordinationCreditCount: number;
+  impactCertificateCount: number;
+  proofState:
+    | "verified_payment_proof"
+    | "pending_payment_proof"
+    | "rejected_payment_proof"
+    | "no_payment_proof";
+  proofDetail: string;
+}
+
 export interface MpgfContributionProofLedgerRow {
   pledgeId: string;
   campaignId: string;
@@ -54,6 +75,7 @@ export interface MpgfContributionProofLedgerRow {
   challengeWindowStatus: MpgfContributionProofLedgerStatus;
   payoutMilestoneStatus: MpgfContributionProofLedgerStatus;
   payoutMilestones: MpgfContributionProofLedgerMilestone[];
+  accounting: MpgfContributionProofLedgerAccounting;
 }
 
 export interface MpgfContributionProofLedger {
@@ -70,6 +92,7 @@ export interface MpgfContributionProofLedger {
   destinationProofStatus: MpgfContributionProofLedgerStatus;
   challengeWindowStatus: MpgfContributionProofLedgerStatus;
   payoutMilestones: MpgfContributionProofLedgerMilestone[];
+  accounting: MpgfContributionProofLedgerAccounting;
   rows: MpgfContributionProofLedgerRow[];
   warnings: string[];
 }
@@ -517,6 +540,112 @@ function buildMilestones(
   }));
 }
 
+function emptyAccounting(): MpgfContributionProofLedgerAccounting {
+  return {
+    grossCapturedCents: 0,
+    feeCents: 0,
+    netRecipientDisbursedCents: 0,
+    actualContributionCents: 0,
+    countedContributionCents: 0,
+    matchEligibleContributionCents: 0,
+    sponsorBaseMatchCents: 0,
+    sponsorBonusMatchCents: 0,
+    successRewardCents: 0,
+    failureBonusOrCarryForwardCreditCents: 0,
+    coordinationCreditCount: 0,
+    impactCertificateCount: 0,
+    proofState: "no_payment_proof",
+    proofDetail: "No participant-specific payment proof has been verified for this route.",
+  };
+}
+
+function accountingForPledge({
+  allocationLine,
+  countedContributionCents,
+  failureBonusOrCarryForwardCreditCents,
+  paymentProof,
+}: {
+  allocationLine?: MpgfPublicGoodsRoundAllocation["lines"][number];
+  countedContributionCents: number;
+  failureBonusOrCarryForwardCreditCents: number;
+  paymentProof?: MpgfPublicGoodsPaymentProof;
+}): MpgfContributionProofLedgerAccounting {
+  const verifiedPaymentCents = paymentProof?.status === "verified" ? paymentProof.amountVerifiedCents : 0;
+  const proofState = paymentProof
+    ? paymentProof.status === "verified"
+      ? "verified_payment_proof"
+      : paymentProof.status === "rejected"
+        ? "rejected_payment_proof"
+        : "pending_payment_proof"
+    : "no_payment_proof";
+  const proofDetail = paymentProof
+    ? `${paymentProof.reconciliationSource.replaceAll("_", " ")} ${paymentProof.status.replaceAll("_", " ")}`
+    : "No participant-specific payment proof has been verified for this route.";
+
+  return {
+    grossCapturedCents: verifiedPaymentCents,
+    // FeeQuote records are a separate CRECM input. The legacy proof ledger does not infer fees.
+    feeCents: 0,
+    netRecipientDisbursedCents: verifiedPaymentCents,
+    actualContributionCents: verifiedPaymentCents,
+    countedContributionCents,
+    matchEligibleContributionCents: countedContributionCents,
+    sponsorBaseMatchCents: countedContributionCents > 0 ? allocationLine?.baseMatchCents ?? 0 : 0,
+    sponsorBonusMatchCents: countedContributionCents > 0 ? allocationLine?.qfBonusCents ?? 0 : 0,
+    successRewardCents: 0,
+    failureBonusOrCarryForwardCreditCents,
+    coordinationCreditCount: 0,
+    impactCertificateCount: 0,
+    proofState,
+    proofDetail,
+  };
+}
+
+function sumAccounting(
+  rows: MpgfContributionProofLedgerRow[],
+  carryForwardCreditCents: number,
+): MpgfContributionProofLedgerAccounting {
+  const initial = emptyAccounting();
+  const totals = rows.reduce(
+    (sum, row) => ({
+      grossCapturedCents: sum.grossCapturedCents + row.accounting.grossCapturedCents,
+      feeCents: sum.feeCents + row.accounting.feeCents,
+      netRecipientDisbursedCents:
+        sum.netRecipientDisbursedCents + row.accounting.netRecipientDisbursedCents,
+      actualContributionCents: sum.actualContributionCents + row.accounting.actualContributionCents,
+      countedContributionCents: sum.countedContributionCents + row.accounting.countedContributionCents,
+      matchEligibleContributionCents:
+        sum.matchEligibleContributionCents + row.accounting.matchEligibleContributionCents,
+      sponsorBaseMatchCents: sum.sponsorBaseMatchCents + row.accounting.sponsorBaseMatchCents,
+      sponsorBonusMatchCents: sum.sponsorBonusMatchCents + row.accounting.sponsorBonusMatchCents,
+      successRewardCents: sum.successRewardCents + row.accounting.successRewardCents,
+      failureBonusOrCarryForwardCreditCents:
+        sum.failureBonusOrCarryForwardCreditCents +
+        row.accounting.failureBonusOrCarryForwardCreditCents,
+      coordinationCreditCount: sum.coordinationCreditCount + row.accounting.coordinationCreditCount,
+      impactCertificateCount: sum.impactCertificateCount + row.accounting.impactCertificateCount,
+      proofState: sum.proofState,
+      proofDetail: sum.proofDetail,
+    }),
+    initial,
+  );
+
+  return {
+    ...totals,
+    failureBonusOrCarryForwardCreditCents:
+      totals.failureBonusOrCarryForwardCreditCents + carryForwardCreditCents,
+    proofState: rows.some((row) => row.accounting.proofState === "verified_payment_proof")
+      ? "verified_payment_proof"
+      : rows.some((row) => row.accounting.proofState === "pending_payment_proof")
+        ? "pending_payment_proof"
+        : rows.some((row) => row.accounting.proofState === "rejected_payment_proof")
+          ? "rejected_payment_proof"
+          : "no_payment_proof",
+    proofDetail:
+      "Separated gross, fee, net-recipient, actual, counted, match-eligible, sponsor, reward, credit, and certificate channels.",
+  };
+}
+
 function summarizeStatusGroup(
   emptyStatus: MpgfContributionProofLedgerStatus,
   statuses: MpgfContributionProofLedgerStatus[],
@@ -631,6 +760,20 @@ export function buildMpgfContributionProofLedger({
       destinationProofStatus,
       challengeWindowStatus,
     });
+    const countedContributionCents =
+      currentlyRoutedAllocationsCents > 0 &&
+      identityStatus.tone === "passed" &&
+      thresholdStatus.tone === "passed" &&
+      destinationProofStatus.tone === "passed" &&
+      challengeWindowStatus.tone === "passed"
+        ? currentlyRoutedAllocationsCents
+        : 0;
+    const accounting = accountingForPledge({
+      allocationLine,
+      countedContributionCents,
+      failureBonusOrCarryForwardCreditCents,
+      paymentProof: paymentProofForPledge(pledge, paymentProofs),
+    });
 
     return {
       pledgeId: pledge.id,
@@ -647,6 +790,7 @@ export function buildMpgfContributionProofLedger({
       challengeWindowStatus,
       payoutMilestoneStatus,
       payoutMilestones: buildMilestones(pledge.campaignId, currentlyRoutedAllocationsCents, payoutMilestoneStatus),
+      accounting,
     };
   });
 
@@ -666,6 +810,7 @@ export function buildMpgfContributionProofLedger({
   const carryForwardCreditCents =
     rows.reduce((sum, row) => sum + row.failureBonusOrCarryForwardCreditCents, 0) +
     lateCarryForwardCreditCents(realMoneyAccountState);
+  const accounting = sumAccounting(rows, lateCarryForwardCreditCents(realMoneyAccountState));
   const noRouteStatus = status(
     "no_saved_route",
     participantState?.status === "sign_in_required" ? "not_started" : "pending",
@@ -702,6 +847,7 @@ export function buildMpgfContributionProofLedger({
       "Challenge-window status",
     ),
     payoutMilestones: rows.flatMap((row) => row.payoutMilestones),
+    accounting,
     rows,
     warnings: [...(participantState?.warnings ?? []), ...(realMoneyAccountState?.warnings ?? [])],
   };

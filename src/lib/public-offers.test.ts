@@ -227,12 +227,18 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.match(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")
       ?.description ?? "",
-    /moralpublicgoods102\.md \/ CRECM v1\.96/,
+    /moralpublicgoods131\.md \/ CRECM v1\.125/,
   );
   assert.ok(
     externalCrecPayload.publicContract.nonClaims.some((claim) =>
-      /moralpublicgoods102\.md \/ CRECM v1\.96/.test(claim),
+      /moralpublicgoods131\.md \/ CRECM v1\.125/.test(claim),
     ),
+  );
+  assert.equal(
+    externalCrecPayload.publicContract.nonClaims.some((claim) =>
+      /moralpublicgoods102\.md|CRECM v1\.96/.test(claim),
+    ),
+    false,
   );
   assert.equal(templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.count, 4);
   assert.ok(

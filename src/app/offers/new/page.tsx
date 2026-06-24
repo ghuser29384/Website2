@@ -7,7 +7,11 @@ import { isPaymentBondsEnabled } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getDonationOffsetOverview, getOfferById, getViewer } from "@/lib/app-data";
 import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
-import { getReviewedMarketplaceSeedTemplate } from "@/lib/marketplace-seed-templates";
+import {
+  DONATION_OFFSET_PLAIN_LABELS,
+  getReviewedMarketplaceSeedTemplate,
+} from "@/lib/marketplace-seed-templates";
+import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
 import { buildCreateSimilarTemplateFromLiveOffer } from "@/lib/offer-create-similar";
 import { isPublicLiveOfferId } from "@/lib/offer-follows";
 import { getPerformanceBondConfig } from "@/lib/performance-bonds";
@@ -73,12 +77,11 @@ const MARKETPLACE_INTAKE_TRIAGE_ROUTES = [
   },
   {
     key: "external_crecm_public_goods",
-    label: "Common Ground Budget public-goods module",
-    href: "/mpgf",
+    label: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel} public-goods module`,
+    href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
     status: "Separate module",
     routeEligible: false,
-    summary:
-      "Moral public-goods work routes to the Public Goods Fund's Common Ground Budget under CRECM v1.125.",
+    summary: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   },
   {
     key: "ordinary_paid_action",
@@ -502,6 +505,12 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
     : null;
   const initialTemplate =
     initialMoralTradeTypeTemplate ?? initialExampleTemplate ?? initialLiveOfferTemplate;
+  const signedOutOffsetPreviewTemplate =
+    !viewer && (initialTemplate?.mode === "offset" || initialMode === "offset")
+      ? initialTemplate?.mode === "offset"
+        ? initialTemplate
+        : getMoralTradeTypeTemplate("pure-opposed-cause")
+      : null;
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
     donationOffsetOverview?.pools.map((pool) => ({
@@ -641,6 +650,71 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
 
         <section className="section section-white">
           <div className="auth-grid offer-create-grid">
+            {signedOutOffsetPreviewTemplate ? (
+              <article
+                aria-labelledby="signed-out-offset-preview-heading"
+                className="panel auth-side-card"
+                data-signed-out-offset-preview="true"
+              >
+                <p className="eyebrow">Local offset preview</p>
+                <h2 id="signed-out-offset-preview-heading">
+                  Preview the donation-offset shape before sign-in.
+                </h2>
+                <p>
+                  Signed-out users can inspect the offset shape here. Sign-in is required before
+                  saving, publishing, requesting review, disclosing counterparties, authorizing
+                  money, or creating a live offer.
+                </p>
+                <dl className="mpgf-summary-grid" aria-label="Donation offset local preview">
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[0]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.baselineStatement}</dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[1]}</dt>
+                    <dd>
+                      {signedOutOffsetPreviewTemplate.offset
+                        ? `$${signedOutOffsetPreviewTemplate.offset.baselineAmountUsd} matched at ${signedOutOffsetPreviewTemplate.offset.offsetRatio}:1`
+                        : "Amount and ratio are set in the signed-in draft."}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[2]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.compromiseCause}</dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[3]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.description}</dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[4]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.verification}</dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[5]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.duration}</dd>
+                  </div>
+                  <div>
+                    <dt>{DONATION_OFFSET_PLAIN_LABELS[6]}</dt>
+                    <dd>{signedOutOffsetPreviewTemplate.exitCondition}</dd>
+                  </div>
+                </dl>
+                <details className="pilot-note">
+                  <summary>What stays blocked while signed out</summary>
+                  <p>
+                    This preview cannot create reliance, contact a counterparty, disclose private
+                    terms, reserve commitments, capture money, or publish an offer. It is only a
+                    plain-language draft preview.
+                  </p>
+                </details>
+                <div className="hero-actions">
+                  <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
+                    Save after sign-in
+                  </Link>
+                </div>
+              </article>
+            ) : null}
+
             {viewer ? (
               <OfferCreateForm
                 availablePools={availablePools}

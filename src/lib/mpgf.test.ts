@@ -224,6 +224,7 @@ import {
   buildMpgfPublicGoodsEcmRulebookReport,
   getMpgfPublicGoodsEcmRulebookReportApi,
 } from "./mpgf/public-goods-ecm-rulebook";
+import { MPGF_CRECM_COPY_VALIDATION_POLICY } from "./mpgf/public-goods-crecm-copy";
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
   MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
@@ -1116,6 +1117,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.ecmRulebook.crossViewSubsidySchedule.moralReputationCanIncreasePremium, false);
   assert.equal(round.round.ecmRulebook.recipientEligibilityRules.payableOnlyIfRegistryStatusEligible, true);
   assert.equal(round.round.ecmRulebook.donorDisclosure.counterpartBucketsRequired, true);
+  assert.equal(round.round.ecmRulebook.publicCopyValidation.ok, true);
+  assert.equal(round.round.ecmRulebook.publicCopyValidation.policy, MPGF_CRECM_COPY_VALIDATION_POLICY);
   assert.equal(round.round.ecmRulebook.moralReputationCanIncreaseAllocationPower, false);
   assert.equal(round.round.ecmRulebook.noGlobalMoralRanking, true);
   assert.equal(round.round.cgVqaf?.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
@@ -1834,6 +1837,7 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/rulebook/route.ts", "utf8");
   const roundApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const rulebookSource = readFileSync("src/lib/mpgf/public-goods-ecm-rulebook.ts", "utf8");
   const schemaSql = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260604_mpgf_ecm_rulebook.sql", "utf8");
@@ -1925,6 +1929,9 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.participantIncentives.successRewardsFromBackedSponsorPoolOnly, true);
   assert.equal(report.participantIncentives.coordinationCreditsNonTransferableAndNoAllocationPower, true);
   assert.equal(report.participantIncentives.impactCertificatesForCapturedSuccessfulContributionRowsOnly, true);
+  assert.equal(report.publicCopyValidation.ok, true);
+  assert.equal(report.publicCopyValidation.policy, MPGF_CRECM_COPY_VALIDATION_POLICY);
+  assert.ok(report.publicCopyValidation.surfaceCount >= 3);
   assert.ok(report.failureBonusControls.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
   assert.equal(report.failureBonusControls.participantRoundCapRequired, true);
   assert.equal(report.failureBonusControls.claimantConflictSnapshotMustBeNoConflict, true);
@@ -1952,6 +1959,7 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.match(roundApi, /clearingContract: ecmRulebook\.clearingContract/);
   assert.match(roundApi, /hardGatesV1125: ecmRulebook\.hardGatesV1125/);
   assert.match(roundApi, /sponsorPoolBacking: ecmRulebook\.sponsorPoolBacking/);
+  assert.match(roundApi, /publicCopyValidation: ecmRulebook\.publicCopyValidation/);
   assert.match(roundApi, /failureBonusControls: ecmRulebook\.failureBonusControls/);
   assert.match(roundApi, /recipientRegistryCount/);
   assert.match(roundPage, /ecmRulebook\.mechanism\.technicalLabel/);
@@ -1965,11 +1973,13 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.match(roundPage, /Contributor benefits/);
   assert.match(roundPage, /reward, credit, and certificate lanes stay separate/);
   assert.match(roundPage, /actual, counted, and match-eligible dollars separated/);
+  assert.match(roundPage, /Copy validation/);
   assert.match(roundPage, /pool-specific and precommitted/);
   assert.match(roundPage, /Cross-view premium/);
   assert.match(roundPage, /Fallback outcome/);
   assert.match(roundPage, /counterpart-bucket conditions/);
   assert.match(roundPage, /CRECM rulebook report/);
+  assert.match(rulebookSource, /validateMpgfCrecPublishedCopyBundle/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_round_rulebooks/);
   assert.match(schemaSql, /ecm_plus_hybrid_policy/);
   assert.match(schemaSql, /batch_interval_min_days integer not null default 7/);
@@ -3006,12 +3016,30 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
   assert.match(roundPage, /MpgfCommonGroundBudgetSavePanel/);
   assert.match(roundPage, /commonGroundBudgetSavePayload/);
+  assert.match(roundPage, /rulebookHash=\{ecmRulebook\.calcHash\}/);
+  assert.match(roundPage, /sourceSpec=\{ecmRulebook\.mechanism\.sourceSpec\}/);
+  assert.match(roundPage, /technicalLabel=\{ecmRulebook\.mechanism\.technicalLabel\}/);
   assert.match(roundPage, /redactedNote_/);
   assert.match(roundPage, /Optional note/);
   assert.match(roundPage, /paymentCaptureAllowed/);
   assert.match(roundPage, /coalition-routing report/);
   assert.match(budgetSavePanel, /"use client"/);
   assert.match(budgetSavePanel, /Save no-capture budget preview/);
+  assert.match(budgetSavePanel, /Final review consent boundary/);
+  assert.match(budgetSavePanel, /Suggested defaults are not binding unless shown on this review screen and explicitly/);
+  assert.match(budgetSavePanel, /Binding caps/);
+  assert.match(budgetSavePanel, /Cross-view conditions/);
+  assert.match(budgetSavePanel, /Counterpart buckets/);
+  assert.match(budgetSavePanel, /Fallback rule/);
+  assert.match(budgetSavePanel, /Payment language/);
+  assert.match(budgetSavePanel, /Fee treatment/);
+  assert.match(budgetSavePanel, /Reward, credit, and certificate opt-ins/);
+  assert.match(budgetSavePanel, /Self-matching exclusions/);
+  assert.match(budgetSavePanel, /Sealed-progress behavior/);
+  assert.match(budgetSavePanel, /Failure-bonus denial categories/);
+  assert.match(budgetSavePanel, /Rulebook hash/);
+  assert.match(budgetSavePanel, /not escrow, custody, funds held, or payment protection/);
+  assert.match(budgetSavePanel, /Gross, fee, net recipient, actual, counted, and match-eligible/);
   assert.match(budgetSavePanel, /fetch\(apiPath/);
   assert.match(budgetSavePanel, /JSON\.stringify\(payload\)/);
   assert.match(budgetSavePanel, /activationState === "ready_for_confirmation"/);
