@@ -397,6 +397,7 @@ export function buildMpgfPublicGoodsRoundApi({
         recipientEligibilityRules: ecmRulebook.recipientEligibilityRules,
         separatedAccounting: ecmRulebook.separatedAccounting,
         clearingInputIntegrity: ecmRulebook.clearingInputIntegrity,
+        clearingContract: ecmRulebook.clearingContract,
         hardGatesV1125: ecmRulebook.hardGatesV1125,
         sponsorPoolBacking: ecmRulebook.sponsorPoolBacking,
         simplifiedUserFlow: ecmRulebook.simplifiedUserFlow,

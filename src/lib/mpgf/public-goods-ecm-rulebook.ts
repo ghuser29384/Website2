@@ -5,6 +5,9 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
+import {
+  buildMpgfCrecV1125ClearingContractSummary,
+} from "./public-goods-crecm-v1125";
 import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsMatchPool,
@@ -122,6 +125,7 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     frozenReciprocalMoralBucketSnapshotRequired: true;
     bundleDerivedRowCountGuardsRequired: true;
   };
+  clearingContract: ReturnType<typeof buildMpgfCrecV1125ClearingContractSummary>;
   hardGatesV1125: {
     projectScopeState: "valid_moral_public_good";
     externalityStateRequired: "clear";
@@ -442,6 +446,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     frozenReciprocalMoralBucketSnapshotRequired: true as const,
     bundleDerivedRowCountGuardsRequired: true as const,
   };
+  const clearingContract = buildMpgfCrecV1125ClearingContractSummary();
   const hardGatesV1125 = {
     projectScopeState: "valid_moral_public_good" as const,
     externalityStateRequired: "clear" as const,
@@ -512,6 +517,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     roundRulebook: rulebook,
     separatedAccounting,
     clearingInputIntegrity,
+    clearingContract,
     hardGatesV1125,
     sponsorPoolBacking,
     batchEngine,
@@ -567,6 +573,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       mechanism,
       separatedAccounting,
       clearingInputIntegrity,
+      clearingContract,
       hardGatesV1125,
       sponsorPoolBacking,
       simplifiedUserFlow,

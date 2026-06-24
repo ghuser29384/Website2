@@ -829,6 +829,30 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
               </dd>
             </div>
             <div>
+              <dt>Clearing contract</dt>
+              <dd>
+                {ecmRulebook.clearingContract.roundClearingInputBundle.bundleHashBindsSelectedBundleId
+                  ? "bundle id, cutoff, and component hashes bound"
+                  : "bundle binding unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt>Audit trace</dt>
+              <dd>
+                {ecmRulebook.clearingContract.optimizationRunTrace.selectedAllocationRowsHashRequired
+                  ? "fee quotes and selected allocation rows are hash-bound"
+                  : "optimizer trace unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt>Contributor benefits</dt>
+              <dd>
+                {ecmRulebook.clearingContract.contributorBenefits.neverCountAsPublicGoodDollarsOrAllocationPower
+                  ? "reward, credit, and certificate lanes stay separate"
+                  : "benefit gates unavailable"}
+              </dd>
+            </div>
+            <div>
               <dt>Accounting</dt>
               <dd>
                 {ecmRulebook.separatedAccounting.actualCountedMatchEligibleSeparated

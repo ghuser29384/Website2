@@ -187,7 +187,6 @@ const REQUIRED_ROUTES = [
   "moral_trade_review_capacity_contract",
   "moral_trade_review_capacity_enforce",
   "moral_trade_participant_term_sheet_contract",
-  "moral_trade_participant_ui_contract",
   "moral_trade_participant_term_sheet_enforce",
   "moral_trade_recipient_acceptance_enforce",
   "moral_trade_ai_preference_elicitation_enforce",
