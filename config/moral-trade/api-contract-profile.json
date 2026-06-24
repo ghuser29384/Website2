@@ -591,6 +591,42 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated commitment-settlement enforcement requests create no runtime transition, match preview, matched-trade lock, payment authorization, payment-capture, performance-release, public-metric, or release-promotion state change."
     },
     {
+      "key": "moral_goods_group_buying_collection",
+      "method": "GET",
+      "path": "/api/moral-trade/group-buying",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "group_buying_collection_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return public action-first deal cards, capability states, guided budget steps, and private-proposal intake fields; never expose private evidence, participant identities, raw action-unit keys, private policy snapshots, or real-money claims from simulated data."
+    },
+    {
+      "key": "moral_goods_group_buying_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/group-buying/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "group_buying_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return group-buying contract validation blockers, shared primitive table names, feature-capability modules, state labels, failure templates, deal-card presenters, and settlement-plan hashes; never expose private anti-gaming thresholds or sensitive identifiers."
+    },
+    {
+      "key": "moral_goods_group_buying_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/group-buying/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "group_buying_enforce_request",
+      "responseSchema": "group_buying_enforce_response",
+      "rateLimitSurface": "group_buying_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, unauthenticated, disabled-module, stale-plan, or unsafe-proposal requests create no launch, activation, settlement, donation, payout, proposal-publication, or public-report state change."
+    },
+    {
       "key": "moral_trade_pledge_performance_bond_contract",
       "method": "GET",
       "path": "/api/moral-trade/pledge-performance-bonds/contract",
@@ -3056,6 +3092,56 @@
       ]
     },
     {
+      "key": "group_buying_collection_response",
+      "purpose": "Public action-first Moral Goods Group Buying listing surface for rounds, lots, baskets, standing budgets, capability states, guided budget setup, and private proposal intake copy.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the capability gate is non-blocking for the public demo surface." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the public collection response." },
+        { "key": "featureName", "type": "string", "required": true, "privacy": "public", "description": "Moral Goods Group Buying feature name." },
+        { "key": "publicSurface", "type": "object", "required": true, "privacy": "public_contract", "description": "Action-first public deal cards, capability states, navigation tabs, primary entry points, and redacted envelope summaries." },
+        { "key": "guidedStandingBudgetSteps", "type": "string_array", "required": true, "privacy": "public", "description": "Six-step preset flow for standing microfund setup." },
+        { "key": "privateProposalIntakeFields", "type": "string_array", "required": true, "privacy": "public", "description": "Ordinary-language proposal fields collected before private review." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Capability blockers for disabled, paused, or dependency-incompatible modules." }
+      ]
+    },
+    {
+      "key": "group_buying_contract_response",
+      "purpose": "Public validator-backed Moral Goods Group Buying contract for shared purchase primitives, feature-capability gates, action-first deal-card presenters, failure templates, deterministic settlement hashes, and public/private snapshot controls.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the group-buying contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Moral Goods Group Buying contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for persistent tables, envelope types, feature modules, state labels, copy lint, failure templates, and settlement hashes." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Shared primitive tables, envelope types, feature modules, user-facing state labels, failure templates, seed slugs, deal-card samples, and settlement-plan hashes without private evidence or anti-gaming thresholds." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on group-buying launch, activation, settlement, public reporting, or receipt behavior." }
+      ]
+    },
+    {
+      "key": "group_buying_enforce_request",
+      "purpose": "Authenticated private fail-closed group-buying enforcement request for readiness checks, settlement previews, and private proposal safety review.",
+      "fields": [
+        { "key": "operation", "type": "enum", "required": true, "privacy": "private_request", "description": "readiness_check, settlement_preview, or proposal_safety_review." },
+        { "key": "envelopeId", "type": "string", "required": false, "privacy": "private_request", "description": "Round, lot, basket, or standing-budget id/slug for readiness and settlement previews." },
+        { "key": "proposal", "type": "object", "required": false, "privacy": "private_request", "description": "Private participant proposal text for anti-threat review; never published directly." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-stable idempotency key for later persistent mutation paths." }
+      ]
+    },
+    {
+      "key": "group_buying_enforce_response",
+      "purpose": "Authenticated private group-buying enforcement result that previews readiness, settlement, or private proposal risk while creating no launch, activation, settlement, donation, payout, or publication mutation.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the requested enforcement preview is non-blocking." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": false, "privacy": "private", "description": "Server time for evaluated requests." },
+        { "key": "envelopeId", "type": "string", "required": false, "privacy": "private", "description": "Envelope id evaluated by readiness or settlement preview." },
+        { "key": "readiness", "type": "object", "required": false, "privacy": "private", "description": "Fail-closed readiness blockers for launch, activation, settlement, or public reporting." },
+        { "key": "settlementPreview", "type": "object", "required": false, "privacy": "private", "description": "Deterministic settlement preview with plan hashes, line items, ledger preview, and blockers." },
+        { "key": "proposalSafety", "type": "object", "required": false, "privacy": "private", "description": "Private proposal anti-threat flags and participant-visible reason." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "Always false for this enforcement preview route." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, operation, disabled-module, unsafe-proposal, stale-plan, rate-limit, input, or readiness blockers." }
+      ]
+    },
+    {
       "key": "pledge_performance_bond_contract_response",
       "purpose": "Public validator-backed pledge-performance-bond governance contract for bounded factual-trust support, frozen bond terms, neutral forfeiture review, and no escrow/reputation/additionality claims.",
       "fields": [
@@ -5127,6 +5213,9 @@
     "risk_control_matrix_enforce_route_contract",
     "preference_integrity_enforce_route_contract",
     "commitment_settlement_enforce_route_contract",
+    "group_buying_collection_route_contract",
+    "group_buying_contract_route",
+    "group_buying_enforce_route_contract",
     "pledge_performance_bond_enforce_route_contract",
     "pledge_swap_performance_schedule_enforce_route_contract",
     "negative_commitment_scope_enforce_route_contract",

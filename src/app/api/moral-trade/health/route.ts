@@ -236,6 +236,10 @@ import {
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
 import {
+  getMoralGoodsGroupBuyingContract,
+  validateMoralGoodsGroupBuyingContract,
+} from "@/lib/moral-trade/group-buying";
+import {
   getOfferReviewWorkflowContract,
   validateOfferReviewWorkflowContract,
 } from "@/lib/proposal-review";
@@ -429,6 +433,9 @@ export async function GET(request: Request) {
     validateMoralTradeFinancialSettlementControlsContract(
       financialSettlementControlsContract,
     );
+  const groupBuyingContract = getMoralGoodsGroupBuyingContract();
+  const groupBuyingValidation =
+    validateMoralGoodsGroupBuyingContract(groupBuyingContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -541,6 +548,7 @@ export async function GET(request: Request) {
       protectiveAssessmentValidation.status === "pass" &&
       userSafetyContentModerationValidation.status === "pass" &&
       financialSettlementControlsValidation.status === "pass" &&
+      groupBuyingValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -603,6 +611,7 @@ export async function GET(request: Request) {
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
+    groupBuyingValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -723,6 +732,13 @@ export async function GET(request: Request) {
       ),
       accountSecurityContractTests:
         accountSecurityContract.contractTests,
+      groupBuyingContractVersion: groupBuyingContract.version,
+      groupBuyingEnvelopeTypes: groupBuyingContract.envelopeTypes,
+      groupBuyingFeatureModules: groupBuyingContract.featureModules,
+      groupBuyingFirstClassRecordTables: groupBuyingContract.firstClassRecordTables,
+      groupBuyingSharedPrimitiveTables: groupBuyingContract.sharedPrimitiveTables,
+      groupBuyingSeedEnvelopeSlugs: groupBuyingContract.seedEnvelopeSlugs,
+      groupBuyingContractTests: groupBuyingContract.contractTests,
       reviewerQualityContractVersion:
         reviewerQualityContract.version,
       reviewerQualityReviewTypes:
