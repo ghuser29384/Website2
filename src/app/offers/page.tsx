@@ -1164,6 +1164,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   create, edit, clear, authorize, capture, release, reward, credit, certify, or
                   audit any CRECM record.
                 </p>
+                <p>
+                  The Common Ground Budget path keeps live progress sealed before close, makes no
+                  escrow or custody claim unless a valid custody route records one, separates gross,
+                  fee, net-recipient, actual, counted, and match-eligible accounting channels, and
+                  requires final review before any binding budget or project stance is saved.
+                </p>
               </div>
               <Link className="button button-primary" href={seedRoundHref}>
                 Preview a Common Ground Budget
@@ -1175,7 +1181,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </span>
               <span className="badge badge-secondary">Capped pilot preview</span>
               <span className="badge badge-secondary">No charge now</span>
+              <span className="badge badge-secondary">No escrow claim</span>
               <span className="badge badge-secondary">Sealed progress before close</span>
+              <span className="badge badge-secondary">Separated accounting</span>
+              <span className="badge badge-secondary">Final review consent</span>
               <span className="badge badge-secondary">Review gates required</span>
             </div>
             <dl className="mpgf-summary-grid" aria-label="Common Ground Budget search-result summary">
@@ -1194,6 +1203,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <div>
                 <dt>Capture</dt>
                 <dd>disabled in preview</dd>
+              </div>
+              <div>
+                <dt>Accounting lanes</dt>
+                <dd>gross, fee, net-recipient, actual, counted, and match-eligible kept separate</dd>
+              </div>
+              <div>
+                <dt>Consent boundary</dt>
+                <dd>Budget to Projects to Review; no binding save before final review</dd>
               </div>
             </dl>
             <div className="marketplace-bootstrap-actions">
@@ -1805,6 +1822,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         <div>
                           <dt>Payment capture</dt>
                           <dd>disabled</dd>
+                        </div>
+                        <div>
+                          <dt>Escrow or custody claim</dt>
+                          <dd>none unless recorded by a valid custody route</dd>
+                        </div>
+                        <div>
+                          <dt>Accounting lanes</dt>
+                          <dd>separated; not merged into ordinary-offer counts</dd>
+                        </div>
+                        <div>
+                          <dt>Consent boundary</dt>
+                          <dd>final Common Ground Budget review before binding save</dd>
                         </div>
                         <div>
                           <dt>Public offer count</dt>

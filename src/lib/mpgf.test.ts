@@ -172,6 +172,7 @@ import {
   MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
   MPGF_PUBLIC_GOODS_API_HEADERS,
   MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_SEALED_PROGRESS_POLICY,
   buildMpgfPublicGoodsAllocationReportApi,
   buildMpgfPublicGoodsCampaignsApi,
   buildMpgfPublicGoodsMatchPreviewApi,
@@ -1033,6 +1034,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   };
   const persistedRound = {
     ...demoMpgfAssuranceRound,
+    endsAt: "2026-05-30T23:59:59.000Z",
     id: "persisted-public-api-round",
     matchPoolId: demoMpgfMatchPool.id,
   };
@@ -1060,11 +1062,13 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const persistedPreview = buildMpgfPublicGoodsMatchPreviewApi({
     allocation: persistedAllocation,
     campaigns: [persistedCampaign],
+    round: persistedRound,
     roundId: persistedRound.id,
   });
   const persistedAllocationReport = buildMpgfPublicGoodsAllocationReportApi({
     allocation: persistedAllocation,
     pledges: persistedPledges,
+    round: persistedRound,
     roundId: persistedRound.id,
   });
   const persistedCampaigns = buildMpgfPublicGoodsCampaignsApi({
@@ -1072,6 +1076,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     campaigns: [persistedCampaign],
     pledges: persistedPledges,
     allocation: persistedAllocation,
+    round: persistedRound,
   });
   const persistedRoundDetail = buildMpgfPublicGoodsRoundApi({
     round: persistedRound,
@@ -1086,8 +1091,15 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(rounds.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.deepEqual(MPGF_PUBLIC_GOODS_API_HEADERS, { "Cache-Control": MPGF_PUBLIC_GOODS_API_CACHE_CONTROL });
   assert.equal(rounds.rounds.length, 1);
+  assert.equal(rounds.rounds[0]?.sealedProgress.active, true);
+  assert.equal(rounds.rounds[0]?.verifiedDonorCount, null);
   assert.ok(round);
   assert.equal(round.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
+  assert.equal(round.round.sealedProgress.active, true);
+  assert.equal(round.round.sealedProgress.policy, MPGF_PUBLIC_GOODS_SEALED_PROGRESS_POLICY);
+  assert.equal(round.round.sealedProgress.exactPublicProgressVisible, false);
+  assert.ok(round.round.sealedProgress.redactedFields.includes("thresholdPassed"));
+  assert.equal(round.round.verifiedDonorCount, null);
   assert.equal(round.round.contributionFlow?.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
   assert.equal(round.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/pledge-intents`);
   assert.equal(round.round.contributionFlow?.manualEvidenceFallbackPath, "/api/mpgf/evidence/manual");
@@ -1149,7 +1161,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.coalitionRouting.noGlobalMoralRanking, true);
   assert.equal(round.round.coalitionRouting.moralReputationAffectsAllocationPower, false);
   assert.equal(round.round.coalitionRouting.publicAggregationOnly, true);
-  assert.ok(round.round.coalitionRouting.weakSupportBudgetCents > 0);
+  assert.equal(round.round.coalitionRouting.weakSupportBudgetCents, null);
+  assert.equal(round.round.coalitionRouting.routedWeakSupportBudgetCents, null);
   assert.equal(round.round.commonGroundBudget.policy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY);
   assert.equal(round.round.commonGroundBudget.choiceArchitecturePolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY);
   assert.equal(round.round.commonGroundBudget.fallbackPolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY);
@@ -1239,6 +1252,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("donation_offset_surplus"));
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("trade_surplus_tithe"));
   assert.equal(persistedRoundDetail.round.id, persistedRound.id);
+  assert.equal(persistedRoundDetail.round.sealedProgress.active, false);
   assert.equal(persistedRoundDetail.round.campaignCount, 1);
   assert.equal(persistedRoundDetail.round.verifiedDonorCount, 1);
   assert.equal(persistedRoundDetail.round.sponsorPool.id, demoMpgfMatchPool.id);
@@ -1271,10 +1285,14 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(persistedRoundDetail.round.postmortem?.reportPath, `/api/mpgf/rounds/${persistedRound.id}/postmortem`);
   assert.equal(persistedRoundDetail.round.finalization.proofPath, `/api/mpgf/rounds/${persistedRound.id}/proof`);
   assert.ok(campaigns);
+  assert.equal(campaigns.sealedProgress.active, true);
   assert.equal(campaigns.campaigns.length, demoMpgfPublicGoodsCampaigns.length);
   assert.ok(campaigns.campaigns.every((campaign) => campaign.milestoneSchedule.length === 3));
-  assert.ok(campaigns.campaigns.some((campaign) => campaign.thresholdPassed));
+  assert.ok(campaigns.campaigns.every((campaign) => campaign.thresholdPassed === null));
+  assert.ok(campaigns.campaigns.every((campaign) => campaign.verifiedDonorCount === null));
+  assert.ok(campaigns.campaigns.every((campaign) => campaign.directEligibleCents === null));
   assert.equal(persistedCampaigns.roundId, persistedRound.id);
+  assert.equal(persistedCampaigns.sealedProgress.active, false);
   assert.equal(persistedCampaigns.campaigns.length, 1);
   assert.equal(persistedCampaigns.campaigns[0]?.campaignId, persistedCampaign.id);
   assert.equal(persistedCampaigns.campaigns[0]?.verifiedDonorCount, 1);
@@ -1306,8 +1324,13 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(preview.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
   assert.ok(preview.qfLambda > 0);
   assert.match(preview.calcHash, /^sha256:/);
-  assert.ok(preview.rows.every((row) => typeof row.verifiedDonorCount === "number"));
+  assert.equal(preview.sealedProgress.active, true);
+  assert.ok(preview.rows.every((row) => row.verifiedDonorCount === null));
+  assert.ok(preview.rows.every((row) => row.directEligibleCents === null));
+  assert.ok(preview.rows.every((row) => row.estimatedMatchCents === null));
+  assert.ok(preview.rows.every((row) => row.blockers.includes("sealed_progress_match_preview_hidden_until_close")));
   assert.equal(persistedPreview.roundId, persistedRound.id);
+  assert.equal(persistedPreview.sealedProgress.active, false);
   assert.equal(persistedPreview.rows.length, 1);
   assert.equal(persistedPreview.rows[0]?.campaignId, persistedCampaign.id);
   assert.equal(persistedPreview.rows[0]?.verifiedDonorCount, 1);
@@ -1326,7 +1349,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(frozenDetail.campaign.matchEstimateCents, null);
   assert.ok(allocations);
   assert.equal(allocations.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
-  assert.equal(allocations.final, true);
+  assert.equal(allocations.final, false);
+  assert.equal(allocations.sealedProgress.active, true);
   assert.equal(
     allocations.regenerationPolicy,
     "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
@@ -1334,16 +1358,19 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(allocations.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
   assert.equal(allocations.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
   assert.ok(allocations.qfLambda > 0);
-  assert.equal(allocations.qfBonusAllocatedCents <= allocations.qfBonusBudgetCents, true);
-  assert.ok(allocations.totalPayoutCents > 0);
+  assert.equal(allocations.qfBonusAllocatedCents, null);
+  assert.equal(allocations.totalPayoutCents, null);
   assert.ok(allocations.rows.every((row) => row.custodyMode === "no_custody_external_handoff"));
   const allocationReportRow = allocations.rows.find((row) => row.campaignId === "campaign-animal-welfare-transition");
   assert.ok(allocationReportRow);
   assert.match(allocationReportRow.sourceContributionDigest, /^sha256:/);
   assert.equal(allocationReportRow.regeneratedFromContributionRecords, true);
-  assert.equal(allocationReportRow.verifiedDonorCount, allocationReportRow.uniqueCountedIdentityCount);
-  assert.ok(allocationReportRow.rawPaymentObjectCount > allocationReportRow.uniqueCountedIdentityCount);
+  assert.equal(allocationReportRow.verifiedDonorCount, null);
+  assert.equal(allocationReportRow.uniqueCountedIdentityCount, null);
+  assert.equal(allocationReportRow.rawPaymentObjectCount, null);
   assert.equal(persistedAllocationReport.roundId, persistedRound.id);
+  assert.equal(persistedAllocationReport.final, true);
+  assert.equal(persistedAllocationReport.sealedProgress.active, false);
   assert.equal(persistedAllocationReport.rows.length, 1);
   assert.equal(persistedAllocationReport.rows[0]?.campaignId, persistedCampaign.id);
   assert.equal(persistedAllocationReport.rows[0]?.verifiedDonorCount, 1);
@@ -1516,6 +1543,13 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Threshold status/,
     /Estimated match/,
     /Final match/,
+    /sealedProgressActive/,
+    /sealedProgressText/,
+    /round\.countdownSeconds > 0/,
+    /Threshold \{sealedThresholdStatus\(sealedProgressActive, publicBoolean\(campaign\.thresholdPassed\)\)\}/,
+    /value=\{sealedProgressActive \? 0 : Math\.min\(publicNumber\(campaign\.directEligibleCents\), campaign\.thresholdAmountCents\)\}/,
+    /Exact live threshold, counterparty-volume, common-ground signal, and success-without-me/,
+    /Public exact aggregates appear only\s+after close in final reports or audit bundles/,
     /Evidence and destination proof/,
     /Campaign page/,
     /Appeal or dissent note/,

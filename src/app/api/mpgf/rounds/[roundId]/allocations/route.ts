@@ -38,6 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
             matchPool: contextLoad.matchPool,
           }),
           pledges: contributionLoad.pledges,
+          round: contextLoad.round,
           roundId: contextLoad.round.id,
         })
       : fallbackResult;

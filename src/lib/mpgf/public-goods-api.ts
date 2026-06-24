@@ -70,6 +70,22 @@ export const MPGF_PUBLIC_GOODS_API_CACHE_CONTROL = "no-store, max-age=0";
 export const MPGF_PUBLIC_GOODS_API_HEADERS = {
   "Cache-Control": MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
 } as const;
+export const MPGF_PUBLIC_GOODS_SEALED_PROGRESS_POLICY =
+  "sealed_progress_no_exact_threshold_counterparty_or_match_before_round_close";
+
+const MPGF_PUBLIC_GOODS_SEALED_PROGRESS_FIELDS = [
+  "directEligibleCents",
+  "countedForMatchCents",
+  "verifiedDonorCount",
+  "thresholdPassed",
+  "campaignStatus",
+  "matchEstimateCents",
+  "baseMatchCents",
+  "qfBonusCents",
+  "qfScore",
+  "allocationTotals",
+  "coalitionRoutingLiveProgress",
+] as const;
 
 export interface MpgfPublicGoodsPublicApiOptions {
   incidentStatusByCampaignId?: Record<string, "clear" | "frozen" | "resolved" | undefined>;
@@ -87,6 +103,31 @@ function secondsUntil(value: string) {
   }
 
   return Math.max(0, Math.floor((parsed - nowMs()) / 1000));
+}
+
+function sealedProgressForRound(round: Pick<MpgfPublicGoodsRound, "endsAt">) {
+  const active = secondsUntil(round.endsAt) > 0;
+
+  return {
+    policy: MPGF_PUBLIC_GOODS_SEALED_PROGRESS_POLICY,
+    active,
+    exactPublicProgressVisible: !active,
+    redactedUntil: active ? round.endsAt : null,
+    publicExactAggregatesSurface: active ? "post_close_final_reports_or_audit_bundles_only" : "post_close_public_report",
+    redactedFields: active ? [...MPGF_PUBLIC_GOODS_SEALED_PROGRESS_FIELDS] : [],
+  };
+}
+
+function sealNumber(sealed: boolean, value: number) {
+  return sealed ? null : value;
+}
+
+function sealBoolean(sealed: boolean, value: boolean) {
+  return sealed ? null : value;
+}
+
+function sealString<T extends string>(sealed: boolean, value: T) {
+  return sealed ? "sealed_before_close" : value;
 }
 
 function publicCalcHash(value: unknown) {
@@ -164,6 +205,7 @@ function publicCampaignProgress(
     allocation?: MpgfPublicGoodsRoundAllocation;
     pledges?: MpgfPublicGoodsPledge[];
     reviewCases?: MpgfPublicGoodsReviewCase[];
+    round?: MpgfPublicGoodsRound;
   } = {},
 ) {
   const sourcePledges = input.pledges ?? demoMpgfAssurancePledges;
@@ -174,6 +216,8 @@ function publicCampaignProgress(
   const approvedMatchCents = (line?.baseMatchCents ?? 0) + (line?.qfBonusCents ?? 0);
   const reviewSummary = latestReviewSummary(campaign.id, input.reviewCases ?? demoMpgfPublicGoodsReviewCases);
   const incidentState = incidentStateForCampaign(campaign, options);
+  const sealedProgress = sealedProgressForRound(input.round ?? demoMpgfAssuranceRound);
+  const sealedProgressActive = sealedProgress.active;
   const matchPreviewHiddenByIncidentFreeze = incidentState === "frozen";
 
   return {
@@ -182,18 +226,19 @@ function publicCampaignProgress(
     title: campaign.title,
     destinationType: campaign.destinationType,
     causeTags: campaign.causeTags,
-    directEligibleCents: assurance.directEligibleCents,
-    countedForMatchCents: countedForMatchCents(pledges),
-    verifiedDonorCount: assurance.verifiedSupporterCount,
+    sealedProgress,
+    directEligibleCents: sealNumber(sealedProgressActive, assurance.directEligibleCents),
+    countedForMatchCents: sealNumber(sealedProgressActive, countedForMatchCents(pledges)),
+    verifiedDonorCount: sealNumber(sealedProgressActive, assurance.verifiedSupporterCount),
     thresholdAmountCents: campaign.thresholdAmountCents,
     thresholdDonors: campaign.thresholdSupporters,
-    thresholdPassed: assurance.thresholdPassed,
+    thresholdPassed: sealBoolean(sealedProgressActive, assurance.thresholdPassed),
     reviewStatus: campaign.reviewStatus,
-    campaignStatus: assurance.status,
-    matchEstimateCents: matchPreviewHiddenByIncidentFreeze ? null : approvedMatchCents,
-    baseMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line?.baseMatchCents ?? 0,
-    qfBonusCents: matchPreviewHiddenByIncidentFreeze ? null : line?.qfBonusCents ?? 0,
-    matchPreviewHiddenByIncidentFreeze,
+    campaignStatus: sealString(sealedProgressActive, assurance.status),
+    matchEstimateCents: sealedProgressActive || matchPreviewHiddenByIncidentFreeze ? null : approvedMatchCents,
+    baseMatchCents: sealedProgressActive || matchPreviewHiddenByIncidentFreeze ? null : line?.baseMatchCents ?? 0,
+    qfBonusCents: sealedProgressActive || matchPreviewHiddenByIncidentFreeze ? null : line?.qfBonusCents ?? 0,
+    matchPreviewHiddenByIncidentFreeze: sealedProgressActive || matchPreviewHiddenByIncidentFreeze,
     milestoneSchedule: buildMpgfPublicGoodsMilestoneSchedule({ campaignId: campaign.id }).map((milestone) => ({
       id: milestone.id,
       ordinal: milestone.ordinal,
@@ -211,6 +256,7 @@ function publicCampaignProgress(
 
 export function listMpgfPublicGoodsRoundsApi() {
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
+  const sealedProgress = sealedProgressForRound(demoMpgfAssuranceRound);
 
   return {
     ok: true,
@@ -223,9 +269,13 @@ export function listMpgfPublicGoodsRoundsApi() {
         startsAt: demoMpgfAssuranceRound.startsAt,
         closesAt: demoMpgfAssuranceRound.endsAt,
         status: "open",
+        sealedProgress,
         sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
         campaignCount: demoMpgfPublicGoodsCampaigns.length,
-        verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
+        verifiedDonorCount: sealNumber(
+          sealedProgress.active,
+          allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
+        ),
         countdownSeconds: secondsUntil(demoMpgfAssuranceRound.endsAt),
       },
     ],
@@ -326,6 +376,7 @@ export function buildMpgfPublicGoodsRoundApi({
     kpiSnapshot,
     thresholdCalibration,
   });
+  const sealedProgress = sealedProgressForRound(round);
 
   return {
     ok: true,
@@ -338,6 +389,7 @@ export function buildMpgfPublicGoodsRoundApi({
       closesAt: round.endsAt,
       status: "open",
       countdownSeconds: secondsUntil(round.endsAt),
+      sealedProgress,
       qfEnabled: round.qfEnabled,
       qfCapMultiple: round.qfCapMultiple,
       supporterGate: round.supporterGate,
@@ -466,10 +518,10 @@ export function buildMpgfPublicGoodsRoundApi({
         failureHandlingPolicy: coalitionRouting.failureHandlingPolicy,
         thresholdClusterMin: coalitionRouting.thresholdClusterMin,
         candidateCount: coalitionRouting.candidateCount,
-        feasibleCandidateCount: coalitionRouting.feasibleCandidateCount,
-        ecmBatchCandidateCount: coalitionRouting.ecmBatchCandidateCount,
-        weakSupportBudgetCents: coalitionRouting.weakSupportBudgetCents,
-        routedWeakSupportBudgetCents: coalitionRouting.routedWeakSupportBudgetCents,
+        feasibleCandidateCount: sealNumber(sealedProgress.active, coalitionRouting.feasibleCandidateCount),
+        ecmBatchCandidateCount: sealNumber(sealedProgress.active, coalitionRouting.ecmBatchCandidateCount),
+        weakSupportBudgetCents: sealNumber(sealedProgress.active, coalitionRouting.weakSupportBudgetCents),
+        routedWeakSupportBudgetCents: sealNumber(sealedProgress.active, coalitionRouting.routedWeakSupportBudgetCents),
         noGlobalMoralRanking: coalitionRouting.noGlobalMoralRanking,
         moralReputationAffectsAllocationPower: coalitionRouting.moralReputationAffectsAllocationPower,
         publicAggregationOnly: coalitionRouting.publicAggregationOnly,
@@ -548,7 +600,10 @@ export function buildMpgfPublicGoodsRoundApi({
         noGlobalMoralRanking: true,
       },
       campaignCount: campaigns.length,
-      verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
+      verifiedDonorCount: sealNumber(
+        sealedProgress.active,
+        allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
+      ),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),
     },
   };
@@ -584,6 +639,7 @@ export function listMpgfPublicGoodsCampaignsApi(
     pledges: demoMpgfAssurancePledges,
     allocation: allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") }),
     options,
+    round: demoMpgfAssuranceRound,
   });
 }
 
@@ -594,6 +650,7 @@ export function buildMpgfPublicGoodsCampaignsApi({
   allocation,
   options = {},
   reviewCases = demoMpgfPublicGoodsReviewCases,
+  round,
 }: {
   roundId: string;
   campaigns: MpgfPublicGoodsCampaign[];
@@ -601,6 +658,7 @@ export function buildMpgfPublicGoodsCampaignsApi({
   allocation?: MpgfPublicGoodsRoundAllocation;
   options?: MpgfPublicGoodsPublicApiOptions;
   reviewCases?: MpgfPublicGoodsReviewCase[];
+  round?: MpgfPublicGoodsRound;
 }) {
   const sourceAllocation =
     allocation ??
@@ -615,11 +673,13 @@ export function buildMpgfPublicGoodsCampaignsApi({
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
+    sealedProgress: sealedProgressForRound(round ?? demoMpgfAssuranceRound),
     campaigns: campaigns.map((campaign) =>
       publicCampaignProgress(campaign, options, {
         allocation: sourceAllocation,
         pledges,
         reviewCases,
+        round: round ?? demoMpgfAssuranceRound,
       })
     ),
   };
@@ -642,7 +702,7 @@ export function getMpgfPublicGoodsCampaignApi(
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     campaign: {
-      ...publicCampaignProgress(campaign, options),
+      ...publicCampaignProgress(campaign, options, { round: demoMpgfAssuranceRound }),
       publicSummary: campaign.publicSummary,
       verificationMethod: campaign.verificationMethod,
       baselineRule: campaign.baselineRule,
@@ -669,7 +729,7 @@ export function getMpgfPublicGoodsCampaignProofPathApi(
     return null;
   }
 
-  const progress = publicCampaignProgress(campaign, options);
+  const progress = publicCampaignProgress(campaign, options, { round: demoMpgfAssuranceRound });
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
   const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({
@@ -678,10 +738,10 @@ export function getMpgfPublicGoodsCampaignProofPathApi(
   });
   const sourceProof = sourceProofByCampaignId.get(campaign.id);
   const aggregateProof = {
-    directEligibleCents: line?.directEligibleCents ?? progress.directEligibleCents,
-    verifiedDonorCount: line?.verifiedSupporterCount ?? progress.verifiedDonorCount,
-    baseMatchCents: line?.baseMatchCents ?? 0,
-    qfBonusCents: line?.qfBonusCents ?? 0,
+    directEligibleCents: progress.sealedProgress.active ? null : line?.directEligibleCents ?? progress.directEligibleCents,
+    verifiedDonorCount: progress.sealedProgress.active ? null : line?.verifiedSupporterCount ?? progress.verifiedDonorCount,
+    baseMatchCents: progress.sealedProgress.active ? null : line?.baseMatchCents ?? 0,
+    qfBonusCents: progress.sealedProgress.active ? null : line?.qfBonusCents ?? 0,
     totalPayoutCents: line?.status === "payable" ? line.totalPayoutCents : 0,
     proofRequired: line?.proofRequired ?? true,
     sourceContributionDigest: sourceProof?.sourceContributionDigest ?? publicCalcHash(["missing-source-proof", campaign.id]),
@@ -693,6 +753,7 @@ export function getMpgfPublicGoodsCampaignProofPathApi(
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     proofPathPolicy: "aggregate_campaign_proof_no_private_donor_rows_or_receipt_urls",
+    sealedProgress: progress.sealedProgress,
     campaignId: campaign.id,
     slug: campaign.slug,
     roundId: demoMpgfAssuranceRound.id,
@@ -725,13 +786,16 @@ export function buildMpgfPublicGoodsMatchPreviewApi({
   allocation,
   campaigns = demoMpgfPublicGoodsCampaigns,
   options = {},
+  round,
   roundId = allocation.roundId,
 }: {
   allocation: MpgfPublicGoodsRoundAllocation;
   campaigns?: MpgfPublicGoodsCampaign[];
   options?: MpgfPublicGoodsPublicApiOptions;
+  round?: MpgfPublicGoodsRound;
   roundId?: string;
 }) {
+  const sealedProgress = sealedProgressForRound(round ?? demoMpgfAssuranceRound);
   const previewRows = allocation.lines.map((line) => {
     const campaign = campaigns.find((candidate) => candidate.id === line.campaignId);
     const incidentState = campaign ? incidentStateForCampaign(campaign, options) : "clear";
@@ -741,15 +805,23 @@ export function buildMpgfPublicGoodsMatchPreviewApi({
       campaignId: line.campaignId,
       status: line.status,
       incidentState,
-      matchPreviewHiddenByIncidentFreeze,
-      verifiedDonorCount: line.verifiedSupporterCount,
-      directEligibleCents: line.directEligibleCents,
-      qfScore: matchPreviewHiddenByIncidentFreeze ? null : line.qfScore,
-      estimatedBaseMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents,
-      estimatedQfBonusCents: matchPreviewHiddenByIncidentFreeze ? null : line.qfBonusCents,
-      estimatedMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents + line.qfBonusCents,
-      blockers: matchPreviewHiddenByIncidentFreeze
-        ? [...new Set([...line.blockers, "incident_frozen_match_preview_hidden"])]
+      sealedProgress,
+      matchPreviewHiddenByIncidentFreeze: sealedProgress.active || matchPreviewHiddenByIncidentFreeze,
+      verifiedDonorCount: sealNumber(sealedProgress.active, line.verifiedSupporterCount),
+      directEligibleCents: sealNumber(sealedProgress.active, line.directEligibleCents),
+      qfScore: sealedProgress.active || matchPreviewHiddenByIncidentFreeze ? null : line.qfScore,
+      estimatedBaseMatchCents: sealedProgress.active || matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents,
+      estimatedQfBonusCents: sealedProgress.active || matchPreviewHiddenByIncidentFreeze ? null : line.qfBonusCents,
+      estimatedMatchCents:
+        sealedProgress.active || matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents + line.qfBonusCents,
+      blockers: sealedProgress.active || matchPreviewHiddenByIncidentFreeze
+        ? [
+            ...new Set([
+              ...line.blockers,
+              ...(matchPreviewHiddenByIncidentFreeze ? ["incident_frozen_match_preview_hidden"] : []),
+              ...(sealedProgress.active ? ["sealed_progress_match_preview_hidden_until_close"] : []),
+            ]),
+          ]
         : line.blockers,
     };
   });
@@ -761,6 +833,7 @@ export function buildMpgfPublicGoodsMatchPreviewApi({
     roundId,
     final: false,
     incidentFreezePolicy: "hide_mutable_match_preview_until_resolved",
+    sealedProgress,
     formulaVersion: allocation.formulaVersion,
     qfAllocationPolicy: allocation.qfAllocationPolicy,
     qfLambda: allocation.qfLambda,
@@ -783,6 +856,7 @@ export function getMpgfPublicGoodsMatchPreviewApi(
     allocation,
     campaigns: demoMpgfPublicGoodsCampaigns,
     options,
+    round: demoMpgfAssuranceRound,
     roundId,
   });
 }
@@ -790,12 +864,15 @@ export function getMpgfPublicGoodsMatchPreviewApi(
 export function buildMpgfPublicGoodsAllocationReportApi({
   allocation,
   pledges = demoMpgfAssurancePledges,
+  round,
   roundId = allocation.roundId,
 }: {
   allocation: MpgfPublicGoodsRoundAllocation;
   pledges?: MpgfPublicGoodsPledge[];
+  round?: MpgfPublicGoodsRound;
   roundId?: string;
 }) {
+  const sealedProgress = sealedProgressForRound(round ?? demoMpgfAssuranceRound);
   const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({
     allocation,
     pledges,
@@ -810,18 +887,19 @@ export function buildMpgfPublicGoodsAllocationReportApi({
     return {
       campaignId: line.campaignId,
       status: line.status,
-      directEligibleCents: line.directEligibleCents,
-      verifiedDonorCount: line.verifiedSupporterCount,
-      baseMatchCents: line.baseMatchCents,
-      qfBonusCents: line.qfBonusCents,
-      totalPayoutCents: line.status === "payable" ? line.totalPayoutCents : 0,
+      sealedProgress,
+      directEligibleCents: sealNumber(sealedProgress.active, line.directEligibleCents),
+      verifiedDonorCount: sealNumber(sealedProgress.active, line.verifiedSupporterCount),
+      baseMatchCents: sealNumber(sealedProgress.active, line.baseMatchCents),
+      qfBonusCents: sealNumber(sealedProgress.active, line.qfBonusCents),
+      totalPayoutCents: sealedProgress.active ? null : line.status === "payable" ? line.totalPayoutCents : 0,
       proofRequired: line.proofRequired,
       custodyMode: line.custodyMode,
       blockers: line.blockers,
       sourceContributionDigest: sourceProof.sourceContributionDigest,
-      eligibleContributionRecordCount: sourceProof.eligibleContributionRecordCount,
-      rawPaymentObjectCount: sourceProof.rawPaymentObjectCount,
-      uniqueCountedIdentityCount: sourceProof.uniqueCountedIdentityCount,
+      eligibleContributionRecordCount: sealNumber(sealedProgress.active, sourceProof.eligibleContributionRecordCount),
+      rawPaymentObjectCount: sealNumber(sealedProgress.active, sourceProof.rawPaymentObjectCount),
+      uniqueCountedIdentityCount: sealNumber(sealedProgress.active, sourceProof.uniqueCountedIdentityCount),
       regeneratedFromContributionRecords: sourceProof.regeneratedFromContributionRecords,
     };
   });
@@ -831,7 +909,8 @@ export function buildMpgfPublicGoodsAllocationReportApi({
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
-    final: true,
+    final: !sealedProgress.active,
+    sealedProgress,
     regenerationPolicy: "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
     formulaVersion: allocation.formulaVersion,
     qfAllocationPolicy: allocation.qfAllocationPolicy,
@@ -840,9 +919,9 @@ export function buildMpgfPublicGoodsAllocationReportApi({
     sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
     baseMatchBudgetCents: allocation.baseMatchBudgetCents,
     qfBonusBudgetCents: allocation.qfBonusBudgetCents,
-    baseMatchAllocatedCents: allocation.baseMatchAllocatedCents,
-    qfBonusAllocatedCents: allocation.qfBonusAllocatedCents,
-    totalPayoutCents: allocation.totalPayoutCents,
+    baseMatchAllocatedCents: sealNumber(sealedProgress.active, allocation.baseMatchAllocatedCents),
+    qfBonusAllocatedCents: sealNumber(sealedProgress.active, allocation.qfBonusAllocatedCents),
+    totalPayoutCents: sealNumber(sealedProgress.active, allocation.totalPayoutCents),
     rows,
   };
 }
@@ -857,6 +936,7 @@ export function getMpgfPublicGoodsAllocationReportApi(roundId: string = demoMpgf
   return buildMpgfPublicGoodsAllocationReportApi({
     allocation,
     pledges: demoMpgfAssurancePledges,
+    round: demoMpgfAssuranceRound,
     roundId,
   });
 }

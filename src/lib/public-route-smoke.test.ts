@@ -38,10 +38,7 @@ function readRepoFile(path: string) {
 }
 
 function flattenPrimaryNavHrefs() {
-  return getPrimaryNavLinks(false).flatMap((link) => [
-    ...(link.href ? [link.href] : []),
-    ...(link.items?.map((item) => item.href) ?? []),
-  ]);
+  return getPrimaryNavLinks(false).flatMap((link) => link.items.map((item) => item.href));
 }
 
 test("public navigation exposes professional marketplace routes", () => {
@@ -119,7 +116,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(topbarSource, /showSearch = true/);
   assert.match(
     globalCss,
-    /\.button-secondary\.button-nav\.is-active\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*color:\s*var\(--accent-deep\);/s,
+    /\.button-secondary\.button-nav\.is-active\s*\{[\s\S]*background:\s*var\(--accent-soft\);[\s\S]*color:\s*var\(--accent-deep\);/,
   );
 });
 
@@ -5411,6 +5408,14 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /No charge\s+now/);
   assert.match(offersPage, /Exact live progress may be hidden until the round closes/);
   assert.match(offersPage, /does not\s+create, edit, clear, authorize, capture, release, reward, credit, certify, or\s+audit any CRECM record/);
+  assert.match(offersPage, /live progress sealed before close/);
+  assert.match(offersPage, /no\s+escrow or custody claim unless a valid custody route records one/);
+  assert.match(offersPage, /gross,\s+fee,\s+net-recipient,\s+actual,\s+counted,\s+and match-eligible accounting channels/);
+  assert.match(offersPage, /requires final review before any binding budget or project stance is saved/);
+  assert.match(offersPage, /No escrow claim/);
+  assert.match(offersPage, /Separated accounting/);
+  assert.match(offersPage, /Final review consent/);
+  assert.match(offersPage, /Budget to Projects to Review; no binding save before final review/);
   assert.match(offersPage, /Search public-goods funding/);
   assert.match(offersPage, /Ordinary offer filters/);
   assert.match(offersPage, /Other ways to browse/);

@@ -35,6 +35,14 @@ function formatDate(value: string | null | undefined) {
   });
 }
 
+function formatPublicUsd(value: number | null | undefined) {
+  return typeof value === "number" ? formatUsd(value) : "sealed until close";
+}
+
+function formatPublicCount(value: number | null | undefined) {
+  return typeof value === "number" ? value : "sealed until close";
+}
+
 export async function generateMetadata({ params }: MpgfCampaignPageProps): Promise<Metadata> {
   const { campaignId } = await params;
   const result = getMpgfPublicGoodsCampaignApi(campaignId);
@@ -86,8 +94,27 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
   const previewRow = preview.rows.find((row) => row.campaignId === campaign.campaignId);
   const allocationRow = allocation.rows.find((row) => row.campaignId === campaign.campaignId);
   const ledgerRow = ledger.rows.find((row) => row.campaignId === campaign.campaignId);
-  const finalMatchCents = (allocationRow?.baseMatchCents ?? 0) + (allocationRow?.qfBonusCents ?? 0);
-  const matchEstimateCents = previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents ?? 0;
+  const finalMatchCents =
+    typeof allocationRow?.baseMatchCents === "number" && typeof allocationRow.qfBonusCents === "number"
+      ? allocationRow.baseMatchCents + allocationRow.qfBonusCents
+      : null;
+  const matchEstimateCents = previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents;
+  const directProgressValue =
+    typeof campaign.directEligibleCents === "number"
+      ? Math.min(campaign.directEligibleCents, campaign.thresholdAmountCents)
+      : 0;
+  const donorProgressValue =
+    typeof campaign.verifiedDonorCount === "number"
+      ? Math.min(campaign.verifiedDonorCount, campaign.thresholdDonors)
+      : 0;
+  const directProgressLabel =
+    typeof campaign.directEligibleCents === "number"
+      ? `${Math.round((directProgressValue / campaign.thresholdAmountCents) * 100)}%`
+      : "sealed until close";
+  const donorProgressLabel =
+    typeof campaign.verifiedDonorCount === "number"
+      ? `${Math.round((donorProgressValue / campaign.thresholdDonors) * 100)}%`
+      : "sealed until close";
 
   return (
     <MpgfPageFrame
@@ -113,19 +140,19 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
       <section className="mpgf-kpi-grid" aria-label="Campaign totals">
         <div className="mpgf-kpi">
           <span>Direct total</span>
-          <strong>{formatUsd(campaign.directEligibleCents)}</strong>
+          <strong>{formatPublicUsd(campaign.directEligibleCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Counted total</span>
-          <strong>{formatUsd(campaign.countedForMatchCents)}</strong>
+          <strong>{formatPublicUsd(campaign.countedForMatchCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Match estimate</span>
-          <strong>{formatUsd(matchEstimateCents)}</strong>
+          <strong>{formatPublicUsd(matchEstimateCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Donor count</span>
-          <strong>{campaign.verifiedDonorCount}</strong>
+          <strong>{formatPublicCount(campaign.verifiedDonorCount)}</strong>
         </div>
       </section>
 
@@ -141,12 +168,12 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
             <div>
               <dt>Donor threshold</dt>
               <dd>
-                {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                {formatPublicCount(campaign.verifiedDonorCount)}/{campaign.thresholdDonors}
               </dd>
             </div>
             <div>
               <dt>Threshold status</dt>
-              <dd>{campaign.thresholdPassed ? "passed" : "pending"}</dd>
+              <dd>{campaign.thresholdPassed === null ? "sealed until close" : campaign.thresholdPassed ? "passed" : "pending"}</dd>
             </div>
             <div>
               <dt>Campaign status</dt>
@@ -158,26 +185,22 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
             </div>
             <div>
               <dt>Final match</dt>
-              <dd>{formatUsd(finalMatchCents)}</dd>
+              <dd>{formatPublicUsd(finalMatchCents)}</dd>
             </div>
           </dl>
           <div className="mpgf-allocation-row">
             <div>
               <span>Amount progress</span>
-              <strong>
-                {Math.round((Math.min(campaign.directEligibleCents, campaign.thresholdAmountCents) / campaign.thresholdAmountCents) * 100)}%
-              </strong>
+              <strong>{directProgressLabel}</strong>
             </div>
-            <meter max={campaign.thresholdAmountCents} value={Math.min(campaign.directEligibleCents, campaign.thresholdAmountCents)} />
+            <meter max={campaign.thresholdAmountCents} value={directProgressValue} />
           </div>
           <div className="mpgf-allocation-row">
             <div>
               <span>Donor progress</span>
-              <strong>
-                {Math.round((Math.min(campaign.verifiedDonorCount, campaign.thresholdDonors) / campaign.thresholdDonors) * 100)}%
-              </strong>
+              <strong>{donorProgressLabel}</strong>
             </div>
-            <meter max={campaign.thresholdDonors} value={Math.min(campaign.verifiedDonorCount, campaign.thresholdDonors)} />
+            <meter max={campaign.thresholdDonors} value={donorProgressValue} />
           </div>
         </article>
 

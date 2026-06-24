@@ -70,6 +70,22 @@ function formatBonusRange(cents: number | null | undefined) {
   return typeof cents === "number" ? `$0 - ${formatUsd(cents)}` : "hidden while incident is frozen";
 }
 
+function publicNumber(value: number | null | undefined) {
+  return typeof value === "number" ? value : 0;
+}
+
+function publicBoolean(value: boolean | null | undefined) {
+  return value === true;
+}
+
+function sealedProgressText(sealed: boolean, value: string) {
+  return sealed ? "sealed until close" : value;
+}
+
+function sealedThresholdStatus(sealed: boolean, passed: boolean) {
+  return sealed ? "sealed until close" : passed ? "passed" : "pending";
+}
+
 function searchParamValue(
   params: Record<string, string | string[] | undefined>,
   key: string,
@@ -217,6 +233,8 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
   }
 
   const { round } = roundResult;
+  const sealedProgressActive =
+    ecmRulebook.donorDisclosure.sealedProgressDisclosureRequired && round.countdownSeconds > 0;
   const payableCampaigns = allocation.rows.filter((row) => row.status === "payable");
   const sponsorPoolCents = round.sponsorPool.baseMatchBudgetCents + round.sponsorPool.qfBonusBudgetCents;
   const perDonorCapCents = Number(round.sponsorPool.perDonorQfCapCents);
@@ -285,14 +303,14 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
   } satisfies CommonGroundBudgetSavePayload;
   const contributionModalCampaigns = campaignResult.campaigns.map((campaign) => ({
     campaignId: campaign.campaignId,
-    countedForMatchCents: campaign.countedForMatchCents,
-    directEligibleCents: campaign.directEligibleCents,
-    matchEstimateCents: campaign.matchEstimateCents ?? 0,
+    countedForMatchCents: publicNumber(campaign.countedForMatchCents),
+    directEligibleCents: publicNumber(campaign.directEligibleCents),
+    matchEstimateCents: publicNumber(campaign.matchEstimateCents),
     thresholdAmountCents: campaign.thresholdAmountCents,
     thresholdDonors: campaign.thresholdDonors,
-    thresholdPassed: campaign.thresholdPassed,
+    thresholdPassed: publicBoolean(campaign.thresholdPassed),
     title: campaign.title,
-    verifiedDonorCount: campaign.verifiedDonorCount,
+    verifiedDonorCount: publicNumber(campaign.verifiedDonorCount),
   }));
   const campaignUnlockMetrics = campaignResult.campaigns.map((campaign) => {
     const previewRow = preview.rows.find((row) => row.campaignId === campaign.campaignId);
@@ -300,13 +318,13 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
 
     return {
       campaignId: campaign.campaignId,
-      directEligibleCents: campaign.directEligibleCents,
+      directEligibleCents: publicNumber(campaign.directEligibleCents),
       estimatedBaseMatchCents: previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents,
       estimatedBonusCapCents: cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents,
       status: campaign.campaignStatus,
       thresholdDonors: campaign.thresholdDonors,
       title: campaign.title,
-      verifiedDonorCount: campaign.verifiedDonorCount,
+      verifiedDonorCount: publicNumber(campaign.verifiedDonorCount),
     };
   });
 
@@ -352,21 +370,24 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
               <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} top campaign funding metrics`}>
                 <div>
                   <dt>Verified direct</dt>
-                  <dd>{formatUsd(campaign.directEligibleCents)}</dd>
+                  <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.directEligibleCents)))}</dd>
                 </div>
                 <div>
                   <dt>Verified supporters</dt>
                   <dd>
-                    {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                    {sealedProgressText(
+                      sealedProgressActive,
+                      `${publicNumber(campaign.verifiedDonorCount)}/${campaign.thresholdDonors}`,
+                    )}
                   </dd>
                 </div>
                 <div>
                   <dt>Guaranteed base match</dt>
-                  <dd>{formatMaybeUsd(campaign.estimatedBaseMatchCents)}</dd>
+                  <dd>{sealedProgressText(sealedProgressActive, formatMaybeUsd(campaign.estimatedBaseMatchCents))}</dd>
                 </div>
                 <div>
                   <dt>Estimated bonus range</dt>
-                  <dd>{formatBonusRange(campaign.estimatedBonusCapCents)}</dd>
+                  <dd>{sealedProgressText(sealedProgressActive, formatBonusRange(campaign.estimatedBonusCapCents))}</dd>
                 </div>
               </dl>
             </article>
@@ -389,7 +410,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
         </div>
         <div className="mpgf-kpi">
           <span>Verified donors</span>
-          <strong>{round.verifiedDonorCount}</strong>
+          <strong>{sealedProgressText(sealedProgressActive, String(publicNumber(round.verifiedDonorCount)))}</strong>
         </div>
       </section>
 
@@ -482,23 +503,25 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             </div>
             <div>
               <dt>Threshold feasible</dt>
-              <dd>{coalitionRouting.feasibleCandidateCount}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, String(coalitionRouting.feasibleCandidateCount))}</dd>
             </div>
             <div>
               <dt>ECM batch candidates</dt>
-              <dd>{coalitionRouting.ecmBatchCandidateCount}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, String(coalitionRouting.ecmBatchCandidateCount))}</dd>
             </div>
             <div>
               <dt>Weak-support budget</dt>
-              <dd>{formatUsd(coalitionRouting.weakSupportBudgetCents)}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, formatUsd(coalitionRouting.weakSupportBudgetCents))}</dd>
             </div>
             <div>
               <dt>Routed weak support</dt>
-              <dd>{formatUsd(coalitionRouting.routedWeakSupportBudgetCents)}</dd>
+              <dd>
+                {sealedProgressText(sealedProgressActive, formatUsd(coalitionRouting.routedWeakSupportBudgetCents))}
+              </dd>
             </div>
             <div>
               <dt>Minimum cluster breadth</dt>
-              <dd>{coalitionRouting.thresholdClusterMin}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, String(coalitionRouting.thresholdClusterMin))}</dd>
             </div>
             <div>
               <dt>Failure fallback candidates</dt>
@@ -932,19 +955,19 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             </div>
             <div>
               <dt>Payable campaigns</dt>
-              <dd>{payableCampaigns.length}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, String(payableCampaigns.length))}</dd>
             </div>
             <div>
               <dt>Base match allocated</dt>
-              <dd>{formatUsd(allocation.baseMatchAllocatedCents)}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(allocation.baseMatchAllocatedCents)))}</dd>
             </div>
             <div>
               <dt>QF bonus allocated</dt>
-              <dd>{formatUsd(allocation.qfBonusAllocatedCents)}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(allocation.qfBonusAllocatedCents)))}</dd>
             </div>
             <div>
               <dt>Total payout plan</dt>
-              <dd>{formatUsd(allocation.totalPayoutCents)}</dd>
+              <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(allocation.totalPayoutCents)))}</dd>
             </div>
             <div>
               <dt>Released in ledger</dt>
@@ -970,10 +993,10 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             const ledgerRow = ledger.rows.find((row) => row.campaignId === campaign.campaignId);
             const cgRow = cgVqaf.rows.find((row) => row.campaignId === campaign.campaignId);
             const currentWorkflowState = workflowState({
-              directEligibleCents: campaign.directEligibleCents,
+              directEligibleCents: publicNumber(campaign.directEligibleCents),
               ledgerReleasedCents: ledgerRow?.releasedTotalCents ?? 0,
               payable: allocationRow?.status === "payable",
-              thresholdPassed: campaign.thresholdPassed,
+              thresholdPassed: publicBoolean(campaign.thresholdPassed),
             });
 
             return (
@@ -983,7 +1006,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 <div className="tag-row">
                   <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
                   <span className="badge badge-secondary">
-                    Threshold {campaign.thresholdPassed ? "passed" : "pending"}
+                    Threshold {sealedThresholdStatus(sealedProgressActive, publicBoolean(campaign.thresholdPassed))}
                   </span>
                   <span className="badge badge-secondary">
                     Review {statusLabel(campaign.reviewStatus)}
@@ -992,36 +1015,52 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} headline funding metrics`}>
                   <div>
                     <dt>Verified direct contributions</dt>
-                    <dd>{formatUsd(campaign.directEligibleCents)}</dd>
+                    <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.directEligibleCents)))}</dd>
                   </div>
                   <div>
                     <dt>Verified supporters</dt>
                     <dd>
-                      {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        `${publicNumber(campaign.verifiedDonorCount)}/${campaign.thresholdDonors}`,
+                      )}
                     </dd>
                   </div>
                   <div>
                     <dt>Base match if cleared</dt>
-                    <dd>{formatMaybeUsd(previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents)}</dd>
+                    <dd>
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        formatMaybeUsd(previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents),
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Estimated bonus range</dt>
-                    <dd>{formatBonusRange(cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents)}</dd>
+                    <dd>
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        formatBonusRange(cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents),
+                      )}
+                    </dd>
                   </div>
                 </dl>
                 <dl className="mpgf-summary-grid">
                   <div>
                     <dt>Direct contributions</dt>
-                    <dd>{formatUsd(campaign.directEligibleCents)}</dd>
+                    <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.directEligibleCents)))}</dd>
                   </div>
                   <div>
                     <dt>Counted for match</dt>
-                    <dd>{formatUsd(campaign.countedForMatchCents)}</dd>
+                    <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.countedForMatchCents)))}</dd>
                   </div>
                   <div>
                     <dt>Verified donor count</dt>
                     <dd>
-                      {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        `${publicNumber(campaign.verifiedDonorCount)}/${campaign.thresholdDonors}`,
+                      )}
                     </dd>
                   </div>
                   <div>
@@ -1030,11 +1069,21 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   </div>
                   <div>
                     <dt>Estimated match</dt>
-                    <dd>{formatMaybeUsd(previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents)}</dd>
+                    <dd>
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        formatMaybeUsd(previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents),
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Final match</dt>
-                    <dd>{formatUsd((allocationRow?.baseMatchCents ?? 0) + (allocationRow?.qfBonusCents ?? 0))}</dd>
+                    <dd>
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        formatUsd(publicNumber(allocationRow?.baseMatchCents) + publicNumber(allocationRow?.qfBonusCents)),
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Released total</dt>
@@ -1042,11 +1091,16 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   </div>
                   <div>
                     <dt>Common-ground signals</dt>
-                    <dd>{cgRow?.commonGroundSignalCount ?? 0}</dd>
+                    <dd>{sealedProgressText(sealedProgressActive, String(cgRow?.commonGroundSignalCount ?? 0))}</dd>
                   </div>
                   <div>
                     <dt>Common-ground score</dt>
-                    <dd>{Math.round((cgRow?.commonGroundScoreBps ?? 0) / 100)}%</dd>
+                    <dd>
+                      {sealedProgressText(
+                        sealedProgressActive,
+                        `${Math.round((cgRow?.commonGroundScoreBps ?? 0) / 100)}%`,
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt>Latest review reason</dt>
@@ -1056,9 +1110,14 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 <div className="mpgf-allocation-row">
                   <div>
                     <span>Threshold status</span>
-                    <strong>{campaign.thresholdPassed ? "Passed" : "Pending"}</strong>
+                    <strong>
+                      {sealedProgressActive ? "Sealed until close" : publicBoolean(campaign.thresholdPassed) ? "Passed" : "Pending"}
+                    </strong>
                   </div>
-                  <meter max={campaign.thresholdAmountCents} value={Math.min(campaign.directEligibleCents, campaign.thresholdAmountCents)} />
+                  <meter
+                    max={campaign.thresholdAmountCents}
+                    value={sealedProgressActive ? 0 : Math.min(publicNumber(campaign.directEligibleCents), campaign.thresholdAmountCents)}
+                  />
                 </div>
                 <div className="mpgf-table" aria-label={`${campaign.title} milestone release schedule`}>
                   <div className="mpgf-table-row mpgf-table-head">
@@ -1074,7 +1133,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     </div>
                   ))}
                 </div>
-                {round.cgVqaf ? (
+                {round.cgVqaf && !sealedProgressActive ? (
                   <MpgfSupportSignalPanel
                     campaignId={campaign.campaignId}
                     campaignTitle={campaign.title}
@@ -1091,6 +1150,12 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     viewerPresent={Boolean(viewer)}
                     weakCommonGroundSignalCount={cgRow?.weakCommonGroundSignalCount ?? 0}
                   />
+                ) : round.cgVqaf ? (
+                  <div className="pilot-note" aria-label={`${campaign.title} sealed support signals`}>
+                    Exact live threshold, counterparty-volume, common-ground signal, and success-without-me
+                    progress stays sealed until the round closes. Public exact aggregates appear only
+                    after close in final reports or audit bundles.
+                  </div>
                 ) : null}
                 <div className="mpgf-admin-action-grid">
                   <Link className="button button-secondary" href={campaign.campaignPath}>
