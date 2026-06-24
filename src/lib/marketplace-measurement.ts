@@ -475,7 +475,7 @@ function buildNonLiveExclusions(
     {
       count: tabCounts.get("external_crecm") ?? 0,
       includedInLiveMetrics: false,
-      reason: "The external CRECM module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
+      reason: "The Common Ground Budget module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
       source: "external_crecm",
     },
     {

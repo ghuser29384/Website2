@@ -159,7 +159,7 @@ test("public offers live-mode parser maps public formats to internal offer modes
   );
 });
 
-test("public offers collection separates template, external CRECM, and demo lanes from offer listings", () => {
+test("public offers collection separates template, Common Ground Budget, and demo lanes from offer listings", () => {
   const externalCrecPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=external_crecm"),
@@ -176,19 +176,40 @@ test("public offers collection separates template, external CRECM, and demo lane
     liveOffers: [],
     searchParams: new URLSearchParams("tab=demo"),
   });
+  const publicGoodFormatPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("format=public-good"),
+  });
+  const publicGoodSearchPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("search=moral%20public%20goods"),
+  });
 
   assert.equal(validatePublicOffersCollectionPayload(externalCrecPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(publicGoodFormatPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(publicGoodSearchPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(templatesPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
   assert.equal(externalCrecPayload.meta.tab, "external_crecm");
   assert.equal(legacyRoundsPayload.meta.tab, "external_crecm");
+  assert.equal(publicGoodFormatPayload.meta.tab, "external_crecm");
+  assert.equal(publicGoodSearchPayload.meta.tab, "external_crecm");
+  assert.equal(publicGoodFormatPayload.meta.defaultedToPublicGoods, true);
+  assert.equal(publicGoodSearchPayload.meta.defaultedToPublicGoods, true);
+  assert.equal(templatesPayload.meta.defaultedToPublicGoods, false);
   assert.equal(templatesPayload.meta.tab, "templates");
   assert.equal(demoPayload.meta.tab, "demo");
   assert.equal(externalCrecPayload.items.length, 0);
+  assert.equal(publicGoodFormatPayload.items.length, 0);
+  assert.equal(publicGoodSearchPayload.items.length, 0);
   assert.equal(templatesPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
   assert.equal(externalCrecPayload.meta.reviewedSeedTemplateCount, 4);
   assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count, 1);
+  assert.equal(
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.label,
+    "Common Ground Budget",
+  );
   assert.equal(templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.count, 4);
   assert.ok(
     (demoPayload.meta.availableTabs.find((tab) => tab.value === "demo")?.count ?? 0) > 0,

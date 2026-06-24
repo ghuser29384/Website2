@@ -125,6 +125,7 @@ export interface PublicOffersMeta {
   reviewedSeedTemplateCount: number;
   reviewedDonationOffsetTemplateCount: number;
   reviewedPledgeSwapTemplateCount: number;
+  defaultedToPublicGoods: boolean;
   defaultedToWorkedExamples: boolean;
   hiddenZeroCountFacets: boolean;
   availableTabs: PublicOffersTabSummary[];
@@ -185,6 +186,7 @@ export interface PublicOffersFacetsPayload {
     | "reviewedSeedTemplateCount"
     | "reviewedDonationOffsetTemplateCount"
     | "reviewedPledgeSwapTemplateCount"
+    | "defaultedToPublicGoods"
     | "defaultedToWorkedExamples"
     | "hiddenZeroCountFacets"
     | "availableTabs"
@@ -237,7 +239,7 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "The public offers API is not escrow, custody, legal advice, tax advice, or contract formation.",
   "Participant scores are participant-stated context, not platform moral rankings.",
   "Worked examples are not live liquidity and require manual review before reliance.",
-  "Moral public-goods and Common-Ground-Budget mechanism work belongs in the external CRECM module, not the non-public-goods marketplace offer contract.",
+  "Moral public-goods and Common Ground Budget mechanism work belongs in the Public Goods Fund module, not the non-public-goods marketplace offer contract.",
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
 const PUBLIC_MARKETPLACE_TAB_ORDER = [
@@ -406,6 +408,27 @@ export function getPublicOffersLiveModeFromSearchParams(
   return "all";
 }
 
+function isPublicGoodsCollectionIntent(params: {
+  formats: readonly PublicOfferFormat[];
+  query: string;
+}) {
+  if (params.formats.includes("public-good")) {
+    return true;
+  }
+
+  const normalizedQuery = params.query.toLowerCase();
+
+  return [
+    "moral public goods",
+    "public goods",
+    "public good",
+    "common ground budget",
+    "public goods fund",
+    "crecm",
+    "mpgf",
+  ].some((token) => normalizedQuery.includes(token));
+}
+
 function parseDuration(label: string): PublicOfferDuration {
   if (/open/i.test(label)) {
     return { value: null, unit: "open-ended", label };
@@ -516,13 +539,13 @@ function buildPublicOffersTabSummaries({
     },
     {
       value: "external_crecm",
-      label: "External CRECM module",
+      label: "Common Ground Budget",
       count: getPublicMarketplaceRoundCount(),
       href: "/offers?tab=external_crecm",
       source: "external_crecm_module",
       noLiveAgreementCount: true,
       description:
-        "Moral public-goods and Common-Ground-Budget mechanism work belongs to the external CRECM module, not live marketplace offers.",
+        "Moral public-goods and Common Ground Budget mechanism work belongs to the Public Goods Fund module, not live marketplace offers.",
     },
   ];
 }
@@ -900,9 +923,7 @@ export function buildPublicOffersCollectionPayload({
   const allListings = [...liveListings, ...workedExampleListings];
   const liveOfferCount = liveListings.length;
   const workedExampleCount = workedExampleListings.length;
-  const defaultTab: PublicOffersTab = liveOfferCount > 0 ? "live" : "worked_examples";
   const requestedTab = readFirst(searchParams, "tab", "view");
-  const tab = parseTab(searchParams, defaultTab);
   const query = readFirst(searchParams, "q", "search").trim().slice(0, 120);
   const page = clampPage(readFirst(searchParams, "page"));
   const pageSize = clampPageSize(readFirst(searchParams, "pageSize", "page_size"));
@@ -911,6 +932,12 @@ export function buildPublicOffersCollectionPayload({
   const formats = readAll(searchParams, "format", "mode")
     .map(parseFormat)
     .filter((format): format is PublicOfferFormat => Boolean(format));
+  const defaultTab: PublicOffersTab = isPublicGoodsCollectionIntent({ formats, query })
+    ? "external_crecm"
+    : liveOfferCount > 0
+      ? "live"
+      : "worked_examples";
+  const tab = parseTab(searchParams, defaultTab);
   const reviewStates = readAll(searchParams, "reviewState", "review").map(normalizeToken);
 
   const tabListings = allListings.filter((listing) => {
@@ -959,6 +986,7 @@ export function buildPublicOffersCollectionPayload({
       reviewedSeedTemplateCount: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
       reviewedDonationOffsetTemplateCount: REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
       reviewedPledgeSwapTemplateCount: REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
+      defaultedToPublicGoods: !requestedTab && defaultTab === "external_crecm",
       defaultedToWorkedExamples: !requestedTab && defaultTab === "worked_examples",
       hiddenZeroCountFacets: true,
       availableTabs: buildPublicOffersTabSummaries({
@@ -1010,6 +1038,7 @@ export function buildPublicOffersFacetsPayload({
       reviewedSeedTemplateCount: collection.meta.reviewedSeedTemplateCount,
       reviewedDonationOffsetTemplateCount: collection.meta.reviewedDonationOffsetTemplateCount,
       reviewedPledgeSwapTemplateCount: collection.meta.reviewedPledgeSwapTemplateCount,
+      defaultedToPublicGoods: collection.meta.defaultedToPublicGoods,
       defaultedToWorkedExamples: collection.meta.defaultedToWorkedExamples,
       hiddenZeroCountFacets: collection.meta.hiddenZeroCountFacets,
       availableTabs: collection.meta.availableTabs,
@@ -1150,14 +1179,15 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "zero-live-default",
-      "Zero live inventory defaults to worked examples",
+      "Zero live inventory defaults to worked examples unless public-goods intent routes to Common Ground Budget",
       payload.meta.liveOfferCount > 0 ||
-        payload.meta.defaultTab === "worked_examples",
+        payload.meta.defaultTab === "worked_examples" ||
+        payload.meta.defaultedToPublicGoods,
       `live=${payload.meta.liveOfferCount}; default=${payload.meta.defaultTab}`,
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and external CRECM module lanes",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and Common Ground Budget lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1312,14 +1342,15 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "zero-live-default",
-      "Zero live inventory defaults facets to worked examples",
+      "Zero live inventory defaults facets to worked examples unless public-goods intent routes to Common Ground Budget",
       payload.meta.liveOfferCount > 0 ||
-        payload.meta.defaultTab === "worked_examples",
+        payload.meta.defaultTab === "worked_examples" ||
+        payload.meta.defaultedToPublicGoods,
       `live=${payload.meta.liveOfferCount}; default=${payload.meta.defaultTab}`,
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and external CRECM module lanes",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and Common Ground Budget lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),

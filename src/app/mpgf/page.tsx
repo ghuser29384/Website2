@@ -95,7 +95,7 @@ export default async function MpgfPage() {
         <a href="#why-this-is-hard">Why this is hard</a>
         <a href="#what-this-pilot-tests">What this pilot tests</a>
         <a href="#round-board">Round board</a>
-        <a href="#assurance-matching">Assurance matching</a>
+        <a href="#assurance-matching">CRECM matching</a>
         <Link href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>Public round</Link>
         <Link href="/mpgf/governance">Governance</Link>
         <Link href="/mpgf/metrics">Funding metrics</Link>
@@ -195,10 +195,11 @@ export default async function MpgfPage() {
           <p className="eyebrow">What this pilot tests</p>
           <h2>Threshold commitments before broad marketplace mechanics</h2>
           <p>
-            The Fund tests threshold commitments, external-payment evidence, dissent notes,
-            candidate pools, reviewer verification, and non-custodial coordination in one public
-            workflow. Its motivating layer is verified assurance matching: pledges count only
-            after amount, supporter, review, and evidence gates are satisfied.
+            The Fund tests Common Ground Budgets, explicit project stances, threshold commitments,
+            payment-commitment snapshots, dissent notes, candidate pools, reviewer verification,
+            and non-custodial coordination in one public workflow. Its motivating layer is CRECM
+            v1.125: pledges count only after amount, supporter, review, payment, and evidence gates
+            are satisfied.
           </p>
         </div>
       </section>
@@ -230,12 +231,12 @@ export default async function MpgfPage() {
 
       <section className="section section-white" id="assurance-matching">
         <div className="section-head section-head-compact">
-          <p className="eyebrow">Verified Assurance Matching</p>
-          <h2>Pledges execute only after enough verified people join</h2>
+          <p className="eyebrow">CRECM v1.125</p>
+          <h2>Common Ground Budgets clear only after enough verified cross-view support joins</h2>
           <p>
-            {demoMpgfMatchPool.visibleCommitment} The capped QF bonus is applied only to
-            threshold-cleared, review-approved campaigns, so broad support allocates sponsor
-            dollars without replacing review or destination proof.
+            {demoMpgfMatchPool.visibleCommitment} The capped diversity-aware bonus is applied only
+            to threshold-cleared, review-approved campaigns, so broad support allocates sponsor
+            dollars without replacing review, payment-state proof, or destination proof.
           </p>
         </div>
         <div className="mpgf-pool-directory">

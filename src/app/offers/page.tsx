@@ -105,7 +105,7 @@ const DIRECTORY_TABS = [
   { label: "Create from template", value: "templates" },
   { label: "Worked examples", value: "worked_examples" },
   { label: "Demo data", value: "demo" },
-  { label: "External CRECM module", value: "external_crecm" },
+  { label: "Common Ground Budget", value: "external_crecm" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
@@ -178,7 +178,7 @@ interface MarketplaceListing {
 const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
   all: "All listings",
   demo: "Demo data",
-  external_crecm: "External CRECM module",
+  external_crecm: "Common Ground Budget",
   live: "Live offers",
   templates: "Create from template",
   worked_examples: "Worked examples",
@@ -186,8 +186,9 @@ const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
 
 const EXTERNAL_CRECM_MODULE = {
   href: "/mpgf",
-  label: "External CRECM module",
-  sourceNote: "Moral public-goods and Common-Ground-Budget mechanism work belongs in moralpublicgoods102.md / CRECM v1.96.",
+  label: "Common Ground Budget",
+  sourceNote:
+    "Moral public-goods work routes to the Public Goods Fund's Common Ground Budget under CRECM v1.125.",
   summary:
     "Public-goods rounds are linked from this marketplace but are not specified, counted, or promoted as live non-public-goods offers.",
 } as const;
@@ -243,6 +244,27 @@ function parseFormatFilters(values: readonly string[]): ListingFormat[] {
   return values.filter((value): value is ListingFormat =>
     FORMAT_FILTERS.some((option) => option.value === value),
   );
+}
+
+function isPublicGoodsDirectoryIntent(params: {
+  formats: readonly ListingFormat[];
+  searchQuery: string;
+}) {
+  if (params.formats.includes("public-good")) {
+    return true;
+  }
+
+  const normalizedSearch = params.searchQuery.toLowerCase();
+
+  return [
+    "moral public goods",
+    "public goods",
+    "public good",
+    "common ground budget",
+    "public goods fund",
+    "crecm",
+    "mpgf",
+  ].some((token) => normalizedSearch.includes(token));
 }
 
 function parseDirectorySort(value: string): DirectorySort {
@@ -672,7 +694,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
   const page = parsePage(resolvedSearchParams.page);
-  const formats = parseFormatFilters(readParams(resolvedSearchParams, "mode"));
+  const formats = parseFormatFilters([
+    ...readParams(resolvedSearchParams, "mode"),
+    ...readParams(resolvedSearchParams, "format"),
+  ]);
   const searchQuery = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
   const causes = readParams(resolvedSearchParams, "cause").filter((value) =>
     CAUSE_FILTER_CHIPS.includes(value as (typeof CAUSE_FILTER_CHIPS)[number]),
@@ -708,11 +733,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const createPledgeSwapTemplateHref = viewer
     ? "/offers/new?mode=pledge"
     : "/signup?returnTo=/offers/new%3Fmode%3Dpledge";
-  const defaultView: DirectoryView = liveOfferCount > 0 ? "live" : "worked_examples";
-  const view = parseDirectoryView(
-    readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view"),
-    defaultView,
-  );
+  const publicGoodsSearchIntent = isPublicGoodsDirectoryIntent({ formats, searchQuery });
+  const explicitViewParam = readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view");
+  const defaultView: DirectoryView = publicGoodsSearchIntent
+    ? "external_crecm"
+    : liveOfferCount > 0
+      ? "live"
+      : "worked_examples";
+  const view = parseDirectoryView(explicitViewParam, defaultView);
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
     external_crecm: seedRoundCount,
@@ -770,7 +798,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     view === "templates"
       ? `${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"}`
       : view === "external_crecm"
-        ? `${seedRoundCount} external ${seedRoundCount === 1 ? "module" : "modules"}`
+        ? `${seedRoundCount} Common Ground Budget ${seedRoundCount === 1 ? "module" : "modules"}`
         : view === "demo"
         ? `${seedRoundProjects.length} demo ${seedRoundProjects.length === 1 ? "record" : "records"}`
         : `${filteredListings.length} ${filteredListings.length === 1 ? "listing" : "listings"}`;
@@ -778,7 +806,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     view === "templates"
       ? `Showing ${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"} in ${activeViewLabel.toLowerCase()}.`
       : view === "external_crecm"
-        ? `Showing ${seedRoundCount} linked external CRECM ${seedRoundCount === 1 ? "module" : "modules"}.`
+        ? `Showing ${seedRoundCount} linked Common Ground Budget ${seedRoundCount === 1 ? "module" : "modules"}.`
         : `Showing ${filteredListings.length} ${filteredListings.length === 1 ? "result" : "results"} in ${activeViewLabel.toLowerCase()}.`;
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
@@ -903,12 +931,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     },
     {
       value: "external_crecm",
-      label: "External CRECM module",
+      label: "Common Ground Budget",
       href: createTabHref("external_crecm", filterHrefParams),
       count: String(seedRoundCount),
-      status: "Separate mechanism brief",
+      status: "Public Goods Fund",
       description:
-        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the external CRECM module.",
+        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the Common Ground Budget.",
     },
   ] satisfies Array<{
     value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
@@ -1015,8 +1043,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="collection-header-copy">
             <h1>Browse offers</h1>
             <p className="hero-text">
-              Explore live offers, reviewed templates, worked examples, demo data, and the external
-              CRECM public-goods module without mixing their counts.
+              Explore live offers, reviewed templates, worked examples, demo data, and the Common
+              Ground Budget public-goods module without mixing their counts.
             </p>
             <div className="collection-stats" aria-label="Marketplace counts">
               <span>
@@ -1027,7 +1055,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 {workedExampleCount === 1 ? "example" : "examples"}
               </span>
               <span>
-                <strong>{seedRoundCount}</strong> external{" "}
+                <strong>{seedRoundCount}</strong> Common Ground Budget{" "}
                 {seedRoundCount === 1 ? "module" : "modules"}
               </span>
               <span>
@@ -1066,8 +1094,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <p>
             Moral Trade currently prioritizes donation offsets and bounded non-public-goods pledge
             swaps on this page because they have clearer baselines, evidence, and review states.
-            Moral public-goods and Common-Ground-Budget mechanism work routes through the external
-            CRECM module and remains governed by moralpublicgoods102.md / CRECM v1.96.
+            Moral public-goods and Common Ground Budget mechanism work routes through the Public
+            Goods Fund and remains governed by CRECM v1.125.
           </p>
           <div className="pilot-note-links">
             <Link className="text-button" href="/donation-offsets">
@@ -1095,7 +1123,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="marketplace-bootstrap-head">
             <div>
               <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the external CRECM module.</h2>
+              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the Common Ground Budget.</h2>
               <p>
                 Live, template, worked-example, demo, and public-goods module surfaces stay
                 separated so the marketplace can build liquidity without implying custody, escrow,
@@ -1103,7 +1131,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </p>
             </div>
             <Link className="button button-primary" href={EXTERNAL_CRECM_MODULE.href}>
-              Open external CRECM module
+              Open Common Ground Budget
             </Link>
           </div>
 
@@ -1118,7 +1146,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <div className="marketplace-bootstrap-grid">
             <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-              <p className="eyebrow">External CRECM module</p>
+              <p className="eyebrow">Public Goods Fund</p>
               <h3>{demoMpgfAssuranceRound.name}</h3>
               <p>
                 {EXTERNAL_CRECM_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
@@ -1152,7 +1180,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   Preview budget
                 </Link>
                 <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
-                  View external module
+                  View Public Goods Fund
                 </Link>
               </div>
             </article>
@@ -1591,15 +1619,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   >
                     <div className="listing-group-head">
                       <h3 id="marketplace-crecm-heading">{EXTERNAL_CRECM_MODULE.label}</h3>
-                      <span>{seedRoundCount} linked module</span>
+                      <span>{seedRoundCount} linked Common Ground Budget module</span>
                     </div>
                     <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-                      <p className="eyebrow">Separate mechanism scope</p>
+                      <p className="eyebrow">Public Goods Fund scope</p>
                       <h4>{demoMpgfAssuranceRound.name}</h4>
                       <p>
                         {EXTERNAL_CRECM_MODULE.summary} {EXTERNAL_CRECM_MODULE.sourceNote}
                       </p>
-                      <dl className="mpgf-summary-grid" aria-label="External CRECM lane snapshot">
+                      <dl className="mpgf-summary-grid" aria-label="Common Ground Budget lane snapshot">
                         <div>
                           <dt>Reviewed projects</dt>
                           <dd>{seedRoundProjects.length}</dd>
@@ -1615,10 +1643,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </dl>
                       <div className="marketplace-bootstrap-actions">
                         <Link className="button button-primary" href={seedRoundHref}>
-                          Preview external budget
+                          Preview Common Ground Budget
                         </Link>
                         <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
-                          Open external module
+                          Open Public Goods Fund
                         </Link>
                       </div>
                     </article>

@@ -105,7 +105,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <div className="growth-hero-inner">
           <section className="growth-hero-copy">
-            <h1>Make voluntary trades across moral disagreement.</h1>
+            <h1>Moral trade could enable a mostly-great future.</h1>
             <p className="hero-text">
               Start with one pledge swap, donation offset, or public-good commitment. Moral Trade
               keeps the terms, baselines, evidence rules, and manual review explicit before

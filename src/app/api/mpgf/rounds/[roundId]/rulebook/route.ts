@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
 
     if (contextLoad.source === "demo_fixture" && !fallbackResult) {
       return NextResponse.json(
-        { ok: false, error: "MPGF ECM rulebook report not found." },
+        { ok: false, error: "MPGF CRECM rulebook report not found." },
         { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
     }
@@ -34,7 +34,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
 
     if (!result) {
       return NextResponse.json(
-        { ok: false, error: "MPGF ECM rulebook report not found." },
+        { ok: false, error: "MPGF CRECM rulebook report not found." },
         { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
     }
@@ -56,8 +56,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
           allocationContextSource: "demo_fixture",
           warnings: [
             error instanceof Error
-              ? `Could not load persisted MPGF ECM rulebook state: ${error.message}`
-              : "Could not load persisted MPGF ECM rulebook state.",
+              ? `Could not load persisted MPGF CRECM rulebook state: ${error.message}`
+              : "Could not load persisted MPGF CRECM rulebook state.",
           ],
         },
         { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
@@ -67,7 +67,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Could not load MPGF ECM rulebook report.",
+        error: error instanceof Error ? error.message : "Could not load MPGF CRECM rulebook report.",
       },
       { status: 500, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );

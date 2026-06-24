@@ -293,7 +293,7 @@ export const demoMpgfMatchPool: MpgfPublicGoodsMatchPool = {
 
 export const demoMpgfAssuranceRound: MpgfPublicGoodsRound = {
   id: "mpgf-assurance-round-demo-2026-05",
-  name: "May 2026 Verified Assurance Matching demo",
+  name: "May 2026 Common Ground Budget demo",
   startsAt: "2026-05-01T00:00:00.000Z",
   endsAt: "2026-05-31T23:59:59.000Z",
   matchPoolId: demoMpgfMatchPool.id,

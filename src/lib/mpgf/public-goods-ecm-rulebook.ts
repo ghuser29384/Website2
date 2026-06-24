@@ -12,7 +12,7 @@ import type {
 } from "./types";
 
 export const MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY =
-  "ecm_core_supervised_custody_cross_view_batch_rulebook_v1";
+  "crecm_v1_125_common_ground_budget_cross_view_batch_rulebook";
 
 export const MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY =
   "recurring_batch_rounds_close_clear_jit_authorize_custody_verify_challenge_release_audit";
@@ -68,6 +68,21 @@ export interface MpgfPublicGoodsEcmRulebookReport {
   ok: true;
   roundId: string;
   policy: typeof MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY;
+  mechanism: {
+    abbreviation: "CRECM";
+    technicalLabel: "CRECM v1.125";
+    userFacingLabel: "Common Ground Budget";
+    currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125";
+    sourceSpec: "moralpublicgoods131.md";
+    deploymentFlag: "crecm_v1_125";
+    notPureMechanism: [
+      "not_pure_assurance",
+      "not_pure_quadratic_funding",
+      "not_pure_matching",
+      "not_pure_ecm_without_common_ground_budget",
+      "not_pure_vcqa",
+    ];
+  };
   ecmPlusHybridPolicy: typeof MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY;
   batchCadencePolicy: typeof MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY;
   custodyPolicy: typeof MPGF_PUBLIC_GOODS_CUSTODY_POLICY;
@@ -89,6 +104,41 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     sponsorPoolCents: number;
     sponsorPoolSegregation: "operating_funds_matching_funds_and_recipient_disbursement_records_are_separate";
     sponsorAuditPolicy: "publish_pool_size_rule_changes_source_types_and_round_allocation_hash";
+  };
+  separatedAccounting: {
+    grossFeeNetRecipientSeparated: true;
+    actualCountedMatchEligibleSeparated: true;
+    matchEligibleDollarsOnlyUnlockSponsorMatch: true;
+    feeQuotesMustBindFeePolicyHash: true;
+    rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true;
+  };
+  clearingInputIntegrity: {
+    roundClosePaymentCommitmentSnapshotsRequired: true;
+    providerConfirmedPaymentMethodReferenceRequired: true;
+    roundCloseClearingInputBundleRequired: true;
+    clearingBundleHashAndComponentHashesRequired: true;
+    frozenProjectInputsRequired: true;
+    frozenSponsorCommitmentInputsRequired: true;
+    frozenReciprocalMoralBucketSnapshotRequired: true;
+    bundleDerivedRowCountGuardsRequired: true;
+  };
+  hardGatesV1125: {
+    projectScopeState: "valid_moral_public_good";
+    externalityStateRequired: "clear";
+    baselineIntegrityStateRequired: "approved";
+    baselineConfidenceStateRequired: "approved";
+    actionEvidenceStateRequired: "approved";
+    challengeStateAllowed: ["clear", "non_blocking"];
+    fiscalHostConflictReviewRequired: true;
+    finalSponsorBackingGatedByBundle: true;
+    projectDestinationRouteValidated: true;
+  };
+  sponsorPoolBacking: {
+    poolSpecificBackingRequired: true;
+    sponsorCommitmentStatesAllowed: ["contractually_committed", "funded", "escrowed"];
+    poolTypes: ["base_match", "bonus_match", "failure_bonus", "fee_support", "success_reward"];
+    wrongRoundOrWrongPoolCommitmentsExcluded: true;
+    phantomMatchingBlocked: true;
   };
   batchEngine: {
     recurringCadence: "one_to_two_week_batch_rounds";
@@ -147,6 +197,34 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     authorizationExpiryRequiredBeforeAuthorization: true;
     counterpartBucketsRequired: true;
     minimumCounterpartyVolumeRequired: true;
+    savedPaymentMethodIsNotHoldAuthorizationCustodyOrEscrow: true;
+    finalReviewConsentBoundaryRequired: true;
+    sealedProgressDisclosureRequired: true;
+    separatedAccountingLedgerRequired: true;
+  };
+  simplifiedUserFlow: {
+    steps: ["budget", "projects", "review"];
+    suggestedDefaultsBindingOnlyAfterFinalReviewSave: true;
+    plainLanguageLabelsMapToCanonicalRecords: true;
+    primaryCtaDoesNotCreateBindingIntent: true;
+  };
+  participantIncentives: {
+    successRewardsFromBackedSponsorPoolOnly: true;
+    coordinationCreditsNonTransferableAndNoAllocationPower: true;
+    impactCertificatesForCapturedSuccessfulContributionRowsOnly: true;
+    noLateAccessForNonSignersOrLateSigners: true;
+  };
+  failureBonusControls: {
+    thresholdFamilyFailureReasonsOnly: [
+      "threshold_amount_shortfall",
+      "verified_supporter_shortfall",
+      "active_cluster_shortfall",
+      "counterparty_volume_shortfall",
+    ];
+    participantRoundCapRequired: true;
+    backedFailureBonusPoolRequired: true;
+    claimantConflictSnapshotMustBeNoConflict: true;
+    idempotentClaimKey: "(roundId,projectId,participantId,conditionalTradeIntentId)";
   };
   identityAndAntiSybil: {
     publicPolicy: "unique_human_counting_payment_method_checks_and_anomaly_review_affect_subsidy_eligibility_only";
@@ -332,6 +410,80 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     moralReputationCanIncreasePremium: false as const,
     rows: crossViewSubsidyRows,
   };
+  const mechanism = {
+    abbreviation: "CRECM" as const,
+    technicalLabel: "CRECM v1.125" as const,
+    userFacingLabel: "Common Ground Budget" as const,
+    currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125" as const,
+    sourceSpec: "moralpublicgoods131.md" as const,
+    deploymentFlag: "crecm_v1_125" as const,
+    notPureMechanism: [
+      "not_pure_assurance",
+      "not_pure_quadratic_funding",
+      "not_pure_matching",
+      "not_pure_ecm_without_common_ground_budget",
+      "not_pure_vcqa",
+    ] as MpgfPublicGoodsEcmRulebookReport["mechanism"]["notPureMechanism"],
+  };
+  const separatedAccounting = {
+    grossFeeNetRecipientSeparated: true as const,
+    actualCountedMatchEligibleSeparated: true as const,
+    matchEligibleDollarsOnlyUnlockSponsorMatch: true as const,
+    feeQuotesMustBindFeePolicyHash: true as const,
+    rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true as const,
+  };
+  const clearingInputIntegrity = {
+    roundClosePaymentCommitmentSnapshotsRequired: true as const,
+    providerConfirmedPaymentMethodReferenceRequired: true as const,
+    roundCloseClearingInputBundleRequired: true as const,
+    clearingBundleHashAndComponentHashesRequired: true as const,
+    frozenProjectInputsRequired: true as const,
+    frozenSponsorCommitmentInputsRequired: true as const,
+    frozenReciprocalMoralBucketSnapshotRequired: true as const,
+    bundleDerivedRowCountGuardsRequired: true as const,
+  };
+  const hardGatesV1125 = {
+    projectScopeState: "valid_moral_public_good" as const,
+    externalityStateRequired: "clear" as const,
+    baselineIntegrityStateRequired: "approved" as const,
+    baselineConfidenceStateRequired: "approved" as const,
+    actionEvidenceStateRequired: "approved" as const,
+    challengeStateAllowed: ["clear", "non_blocking"] as MpgfPublicGoodsEcmRulebookReport["hardGatesV1125"]["challengeStateAllowed"],
+    fiscalHostConflictReviewRequired: true as const,
+    finalSponsorBackingGatedByBundle: true as const,
+    projectDestinationRouteValidated: true as const,
+  };
+  const sponsorPoolBacking = {
+    poolSpecificBackingRequired: true as const,
+    sponsorCommitmentStatesAllowed: ["contractually_committed", "funded", "escrowed"] as MpgfPublicGoodsEcmRulebookReport["sponsorPoolBacking"]["sponsorCommitmentStatesAllowed"],
+    poolTypes: ["base_match", "bonus_match", "failure_bonus", "fee_support", "success_reward"] as MpgfPublicGoodsEcmRulebookReport["sponsorPoolBacking"]["poolTypes"],
+    wrongRoundOrWrongPoolCommitmentsExcluded: true as const,
+    phantomMatchingBlocked: true as const,
+  };
+  const simplifiedUserFlow = {
+    steps: ["budget", "projects", "review"] as MpgfPublicGoodsEcmRulebookReport["simplifiedUserFlow"]["steps"],
+    suggestedDefaultsBindingOnlyAfterFinalReviewSave: true as const,
+    plainLanguageLabelsMapToCanonicalRecords: true as const,
+    primaryCtaDoesNotCreateBindingIntent: true as const,
+  };
+  const participantIncentives = {
+    successRewardsFromBackedSponsorPoolOnly: true as const,
+    coordinationCreditsNonTransferableAndNoAllocationPower: true as const,
+    impactCertificatesForCapturedSuccessfulContributionRowsOnly: true as const,
+    noLateAccessForNonSignersOrLateSigners: true as const,
+  };
+  const failureBonusControls = {
+    thresholdFamilyFailureReasonsOnly: [
+      "threshold_amount_shortfall",
+      "verified_supporter_shortfall",
+      "active_cluster_shortfall",
+      "counterparty_volume_shortfall",
+    ] as MpgfPublicGoodsEcmRulebookReport["failureBonusControls"]["thresholdFamilyFailureReasonsOnly"],
+    participantRoundCapRequired: true as const,
+    backedFailureBonusPoolRequired: true as const,
+    claimantConflictSnapshotMustBeNoConflict: true as const,
+    idempotentClaimKey: "(roundId,projectId,participantId,conditionalTradeIntentId)" as const,
+  };
   const custodyAndRelease = {
     postClearCustodialState: "awaiting_partner_or_fiscal_host_custody_confirmation" as const,
     escrowClaimAllowed: false as const,
@@ -350,6 +502,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     ok: true,
     roundId: round.id,
     policy: MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY,
+    mechanism,
     ecmPlusHybridPolicy: MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY,
     batchCadencePolicy: MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY,
     custodyPolicy: MPGF_PUBLIC_GOODS_CUSTODY_POLICY,
@@ -357,6 +510,10 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     refundReroutePolicy: MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY,
     crossViewSubsidyPolicy: MPGF_PUBLIC_GOODS_CROSS_VIEW_SUBSIDY_POLICY,
     roundRulebook: rulebook,
+    separatedAccounting,
+    clearingInputIntegrity,
+    hardGatesV1125,
+    sponsorPoolBacking,
     batchEngine,
     refundAndReroute,
     crossViewSubsidySchedule,
@@ -368,7 +525,14 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       authorizationExpiryRequiredBeforeAuthorization: true,
       counterpartBucketsRequired: true,
       minimumCounterpartyVolumeRequired: true,
+      savedPaymentMethodIsNotHoldAuthorizationCustodyOrEscrow: true,
+      finalReviewConsentBoundaryRequired: true,
+      sealedProgressDisclosureRequired: true,
+      separatedAccountingLedgerRequired: true,
     },
+    simplifiedUserFlow,
+    participantIncentives,
+    failureBonusControls,
     identityAndAntiSybil: {
       publicPolicy: "unique_human_counting_payment_method_checks_and_anomaly_review_affect_subsidy_eligibility_only",
       moralReputationCanIncreaseAllocationPower: false,
@@ -400,6 +564,14 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       refundAndReroute,
       crossViewSubsidySchedule,
       custodyAndRelease,
+      mechanism,
+      separatedAccounting,
+      clearingInputIntegrity,
+      hardGatesV1125,
+      sponsorPoolBacking,
+      simplifiedUserFlow,
+      participantIncentives,
+      failureBonusControls,
       MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY,
       recipientRegistry.map((recipient) => [recipient.campaignId, recipient.registryStatus, recipient.payoutRail]),
     ]),

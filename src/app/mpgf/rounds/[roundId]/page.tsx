@@ -783,15 +783,19 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
         </article>
 
         <article className="mpgf-panel">
-          <p className="eyebrow">Fixed ECM rulebook</p>
-          <h2>ECM-core plus Moral Trade safeguards stays public before clearing</h2>
+          <p className="eyebrow">{ecmRulebook.mechanism.technicalLabel}</p>
+          <h2>Common Ground Budget safeguards stay public before clearing</h2>
           <p>
             Donors see maximum exposure, counterpart-bucket conditions, refund or reroute
-            outcomes, sponsor-match rules, a one-to-two-week batch cadence, and just-in-time
-            authorization timing before a pledge can be authorized. Cleared funds require partner
-            or fiscal-host custody confirmation before release.
+            outcomes, separated accounting channels, sponsor-match rules, a one-to-two-week batch
+            cadence, and just-in-time authorization timing before a pledge can be authorized.
+            Cleared funds require partner or fiscal-host custody confirmation before release.
           </p>
           <dl className="mpgf-summary-grid">
+            <div>
+              <dt>User label</dt>
+              <dd>{ecmRulebook.mechanism.userFacingLabel}</dd>
+            </div>
             <div>
               <dt>Batch cadence</dt>
               <dd>
@@ -814,6 +818,30 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
               <dt>Cross-view premium</dt>
               <dd>
                 up to {Math.round(ecmRulebook.crossViewSubsidySchedule.maxPremiumBps / 100)}%; QF preserved
+              </dd>
+            </div>
+            <div>
+              <dt>Payment snapshot</dt>
+              <dd>
+                {ecmRulebook.clearingInputIntegrity.roundClosePaymentCommitmentSnapshotsRequired
+                  ? "provider-confirmed before final clearing"
+                  : "not required"}
+              </dd>
+            </div>
+            <div>
+              <dt>Accounting</dt>
+              <dd>
+                {ecmRulebook.separatedAccounting.actualCountedMatchEligibleSeparated
+                  ? "actual, counted, and match-eligible dollars separated"
+                  : "not separated"}
+              </dd>
+            </div>
+            <div>
+              <dt>Sponsor backing</dt>
+              <dd>
+                {ecmRulebook.sponsorPoolBacking.poolSpecificBackingRequired
+                  ? "pool-specific and precommitted"
+                  : "not pool-specific"}
               </dd>
             </div>
             <div>
@@ -849,7 +877,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             <div>
               <dt>Public report</dt>
               <dd>
-                <Link href={round.ecmRulebook.reportPath}>ECM rulebook report</Link>
+                <Link href={round.ecmRulebook.reportPath}>CRECM rulebook report</Link>
               </dd>
             </div>
           </dl>

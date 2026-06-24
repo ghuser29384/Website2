@@ -1815,7 +1815,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   }
 });
 
-test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil terms", () => {
+test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, and consent terms", () => {
   const report = buildMpgfPublicGoodsEcmRulebookReport();
   const apiReport = getMpgfPublicGoodsEcmRulebookReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsEcmRulebookReportApi("unknown-round");
@@ -1828,6 +1828,12 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   const ecmPlusMigration = readFileSync("supabase/migrations/20260605_mpgf_ecm_plus_subsidy.sql", "utf8");
 
   assert.equal(report.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
+  assert.equal(report.mechanism.abbreviation, "CRECM");
+  assert.equal(report.mechanism.technicalLabel, "CRECM v1.125");
+  assert.equal(report.mechanism.userFacingLabel, "Common Ground Budget");
+  assert.equal(report.mechanism.sourceSpec, "moralpublicgoods131.md");
+  assert.equal(report.mechanism.deploymentFlag, "crecm_v1_125");
+  assert.ok(report.mechanism.notPureMechanism.includes("not_pure_ecm_without_common_ground_budget"));
   assert.equal(report.ecmPlusHybridPolicy, MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY);
   assert.equal(report.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
   assert.equal(report.custodyPolicy, MPGF_PUBLIC_GOODS_CUSTODY_POLICY);
@@ -1837,6 +1843,24 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.equal(report.roundRulebook.batchWindowMinDays, 7);
   assert.equal(report.roundRulebook.batchWindowMaxDays, 14);
   assert.equal(report.roundRulebook.preserveCappedQfBreadthBonus, true);
+  assert.equal(report.separatedAccounting.grossFeeNetRecipientSeparated, true);
+  assert.equal(report.separatedAccounting.actualCountedMatchEligibleSeparated, true);
+  assert.equal(report.separatedAccounting.matchEligibleDollarsOnlyUnlockSponsorMatch, true);
+  assert.equal(report.separatedAccounting.rewardsCreditsCertificatesExcludedFromPublicGoodDollars, true);
+  assert.equal(report.clearingInputIntegrity.roundClosePaymentCommitmentSnapshotsRequired, true);
+  assert.equal(report.clearingInputIntegrity.clearingBundleHashAndComponentHashesRequired, true);
+  assert.equal(report.clearingInputIntegrity.frozenReciprocalMoralBucketSnapshotRequired, true);
+  assert.equal(report.clearingInputIntegrity.bundleDerivedRowCountGuardsRequired, true);
+  assert.equal(report.hardGatesV1125.projectScopeState, "valid_moral_public_good");
+  assert.equal(report.hardGatesV1125.externalityStateRequired, "clear");
+  assert.equal(report.hardGatesV1125.baselineIntegrityStateRequired, "approved");
+  assert.equal(report.hardGatesV1125.actionEvidenceStateRequired, "approved");
+  assert.deepEqual(report.hardGatesV1125.challengeStateAllowed, ["clear", "non_blocking"]);
+  assert.equal(report.hardGatesV1125.fiscalHostConflictReviewRequired, true);
+  assert.equal(report.sponsorPoolBacking.poolSpecificBackingRequired, true);
+  assert.ok(report.sponsorPoolBacking.sponsorCommitmentStatesAllowed.includes("contractually_committed"));
+  assert.ok(report.sponsorPoolBacking.poolTypes.includes("failure_bonus"));
+  assert.equal(report.sponsorPoolBacking.phantomMatchingBlocked, true);
   assert.equal(report.batchEngine.recurringCadence, "one_to_two_week_batch_rounds");
   assert.equal(report.batchEngine.fixedCadencePublishedBeforeRoundOpen, true);
   assert.equal(report.batchEngine.longLivedRoundOpenHoldsAllowed, false);
@@ -1866,6 +1890,17 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.equal(report.donorDisclosure.maxExposureRequiredBeforeAuthorization, true);
   assert.equal(report.donorDisclosure.counterpartBucketsRequired, true);
   assert.equal(report.donorDisclosure.minimumCounterpartyVolumeRequired, true);
+  assert.equal(report.donorDisclosure.savedPaymentMethodIsNotHoldAuthorizationCustodyOrEscrow, true);
+  assert.equal(report.donorDisclosure.finalReviewConsentBoundaryRequired, true);
+  assert.equal(report.donorDisclosure.sealedProgressDisclosureRequired, true);
+  assert.deepEqual(report.simplifiedUserFlow.steps, ["budget", "projects", "review"]);
+  assert.equal(report.simplifiedUserFlow.suggestedDefaultsBindingOnlyAfterFinalReviewSave, true);
+  assert.equal(report.participantIncentives.successRewardsFromBackedSponsorPoolOnly, true);
+  assert.equal(report.participantIncentives.coordinationCreditsNonTransferableAndNoAllocationPower, true);
+  assert.equal(report.participantIncentives.impactCertificatesForCapturedSuccessfulContributionRowsOnly, true);
+  assert.ok(report.failureBonusControls.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
+  assert.equal(report.failureBonusControls.participantRoundCapRequired, true);
+  assert.equal(report.failureBonusControls.claimantConflictSnapshotMustBeNoConflict, true);
   assert.equal(report.identityAndAntiSybil.moralReputationCanIncreaseAllocationPower, false);
   assert.equal(report.identityAndAntiSybil.noGlobalMoralRanking, true);
   assert.equal(report.preservedInvariants.antiThreatAndBaselineIntegrityAreBlockingGates, true);
@@ -1881,16 +1916,26 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.equal(unknownReport, null);
   assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(route, /buildMpgfPublicGoodsEcmRulebookReport/);
+  assert.match(route, /MPGF CRECM rulebook report not found/);
   assert.match(route, /allocationContextSource/);
   assert.match(roundApi, /ecmRulebook/);
+  assert.match(roundApi, /mechanism: ecmRulebook\.mechanism/);
+  assert.match(roundApi, /separatedAccounting: ecmRulebook\.separatedAccounting/);
+  assert.match(roundApi, /clearingInputIntegrity: ecmRulebook\.clearingInputIntegrity/);
+  assert.match(roundApi, /hardGatesV1125: ecmRulebook\.hardGatesV1125/);
+  assert.match(roundApi, /sponsorPoolBacking: ecmRulebook\.sponsorPoolBacking/);
+  assert.match(roundApi, /failureBonusControls: ecmRulebook\.failureBonusControls/);
   assert.match(roundApi, /recipientRegistryCount/);
-  assert.match(roundPage, /Fixed ECM rulebook/);
-  assert.match(roundPage, /ECM-core plus Moral Trade safeguards/);
+  assert.match(roundPage, /ecmRulebook\.mechanism\.technicalLabel/);
+  assert.match(roundPage, /Common Ground Budget safeguards/);
   assert.match(roundPage, /Batch cadence/);
+  assert.match(roundPage, /Payment snapshot/);
+  assert.match(roundPage, /actual, counted, and match-eligible dollars separated/);
+  assert.match(roundPage, /pool-specific and precommitted/);
   assert.match(roundPage, /Cross-view premium/);
   assert.match(roundPage, /Fallback outcome/);
   assert.match(roundPage, /counterpart-bucket conditions/);
-  assert.match(roundPage, /ECM rulebook report/);
+  assert.match(roundPage, /CRECM rulebook report/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_round_rulebooks/);
   assert.match(schemaSql, /ecm_plus_hybrid_policy/);
   assert.match(schemaSql, /batch_interval_min_days integer not null default 7/);
