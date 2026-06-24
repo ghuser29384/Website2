@@ -73,12 +73,12 @@ const MARKETPLACE_INTAKE_TRIAGE_ROUTES = [
   },
   {
     key: "external_crecm_public_goods",
-    label: "External CRECM public-goods module",
+    label: "Common Ground Budget public-goods module",
     href: "/mpgf",
     status: "Separate module",
     routeEligible: false,
     summary:
-      "Moral public-goods and Common-Ground-Budget mechanism work belongs in moralpublicgoods102.md / CRECM v1.96.",
+      "Moral public-goods work routes to the Public Goods Fund's Common Ground Budget under CRECM v1.125.",
   },
   {
     key: "ordinary_paid_action",
@@ -97,6 +97,44 @@ const MARKETPLACE_INTAKE_TRIAGE_ROUTES = [
     routeEligible: false,
     summary:
       "Threat creation, unsafe abstention, coercion, contact requests, or exact private wishes require review before any draft.",
+  },
+] as const;
+
+const PARTICIPANT_SCREEN_FLOW = [
+  {
+    action: "Choose route",
+    label: "Intake",
+    summary:
+      "Start by separating donation offsets and bounded pledge swaps from ordinary donations, services, self-offset bookkeeping, public-goods work, background networking, and unsupported requests.",
+    title: "Route before drafting",
+  },
+  {
+    action: "Create draft",
+    label: "Template",
+    summary:
+      "Use reviewed donation-offset and micro-pledge defaults. Food-abstention pledges start with one meal, a few meals, one day, or a few days.",
+    title: "Pick a bounded template",
+  },
+  {
+    action: "Request review",
+    label: "Preview",
+    summary:
+      "Compare no trade against the proposed trade, including maximum exposure, evidence burden, privacy change, deadlines, fallback, and remaining uncertainty.",
+    title: "Check the draft preview",
+  },
+  {
+    action: "Confirm locked terms",
+    label: "Lock",
+    summary:
+      "A match candidate is not a deal. Final confirmation must show the participant-facing term sheet, exact clearing condition, payment or cancellation behavior, and disclosure state.",
+    title: "Confirm only frozen terms",
+  },
+  {
+    action: "Keep private",
+    label: "Receipt",
+    summary:
+      "After completion, receipts stay private unless the participant opts in after verification, privacy review, claim hygiene, and correction or revocation checks.",
+    title: "Share only by opt-in",
   },
 ] as const;
 
@@ -576,6 +614,27 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 <h3>{route.label}</h3>
                 <p>{route.summary}</p>
               </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="participant-screen-flow-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant flow</p>
+            <h2 id="participant-screen-flow-heading">One primary action at each stage.</h2>
+            <p>
+              Drafting stays non-binding until a reviewed matched-trade lock proposal is shown and
+              the participant separately confirms the frozen terms.
+            </p>
+          </div>
+          <div className="teaser-grid">
+            {PARTICIPANT_SCREEN_FLOW.map((step) => (
+              <article className="panel teaser-card" key={step.label}>
+                <span className="detail-kicker">{step.label}</span>
+                <h3>{step.title}</h3>
+                <p>{step.summary}</p>
+                <p className="panel-note">Primary action: {step.action}</p>
+              </article>
             ))}
           </div>
         </section>
