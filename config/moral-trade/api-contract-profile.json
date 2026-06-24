@@ -1119,6 +1119,18 @@
       "fallback": "Return participant-term-sheet, counterparty-blinding, and staged-disclosure validation blockers, first-class record metadata, and sample evaluations; never expose participant-specific term sheets, raw counterparty identities, contact details, private wishes, exact constraints, hidden match reasoning, source evidence, reviewer notes, or payment details."
     },
     {
+      "key": "moral_trade_participant_ui_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/participant-ui/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "participant_ui_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return participant-UI validation blockers, first-class render-snapshot and explanation-record metadata, required screen surfaces, plain-language copy constraints, receipt publication boundaries, and sample screen statuses; never expose participant-specific render snapshots, private evidence, private caps, counterparty identity, reviewer notes, source hashes, or hidden policy state."
+    },
+    {
       "key": "moral_trade_participant_term_sheet_enforce",
       "method": "POST",
       "path": "/api/moral-trade/participant-term-sheet/enforce",
@@ -4047,6 +4059,19 @@
       ]
     },
     {
+      "key": "participant_ui_contract_response",
+      "purpose": "Public validator-backed participant UI contract for intake triage, template gallery, guided builder, previews, final lock confirmation, dashboard grouping, public receipt preview/publication, render snapshots, plain-language copy, and task-card constraints.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the participant UI contract validator and sample evaluation pass." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the participant UI validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Participant UI contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable participant UI contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for required participant surfaces, render snapshots, material disclosures, plain-language primary copy, and public receipt sidecar boundaries." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "First-class record tables, required surfaces, render-snapshot surfaces, reliance disclosures, receipt disclosures, key-fact cap, banned primary-copy terms, sample screen summaries, snapshot hashes, receipt policy summaries, evaluation result, and test hooks without participant-specific render snapshots, private evidence, private caps, counterparty identity, reviewer notes, source hashes, or hidden policy state." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Participant UI blockers that keep screens in draft, preview, manual review, not-lockable, not-publishable, or not-reliance-bearing when required surfaces, render snapshots, material disclosures, plain-language copy, accessibility checks, distinct final confirmation, or public receipt publication checks are missing." }
+      ]
+    },
+    {
       "key": "participant_term_sheet_enforce_request",
       "purpose": "Authenticated private request for live participant-term-sheet and staged-counterparty-disclosure enforcement before live publication, matching, lock, payment, reliance, public-metric, or release-gate transitions.",
       "fields": [
@@ -5198,6 +5223,7 @@
     "template_conformance_enforce_route_contract",
     "review_capacity_contract_route",
     "review_capacity_enforce_route_contract",
+    "participant_ui_contract_route",
     "participant_term_sheet_enforce_route_contract",
     "participant_confirmation_enforce_route_contract",
     "participant_eligibility_enforce_route_contract",
