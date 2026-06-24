@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   buildMpgfCrecContributorBenefitContextHash,
   buildMpgfCrecCoordinationCreditLedgerEntryHash,
+  buildMpgfCrecFailureBonusClaimAuditContextHash,
   buildMpgfCrecFailureBonusEligibilityInputsHash,
   buildMpgfCrecAuthorizationReconciliationEventHash,
   buildMpgfCrecFeeQuoteHash,
@@ -17,8 +19,11 @@ import {
   buildMpgfCrecV1125ClearingContractSummary,
   evaluateMpgfCrecContributorBenefitEligibility,
   evaluateMpgfCrecFailureBonusEligibility,
+  evaluateMpgfCrecRoundStatusGate,
   evaluateMpgfCrecSuccessRewardClaim,
   hashMpgfCrecV1125Value,
+  selectMpgfCrecFinalFailureBonusPayoutClaims,
+  selectMpgfCrecPreliminaryFailureBonusMutationClaims,
   sumMpgfCrecSponsorBackedCentsForFinalClearing,
   sumSelectedMpgfCrecSponsorPaidFeeSupportDemand,
   validateMpgfCrecAuthorizationReconciliationEvent,
@@ -33,6 +38,7 @@ import {
   type MpgfCrecAuthorizationReconciliationEvent,
   type MpgfCrecContributorBenefitEligibilityInput,
   type MpgfCrecCoordinationCreditLedgerEntry,
+  type MpgfCrecFailureBonusClaimRecord,
   type MpgfCrecFailureBonusEligibilityInput,
   type MpgfCrecFeeQuote,
   type MpgfCrecImpactCertificateClaim,
@@ -44,6 +50,18 @@ import {
   type MpgfCrecSponsorCommitment,
   type MpgfCrecSuccessRewardClaimInput,
 } from "./public-goods-crecm-v1125";
+import {
+  MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY,
+  buildMpgfCrecV1125NoSideEffectPostApi,
+  buildMpgfCrecV1125RouteContractApi,
+  getMpgfCrecV1125AuditBundleApi,
+  getMpgfCrecV1125FailureBonusClaimsApi,
+  getMpgfCrecV1125PaymentCommitmentSnapshotsApi,
+  getMpgfCrecV1125ProjectReviewStateApi,
+  getMpgfCrecV1125RecipientRegistryApi,
+  getMpgfCrecV1125SettlementPreviewApi,
+  getMpgfCrecV1125SponsorCommitmentsApi,
+} from "./public-goods-crecm-route-contract";
 
 const roundId = "round-crecm-2026-05";
 const participantId = "participant-alix";
@@ -57,6 +75,124 @@ const parametersFrozenAt = "2026-04-30T20:00:00.000Z";
 const closesAt = "2026-05-14T00:00:00.000Z";
 const earlyFailureBonusCutoff = "2026-05-07T00:00:00.000Z";
 const createdAt = "2026-04-30T19:00:00.000Z";
+
+test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route contracts", () => {
+  const routeContract = buildMpgfCrecV1125RouteContractApi();
+
+  assert.equal(routeContract.policy, MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY);
+  assert.equal(routeContract.exactRouteSurface, true);
+  assert.equal(routeContract.stateChangingRoutesFailClosedUntilPrerequisitesPass, true);
+
+  for (const route of [
+    "POST /api/mpgf/rounds/:roundId/common-ground-budget",
+    "POST /api/mpgf/rounds/:roundId/common-ground-budget/cancel",
+    "POST /api/mpgf/rounds/:roundId/support-stance",
+    "POST /api/mpgf/rounds/:roundId/conditional-intent",
+    "GET /api/mpgf/rounds/:roundId/settlement-preview",
+    "POST /api/mpgf/pivotality-calculator",
+    "GET /api/mpgf/rounds/:roundId/payment-commitment-snapshots",
+    "POST /api/mpgf/rounds/:roundId/payment-commitment-snapshots",
+    "POST /api/mpgf/rounds/:roundId/lock",
+    "POST /api/mpgf/rounds/:roundId/clear",
+    "POST /api/mpgf/rounds/:roundId/authorize",
+    "POST /api/mpgf/rounds/:roundId/reconcile-authorizations",
+    "GET /api/mpgf/rounds/:roundId/authorization-reconciliation-events",
+    "POST /api/mpgf/rounds/:roundId/capture",
+    "POST /api/mpgf/rounds/:roundId/freeze",
+    "GET /api/mpgf/rounds/:roundId/sponsor-commitments",
+    "POST /api/mpgf/rounds/:roundId/sponsor-commitments",
+    "POST /api/mpgf/rounds/:roundId/release-failed",
+    "GET /api/mpgf/rounds/:roundId/failure-bonus-claims",
+    "POST /api/mpgf/rounds/:roundId/failure-bonus-claims/:claimId/resolve",
+    "GET /api/mpgf/rounds/:roundId/success-reward-claims",
+    "POST /api/mpgf/rounds/:roundId/success-reward-claims/:claimId/resolve",
+    "GET /api/mpgf/rounds/:roundId/coordination-credits",
+    "GET /api/mpgf/rounds/:roundId/impact-certificates",
+    "GET /api/mpgf/rounds/:roundId/audit-bundle",
+    "GET /api/mpgf/projects/:projectId/review-state",
+    "POST /api/mpgf/projects/:projectId/challenge",
+    "POST /api/mpgf/projects/:projectId/conflict-review",
+    "GET /api/mpgf/recipient-registry",
+    "POST /api/mpgf/recipient-registry",
+  ] as const) {
+    assert.ok(routeContract.routes.includes(route));
+  }
+
+  for (const [path, expected] of [
+    ["src/app/api/mpgf/rounds/[roundId]/common-ground-budget/route.ts", /common-ground-budget-preview/],
+    ["src/app/api/mpgf/rounds/[roundId]/common-ground-budget/cancel/route.ts", /common_ground_budget_cancel/],
+    ["src/app/api/mpgf/rounds/[roundId]/support-stance/route.ts", /support_stance_intake/],
+    ["src/app/api/mpgf/rounds/[roundId]/conditional-intent/route.ts", /conditional_intent_intake/],
+    ["src/app/api/mpgf/rounds/[roundId]/settlement-preview/route.ts", /getMpgfCrecV1125SettlementPreviewApi/],
+    ["src/app/api/mpgf/pivotality-calculator/route.ts", /pivotality\/route/],
+    ["src/app/api/mpgf/rounds/[roundId]/payment-commitment-snapshots/route.ts", /getMpgfCrecV1125PaymentCommitmentSnapshotsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/lock/route.ts", /round_lock/],
+    ["src/app/api/mpgf/rounds/[roundId]/clear/route.ts", /round_clear/],
+    ["src/app/api/mpgf/rounds/[roundId]/authorize/route.ts", /post_clear_authorize/],
+    ["src/app/api/mpgf/rounds/[roundId]/reconcile-authorizations/route.ts", /authorization_reconciliation/],
+    ["src/app/api/mpgf/rounds/[roundId]/authorization-reconciliation-events/route.ts", /getMpgfCrecV1125AuthorizationReconciliationEventsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/capture/route.ts", /post_reconciliation_capture/],
+    ["src/app/api/mpgf/rounds/[roundId]/freeze/route.ts", /safety_freeze/],
+    ["src/app/api/mpgf/rounds/[roundId]/sponsor-commitments/route.ts", /getMpgfCrecV1125SponsorCommitmentsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/release-failed/route.ts", /release_failed_rows/],
+    ["src/app/api/mpgf/rounds/[roundId]/failure-bonus-claims/route.ts", /getMpgfCrecV1125FailureBonusClaimsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/failure-bonus-claims/[claimId]/resolve/route.ts", /failure_bonus_claim_resolve/],
+    ["src/app/api/mpgf/rounds/[roundId]/success-reward-claims/route.ts", /success_reward_claims/],
+    ["src/app/api/mpgf/rounds/[roundId]/success-reward-claims/[claimId]/resolve/route.ts", /success_reward_claim_resolve/],
+    ["src/app/api/mpgf/rounds/[roundId]/coordination-credits/route.ts", /coordination_credits/],
+    ["src/app/api/mpgf/rounds/[roundId]/impact-certificates/route.ts", /impact_certificates/],
+    ["src/app/api/mpgf/rounds/[roundId]/audit-bundle/route.ts", /getMpgfCrecV1125AuditBundleApi/],
+    ["src/app/api/mpgf/projects/[projectId]/review-state/route.ts", /getMpgfCrecV1125ProjectReviewStateApi/],
+    ["src/app/api/mpgf/projects/[projectId]/challenge/route.ts", /project_challenge_intake/],
+    ["src/app/api/mpgf/projects/[projectId]/conflict-review/route.ts", /project_conflict_review_intake/],
+    ["src/app/api/mpgf/recipient-registry/route.ts", /getMpgfCrecV1125RecipientRegistryApi/],
+  ] as const) {
+    assert.match(readFileSync(path, "utf8"), expected);
+  }
+
+  const settlementPreview = getMpgfCrecV1125SettlementPreviewApi("mpgf-assurance-round-demo-2026-05");
+  assert.ok(settlementPreview);
+  assert.equal(settlementPreview.nonBindingSettlementPreview, true);
+  assert.equal(settlementPreview.bindingChannels.grossCapturedCents, 0);
+  assert.equal(settlementPreview.requiredSnapshotKindForBinding, "round_close");
+
+  const paymentSnapshots = getMpgfCrecV1125PaymentCommitmentSnapshotsApi("mpgf-assurance-round-demo-2026-05");
+  assert.ok(paymentSnapshots);
+  assert.ok(paymentSnapshots.supportedSnapshotKinds.includes("round_close"));
+  assert.equal(paymentSnapshots.providerConfirmedStateRequiredForBinding, true);
+
+  const sponsorCommitments = getMpgfCrecV1125SponsorCommitmentsApi("mpgf-assurance-round-demo-2026-05");
+  assert.ok(sponsorCommitments);
+  assert.deepEqual(sponsorCommitments.positiveBackingStates, ["contractually_committed", "funded", "escrowed"]);
+
+  const failureBonusClaims = getMpgfCrecV1125FailureBonusClaimsApi("mpgf-assurance-round-demo-2026-05");
+  assert.ok(failureBonusClaims);
+  assert.equal(failureBonusClaims.claimCreationRequiresFullQualifiedPredicate, true);
+
+  const auditBundle = getMpgfCrecV1125AuditBundleApi("mpgf-assurance-round-demo-2026-05");
+  assert.ok(auditBundle);
+  assert.equal(auditBundle.publicAuditBundleRequiresFinalRoundCloseBundle, true);
+
+  const projectReview = getMpgfCrecV1125ProjectReviewStateApi("campaign-animal-welfare-transition");
+  assert.equal(projectReview.ok, true);
+  if (!projectReview.ok) {
+    throw new Error("Expected demo CRECM project review state to exist.");
+  }
+  assert.equal(projectReview.fiscalHostConflictCovered, true);
+
+  const recipientRegistry = getMpgfCrecV1125RecipientRegistryApi();
+  assert.ok(recipientRegistry.recipients.length > 0);
+  assert.equal(recipientRegistry.privateBenefitProjectsAllowed, false);
+
+  const intake = buildMpgfCrecV1125NoSideEffectPostApi({
+    operation: "support_stance_intake",
+    route: "/api/mpgf/rounds/:roundId/support-stance",
+    roundId: "mpgf-assurance-round-demo-2026-05",
+  });
+  assert.equal(intake.stateMutation, "none_fail_closed_contract_only");
+  assert.equal(intake.paymentCaptureAllowed, false);
+  assert.equal(intake.finalReviewRequiredBeforeBindingSave, true);
+});
 
 function h(label: string) {
   return hashMpgfCrecV1125Value({ label });
@@ -319,6 +455,54 @@ function failureBonusInput(
     totalSponsorBudgetCents: 10_000,
     claimantConflictState: "no_conflict",
     ...overrides,
+  };
+}
+
+function failureBonusClaim(
+  overrides: Partial<MpgfCrecFailureBonusClaimRecord> = {},
+): MpgfCrecFailureBonusClaimRecord {
+  const earlyPaymentSnapshot = paymentSnapshot({
+    snapshotKind: "early_failure_bonus_cutoff",
+    asOf: earlyFailureBonusCutoff,
+    createdAt: earlyFailureBonusCutoff,
+  });
+  const claim: MpgfCrecFailureBonusClaimRecord = {
+    id: "failure-claim-1",
+    roundId,
+    projectId,
+    participantId,
+    commonGroundBudgetId,
+    conditionalTradeIntentId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    claimState: "approved",
+    denialReason: null,
+    payoutRef: null,
+    resolvedAt: null,
+    createdAt: closesAt,
+    failureReason: "counterparty_volume_shortfall",
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    paymentCommitmentSnapshotHash: earlyPaymentSnapshot.snapshotHash,
+    projectRoundEligibilitySnapshotHash: projectEligibilitySnapshot().snapshotHash,
+    claimantConflictSnapshotHash: h("claimant-conflict"),
+    claimantConflictState: "no_conflict",
+    earlyFailureBonusCutoff,
+    paymentMethodSavedAt: "2026-05-05T00:00:00.000Z",
+    paymentMethodConfirmedAt: "2026-05-05T00:01:00.000Z",
+    failedQualifiedMatchEligibleCents: 1_000,
+    rawBonusCents: 100,
+    participantRoundCapCents: 75,
+    participantCappedProvisionalBonusCents: 75,
+    bonusCents: 75,
+    finalFailureBonusCents: 75,
+    prorationFactorBps: 10_000,
+    eligibilityInputsHash: "",
+    ...overrides,
+  };
+
+  return {
+    ...claim,
+    eligibilityInputsHash:
+      overrides.eligibilityInputsHash ?? buildMpgfCrecFailureBonusClaimAuditContextHash(claim),
   };
 }
 
@@ -1012,6 +1196,156 @@ test("CRECM v1.125 failure bonuses require payable threshold-family failures and
 
   assert.equal(underBacked.qualified, false);
   assert.ok(underBacked.blockers.includes("failure_bonus_pool_not_fully_backed"));
+});
+
+test("CRECM v1.125 round status gate separates replay, authorization, payable side effects, and previews", () => {
+  const payableCapture = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "payable",
+    operation: "capture",
+  });
+  assert.equal(payableCapture.allowed, true);
+  assert.equal(payableCapture.stateMutationAllowed, true);
+
+  const releasedCapture = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "released",
+    operation: "capture",
+  });
+  assert.equal(releasedCapture.allowed, false);
+  assert.ok(releasedCapture.blockers.includes("round_status_not_payable_for_side_effect"));
+
+  const closedAudit = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "closed",
+    operation: "audit_output",
+  });
+  assert.equal(closedAudit.allowed, true);
+  assert.equal(closedAudit.replayOnly, true);
+
+  const openPreview = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "open",
+    operation: "non_binding_preview",
+  });
+  assert.equal(openPreview.allowed, true);
+  assert.equal(openPreview.nonBindingPreviewOnly, true);
+
+  const openFinal = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "open",
+    operation: "final_binding_result",
+  });
+  assert.equal(openFinal.allowed, false);
+  assert.ok(openFinal.blockers.includes("round_status_not_result_replay_allowed"));
+
+  const clearedAuthorization = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "cleared",
+    operation: "new_authorization_attempt",
+  });
+  assert.equal(clearedAuthorization.allowed, true);
+  assert.equal(clearedAuthorization.stateMutationAllowed, true);
+
+  const payableAuthorization = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "payable",
+    operation: "new_authorization_attempt",
+  });
+  assert.equal(payableAuthorization.allowed, false);
+  assert.ok(payableAuthorization.blockers.includes("round_status_not_cleared_for_authorization"));
+
+  const unbackedFailureBonusPayment = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "payable",
+    operation: "failure_bonus_payment",
+    backedFailureBonusPoolCents: 0,
+  });
+  assert.equal(unbackedFailureBonusPayment.allowed, false);
+  assert.ok(unbackedFailureBonusPayment.blockers.includes("failure_bonus_backed_pool_not_positive_for_mutation"));
+
+  const malformed = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: "missing",
+    operation: "audit_output",
+  });
+  assert.equal(malformed.allowed, false);
+  assert.ok(malformed.blockers.includes("round_status_malformed"));
+});
+
+test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, and payable-only", () => {
+  const context = {
+    roundId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    roundStatus: "payable",
+    backedFailureBonusPoolCents: 500,
+    earlyFailureBonusCutoff,
+  };
+  const claim = failureBonusClaim();
+
+  const preliminary = selectMpgfCrecPreliminaryFailureBonusMutationClaims([claim], context);
+  assert.equal(preliminary.eligible, true);
+  assert.deepEqual(preliminary.claimIds, ["failure-claim-1"]);
+
+  const final = selectMpgfCrecFinalFailureBonusPayoutClaims([claim], context);
+  assert.equal(final.eligible, true);
+  assert.deepEqual(final.claimIds, ["failure-claim-1"]);
+
+  const pendingFinal = selectMpgfCrecFinalFailureBonusPayoutClaims(
+    [failureBonusClaim({ claimState: "pending" })],
+    context,
+  );
+  assert.equal(pendingFinal.eligible, false);
+  assert.ok(pendingFinal.blockers.includes("failure_bonus_claim_0_not_unsettled_approved"));
+
+  const paidPreliminary = selectMpgfCrecPreliminaryFailureBonusMutationClaims(
+    [failureBonusClaim({ claimState: "paid" })],
+    context,
+  );
+  assert.equal(paidPreliminary.eligible, false);
+  assert.ok(paidPreliminary.blockers.includes("failure_bonus_claim_0_not_unsettled_non_terminal"));
+
+  const settled = selectMpgfCrecFinalFailureBonusPayoutClaims(
+    [failureBonusClaim({ payoutRef: "payout-1" })],
+    context,
+  );
+  assert.equal(settled.eligible, false);
+  assert.ok(settled.blockers.includes("failure_bonus_claim_0_payout_ref_present"));
+
+  const malformedCreatedAt = selectMpgfCrecFinalFailureBonusPayoutClaims(
+    [failureBonusClaim({ createdAt: "2026-05-14" })],
+    context,
+  );
+  assert.equal(malformedCreatedAt.eligible, false);
+  assert.ok(malformedCreatedAt.blockers.includes("failure_bonus_claim_0_created_at_invalid"));
+
+  const latePaymentConfirmation = selectMpgfCrecFinalFailureBonusPayoutClaims(
+    [failureBonusClaim({ paymentMethodConfirmedAt: "2026-05-08T00:01:00.000Z" })],
+    context,
+  );
+  assert.equal(latePaymentConfirmation.eligible, false);
+  assert.ok(latePaymentConfirmation.blockers.includes("failure_bonus_claim_0_payment_method_confirmed_after_cutoff"));
+
+  const staleHash = selectMpgfCrecFinalFailureBonusPayoutClaims(
+    [failureBonusClaim({ eligibilityInputsHash: h("stale-claim-context") })],
+    context,
+  );
+  assert.equal(staleHash.eligible, false);
+  assert.ok(staleHash.blockers.includes("failure_bonus_claim_0_eligibility_inputs_hash_mismatch"));
+
+  const externalMismatch = selectMpgfCrecFinalFailureBonusPayoutClaims([claim], {
+    ...context,
+    externalFailedQualifiedMatchEligibleCentsByClaimId: {
+      "failure-claim-1": 999,
+    },
+  });
+  assert.equal(externalMismatch.eligible, false);
+  assert.ok(externalMismatch.blockers.includes("failure_bonus_claim_0_external_failed_qualified_cents_mismatch"));
+
+  const closedRound = selectMpgfCrecFinalFailureBonusPayoutClaims([claim], {
+    ...context,
+    roundStatus: "closed",
+  });
+  assert.equal(closedRound.eligible, false);
+  assert.ok(closedRound.blockers.includes("round_status_not_payable_for_side_effect"));
+
+  const unbacked = selectMpgfCrecFinalFailureBonusPayoutClaims([claim], {
+    ...context,
+    backedFailureBonusPoolCents: 0,
+  });
+  assert.equal(unbacked.eligible, false);
+  assert.ok(unbacked.blockers.includes("failure_bonus_backed_pool_not_positive_for_mutation"));
 });
 
 test("CRECM v1.125 rulebook summary names the executable contract predicates", () => {

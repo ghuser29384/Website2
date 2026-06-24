@@ -89,6 +89,32 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_COORDINATION_CREDIT_KINDS = [
   "advisory_access",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES = [
+  "draft",
+  "open",
+  "locked",
+  "frozen",
+  "reviewing",
+  "cleared",
+  "payable",
+  "released",
+  "closed",
+  "canceled",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_RESULT_REPLAY_STATUSES = [
+  "cleared",
+  "payable",
+  "released",
+  "closed",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PREVIEW_ONLY_STATUSES = [
+  "open",
+  "locked",
+  "reviewing",
+] as const;
+
 const MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES_WITH_FAILURE_BONUS_SIDE_EFFECTS = [
   "payable",
 ] as const;
@@ -142,10 +168,62 @@ export type MpgfCrecContributorBenefitKind =
 export type MpgfCrecCoordinationCreditKind =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_COORDINATION_CREDIT_KINDS>;
 
+export type MpgfCrecRoundStatus =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES>;
+
+export type MpgfCrecRoundStatusOperation =
+  | "final_binding_result"
+  | "deterministic_replay"
+  | "failure_bonus_qualification_review"
+  | "audit_output"
+  | "new_authorization_attempt"
+  | "stage7_fallback_execution"
+  | "authorization_cancel_release"
+  | "reroute"
+  | "carry_forward"
+  | "capture"
+  | "release"
+  | "payment"
+  | "failure_bonus_claim_creation"
+  | "failure_bonus_claim_advancement"
+  | "failure_bonus_claim_field_mutation"
+  | "failure_bonus_crediting"
+  | "failure_bonus_payment"
+  | "setup_display"
+  | "internal_review_calculation"
+  | "non_binding_preview";
+
+export type MpgfCrecFailureBonusClaimState =
+  | "pending"
+  | "approved"
+  | "denied"
+  | "expired"
+  | "paid"
+  | "credited";
+
 type MpgfCrecValidationResult = {
   eligible: boolean;
   blockers: string[];
 };
+
+export interface MpgfCrecRoundStatusGateInput {
+  roundStatus: unknown;
+  operation: MpgfCrecRoundStatusOperation;
+  backedFailureBonusPoolCents?: number | null;
+  publicSafetyFreezeActive?: boolean;
+  cancellationActive?: boolean;
+}
+
+export interface MpgfCrecRoundStatusGateResult {
+  allowed: boolean;
+  blockers: string[];
+  operation: MpgfCrecRoundStatusOperation;
+  roundStatus: MpgfCrecRoundStatus | null;
+  stateMutationAllowed: boolean;
+  finalBindingOutputAllowed: boolean;
+  replayOnly: boolean;
+  nonBindingPreviewOnly: boolean;
+}
 
 export interface MpgfCrecPaymentCommitmentSnapshot {
   snapshotKind: MpgfCrecPaymentSnapshotKind;
@@ -523,6 +601,55 @@ export interface MpgfCrecFailureBonusEligibilityResult {
   eligibilityInputsHash: string | null;
 }
 
+export interface MpgfCrecFailureBonusClaimRecord {
+  id: string;
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  commonGroundBudgetId: string;
+  conditionalTradeIntentId: string;
+  failureBonusPolicyVersion: string;
+  claimState: MpgfCrecFailureBonusClaimState;
+  denialReason: string | null;
+  payoutRef: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  failureReason: string;
+  clearingInputBundleHash: string;
+  paymentCommitmentSnapshotHash: string;
+  projectRoundEligibilitySnapshotHash: string;
+  claimantConflictSnapshotHash: string;
+  claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  earlyFailureBonusCutoff: string;
+  paymentMethodSavedAt: string;
+  paymentMethodConfirmedAt: string;
+  failedQualifiedMatchEligibleCents: number;
+  rawBonusCents: number;
+  participantRoundCapCents: number;
+  participantCappedProvisionalBonusCents: number;
+  bonusCents: number;
+  finalFailureBonusCents: number;
+  prorationFactorBps: number;
+  eligibilityInputsHash: string;
+}
+
+export interface MpgfCrecFailureBonusClaimListContext {
+  roundId: string;
+  failureBonusPolicyVersion: string;
+  roundStatus: unknown;
+  backedFailureBonusPoolCents: number;
+  earlyFailureBonusCutoff: string;
+  externalFailedQualifiedMatchEligibleCentsByClaimId?: Record<string, number>;
+  externalParticipantCappedProvisionalBonusCentsByClaimId?: Record<string, number>;
+}
+
+export interface MpgfCrecFailureBonusClaimListResult {
+  eligible: boolean;
+  blockers: string[];
+  claims: MpgfCrecFailureBonusClaimRecord[];
+  claimIds: string[];
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonicalize);
@@ -618,6 +745,103 @@ function addBlocker(blockers: string[], code: string, condition: boolean) {
   if (!condition) {
     blockers.push(code);
   }
+}
+
+const MPGF_PUBLIC_GOODS_CRECM_V1125_PAYABLE_SIDE_EFFECT_OPERATIONS = new Set<MpgfCrecRoundStatusOperation>([
+  "stage7_fallback_execution",
+  "authorization_cancel_release",
+  "reroute",
+  "carry_forward",
+  "capture",
+  "release",
+  "payment",
+  "failure_bonus_claim_creation",
+  "failure_bonus_claim_advancement",
+  "failure_bonus_claim_field_mutation",
+  "failure_bonus_crediting",
+  "failure_bonus_payment",
+]);
+
+const MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_MUTATION_OPERATIONS = new Set<MpgfCrecRoundStatusOperation>([
+  "failure_bonus_claim_creation",
+  "failure_bonus_claim_advancement",
+  "failure_bonus_claim_field_mutation",
+  "failure_bonus_crediting",
+  "failure_bonus_payment",
+]);
+
+function isMpgfCrecRoundStatus(value: unknown): value is MpgfCrecRoundStatus {
+  return (MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES as readonly unknown[]).includes(value);
+}
+
+export function evaluateMpgfCrecRoundStatusGate(
+  input: MpgfCrecRoundStatusGateInput,
+): MpgfCrecRoundStatusGateResult {
+  const blockers: string[] = [];
+  const roundStatus = isMpgfCrecRoundStatus(input.roundStatus) ? input.roundStatus : null;
+  const resultReplayOperation =
+    input.operation === "final_binding_result" ||
+    input.operation === "deterministic_replay" ||
+    input.operation === "failure_bonus_qualification_review" ||
+    input.operation === "audit_output";
+  const payableSideEffectOperation = MPGF_PUBLIC_GOODS_CRECM_V1125_PAYABLE_SIDE_EFFECT_OPERATIONS.has(input.operation);
+  const failureBonusMutationOperation =
+    MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_MUTATION_OPERATIONS.has(input.operation);
+  const previewOnlyOperation =
+    input.operation === "setup_display" ||
+    input.operation === "internal_review_calculation" ||
+    input.operation === "non_binding_preview";
+
+  addBlocker(blockers, "round_status_malformed", roundStatus != null);
+  addBlocker(blockers, "round_safety_freeze_active", input.publicSafetyFreezeActive !== true);
+  addBlocker(blockers, "round_cancellation_active", input.cancellationActive !== true);
+
+  if (roundStatus != null) {
+    if (resultReplayOperation) {
+      addBlocker(
+        blockers,
+        "round_status_not_result_replay_allowed",
+        (MPGF_PUBLIC_GOODS_CRECM_V1125_RESULT_REPLAY_STATUSES as readonly MpgfCrecRoundStatus[]).includes(roundStatus),
+      );
+    }
+
+    if (input.operation === "new_authorization_attempt") {
+      addBlocker(blockers, "round_status_not_cleared_for_authorization", roundStatus === "cleared");
+    }
+
+    if (payableSideEffectOperation) {
+      addBlocker(blockers, "round_status_not_payable_for_side_effect", roundStatus === "payable");
+    }
+
+    if (failureBonusMutationOperation) {
+      addBlocker(
+        blockers,
+        "failure_bonus_backed_pool_not_positive_for_mutation",
+        isPositiveSafeIntegerCents(input.backedFailureBonusPoolCents),
+      );
+    }
+
+    if (previewOnlyOperation) {
+      addBlocker(
+        blockers,
+        "round_status_not_preview_allowed",
+        (MPGF_PUBLIC_GOODS_CRECM_V1125_PREVIEW_ONLY_STATUSES as readonly MpgfCrecRoundStatus[]).includes(roundStatus),
+      );
+    }
+  }
+
+  const allowed = blockers.length === 0;
+
+  return {
+    allowed,
+    blockers,
+    operation: input.operation,
+    roundStatus,
+    stateMutationAllowed: allowed && (input.operation === "new_authorization_attempt" || payableSideEffectOperation),
+    finalBindingOutputAllowed: allowed && input.operation === "final_binding_result" && roundStatus !== "released" && roundStatus !== "closed",
+    replayOnly: allowed && resultReplayOperation && (roundStatus === "released" || roundStatus === "closed"),
+    nonBindingPreviewOnly: allowed && previewOnlyOperation,
+  };
 }
 
 function paymentSnapshotHashPayload(snapshot: Omit<MpgfCrecPaymentCommitmentSnapshot, "snapshotHash">) {
@@ -1850,6 +2074,227 @@ export function evaluateMpgfCrecFailureBonusEligibility(
     backedAvailableFailureBonusPoolCents,
     eligibilityInputsHash: qualified ? buildMpgfCrecFailureBonusEligibilityInputsHash(input) : null,
   };
+}
+
+function failureBonusClaimAuditHashPayload(claim: MpgfCrecFailureBonusClaimRecord) {
+  return {
+    roundId: claim.roundId,
+    projectId: claim.projectId,
+    participantId: claim.participantId,
+    commonGroundBudgetId: claim.commonGroundBudgetId,
+    conditionalTradeIntentId: claim.conditionalTradeIntentId,
+    failureBonusPolicyVersion: claim.failureBonusPolicyVersion,
+    failureReason: claim.failureReason,
+    clearingInputBundleHash: claim.clearingInputBundleHash,
+    paymentCommitmentSnapshotHash: claim.paymentCommitmentSnapshotHash,
+    projectRoundEligibilitySnapshotHash: claim.projectRoundEligibilitySnapshotHash,
+    claimantConflictSnapshotHash: claim.claimantConflictSnapshotHash,
+    claimantConflictState: claim.claimantConflictState,
+    earlyFailureBonusCutoff: claim.earlyFailureBonusCutoff,
+    paymentMethodSavedAt: claim.paymentMethodSavedAt,
+    paymentMethodConfirmedAt: claim.paymentMethodConfirmedAt,
+    failedQualifiedMatchEligibleCents: claim.failedQualifiedMatchEligibleCents,
+  };
+}
+
+export function buildMpgfCrecFailureBonusClaimAuditContextHash(
+  claim: MpgfCrecFailureBonusClaimRecord,
+) {
+  return hashMpgfCrecV1125Value(failureBonusClaimAuditHashPayload(claim));
+}
+
+function validateMpgfCrecFailureBonusClaimListContext(
+  context: MpgfCrecFailureBonusClaimListContext,
+  blockers: string[],
+) {
+  addBlocker(blockers, "failure_bonus_claim_context_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(context.roundId));
+  addBlocker(
+    blockers,
+    "failure_bonus_claim_context_policy_version_invalid",
+    isMpgfCrecNonEmptyTrimStableString(context.failureBonusPolicyVersion),
+  );
+  addBlocker(
+    blockers,
+    "failure_bonus_claim_context_cutoff_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(context.earlyFailureBonusCutoff),
+  );
+  addBlocker(
+    blockers,
+    "failure_bonus_claim_context_backed_pool_invalid",
+    isPositiveSafeIntegerCents(context.backedFailureBonusPoolCents),
+  );
+}
+
+function validateMpgfCrecFailureBonusClaimRecord(
+  claim: MpgfCrecFailureBonusClaimRecord,
+  context: MpgfCrecFailureBonusClaimListContext,
+  blockers: string[],
+  index: number,
+  mode: "preliminary_mutation" | "final_payout",
+) {
+  const prefix = `failure_bonus_claim_${index}`;
+
+  if (claim == null || typeof claim !== "object") {
+    blockers.push(`${prefix}_missing`);
+    return;
+  }
+
+  addBlocker(blockers, `${prefix}_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.id));
+  addBlocker(blockers, `${prefix}_round_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.roundId));
+  addBlocker(blockers, `${prefix}_wrong_round`, claim.roundId === context.roundId);
+  addBlocker(blockers, `${prefix}_project_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.projectId));
+  addBlocker(blockers, `${prefix}_participant_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.participantId));
+  addBlocker(blockers, `${prefix}_budget_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.commonGroundBudgetId));
+  addBlocker(blockers, `${prefix}_intent_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.conditionalTradeIntentId));
+  addBlocker(
+    blockers,
+    `${prefix}_policy_version_invalid`,
+    isMpgfCrecNonEmptyTrimStableString(claim.failureBonusPolicyVersion),
+  );
+  addBlocker(blockers, `${prefix}_wrong_policy_version`, claim.failureBonusPolicyVersion === context.failureBonusPolicyVersion);
+  addBlocker(blockers, `${prefix}_denial_reason_present`, claim.denialReason === null);
+  addBlocker(blockers, `${prefix}_payout_ref_present`, claim.payoutRef === null);
+  addBlocker(blockers, `${prefix}_resolved_at_present`, claim.resolvedAt === null);
+  addBlocker(blockers, `${prefix}_created_at_invalid`, isMpgfCrecCanonicalUtcTimestamp(claim.createdAt));
+  addBlocker(
+    blockers,
+    `${prefix}_failure_reason_not_threshold_family`,
+    MPGF_PUBLIC_GOODS_CRECM_V1125_THRESHOLD_FAMILY_FAILURE_REASONS.includes(
+      claim.failureReason as MpgfCrecThresholdFamilyFailureReason,
+    ),
+  );
+  addBlocker(blockers, `${prefix}_clearing_bundle_hash_invalid`, isMpgfCrecCanonicalHash(claim.clearingInputBundleHash));
+  addBlocker(blockers, `${prefix}_payment_snapshot_hash_invalid`, isMpgfCrecCanonicalHash(claim.paymentCommitmentSnapshotHash));
+  addBlocker(
+    blockers,
+    `${prefix}_project_eligibility_snapshot_hash_invalid`,
+    isMpgfCrecCanonicalHash(claim.projectRoundEligibilitySnapshotHash),
+  );
+  addBlocker(blockers, `${prefix}_claimant_conflict_snapshot_hash_invalid`, isMpgfCrecCanonicalHash(claim.claimantConflictSnapshotHash));
+  addBlocker(blockers, `${prefix}_claimant_conflict_not_clear`, claim.claimantConflictState === "no_conflict");
+  addBlocker(blockers, `${prefix}_cutoff_invalid`, isMpgfCrecCanonicalUtcTimestamp(claim.earlyFailureBonusCutoff));
+  addBlocker(blockers, `${prefix}_wrong_cutoff`, claim.earlyFailureBonusCutoff === context.earlyFailureBonusCutoff);
+  addBlocker(blockers, `${prefix}_payment_method_saved_at_invalid`, isMpgfCrecCanonicalUtcTimestamp(claim.paymentMethodSavedAt));
+  addBlocker(
+    blockers,
+    `${prefix}_payment_method_confirmed_at_invalid`,
+    isMpgfCrecCanonicalUtcTimestamp(claim.paymentMethodConfirmedAt),
+  );
+  addBlocker(
+    blockers,
+    `${prefix}_payment_method_saved_after_confirmation`,
+    timestampLte(claim.paymentMethodSavedAt, claim.paymentMethodConfirmedAt),
+  );
+  addBlocker(
+    blockers,
+    `${prefix}_payment_method_confirmed_after_cutoff`,
+    timestampLte(claim.paymentMethodConfirmedAt, claim.earlyFailureBonusCutoff),
+  );
+  addBlocker(
+    blockers,
+    `${prefix}_failed_qualified_cents_invalid`,
+    isPositiveSafeIntegerCents(claim.failedQualifiedMatchEligibleCents),
+  );
+  addBlocker(blockers, `${prefix}_raw_bonus_cents_invalid`, isNonNegativeSafeIntegerCents(claim.rawBonusCents));
+  addBlocker(blockers, `${prefix}_participant_cap_cents_invalid`, isNonNegativeSafeIntegerCents(claim.participantRoundCapCents));
+  addBlocker(
+    blockers,
+    `${prefix}_participant_capped_bonus_cents_invalid`,
+    isNonNegativeSafeIntegerCents(claim.participantCappedProvisionalBonusCents),
+  );
+  addBlocker(blockers, `${prefix}_bonus_cents_invalid`, isNonNegativeSafeIntegerCents(claim.bonusCents));
+  addBlocker(blockers, `${prefix}_final_bonus_cents_invalid`, isNonNegativeSafeIntegerCents(claim.finalFailureBonusCents));
+  addBlocker(
+    blockers,
+    `${prefix}_proration_factor_bps_invalid`,
+    Number.isSafeInteger(claim.prorationFactorBps) && claim.prorationFactorBps >= 0 && claim.prorationFactorBps <= 10_000,
+  );
+  addBlocker(blockers, `${prefix}_eligibility_inputs_hash_invalid`, isMpgfCrecCanonicalHash(claim.eligibilityInputsHash));
+  addBlocker(
+    blockers,
+    `${prefix}_eligibility_inputs_hash_mismatch`,
+    claim.eligibilityInputsHash === buildMpgfCrecFailureBonusClaimAuditContextHash(claim),
+  );
+
+  const externalFailedQualified =
+    context.externalFailedQualifiedMatchEligibleCentsByClaimId &&
+    Object.prototype.hasOwnProperty.call(context.externalFailedQualifiedMatchEligibleCentsByClaimId, claim.id)
+      ? context.externalFailedQualifiedMatchEligibleCentsByClaimId[claim.id]
+      : undefined;
+  if (externalFailedQualified !== undefined) {
+    addBlocker(
+      blockers,
+      `${prefix}_external_failed_qualified_cents_mismatch`,
+      externalFailedQualified === claim.failedQualifiedMatchEligibleCents,
+    );
+  }
+
+  const externalParticipantCapped =
+    context.externalParticipantCappedProvisionalBonusCentsByClaimId &&
+    Object.prototype.hasOwnProperty.call(context.externalParticipantCappedProvisionalBonusCentsByClaimId, claim.id)
+      ? context.externalParticipantCappedProvisionalBonusCentsByClaimId[claim.id]
+      : undefined;
+  if (externalParticipantCapped !== undefined) {
+    addBlocker(
+      blockers,
+      `${prefix}_external_participant_capped_bonus_cents_mismatch`,
+      externalParticipantCapped === claim.participantCappedProvisionalBonusCents,
+    );
+  }
+
+  if (mode === "final_payout") {
+    addBlocker(blockers, `${prefix}_not_unsettled_approved`, claim.claimState === "approved");
+  } else {
+    addBlocker(
+      blockers,
+      `${prefix}_not_unsettled_non_terminal`,
+      claim.claimState === "pending" || claim.claimState === "approved",
+    );
+  }
+}
+
+function selectMpgfCrecFailureBonusClaimsForMutation(
+  claims: readonly MpgfCrecFailureBonusClaimRecord[],
+  context: MpgfCrecFailureBonusClaimListContext,
+  mode: "preliminary_mutation" | "final_payout",
+): MpgfCrecFailureBonusClaimListResult {
+  const gate = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: context.roundStatus,
+    operation: mode === "final_payout" ? "failure_bonus_payment" : "failure_bonus_claim_field_mutation",
+    backedFailureBonusPoolCents: context.backedFailureBonusPoolCents,
+  });
+  const blockers = [...gate.blockers];
+  const claimIds = claims.map((claim) => claim.id);
+
+  validateMpgfCrecFailureBonusClaimListContext(context, blockers);
+  addBlocker(blockers, "failure_bonus_claim_ids_duplicate", !hasDuplicate(claimIds));
+
+  claims.forEach((claim, index) => {
+    validateMpgfCrecFailureBonusClaimRecord(claim, context, blockers, index, mode);
+  });
+
+  const eligible = blockers.length === 0;
+
+  return {
+    eligible,
+    blockers,
+    claims: eligible ? [...claims] : [],
+    claimIds: eligible ? claimIds : [],
+  };
+}
+
+export function selectMpgfCrecPreliminaryFailureBonusMutationClaims(
+  claims: readonly MpgfCrecFailureBonusClaimRecord[],
+  context: MpgfCrecFailureBonusClaimListContext,
+) {
+  return selectMpgfCrecFailureBonusClaimsForMutation(claims, context, "preliminary_mutation");
+}
+
+export function selectMpgfCrecFinalFailureBonusPayoutClaims(
+  claims: readonly MpgfCrecFailureBonusClaimRecord[],
+  context: MpgfCrecFailureBonusClaimListContext,
+) {
+  return selectMpgfCrecFailureBonusClaimsForMutation(claims, context, "final_payout");
 }
 
 export function buildMpgfCrecV1125ClearingContractSummary() {
