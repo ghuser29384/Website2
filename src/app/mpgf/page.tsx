@@ -23,6 +23,13 @@ import { buildMpgfRoundBoardCards } from "@/lib/mpgf/public-goods-round-board";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
+const MPGF_SHARED_FUTURE_SENTENCE =
+  "It might not be necessary for everyone to have the same values, or agree on philosophical questions, to get a future which most views think is pretty great.";
+const MPGF_COORDINATION_FUTURE_SENTENCE =
+  "By coordinating to fund moral public goods, we could still get a mostly-great future even if people only broadly agree on what's valuable and even if most people are mostly self-interested.";
+const MPGF_SELF_INTEREST_SENTENCE =
+  "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.";
+
 export const metadata: Metadata = {
   title: "Public Goods Fund",
   description:
@@ -136,7 +143,9 @@ export default async function MpgfPage() {
           <p>
             People may value global health, animal welfare, existential-risk reduction,
             public-interest knowledge, or climate resilience somewhat, even when they prioritize
-            different idiosyncratic goals. That overlap can create gains from coordination.
+            different idiosyncratic goals. {MPGF_SHARED_FUTURE_SENTENCE}{" "}
+            {MPGF_COORDINATION_FUTURE_SENTENCE} {MPGF_SELF_INTEREST_SENTENCE} That overlap can
+            create gains from coordination.
           </p>
         </div>
         <div className="concept-grid">
