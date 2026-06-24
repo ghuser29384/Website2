@@ -165,9 +165,9 @@ const BANNED_PRIMARY_COPY_TERMS = [
   "source_hash",
 ];
 
-function canonicalJson(value: unknown) {
+function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "undefined";
   }
 
   if (Array.isArray(value)) {
