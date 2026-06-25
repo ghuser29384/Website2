@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.69-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, batch-clearing objective governance, sensitive-evidence attestation governance, pilot-evidence governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.70-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, batch-clearing objective governance, sensitive-evidence attestation governance, pilot-evidence governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, payment-event replay-safety governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -673,6 +673,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return behavioral micro-pledge blockers, first-class unit, sequence, evidence-ladder, and health-safety metadata, safe default duration rules, pre-performance lock rule, low-stakes caps, settlement disclosure rule, release-gate hooks, and sample evaluations; never expose participant identity hashes, raw private evidence, exact sensitive behavior details, reviewer notes, or participant-specific micro-pledge rows."
+    },
+    {
+      "key": "moral_trade_payment_event_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/payment-events/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "payment_event_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return payment-event replay-safety blockers, first-class delivery, transition-attempt, source-authentication, marketplace-state-event, and manual-review metadata, idempotency rule, provider-source-authentication rule, locked snapshot rule, transaction rule, non-escrow non-claim, release-gate hook, and sample evaluations; never expose raw provider payloads, payment-method details, provider secrets, participant identity hashes, reviewer notes, or participant-specific payment-event rows."
     },
     {
       "key": "moral_trade_pledge_swap_performance_schedule_enforce",
@@ -3224,6 +3236,19 @@
       ]
     },
     {
+      "key": "payment_event_contract_response",
+      "purpose": "Public validator-backed payment-event replay-safety contract for idempotent provider webhook storage, authentication, dedupe, locked-snapshot matching, and transactional marketplace state events.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the payment-event replay-safety contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the payment-event replay-safety validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Payment-event replay-safety contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for storage-before-apply, idempotency, provider-source authentication, locked-snapshot matching, transaction, manual-review, and non-escrow checks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed payment-event rules, first-class delivery, attempt, source-authentication, state-event, and manual-review table names, policy subjects, release-gate hooks, transition names, sample statuses, and test hooks without raw provider payloads, payment-method details, provider secrets, participant identity hashes, reviewer notes, or participant-specific payment-event rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Payment-event blockers that prevent authorization, capture, cancellation, refund, payout release, payment-backed public metrics, or release-gate promotion." }
+      ]
+    },
+    {
       "key": "pledge_swap_performance_schedule_enforce_request",
       "purpose": "Authenticated private request for pledge-swap performance-schedule enforcement before matched-trade lock, performance start, checkpoint evidence, performance release, breach remedy, reciprocal release, public-metric, or release-gate transitions.",
       "fields": [
@@ -5265,6 +5290,7 @@
     "disclosure_grant_route_contract",
     "financial_settlement_controls_route_contract",
     "financial_settlement_controls_enforce_route_contract",
+    "payment_event_contract_route",
     "matching_clearing_execute_route_contract",
     "clearing_preview_execute_route_contract",
     "baseline_integrity_enforce_route_contract",
