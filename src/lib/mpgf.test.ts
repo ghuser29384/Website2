@@ -2915,6 +2915,20 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
       rankOrder: 1,
     }],
   });
+  const defaultSkipPreview = buildMpgfCommonGroundBudgetPreview({
+    roundId: persistedRound.id,
+    roundLockTime: persistedRound.endsAt,
+    projects: [{
+      id: persistedCampaign.id,
+      title: persistedCampaign.title,
+      thresholdAmountCents: persistedCampaign.thresholdAmountCents,
+      thresholdSupporters: persistedCampaign.thresholdSupporters,
+    }],
+    coalitionRouting: persistedReport,
+    budgetPeriod: "round_limited",
+    roundBudgetCents: 7_500,
+    participantSurplusConfirmed: true,
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", "utf8");
   const budgetPreviewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/common-ground-budget-preview/route.ts", "utf8");
   const budgetSavePanel = readFileSync("src/components/mpgf/mpgf-common-ground-budget-save-panel.tsx", "utf8");
@@ -3021,6 +3035,14 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreview.participantConfirmationHash ?? "", /^sha256:/);
   assert.equal(budgetPreview.rows[0]?.stance, "weak");
   assert.equal(budgetPreview.rows[0]?.allocationState, "currently_routed");
+  assert.equal(defaultSkipPreview.rows[0]?.stance, "abstain");
+  assert.equal(defaultSkipPreview.routedAllocationCents, 0);
+  assert.equal(defaultSkipPreview.activationState, "preview_only_confirmation_required");
+  assert.ok(
+    defaultSkipPreview.userFacingBlockers.some((blocker) =>
+      blocker.nextAction.includes("Choose Fund this or Fund if different-view support joins"),
+    ),
+  );
   assert.equal(supportSignalContract.coalitionRoutingPath, `/api/mpgf/rounds/${persistedRound.id}/coalition-routing`);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCoalitionRoutingReportApi/);
@@ -3062,8 +3084,26 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(publicApi, /routedWeakSupportBudgetCents/);
   assert.match(roundPage, /Coalition-routed common-ground budget/);
   assert.match(roundPage, /Common Ground Budget preview/);
+  assert.match(roundPage, /Common Ground Budget guided setup checklist/);
+  assert.match(roundPage, /1\. Choose budget/);
+  assert.match(roundPage, /2\. Pick projects/);
+  assert.match(roundPage, /3\. Review and save/);
+  assert.match(roundPage, /Non-binding preview/);
+  assert.match(roundPage, /You are not charged now/);
+  assert.match(roundPage, /final review screen\s+remains the consent boundary/);
   assert.match(roundPage, /Preview release gate/);
   assert.match(roundPage, /Later-stage controls held back/);
+  assert.match(roundPage, /Maximum this round/);
+  assert.doesNotMatch(roundPage, /Maximum budget/);
+  assert.match(roundPage, /Pick projects with the plain-language choices below/);
+  assert.match(roundPage, /Fund this/);
+  assert.match(roundPage, /Fund if different-view support joins/);
+  assert.match(roundPage, /Needs review/);
+  assert.match(roundPage, /Skip/);
+  assert.match(roundPage, /Maximum for this project, cents/);
+  assert.match(roundPage, /commonGroundStanceLabel/);
+  assert.doesNotMatch(roundPage, /Strong support/);
+  assert.doesNotMatch(roundPage, /Weak common-ground/);
   assert.match(roundPage, /Your default allocation baseline/);
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
   assert.match(roundPage, /MpgfCommonGroundBudgetSavePanel/);
@@ -3072,7 +3112,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /sourceSpec=\{ecmRulebook\.mechanism\.sourceSpec\}/);
   assert.match(roundPage, /technicalLabel=\{ecmRulebook\.mechanism\.technicalLabel\}/);
   assert.match(roundPage, /redactedNote_/);
-  assert.match(roundPage, /Optional note/);
+  assert.match(roundPage, /Review note/);
   assert.match(roundPage, /paymentCaptureAllowed/);
   assert.match(roundPage, /coalition-routing report/);
   assert.match(budgetSavePanel, /"use client"/);

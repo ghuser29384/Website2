@@ -43,7 +43,7 @@ export function MpgfContributionProofLedger({
 
       <div className="mpgf-kpi-grid" aria-label="Contribution ledger totals">
         <div className="mpgf-kpi">
-          <span>Authorized budget</span>
+          <span>Maximum this round</span>
           <strong>{formatUsd(ledger.authorizedBudgetCents)}</strong>
         </div>
         <div className="mpgf-kpi">

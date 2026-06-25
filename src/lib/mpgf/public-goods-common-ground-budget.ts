@@ -535,8 +535,8 @@ function pivotalActionFor(row: Omit<MpgfCommonGroundBudgetPreviewRow, "allocatio
 function defaultStances(projects: MpgfCommonGroundBudgetProject[]) {
   return projects.map((project, index): MpgfCommonGroundBudgetStanceInput => ({
     campaignId: project.id,
-    stance: index === 0 ? "weak" : "abstain",
-    maxAllocPctBps: index === 0 ? 10_000 : 0,
+    stance: "abstain",
+    maxAllocPctBps: 0,
     rankOrder: index + 1,
   }));
 }
@@ -679,7 +679,7 @@ export function buildMpgfCommonGroundBudgetPreview(
   if (!eligibleProjectIds.length) {
     userFacingBlockers.push({
       reasonCategory: "user_action_needed",
-      nextAction: "Mark at least one reviewed project as strong or weak common-ground support.",
+      nextAction: "Choose Fund this or Fund if different-view support joins for at least one reviewed project.",
       moneyOrObligationsAffected: false as const,
       appealOrCorrectionPath: null,
     });

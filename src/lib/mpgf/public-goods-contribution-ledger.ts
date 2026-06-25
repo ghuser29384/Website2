@@ -237,7 +237,7 @@ function identityStatusForPledge(
       "blocked",
       "Below minimum",
       "The intent is below the minimum counted amount for this route.",
-      "Increase the authorized amount or choose another route.",
+      "Increase the maximum budget or choose another route.",
       "The pledge is not counted toward release.",
     );
   }

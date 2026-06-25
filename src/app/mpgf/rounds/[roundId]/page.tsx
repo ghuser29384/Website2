@@ -86,6 +86,22 @@ function sealedThresholdStatus(sealed: boolean, passed: boolean) {
   return sealed ? "sealed until close" : passed ? "passed" : "pending";
 }
 
+function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
+  if (stance === "strong") {
+    return "Fund this";
+  }
+
+  if (stance === "weak") {
+    return "Fund if different-view support joins";
+  }
+
+  if (stance === "dissent") {
+    return "Needs review";
+  }
+
+  return "Skip";
+}
+
 function searchParamValue(
   params: Record<string, string | string[] | undefined>,
   key: string,
@@ -139,15 +155,14 @@ function unroutablePolicyFromParams(
 function stanceFromParams(
   params: Record<string, string | string[] | undefined>,
   campaignId: string,
-  index: number,
 ): MpgfCommonGroundBudgetStance {
-  const value = searchParamValue(params, `stance_${campaignId}`, index === 0 ? "weak" : "abstain");
+  const value = searchParamValue(params, `stance_${campaignId}`, "abstain");
 
   if (value === "strong" || value === "dissent" || value === "abstain") {
     return value;
   }
 
-  return "weak";
+  return value === "weak" ? "weak" : "abstain";
 }
 
 function workflowState({
@@ -272,14 +287,21 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
     unroutableBudgetPolicy: unroutablePolicyFromParams(resolvedSearchParams),
     stances: campaignResult.campaigns.map((campaign, index) => ({
       campaignId: campaign.campaignId,
-      stance: stanceFromParams(resolvedSearchParams, campaign.campaignId, index),
-      maxAllocCents: searchParamNumber(resolvedSearchParams, `maxAllocCents_${campaign.campaignId}`, index === 0 ? 2_500 : 0),
-      maxAllocPctBps: searchParamNumber(resolvedSearchParams, `maxAllocPctBps_${campaign.campaignId}`, index === 0 ? 10_000 : 0),
+      stance: stanceFromParams(resolvedSearchParams, campaign.campaignId),
+      maxAllocCents: searchParamNumber(resolvedSearchParams, `maxAllocCents_${campaign.campaignId}`, 0),
+      maxAllocPctBps: searchParamNumber(resolvedSearchParams, `maxAllocPctBps_${campaign.campaignId}`, 0),
       rankOrder: index + 1,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${campaign.campaignId}`),
     })),
   });
   const commonGroundBudgetReleaseGate = commonGroundBudgetPreview.releaseGateRequirementBundle;
+  const selectedCommonGroundProjectCount = commonGroundBudgetPreview.rows.filter(
+    (row) => row.stance !== "abstain",
+  ).length;
+  const chooseBudgetReady = commonGroundBudgetPreview.maximumBudgetCents > 0;
+  const reviewReady =
+    commonGroundBudgetPreview.activationState === "ready_for_confirmation" &&
+    Boolean(commonGroundBudgetPreview.participantConfirmationHash);
   const commonGroundBudgetSavePayload = {
     baselineConfidenceLevel: commonGroundBudgetPreview.baselineConfidenceLevel,
     baselineConfidenceRationale: commonGroundBudgetPreview.baselineConfidenceRationale,
@@ -544,6 +566,50 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             that the routing is acceptable relative to your stated default allocation. This preview
             does not authorize payment capture or create a reliance-bearing agreement.
           </p>
+          <div className="notice-card" aria-label="Common Ground Budget guided setup checklist">
+            <strong>Common Ground Budget</strong>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>1. Choose budget</dt>
+                <dd>
+                  <span className={chooseBudgetReady ? "badge badge-success" : "badge badge-warning"}>
+                    {chooseBudgetReady ? "Ready" : "Needs amount"}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>2. Pick projects</dt>
+                <dd>
+                  <span className={selectedCommonGroundProjectCount > 0 ? "badge badge-success" : "badge badge-secondary"}>
+                    {selectedCommonGroundProjectCount} selected
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>3. Review and save</dt>
+                <dd>
+                  <span className={reviewReady ? "badge badge-success" : "badge badge-warning"}>
+                    {reviewReady ? "Ready" : "Not ready"}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Preview status</dt>
+                <dd>
+                  <span className="badge badge-secondary">Non-binding preview</span>
+                </dd>
+              </div>
+            </dl>
+            <p>
+              You are not charged now. A payment attempt can happen only after the round closes
+              and selected projects pass threshold, review, challenge, payment, and authorization
+              checks.
+            </p>
+            <p className="mpgf-small">
+              Status chips summarize whether fields appear complete; the final review screen
+              remains the consent boundary.
+            </p>
+          </div>
           {!viewer ? (
             <div className="notice-card">
               <strong>Sign in required.</strong>
@@ -628,15 +694,20 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     rows={3}
                   />
                 </label>
+                <p className="mpgf-small">
+                  Pick projects with the plain-language choices below. A project can route budget
+                  only after you explicitly choose a non-skip stance, accept a maximum for this
+                  project, and save the condition on the final review screen.
+                </p>
                 <div className="mpgf-table-wrap">
                   <table className="mpgf-table">
                     <thead>
                       <tr>
                         <th scope="col">Project</th>
-                        <th scope="col">Stance</th>
-                        <th scope="col">Cap, cents</th>
-                        <th scope="col">Cap, pct bps</th>
-                        <th scope="col">Optional note</th>
+                        <th scope="col">Your choice</th>
+                        <th scope="col">Maximum for this project, cents</th>
+                        <th scope="col">Maximum for this project, bps</th>
+                        <th scope="col">Review note</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -645,10 +716,10 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                           <th scope="row">{row.title}</th>
                           <td>
                             <select name={`stance_${row.campaignId}`} defaultValue={row.stance}>
-                              <option value="strong">Strong support</option>
-                              <option value="weak">Weak common-ground</option>
-                              <option value="dissent">Dissent</option>
-                              <option value="abstain">Abstain</option>
+                              <option value="strong">Fund this</option>
+                              <option value="weak">Fund if different-view support joins</option>
+                              <option value="dissent">Needs review</option>
+                              <option value="abstain">Skip</option>
                             </select>
                           </td>
                           <td>
@@ -701,7 +772,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dd>{commonGroundBudgetPreview.releaseStage.replaceAll("_", " ")}</dd>
                 </div>
                 <div>
-                  <dt>Maximum budget</dt>
+                  <dt>Maximum this round</dt>
                   <dd>{formatUsd(commonGroundBudgetPreview.maximumBudgetCents)}</dd>
                 </div>
                 <div>
@@ -785,7 +856,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     <dl className="mpgf-headline-metrics">
                       <div>
                         <dt>Your stance</dt>
-                        <dd>{row.stance.replaceAll("_", " ")}</dd>
+                        <dd>{commonGroundStanceLabel(row.stance)}</dd>
                       </div>
                       <div>
                         <dt>Projected allocation</dt>

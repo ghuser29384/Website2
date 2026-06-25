@@ -70,7 +70,8 @@ test("MPGF contribution page renders the moraltrade60 contribution state surface
 
   assert.match(page, /MpgfContributionProofLedger/);
   assert.match(page, /buildMpgfContributionProofLedger/);
-  assert.match(component, /Authorized budget/);
+  assert.match(component, /Maximum this round/);
+  assert.doesNotMatch(component, /Authorized budget/);
   assert.match(component, /Currently routed allocations/);
   assert.match(component, /Pending threshold allocations/);
   assert.match(component, /Failed allocations/);
@@ -109,4 +110,6 @@ test("MPGF contribution page renders the moraltrade60 contribution state surface
   assert.match(helper, /destinationProofStatusForPledge/);
   assert.match(helper, /challengeWindowStatusForCampaign/);
   assert.match(helper, /failureBonusOrCarryForwardCreditCents/);
+  assert.doesNotMatch(helper, /Increase the authorized amount/);
+  assert.match(helper, /Increase the maximum budget/);
 });
