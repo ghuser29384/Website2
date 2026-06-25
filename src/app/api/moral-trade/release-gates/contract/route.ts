@@ -39,6 +39,8 @@ export async function GET(request: Request) {
         requiredRequirementKeys: stage.requiredRequirementKeys,
         inactiveRequirementKeys: stage.inactiveRequirementKeys,
       })),
+      documentedReleaseStages: contract.documentedReleaseStages,
+      documentedFeatureFlags: contract.documentedFeatureFlags,
       requirementKeys: contract.requirementDefinitions.map((requirement) => requirement.key),
       firstClassRecordTables: contract.firstClassRecordTables,
       immutablePolicySnapshotSubjects: contract.immutablePolicySnapshotSubjects,

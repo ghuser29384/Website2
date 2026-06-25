@@ -5,7 +5,9 @@ import { readFileSync } from "node:fs";
 import { POST as enforceReleaseGate } from "@/app/api/moral-trade/release-gates/enforce/route";
 
 import {
+  MORALTRADE82_FEATURE_FLAGS,
   MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS,
+  MORALTRADE82_RELEASE_STAGES,
   evaluateMoralTradeReleaseGate,
   getMoralTradeReleaseGateContract,
   validateMoralTradeReleaseGateContract,
@@ -72,6 +74,25 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.equal(validation.status, "pass");
   assert.equal(validation.blockers.length, 0);
   assert.equal(MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.length, 93);
+  assert.deepEqual(contract.documentedReleaseStages, [...MORALTRADE82_RELEASE_STAGES]);
+  assert.deepEqual(contract.documentedFeatureFlags, [...MORALTRADE82_FEATURE_FLAGS]);
+  assert.ok(contract.stages.some((stage) => stage.key === "demo" && !stage.payable));
+  assert.ok(
+    contract.stages.some(
+      (stage) =>
+        stage.key === "pledge_swap_preview_only" &&
+        stage.requiredRequirementKeys.includes("micro_pledge_preperformance_lock_test") &&
+        stage.requiredRequirementKeys.includes("food_abstention_health_safety_boundary_test"),
+    ),
+  );
+  assert.ok(
+    contract.stages.some(
+      (stage) =>
+        stage.key === "donation_offset_pilot" &&
+        stage.requiredRequirementKeys.includes("public_receipt_card_publication_test") &&
+        stage.requiredRequirementKeys.includes("offset_creation_route_happy_path_test"),
+    ),
+  );
   assert.ok(
     MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.every((key) =>
       contract.requirementDefinitions.some((requirement) => requirement.key === key),
@@ -195,6 +216,45 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.requiredRequirementCount, 5);
   assert.equal(evaluation.inactiveRequirementCount, 88);
   assert.equal(evaluation.notRequiredRequirementCount, 88);
+});
+
+test("moraltrade82 documented preview stages use the same fail-closed evaluator", () => {
+  const pledgePreview = evaluateMoralTradeReleaseGate({
+    stage: "pledge_swap_preview_only",
+    gateId: "pledge-preview-test-gate",
+    policySnapshotBundleStatus: "resolved_immutable",
+    stateInterpretationPolicyStatus: "resolved_immutable",
+    featureFlagEnabled: true,
+    emergencyPaused: false,
+    results: stageResults("pledge_swap_preview_only"),
+  });
+
+  assert.equal(pledgePreview.status, "pass");
+  assert.equal(pledgePreview.payable, false);
+  assert.equal(pledgePreview.relianceBearing, false);
+  assert.ok(pledgePreview.requiredRequirementCount > 20);
+  assert.ok(pledgePreview.inactiveRequirementCount > 0);
+
+  const blocked = evaluateMoralTradeReleaseGate({
+    stage: "pledge_swap_manual_pilot",
+    gateId: "manual-pilot-test-gate",
+    policySnapshotBundleStatus: "resolved_immutable",
+    stateInterpretationPolicyStatus: "resolved_immutable",
+    featureFlagEnabled: false,
+    emergencyPaused: false,
+    results: stageResults("pledge_swap_manual_pilot").filter(
+      (entry) => entry.key !== "participant_ui_render_snapshot_accessibility_test",
+    ),
+  });
+
+  assert.equal(blocked.status, "blocked");
+  assert.ok(blocked.relianceBearing);
+  assert.ok(blocked.blockers.includes("feature_flag_disabled:moral_trade_pledge_swap_manual_pilot"));
+  assert.ok(
+    blocked.blockers.includes(
+      "missing_required_result:participant_ui_render_snapshot_accessibility_test",
+    ),
+  );
 });
 
 test("missing required and inactive-control results fail closed", () => {
@@ -359,7 +419,11 @@ test("release-gate route, health, technical spec, and migration are wired", () =
   );
 
   assert.match(route, /validateMoralTradeReleaseGateContract/);
+  assert.match(route, /documentedReleaseStages/);
+  assert.match(route, /documentedFeatureFlags/);
   assert.match(enforceRoute, /release_gate_enforce/);
+  assert.match(enforceRoute, /pledge_swap_preview_only/);
+  assert.match(enforceRoute, /donation_offset_pilot/);
   assert.match(enforceRoute, /moral_trade_release_gate_enforcement_records/);
   assert.match(enforceRoute, /payableAllowed: false/);
   assert.match(enforceRoute, /relianceBearingAllowed: false/);

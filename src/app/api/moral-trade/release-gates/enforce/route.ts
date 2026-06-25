@@ -28,6 +28,13 @@ const MAX_IDEMPOTENCY_LENGTH = 160;
 const MAX_REQUIREMENT_RESULTS = 160;
 
 const STAGES = new Set<MoralTradeReleaseStage>([
+  "demo",
+  "sandbox_calculation",
+  "reviewed_no_money_manual_evidence_pilot",
+  "capped_real_money_external_crecm_module",
+  "donation_offset_pilot",
+  "pledge_swap_preview_only",
+  "pledge_swap_manual_pilot",
   "public_goods_preview",
   "donation_offset_payable",
   "pledge_swap_reliance_manual_pilot",

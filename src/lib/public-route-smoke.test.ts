@@ -2765,6 +2765,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleSource, /policy_bundle_contract_validator/);
   assert.match(releaseGateSource, /getMoralTradeReleaseGateContract/);
   assert.match(releaseGateSource, /evaluateMoralTradeReleaseGate/);
+  assert.match(releaseGateSource, /MORALTRADE82_RELEASE_STAGES/);
+  assert.match(releaseGateSource, /MORALTRADE82_FEATURE_FLAGS/);
+  assert.match(releaseGateSource, /pledge_swap_preview_only/);
+  assert.match(releaseGateSource, /donation_offset_pilot/);
   assert.match(releaseGateSource, /MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS/);
   assert.match(releaseGateSource, /marketplace_intake_triage_routing_test/);
   assert.match(releaseGateSource, /participant_ui_render_snapshot_accessibility_test/);
@@ -4707,6 +4711,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleContractRoute, /prohibitedPatternCodes/);
   assert.match(policyBundleContractRoute, /verificationMethodKeys/);
   assert.match(releaseGateContractRoute, /validateMoralTradeReleaseGateContract/);
+  assert.match(releaseGateContractRoute, /documentedReleaseStages/);
+  assert.match(releaseGateContractRoute, /documentedFeatureFlags/);
   assert.match(releaseGateContractRoute, /firstClassRecordTables/);
   assert.match(releaseGateContractRoute, /sampleEvaluations/);
   assert.match(participantConfirmationContractRoute, /validateMoralTradeParticipantConfirmationContract/);
@@ -5415,6 +5421,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
+  const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
   assert.match(offersPage, /Live offers/);
@@ -5473,6 +5480,11 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /isPublicGoodsDirectoryIntent/);
   assert.match(offersPage, /publicGoodsSearchIntent/);
   assert.match(offersPage, /defaultView: DirectoryView = publicGoodsSearchIntent/);
+  assert.match(publicOffersSource, /publicGoodsEntry/);
+  assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);
+  assert.match(publicOffersSource, /noPrimaryZeroState/);
+  assert.match(publicOffersSource, /ordinaryOfferFiltersCollapsed/);
+  assert.match(publicOffersSource, /exactLiveProgressExposed/);
   assert.match(offersPage, /query\.set\("tab", params\.view\)/);
   assert.match(offersPage, /parseDirectoryView/);
   assert.match(offersPage, /No live offers yet/);

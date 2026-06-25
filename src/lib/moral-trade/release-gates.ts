@@ -4,6 +4,13 @@ export const MORAL_TRADE_RELEASE_GATE_VALIDATOR_VERSION =
   "moral-trade-release-gate-validator-v0.1";
 
 export type MoralTradeReleaseStage =
+  | "demo"
+  | "sandbox_calculation"
+  | "reviewed_no_money_manual_evidence_pilot"
+  | "capped_real_money_external_crecm_module"
+  | "donation_offset_pilot"
+  | "pledge_swap_preview_only"
+  | "pledge_swap_manual_pilot"
   | "public_goods_preview"
   | "donation_offset_payable"
   | "pledge_swap_reliance_manual_pilot"
@@ -130,6 +137,8 @@ export interface MoralTradeReleaseGateContract {
   firstClassRecordTables: string[];
   immutablePolicySnapshotSubjects: string[];
   privilegedActionKeys: string[];
+  documentedReleaseStages: MoralTradeReleaseStage[];
+  documentedFeatureFlags: string[];
   stages: MoralTradeReleaseStageContract[];
   requirementDefinitions: MoralTradeReleaseGateRequirementDefinition[];
   sampleEvaluations: MoralTradeReleaseGateEvaluation[];
@@ -196,6 +205,26 @@ const PRIVILEGED_ACTION_KEYS = [
   "manual_payout_release",
   "emergency_unpause",
   "nonroutine_refund_cancellation",
+] as const;
+
+export const MORALTRADE82_RELEASE_STAGES = [
+  "demo",
+  "sandbox_calculation",
+  "reviewed_no_money_manual_evidence_pilot",
+  "capped_real_money_external_crecm_module",
+  "donation_offset_pilot",
+  "pledge_swap_preview_only",
+  "pledge_swap_manual_pilot",
+] as const satisfies readonly MoralTradeReleaseStage[];
+
+export const MORALTRADE82_FEATURE_FLAGS = [
+  "external_crecm_module",
+  "real_money_capture",
+  "non_public_goods_subsidies",
+  "donation_offsets",
+  "pledge_swaps",
+  "automated_provider_evidence",
+  "payout_release",
 ] as const;
 
 export const MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS = [
@@ -697,6 +726,135 @@ const PUBLIC_GOODS_PREVIEW_REQUIRED_REQUIREMENTS = [
   "environment_data_isolation_check",
 ] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
 
+const DEMO_REQUIRED_REQUIREMENTS = [
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const SANDBOX_CALCULATION_REQUIRED_REQUIREMENTS = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "environment_data_isolation_check",
+  "schema_migration_dry_run",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "evidence_challenge_tests",
+  "reviewer_conflict_tests",
+  "neutral_reviewer_approval",
+  "non_public_goods_term_sheet_test",
+  "marketplace_intake_triage_routing_test",
+  "participant_ui_ux_progressive_disclosure_test",
+  "participant_ui_render_snapshot_accessibility_test",
+  "plain_language_copy_contract_test",
+  "participant_task_card_simplification_test",
+  "safe_template_default_disclosure_test",
+  "technical_detail_progressive_disclosure_test",
+  "approved_trade_template_parameter_test",
+  "review_capacity_admission_queue_test",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const CRECM_HANDOFF_REQUIRED_REQUIREMENTS = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "payment_replay_tests",
+  "evidence_challenge_tests",
+  "reviewer_conflict_tests",
+  "emergency_pause_test",
+  "neutral_reviewer_approval",
+  "deployment_config_snapshot",
+  "schema_migration_dry_run",
+  "rollback_plan_test",
+  "environment_data_isolation_check",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const DONATION_OFFSET_PILOT_REQUIRED_REQUIREMENTS = [
+  ...REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS,
+  "donation_offset_lock_confirmation_test",
+  "offset_creation_route_happy_path_test",
+  "public_moral_trade_page_simplification_test",
+  "recipient_acceptance_association_test",
+  "post_clear_audit_sampling_test",
+  "public_receipt_card_publication_test",
+  "public_receipt_causal_wording_and_reuse_test",
+  "public_receipt_net_personal_contribution_test",
+  "public_receipt_anti_gamification_test",
+  "public_receipt_authenticity_revocation_test",
+  "public_receipt_social_pressure_sensitive_action_test",
+  "non_public_goods_subsidy_schedule_test",
+  "direct_pair_clearing_test",
+  "cause_bucket_taxonomy_review_test",
+  "resource_compatibility_assessment_test",
+  "net_offset_accounting_test",
+  "offer_expiry_staleness_test",
+  "batch_clearing_objective_fairness_test",
+  "privacy_preserving_verification_attestation_test",
+  "non_public_goods_tier_scope_test",
+  "counterfactual_trust_class_test",
+  "control_applicability_matrix_test",
+  "market_simulation_red_team_test",
+  "pilot_exit_criteria_test",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const PLEDGE_SWAP_PREVIEW_REQUIRED_REQUIREMENTS = [
+  ...REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS,
+  "pledge_swap_performance_terms_test",
+  "behavioral_micro_pledge_duration_test",
+  "behavioral_micro_pledge_evidence_ladder_test",
+  "behavioral_micro_pledge_unit_baseline_test",
+  "micro_pledge_sequence_cumulative_cap_test",
+  "food_abstention_health_safety_boundary_test",
+  "behavioral_micro_pledge_low_stakes_cap_test",
+  "micro_pledge_unit_settlement_test",
+  "micro_pledge_preperformance_lock_test",
+  "counterparty_blinding_staged_disclosure_test",
+  "ai_preference_elicitation_boundary_test",
+  "closed_counterparty_pledge_swap_test",
+  "counterfactual_trust_class_test",
+  "non_public_goods_tier_scope_test",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
+const PLEDGE_SWAP_MANUAL_PILOT_REQUIRED_REQUIREMENTS = [
+  ...PLEDGE_SWAP_PREVIEW_REQUIRED_REQUIREMENTS,
+  "recipient_acceptance_association_test",
+  "post_clear_audit_sampling_test",
+  "public_receipt_card_publication_test",
+  "public_receipt_causal_wording_and_reuse_test",
+  "public_receipt_net_personal_contribution_test",
+  "public_receipt_anti_gamification_test",
+  "public_receipt_authenticity_revocation_test",
+  "public_receipt_social_pressure_sensitive_action_test",
+  "commitment_inventory_double_count_test",
+  "atomic_settlement_group_test",
+  "pledge_swap_synchronized_performance_test",
+  "negative_commitment_substitution_test",
+  "irreversible_action_gate_test",
+  "third_party_obligation_assessment_test",
+  "representative_authority_verification_test",
+  "protected_reporting_non_suppression_test",
+  "civil_rights_discrimination_test",
+  "participant_autonomy_undue_influence_test",
+  "confidentiality_privacy_rights_test",
+  "evidence_authenticity_synthetic_media_test",
+  "financial_crime_fraud_screening_test",
+  "agreement_non_transferability_test",
+  "regulated_goods_hazardous_activity_test",
+  "cyber_abuse_digital_systems_integrity_test",
+  "control_applicability_matrix_test",
+  "market_simulation_red_team_test",
+  "pilot_exit_criteria_test",
+  "pledge_performance_bond_neutral_forfeiture_test",
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
+
 const DOCUMENTED_RELEASE_STAGE_REQUIREMENTS = [
   ...MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS,
 ] as const;
@@ -710,6 +868,90 @@ function inactiveDocumentRequirements(
 }
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
+  {
+    key: "demo",
+    label: "Demo",
+    featureFlagKey: "moral_trade_demo",
+    payable: false,
+    relianceBearing: false,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...DEMO_REQUIRED_REQUIREMENTS],
+    inactiveRequirementKeys: inactiveDocumentRequirements(DEMO_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "Demo surfaces require current route health, privacy, and anti-threat evidence; every later control remains explicitly not required under a frozen policy snapshot.",
+  },
+  {
+    key: "sandbox_calculation",
+    label: "Sandbox calculation",
+    featureFlagKey: "moral_trade_sandbox_calculation",
+    payable: false,
+    relianceBearing: false,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...SANDBOX_CALCULATION_REQUIRED_REQUIREMENTS],
+    inactiveRequirementKeys: inactiveDocumentRequirements(SANDBOX_CALCULATION_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "Sandbox calculation requires dry-run, route, privacy, anti-threat, environment-isolation, and migration dry-run evidence before previews can rely on calculation output.",
+  },
+  {
+    key: "reviewed_no_money_manual_evidence_pilot",
+    label: "Reviewed no-money manual-evidence pilot",
+    featureFlagKey: "moral_trade_reviewed_no_money_manual_evidence_pilot",
+    payable: false,
+    relianceBearing: false,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...new Set(REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS)],
+    inactiveRequirementKeys: inactiveDocumentRequirements(REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "No-money manual-evidence pilots require triage, template, term-sheet, evidence, reviewer, capacity, participant UI, and plain-language checks before any participant can treat a preview as reviewed.",
+  },
+  {
+    key: "capped_real_money_external_crecm_module",
+    label: "Capped real-money external CRECM module handoff",
+    featureFlagKey: "moral_trade_external_crecm_module",
+    payable: true,
+    relianceBearing: true,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...CRECM_HANDOFF_REQUIRED_REQUIREMENTS],
+    inactiveRequirementKeys: inactiveDocumentRequirements(CRECM_HANDOFF_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "External CRECM handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
+  },
+  {
+    key: "donation_offset_pilot",
+    label: "Donation-offset pilot",
+    featureFlagKey: "moral_trade_donation_offsets",
+    payable: false,
+    relianceBearing: false,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...new Set(DONATION_OFFSET_PILOT_REQUIRED_REQUIREMENTS)],
+    inactiveRequirementKeys: inactiveDocumentRequirements(DONATION_OFFSET_PILOT_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "Donation-offset pilot requires intake, signed-out offset preview, term-sheet, recipient, receipt, subsidy, direct-pair, taxonomy, clearing, and public-page controls before pilots can move beyond preview.",
+  },
+  {
+    key: "pledge_swap_preview_only",
+    label: "Pledge-swap preview only",
+    featureFlagKey: "moral_trade_pledge_swaps",
+    payable: false,
+    relianceBearing: false,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...new Set(PLEDGE_SWAP_PREVIEW_REQUIRED_REQUIREMENTS)],
+    inactiveRequirementKeys: inactiveDocumentRequirements(PLEDGE_SWAP_PREVIEW_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "Pledge-swap preview-only mode requires micro-pledge duration, evidence ladder, unit baseline, cumulative cap, health-safety, low-stakes, settlement, pre-performance lock, and staged disclosure checks.",
+  },
+  {
+    key: "pledge_swap_manual_pilot",
+    label: "Pledge-swap manual pilot",
+    featureFlagKey: "moral_trade_pledge_swap_manual_pilot",
+    payable: false,
+    relianceBearing: true,
+    publicMetricsMayPublish: false,
+    requiredRequirementKeys: [...new Set(PLEDGE_SWAP_MANUAL_PILOT_REQUIRED_REQUIREMENTS)],
+    inactiveRequirementKeys: inactiveDocumentRequirements(PLEDGE_SWAP_MANUAL_PILOT_REQUIRED_REQUIREMENTS),
+    hardBlockerSummary:
+      "Manual pledge-swap pilots require preview controls plus settlement, protective assessment, recipient/receipt, post-clear audit, neutral review, and optional performance-bond forfeiture gates.",
+  },
   {
     key: "public_goods_preview",
     label: "Public-goods preview",
@@ -1047,6 +1289,8 @@ export function getMoralTradeReleaseGateContract(): MoralTradeReleaseGateContrac
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
     immutablePolicySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
     privilegedActionKeys: [...PRIVILEGED_ACTION_KEYS],
+    documentedReleaseStages: [...MORALTRADE82_RELEASE_STAGES],
+    documentedFeatureFlags: [...MORALTRADE82_FEATURE_FLAGS],
     stages: RELEASE_STAGES.map((stage) => ({ ...stage })),
     requirementDefinitions: MORAL_TRADE_RELEASE_GATE_REQUIREMENTS.map((requirement) => ({
       ...requirement,
@@ -1088,6 +1332,18 @@ export function validateMoralTradeReleaseGateContract(
             stage.requiredRequirementKeys.length > 0,
         ),
       stageKeys.join(", "),
+    ),
+    check(
+      "moraltrade82-stage-and-flag-coverage",
+      "Moraltrade82 release stages and feature flags are first-class public contract values",
+      MORALTRADE82_RELEASE_STAGES.every((stage) => stageKeys.includes(stage)) &&
+        MORALTRADE82_FEATURE_FLAGS.every((flag) =>
+          contract.documentedFeatureFlags.includes(flag),
+        ) &&
+        MORALTRADE82_RELEASE_STAGES.every((stage) =>
+          contract.documentedReleaseStages.includes(stage),
+        ),
+      `${contract.documentedReleaseStages.join(", ")} | ${contract.documentedFeatureFlags.join(", ")}`,
     ),
     check(
       "requirement-definition-coverage",
