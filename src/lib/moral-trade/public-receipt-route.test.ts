@@ -1,7 +1,55 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { GET as publicReceiptContractRoute } from "@/app/api/moral-trade/public-receipts/contract/route";
 import { GET as verifyPublicReceiptRoute } from "@/app/api/moral-trade/public-receipts/[receiptId]/verify/route";
+
+test("public receipt card contract route exposes safe claim-hygiene policy", async () => {
+  const response = await publicReceiptContractRoute(
+    new Request("http://localhost/api/moral-trade/public-receipts/contract"),
+  );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.ok, true);
+  assert.equal(body.validation.status, "pass");
+  assert.ok(
+    body.publicContract.firstClassRecordTables.includes(
+      "moral_trade_public_receipt_cards",
+    ),
+  );
+  assert.ok(
+    body.publicContract.claimHygieneRules.includes(
+      "trade_conditioned_wording_default",
+    ),
+  );
+  assert.ok(
+    body.publicContract.claimHygieneRules.includes(
+      "publication_sidecar_only",
+    ),
+  );
+  assert.equal(
+    body.publicContract.defaultPublicationControls.affectsMatchingOrReview,
+    false,
+  );
+  assert.equal(
+    body.publicContract.defaultPublicationControls.publicEngagementCounters,
+    false,
+  );
+  assert.ok(body.publicContract.prohibitedPublicSignals.includes("leaderboards"));
+  assert.ok(body.publicContract.prohibitedPublicSignals.includes("moral_scores"));
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].status,
+    "pass",
+  );
+  assert.equal(serialized.includes("private_note"), false);
+  assert.equal(serialized.includes("raw_evidence"), false);
+  assert.equal(serialized.includes("contact"), false);
+});
 
 test("public receipt verification route returns contract-only validation without private claim data", async () => {
   const response = await verifyPublicReceiptRoute(

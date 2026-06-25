@@ -2,6 +2,10 @@ export const PUBLIC_RECEIPT_CARD_POLICY_VERSION =
   "public-receipt-card-policy-v0.1-2026-06";
 export const PUBLIC_RECEIPT_CARD_VALIDATOR_VERSION =
   "public-receipt-card-validator-v0.1";
+export const PUBLIC_RECEIPT_CARD_CONTRACT_VERSION =
+  "public-receipt-card-contract-v0.1-2026-06";
+export const PUBLIC_RECEIPT_CARD_CONTRACT_VALIDATOR_VERSION =
+  "public-receipt-card-contract-validator-v0.1";
 
 export type PublicReceiptClaimKind = "donation_offset" | "pledge_swap";
 export type PublicReceiptVisibility = "private_preview" | "opt_in_public" | "revoked";
@@ -84,6 +88,39 @@ export interface PublicReceiptCardPreview {
   visibility: PublicReceiptVisibility;
 }
 
+export interface PublicReceiptCardContract {
+  version: typeof PUBLIC_RECEIPT_CARD_CONTRACT_VERSION;
+  policyVersion: typeof PUBLIC_RECEIPT_CARD_POLICY_VERSION;
+  purpose: string;
+  firstClassRecordTables: string[];
+  claimKinds: PublicReceiptClaimKind[];
+  visibilityStates: PublicReceiptVisibility[];
+  correctionStatuses: PublicReceiptCorrectionStatus[];
+  causalWordingStates: PublicReceiptCausalWording[];
+  reviewStates: PublicReceiptReviewState[];
+  personalContributionStates: PublicReceiptPersonalContributionState[];
+  claimHygieneRules: string[];
+  defaultPublicationControls: PublicReceiptPublicationControls;
+  requiredPublicFields: string[];
+  prohibitedPublicSignals: string[];
+  samplePreviews: PublicReceiptCardPreview[];
+  contractTests: string[];
+}
+
+export interface PublicReceiptCardContractValidation {
+  status: "pass" | "fail";
+  validatorName: "public-receipt-card-contract";
+  validatorVersion: typeof PUBLIC_RECEIPT_CARD_CONTRACT_VALIDATOR_VERSION;
+  contractVersion: typeof PUBLIC_RECEIPT_CARD_CONTRACT_VERSION;
+  blockers: string[];
+  checks: Array<{
+    id: string;
+    label: string;
+    status: "pass" | "fail";
+    evidence: string;
+  }>;
+}
+
 const PRIVATE_TOKEN_PATTERN =
   /(email|phone|contact|private note|raw evidence|source note|exact wish|counterparty message|receipt url)/i;
 const ENDORSEMENT_PATTERN =
@@ -102,6 +139,20 @@ function hasText(value: string | undefined) {
 
 function isPassedReviewState(value: PublicReceiptReviewState) {
   return value === "passed";
+}
+
+function check(
+  id: string,
+  label: string,
+  passed: boolean,
+  evidence: string,
+): PublicReceiptCardContractValidation["checks"][number] {
+  return {
+    id,
+    label,
+    status: passed ? "pass" : "fail",
+    evidence,
+  };
 }
 
 export function validatePublicReceiptCardDraft(
@@ -219,5 +270,279 @@ export function buildPublicReceiptCardPreview(
     validation: validatePublicReceiptCardDraft(draft),
     verificationUrl: draft.verificationUrl,
     visibility: draft.visibility,
+  };
+}
+
+const DEFAULT_PUBLICATION_CONTROLS: PublicReceiptPublicationControls = {
+  affectsMatchingOrReview: false,
+  currentStatus: "current",
+  issuedAt: "2026-06-25T00:00:00.000Z",
+  profileOrSearchBoost: false,
+  publicEngagementCounters: false,
+  publicationRequiredAsTradeTerm: false,
+  recommendationOrPriorityBoost: false,
+  sidecarOnly: true,
+};
+
+const SAMPLE_PUBLIC_RECEIPT_DRAFTS: PublicReceiptCardDraft[] = [
+  {
+    claimCopy:
+      "Participant reports a reviewed donation-offset completion with a trade-conditioned contribution shown below.",
+    claimKind: "donation_offset",
+    contributionSummary: {
+      baselineAdditionalityReview: "missing",
+      causalWording: "trade_conditioned",
+      counterfactualTrustReview: "missing",
+      impactClaimReview: "missing",
+      personalContribution: "$100 verified personal direct donation",
+      personalContributionState: "verified_new",
+      totalVerifiedRecipientTransfer: "$200 total verified recipient transfer",
+      tradeConditionedContribution:
+        "$100 verified trade-conditioned counterparty donation",
+    },
+    correctionStatus: "none",
+    directDonationParityNote:
+      "Direct donation remains at parity; Moral Trade does not prefer this route over giving directly.",
+    evidenceLevel: "receipt_reviewed",
+    netAttributionNote:
+      "Net attribution separates personal contribution, trade-conditioned contribution, and total verified recipient transfer.",
+    participantOptIn: true,
+    publicationControls: DEFAULT_PUBLICATION_CONTROLS,
+    publicActionSummary: "Reviewed donation-offset receipt",
+    receiptId: "public-receipt-contract-sample-offset",
+    reviewed: true,
+    sensitiveActionRedacted: true,
+    title: "Reviewed offset receipt",
+    verificationUrl:
+      "/api/moral-trade/public-receipts/public-receipt-contract-sample-offset/verify",
+    visibility: "opt_in_public",
+  },
+  {
+    claimCopy:
+      "Participant reports a reviewed trade-unlocked contribution after baseline, counterfactual, and impact-claim review.",
+    claimKind: "donation_offset",
+    contributionSummary: {
+      baselineAdditionalityReview: "passed",
+      causalWording: "trade_unlocked",
+      counterfactualTrustReview: "passed",
+      impactClaimReview: "passed",
+      personalContribution: "$25 verified personal direct donation",
+      personalContributionState: "verified_new",
+      totalVerifiedRecipientTransfer: "$50 total verified recipient transfer",
+      tradeConditionedContribution:
+        "$25 verified trade-conditioned counterparty donation",
+      tradeUnlockedContribution:
+        "$25 reviewed trade-unlocked counterparty donation",
+    },
+    correctionStatus: "none",
+    directDonationParityNote:
+      "Direct donation parity is optional and non-preferential; it does not affect matching, review, or access.",
+    evidenceLevel: "receipt_reviewed",
+    netAttributionNote:
+      "Net personal contribution excludes reimbursements, subsidies, refunds, and counterparty-funded amounts.",
+    participantOptIn: true,
+    publicationControls: DEFAULT_PUBLICATION_CONTROLS,
+    publicActionSummary:
+      "Reviewed stronger causal wording receipt with current verification status",
+    receiptId: "public-receipt-contract-sample-unlocked",
+    reviewed: true,
+    sensitiveActionRedacted: true,
+    title: "Reviewed causal wording receipt",
+    verificationUrl:
+      "/api/moral-trade/public-receipts/public-receipt-contract-sample-unlocked/verify",
+    visibility: "opt_in_public",
+  },
+  {
+    claimCopy:
+      "Participant reports a verified micro-pledge completed with the public action details kept generic.",
+    claimKind: "pledge_swap",
+    contributionSummary: {
+      baselineAdditionalityReview: "missing",
+      causalWording: "trade_conditioned",
+      counterfactualTrustReview: "missing",
+      impactClaimReview: "missing",
+      personalContribution: "Personal action details are redacted in public display.",
+      personalContributionState: "suppressed_uncertain",
+      totalVerifiedRecipientTransfer: "$20 total verified recipient transfer",
+      tradeConditionedContribution: "$20 verified trade-conditioned transfer",
+    },
+    correctionStatus: "none",
+    directDonationParityNote:
+      "Direct donation parity is not required, not preselected, and creates no preference.",
+    evidenceLevel: "self_attestation",
+    netAttributionNote:
+      "Net attribution is qualified because personal behavior details are suppressed.",
+    participantOptIn: true,
+    publicationControls: DEFAULT_PUBLICATION_CONTROLS,
+    publicActionSummary: "Verified micro-pledge completed",
+    receiptId: "public-receipt-contract-sample-pledge",
+    reviewed: true,
+    sensitiveActionRedacted: true,
+    title: "Reviewed micro-pledge receipt",
+    verificationUrl:
+      "/api/moral-trade/public-receipts/public-receipt-contract-sample-pledge/verify",
+    visibility: "opt_in_public",
+  },
+];
+
+const CLAIM_HYGIENE_RULES = [
+  "trade_conditioned_wording_default",
+  "trade_unlocked_requires_reviewed_causal_support",
+  "net_personal_contribution_separated",
+  "direct_donation_parity_non_preferential",
+  "no_public_moral_rank_or_platform_endorsement",
+  "no_engagement_counters_or_priority_effects",
+  "verification_url_current_status_required",
+  "correction_revocation_state_required",
+  "sensitive_action_redaction_required",
+  "publication_sidecar_only",
+];
+
+const PROHIBITED_PUBLIC_SIGNALS = [
+  "likes",
+  "reactions",
+  "share_counts",
+  "streaks",
+  "leaderboards",
+  "moral_scores",
+  "public_ranks",
+  "profile_boosts",
+  "search_boosts",
+  "matching_priority",
+  "review_priority",
+  "recommendation_ranking",
+];
+
+export function getPublicReceiptCardContract(): PublicReceiptCardContract {
+  const samplePreviews = SAMPLE_PUBLIC_RECEIPT_DRAFTS.map((draft) =>
+    buildPublicReceiptCardPreview(draft),
+  );
+
+  return {
+    version: PUBLIC_RECEIPT_CARD_CONTRACT_VERSION,
+    policyVersion: PUBLIC_RECEIPT_CARD_POLICY_VERSION,
+    purpose:
+      "Public receipt card policy contract for opt-in, sidecar-only, claim-hygienic receipt previews and publication checks after non-public-goods Moral Trade completion.",
+    firstClassRecordTables: [
+      "moral_trade_public_receipt_cards",
+      "moral_trade_public_receipt_claim_reviews",
+      "moral_trade_public_receipt_publication_controls",
+      "moral_trade_public_receipt_corrections",
+      "moral_trade_public_receipt_verification_events",
+    ],
+    claimKinds: ["donation_offset", "pledge_swap"],
+    visibilityStates: ["private_preview", "opt_in_public", "revoked"],
+    correctionStatuses: ["none", "correction_requested", "corrected", "revoked"],
+    causalWordingStates: ["trade_conditioned", "trade_unlocked"],
+    reviewStates: ["passed", "not_required_for_stage", "missing", "blocked", "stale"],
+    personalContributionStates: [
+      "verified_new",
+      "verified_already_counted",
+      "ordinary_verified_not_parity",
+      "suppressed_uncertain",
+    ],
+    claimHygieneRules: CLAIM_HYGIENE_RULES,
+    defaultPublicationControls: DEFAULT_PUBLICATION_CONTROLS,
+    requiredPublicFields: [
+      "receiptId",
+      "title",
+      "claimKind",
+      "visibility",
+      "verificationUrl",
+      "correctionStatus",
+      "contributionSummary.personalContribution",
+      "contributionSummary.tradeConditionedContribution",
+      "contributionSummary.totalVerifiedRecipientTransfer",
+      "directDonationParityNote",
+      "netAttributionNote",
+    ],
+    prohibitedPublicSignals: PROHIBITED_PUBLIC_SIGNALS,
+    samplePreviews,
+    contractTests: [
+      "src/lib/moral-trade/public-receipt-cards.test.ts",
+      "src/lib/moral-trade/public-receipt-route.test.ts",
+      "src/app/api/moral-trade/public-receipts/contract/route.ts",
+      "src/app/api/moral-trade/public-receipts/[receiptId]/verify/route.ts",
+    ],
+  };
+}
+
+export function validatePublicReceiptCardContract(
+  contract: PublicReceiptCardContract = getPublicReceiptCardContract(),
+): PublicReceiptCardContractValidation {
+  const checks = [
+    check(
+      "first-class-records",
+      "Receipt cards, claim reviews, publication controls, corrections, and verification events are first-class",
+      [
+        "moral_trade_public_receipt_cards",
+        "moral_trade_public_receipt_claim_reviews",
+        "moral_trade_public_receipt_publication_controls",
+        "moral_trade_public_receipt_corrections",
+        "moral_trade_public_receipt_verification_events",
+      ].every((table) => contract.firstClassRecordTables.includes(table)),
+      contract.firstClassRecordTables.join(", "),
+    ),
+    check(
+      "claim-hygiene-rules",
+      "Contract covers causal wording, net attribution, parity, sidecar, verification, and anti-gamification rules",
+      CLAIM_HYGIENE_RULES.every((rule) => contract.claimHygieneRules.includes(rule)),
+      contract.claimHygieneRules.join(", "),
+    ),
+    check(
+      "publication-controls",
+      "Default publication controls cannot affect matching, review, engagement, ranking, or trade terms",
+      contract.defaultPublicationControls.sidecarOnly &&
+        !contract.defaultPublicationControls.affectsMatchingOrReview &&
+        !contract.defaultPublicationControls.publicEngagementCounters &&
+        !contract.defaultPublicationControls.profileOrSearchBoost &&
+        !contract.defaultPublicationControls.publicationRequiredAsTradeTerm &&
+        !contract.defaultPublicationControls.recommendationOrPriorityBoost,
+      JSON.stringify(contract.defaultPublicationControls),
+    ),
+    check(
+      "sample-previews-pass",
+      "Sample public receipt previews satisfy the fail-closed card validator",
+      contract.samplePreviews.every((preview) => preview.validation.status === "pass"),
+      contract.samplePreviews
+        .map((preview) => `${preview.receiptId}:${preview.validation.status}`)
+        .join(", "),
+    ),
+    check(
+      "prohibited-public-signals",
+      "Receipt publication cannot create engagement or moral-status infrastructure",
+      [
+        "likes",
+        "leaderboards",
+        "moral_scores",
+        "matching_priority",
+        "review_priority",
+        "recommendation_ranking",
+      ].every((signal) => contract.prohibitedPublicSignals.includes(signal)),
+      contract.prohibitedPublicSignals.join(", "),
+    ),
+    check(
+      "contract-tests",
+      "Contract and verification route tests are named",
+      [
+        "src/lib/moral-trade/public-receipt-cards.test.ts",
+        "src/lib/moral-trade/public-receipt-route.test.ts",
+        "src/app/api/moral-trade/public-receipts/contract/route.ts",
+        "src/app/api/moral-trade/public-receipts/[receiptId]/verify/route.ts",
+      ].every((testName) => contract.contractTests.includes(testName)),
+      contract.contractTests.join(", "),
+    ),
+  ];
+  const blockers = checks
+    .filter((entry) => entry.status === "fail")
+    .map((entry) => `${entry.id}: ${entry.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "public-receipt-card-contract",
+    validatorVersion: PUBLIC_RECEIPT_CARD_CONTRACT_VALIDATOR_VERSION,
+    contractVersion: contract.version,
+    blockers,
+    checks,
   };
 }

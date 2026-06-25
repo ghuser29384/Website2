@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   buildPublicReceiptCardPreview,
+  getPublicReceiptCardContract,
+  validatePublicReceiptCardContract,
   validatePublicReceiptCardDraft,
   type PublicReceiptCardDraft,
 } from "./public-receipt-cards";
@@ -178,4 +180,70 @@ test("public receipt card validator requires reuse and uncertain-net attribution
 
   assert.equal(uncertain.status, "fail");
   assert.ok(uncertain.blockers.includes("uncertain_personal_contribution_must_be_qualified"));
+});
+
+test("public receipt card contract validates first-class claim hygiene coverage", () => {
+  const contract = getPublicReceiptCardContract();
+  const validation = validatePublicReceiptCardContract(contract);
+
+  assert.equal(validation.status, "pass");
+  assert.deepEqual(validation.blockers, []);
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_public_receipt_cards"));
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_public_receipt_claim_reviews",
+    ),
+  );
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_public_receipt_publication_controls",
+    ),
+  );
+  assert.ok(contract.claimHygieneRules.includes("trade_conditioned_wording_default"));
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "trade_unlocked_requires_reviewed_causal_support",
+    ),
+  );
+  assert.ok(contract.claimHygieneRules.includes("net_personal_contribution_separated"));
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "direct_donation_parity_non_preferential",
+    ),
+  );
+  assert.ok(contract.claimHygieneRules.includes("publication_sidecar_only"));
+  assert.equal(contract.defaultPublicationControls.sidecarOnly, true);
+  assert.equal(contract.defaultPublicationControls.affectsMatchingOrReview, false);
+  assert.equal(contract.defaultPublicationControls.publicEngagementCounters, false);
+  assert.ok(contract.prohibitedPublicSignals.includes("leaderboards"));
+  assert.ok(contract.prohibitedPublicSignals.includes("moral_scores"));
+  assert.ok(contract.prohibitedPublicSignals.includes("matching_priority"));
+  assert.ok(contract.samplePreviews.every((preview) => preview.validation.status === "pass"));
+});
+
+test("public receipt card contract fails closed if publication can affect marketplace priority", () => {
+  const contract = getPublicReceiptCardContract();
+  const validation = validatePublicReceiptCardContract({
+    ...contract,
+    claimHygieneRules: contract.claimHygieneRules.filter(
+      (rule) => rule !== "publication_sidecar_only",
+    ),
+    defaultPublicationControls: {
+      ...contract.defaultPublicationControls,
+      affectsMatchingOrReview: true,
+      publicEngagementCounters: true,
+    },
+  });
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.includes(
+      "claim-hygiene-rules: Contract covers causal wording, net attribution, parity, sidecar, verification, and anti-gamification rules",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication-controls: Default publication controls cannot affect matching, review, engagement, ranking, or trade terms",
+    ),
+  );
 });
