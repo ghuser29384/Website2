@@ -25,9 +25,9 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import publicOfferListingSchemaJson from "../../config/moral-trade/public-offer-listing.schema.json";
 
 export const PUBLIC_OFFERS_API_CONTRACT_VERSION =
-  "public-offers-api-v0.2-2026-06";
+  "public-offers-api-v0.3-2026-06";
 export const PUBLIC_OFFERS_API_VALIDATOR_VERSION =
-  "public-offers-api-validator-v0.2";
+  "public-offers-api-validator-v0.3";
 
 export type PublicOfferFormat =
   | "pledge-swap"
@@ -113,6 +113,44 @@ export interface PublicOffersTabSummary {
   description: string;
 }
 
+export interface PublicGoodsEntryAction {
+  key: "preview-common-ground-budget" | "view-current-round" | "learn-how-it-works";
+  label: string;
+  href: string;
+  method: "GET";
+  rank: number;
+  authRequired: boolean;
+  createsBindingIntent: false;
+}
+
+export interface PublicGoodsEntryCard {
+  id: "common-ground-budget-public-goods-fund";
+  label: "Common Ground Budget";
+  eyebrow: "Public Goods Fund";
+  mechanismVersion: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion;
+  href: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href;
+  summary: string;
+  resultRank: 1;
+  visibleForPublicGoodsIntent: boolean;
+  countsAsLiveOffer: false;
+  countsAsOrdinaryListing: false;
+  createsBindingIntent: false;
+  noPrimaryZeroState: true;
+  ordinaryOfferFiltersCollapsed: true;
+  exactLiveProgressExposed: false;
+  primaryCta: PublicGoodsEntryAction;
+  secondaryCtas: PublicGoodsEntryAction[];
+  laneSeparation: {
+    liveOfferCount: number;
+    reviewedSeedTemplateCount: number;
+    workedExampleCount: number;
+    demoRecordCount: number;
+    publicGoodsModuleCount: number;
+  };
+  statusChips: string[];
+  copyGuards: string[];
+}
+
 export interface PublicOffersMeta {
   tab: PublicOffersTab;
   defaultTab: PublicOffersTab;
@@ -153,6 +191,7 @@ export interface PublicOffersCollectionPayload {
   contractVersion: string;
   meta: PublicOffersMeta;
   publicContract: PublicOffersContract;
+  publicGoodsEntry: PublicGoodsEntryCard | null;
   items: PublicOfferListing[];
 }
 
@@ -194,6 +233,7 @@ export interface PublicOffersFacetsPayload {
     | "reviewedSeedTemplates"
   >;
   publicContract: PublicOffersContract;
+  publicGoodsEntry: PublicGoodsEntryCard | null;
   availableFacets: PublicOffersMeta["availableFacets"];
 }
 
@@ -495,6 +535,87 @@ function getPublicMarketplaceRoundCount() {
 
 function getPublicMarketplaceDemoCount() {
   return demoMpgfPublicGoodsCampaigns.filter((campaign) => campaign.reviewStatus === "approved").length;
+}
+
+export function buildPublicGoodsEntryCard({
+  liveOfferCount,
+  publicGoodsIntent,
+  reviewedSeedTemplateCount,
+  workedExampleCount,
+}: {
+  liveOfferCount: number;
+  publicGoodsIntent: boolean;
+  reviewedSeedTemplateCount: number;
+  workedExampleCount: number;
+}): PublicGoodsEntryCard {
+  const currentRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
+  const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
+
+  return {
+    id: "common-ground-budget-public-goods-fund",
+    label: "Common Ground Budget",
+    eyebrow: "Public Goods Fund",
+    mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
+    href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
+    summary:
+      "Fund moral public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes. This is a separate Public Goods Fund entry, not an ordinary offer listing.",
+    resultRank: 1,
+    visibleForPublicGoodsIntent: publicGoodsIntent,
+    countsAsLiveOffer: false,
+    countsAsOrdinaryListing: false,
+    createsBindingIntent: false,
+    noPrimaryZeroState: true,
+    ordinaryOfferFiltersCollapsed: true,
+    exactLiveProgressExposed: false,
+    primaryCta: {
+      key: "preview-common-ground-budget",
+      label: "Preview a Common Ground Budget",
+      href: previewHref,
+      method: "GET",
+      rank: 1,
+      authRequired: false,
+      createsBindingIntent: false,
+    },
+    secondaryCtas: [
+      {
+        key: "view-current-round",
+        label: "View current round",
+        href: currentRoundHref,
+        method: "GET",
+        rank: 2,
+        authRequired: false,
+        createsBindingIntent: false,
+      },
+      {
+        key: "learn-how-it-works",
+        label: "Learn how it works / View audit and rules",
+        href: "/mpgf",
+        method: "GET",
+        rank: 3,
+        authRequired: false,
+        createsBindingIntent: false,
+      },
+    ],
+    laneSeparation: {
+      liveOfferCount,
+      reviewedSeedTemplateCount,
+      workedExampleCount,
+      demoRecordCount: getPublicMarketplaceDemoCount(),
+      publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
+    },
+    statusChips: [
+      "No charge now",
+      "No escrow claim",
+      "Sealed progress before close",
+      "Separated accounting",
+      "Final review consent",
+    ],
+    copyGuards: [
+      "Does not create, edit, clear, authorize, capture, release, reward, credit, certify, or audit a CRECM record.",
+      "Does not count as a live offer, ordinary listing, completed agreement, or live liquidity.",
+      "Does not expose exact live threshold satisfaction, counterparty gaps, supporter counts, active-cluster counts, or success-without-me status before close.",
+    ],
+  };
 }
 
 function buildPublicOffersTabSummaries({
@@ -935,7 +1056,8 @@ export function buildPublicOffersCollectionPayload({
   const formats = readAll(searchParams, "format", "mode")
     .map(parseFormat)
     .filter((format): format is PublicOfferFormat => Boolean(format));
-  const defaultTab: PublicOffersTab = isPublicGoodsCollectionIntent({ formats, query })
+  const publicGoodsIntent = isPublicGoodsCollectionIntent({ formats, query });
+  const defaultTab: PublicOffersTab = publicGoodsIntent
     ? "external_crecm"
     : liveOfferCount > 0
       ? "live"
@@ -973,6 +1095,15 @@ export function buildPublicOffersCollectionPayload({
   );
   const start = (page - 1) * pageSize;
   const items = filtered.slice(start, start + pageSize);
+  const publicGoodsEntry =
+    publicGoodsIntent || tab === "external_crecm"
+      ? buildPublicGoodsEntryCard({
+          liveOfferCount,
+          publicGoodsIntent,
+          reviewedSeedTemplateCount: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+          workedExampleCount,
+        })
+      : null;
 
   return {
     contractVersion: PUBLIC_OFFERS_API_CONTRACT_VERSION,
@@ -1013,6 +1144,7 @@ export function buildPublicOffersCollectionPayload({
     publicContract: buildPublicOffersContract({
       publicApiRoute: "/api/offers",
     }),
+    publicGoodsEntry,
     items,
   };
 }
@@ -1053,6 +1185,7 @@ export function buildPublicOffersFacetsPayload({
         (filter) => filter !== "page" && filter !== "pageSize",
       ),
     }),
+    publicGoodsEntry: collection.publicGoodsEntry,
     availableFacets: collection.meta.availableFacets,
   };
 }
@@ -1161,6 +1294,47 @@ function reviewedSeedTemplatesSatisfyBootstrapPath(
   );
 }
 
+function publicGoodsEntryPreservesBoundaries(
+  payload:
+    | Pick<PublicOffersCollectionPayload, "items" | "meta" | "publicGoodsEntry">
+    | (Pick<PublicOffersFacetsPayload, "meta" | "publicGoodsEntry"> & { items?: never[] }),
+) {
+  const expectsPublicGoodsEntry =
+    payload.meta.tab === "external_crecm" || payload.meta.defaultedToPublicGoods;
+
+  if (!expectsPublicGoodsEntry) {
+    return payload.publicGoodsEntry === null;
+  }
+
+  const entry = payload.publicGoodsEntry;
+
+  return Boolean(
+    entry &&
+      entry.resultRank === 1 &&
+      entry.label === "Common Ground Budget" &&
+      entry.primaryCta.key === "preview-common-ground-budget" &&
+      entry.primaryCta.rank === 1 &&
+      entry.secondaryCtas.map((action) => action.rank).join(",") === "2,3" &&
+      entry.secondaryCtas[0]?.key === "view-current-round" &&
+      entry.secondaryCtas[1]?.key === "learn-how-it-works" &&
+      entry.countsAsLiveOffer === false &&
+      entry.countsAsOrdinaryListing === false &&
+      entry.createsBindingIntent === false &&
+      entry.primaryCta.createsBindingIntent === false &&
+      entry.secondaryCtas.every((action) => action.createsBindingIntent === false) &&
+      entry.noPrimaryZeroState &&
+      entry.ordinaryOfferFiltersCollapsed &&
+      entry.exactLiveProgressExposed === false &&
+      entry.laneSeparation.liveOfferCount === payload.meta.liveOfferCount &&
+      entry.laneSeparation.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplateCount &&
+      entry.laneSeparation.workedExampleCount === payload.meta.workedExampleCount &&
+      entry.laneSeparation.publicGoodsModuleCount ===
+        (payload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count ?? -1) &&
+      entry.copyGuards.some((claim) => /does not count as a live offer/i.test(claim)) &&
+      entry.copyGuards.some((claim) => /does not expose exact live threshold/i.test(claim)),
+  );
+}
+
 export function validatePublicOffersCollectionPayload(
   payload: PublicOffersCollectionPayload,
 ): PublicOffersValidation {
@@ -1193,6 +1367,14 @@ export function validatePublicOffersCollectionPayload(
       "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and Common Ground Budget lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
+    ),
+    validationCheck(
+      "public-goods-entry-card",
+      "Public-goods intent returns a first-rank Common Ground Budget entry without treating it as a live listing",
+      publicGoodsEntryPreservesBoundaries(payload),
+      payload.publicGoodsEntry
+        ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; items=${payload.items.length}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`
+        : "No public-goods entry.",
     ),
     validationCheck(
       "reviewed-seed-templates",
@@ -1373,6 +1555,14 @@ export function validatePublicOffersFacetsPayload(
         payload.publicContract.nonClaims.some((claim) => /not escrow|custody/i.test(claim)) &&
         payload.publicContract.nonClaims.some((claim) => /not platform moral rankings/i.test(claim)),
       payload.publicContract.nonClaims.join(" | "),
+    ),
+    validationCheck(
+      "public-goods-entry-card",
+      "Public-goods facet responses preserve the Common Ground Budget entry without treating it as a facet or listing",
+      publicGoodsEntryPreservesBoundaries({ ...payload, items: [] }),
+      payload.publicGoodsEntry
+        ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`
+        : "No public-goods entry.",
     ),
   ];
   const blockers = checks

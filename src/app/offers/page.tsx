@@ -26,6 +26,7 @@ import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
+import { buildPublicGoodsEntryCard } from "@/lib/public-offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import {
   getActionEvidenceSummary,
@@ -745,6 +746,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       : "worked_examples";
   const view = parseDirectoryView(explicitViewParam, defaultView);
   const showPublicGoodsEntryCard = publicGoodsSearchIntent || view === "external_crecm";
+  const publicGoodsEntry = showPublicGoodsEntryCard
+    ? buildPublicGoodsEntryCard({
+        liveOfferCount,
+        publicGoodsIntent: publicGoodsSearchIntent,
+        reviewedSeedTemplateCount: seedTemplateCount,
+        workedExampleCount,
+      })
+    : null;
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
     external_crecm: seedRoundCount,
@@ -1093,12 +1102,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="hero-actions">
               {publicGoodsSearchIntent ? (
                 <>
-                  <Link className="button button-primary" href={seedRoundHref}>
-                    Preview a Common Ground Budget
+                  <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
+                    {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
                   </Link>
-                  <Link className="button button-secondary" href="/mpgf">
-                    Learn how it works
-                  </Link>
+                  {publicGoodsEntry?.secondaryCtas.map((action) => (
+                    <Link className="button button-secondary" href={action.href} key={action.key}>
+                      {action.label}
+                    </Link>
+                  ))}
                 </>
               ) : (
                 <>
@@ -1152,11 +1163,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           >
             <div className="marketplace-bootstrap-head">
               <div>
-                <p className="eyebrow">Public Goods Fund</p>
-                <h2 id="public-goods-intent-heading">Common Ground Budget</h2>
+                <p className="eyebrow">{publicGoodsEntry?.eyebrow ?? "Public Goods Fund"}</p>
+                <h2 id="public-goods-intent-heading">
+                  {publicGoodsEntry?.label ?? "Common Ground Budget"}
+                </h2>
                 <p>
-                  Fund moral public goods only if enough different-view support joins. No charge
-                  now. Exact live progress may be hidden until the round closes.
+                  {publicGoodsEntry?.summary ??
+                    "Fund moral public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
                 </p>
                 <p>
                   Projects must pass threshold, review, challenge, payment, and authorization
@@ -1171,20 +1184,26 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   requires final review before any binding budget or project stance is saved.
                 </p>
               </div>
-              <Link className="button button-primary" href={seedRoundHref}>
-                Preview a Common Ground Budget
+              <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
+                {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
               </Link>
             </div>
             <div className="tag-row" aria-label="Common Ground Budget status">
               <span className="badge badge-secondary">
-                {MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion}
+                {publicGoodsEntry?.mechanismVersion ?? MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion}
               </span>
-              <span className="badge badge-secondary">Capped pilot preview</span>
-              <span className="badge badge-secondary">No charge now</span>
-              <span className="badge badge-secondary">No escrow claim</span>
-              <span className="badge badge-secondary">Sealed progress before close</span>
-              <span className="badge badge-secondary">Separated accounting</span>
-              <span className="badge badge-secondary">Final review consent</span>
+              {(publicGoodsEntry?.statusChips ?? [
+                "Capped pilot preview",
+                "No charge now",
+                "No escrow claim",
+                "Sealed progress before close",
+                "Separated accounting",
+                "Final review consent",
+              ]).map((chip) => (
+                <span className="badge badge-secondary" key={chip}>
+                  {chip}
+                </span>
+              ))}
               <span className="badge badge-secondary">Review gates required</span>
             </div>
             <dl className="mpgf-summary-grid" aria-label="Common Ground Budget search-result summary">
@@ -1214,12 +1233,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </div>
             </dl>
             <div className="marketplace-bootstrap-actions">
-              <Link className="button button-secondary" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
-                View current round
-              </Link>
-              <Link className="button button-secondary" href="/mpgf#advanced-pivotality-calculator">
-                Learn how this differs from ordinary offers
-              </Link>
+              {publicGoodsEntry?.secondaryCtas.map((action) => (
+                <Link className="button button-secondary" href={action.href} key={action.key}>
+                  {action.label}
+                </Link>
+              ))}
             </div>
             <details className="pilot-note" aria-label="Other ways to browse marketplace lanes">
               <summary>Other ways to browse</summary>

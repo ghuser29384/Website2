@@ -200,6 +200,11 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(validatePublicOffersCollectionPayload(crossViewSearchPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(templatesPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
+  assert.equal(publicGoodSearchPayload.contractVersion, "public-offers-api-v0.3-2026-06");
+  assert.equal(
+    validatePublicOffersCollectionPayload(publicGoodSearchPayload).validatorVersion,
+    "public-offers-api-validator-v0.3",
+  );
   assert.equal(externalCrecPayload.meta.tab, "external_crecm");
   assert.equal(legacyRoundsPayload.meta.tab, "external_crecm");
   assert.equal(publicGoodFormatPayload.meta.tab, "external_crecm");
@@ -218,6 +223,32 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(publicGoodSearchPayload.items.length, 0);
   assert.equal(templatesPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
+  assert.equal(externalCrecPayload.publicGoodsEntry?.resultRank, 1);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "Common Ground Budget");
+  assert.match(publicGoodSearchPayload.publicGoodsEntry?.summary ?? "", /No charge now/);
+  assert.match(
+    publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
+    /Exact live progress may be hidden until the round closes/,
+  );
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget");
+  assert.deepEqual(
+    publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.label),
+    ["View current round", "Learn how it works / View audit and rules"],
+  );
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.countsAsLiveOffer, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.countsAsOrdinaryListing, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.createsBindingIntent, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.noPrimaryZeroState, true);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.ordinaryOfferFiltersCollapsed, true);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.exactLiveProgressExposed, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.publicGoodsModuleCount, 1);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.liveOfferCount, 0);
+  assert.ok(
+    publicGoodSearchPayload.publicGoodsEntry?.copyGuards.some((claim) =>
+      /does not expose exact live threshold/i.test(claim),
+    ),
+  );
+  assert.equal(templatesPayload.publicGoodsEntry, null);
   assert.equal(externalCrecPayload.meta.reviewedSeedTemplateCount, 4);
   assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count, 1);
   assert.equal(
@@ -277,12 +308,24 @@ test("public offer facets endpoint payload hides zero-count options", () => {
     liveOffers: [],
     searchParams: new URLSearchParams("tab=worked_examples&q=vegetarian"),
   });
+  const publicGoodsPayload = buildPublicOffersFacetsPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("search=moral%20public%20goods"),
+  });
   const validation = validatePublicOffersFacetsPayload(payload);
+  const publicGoodsValidation = validatePublicOffersFacetsPayload(publicGoodsPayload);
   const allFacets = Object.values(payload.availableFacets).flat();
 
   assert.equal(validation.status, "pass");
+  assert.equal(publicGoodsValidation.status, "pass");
   assert.equal(payload.publicContract.publicApiRoute, "/api/offers/facets");
   assert.equal(payload.meta.tab, "worked_examples");
+  assert.equal(payload.publicGoodsEntry, null);
+  assert.equal(publicGoodsPayload.meta.tab, "external_crecm");
+  assert.equal(publicGoodsPayload.publicGoodsEntry?.resultRank, 1);
+  assert.match(publicGoodsPayload.publicGoodsEntry?.summary ?? "", /not an ordinary offer listing/);
+  assert.equal(publicGoodsPayload.publicGoodsEntry?.countsAsLiveOffer, false);
+  assert.deepEqual(Object.values(publicGoodsPayload.availableFacets).flat(), []);
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
     ["live", "templates", "worked_examples", "demo", "external_crecm"],
@@ -319,6 +362,30 @@ test("public offers API route returns validator-backed collection JSON", async (
     body.publicContract.listingSchemaId,
     "https://www.moraltrade.org/schemas/moral-trade/public-offer-listing.schema.json",
   );
+  assert.equal(body.validation.status, "pass");
+  assert.deepEqual(body.blockers, []);
+});
+
+test("public offers API route returns Common Ground Budget entry for moral-public-goods search", async () => {
+  const response = await publicOffersRoute(
+    new Request("http://localhost/api/offers?search=moral%20public%20goods"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.meta.tab, "external_crecm");
+  assert.equal(body.meta.defaultedToPublicGoods, true);
+  assert.equal(body.items.length, 0);
+  assert.equal(body.publicGoodsEntry.resultRank, 1);
+  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
+  assert.equal(body.publicGoodsEntry.primaryCta.key, "preview-common-ground-budget");
+  assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
+  assert.equal(body.publicGoodsEntry.countsAsOrdinaryListing, false);
+  assert.equal(body.publicGoodsEntry.createsBindingIntent, false);
+  assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
+  assert.equal(body.publicGoodsEntry.ordinaryOfferFiltersCollapsed, true);
+  assert.equal(body.publicGoodsEntry.exactLiveProgressExposed, false);
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);
 });
@@ -378,6 +445,25 @@ test("public offer facets API route returns validator-backed facets JSON", async
   );
   assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");
+  assert.equal(body.validation.status, "pass");
+  assert.deepEqual(body.blockers, []);
+});
+
+test("public offer facets API route preserves Common Ground Budget entry for public-goods intent", async () => {
+  const response = await publicOffersFacetsRoute(
+    new Request("http://localhost/api/offers/facets?search=moral%20public%20goods"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.meta.tab, "external_crecm");
+  assert.equal(body.meta.defaultedToPublicGoods, true);
+  assert.equal(body.publicGoodsEntry.resultRank, 1);
+  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
+  assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
+  assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
+  assert.deepEqual(Object.values(body.availableFacets).flat(), []);
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);
 });

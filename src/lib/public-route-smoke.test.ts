@@ -5437,6 +5437,8 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Open Common Ground Budget/);
   assert.match(offersPage, /Common Ground Budget result available/);
   assert.match(offersPage, /Preview a Common Ground Budget/);
+  assert.match(publicOffersSource, /View current round/);
+  assert.match(publicOffersSource, /View audit and rules/);
   assert.match(offersPage, /Fund moral public goods only if enough different-view support joins/);
   assert.match(offersPage, /No charge\s+now/);
   assert.match(offersPage, /Exact live progress may be hidden until the round closes/);
@@ -5480,8 +5482,13 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /isPublicGoodsDirectoryIntent/);
   assert.match(offersPage, /publicGoodsSearchIntent/);
   assert.match(offersPage, /defaultView: DirectoryView = publicGoodsSearchIntent/);
+  assert.match(offersPage, /buildPublicGoodsEntryCard/);
+  assert.match(offersPage, /publicGoodsEntry\?\.primaryCta/);
+  assert.match(offersPage, /publicGoodsEntry\?\.secondaryCtas/);
   assert.match(publicOffersSource, /publicGoodsEntry/);
   assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);
+  assert.match(publicOffersSource, /public-offers-api-v0\.3-2026-06/);
+  assert.match(publicOffersSource, /public-offers-api-validator-v0\.3/);
   assert.match(publicOffersSource, /noPrimaryZeroState/);
   assert.match(publicOffersSource, /ordinaryOfferFiltersCollapsed/);
   assert.match(publicOffersSource, /exactLiveProgressExposed/);
