@@ -90,6 +90,16 @@ export interface PublicReviewedSeedTemplateSummary {
   microPledgeDefaults?: MarketplaceMicroPledgeDefaults;
 }
 
+export const DONATION_OFFSET_PLAIN_LABELS = [
+  "what would each side donate without this trade",
+  "how much each side redirects",
+  "where the shared money goes",
+  "why each side prefers this",
+  "what proof reviewers check",
+  "when the offer expires",
+  "what would make this unsafe or invalid",
+] as const;
+
 export const FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS = {
   defaultDurations: ["One meal", "A few meals", "One day", "A few days"],
   coveredFoodPrompt:

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DONATION_OFFSET_PLAIN_LABELS,
   getPublicReviewedSeedTemplateSummaries,
   getReviewedMarketplaceSeedTemplate,
   REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
@@ -49,4 +50,16 @@ test("public seed template summaries omit private fields and live-metric eligibi
   assert.ok(summaries.every((summary) => summary.liveMetricEligible === false));
   assert.ok(summaries.every((summary) => summary.reviewStatus === "admin_reviewed"));
   assert.equal(/baselineAmountUsd|requestedMatchingAmountUsd|notes|reviewDecisionId/.test(serialized), false);
+});
+
+test("donation-offset templates expose the approved participant plain-label map", () => {
+  assert.deepEqual([...DONATION_OFFSET_PLAIN_LABELS], [
+    "what would each side donate without this trade",
+    "how much each side redirects",
+    "where the shared money goes",
+    "why each side prefers this",
+    "what proof reviewers check",
+    "when the offer expires",
+    "what would make this unsafe or invalid",
+  ]);
 });
