@@ -404,7 +404,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   </dd>
                 </div>
                 <div>
-                  <dt>Guaranteed base match</dt>
+                  <dt>Base match if backed and gates pass</dt>
                   <dd>{sealedProgressText(sealedProgressActive, formatMaybeUsd(campaign.estimatedBaseMatchCents))}</dd>
                 </div>
                 <div>
@@ -560,7 +560,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
 
         <article className="mpgf-panel" id="common-ground-budget-preview">
           <p className="eyebrow">Common Ground Budget preview</p>
-          <h2>Set a no-capture budget for this round</h2>
+          <h2>Choose your maximum</h2>
           <p>
             Preview a monthly or round-limited budget, freeze the eligible project set, and confirm
             that the routing is acceptable relative to your stated default allocation. This preview
@@ -623,28 +623,29 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
               <form className="stacked-form" method="get" aria-label="Common Ground Budget setup">
                 <div className="form-grid">
                   <label className="field">
-                    <span>Budget period</span>
+                    <span>Budget type</span>
                     <select name="budgetPeriod" defaultValue={commonGroundBudgetPreview.budgetPeriod}>
+                      <option value="round_limited">One-time</option>
+                      <option disabled value="every_round">Every round (requires final review)</option>
                       <option value="monthly">Monthly</option>
-                      <option value="round_limited">Round-limited</option>
                     </select>
                   </label>
                   <label className="field">
-                    <span>Monthly budget, cents</span>
-                    <input
-                      min="0"
-                      name="monthlyBudgetCents"
-                      type="number"
-                      defaultValue={monthlyBudgetCents}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Round budget, cents</span>
+                    <span>Maximum this round, cents</span>
                     <input
                       min="0"
                       name="roundBudgetCents"
                       type="number"
                       defaultValue={roundBudgetCents}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Maximum monthly, cents</span>
+                    <input
+                      min="0"
+                      name="monthlyBudgetCents"
+                      type="number"
+                      defaultValue={monthlyBudgetCents}
                     />
                   </label>
                   <label className="field">
@@ -659,15 +660,15 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     </select>
                   </label>
                   <label className="field">
-                    <span>Fallback rule</span>
+                    <span>If something does not clear</span>
                     <select name="fallbackRule" defaultValue={commonGroundBudgetPreview.fallbackRule}>
                       <option value="carry_forward">Carry forward</option>
-                      <option value="reroute">Reroute inside eligible set</option>
-                      <option value="release_hold">Release hold</option>
+                      <option value="reroute">Try another approved project</option>
+                      <option value="release_hold">Cancel authorization or release hold if applicable</option>
                     </select>
                   </label>
                   <label className="field">
-                    <span>Unroutable budget</span>
+                    <span>If budget cannot be routed</span>
                     <select
                       name="unroutableBudgetPolicy"
                       defaultValue={commonGroundBudgetPreview.unroutableBudgetPolicy}
@@ -677,7 +678,69 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                       <option value="manual_review">Manual review</option>
                     </select>
                   </label>
+                  <div className="field" aria-label="Privacy">
+                    <span>Privacy</span>
+                    <strong>Aggregate only</strong>
+                    <p className="mpgf-small">No project-level identity disclosure is added by this preview.</p>
+                  </div>
+                  <div className="field" aria-label="Payment method">
+                    <span>Payment method</span>
+                    <button className="button button-secondary" disabled type="button">
+                      Save payment method
+                    </button>
+                    <p className="mpgf-small">
+                      A saved card is not a charge, hold, authorization, escrow, custody event,
+                      or guarantee that a later authorization will succeed.
+                    </p>
+                  </div>
                 </div>
+                <details className="notice-card">
+                  <summary>
+                    <strong>Details you are agreeing to</strong>
+                  </summary>
+                  <dl className="mpgf-summary-grid">
+                    <div>
+                      <dt>Per-project maximum</dt>
+                      <dd>Shown in the project picker below and repeated on final review.</dd>
+                    </div>
+                    <div>
+                      <dt>Next capture rule and cancellation deadline</dt>
+                      <dd>
+                        No capture in preview; later capture can occur only after hard gates and exact
+                        authorization reconciliation. Cancellation deadline:{" "}
+                        {formatDate(commonGroundBudgetPreview.cancelUntil)}.
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Fee acknowledgement and fee-policy hash</dt>
+                      <dd>Fee policy stays tied to rulebook hash {ecmRulebook.calcHash.slice(0, 19)}...</dd>
+                    </div>
+                    <div>
+                      <dt>Sponsor-paid fee support disclosure</dt>
+                      <dd>Sponsor-paid fee support, if any, is disclosed separately from public-good dollars.</dd>
+                    </div>
+                    <div>
+                      <dt>Contributor benefits</dt>
+                      <dd>Success reward, coordination credit, and impact certificate opt-ins default off.</dd>
+                    </div>
+                    <div>
+                      <dt>Recognition preference</dt>
+                      <dd>Aggregate only.</dd>
+                    </div>
+                    <div>
+                      <dt>Rulebook hash at consent</dt>
+                      <dd>{ecmRulebook.calcHash.slice(0, 19)}...</dd>
+                    </div>
+                    <div>
+                      <dt>Sealed-progress acknowledgement</dt>
+                      <dd>Exact live threshold and counterparty gaps can stay hidden until close.</dd>
+                    </div>
+                  </dl>
+                  <p className="mpgf-small">
+                    Safe defaults become binding only after the final review screen shows them and
+                    you explicitly save.
+                  </p>
+                </details>
                 <label className="field">
                   <span>Your default allocation baseline</span>
                   <textarea
@@ -699,6 +762,77 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   only after you explicitly choose a non-skip stance, accept a maximum for this
                   project, and save the condition on the final review screen.
                 </p>
+                <div className="notice-card" aria-label="Edit condition drawer">
+                  <strong>Edit condition</strong>
+                  <p>
+                    I may contribute up to the selected project maximum only if at least{" "}
+                    {formatUsd(20_000)} of verified match-eligible support clears from morally
+                    distinct buckets.
+                  </p>
+                  <dl className="mpgf-summary-grid">
+                    <div>
+                      <dt>Morally distinct buckets</dt>
+                      <dd>Animal welfare, Long-run future, Public-interest knowledge.</dd>
+                    </div>
+                    <div>
+                      <dt>Does not count</dt>
+                      <dd>
+                        Your own dollars, linked accounts, same-payment-method or same-payment-cluster
+                        accounts, same-control entities, sponsor dollars, platform dollars, fees,
+                        same-bucket dollars, rewards, credits, or certificates.
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Priority order</dt>
+                      <dd>Recorded per project from the current project order.</dd>
+                    </div>
+                    <div>
+                      <dt>Fallback rule</dt>
+                      <dd>Same as budget unless a compatible custom fallback is approved on final review.</dd>
+                    </div>
+                    <div>
+                      <dt>Base match if cleared</dt>
+                      <dd>Project-specific sponsor match on match-eligible dollars.</dd>
+                    </div>
+                    <div>
+                      <dt>Bonus</dt>
+                      <dd>Capped diversity-aware post-clear sponsor bonus.</dd>
+                    </div>
+                    <div>
+                      <dt>Contributor benefit</dt>
+                      <dd>Success reward only if backed; otherwise $0 or an up-to cap with proration disclosure.</dd>
+                    </div>
+                    <div>
+                      <dt>Coordination credits / impact certificate</dt>
+                      <dd>Optional contributor-only receipt; no allocation power.</dd>
+                    </div>
+                    <div>
+                      <dt>Fees</dt>
+                      <dd>Gross captured, fee, and sent-to-project amounts shown separately.</dd>
+                    </div>
+                    <div>
+                      <dt>Self-matching exclusions</dt>
+                      <dd>Self, linked accounts, same payment method, same payment cluster, and same-control entity.</dd>
+                    </div>
+                    <div>
+                      <dt>Capture rule</dt>
+                      <dd>After hard gates and exact authorization reconciliation only.</dd>
+                    </div>
+                  </dl>
+                  <details>
+                    <summary>Canonical fields</summary>
+                    <ul>
+                      <li>ProjectSupportStance.stance</li>
+                      <li>ProjectSupportStance.maxAllocCents / maxAllocBps</li>
+                      <li>ConditionalTradeIntent.amountCents</li>
+                      <li>ConditionalTradeIntent.maxExposureCents</li>
+                      <li>ConditionalTradeIntent.acceptableCounterBucketIds</li>
+                      <li>ConditionalTradeIntent.minCounterpartyVolumeCents</li>
+                      <li>ConditionalTradeIntent.fallbackRule</li>
+                      <li>rulebookHashAtConsent</li>
+                    </ul>
+                  </details>
+                </div>
                 <div className="mpgf-table-wrap">
                   <table className="mpgf-table">
                     <thead>
@@ -792,7 +926,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dd>{commonGroundBudgetPreview.eligibleProjectSetHash.slice(0, 19)}...</dd>
                 </div>
                 <div>
-                  <dt>Payment capture</dt>
+                  <dt>No charge in this preview</dt>
                   <dd>{commonGroundBudgetPreview.paymentCaptureAllowed ? "enabled" : "disabled"}</dd>
                 </div>
                 <div>
@@ -842,6 +976,13 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 participantConfirmationHash={commonGroundBudgetPreview.participantConfirmationHash}
                 payload={commonGroundBudgetSavePayload}
                 paymentCaptureAllowed={commonGroundBudgetPreview.paymentCaptureAllowed}
+                projectReviewRows={commonGroundBudgetPreview.rows.map((row) => ({
+                  campaignId: row.campaignId,
+                  maxAllocCents: row.maxAllocCents,
+                  rankOrder: row.rankOrder,
+                  stance: row.stance,
+                  title: row.title,
+                }))}
                 releaseGateRequirementBundleHash={commonGroundBudgetPreview.releaseGateRequirementBundleHash}
                 rulebookHash={ecmRulebook.calcHash}
                 sourceSpec={ecmRulebook.mechanism.sourceSpec}
@@ -859,7 +1000,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                         <dd>{commonGroundStanceLabel(row.stance)}</dd>
                       </div>
                       <div>
-                        <dt>Projected allocation</dt>
+                        <dt>Possible allocation if gates pass</dt>
                         <dd>{formatUsd(row.projectedAllocationCents)}</dd>
                       </div>
                       <div>

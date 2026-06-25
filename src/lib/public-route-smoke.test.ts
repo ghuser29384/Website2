@@ -5451,6 +5451,15 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Open Common Ground Budget/);
   assert.match(offersPage, /Common Ground Budget result available/);
   assert.match(offersPage, /Preview a Common Ground Budget/);
+  assert.match(offersPage, /No ordinary moral-trade offers match this search/);
+  assert.match(offersPage, /The moral-public-goods route is separate/);
+  assert.match(offersPage, /Current mode/);
+  assert.match(offersPage, /capped pilot/);
+  assert.match(offersPage, /No charge in this preview/);
+  assert.equal(offersPage.includes("Payment capture"), false);
+  assert.match(offersPage, /Current safe action/);
+  assert.match(offersPage, /preview budget/);
+  assert.match(offersPage, /Browse ordinary offers instead/);
   assert.match(publicOffersSource, /View current round/);
   assert.match(publicOffersSource, /View audit and rules/);
   assert.match(offersPage, /Fund moral public goods only if enough different-view support joins/);
@@ -5471,6 +5480,10 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(mpgfPage, /Review contribution controls/);
   assert.equal(mpgfPage.includes("Start conditional contribution"), false);
   assert.match(offersPage, /Search public-goods funding/);
+  assert.match(offersPage, /Deployment mode/);
+  assert.match(offersPage, /Round state/);
+  assert.match(offersPage, /Project bucket/);
+  assert.match(offersPage, /showPublicGoodsEntryCard \? \(/);
   assert.match(offersPage, /Ordinary offer filters/);
   assert.match(offersPage, /Other ways to browse/);
   assert.match(offersPage, /assurance matching/);

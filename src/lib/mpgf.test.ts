@@ -1531,7 +1531,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Campaign unlock board/,
     /Above-the-fold campaign unlock metrics/,
     /top campaign funding metrics/,
-    /Guaranteed base match/,
+    /Base match if backed and gates pass/,
     /Base match if cleared/,
     /Estimated bonus range/,
     /MpgfSupportSignalPanel/,
@@ -3093,9 +3093,52 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /final review screen\s+remains the consent boundary/);
   assert.match(roundPage, /Preview release gate/);
   assert.match(roundPage, /Later-stage controls held back/);
+  assert.match(roundPage, /Choose your maximum/);
+  assert.match(roundPage, /Budget type/);
+  assert.match(roundPage, /One-time/);
+  assert.match(roundPage, /Every round \(requires final review\)/);
+  assert.match(roundPage, /Maximum this round, cents/);
+  assert.match(roundPage, /Maximum monthly, cents/);
   assert.match(roundPage, /Maximum this round/);
   assert.doesNotMatch(roundPage, /Maximum budget/);
+  assert.match(roundPage, /No charge in this preview/);
+  assert.match(roundPage, /Possible allocation if gates pass/);
+  assert.doesNotMatch(roundPage, /Guaranteed base match/);
+  assert.doesNotMatch(roundPage, /Projected allocation/);
+  assert.doesNotMatch(roundPage, /Budget period/);
+  assert.doesNotMatch(roundPage, /Monthly budget, cents/);
+  assert.doesNotMatch(roundPage, /Round budget, cents/);
+  assert.match(roundPage, /If something does not clear/);
+  assert.match(roundPage, /Try another approved project/);
+  assert.match(roundPage, /Cancel authorization or release hold if applicable/);
+  assert.match(roundPage, /If budget cannot be routed/);
+  assert.doesNotMatch(roundPage, /Unroutable budget/);
+  assert.match(roundPage, /Privacy/);
+  assert.match(roundPage, /Aggregate only/);
+  assert.match(roundPage, /Payment method/);
+  assert.match(roundPage, /Save payment method/);
+  assert.match(roundPage, /A saved card is not a charge, hold, authorization, escrow, custody event/);
+  assert.match(roundPage, /or guarantee that a later authorization will succeed/);
+  assert.match(roundPage, /Details you are agreeing to/);
+  assert.match(roundPage, /Safe defaults become binding only after the final review screen shows them/);
   assert.match(roundPage, /Pick projects with the plain-language choices below/);
+  assert.match(roundPage, /Edit condition/);
+  assert.match(roundPage, /verified match-eligible support clears from morally/);
+  assert.match(roundPage, /Morally distinct buckets/);
+  assert.match(roundPage, /Animal welfare, Long-run future, Public-interest knowledge/);
+  assert.match(roundPage, /Does not count/);
+  assert.match(roundPage, /same-payment-method or same-payment-cluster/);
+  assert.match(roundPage, /same-control entities/);
+  assert.match(roundPage, /Base match if cleared/);
+  assert.match(roundPage, /Capped diversity-aware post-clear sponsor bonus/);
+  assert.match(roundPage, /Contributor benefit/);
+  assert.match(roundPage, /Coordination credits \/ impact certificate/);
+  assert.match(roundPage, /Self-matching exclusions/);
+  assert.match(roundPage, /After hard gates and exact authorization reconciliation only/);
+  assert.match(roundPage, /Canonical fields/);
+  assert.match(roundPage, /ProjectSupportStance\.stance/);
+  assert.match(roundPage, /ConditionalTradeIntent\.acceptableCounterBucketIds/);
+  assert.match(roundPage, /rulebookHashAtConsent/);
   assert.match(roundPage, /Fund this/);
   assert.match(roundPage, /Fund if different-view support joins/);
   assert.match(roundPage, /Needs review/);
@@ -3108,6 +3151,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
   assert.match(roundPage, /MpgfCommonGroundBudgetSavePanel/);
   assert.match(roundPage, /commonGroundBudgetSavePayload/);
+  assert.match(roundPage, /projectReviewRows=\{commonGroundBudgetPreview\.rows\.map/);
   assert.match(roundPage, /rulebookHash=\{ecmRulebook\.calcHash\}/);
   assert.match(roundPage, /sourceSpec=\{ecmRulebook\.mechanism\.sourceSpec\}/);
   assert.match(roundPage, /technicalLabel=\{ecmRulebook\.mechanism\.technicalLabel\}/);
@@ -3118,6 +3162,29 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /"use client"/);
   assert.match(budgetSavePanel, /Save no-capture budget preview/);
   assert.match(budgetSavePanel, /Final review consent boundary/);
+  assert.match(budgetSavePanel, /Review your Common Ground Budget/);
+  assert.match(budgetSavePanel, /This review screen is the consent boundary/);
+  assert.match(budgetSavePanel, /Hidden defaults, suggestions, project-card/);
+  assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
+  assert.match(budgetSavePanel, /Maximum this round/);
+  assert.match(budgetSavePanel, /Payment/);
+  assert.match(budgetSavePanel, /Saved method required for final clearing; no charge or hold now/);
+  assert.match(budgetSavePanel, /If something does not clear/);
+  assert.match(budgetSavePanel, /Privacy/);
+  assert.match(budgetSavePanel, /aggregate only/);
+  assert.match(budgetSavePanel, /Sealed progress/);
+  assert.match(budgetSavePanel, /Exact live threshold and counterparty gaps hidden until close/);
+  assert.match(budgetSavePanel, /Projects/);
+  assert.match(budgetSavePanel, /canonical \{project\.stance\}/);
+  assert.match(budgetSavePanel, /condition accepted/);
+  assert.match(budgetSavePanel, /What you may see after settlement/);
+  assert.match(budgetSavePanel, /Charged from you: gross captured amount, if any/);
+  assert.match(budgetSavePanel, /Sent to projects: net recipient-disbursed public-good dollars/);
+  assert.match(budgetSavePanel, /Counts for matching: counted and match-eligible dollars/);
+  assert.match(budgetSavePanel, /Sponsor added: base match and capped bonus, if backed and eligible/);
+  assert.match(budgetSavePanel, /Contributor benefits: success reward \/ coordination credit \/ impact certificate/);
+  assert.match(budgetSavePanel, /Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback/);
+  assert.match(budgetSavePanel, /Required details/);
   assert.match(budgetSavePanel, /Suggested defaults are not binding unless shown on this review screen and explicitly/);
   assert.match(budgetSavePanel, /Binding caps/);
   assert.match(budgetSavePanel, /Cross-view conditions/);
@@ -3130,7 +3197,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Sealed-progress behavior/);
   assert.match(budgetSavePanel, /Failure-bonus denial categories/);
   assert.match(budgetSavePanel, /Rulebook hash/);
-  assert.match(budgetSavePanel, /not escrow, custody, funds held, or payment protection/);
+  assert.match(budgetSavePanel, /not escrow, custody,\s+funds held, or payment protection/);
   assert.match(budgetSavePanel, /Gross, fee, net recipient, actual, counted, and match-eligible/);
   assert.match(budgetSavePanel, /fetch\(apiPath/);
   assert.match(budgetSavePanel, /JSON\.stringify\(payload\)/);
@@ -3140,6 +3207,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /paymentCaptureAllowed: false/);
   assert.match(budgetSavePanel, /saved_no_capture/);
   assert.match(budgetSavePanel, /No payment capture was authorized/);
+  assert.match(budgetSavePanel, /Save Common Ground Budget/);
 
   for (const table of [
     "mpgf_user_budgets",

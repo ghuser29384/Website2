@@ -39,6 +39,7 @@ interface CommonGroundBudgetSavePanelProps {
   participantConfirmationHash: string | null;
   payload: CommonGroundBudgetSavePayload;
   paymentCaptureAllowed: false;
+  projectReviewRows: CommonGroundBudgetReviewProject[];
   releaseGateRequirementBundleHash: string;
   rulebookHash: string;
   sourceSpec: string;
@@ -57,6 +58,14 @@ interface CommonGroundBudgetSaveResponse {
     status?: string;
     stateMutation?: string;
   };
+}
+
+interface CommonGroundBudgetReviewProject {
+  campaignId: string;
+  maxAllocCents: number;
+  rankOrder: number;
+  stance: SupportStance;
+  title: string;
 }
 
 function statusLabel(value: string) {
@@ -83,6 +92,21 @@ function stanceLabel(value: SupportStance) {
   }
 }
 
+function fallbackLabel(value: FallbackRule) {
+  switch (value) {
+    case "carry_forward":
+      return "carry forward";
+    case "reroute":
+      return "try another approved project";
+    case "release_hold":
+      return "cancel authorization or release hold if applicable";
+  }
+}
+
+function budgetPeriodLabel(value: BudgetPeriod) {
+  return value === "monthly" ? "monthly" : "one-time";
+}
+
 export function MpgfCommonGroundBudgetSavePanel({
   activationState,
   apiPath,
@@ -90,6 +114,7 @@ export function MpgfCommonGroundBudgetSavePanel({
   participantConfirmationHash,
   payload,
   paymentCaptureAllowed,
+  projectReviewRows,
   releaseGateRequirementBundleHash,
   rulebookHash,
   sourceSpec,
@@ -110,9 +135,16 @@ export function MpgfCommonGroundBudgetSavePanel({
   const [savedBudgetId, setSavedBudgetId] = useState<string | null>(null);
   const maximumBudgetCents =
     payload.budgetPeriod === "monthly" ? payload.monthlyBudgetCents : payload.roundBudgetCents;
-  const stanceSummary = payload.stances
-    .map((stance) => `${stance.campaignId}: ${stanceLabel(stance.stance)}`)
-    .join("; ");
+  const projectRows =
+    projectReviewRows.length > 0
+      ? projectReviewRows
+      : payload.stances.map((stance) => ({
+          campaignId: stance.campaignId,
+          maxAllocCents: stance.maxAllocCents,
+          rankOrder: stance.rankOrder,
+          stance: stance.stance,
+          title: stance.campaignId,
+        }));
 
   async function saveBudgetPreview() {
     if (!canSave) {
@@ -121,7 +153,7 @@ export function MpgfCommonGroundBudgetSavePanel({
     }
 
     setPending(true);
-    setStatusMessage("Saving no-capture Common Ground Budget preview.");
+    setStatusMessage("Saving no-capture Common Ground Budget.");
 
     try {
       const response = await fetch(apiPath, {
@@ -158,68 +190,138 @@ export function MpgfCommonGroundBudgetSavePanel({
         and private project stances. It still does not authorize payment capture.
       </p>
       <section aria-label="Final review consent boundary">
-        <h3>Final review consent boundary</h3>
+        <h3>Review your Common Ground Budget</h3>
         <p>
-          Suggested defaults are not binding unless shown on this review screen and explicitly
-          saved. This save records a no-capture preview only; later authorization, capture, reward,
-          credit, certificate, reroute, or release requires the recorded CRECM state to pass.
+          This review screen is the consent boundary. Hidden defaults, suggestions, project-card
+          text, status chips, emails, or calculator outputs that are not shown here cannot become
+          binding.
         </p>
-        <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review checklist">
+        <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review summary">
           <div>
-            <dt>Binding caps</dt>
-            <dd>
-              {payload.budgetPeriod.replaceAll("_", " ")} cap {formatCents(maximumBudgetCents)};
-              per-project caps are recorded in cents and basis points.
-            </dd>
+            <dt>Maximum this round</dt>
+            <dd>{formatCents(maximumBudgetCents)}</dd>
           </div>
           <div>
-            <dt>Cross-view conditions</dt>
-            <dd>Strong and weak stances map to canonical records; weak support clears only with different-view support.</dd>
+            <dt>Payment</dt>
+            <dd>Saved method required for final clearing; no charge or hold now.</dd>
           </div>
           <div>
-            <dt>Counterpart buckets</dt>
-            <dd>Counterpart-bucket eligibility uses the frozen eligible-set hash and canonical CRECM rules.</dd>
+            <dt>If something does not clear</dt>
+            <dd>{fallbackLabel(payload.fallbackRule)}</dd>
           </div>
           <div>
-            <dt>Fallback rule</dt>
-            <dd>
-              {payload.fallbackRule.replaceAll("_", " ")}; unroutable budget policy{" "}
-              {payload.unroutableBudgetPolicy.replaceAll("_", " ")}.
-            </dd>
+            <dt>Privacy</dt>
+            <dd>aggregate only</dd>
           </div>
           <div>
-            <dt>Payment language</dt>
-            <dd>No charge now; saved payment methods or JIT authorizations are not escrow, custody, funds held, or payment protection.</dd>
-          </div>
-          <div>
-            <dt>Fee treatment</dt>
-            <dd>Gross, fee, net recipient, actual, counted, and match-eligible cents remain separate.</dd>
-          </div>
-          <div>
-            <dt>Reward, credit, and certificate opt-ins</dt>
-            <dd>Contributor-only benefits stay separate and never count as public-good dollars or allocation power.</dd>
-          </div>
-          <div>
-            <dt>Self-matching exclusions</dt>
-            <dd>Same participant, linked account, same payment method, and same-control support cannot satisfy counterparty conditions.</dd>
-          </div>
-          <div>
-            <dt>Sealed-progress behavior</dt>
-            <dd>Exact live threshold, counterparty-volume, and success-without-me progress stays sealed before close.</dd>
-          </div>
-          <div>
-            <dt>Failure-bonus denial categories</dt>
-            <dd>Denied for rulebook, legal/custody, identity, sybil, collusion, authorization, consent, conflict, and review failures.</dd>
-          </div>
-          <div>
-            <dt>Rulebook hash</dt>
-            <dd>{rulebookHash.slice(0, 19)}...</dd>
-          </div>
-          <div>
-            <dt>Plain labels</dt>
-            <dd>{stanceSummary || "No project stances selected."}</dd>
+            <dt>Sealed progress</dt>
+            <dd>Exact live threshold and counterparty gaps hidden until close.</dd>
           </div>
         </dl>
+        <div aria-label="Common Ground Budget project review">
+          <h4>Projects</h4>
+          <ul>
+            {projectRows.map((project) => (
+              <li key={`review-${project.campaignId}`}>
+                {project.title}: {stanceLabel(project.stance)} / canonical {project.stance},{" "}
+                {project.stance === "dissent" || project.stance === "abstain"
+                  ? "allocation $0"
+                  : `max ${formatCents(project.maxAllocCents)}, condition accepted`}, priority{" "}
+                {project.rankOrder}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div aria-label="Common Ground Budget settlement preview">
+          <h4>What you may see after settlement</h4>
+          <ul>
+            <li>Charged from you: gross captured amount, if any.</li>
+            <li>Sent to projects: net recipient-disbursed public-good dollars.</li>
+            <li>Counts for matching: counted and match-eligible dollars.</li>
+            <li>Sponsor added: base match and capped bonus, if backed and eligible.</li>
+            <li>Contributor benefits: success reward / coordination credit / impact certificate, if eligible.</li>
+            <li>Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback.</li>
+          </ul>
+        </div>
+        <details>
+          <summary>Required details</summary>
+          <p>
+            Suggested defaults are not binding unless shown on this review screen and explicitly
+            saved. This save records a no-capture preview only; later authorization, capture, reward,
+            credit, certificate, reroute, or release requires the recorded CRECM state to pass.
+          </p>
+          <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review required details">
+            <div>
+              <dt>Binding caps</dt>
+              <dd>
+                {budgetPeriodLabel(payload.budgetPeriod)} cap {formatCents(maximumBudgetCents)};
+                per-project caps are recorded in cents and basis points.
+              </dd>
+            </div>
+            <div>
+              <dt>Cross-view conditions</dt>
+              <dd>
+                Strong and weak stances map to canonical records; weak support clears only with
+                different-view support.
+              </dd>
+            </div>
+            <div>
+              <dt>Counterpart buckets</dt>
+              <dd>Counterpart-bucket eligibility uses the frozen eligible-set hash and canonical CRECM rules.</dd>
+            </div>
+            <div>
+              <dt>Fallback rule</dt>
+              <dd>
+                {payload.fallbackRule.replaceAll("_", " ")}; unroutable budget policy{" "}
+                {payload.unroutableBudgetPolicy.replaceAll("_", " ")}.
+              </dd>
+            </div>
+            <div>
+              <dt>Payment language</dt>
+              <dd>
+                No charge now; saved payment methods or JIT authorizations are not escrow, custody,
+                funds held, or payment protection.
+              </dd>
+            </div>
+            <div>
+              <dt>Fee treatment</dt>
+              <dd>Gross, fee, net recipient, actual, counted, and match-eligible cents remain separate.</dd>
+            </div>
+            <div>
+              <dt>Reward, credit, and certificate opt-ins</dt>
+              <dd>Contributor-only benefits stay separate and never count as public-good dollars or allocation power.</dd>
+            </div>
+            <div>
+              <dt>Self-matching exclusions</dt>
+              <dd>
+                Same participant, linked account, same payment method, and same-control support
+                cannot satisfy counterparty conditions.
+              </dd>
+            </div>
+            <div>
+              <dt>Sealed-progress behavior</dt>
+              <dd>Exact live threshold, counterparty-volume, and success-without-me progress stays sealed before close.</dd>
+            </div>
+            <div>
+              <dt>Failure-bonus denial categories</dt>
+              <dd>
+                Denied for rulebook, legal/custody, identity, sybil, collusion, authorization,
+                consent, conflict, and review failures.
+              </dd>
+            </div>
+            <div>
+              <dt>Rulebook hash</dt>
+              <dd>{rulebookHash.slice(0, 19)}...</dd>
+            </div>
+            <div>
+              <dt>Plain labels</dt>
+              <dd>
+                {projectRows.map((project) => `${project.title}: ${stanceLabel(project.stance)}`).join("; ") ||
+                  "No project stances selected."}
+              </dd>
+            </div>
+          </dl>
+        </details>
         <p className="mpgf-small">
           Source: {sourceSpec}; mechanism: {technicalLabel}.
         </p>
@@ -244,7 +346,7 @@ export function MpgfCommonGroundBudgetSavePanel({
       </dl>
       <div className="mpgf-admin-action-grid">
         <button className="button button-primary" disabled={!canSave || pending} type="button" onClick={saveBudgetPreview}>
-          {pending ? "Saving preview" : "Save budget preview"}
+          {pending ? "Saving Common Ground Budget" : "Save Common Ground Budget"}
         </button>
       </div>
       <p className="mpgf-small" aria-live="polite">

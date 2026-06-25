@@ -1167,6 +1167,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <h2 id="public-goods-intent-heading">
                   {publicGoodsEntry?.label ?? "Common Ground Budget"}
                 </h2>
+                <p>No ordinary moral-trade offers match this search.</p>
+                <p>
+                  The moral-public-goods route is separate: Common Ground Budget / Public Goods
+                  Fund.
+                </p>
                 <p>
                   {publicGoodsEntry?.summary ??
                     "Fund moral public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
@@ -1208,6 +1213,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </div>
             <dl className="mpgf-summary-grid" aria-label="Common Ground Budget search-result summary">
               <div>
+                <dt>Current mode</dt>
+                <dd>capped pilot</dd>
+              </div>
+              <div>
+                <dt>No charge in this preview</dt>
+                <dd>disabled</dd>
+              </div>
+              <div>
+                <dt>Current safe action</dt>
+                <dd>preview budget</dd>
+              </div>
+              <div>
                 <dt>Current round state</dt>
                 <dd>open preview</dd>
               </div>
@@ -1238,6 +1255,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   {action.label}
                 </Link>
               ))}
+              <Link className="button button-secondary" href="/offers?tab=live">
+                Browse ordinary offers instead
+              </Link>
             </div>
             <details className="pilot-note" aria-label="Other ways to browse marketplace lanes">
               <summary>Other ways to browse</summary>
@@ -1311,7 +1331,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <dd>{formatUsd(2_500)}</dd>
                 </div>
                 <div>
-                  <dt>Payment capture</dt>
+                  <dt>No charge in this preview</dt>
                   <dd>disabled</dd>
                 </div>
               </dl>
@@ -1402,57 +1422,112 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
 
           <form action="/offers" className="marketplace-search marketplace-search-wide marketplace-search-with-category" role="search">
-            <label className="field marketplace-search-field">
-              <span>Search offers</span>
-              <input
-                defaultValue={searchQuery}
-                name="search"
-                placeholder="Search offers or cause areas"
-                type="search"
-              />
-            </label>
-            <label className="field marketplace-category-field">
-              <span>Cause</span>
-              <select name="cause" defaultValue={causes[0] ?? ""}>
-                <option value="">All causes</option>
-                {visibleCauseCounts.map((option) => (
-                  <option key={option.label} value={option.label}>
-                    {withCount(option.label, option.count)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field marketplace-format-field">
-              <span>Format</span>
-              <select name="mode" defaultValue={formats[0] ?? ""}>
-                <option value="">All formats</option>
-                {visibleFormatCounts.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {withCount(option.label, option.count)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field marketplace-review-field">
-              <span>Review state</span>
-              <select name="review" defaultValue={reviewStatus}>
-                {visibleReviewStatusCounts.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {withCount(option.label, option.count)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field marketplace-sort-field">
-              <span>Sort</span>
-              <select name="sort" defaultValue={directorySort}>
-                {SORT_FILTER_CHIPS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {showPublicGoodsEntryCard ? (
+              <>
+                <label className="field marketplace-search-field">
+                  <span>Search public-goods funding</span>
+                  <input
+                    defaultValue={searchQuery || "moral public goods"}
+                    name="search"
+                    placeholder="Search public-goods funding"
+                    type="search"
+                  />
+                </label>
+                <label className="field marketplace-category-field">
+                  <span>Deployment mode</span>
+                  <select name="publicGoodsDeploymentMode" defaultValue="any">
+                    <option value="any">Any</option>
+                    <option value="shadow">Shadow</option>
+                    <option value="capped_pilot">Capped pilot</option>
+                    <option value="full">Full</option>
+                  </select>
+                </label>
+                <label className="field marketplace-format-field">
+                  <span>Round state</span>
+                  <select name="publicGoodsRoundState" defaultValue="open">
+                    <option value="open">Open</option>
+                    <option value="reviewing">Reviewing</option>
+                    <option value="cleared">Cleared</option>
+                    <option value="payable">Payable</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </label>
+                <label className="field marketplace-review-field">
+                  <span>Project bucket</span>
+                  <select name="publicGoodsProjectBucket" defaultValue="any">
+                    <option value="any">Any</option>
+                    <option value="global_health">Global health</option>
+                    <option value="animal_welfare">Animal welfare</option>
+                    <option value="long_run_future">Long-run future</option>
+                    <option value="public_interest_knowledge">Public-interest knowledge</option>
+                    <option value="institutional_resilience">Institutional resilience</option>
+                  </select>
+                </label>
+                <label className="field marketplace-sort-field">
+                  <span>Review state</span>
+                  <select name="publicGoodsReviewState" defaultValue="any">
+                    <option value="any">Any</option>
+                    <option value="clear">Clear</option>
+                    <option value="needs_review">Needs review</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="field marketplace-search-field">
+                  <span>Search offers</span>
+                  <input
+                    defaultValue={searchQuery}
+                    name="search"
+                    placeholder="Search offers or cause areas"
+                    type="search"
+                  />
+                </label>
+                <label className="field marketplace-category-field">
+                  <span>Cause</span>
+                  <select name="cause" defaultValue={causes[0] ?? ""}>
+                    <option value="">All causes</option>
+                    {visibleCauseCounts.map((option) => (
+                      <option key={option.label} value={option.label}>
+                        {withCount(option.label, option.count)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field marketplace-format-field">
+                  <span>Format</span>
+                  <select name="mode" defaultValue={formats[0] ?? ""}>
+                    <option value="">All formats</option>
+                    {visibleFormatCounts.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {withCount(option.label, option.count)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field marketplace-review-field">
+                  <span>Review state</span>
+                  <select name="review" defaultValue={reviewStatus}>
+                    {visibleReviewStatusCounts.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {withCount(option.label, option.count)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field marketplace-sort-field">
+                  <span>Sort</span>
+                  <select name="sort" defaultValue={directorySort}>
+                    {SORT_FILTER_CHIPS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
             <input name="tab" type="hidden" value={view} />
             {formats.slice(1).map((selectedFormat) => (
               <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
@@ -1838,7 +1913,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           <dd>{seedRoundProjects.length}</dd>
                         </div>
                         <div>
-                          <dt>Payment capture</dt>
+                          <dt>No charge in this preview</dt>
                           <dd>disabled</dd>
                         </div>
                         <div>

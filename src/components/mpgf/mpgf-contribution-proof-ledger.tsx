@@ -16,12 +16,29 @@ function formatCount(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function currentState(ledger: MpgfContributionProofLedger) {
+  if (ledger.authorizedBudgetCents <= 0 && ledger.accounting.grossCapturedCents <= 0) {
+    return "no charge";
+  }
+
+  return ledger.accounting.proofState === "verified_payment_proof" ? "final" : "pending final review";
+}
+
+function settlementValue(state: string, cents: number) {
+  if (state === "pending final review") {
+    return "pending";
+  }
+
+  return formatUsd(cents);
+}
+
 export function MpgfContributionProofLedger({
   ledger,
 }: {
   ledger: MpgfContributionProofLedger;
 }) {
   const accounting = ledger.accounting;
+  const state = currentState(ledger);
 
   return (
     <div aria-labelledby="mpgf-contribution-proof-ledger-title">
@@ -40,6 +57,63 @@ export function MpgfContributionProofLedger({
           never merged into one unlabeled impact number.
         </p>
       </div>
+
+      <section className="notice-card" aria-label="Your Common Ground Budget">
+        <strong>Your Common Ground Budget</strong>
+        <dl className="mpgf-summary-grid">
+          <div>
+            <dt>Maximum this round</dt>
+            <dd>{formatUsd(ledger.authorizedBudgetCents)}</dd>
+          </div>
+          <div>
+            <dt>Current state</dt>
+            <dd>{state}</dd>
+          </div>
+        </dl>
+        <h3>Plain summary</h3>
+        <ul>
+          <li>Charged from you: {settlementValue(state, accounting.grossCapturedCents)}</li>
+          <li>Sent to projects: {settlementValue(state, accounting.netRecipientDisbursedCents)}</li>
+          <li>
+            Counted for matching: {settlementValue(state, accounting.countedContributionCents)} counted;{" "}
+            {settlementValue(state, accounting.matchEligibleContributionCents)} match-eligible.
+          </li>
+          <li>
+            Sponsor added: base {settlementValue(state, accounting.sponsorBaseMatchCents)}; bonus{" "}
+            {settlementValue(state, accounting.sponsorBonusMatchCents)}.
+          </li>
+          <li>
+            Contributor benefits: reward {settlementValue(state, accounting.successRewardCents)},{" "}
+            {formatCount(accounting.coordinationCreditCount, "credit")},{" "}
+            {formatCount(accounting.impactCertificateCount, "certificate")}.
+          </li>
+          <li>
+            Failed or carried forward: {formatUsd(ledger.failedAllocationsCents)} failed;{" "}
+            {formatUsd(ledger.carryForwardCreditCents)} carry-forward credit.
+          </li>
+        </ul>
+        <p className="mpgf-small">
+          Summary numbers keep accounting channels separate: sent-to-project dollars exclude fees,
+          rewards, credits, certificates, base match, and bonus match unless separately labeled.
+        </p>
+      </section>
+
+      <section className="notice-card" aria-label="Proof details">
+        <strong>Proof details</strong>
+        <ul>
+          <li>Gross captured</li>
+          <li>Fees</li>
+          <li>Net recipient-disbursed</li>
+          <li>Actual/gross exposure</li>
+          <li>Counted contribution</li>
+          <li>Match-eligible contribution</li>
+          <li>Base-match claim and paid amount</li>
+          <li>Bonus-score units and bonus-match paid amount</li>
+          <li>Failure-bonus claim state and denial reason, if any</li>
+          <li>Success-reward / coordination-credit / impact-certificate state</li>
+          <li>Review, threshold, challenge, payment, and authorization reconciliation states</li>
+        </ul>
+      </section>
 
       <div className="mpgf-kpi-grid" aria-label="Contribution ledger totals">
         <div className="mpgf-kpi">
