@@ -47,6 +47,83 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_ELIGIBILITY_FIELDS = [
   "legalCustodyClear",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES = [
+  "valid_moral_public_good",
+  "private_benefit",
+  "political_campaign",
+  "lifestyle",
+  "threat_like",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_DESTINATION_ROUTE_STATES = [
+  "valid",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_EXTERNALITY_STATES = [
+  "clear",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_REVIEW_STATES = [
+  "approved",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_CHALLENGE_STATES = [
+  "clear",
+  "non_blocking",
+  "open",
+  "blocking",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_CLEAR_REVIEW_STATES = [
+  "clear",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_SPONSOR_COMPATIBILITY_STATES = [
+  "compatible",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_INTEGRITY_STATES = [
+  "approved",
+  "provisional",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_CONFIDENCE_STATES = [
+  "approved",
+  "provisional",
+  "review",
+  "low",
+  "blocked",
+  "unknown",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_ACTION_EVIDENCE_STATES = [
+  "approved",
+  "provisional",
+  "review",
+  "blocked",
+  "unknown",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_RECONCILIATION_STATES = [
   "kept_authorized",
   "removed_wrong_amount",
@@ -75,6 +152,29 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_OPTIMALITY_STATUSES = [
   "optimal",
   "deterministic_greedy_selected",
 ] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_PRECISION = 12 as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_ROUNDING_MODE = "half_even" as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS = {
+  alphaFixed: "0.200000000000",
+  betaFixed: "0.200000000000",
+  gammaFixed: "0.500000000000",
+  weakWeightFixed: "0.600000000000",
+  strongWeightFixed: "1.000000000000",
+  dissentWeightFixed: "0.000000000000",
+  abstainWeightFixed: "0.000000000000",
+} as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_STANCE_WEIGHT_FIXED_BY_STANCE = {
+  strong: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS.strongWeightFixed,
+  weak: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS.weakWeightFixed,
+  dissent: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS.dissentWeightFixed,
+  abstain: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS.abstainWeightFixed,
+} as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_DEFAULT_SUPPORTER_COUNT_MIN_NET_PUBLIC_GOOD_CENTS = 100 as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_CONTRIBUTOR_BENEFIT_KINDS = [
   "success_reward",
@@ -171,6 +271,36 @@ export type MpgfCrecThresholdFamilyFailureReason =
 
 export type MpgfCrecProjectEligibilityField =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_ELIGIBILITY_FIELDS>;
+
+export type MpgfCrecProjectScopeState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES>;
+
+export type MpgfCrecDestinationRouteState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DESTINATION_ROUTE_STATES>;
+
+export type MpgfCrecExternalityState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_EXTERNALITY_STATES>;
+
+export type MpgfCrecReviewState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_REVIEW_STATES>;
+
+export type MpgfCrecChallengeState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_CHALLENGE_STATES>;
+
+export type MpgfCrecClearReviewState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_CLEAR_REVIEW_STATES>;
+
+export type MpgfCrecSponsorCompatibilityState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_SPONSOR_COMPATIBILITY_STATES>;
+
+export type MpgfCrecBaselineIntegrityState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_INTEGRITY_STATES>;
+
+export type MpgfCrecBaselineConfidenceState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_CONFIDENCE_STATES>;
+
+export type MpgfCrecActionEvidenceState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_ACTION_EVIDENCE_STATES>;
 
 export type MpgfCrecAuthorizationReconciliationState =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_RECONCILIATION_STATES>;
@@ -421,6 +551,27 @@ export interface MpgfCrecDeploymentExposureCapResult {
   shadowOnly: boolean;
 }
 
+export interface MpgfCrecProjectHardGateInput {
+  deploymentMode: MpgfCrecRoundClearingInputBundle["deploymentMode"];
+  projectScopeState: MpgfCrecProjectScopeState;
+  destinationRouteState: MpgfCrecDestinationRouteState;
+  externalityState: MpgfCrecExternalityState;
+  reviewState: MpgfCrecReviewState;
+  challengeState: MpgfCrecChallengeState;
+  conflictReviewState: MpgfCrecClearReviewState;
+  sponsorCompatibilityState: MpgfCrecSponsorCompatibilityState;
+  legalCustodyState: MpgfCrecClearReviewState;
+  baselineIntegrityState: MpgfCrecBaselineIntegrityState;
+  baselineConfidenceState: MpgfCrecBaselineConfidenceState;
+  actionEvidenceState: MpgfCrecActionEvidenceState;
+}
+
+export interface MpgfCrecProjectHardGateResult extends MpgfCrecValidationResult {
+  bindingOutputAllowed: boolean;
+  shadowOnlyProvisionalLearningAllowed: boolean;
+  hardGateHash: string | null;
+}
+
 export interface MpgfCrecProjectRoundEligibilitySnapshot {
   snapshotKind: "round_open";
   sourceCutoffAt: string;
@@ -529,6 +680,169 @@ export interface MpgfCrecOptimizationRunTraceExpectedContext {
   clearingInputBundleHash: string;
   calculationVersion: string;
   optimizationPolicyHash: string;
+}
+
+export interface MpgfCrecRoundAuditBundle {
+  id: string;
+  roundId: string;
+  rulebookHash: string;
+  calculationVersion: string;
+  clearingInputBundleId: string;
+  clearingInputBundleHash: string;
+  canonicalInputJsonHash: string;
+  feeInputHash: string;
+  feePolicyHash: string;
+  deploymentExposureInputHash: string;
+  paymentReconciliationPathHash: string;
+  deploymentAuditHash: string | null;
+  optimizationPolicyHash: string;
+  optimizationTraceId: string;
+  optimizationTraceHash: string;
+  projectInputHash: string;
+  sponsorCommitmentInputHash: string;
+  moralBucketSnapshotHash: string;
+  bonusScoreHash: string;
+  createdAt: string;
+  auditBundleHash: string;
+}
+
+export interface MpgfCrecRoundAuditBundleExpectedContext {
+  roundId: string;
+  rulebookHash: string;
+  calculationVersion: string;
+  clearingInputBundleId: string;
+  clearingInputBundleHash: string;
+  canonicalInputJsonHash: string;
+  feeInputHash: string;
+  feePolicyHash: string;
+  deploymentExposureInputHash: string;
+  paymentReconciliationPathHash: string;
+  deploymentAuditHash: string | null;
+  optimizationPolicyHash: string;
+  optimizationTraceId: string;
+  optimizationTraceHash: string;
+  projectInputHash: string;
+  sponsorCommitmentInputHash: string;
+  moralBucketSnapshotHash: string;
+  bonusScoreHash: string;
+}
+
+export interface MpgfCrecBonusScoreUnitRow {
+  projectId: string;
+  bonusScoreUnits: string;
+  bonusCapCents: number;
+  stableOrderKey: string;
+}
+
+export interface MpgfCrecBonusScoreHashInput {
+  calculationVersion: string;
+  fixedPointPrecision: typeof MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_PRECISION;
+  roundingMode: typeof MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_ROUNDING_MODE;
+  rows: Array<{
+    projectId: string;
+    bonusScoreUnits: string;
+  }>;
+}
+
+export interface MpgfCrecBonusScoreUnitAllocationInput {
+  roundId: string;
+  clearingInputBundleHash: string;
+  bonusScoreHash: string;
+  calculationVersion: string;
+  backedBonusMatchPoolCents: number;
+  rows: MpgfCrecBonusScoreUnitRow[];
+}
+
+export interface MpgfCrecBonusScoreUnitAllocationResult extends MpgfCrecValidationResult {
+  allocatedBonusCentsByProjectId: Record<string, number>;
+  sanitizedBonusScoreUnitsByProjectId: Record<string, string>;
+  sanitizedBonusCapCentsByProjectId: Record<string, number>;
+  sanitizedRowCodes: string[];
+  totalAllocatedCents: number;
+  unallocatedBonusPoolCents: number;
+  totalBonusScoreUnitsExact: string;
+}
+
+export interface MpgfCrecBundlePublicGoodProjectRow {
+  roundId: string;
+  id: string;
+  bucketId: string;
+}
+
+export interface MpgfCrecBundleCommonGroundBudgetRow {
+  roundId: string;
+  id: string;
+  participantId: string;
+}
+
+export interface MpgfCrecBundleProjectParticipantRow {
+  id: string;
+  roundId: string;
+  commonGroundBudgetId: string;
+  projectId: string;
+  participantId: string;
+}
+
+export interface MpgfCrecBundleIdentityEligibilityRow {
+  roundId: string;
+  participantId: string;
+}
+
+export interface MpgfCrecRoundCloseBundleRowUniquenessInput {
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  commonGroundBudgetId: string;
+  paymentSnapshotKind: "round_close" | "early_failure_bonus_cutoff";
+  publicGoodProjects: unknown;
+  commonGroundBudgets: unknown;
+  supportStances: unknown;
+  conditionalTradeIntents: unknown;
+  identityEligibilityRows: unknown;
+  paymentCommitmentSnapshots: unknown;
+  projectRoundEligibilitySnapshots: unknown;
+}
+
+export interface MpgfCrecRoundCloseBundleRowUniquenessResult extends MpgfCrecValidationResult {
+  selectedProjectRowCount: number;
+  selectedCommonGroundBudgetByIdCount: number;
+  selectedCommonGroundBudgetByParticipantCount: number;
+  selectedSupportStanceRowCount: number;
+  selectedConditionalTradeIntentRowCount: number;
+  selectedIdentityEligibilityRowCount: number;
+  selectedPaymentCommitmentSnapshotRowCount: number;
+  selectedProjectRoundEligibilitySnapshotRowCount: number;
+  rowUniquenessHash: string | null;
+}
+
+export interface MpgfCrecNetPublicGoodSupporterCreditRow {
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  activeClusterId: string;
+  netRecipientDisbursedCents: number;
+  humanVerified: boolean;
+  sybilRiskState: "clear" | "review" | "blocked" | "unknown";
+  collusionRiskState: "clear" | "review" | "blocked" | "unknown";
+  linkedAccountExcluded: boolean;
+  samePaymentMethodExcluded: boolean;
+  sameControlExcluded: boolean;
+}
+
+export interface MpgfCrecNetPublicGoodSupporterBreadthInput {
+  roundId: string;
+  projectId: string;
+  supporterCountMinNetPublicGoodCents: unknown;
+  rows: unknown;
+}
+
+export interface MpgfCrecNetPublicGoodSupporterBreadthResult extends MpgfCrecValidationResult {
+  supporterCountMinNetPublicGoodCents: number;
+  verifiedSupporterCount: number;
+  activeClusterCount: number;
+  countedParticipantIds: string[];
+  countedActiveClusterIds: string[];
+  excludedRowCodes: string[];
 }
 
 export interface MpgfCrecContributorBenefitEligibilityInput {
@@ -671,6 +985,10 @@ export interface MpgfCrecFailureBonusEligibilityInput {
   failureReason: string;
   clearingBundleEligible: boolean;
   clearingInputBundleHash: string;
+  projectHardGateEligible: boolean;
+  projectHardGateHash: string;
+  rowUniquenessEligible: boolean;
+  rowUniquenessHash: string;
   paymentSnapshotEligible: boolean;
   paymentCommitmentSnapshotHash: string;
   failedQualifiedMatchEligibleCents: number;
@@ -848,11 +1166,11 @@ function timestampEquals(left: unknown, right: unknown) {
   return isMpgfCrecCanonicalUtcTimestamp(left) && left === right;
 }
 
-function isNonNegativeSafeIntegerCents(value: unknown) {
+function isNonNegativeSafeIntegerCents(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
 }
 
-function isPositiveSafeIntegerCents(value: unknown) {
+function isPositiveSafeIntegerCents(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === "number" && value > 0;
 }
 
@@ -1502,6 +1820,125 @@ export function capMpgfCrecDeploymentGrossExposure(
   };
 }
 
+function projectHardGateHashPayload(input: MpgfCrecProjectHardGateInput) {
+  return {
+    deploymentMode: input.deploymentMode,
+    projectScopeState: input.projectScopeState,
+    destinationRouteState: input.destinationRouteState,
+    externalityState: input.externalityState,
+    reviewState: input.reviewState,
+    challengeState: input.challengeState,
+    conflictReviewState: input.conflictReviewState,
+    sponsorCompatibilityState: input.sponsorCompatibilityState,
+    legalCustodyState: input.legalCustodyState,
+    baselineIntegrityState: input.baselineIntegrityState,
+    baselineConfidenceState: input.baselineConfidenceState,
+    actionEvidenceState: input.actionEvidenceState,
+  };
+}
+
+export function buildMpgfCrecProjectHardGateHash(input: MpgfCrecProjectHardGateInput) {
+  return hashMpgfCrecV1125Value(projectHardGateHashPayload(input));
+}
+
+export function evaluateMpgfCrecProjectHardGate(
+  input: MpgfCrecProjectHardGateInput,
+): MpgfCrecProjectHardGateResult {
+  const blockers: string[] = [];
+  const bindingDeploymentMode = input.deploymentMode === "capped_pilot" || input.deploymentMode === "full";
+  const shadowDeploymentMode = input.deploymentMode === "shadow";
+  const deploymentModeValid = bindingDeploymentMode || shadowDeploymentMode;
+  const shadowBaselineStatesAllowed =
+    input.baselineIntegrityState === "approved" ||
+    input.baselineIntegrityState === "provisional";
+  const shadowBaselineConfidenceAllowed =
+    input.baselineConfidenceState === "approved" ||
+    input.baselineConfidenceState === "provisional";
+  const shadowActionEvidenceAllowed =
+    input.actionEvidenceState === "approved" ||
+    input.actionEvidenceState === "provisional";
+  const hasProvisionalLearningSignal =
+    input.baselineIntegrityState === "provisional" ||
+    input.baselineConfidenceState === "provisional" ||
+    input.actionEvidenceState === "provisional";
+
+  addBlocker(blockers, "project_hard_gate_deployment_mode_invalid", deploymentModeValid);
+  addBlocker(
+    blockers,
+    "project_hard_gate_scope_not_valid_moral_public_good",
+    input.projectScopeState === "valid_moral_public_good",
+  );
+  addBlocker(
+    blockers,
+    "project_hard_gate_destination_route_not_valid",
+    input.destinationRouteState === "valid",
+  );
+  addBlocker(blockers, "project_hard_gate_externality_not_clear", input.externalityState === "clear");
+  addBlocker(blockers, "project_hard_gate_review_not_approved", input.reviewState === "approved");
+  addBlocker(
+    blockers,
+    "project_hard_gate_challenge_not_clear_or_non_blocking",
+    input.challengeState === "clear" || input.challengeState === "non_blocking",
+  );
+  addBlocker(
+    blockers,
+    "project_hard_gate_conflict_review_not_clear",
+    input.conflictReviewState === "clear",
+  );
+  addBlocker(
+    blockers,
+    "project_hard_gate_sponsor_not_compatible",
+    input.sponsorCompatibilityState === "compatible",
+  );
+  addBlocker(blockers, "project_hard_gate_legal_custody_not_clear", input.legalCustodyState === "clear");
+
+  if (bindingDeploymentMode) {
+    addBlocker(
+      blockers,
+      "project_hard_gate_baseline_integrity_not_approved",
+      input.baselineIntegrityState === "approved",
+    );
+    addBlocker(
+      blockers,
+      "project_hard_gate_baseline_confidence_not_approved",
+      input.baselineConfidenceState === "approved",
+    );
+    addBlocker(
+      blockers,
+      "project_hard_gate_action_evidence_not_approved",
+      input.actionEvidenceState === "approved",
+    );
+  }
+
+  if (shadowDeploymentMode) {
+    addBlocker(
+      blockers,
+      "project_hard_gate_shadow_baseline_integrity_not_approved_or_provisional",
+      shadowBaselineStatesAllowed,
+    );
+    addBlocker(
+      blockers,
+      "project_hard_gate_shadow_baseline_confidence_not_approved_or_provisional",
+      shadowBaselineConfidenceAllowed,
+    );
+    addBlocker(
+      blockers,
+      "project_hard_gate_shadow_action_evidence_not_approved_or_provisional",
+      shadowActionEvidenceAllowed,
+    );
+  }
+
+  const eligible = blockers.length === 0;
+
+  return {
+    eligible,
+    blockers,
+    bindingOutputAllowed: eligible && bindingDeploymentMode,
+    shadowOnlyProvisionalLearningAllowed: eligible && shadowDeploymentMode && hasProvisionalLearningSignal,
+    hardGateHash: eligible ? buildMpgfCrecProjectHardGateHash(input) : null,
+  };
+}
+
 function projectEligibilityHashPayload(
   snapshot: Omit<MpgfCrecProjectRoundEligibilitySnapshot, "snapshotHash">,
 ) {
@@ -1941,6 +2378,662 @@ export function validateMpgfCrecOptimizationRunTrace(
   return validationResult(blockers);
 }
 
+function roundAuditBundleHashPayload(bundle: Omit<MpgfCrecRoundAuditBundle, "auditBundleHash">) {
+  return {
+    id: bundle.id,
+    roundId: bundle.roundId,
+    rulebookHash: bundle.rulebookHash,
+    calculationVersion: bundle.calculationVersion,
+    clearingInputBundleId: bundle.clearingInputBundleId,
+    clearingInputBundleHash: bundle.clearingInputBundleHash,
+    canonicalInputJsonHash: bundle.canonicalInputJsonHash,
+    feeInputHash: bundle.feeInputHash,
+    feePolicyHash: bundle.feePolicyHash,
+    deploymentExposureInputHash: bundle.deploymentExposureInputHash,
+    paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+    deploymentAuditHash: bundle.deploymentAuditHash,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    optimizationTraceId: bundle.optimizationTraceId,
+    optimizationTraceHash: bundle.optimizationTraceHash,
+    projectInputHash: bundle.projectInputHash,
+    sponsorCommitmentInputHash: bundle.sponsorCommitmentInputHash,
+    moralBucketSnapshotHash: bundle.moralBucketSnapshotHash,
+    bonusScoreHash: bundle.bonusScoreHash,
+    createdAt: bundle.createdAt,
+  };
+}
+
+export function buildMpgfCrecRoundAuditBundleHash(
+  bundle: Omit<MpgfCrecRoundAuditBundle, "auditBundleHash">,
+) {
+  return hashMpgfCrecV1125Value(roundAuditBundleHashPayload(bundle));
+}
+
+export function validateMpgfCrecRoundAuditBundle(
+  bundle: MpgfCrecRoundAuditBundle | null | undefined,
+  expected: MpgfCrecRoundAuditBundleExpectedContext,
+) {
+  const blockers: string[] = [];
+
+  if (bundle == null) {
+    return validationResult(["round_audit_bundle_missing"]);
+  }
+
+  addBlocker(blockers, "round_audit_bundle_id_invalid", isMpgfCrecNonEmptyTrimStableString(bundle.id));
+  addBlocker(blockers, "round_audit_bundle_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(bundle.roundId));
+  addBlocker(blockers, "round_audit_bundle_wrong_round", bundle.roundId === expected.roundId);
+  addBlocker(blockers, "round_audit_bundle_rulebook_hash_invalid", isMpgfCrecCanonicalHash(bundle.rulebookHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_rulebook_hash", bundle.rulebookHash === expected.rulebookHash);
+  addBlocker(blockers, "round_audit_bundle_calculation_version_invalid", isMpgfCrecNonEmptyTrimStableString(bundle.calculationVersion));
+  addBlocker(blockers, "round_audit_bundle_wrong_calculation_version", bundle.calculationVersion === expected.calculationVersion);
+  addBlocker(blockers, "round_audit_bundle_clearing_bundle_id_invalid", isMpgfCrecNonEmptyTrimStableString(bundle.clearingInputBundleId));
+  addBlocker(blockers, "round_audit_bundle_wrong_clearing_bundle_id", bundle.clearingInputBundleId === expected.clearingInputBundleId);
+  addBlocker(blockers, "round_audit_bundle_clearing_bundle_hash_invalid", isMpgfCrecCanonicalHash(bundle.clearingInputBundleHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_clearing_bundle_hash", bundle.clearingInputBundleHash === expected.clearingInputBundleHash);
+  addBlocker(blockers, "round_audit_bundle_canonical_input_hash_invalid", isMpgfCrecCanonicalHash(bundle.canonicalInputJsonHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_canonical_input_hash", bundle.canonicalInputJsonHash === expected.canonicalInputJsonHash);
+  addBlocker(blockers, "round_audit_bundle_fee_input_hash_invalid", isMpgfCrecCanonicalHash(bundle.feeInputHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_fee_input_hash", bundle.feeInputHash === expected.feeInputHash);
+  addBlocker(blockers, "round_audit_bundle_fee_policy_hash_invalid", isMpgfCrecCanonicalHash(bundle.feePolicyHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_fee_policy_hash", bundle.feePolicyHash === expected.feePolicyHash);
+  addBlocker(blockers, "round_audit_bundle_deployment_exposure_hash_invalid", isMpgfCrecCanonicalHash(bundle.deploymentExposureInputHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_deployment_exposure_hash", bundle.deploymentExposureInputHash === expected.deploymentExposureInputHash);
+  addBlocker(blockers, "round_audit_bundle_payment_path_hash_invalid", isMpgfCrecCanonicalHash(bundle.paymentReconciliationPathHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_payment_path_hash", bundle.paymentReconciliationPathHash === expected.paymentReconciliationPathHash);
+  addBlocker(
+    blockers,
+    "round_audit_bundle_deployment_audit_hash_invalid",
+    bundle.deploymentAuditHash == null || isMpgfCrecCanonicalHash(bundle.deploymentAuditHash),
+  );
+  addBlocker(
+    blockers,
+    "round_audit_bundle_wrong_deployment_audit_hash",
+    bundle.deploymentAuditHash === expected.deploymentAuditHash,
+  );
+  addBlocker(blockers, "round_audit_bundle_optimization_policy_hash_invalid", isMpgfCrecCanonicalHash(bundle.optimizationPolicyHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_optimization_policy_hash", bundle.optimizationPolicyHash === expected.optimizationPolicyHash);
+  addBlocker(blockers, "round_audit_bundle_optimization_trace_id_invalid", isMpgfCrecNonEmptyTrimStableString(bundle.optimizationTraceId));
+  addBlocker(blockers, "round_audit_bundle_wrong_optimization_trace_id", bundle.optimizationTraceId === expected.optimizationTraceId);
+  addBlocker(blockers, "round_audit_bundle_optimization_trace_hash_invalid", isMpgfCrecCanonicalHash(bundle.optimizationTraceHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_optimization_trace_hash", bundle.optimizationTraceHash === expected.optimizationTraceHash);
+  addBlocker(blockers, "round_audit_bundle_project_input_hash_invalid", isMpgfCrecCanonicalHash(bundle.projectInputHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_project_input_hash", bundle.projectInputHash === expected.projectInputHash);
+  addBlocker(blockers, "round_audit_bundle_sponsor_input_hash_invalid", isMpgfCrecCanonicalHash(bundle.sponsorCommitmentInputHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_sponsor_input_hash", bundle.sponsorCommitmentInputHash === expected.sponsorCommitmentInputHash);
+  addBlocker(blockers, "round_audit_bundle_moral_bucket_hash_invalid", isMpgfCrecCanonicalHash(bundle.moralBucketSnapshotHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_moral_bucket_hash", bundle.moralBucketSnapshotHash === expected.moralBucketSnapshotHash);
+  addBlocker(blockers, "round_audit_bundle_bonus_score_hash_invalid", isMpgfCrecCanonicalHash(bundle.bonusScoreHash));
+  addBlocker(blockers, "round_audit_bundle_wrong_bonus_score_hash", bundle.bonusScoreHash === expected.bonusScoreHash);
+  addBlocker(blockers, "round_audit_bundle_created_at_invalid", isMpgfCrecCanonicalUtcTimestamp(bundle.createdAt));
+  addBlocker(blockers, "round_audit_bundle_hash_invalid", isMpgfCrecCanonicalHash(bundle.auditBundleHash));
+  addBlocker(
+    blockers,
+    "round_audit_bundle_hash_mismatch",
+    bundle.auditBundleHash === buildMpgfCrecRoundAuditBundleHash(bundle),
+  );
+
+  return validationResult(blockers);
+}
+
+function isCanonicalNonNegativeIntegerString(value: unknown): value is string {
+  return typeof value === "string" && /^(0|[1-9]\d*)$/.test(value);
+}
+
+function sanitizeBonusScoreUnits(value: unknown) {
+  if (!isCanonicalNonNegativeIntegerString(value)) {
+    return {
+      units: BigInt(0),
+      unitsString: "0",
+      sanitized: true,
+    };
+  }
+
+  return {
+    units: BigInt(value),
+    unitsString: value,
+    sanitized: false,
+  };
+}
+
+function sanitizeNonNegativeSafeCents(value: unknown) {
+  if (!isNonNegativeSafeIntegerCents(value)) {
+    return {
+      cents: 0,
+      sanitized: true,
+    };
+  }
+
+  return {
+    cents: value,
+    sanitized: false,
+  };
+}
+
+export function buildMpgfCrecBonusScoreHash(input: MpgfCrecBonusScoreHashInput) {
+  return hashMpgfCrecV1125Value({
+    calculationVersion: input.calculationVersion,
+    fixedPointPrecision: input.fixedPointPrecision,
+    roundingMode: input.roundingMode,
+    fixedPointConstants: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS,
+    stanceWeightFixedByStance: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_STANCE_WEIGHT_FIXED_BY_STANCE,
+    rows: input.rows.map((row) => ({
+      projectId: row.projectId,
+      bonusScoreUnits: row.bonusScoreUnits,
+    })),
+  });
+}
+
+export function allocateMpgfCrecBonusMatchByScoreUnits(
+  input: MpgfCrecBonusScoreUnitAllocationInput,
+): MpgfCrecBonusScoreUnitAllocationResult {
+  const blockers: string[] = [];
+  const sanitizedRowCodes: string[] = [];
+
+  addBlocker(blockers, "bonus_score_allocation_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.roundId));
+  addBlocker(blockers, "bonus_score_allocation_bundle_hash_invalid", isMpgfCrecCanonicalHash(input.clearingInputBundleHash));
+  addBlocker(blockers, "bonus_score_allocation_bonus_score_hash_invalid", isMpgfCrecCanonicalHash(input.bonusScoreHash));
+  addBlocker(blockers, "bonus_score_allocation_calculation_version_invalid", isMpgfCrecNonEmptyTrimStableString(input.calculationVersion));
+  addBlocker(blockers, "bonus_score_allocation_pool_invalid", isNonNegativeSafeIntegerCents(input.backedBonusMatchPoolCents));
+  addBlocker(blockers, "bonus_score_allocation_rows_not_array", Array.isArray(input.rows));
+
+  const rows = Array.isArray(input.rows) ? input.rows : [];
+  const projectIds = rows.map((row) => row.projectId);
+  addBlocker(
+    blockers,
+    "bonus_score_allocation_project_ids_invalid",
+    projectIds.every(isMpgfCrecNonEmptyTrimStableString),
+  );
+  addBlocker(blockers, "bonus_score_allocation_project_ids_not_unique", !hasDuplicate(projectIds));
+  addBlocker(
+    blockers,
+    "bonus_score_allocation_stable_order_keys_invalid",
+    rows.every((row) => isMpgfCrecCanonicalHash(row.stableOrderKey)),
+  );
+
+  const zeroResult = (): MpgfCrecBonusScoreUnitAllocationResult => ({
+    eligible: false,
+    blockers,
+    allocatedBonusCentsByProjectId: Object.fromEntries(projectIds.map((projectId) => [projectId, 0])),
+    sanitizedBonusScoreUnitsByProjectId: Object.fromEntries(projectIds.map((projectId) => [projectId, "0"])),
+    sanitizedBonusCapCentsByProjectId: Object.fromEntries(projectIds.map((projectId) => [projectId, 0])),
+    sanitizedRowCodes,
+    totalAllocatedCents: 0,
+    unallocatedBonusPoolCents: isNonNegativeSafeIntegerCents(input.backedBonusMatchPoolCents)
+      ? input.backedBonusMatchPoolCents
+      : 0,
+    totalBonusScoreUnitsExact: "0",
+  });
+
+  if (blockers.length > 0) {
+    return zeroResult();
+  }
+
+  const normalizedRows = rows.map((row, index) => {
+    const scoreUnits = sanitizeBonusScoreUnits(row.bonusScoreUnits);
+    const cap = sanitizeNonNegativeSafeCents(row.bonusCapCents);
+
+    if (scoreUnits.sanitized) {
+      sanitizedRowCodes.push(`bonus_score_units_${index}_sanitized_to_zero`);
+    }
+
+    if (cap.sanitized) {
+      sanitizedRowCodes.push(`bonus_cap_cents_${index}_sanitized_to_zero`);
+    }
+
+    return {
+      projectId: row.projectId,
+      stableOrderKey: row.stableOrderKey,
+      bonusScoreUnits: scoreUnits.units,
+      bonusScoreUnitsString: scoreUnits.unitsString,
+      bonusCapCents: cap.cents,
+      allocatedCents: BigInt(0),
+    };
+  });
+
+  let remainingPoolCents = BigInt(input.backedBonusMatchPoolCents);
+
+  while (remainingPoolCents > BigInt(0)) {
+    const activeRows = normalizedRows.filter(
+      (row) => row.bonusScoreUnits > BigInt(0) && row.allocatedCents < BigInt(row.bonusCapCents),
+    );
+    const totalActiveUnits = activeRows.reduce((sum, row) => sum + row.bonusScoreUnits, BigInt(0));
+
+    if (activeRows.length === 0 || totalActiveUnits === BigInt(0)) {
+      break;
+    }
+
+    let allocatedThisPass = BigInt(0);
+    const remainders: Array<{
+      projectId: string;
+      remainder: bigint;
+      stableOrderKey: string;
+    }> = [];
+
+    activeRows.forEach((row) => {
+      const remainingCap = BigInt(row.bonusCapCents) - row.allocatedCents;
+      const weightedPool = remainingPoolCents * row.bonusScoreUnits;
+      const floorShare = weightedPool / totalActiveUnits;
+      const cappedShare = floorShare > remainingCap ? remainingCap : floorShare;
+
+      row.allocatedCents += cappedShare;
+      allocatedThisPass += cappedShare;
+
+      if (row.allocatedCents < BigInt(row.bonusCapCents)) {
+        remainders.push({
+          projectId: row.projectId,
+          remainder: weightedPool % totalActiveUnits,
+          stableOrderKey: row.stableOrderKey,
+        });
+      }
+    });
+
+    remainingPoolCents -= allocatedThisPass;
+
+    if (remainingPoolCents === BigInt(0)) {
+      break;
+    }
+
+    const remainderOrder = remainders.sort((left, right) => {
+      if (left.remainder !== right.remainder) {
+        return left.remainder > right.remainder ? -1 : 1;
+      }
+
+      const keyComparison = left.stableOrderKey.localeCompare(right.stableOrderKey);
+      if (keyComparison !== 0) {
+        return keyComparison;
+      }
+
+      return left.projectId.localeCompare(right.projectId);
+    });
+
+    let remainderAllocated = BigInt(0);
+    remainderOrder.forEach((entry) => {
+      if (remainingPoolCents === BigInt(0)) {
+        return;
+      }
+
+      const row = normalizedRows.find((candidate) => candidate.projectId === entry.projectId);
+      if (row == null || row.allocatedCents >= BigInt(row.bonusCapCents)) {
+        return;
+      }
+
+      row.allocatedCents += BigInt(1);
+      remainingPoolCents -= BigInt(1);
+      remainderAllocated += BigInt(1);
+    });
+
+    if (allocatedThisPass === BigInt(0) && remainderAllocated === BigInt(0)) {
+      break;
+    }
+  }
+
+  const allocatedBonusCentsByProjectId = Object.fromEntries(
+    normalizedRows.map((row) => [row.projectId, Number(row.allocatedCents)]),
+  );
+  const sanitizedBonusScoreUnitsByProjectId = Object.fromEntries(
+    normalizedRows.map((row) => [row.projectId, row.bonusScoreUnitsString]),
+  );
+  const sanitizedBonusCapCentsByProjectId = Object.fromEntries(
+    normalizedRows.map((row) => [row.projectId, row.bonusCapCents]),
+  );
+  const totalAllocatedCents = Number(
+    normalizedRows.reduce((sum, row) => sum + row.allocatedCents, BigInt(0)),
+  );
+  const totalBonusScoreUnitsExact = normalizedRows
+    .reduce((sum, row) => sum + row.bonusScoreUnits, BigInt(0))
+    .toString();
+
+  return {
+    eligible: true,
+    blockers,
+    allocatedBonusCentsByProjectId,
+    sanitizedBonusScoreUnitsByProjectId,
+    sanitizedBonusCapCentsByProjectId,
+    sanitizedRowCodes,
+    totalAllocatedCents,
+    unallocatedBonusPoolCents: Number(remainingPoolCents),
+    totalBonusScoreUnitsExact,
+  };
+}
+
+function asObjectArray(value: unknown): Array<Record<string, unknown>> | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  if (value.some((row) => row == null || typeof row !== "object" || Array.isArray(row))) {
+    return null;
+  }
+
+  return value as Array<Record<string, unknown>>;
+}
+
+function rowField(row: Record<string, unknown>, field: string) {
+  return row[field];
+}
+
+function validRowString(row: Record<string, unknown>, field: string) {
+  return isMpgfCrecNonEmptyTrimStableString(rowField(row, field));
+}
+
+function rowKey(row: Record<string, unknown>, fields: readonly string[]) {
+  if (!fields.every((field) => validRowString(row, field))) {
+    return null;
+  }
+
+  return fields.map((field) => String(rowField(row, field))).join(":");
+}
+
+function addDuplicateKeyBlocker(
+  blockers: string[],
+  rows: readonly Record<string, unknown>[],
+  fields: readonly string[],
+  blockerCode: string,
+) {
+  const keys = rows.map((row) => rowKey(row, fields)).filter((key): key is string => key != null);
+  addBlocker(blockers, blockerCode, !hasDuplicate(keys));
+}
+
+function countRowsWithKey(rows: readonly Record<string, unknown>[], fields: readonly string[], expectedKey: string) {
+  return rows.filter((row) => rowKey(row, fields) === expectedKey).length;
+}
+
+function rowUniquenessHashPayload(input: MpgfCrecRoundCloseBundleRowUniquenessInput) {
+  const normalizeRows = (value: unknown, fields: readonly string[]) => {
+    const rows = asObjectArray(value) ?? [];
+
+    return rows
+      .map((row) => rowKey(row, fields) ?? "malformed")
+      .sort((left, right) => left.localeCompare(right));
+  };
+
+  return {
+    roundId: input.roundId,
+    projectId: input.projectId,
+    participantId: input.participantId,
+    commonGroundBudgetId: input.commonGroundBudgetId,
+    paymentSnapshotKind: input.paymentSnapshotKind,
+    publicGoodProjectKeys: normalizeRows(input.publicGoodProjects, ["roundId", "id"]),
+    commonGroundBudgetByIdKeys: normalizeRows(input.commonGroundBudgets, ["roundId", "id"]),
+    commonGroundBudgetByParticipantKeys: normalizeRows(input.commonGroundBudgets, ["roundId", "participantId"]),
+    supportStanceKeys: normalizeRows(input.supportStances, ["roundId", "commonGroundBudgetId", "projectId"]),
+    conditionalTradeIntentKeys: normalizeRows(input.conditionalTradeIntents, ["roundId", "commonGroundBudgetId", "projectId"]),
+    identityEligibilityKeys: normalizeRows(input.identityEligibilityRows, ["roundId", "participantId"]),
+    paymentSnapshotKeys: normalizeRows(input.paymentCommitmentSnapshots, ["roundId", "commonGroundBudgetId", "snapshotKind"]),
+    projectEligibilitySnapshotKeys: normalizeRows(input.projectRoundEligibilitySnapshots, ["roundId", "projectId"]),
+  };
+}
+
+export function buildMpgfCrecRoundCloseBundleRowUniquenessHash(
+  input: MpgfCrecRoundCloseBundleRowUniquenessInput,
+) {
+  return hashMpgfCrecV1125Value(rowUniquenessHashPayload(input));
+}
+
+export function validateMpgfCrecRoundCloseBundleRowUniqueness(
+  input: MpgfCrecRoundCloseBundleRowUniquenessInput,
+): MpgfCrecRoundCloseBundleRowUniquenessResult {
+  const blockers: string[] = [];
+
+  addBlocker(blockers, "row_uniqueness_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.roundId));
+  addBlocker(blockers, "row_uniqueness_project_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.projectId));
+  addBlocker(blockers, "row_uniqueness_participant_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.participantId));
+  addBlocker(blockers, "row_uniqueness_budget_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.commonGroundBudgetId));
+  addBlocker(
+    blockers,
+    "row_uniqueness_payment_snapshot_kind_invalid",
+    input.paymentSnapshotKind === "round_close" || input.paymentSnapshotKind === "early_failure_bonus_cutoff",
+  );
+
+  const publicGoodProjects = asObjectArray(input.publicGoodProjects);
+  const commonGroundBudgets = asObjectArray(input.commonGroundBudgets);
+  const supportStances = asObjectArray(input.supportStances);
+  const conditionalTradeIntents = asObjectArray(input.conditionalTradeIntents);
+  const identityRows = asObjectArray(input.identityEligibilityRows);
+  const paymentSnapshots = asObjectArray(input.paymentCommitmentSnapshots);
+  const projectEligibilitySnapshots = asObjectArray(input.projectRoundEligibilitySnapshots);
+
+  addBlocker(blockers, "row_uniqueness_projects_not_array", publicGoodProjects != null);
+  addBlocker(blockers, "row_uniqueness_budgets_not_array", commonGroundBudgets != null);
+  addBlocker(blockers, "row_uniqueness_support_stances_not_array", supportStances != null);
+  addBlocker(blockers, "row_uniqueness_conditional_intents_not_array", conditionalTradeIntents != null);
+  addBlocker(blockers, "row_uniqueness_identity_rows_not_array", identityRows != null);
+  addBlocker(blockers, "row_uniqueness_payment_snapshots_not_array", paymentSnapshots != null);
+  addBlocker(blockers, "row_uniqueness_project_eligibility_snapshots_not_array", projectEligibilitySnapshots != null);
+
+  const projects = publicGoodProjects ?? [];
+  const budgets = commonGroundBudgets ?? [];
+  const stances = supportStances ?? [];
+  const intents = conditionalTradeIntents ?? [];
+  const identities = identityRows ?? [];
+  const payments = paymentSnapshots ?? [];
+  const projectSnapshots = projectEligibilitySnapshots ?? [];
+
+  addBlocker(
+    blockers,
+    "row_uniqueness_project_rows_malformed",
+    projects.every((row) => validRowString(row, "roundId") && validRowString(row, "id") && validRowString(row, "bucketId")),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_budget_rows_malformed",
+    budgets.every((row) => validRowString(row, "roundId") && validRowString(row, "id") && validRowString(row, "participantId")),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_support_stance_rows_malformed",
+    stances.every(
+      (row) =>
+        validRowString(row, "id") &&
+        validRowString(row, "roundId") &&
+        validRowString(row, "commonGroundBudgetId") &&
+        validRowString(row, "projectId") &&
+        validRowString(row, "participantId"),
+    ),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_conditional_intent_rows_malformed",
+    intents.every(
+      (row) =>
+        validRowString(row, "id") &&
+        validRowString(row, "roundId") &&
+        validRowString(row, "commonGroundBudgetId") &&
+        validRowString(row, "projectId") &&
+        validRowString(row, "participantId"),
+    ),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_identity_rows_malformed",
+    identities.every((row) => validRowString(row, "roundId") && validRowString(row, "participantId")),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_payment_snapshot_rows_malformed",
+    payments.every(
+      (row) =>
+        validRowString(row, "roundId") &&
+        validRowString(row, "commonGroundBudgetId") &&
+        validRowString(row, "snapshotKind"),
+    ),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_project_eligibility_snapshot_rows_malformed",
+    projectSnapshots.every((row) => validRowString(row, "roundId") && validRowString(row, "projectId")),
+  );
+
+  addDuplicateKeyBlocker(blockers, projects, ["roundId", "id"], "row_uniqueness_project_duplicate_key");
+  addDuplicateKeyBlocker(blockers, budgets, ["roundId", "id"], "row_uniqueness_budget_id_duplicate_key");
+  addDuplicateKeyBlocker(blockers, budgets, ["roundId", "participantId"], "row_uniqueness_budget_participant_duplicate_key");
+  addDuplicateKeyBlocker(blockers, stances, ["roundId", "commonGroundBudgetId", "projectId"], "row_uniqueness_support_stance_duplicate_key");
+  addDuplicateKeyBlocker(blockers, intents, ["roundId", "commonGroundBudgetId", "projectId"], "row_uniqueness_conditional_intent_duplicate_key");
+  addDuplicateKeyBlocker(blockers, identities, ["roundId", "participantId"], "row_uniqueness_identity_duplicate_key");
+  addDuplicateKeyBlocker(blockers, payments, ["roundId", "commonGroundBudgetId", "snapshotKind"], "row_uniqueness_payment_snapshot_duplicate_key");
+  addDuplicateKeyBlocker(blockers, projectSnapshots, ["roundId", "projectId"], "row_uniqueness_project_eligibility_duplicate_key");
+
+  const selectedProjectKey = `${input.roundId}:${input.projectId}`;
+  const selectedBudgetByIdKey = `${input.roundId}:${input.commonGroundBudgetId}`;
+  const selectedBudgetByParticipantKey = `${input.roundId}:${input.participantId}`;
+  const selectedProjectBudgetKey = `${input.roundId}:${input.commonGroundBudgetId}:${input.projectId}`;
+  const selectedIdentityKey = `${input.roundId}:${input.participantId}`;
+  const selectedPaymentKey = `${input.roundId}:${input.commonGroundBudgetId}:${input.paymentSnapshotKind}`;
+
+  const selectedProjectRowCount = countRowsWithKey(projects, ["roundId", "id"], selectedProjectKey);
+  const selectedCommonGroundBudgetByIdCount = countRowsWithKey(budgets, ["roundId", "id"], selectedBudgetByIdKey);
+  const selectedCommonGroundBudgetByParticipantCount = countRowsWithKey(budgets, ["roundId", "participantId"], selectedBudgetByParticipantKey);
+  const selectedSupportStanceRowCount = countRowsWithKey(stances, ["roundId", "commonGroundBudgetId", "projectId"], selectedProjectBudgetKey);
+  const selectedConditionalTradeIntentRowCount = countRowsWithKey(intents, ["roundId", "commonGroundBudgetId", "projectId"], selectedProjectBudgetKey);
+  const selectedIdentityEligibilityRowCount = countRowsWithKey(identities, ["roundId", "participantId"], selectedIdentityKey);
+  const selectedPaymentCommitmentSnapshotRowCount = countRowsWithKey(payments, ["roundId", "commonGroundBudgetId", "snapshotKind"], selectedPaymentKey);
+  const selectedProjectRoundEligibilitySnapshotRowCount = countRowsWithKey(projectSnapshots, ["roundId", "projectId"], selectedProjectKey);
+
+  addBlocker(blockers, "row_uniqueness_selected_project_not_exactly_one", selectedProjectRowCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_budget_by_id_not_exactly_one", selectedCommonGroundBudgetByIdCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_budget_by_participant_not_exactly_one", selectedCommonGroundBudgetByParticipantCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_support_stance_not_exactly_one", selectedSupportStanceRowCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_conditional_intent_not_exactly_one", selectedConditionalTradeIntentRowCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_identity_not_exactly_one", selectedIdentityEligibilityRowCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_payment_snapshot_not_exactly_one", selectedPaymentCommitmentSnapshotRowCount === 1);
+  addBlocker(blockers, "row_uniqueness_selected_project_eligibility_not_exactly_one", selectedProjectRoundEligibilitySnapshotRowCount === 1);
+
+  addBlocker(
+    blockers,
+    "row_uniqueness_selected_support_stance_wrong_participant",
+    stances
+      .filter((row) => rowKey(row, ["roundId", "commonGroundBudgetId", "projectId"]) === selectedProjectBudgetKey)
+      .every((row) => rowField(row, "participantId") === input.participantId),
+  );
+  addBlocker(
+    blockers,
+    "row_uniqueness_selected_conditional_intent_wrong_participant",
+    intents
+      .filter((row) => rowKey(row, ["roundId", "commonGroundBudgetId", "projectId"]) === selectedProjectBudgetKey)
+      .every((row) => rowField(row, "participantId") === input.participantId),
+  );
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    selectedProjectRowCount,
+    selectedCommonGroundBudgetByIdCount,
+    selectedCommonGroundBudgetByParticipantCount,
+    selectedSupportStanceRowCount,
+    selectedConditionalTradeIntentRowCount,
+    selectedIdentityEligibilityRowCount,
+    selectedPaymentCommitmentSnapshotRowCount,
+    selectedProjectRoundEligibilitySnapshotRowCount,
+    rowUniquenessHash:
+      blockers.length === 0 ? buildMpgfCrecRoundCloseBundleRowUniquenessHash(input) : null,
+  };
+}
+
+export function normalizeMpgfCrecSupporterCountMinNetPublicGoodCents(value: unknown) {
+  return isNonNegativeSafeIntegerCents(value) &&
+    value >= MPGF_PUBLIC_GOODS_CRECM_V1125_DEFAULT_SUPPORTER_COUNT_MIN_NET_PUBLIC_GOOD_CENTS
+    ? value
+    : MPGF_PUBLIC_GOODS_CRECM_V1125_DEFAULT_SUPPORTER_COUNT_MIN_NET_PUBLIC_GOOD_CENTS;
+}
+
+function isMpgfCrecNetPublicGoodSupporterCreditRow(
+  row: unknown,
+): row is MpgfCrecNetPublicGoodSupporterCreditRow {
+  if (row == null || typeof row !== "object" || Array.isArray(row)) {
+    return false;
+  }
+
+  const candidate = row as MpgfCrecNetPublicGoodSupporterCreditRow;
+
+  return (
+    isMpgfCrecNonEmptyTrimStableString(candidate.roundId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.projectId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.participantId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.activeClusterId) &&
+    isNonNegativeSafeIntegerCents(candidate.netRecipientDisbursedCents) &&
+    typeof candidate.humanVerified === "boolean" &&
+    ["clear", "review", "blocked", "unknown"].includes(candidate.sybilRiskState) &&
+    ["clear", "review", "blocked", "unknown"].includes(candidate.collusionRiskState) &&
+    typeof candidate.linkedAccountExcluded === "boolean" &&
+    typeof candidate.samePaymentMethodExcluded === "boolean" &&
+    typeof candidate.sameControlExcluded === "boolean"
+  );
+}
+
+export function evaluateMpgfCrecNetPublicGoodSupporterBreadth(
+  input: MpgfCrecNetPublicGoodSupporterBreadthInput,
+): MpgfCrecNetPublicGoodSupporterBreadthResult {
+  const blockers: string[] = [];
+  const excludedRowCodes: string[] = [];
+  const floor = normalizeMpgfCrecSupporterCountMinNetPublicGoodCents(
+    input.supporterCountMinNetPublicGoodCents,
+  );
+
+  addBlocker(blockers, "supporter_breadth_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.roundId));
+  addBlocker(blockers, "supporter_breadth_project_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.projectId));
+  addBlocker(blockers, "supporter_breadth_rows_not_array", Array.isArray(input.rows));
+
+  const countedParticipantIds = new Set<string>();
+  const countedActiveClusterIds = new Set<string>();
+
+  if (blockers.length === 0 && Array.isArray(input.rows)) {
+    input.rows.forEach((row, index) => {
+      if (!isMpgfCrecNetPublicGoodSupporterCreditRow(row)) {
+        excludedRowCodes.push(`supporter_row_${index}_malformed`);
+        return;
+      }
+
+      if (row.roundId !== input.roundId || row.projectId !== input.projectId) {
+        excludedRowCodes.push(`supporter_row_${index}_wrong_round_or_project`);
+        return;
+      }
+
+      if (row.netRecipientDisbursedCents < floor) {
+        excludedRowCodes.push(`supporter_row_${index}_below_net_public_good_floor`);
+        return;
+      }
+
+      if (row.humanVerified !== true) {
+        excludedRowCodes.push(`supporter_row_${index}_identity_not_verified`);
+        return;
+      }
+
+      if (row.sybilRiskState !== "clear") {
+        excludedRowCodes.push(`supporter_row_${index}_sybil_not_clear`);
+        return;
+      }
+
+      if (row.collusionRiskState !== "clear") {
+        excludedRowCodes.push(`supporter_row_${index}_collusion_not_clear`);
+        return;
+      }
+
+      if (
+        row.linkedAccountExcluded !== true ||
+        row.samePaymentMethodExcluded !== true ||
+        row.sameControlExcluded !== true
+      ) {
+        excludedRowCodes.push(`supporter_row_${index}_counterparty_identity_exclusion_not_clear`);
+        return;
+      }
+
+      countedParticipantIds.add(row.participantId);
+      countedActiveClusterIds.add(row.activeClusterId);
+    });
+  }
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    supporterCountMinNetPublicGoodCents: floor,
+    verifiedSupporterCount: countedParticipantIds.size,
+    activeClusterCount: countedActiveClusterIds.size,
+    countedParticipantIds: [...countedParticipantIds].sort((left, right) => left.localeCompare(right)),
+    countedActiveClusterIds: [...countedActiveClusterIds].sort((left, right) => left.localeCompare(right)),
+    excludedRowCodes,
+  };
+}
+
 function contributorBenefitContextHashPayload(input: MpgfCrecContributorBenefitEligibilityInput) {
   return {
     benefitKind: input.benefitKind,
@@ -2345,6 +3438,8 @@ function failureBonusEligibilityHashPayload(input: MpgfCrecFailureBonusEligibili
     failureBonusPolicyVersion: input.failureBonusPolicyVersion,
     failureReason: input.failureReason,
     clearingInputBundleHash: input.clearingInputBundleHash,
+    projectHardGateHash: input.projectHardGateHash,
+    rowUniquenessHash: input.rowUniquenessHash,
     paymentCommitmentSnapshotHash: input.paymentCommitmentSnapshotHash,
     failedQualifiedMatchEligibleCents: input.failedQualifiedMatchEligibleCents,
     participantRoundFailureBonusCapCents: input.participantRoundFailureBonusCapCents,
@@ -2383,6 +3478,10 @@ export function evaluateMpgfCrecFailureBonusEligibility(
   addBlocker(blockers, "failure_bonus_policy_version_invalid", isMpgfCrecNonEmptyTrimStableString(input.failureBonusPolicyVersion));
   addBlocker(blockers, "failure_bonus_clearing_bundle_ineligible", input.clearingBundleEligible === true);
   addBlocker(blockers, "failure_bonus_clearing_bundle_hash_invalid", isMpgfCrecCanonicalHash(input.clearingInputBundleHash));
+  addBlocker(blockers, "failure_bonus_project_hard_gate_ineligible", input.projectHardGateEligible === true);
+  addBlocker(blockers, "failure_bonus_project_hard_gate_hash_invalid", isMpgfCrecCanonicalHash(input.projectHardGateHash));
+  addBlocker(blockers, "failure_bonus_row_uniqueness_ineligible", input.rowUniquenessEligible === true);
+  addBlocker(blockers, "failure_bonus_row_uniqueness_hash_invalid", isMpgfCrecCanonicalHash(input.rowUniquenessHash));
   addBlocker(blockers, "failure_bonus_payment_snapshot_ineligible", input.paymentSnapshotEligible === true);
   addBlocker(blockers, "failure_bonus_payment_snapshot_hash_invalid", isMpgfCrecCanonicalHash(input.paymentCommitmentSnapshotHash));
   addBlocker(blockers, "failure_bonus_claimant_conflict_not_clear", input.claimantConflictState === "no_conflict");
@@ -2909,6 +4008,23 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       allEligibilityFieldsMustBeTrueForFailureBonus: true,
       bindingHashIncludesEligibilityFields: true,
     },
+    projectHardGates: {
+      bindingModesRequireApprovedBaselineIntegrity: true,
+      bindingModesRequireApprovedBaselineConfidence: true,
+      bindingModesRequireApprovedActionEvidence: true,
+      shadowModeAllowsProvisionalBaselineAndActionEvidenceOnlyAsNonBindingLearning: true,
+      openChallengesBlockedUnlessRecordedNonBlocking: true,
+      projectScopeStateRequired: "valid_moral_public_good" as const,
+      destinationRouteStateRequired: "valid" as const,
+      externalityStateRequired: "clear" as const,
+      reviewStateRequired: "approved" as const,
+      challengeStatesAllowed: ["clear", "non_blocking"] as const,
+      conflictReviewStateRequired: "clear" as const,
+      sponsorCompatibilityStateRequired: "compatible" as const,
+      legalCustodyStateRequired: "clear" as const,
+      hardGateHashBindsBaselineActionAndReviewStates: true,
+      failureBonusEligibilityRequiresProjectHardGateHash: true,
+    },
     moralBucketSnapshot: {
       frozenReciprocalGraphRequired: true,
       liveBucketDistinctnessReadsAllowed: false,
@@ -2937,6 +4053,66 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       constraintSatisfactionHashRequired: true,
       allowedSolverModes: MPGF_PUBLIC_GOODS_CRECM_V1125_SOLVER_MODES,
       allowedOptimalityStatuses: MPGF_PUBLIC_GOODS_CRECM_V1125_OPTIMALITY_STATUSES,
+    },
+    roundAuditBundles: {
+      publicAuditBundleRequiresFinalRoundCloseBundle: true,
+      mutableLiveInputsCannotChangeFinalAllocation: true,
+      auditBundleHashBindsComponentHashesAndTrace: true,
+      requiredDirectComponentHashes: [
+        "canonicalInputJsonHash",
+        "feeInputHash",
+        "feePolicyHash",
+        "deploymentExposureInputHash",
+        "paymentReconciliationPathHash",
+        "deploymentAuditHash",
+        "optimizationPolicyHash",
+        "optimizationTraceHash",
+        "projectInputHash",
+        "sponsorCommitmentInputHash",
+        "moralBucketSnapshotHash",
+        "bonusScoreHash",
+      ],
+      optimizationTraceIdRequired: true,
+      optimizationTraceHashRequired: true,
+      deploymentAuditHashMustBeExplicitNullWhenNotRequired: true,
+    },
+    bonusScoreUnits: {
+      fixedPointPrecision: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_PRECISION,
+      roundingMode: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_ROUNDING_MODE,
+      fixedPointConstants: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_FIXED_POINT_CONSTANTS,
+      stanceWeightFixedByStance: MPGF_PUBLIC_GOODS_CRECM_V1125_BONUS_STANCE_WEIGHT_FIXED_BY_STANCE,
+      canonicalNonNegativeIntegerStringsRequired: true,
+      malformedScoreUnitsSanitizedToZero: true,
+      malformedBonusCapsSanitizedToZero: true,
+      allocationUsesExactBigIntProration: true,
+      floatingQfAdjustedMayNotDeterminePayoutCents: true,
+      deterministicRemainderOrderRequiresStableHashKeys: true,
+      bonusScoreHashBindsFixedPointConstantsAndUnits: true,
+    },
+    roundCloseBundleRowUniqueness: {
+      formulaLevelGuardsRequired: true,
+      publicGoodProjectKey: "(roundId,id)" as const,
+      commonGroundBudgetKeys: ["(roundId,id)", "(roundId,participantId)"] as const,
+      supportStanceKey: "(roundId,commonGroundBudgetId,projectId)" as const,
+      conditionalTradeIntentKey: "(roundId,commonGroundBudgetId,projectId)" as const,
+      identityEligibilityKey: "(roundId,participantId)" as const,
+      paymentSnapshotKey: "(roundId,commonGroundBudgetId,snapshotKind)" as const,
+      projectEligibilitySnapshotKey: "(roundId,projectId)" as const,
+      duplicateRowsFailClosed: true,
+      wrongRoundRowsDoNotSatisfySelectedLookups: true,
+      failureBonusEligibilityRequiresRowUniquenessHash: true,
+    },
+    netPublicGoodSupporterBreadth: {
+      defaultSupporterCountMinNetPublicGoodCents:
+        MPGF_PUBLIC_GOODS_CRECM_V1125_DEFAULT_SUPPORTER_COUNT_MIN_NET_PUBLIC_GOOD_CENTS,
+      malformedOrBelowDefaultFloorResolvesToDefault: true,
+      frozenFloorMayOnlyRaiseMinimum: true,
+      usesNetRecipientDisbursedPublicGoodCreditOnly: true,
+      feeInclusiveGrossDollarsNeverCountForBreadth: true,
+      rowsBelowFloorCannotCountAsVerifiedSupporters: true,
+      rowsBelowFloorCannotCountAsActiveClusters: true,
+      requiresHumanVerifiedSybilClearCollusionClearRows: true,
+      requiresLinkedPaymentAndSameControlExclusions: true,
     },
     contributorBenefits: {
       supportedKinds: MPGF_PUBLIC_GOODS_CRECM_V1125_CONTRIBUTOR_BENEFIT_KINDS,

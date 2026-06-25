@@ -313,6 +313,7 @@ export function getMpgfCrecV1125AuditBundleApi(roundId: string) {
       roundId,
     }),
     clearingContract: summary,
+    roundAuditBundleContract: summary.roundAuditBundles,
     routeContractHash: hashMpgfCrecV1125Value(buildMpgfCrecV1125RouteContractApi()),
     publicAuditBundleRequiresFinalRoundCloseBundle: true,
     mutableLiveInputsCannotChangeFinalAllocation: true,

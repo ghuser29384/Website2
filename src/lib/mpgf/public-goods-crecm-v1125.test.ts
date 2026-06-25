@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  allocateMpgfCrecBonusMatchByScoreUnits,
+  buildMpgfCrecBonusScoreHash,
   buildMpgfCrecContributorBenefitContextHash,
   buildMpgfCrecCoordinationCreditLedgerEntryHash,
   buildMpgfCrecDeploymentAuditHash,
@@ -13,8 +15,11 @@ import {
   buildMpgfCrecImpactCertificateClaimHash,
   buildMpgfCrecOptimizationRunTraceHash,
   buildMpgfCrecPaymentCommitmentSnapshotHash,
+  buildMpgfCrecProjectHardGateHash,
   buildMpgfCrecProjectRoundEligibilitySnapshotHash,
+  buildMpgfCrecRoundAuditBundleHash,
   buildMpgfCrecRoundClearingInputBundleHash,
+  buildMpgfCrecRoundCloseBundleRowUniquenessHash,
   buildMpgfCrecRoundMoralBucketSnapshotHash,
   buildMpgfCrecSuccessRewardClaimHash,
   buildMpgfCrecV1125ClearingContractSummary,
@@ -22,6 +27,8 @@ import {
   createMpgfCrecFailureBonusClaim,
   evaluateMpgfCrecContributorBenefitEligibility,
   evaluateMpgfCrecFailureBonusEligibility,
+  evaluateMpgfCrecNetPublicGoodSupporterBreadth,
+  evaluateMpgfCrecProjectHardGate,
   evaluateMpgfCrecRoundStatusGate,
   evaluateMpgfCrecSuccessRewardClaim,
   hashMpgfCrecV1125Value,
@@ -38,8 +45,11 @@ import {
   validateMpgfCrecOptimizationRunTrace,
   validateMpgfCrecPaymentCommitmentSnapshot,
   validateMpgfCrecProjectRoundEligibilitySnapshot,
+  validateMpgfCrecRoundAuditBundle,
   validateMpgfCrecRoundClearingInputBundle,
+  validateMpgfCrecRoundCloseBundleRowUniqueness,
   validateMpgfCrecRoundMoralBucketSnapshot,
+  normalizeMpgfCrecSupporterCountMinNetPublicGoodCents,
   type MpgfCrecAuthorizationReconciliationEvent,
   type MpgfCrecContributorBenefitEligibilityInput,
   type MpgfCrecCoordinationCreditLedgerEntry,
@@ -50,7 +60,9 @@ import {
   type MpgfCrecImpactCertificateClaim,
   type MpgfCrecOptimizationRunTrace,
   type MpgfCrecPaymentCommitmentSnapshot,
+  type MpgfCrecProjectHardGateInput,
   type MpgfCrecProjectRoundEligibilitySnapshot,
+  type MpgfCrecRoundAuditBundle,
   type MpgfCrecRoundClearingInputBundle,
   type MpgfCrecRoundMoralBucketSnapshot,
   type MpgfCrecSponsorCommitment,
@@ -179,6 +191,12 @@ test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route con
   const auditBundle = getMpgfCrecV1125AuditBundleApi("mpgf-assurance-round-demo-2026-05");
   assert.ok(auditBundle);
   assert.equal(auditBundle.publicAuditBundleRequiresFinalRoundCloseBundle, true);
+  assert.equal(auditBundle.roundAuditBundleContract.optimizationTraceIdRequired, true);
+  assert.ok(
+    auditBundle.roundAuditBundleContract.requiredDirectComponentHashes.includes(
+      "deploymentExposureInputHash",
+    ),
+  );
 
   const projectReview = getMpgfCrecV1125ProjectReviewStateApi("campaign-animal-welfare-transition");
   assert.equal(projectReview.ok, true);
@@ -471,9 +489,180 @@ function optimizationRunTrace(
   };
 }
 
+function roundAuditBundle(
+  overrides: Partial<MpgfCrecRoundAuditBundle> = {},
+): MpgfCrecRoundAuditBundle {
+  const bundle = clearingBundle();
+  const trace = optimizationRunTrace();
+  const base: Omit<MpgfCrecRoundAuditBundle, "auditBundleHash"> = {
+    id: "audit-bundle-1",
+    roundId,
+    rulebookHash,
+    calculationVersion: bundle.calculationVersion,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    canonicalInputJsonHash: bundle.canonicalInputJsonHash,
+    feeInputHash: bundle.feeInputHash,
+    feePolicyHash: bundle.feePolicyHash,
+    deploymentExposureInputHash: bundle.deploymentExposureInputHash,
+    paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+    deploymentAuditHash: bundle.deploymentAuditHash,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    optimizationTraceId: trace.id,
+    optimizationTraceHash: trace.optimizationTraceHash,
+    projectInputHash: bundle.projectInputHash,
+    sponsorCommitmentInputHash: bundle.sponsorCommitmentInputHash,
+    moralBucketSnapshotHash: bundle.moralBucketSnapshotHash,
+    bonusScoreHash: h("bonus-score"),
+    createdAt: closesAt,
+    ...overrides,
+  };
+
+  return {
+    ...base,
+    auditBundleHash: overrides.auditBundleHash ?? buildMpgfCrecRoundAuditBundleHash(base),
+  };
+}
+
+function roundAuditBundleExpectedContext(
+  bundle: MpgfCrecRoundClearingInputBundle = clearingBundle(),
+  trace: MpgfCrecOptimizationRunTrace = optimizationRunTrace(),
+) {
+  return {
+    roundId,
+    rulebookHash,
+    calculationVersion: bundle.calculationVersion,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    canonicalInputJsonHash: bundle.canonicalInputJsonHash,
+    feeInputHash: bundle.feeInputHash,
+    feePolicyHash: bundle.feePolicyHash,
+    deploymentExposureInputHash: bundle.deploymentExposureInputHash,
+    paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+    deploymentAuditHash: bundle.deploymentAuditHash,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    optimizationTraceId: trace.id,
+    optimizationTraceHash: trace.optimizationTraceHash,
+    projectInputHash: bundle.projectInputHash,
+    sponsorCommitmentInputHash: bundle.sponsorCommitmentInputHash,
+    moralBucketSnapshotHash: bundle.moralBucketSnapshotHash,
+    bonusScoreHash: h("bonus-score"),
+  };
+}
+
+function bonusScoreHash(rows: Array<{ projectId: string; bonusScoreUnits: string }>) {
+  return buildMpgfCrecBonusScoreHash({
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    fixedPointPrecision: 12,
+    roundingMode: "half_even",
+    rows,
+  });
+}
+
+function rowUniquenessInput(
+  overrides: Partial<Parameters<typeof validateMpgfCrecRoundCloseBundleRowUniqueness>[0]> = {},
+): Parameters<typeof validateMpgfCrecRoundCloseBundleRowUniqueness>[0] {
+  const payment = paymentSnapshot({
+    snapshotKind: "early_failure_bonus_cutoff",
+    asOf: earlyFailureBonusCutoff,
+    createdAt: earlyFailureBonusCutoff,
+  });
+
+  return {
+    roundId,
+    projectId,
+    participantId,
+    commonGroundBudgetId,
+    paymentSnapshotKind: "early_failure_bonus_cutoff",
+    publicGoodProjects: [
+      {
+        roundId,
+        id: projectId,
+        bucketId: "bucket-clean-air",
+      },
+    ],
+    commonGroundBudgets: [
+      {
+        roundId,
+        id: commonGroundBudgetId,
+        participantId,
+      },
+    ],
+    supportStances: [
+      {
+        id: "stance-alix-clean-air",
+        roundId,
+        commonGroundBudgetId,
+        projectId,
+        participantId,
+      },
+    ],
+    conditionalTradeIntents: [
+      {
+        id: conditionalTradeIntentId,
+        roundId,
+        commonGroundBudgetId,
+        projectId,
+        participantId,
+      },
+    ],
+    identityEligibilityRows: [
+      {
+        roundId,
+        participantId,
+      },
+    ],
+    paymentCommitmentSnapshots: [payment],
+    projectRoundEligibilitySnapshots: [projectEligibilitySnapshot()],
+    ...overrides,
+  };
+}
+
+function supporterCreditRow(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    roundId,
+    projectId,
+    participantId: "supporter-1",
+    activeClusterId: "cluster-1",
+    netRecipientDisbursedCents: 100,
+    humanVerified: true,
+    sybilRiskState: "clear",
+    collusionRiskState: "clear",
+    linkedAccountExcluded: true,
+    samePaymentMethodExcluded: true,
+    sameControlExcluded: true,
+    ...overrides,
+  };
+}
+
+function projectHardGateInput(
+  overrides: Partial<MpgfCrecProjectHardGateInput> = {},
+): MpgfCrecProjectHardGateInput {
+  return {
+    deploymentMode: "capped_pilot",
+    projectScopeState: "valid_moral_public_good",
+    destinationRouteState: "valid",
+    externalityState: "clear",
+    reviewState: "approved",
+    challengeState: "clear",
+    conflictReviewState: "clear",
+    sponsorCompatibilityState: "compatible",
+    legalCustodyState: "clear",
+    baselineIntegrityState: "approved",
+    baselineConfidenceState: "approved",
+    actionEvidenceState: "approved",
+    ...overrides,
+  };
+}
+
 function failureBonusInput(
   overrides: Partial<MpgfCrecFailureBonusEligibilityInput> = {},
 ): MpgfCrecFailureBonusEligibilityInput {
+  const hardGate = evaluateMpgfCrecProjectHardGate(projectHardGateInput());
+  const rowUniqueness = validateMpgfCrecRoundCloseBundleRowUniqueness(rowUniquenessInput());
+
   return {
     roundId,
     projectId,
@@ -486,6 +675,12 @@ function failureBonusInput(
     failureReason: "counterparty_volume_shortfall",
     clearingBundleEligible: true,
     clearingInputBundleHash: clearingBundle().bundleHash,
+    projectHardGateEligible: hardGate.eligible,
+    projectHardGateHash: hardGate.hardGateHash ?? buildMpgfCrecProjectHardGateHash(projectHardGateInput()),
+    rowUniquenessEligible: rowUniqueness.eligible,
+    rowUniquenessHash:
+      rowUniqueness.rowUniquenessHash ??
+      buildMpgfCrecRoundCloseBundleRowUniquenessHash(rowUniquenessInput()),
     paymentSnapshotEligible: true,
     paymentCommitmentSnapshotHash: paymentSnapshot({ snapshotKind: "early_failure_bonus_cutoff", asOf: earlyFailureBonusCutoff }).snapshotHash,
     failedQualifiedMatchEligibleCents: 1_000,
@@ -1093,6 +1288,260 @@ test("CRECM v1.125 project eligibility snapshots bind exact round-open booleans"
   assert.ok(staleResult.blockers.includes("project_eligibility_snapshot_hash_mismatch"));
 });
 
+test("CRECM v1.125 project hard gates separate binding baseline approval from shadow learning", () => {
+  const bindingGate = evaluateMpgfCrecProjectHardGate(projectHardGateInput());
+
+  assert.equal(bindingGate.eligible, true);
+  assert.equal(bindingGate.bindingOutputAllowed, true);
+  assert.equal(bindingGate.shadowOnlyProvisionalLearningAllowed, false);
+  assert.equal(bindingGate.hardGateHash, buildMpgfCrecProjectHardGateHash(projectHardGateInput()));
+
+  const provisionalBaseline = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ baselineIntegrityState: "provisional" }),
+  );
+
+  assert.equal(provisionalBaseline.eligible, false);
+  assert.equal(provisionalBaseline.bindingOutputAllowed, false);
+  assert.ok(
+    provisionalBaseline.blockers.includes("project_hard_gate_baseline_integrity_not_approved"),
+  );
+
+  const actionEvidenceReview = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ actionEvidenceState: "review" }),
+  );
+
+  assert.equal(actionEvidenceReview.eligible, false);
+  assert.ok(actionEvidenceReview.blockers.includes("project_hard_gate_action_evidence_not_approved"));
+
+  const openChallenge = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ challengeState: "open" }),
+  );
+
+  assert.equal(openChallenge.eligible, false);
+  assert.ok(openChallenge.blockers.includes("project_hard_gate_challenge_not_clear_or_non_blocking"));
+
+  const shadowLearning = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({
+      deploymentMode: "shadow",
+      baselineIntegrityState: "provisional",
+      baselineConfidenceState: "provisional",
+      actionEvidenceState: "provisional",
+    }),
+  );
+
+  assert.equal(shadowLearning.eligible, true);
+  assert.equal(shadowLearning.bindingOutputAllowed, false);
+  assert.equal(shadowLearning.shadowOnlyProvisionalLearningAllowed, true);
+  assert.equal(
+    shadowLearning.hardGateHash,
+    buildMpgfCrecProjectHardGateHash(
+      projectHardGateInput({
+        deploymentMode: "shadow",
+        baselineIntegrityState: "provisional",
+        baselineConfidenceState: "provisional",
+        actionEvidenceState: "provisional",
+      }),
+    ),
+  );
+
+  const blockedShadow = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({
+      deploymentMode: "shadow",
+      externalityState: "blocked",
+      baselineIntegrityState: "provisional",
+      baselineConfidenceState: "provisional",
+      actionEvidenceState: "provisional",
+    }),
+  );
+
+  assert.equal(blockedShadow.eligible, false);
+  assert.equal(blockedShadow.shadowOnlyProvisionalLearningAllowed, false);
+  assert.ok(blockedShadow.blockers.includes("project_hard_gate_externality_not_clear"));
+});
+
+test("CRECM v1.125 round-close row-count guards reject duplicate and wrong-key bundle rows", () => {
+  const input = rowUniquenessInput();
+  const result = validateMpgfCrecRoundCloseBundleRowUniqueness(input);
+
+  assert.equal(result.eligible, true);
+  assert.equal(result.selectedProjectRowCount, 1);
+  assert.equal(result.selectedCommonGroundBudgetByIdCount, 1);
+  assert.equal(result.selectedCommonGroundBudgetByParticipantCount, 1);
+  assert.equal(result.selectedSupportStanceRowCount, 1);
+  assert.equal(result.selectedConditionalTradeIntentRowCount, 1);
+  assert.equal(result.selectedIdentityEligibilityRowCount, 1);
+  assert.equal(result.selectedPaymentCommitmentSnapshotRowCount, 1);
+  assert.equal(result.selectedProjectRoundEligibilitySnapshotRowCount, 1);
+  assert.equal(result.rowUniquenessHash, buildMpgfCrecRoundCloseBundleRowUniquenessHash(input));
+
+  const duplicateStance = validateMpgfCrecRoundCloseBundleRowUniqueness(
+    rowUniquenessInput({
+      supportStances: [
+        {
+          id: "stance-1",
+          roundId,
+          commonGroundBudgetId,
+          projectId,
+          participantId,
+        },
+        {
+          id: "stance-2",
+          roundId,
+          commonGroundBudgetId,
+          projectId,
+          participantId,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(duplicateStance.eligible, false);
+  assert.ok(duplicateStance.blockers.includes("row_uniqueness_support_stance_duplicate_key"));
+  assert.ok(duplicateStance.blockers.includes("row_uniqueness_selected_support_stance_not_exactly_one"));
+
+  const duplicateBudgetParticipant = validateMpgfCrecRoundCloseBundleRowUniqueness(
+    rowUniquenessInput({
+      commonGroundBudgets: [
+        {
+          roundId,
+          id: commonGroundBudgetId,
+          participantId,
+        },
+        {
+          roundId,
+          id: "budget-alix-second",
+          participantId,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(duplicateBudgetParticipant.eligible, false);
+  assert.ok(
+    duplicateBudgetParticipant.blockers.includes("row_uniqueness_budget_participant_duplicate_key"),
+  );
+
+  const wrongRoundPayment = validateMpgfCrecRoundCloseBundleRowUniqueness(
+    rowUniquenessInput({
+      paymentCommitmentSnapshots: [
+        paymentSnapshot({
+          roundId: "round-other",
+          snapshotKind: "early_failure_bonus_cutoff",
+          asOf: earlyFailureBonusCutoff,
+          createdAt: earlyFailureBonusCutoff,
+        }),
+      ],
+    }),
+  );
+
+  assert.equal(wrongRoundPayment.eligible, false);
+  assert.equal(wrongRoundPayment.selectedPaymentCommitmentSnapshotRowCount, 0);
+  assert.ok(
+    wrongRoundPayment.blockers.includes("row_uniqueness_selected_payment_snapshot_not_exactly_one"),
+  );
+
+  const crossBudgetIntent = validateMpgfCrecRoundCloseBundleRowUniqueness(
+    rowUniquenessInput({
+      conditionalTradeIntents: [
+        {
+          id: conditionalTradeIntentId,
+          roundId,
+          commonGroundBudgetId: "budget-other",
+          projectId,
+          participantId,
+        },
+      ],
+    }),
+  );
+
+  assert.equal(crossBudgetIntent.eligible, false);
+  assert.equal(crossBudgetIntent.selectedConditionalTradeIntentRowCount, 0);
+  assert.ok(
+    crossBudgetIntent.blockers.includes("row_uniqueness_selected_conditional_intent_not_exactly_one"),
+  );
+});
+
+test("CRECM v1.125 supporter breadth uses net-public-good credit floor and verified-clear identity", () => {
+  assert.equal(normalizeMpgfCrecSupporterCountMinNetPublicGoodCents(undefined), 100);
+  assert.equal(normalizeMpgfCrecSupporterCountMinNetPublicGoodCents(1), 100);
+  assert.equal(normalizeMpgfCrecSupporterCountMinNetPublicGoodCents(250), 250);
+
+  const breadth = evaluateMpgfCrecNetPublicGoodSupporterBreadth({
+    roundId,
+    projectId,
+    supporterCountMinNetPublicGoodCents: "100",
+    rows: [
+      supporterCreditRow({
+        participantId: "supporter-dust",
+        activeClusterId: "cluster-dust",
+        netRecipientDisbursedCents: 99,
+      }),
+      supporterCreditRow({
+        participantId: "supporter-a",
+        activeClusterId: "cluster-a",
+        netRecipientDisbursedCents: 100,
+      }),
+      supporterCreditRow({
+        participantId: "supporter-b",
+        activeClusterId: "cluster-b",
+        netRecipientDisbursedCents: 250,
+      }),
+      supporterCreditRow({
+        participantId: "supporter-c",
+        activeClusterId: "cluster-b",
+        netRecipientDisbursedCents: 300,
+      }),
+      supporterCreditRow({
+        participantId: "supporter-sybil-review",
+        activeClusterId: "cluster-sybil-review",
+        netRecipientDisbursedCents: 500,
+        sybilRiskState: "review",
+      }),
+      supporterCreditRow({
+        participantId: "supporter-same-payment",
+        activeClusterId: "cluster-same-payment",
+        netRecipientDisbursedCents: 500,
+        samePaymentMethodExcluded: false,
+      }),
+    ],
+  });
+
+  assert.equal(breadth.eligible, true);
+  assert.equal(breadth.supporterCountMinNetPublicGoodCents, 100);
+  assert.equal(breadth.verifiedSupporterCount, 3);
+  assert.equal(breadth.activeClusterCount, 2);
+  assert.deepEqual(breadth.countedParticipantIds, ["supporter-a", "supporter-b", "supporter-c"]);
+  assert.deepEqual(breadth.countedActiveClusterIds, ["cluster-a", "cluster-b"]);
+  assert.ok(breadth.excludedRowCodes.includes("supporter_row_0_below_net_public_good_floor"));
+  assert.ok(breadth.excludedRowCodes.includes("supporter_row_4_sybil_not_clear"));
+  assert.ok(
+    breadth.excludedRowCodes.includes("supporter_row_5_counterparty_identity_exclusion_not_clear"),
+  );
+
+  const raisedFloor = evaluateMpgfCrecNetPublicGoodSupporterBreadth({
+    roundId,
+    projectId,
+    supporterCountMinNetPublicGoodCents: 250,
+    rows: [
+      supporterCreditRow({
+        participantId: "supporter-a",
+        activeClusterId: "cluster-a",
+        netRecipientDisbursedCents: 249,
+      }),
+      supporterCreditRow({
+        participantId: "supporter-b",
+        activeClusterId: "cluster-b",
+        netRecipientDisbursedCents: 250,
+      }),
+    ],
+  });
+
+  assert.equal(raisedFloor.supporterCountMinNetPublicGoodCents, 250);
+  assert.equal(raisedFloor.verifiedSupporterCount, 1);
+  assert.equal(raisedFloor.activeClusterCount, 1);
+  assert.ok(raisedFloor.excludedRowCodes.includes("supporter_row_0_below_net_public_good_floor"));
+});
+
 test("CRECM v1.125 authorization reconciliation events bind row identity, amounts, and expiry", () => {
   const event = authorizationReconciliationEvent();
   const result = validateMpgfCrecAuthorizationReconciliationEvent(event, {
@@ -1274,6 +1723,180 @@ test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => 
 
   assert.equal(staleAllocationResult.eligible, false);
   assert.ok(staleAllocationResult.blockers.includes("optimization_trace_hash_mismatch"));
+});
+
+test("CRECM v1.125 bonus match allocates from canonical integer score units with exact caps", () => {
+  const rows = [
+    {
+      projectId: "project-a",
+      bonusScoreUnits: "2",
+      bonusCapCents: 10,
+      stableOrderKey: h("bonus-order-project-a"),
+    },
+    {
+      projectId: "project-b",
+      bonusScoreUnits: "1",
+      bonusCapCents: 10,
+      stableOrderKey: h("bonus-order-project-b"),
+    },
+  ];
+  const allocation = allocateMpgfCrecBonusMatchByScoreUnits({
+    roundId,
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    bonusScoreHash: bonusScoreHash(rows),
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    backedBonusMatchPoolCents: 5,
+    rows,
+  });
+
+  assert.equal(allocation.eligible, true);
+  assert.deepEqual(allocation.allocatedBonusCentsByProjectId, {
+    "project-a": 3,
+    "project-b": 2,
+  });
+  assert.equal(allocation.totalAllocatedCents, 5);
+  assert.equal(allocation.totalBonusScoreUnitsExact, "3");
+
+  const capped = allocateMpgfCrecBonusMatchByScoreUnits({
+    roundId,
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    bonusScoreHash: bonusScoreHash([
+      { projectId: "project-a", bonusScoreUnits: "100" },
+      { projectId: "project-b", bonusScoreUnits: "1" },
+    ]),
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    backedBonusMatchPoolCents: 10,
+    rows: [
+      {
+        projectId: "project-a",
+        bonusScoreUnits: "100",
+        bonusCapCents: 2,
+        stableOrderKey: h("bonus-order-project-a"),
+      },
+      {
+        projectId: "project-b",
+        bonusScoreUnits: "1",
+        bonusCapCents: 10,
+        stableOrderKey: h("bonus-order-project-b"),
+      },
+    ],
+  });
+
+  assert.equal(capped.eligible, true);
+  assert.deepEqual(capped.allocatedBonusCentsByProjectId, {
+    "project-a": 2,
+    "project-b": 8,
+  });
+  assert.equal(capped.unallocatedBonusPoolCents, 0);
+});
+
+test("CRECM v1.125 bonus score-unit allocation zeroes malformed row values fail-closed", () => {
+  const rows = [
+    {
+      projectId: "project-malformed",
+      bonusScoreUnits: "01",
+      bonusCapCents: -1,
+      stableOrderKey: h("bonus-order-project-malformed"),
+    },
+    {
+      projectId: "project-valid",
+      bonusScoreUnits: "5",
+      bonusCapCents: 5,
+      stableOrderKey: h("bonus-order-project-valid"),
+    },
+  ];
+  const allocation = allocateMpgfCrecBonusMatchByScoreUnits({
+    roundId,
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    bonusScoreHash: bonusScoreHash(rows),
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    backedBonusMatchPoolCents: 5,
+    rows,
+  });
+
+  assert.equal(allocation.eligible, true);
+  assert.deepEqual(allocation.allocatedBonusCentsByProjectId, {
+    "project-malformed": 0,
+    "project-valid": 5,
+  });
+  assert.equal(allocation.sanitizedBonusScoreUnitsByProjectId["project-malformed"], "0");
+  assert.equal(allocation.sanitizedBonusCapCentsByProjectId["project-malformed"], 0);
+  assert.ok(allocation.sanitizedRowCodes.includes("bonus_score_units_0_sanitized_to_zero"));
+  assert.ok(allocation.sanitizedRowCodes.includes("bonus_cap_cents_0_sanitized_to_zero"));
+
+  const invalidOrder = allocateMpgfCrecBonusMatchByScoreUnits({
+    roundId,
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    bonusScoreHash: bonusScoreHash(rows),
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    backedBonusMatchPoolCents: 5,
+    rows: [
+      {
+        projectId: "project-valid",
+        bonusScoreUnits: "5",
+        bonusCapCents: 5,
+        stableOrderKey: "not-a-hash",
+      },
+    ],
+  });
+
+  assert.equal(invalidOrder.eligible, false);
+  assert.ok(invalidOrder.blockers.includes("bonus_score_allocation_stable_order_keys_invalid"));
+  assert.equal(invalidOrder.totalAllocatedCents, 0);
+});
+
+test("CRECM v1.125 audit bundles bind final bundle component hashes and optimization trace ids", () => {
+  const bundle = clearingBundle();
+  const trace = optimizationRunTrace();
+  const auditBundle = roundAuditBundle();
+  const result = validateMpgfCrecRoundAuditBundle(
+    auditBundle,
+    roundAuditBundleExpectedContext(bundle, trace),
+  );
+
+  assert.equal(result.eligible, true);
+
+  const staleFeeInput = {
+    ...auditBundle,
+    feeInputHash: h("changed-fee-input"),
+  };
+  const staleFeeInputResult = validateMpgfCrecRoundAuditBundle(
+    staleFeeInput,
+    roundAuditBundleExpectedContext(bundle, trace),
+  );
+
+  assert.equal(staleFeeInputResult.eligible, false);
+  assert.ok(staleFeeInputResult.blockers.includes("round_audit_bundle_wrong_fee_input_hash"));
+  assert.ok(staleFeeInputResult.blockers.includes("round_audit_bundle_hash_mismatch"));
+
+  const wrongTrace = {
+    ...auditBundle,
+    optimizationTraceId: "optimization-trace-2",
+    optimizationTraceHash: h("other-optimization-trace"),
+  };
+  const wrongTraceResult = validateMpgfCrecRoundAuditBundle(
+    wrongTrace,
+    roundAuditBundleExpectedContext(bundle, trace),
+  );
+
+  assert.equal(wrongTraceResult.eligible, false);
+  assert.ok(
+    wrongTraceResult.blockers.includes("round_audit_bundle_wrong_optimization_trace_id"),
+  );
+  assert.ok(
+    wrongTraceResult.blockers.includes("round_audit_bundle_wrong_optimization_trace_hash"),
+  );
+
+  const staleBonusScore = roundAuditBundle({
+    bonusScoreHash: h("different-bonus-score"),
+  });
+  const staleBonusScoreResult = validateMpgfCrecRoundAuditBundle(
+    staleBonusScore,
+    roundAuditBundleExpectedContext(bundle, trace),
+  );
+
+  assert.equal(staleBonusScoreResult.eligible, false);
+  assert.ok(staleBonusScoreResult.blockers.includes("round_audit_bundle_wrong_bonus_score_hash"));
 });
 
 test("CRECM v1.125 contributor benefits require captured successful no-late-access rows", () => {
@@ -1468,6 +2091,20 @@ test("CRECM v1.125 failure bonuses require payable threshold-family failures and
 
   assert.equal(deniedReason.qualified, false);
   assert.ok(deniedReason.blockers.includes("failure_bonus_reason_not_threshold_family"));
+
+  const hardGateBlocked = evaluateMpgfCrecFailureBonusEligibility(
+    failureBonusInput({ projectHardGateEligible: false }),
+  );
+
+  assert.equal(hardGateBlocked.qualified, false);
+  assert.ok(hardGateBlocked.blockers.includes("failure_bonus_project_hard_gate_ineligible"));
+
+  const rowUniquenessBlocked = evaluateMpgfCrecFailureBonusEligibility(
+    failureBonusInput({ rowUniquenessEligible: false }),
+  );
+
+  assert.equal(rowUniquenessBlocked.qualified, false);
+  assert.ok(rowUniquenessBlocked.blockers.includes("failure_bonus_row_uniqueness_ineligible"));
 
   const underBacked = evaluateMpgfCrecFailureBonusEligibility(
     failureBonusInput({ backedFailureBonusPoolCents: 499 }),
@@ -1789,10 +2426,42 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.deploymentAudits.shadowBindingExposureCentsAlwaysZero, true);
   assert.equal(summary.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
   assert.equal(summary.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineConfidence, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireApprovedActionEvidence, true);
+  assert.equal(
+    summary.projectHardGates.shadowModeAllowsProvisionalBaselineAndActionEvidenceOnlyAsNonBindingLearning,
+    true,
+  );
+  assert.equal(summary.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
   assert.equal(summary.optimizationRunTrace.selectedAllocationRowsHashRequired, true);
+  assert.equal(summary.roundAuditBundles.auditBundleHashBindsComponentHashesAndTrace, true);
+  assert.equal(summary.roundAuditBundles.optimizationTraceIdRequired, true);
+  assert.ok(summary.roundAuditBundles.requiredDirectComponentHashes.includes("feePolicyHash"));
+  assert.ok(summary.roundAuditBundles.requiredDirectComponentHashes.includes("bonusScoreHash"));
+  assert.equal(summary.bonusScoreUnits.fixedPointPrecision, 12);
+  assert.equal(summary.bonusScoreUnits.roundingMode, "half_even");
+  assert.equal(summary.bonusScoreUnits.canonicalNonNegativeIntegerStringsRequired, true);
+  assert.equal(summary.bonusScoreUnits.allocationUsesExactBigIntProration, true);
+  assert.equal(summary.bonusScoreUnits.floatingQfAdjustedMayNotDeterminePayoutCents, true);
+  assert.equal(summary.roundCloseBundleRowUniqueness.formulaLevelGuardsRequired, true);
+  assert.deepEqual(summary.roundCloseBundleRowUniqueness.commonGroundBudgetKeys, [
+    "(roundId,id)",
+    "(roundId,participantId)",
+  ]);
+  assert.equal(
+    summary.roundCloseBundleRowUniqueness.paymentSnapshotKey,
+    "(roundId,commonGroundBudgetId,snapshotKind)",
+  );
+  assert.equal(summary.roundCloseBundleRowUniqueness.failureBonusEligibilityRequiresRowUniquenessHash, true);
+  assert.equal(summary.netPublicGoodSupporterBreadth.defaultSupporterCountMinNetPublicGoodCents, 100);
+  assert.equal(summary.netPublicGoodSupporterBreadth.malformedOrBelowDefaultFloorResolvesToDefault, true);
+  assert.equal(summary.netPublicGoodSupporterBreadth.usesNetRecipientDisbursedPublicGoodCreditOnly, true);
+  assert.equal(summary.netPublicGoodSupporterBreadth.rowsBelowFloorCannotCountAsVerifiedSupporters, true);
+  assert.equal(summary.netPublicGoodSupporterBreadth.requiresHumanVerifiedSybilClearCollusionClearRows, true);
   assert.ok(summary.contributorBenefits.supportedKinds.includes("success_reward"));
   assert.equal(summary.contributorBenefits.requireCapturedSuccessfulContributionRow, true);
   assert.equal(summary.contributorBenefits.neverCountAsPublicGoodDollarsOrAllocationPower, true);
