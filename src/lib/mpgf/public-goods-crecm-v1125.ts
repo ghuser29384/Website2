@@ -130,6 +130,31 @@ const MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_STATES = [
   "passed",
 ] as const;
 
+const MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_KINDS = [
+  "shadow_to_pilot",
+  "pilot_to_full",
+  "shadow_or_pilot_to_full",
+] as const;
+
+const MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_TARGET_MODES = [
+  "capped_pilot",
+  "full",
+] as const;
+
+const MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_PRIOR_MODES = [
+  "shadow",
+  "capped_pilot",
+] as const;
+
+const MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_PRIOR_OUTCOME_STATES = [
+  "passed",
+  "failed",
+  "canceled",
+  "incident_review",
+  "missing",
+  "malformed",
+] as const;
+
 type ArrayValue<T extends readonly unknown[]> = T[number];
 
 export type MpgfCrecPaymentSnapshotKind =
@@ -170,6 +195,18 @@ export type MpgfCrecCoordinationCreditKind =
 
 export type MpgfCrecRoundStatus =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES>;
+
+export type MpgfCrecDeploymentAuditKind =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_KINDS>;
+
+export type MpgfCrecDeploymentAuditTargetMode =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_TARGET_MODES>;
+
+export type MpgfCrecDeploymentAuditPriorMode =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_PRIOR_MODES>;
+
+export type MpgfCrecDeploymentPriorOutcomeState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_PRIOR_OUTCOME_STATES>;
 
 export type MpgfCrecRoundStatusOperation =
   | "final_binding_result"
@@ -329,6 +366,59 @@ export interface MpgfCrecRoundClearingInputBundleExpectedContext {
   sponsorPoolSourceHash?: string;
   moralBucketSnapshotId?: string;
   moralBucketSnapshotHash?: string;
+}
+
+export interface MpgfCrecDeploymentAudit {
+  id: string;
+  roundId: string;
+  auditKind: MpgfCrecDeploymentAuditKind;
+  targetDeploymentMode: MpgfCrecDeploymentAuditTargetMode;
+  calculationVersion: string;
+  rulebookHash: string;
+  feePolicyHash: string;
+  sponsorPoolSourceHash: string;
+  paymentReconciliationPathHash: string;
+  optimizationPolicyHash: string;
+  solverVersion: string;
+  priorRoundIds: string[];
+  priorAuditBundleHashes: string[];
+  priorRoundDeploymentModes: MpgfCrecDeploymentAuditPriorMode[];
+  priorPaymentReconciliationPathHashes: string[];
+  priorRoundOutcomeStates: MpgfCrecDeploymentPriorOutcomeState[];
+  auditState: "passed";
+  auditorId: string;
+  createdAt: string;
+  auditHash: string;
+}
+
+export interface MpgfCrecDeploymentAuditExpectedContext {
+  id?: string;
+  roundId: string;
+  targetDeploymentMode: MpgfCrecDeploymentAuditTargetMode;
+  calculationVersion: string;
+  rulebookHash: string;
+  feePolicyHash: string;
+  sponsorPoolSourceHash: string;
+  paymentReconciliationPathHash: string;
+  optimizationPolicyHash: string;
+  parametersFrozenAt: string;
+}
+
+export interface MpgfCrecDeploymentExposureCapInput {
+  deploymentMode: MpgfCrecRoundClearingInputBundle["deploymentMode"];
+  requestedGrossExposureCents: number;
+  pilotMaxRoundGrossExposureCents: number | null;
+  pilotMaxParticipantGrossExposureCents: number | null;
+  remainingRoundDeploymentExposureCents: number | null;
+  remainingParticipantDeploymentExposureCents: number | null;
+}
+
+export interface MpgfCrecDeploymentExposureCapResult {
+  eligible: boolean;
+  blockers: string[];
+  cappedGrossExposureCents: number;
+  bindingOutputAllowed: boolean;
+  shadowOnly: boolean;
 }
 
 export interface MpgfCrecProjectRoundEligibilitySnapshot {
@@ -620,6 +710,7 @@ export interface MpgfCrecFailureBonusClaimRecord {
   projectRoundEligibilitySnapshotHash: string;
   claimantConflictSnapshotHash: string;
   claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  claimantConflictSourceCutoff: string;
   earlyFailureBonusCutoff: string;
   paymentMethodSavedAt: string;
   paymentMethodConfirmedAt: string;
@@ -639,6 +730,7 @@ export interface MpgfCrecFailureBonusClaimListContext {
   roundStatus: unknown;
   backedFailureBonusPoolCents: number;
   earlyFailureBonusCutoff: string;
+  claimantConflictSourceCutoff: string;
   externalFailedQualifiedMatchEligibleCentsByClaimId?: Record<string, number>;
   externalParticipantCappedProvisionalBonusCentsByClaimId?: Record<string, number>;
 }
@@ -648,6 +740,60 @@ export interface MpgfCrecFailureBonusClaimListResult {
   blockers: string[];
   claims: MpgfCrecFailureBonusClaimRecord[];
   claimIds: string[];
+}
+
+export type MpgfCrecFailureBonusClaimCreationMode =
+  | "qualified_payout_path"
+  | "intake_only_review";
+
+export interface MpgfCrecFailureBonusClaimCreationInput {
+  existingClaims: readonly MpgfCrecFailureBonusClaimRecord[];
+  creationMode: MpgfCrecFailureBonusClaimCreationMode;
+  roundStatus: unknown;
+  backedFailureBonusPoolCents: number;
+  failureBonusEligibilityQualified: boolean;
+  projectFailed: boolean;
+  id: string;
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  commonGroundBudgetId: string;
+  conditionalTradeIntentId: string;
+  failureBonusPolicyVersion: string;
+  failureReason: string;
+  clearingInputBundleHash: string;
+  paymentCommitmentSnapshotHash: string;
+  projectRoundEligibilitySnapshotHash: string;
+  claimantConflictSnapshotHash: string;
+  claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  claimantConflictSourceCutoff: string;
+  earlyFailureBonusCutoff: string;
+  paymentMethodSavedAt: string;
+  paymentMethodConfirmedAt: string;
+  failedQualifiedMatchEligibleCents: number;
+  createdAt: string;
+}
+
+export interface MpgfCrecFailureBonusClaimCreationResult {
+  eligible: boolean;
+  action: "create" | "noop_replay" | "manual_review";
+  blockers: string[];
+  idempotencyKey: string | null;
+  claim: MpgfCrecFailureBonusClaimRecord | null;
+}
+
+export interface MpgfCrecFailureBonusClaimSettlementInput {
+  claim: MpgfCrecFailureBonusClaimRecord;
+  context: MpgfCrecFailureBonusClaimListContext;
+  settlementState: "paid" | "credited";
+  payoutRef: string;
+  resolvedAt: string;
+}
+
+export interface MpgfCrecFailureBonusClaimSettlementResult {
+  eligible: boolean;
+  blockers: string[];
+  claim: MpgfCrecFailureBonusClaimRecord | null;
 }
 
 function canonicalize(value: unknown): unknown {
@@ -1154,6 +1300,206 @@ export function validateMpgfCrecRoundClearingInputBundle(
   );
 
   return validationResult(blockers);
+}
+
+function deploymentAuditHashPayload(audit: Omit<MpgfCrecDeploymentAudit, "auditHash">) {
+  return {
+    id: audit.id,
+    roundId: audit.roundId,
+    auditKind: audit.auditKind,
+    targetDeploymentMode: audit.targetDeploymentMode,
+    calculationVersion: audit.calculationVersion,
+    rulebookHash: audit.rulebookHash,
+    feePolicyHash: audit.feePolicyHash,
+    sponsorPoolSourceHash: audit.sponsorPoolSourceHash,
+    paymentReconciliationPathHash: audit.paymentReconciliationPathHash,
+    optimizationPolicyHash: audit.optimizationPolicyHash,
+    solverVersion: audit.solverVersion,
+    priorRoundIds: audit.priorRoundIds,
+    priorAuditBundleHashes: audit.priorAuditBundleHashes,
+    priorRoundDeploymentModes: audit.priorRoundDeploymentModes,
+    priorPaymentReconciliationPathHashes: audit.priorPaymentReconciliationPathHashes,
+    priorRoundOutcomeStates: audit.priorRoundOutcomeStates,
+    auditState: audit.auditState,
+    auditorId: audit.auditorId,
+    createdAt: audit.createdAt,
+  };
+}
+
+export function buildMpgfCrecDeploymentAuditHash(
+  audit: Omit<MpgfCrecDeploymentAudit, "auditHash">,
+) {
+  return hashMpgfCrecV1125Value(deploymentAuditHashPayload(audit));
+}
+
+function deploymentAuditPriorEvidenceLengthsValid(audit: MpgfCrecDeploymentAudit) {
+  const expectedLength = audit.priorRoundIds.length;
+
+  return (
+    expectedLength > 0 &&
+    audit.priorAuditBundleHashes.length === expectedLength &&
+    audit.priorRoundDeploymentModes.length === expectedLength &&
+    audit.priorPaymentReconciliationPathHashes.length === expectedLength &&
+    audit.priorRoundOutcomeStates.length === expectedLength
+  );
+}
+
+export function validateMpgfCrecDeploymentAudit(
+  audit: MpgfCrecDeploymentAudit | null | undefined,
+  expected: MpgfCrecDeploymentAuditExpectedContext,
+) {
+  const blockers: string[] = [];
+
+  if (audit == null) {
+    return validationResult(["deployment_audit_missing"]);
+  }
+
+  const evidenceLengthsValid = deploymentAuditPriorEvidenceLengthsValid(audit);
+  const priorModesValid =
+    evidenceLengthsValid &&
+    audit.priorRoundDeploymentModes.every((mode) =>
+      MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_PRIOR_MODES.includes(mode),
+    );
+  const priorOutcomesPassed =
+    evidenceLengthsValid &&
+    audit.priorRoundOutcomeStates.every((state) => state === "passed");
+  const targetModeValid =
+    MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_TARGET_MODES.includes(audit.targetDeploymentMode);
+  const auditKindValid =
+    MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_KINDS.includes(audit.auditKind);
+  const kindTargetsMode =
+    (audit.auditKind === "shadow_to_pilot" && audit.targetDeploymentMode === "capped_pilot") ||
+    ((audit.auditKind === "pilot_to_full" || audit.auditKind === "shadow_or_pilot_to_full") &&
+      audit.targetDeploymentMode === "full");
+  const kindEvidenceModesCoherent =
+    evidenceLengthsValid &&
+    ((audit.auditKind === "shadow_to_pilot" &&
+      audit.priorRoundDeploymentModes.every((mode) => mode === "shadow")) ||
+      (audit.auditKind === "pilot_to_full" &&
+        audit.priorRoundDeploymentModes.every((mode) => mode === "capped_pilot")) ||
+      (audit.auditKind === "shadow_or_pilot_to_full" &&
+        audit.priorRoundDeploymentModes.every((mode) => mode === "shadow" || mode === "capped_pilot")));
+  const hasSamePathCappedPilotPrior =
+    evidenceLengthsValid &&
+    audit.priorRoundDeploymentModes.some(
+      (mode, index) =>
+        mode === "capped_pilot" &&
+        audit.priorPaymentReconciliationPathHashes[index] === expected.paymentReconciliationPathHash,
+    );
+  const fullEvidenceIncludesSamePathPilot =
+    audit.targetDeploymentMode !== "full" || hasSamePathCappedPilotPrior;
+
+  addBlocker(blockers, "deployment_audit_id_invalid", isMpgfCrecNonEmptyTrimStableString(audit.id));
+  if (expected.id != null) {
+    addBlocker(blockers, "deployment_audit_wrong_id", audit.id === expected.id);
+  }
+  addBlocker(blockers, "deployment_audit_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(audit.roundId));
+  addBlocker(blockers, "deployment_audit_wrong_round", audit.roundId === expected.roundId);
+  addBlocker(blockers, "deployment_audit_kind_invalid", auditKindValid);
+  addBlocker(blockers, "deployment_audit_target_mode_invalid", targetModeValid);
+  addBlocker(blockers, "deployment_audit_wrong_target_mode", audit.targetDeploymentMode === expected.targetDeploymentMode);
+  addBlocker(blockers, "deployment_audit_kind_target_mismatch", kindTargetsMode);
+  addBlocker(blockers, "deployment_audit_calculation_version_invalid", isMpgfCrecNonEmptyTrimStableString(audit.calculationVersion));
+  addBlocker(blockers, "deployment_audit_wrong_calculation_version", audit.calculationVersion === expected.calculationVersion);
+  addBlocker(blockers, "deployment_audit_rulebook_hash_invalid", isMpgfCrecCanonicalHash(audit.rulebookHash));
+  addBlocker(blockers, "deployment_audit_wrong_rulebook_hash", audit.rulebookHash === expected.rulebookHash);
+  addBlocker(blockers, "deployment_audit_fee_policy_hash_invalid", isMpgfCrecCanonicalHash(audit.feePolicyHash));
+  addBlocker(blockers, "deployment_audit_wrong_fee_policy_hash", audit.feePolicyHash === expected.feePolicyHash);
+  addBlocker(blockers, "deployment_audit_sponsor_source_hash_invalid", isMpgfCrecCanonicalHash(audit.sponsorPoolSourceHash));
+  addBlocker(blockers, "deployment_audit_wrong_sponsor_source_hash", audit.sponsorPoolSourceHash === expected.sponsorPoolSourceHash);
+  addBlocker(blockers, "deployment_audit_payment_path_hash_invalid", isMpgfCrecCanonicalHash(audit.paymentReconciliationPathHash));
+  addBlocker(blockers, "deployment_audit_wrong_payment_path_hash", audit.paymentReconciliationPathHash === expected.paymentReconciliationPathHash);
+  addBlocker(blockers, "deployment_audit_optimization_policy_hash_invalid", isMpgfCrecCanonicalHash(audit.optimizationPolicyHash));
+  addBlocker(blockers, "deployment_audit_wrong_optimization_policy_hash", audit.optimizationPolicyHash === expected.optimizationPolicyHash);
+  addBlocker(blockers, "deployment_audit_solver_version_invalid", isMpgfCrecNonEmptyTrimStableString(audit.solverVersion));
+  addBlocker(blockers, "deployment_audit_prior_evidence_lengths_invalid", evidenceLengthsValid);
+  addBlocker(blockers, "deployment_audit_prior_round_ids_invalid", isTrimStableStringArray(audit.priorRoundIds));
+  addBlocker(blockers, "deployment_audit_prior_round_self_reference", !audit.priorRoundIds.includes(expected.roundId));
+  addBlocker(blockers, "deployment_audit_prior_bundle_hashes_invalid", audit.priorAuditBundleHashes.every(isMpgfCrecCanonicalHash));
+  addBlocker(blockers, "deployment_audit_prior_modes_invalid", priorModesValid);
+  addBlocker(blockers, "deployment_audit_prior_payment_paths_invalid", audit.priorPaymentReconciliationPathHashes.every(isMpgfCrecCanonicalHash));
+  addBlocker(blockers, "deployment_audit_prior_outcomes_not_all_passed", priorOutcomesPassed);
+  addBlocker(blockers, "deployment_audit_kind_prior_modes_mismatch", kindEvidenceModesCoherent);
+  addBlocker(blockers, "deployment_audit_full_missing_same_path_capped_pilot_prior", fullEvidenceIncludesSamePathPilot);
+  addBlocker(blockers, "deployment_audit_state_not_passed", audit.auditState === "passed");
+  addBlocker(blockers, "deployment_audit_auditor_id_invalid", isMpgfCrecNonEmptyTrimStableString(audit.auditorId));
+  addBlocker(blockers, "deployment_audit_created_at_invalid", isMpgfCrecCanonicalUtcTimestamp(audit.createdAt));
+  addBlocker(blockers, "deployment_audit_created_after_parameter_freeze", timestampLte(audit.createdAt, expected.parametersFrozenAt));
+  addBlocker(blockers, "deployment_audit_hash_invalid", isMpgfCrecCanonicalHash(audit.auditHash));
+  addBlocker(blockers, "deployment_audit_hash_mismatch", audit.auditHash === buildMpgfCrecDeploymentAuditHash(audit));
+
+  return validationResult(blockers);
+}
+
+export function capMpgfCrecDeploymentGrossExposure(
+  input: MpgfCrecDeploymentExposureCapInput,
+): MpgfCrecDeploymentExposureCapResult {
+  const blockers: string[] = [];
+  const deploymentModeValid =
+    (MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_MODES as readonly string[]).includes(input.deploymentMode);
+  const requestedValid = isNonNegativeSafeIntegerCents(input.requestedGrossExposureCents);
+  const pilotCapsNull =
+    input.pilotMaxRoundGrossExposureCents == null &&
+    input.pilotMaxParticipantGrossExposureCents == null;
+  const pilotCapsPositive =
+    isPositiveSafeIntegerCents(input.pilotMaxRoundGrossExposureCents) &&
+    isPositiveSafeIntegerCents(input.pilotMaxParticipantGrossExposureCents);
+
+  addBlocker(blockers, "deployment_exposure_mode_invalid", deploymentModeValid);
+  addBlocker(blockers, "deployment_exposure_requested_gross_invalid", requestedValid);
+
+  if (input.deploymentMode === "shadow") {
+    addBlocker(blockers, "deployment_exposure_shadow_pilot_caps_not_null", pilotCapsNull);
+
+    return {
+      eligible: blockers.length === 0,
+      blockers,
+      cappedGrossExposureCents: 0,
+      bindingOutputAllowed: false,
+      shadowOnly: true,
+    };
+  }
+
+  if (input.deploymentMode === "full") {
+    addBlocker(blockers, "deployment_exposure_full_pilot_caps_not_null", pilotCapsNull);
+
+    return {
+      eligible: blockers.length === 0,
+      blockers,
+      cappedGrossExposureCents: blockers.length === 0 ? input.requestedGrossExposureCents : 0,
+      bindingOutputAllowed: blockers.length === 0,
+      shadowOnly: false,
+    };
+  }
+
+  addBlocker(blockers, "deployment_exposure_capped_pilot_caps_invalid", pilotCapsPositive);
+  addBlocker(
+    blockers,
+    "deployment_exposure_remaining_round_invalid",
+    isNonNegativeSafeIntegerCents(input.remainingRoundDeploymentExposureCents),
+  );
+  addBlocker(
+    blockers,
+    "deployment_exposure_remaining_participant_invalid",
+    isNonNegativeSafeIntegerCents(input.remainingParticipantDeploymentExposureCents),
+  );
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    cappedGrossExposureCents:
+      blockers.length === 0
+        ? Math.min(
+            input.requestedGrossExposureCents,
+            input.pilotMaxRoundGrossExposureCents as number,
+            input.pilotMaxParticipantGrossExposureCents as number,
+            input.remainingRoundDeploymentExposureCents as number,
+            input.remainingParticipantDeploymentExposureCents as number,
+          )
+        : 0,
+    bindingOutputAllowed: blockers.length === 0,
+    shadowOnly: false,
+  };
 }
 
 function projectEligibilityHashPayload(
@@ -2090,6 +2436,7 @@ function failureBonusClaimAuditHashPayload(claim: MpgfCrecFailureBonusClaimRecor
     projectRoundEligibilitySnapshotHash: claim.projectRoundEligibilitySnapshotHash,
     claimantConflictSnapshotHash: claim.claimantConflictSnapshotHash,
     claimantConflictState: claim.claimantConflictState,
+    claimantConflictSourceCutoff: claim.claimantConflictSourceCutoff,
     earlyFailureBonusCutoff: claim.earlyFailureBonusCutoff,
     paymentMethodSavedAt: claim.paymentMethodSavedAt,
     paymentMethodConfirmedAt: claim.paymentMethodConfirmedAt,
@@ -2117,6 +2464,11 @@ function validateMpgfCrecFailureBonusClaimListContext(
     blockers,
     "failure_bonus_claim_context_cutoff_invalid",
     isMpgfCrecCanonicalUtcTimestamp(context.earlyFailureBonusCutoff),
+  );
+  addBlocker(
+    blockers,
+    "failure_bonus_claim_context_conflict_source_cutoff_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(context.claimantConflictSourceCutoff),
   );
   addBlocker(
     blockers,
@@ -2172,6 +2524,16 @@ function validateMpgfCrecFailureBonusClaimRecord(
   );
   addBlocker(blockers, `${prefix}_claimant_conflict_snapshot_hash_invalid`, isMpgfCrecCanonicalHash(claim.claimantConflictSnapshotHash));
   addBlocker(blockers, `${prefix}_claimant_conflict_not_clear`, claim.claimantConflictState === "no_conflict");
+  addBlocker(
+    blockers,
+    `${prefix}_claimant_conflict_source_cutoff_invalid`,
+    isMpgfCrecCanonicalUtcTimestamp(claim.claimantConflictSourceCutoff),
+  );
+  addBlocker(
+    blockers,
+    `${prefix}_claimant_conflict_source_cutoff_mismatch`,
+    claim.claimantConflictSourceCutoff === context.claimantConflictSourceCutoff,
+  );
   addBlocker(blockers, `${prefix}_cutoff_invalid`, isMpgfCrecCanonicalUtcTimestamp(claim.earlyFailureBonusCutoff));
   addBlocker(blockers, `${prefix}_wrong_cutoff`, claim.earlyFailureBonusCutoff === context.earlyFailureBonusCutoff);
   addBlocker(blockers, `${prefix}_payment_method_saved_at_invalid`, isMpgfCrecCanonicalUtcTimestamp(claim.paymentMethodSavedAt));
@@ -2297,6 +2659,179 @@ export function selectMpgfCrecFinalFailureBonusPayoutClaims(
   return selectMpgfCrecFailureBonusClaimsForMutation(claims, context, "final_payout");
 }
 
+function buildMpgfCrecFailureBonusClaimFromCreationInput(
+  input: MpgfCrecFailureBonusClaimCreationInput,
+): MpgfCrecFailureBonusClaimRecord {
+  const claim: MpgfCrecFailureBonusClaimRecord = {
+    id: input.id,
+    roundId: input.roundId,
+    projectId: input.projectId,
+    participantId: input.participantId,
+    commonGroundBudgetId: input.commonGroundBudgetId,
+    conditionalTradeIntentId: input.conditionalTradeIntentId,
+    failureBonusPolicyVersion: input.failureBonusPolicyVersion,
+    claimState: input.creationMode === "qualified_payout_path" ? "approved" : "pending",
+    denialReason: null,
+    payoutRef: null,
+    resolvedAt: null,
+    createdAt: input.createdAt,
+    failureReason: input.failureReason,
+    clearingInputBundleHash: input.clearingInputBundleHash,
+    paymentCommitmentSnapshotHash: input.paymentCommitmentSnapshotHash,
+    projectRoundEligibilitySnapshotHash: input.projectRoundEligibilitySnapshotHash,
+    claimantConflictSnapshotHash: input.claimantConflictSnapshotHash,
+    claimantConflictState: input.claimantConflictState,
+    claimantConflictSourceCutoff: input.claimantConflictSourceCutoff,
+    earlyFailureBonusCutoff: input.earlyFailureBonusCutoff,
+    paymentMethodSavedAt: input.paymentMethodSavedAt,
+    paymentMethodConfirmedAt: input.paymentMethodConfirmedAt,
+    failedQualifiedMatchEligibleCents: input.failedQualifiedMatchEligibleCents,
+    rawBonusCents: 0,
+    participantRoundCapCents: 0,
+    participantCappedProvisionalBonusCents: 0,
+    bonusCents: 0,
+    finalFailureBonusCents: 0,
+    prorationFactorBps: 10_000,
+    eligibilityInputsHash: "",
+  };
+
+  return {
+    ...claim,
+    eligibilityInputsHash: buildMpgfCrecFailureBonusClaimAuditContextHash(claim),
+  };
+}
+
+function failureBonusClaimCreationContextMatches(
+  existing: MpgfCrecFailureBonusClaimRecord,
+  candidate: MpgfCrecFailureBonusClaimRecord,
+) {
+  return (
+    existing.failureBonusPolicyVersion === candidate.failureBonusPolicyVersion &&
+    existing.failureReason === candidate.failureReason &&
+    existing.clearingInputBundleHash === candidate.clearingInputBundleHash &&
+    existing.paymentCommitmentSnapshotHash === candidate.paymentCommitmentSnapshotHash &&
+    existing.projectRoundEligibilitySnapshotHash === candidate.projectRoundEligibilitySnapshotHash &&
+    existing.claimantConflictSnapshotHash === candidate.claimantConflictSnapshotHash &&
+    existing.claimantConflictState === candidate.claimantConflictState &&
+    existing.claimantConflictSourceCutoff === candidate.claimantConflictSourceCutoff &&
+    existing.earlyFailureBonusCutoff === candidate.earlyFailureBonusCutoff &&
+    existing.paymentMethodSavedAt === candidate.paymentMethodSavedAt &&
+    existing.paymentMethodConfirmedAt === candidate.paymentMethodConfirmedAt &&
+    existing.failedQualifiedMatchEligibleCents === candidate.failedQualifiedMatchEligibleCents &&
+    existing.eligibilityInputsHash === candidate.eligibilityInputsHash
+  );
+}
+
+export function createMpgfCrecFailureBonusClaim(
+  input: MpgfCrecFailureBonusClaimCreationInput,
+): MpgfCrecFailureBonusClaimCreationResult {
+  const gate = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: input.roundStatus,
+    operation: "failure_bonus_claim_creation",
+    backedFailureBonusPoolCents: input.backedFailureBonusPoolCents,
+  });
+  const blockers = [...gate.blockers];
+  const idempotencyKey = buildMpgfCrecFailureBonusClaimKey(input);
+  const candidate = buildMpgfCrecFailureBonusClaimFromCreationInput(input);
+  const context: MpgfCrecFailureBonusClaimListContext = {
+    roundId: input.roundId,
+    failureBonusPolicyVersion: input.failureBonusPolicyVersion,
+    roundStatus: input.roundStatus,
+    backedFailureBonusPoolCents: input.backedFailureBonusPoolCents,
+    earlyFailureBonusCutoff: input.earlyFailureBonusCutoff,
+    claimantConflictSourceCutoff: input.claimantConflictSourceCutoff,
+  };
+  const matchingClaims = input.existingClaims.filter(
+    (claim) =>
+      claim.roundId === input.roundId &&
+      claim.projectId === input.projectId &&
+      claim.participantId === input.participantId &&
+      claim.conditionalTradeIntentId === input.conditionalTradeIntentId,
+  );
+
+  addBlocker(blockers, "failure_bonus_claim_idempotency_key_invalid", idempotencyKey != null);
+  addBlocker(blockers, "failure_bonus_claim_project_not_failed", input.projectFailed === true);
+  if (input.creationMode === "qualified_payout_path") {
+    addBlocker(
+      blockers,
+      "failure_bonus_claim_creation_not_fully_qualified",
+      input.failureBonusEligibilityQualified === true,
+    );
+  }
+  addBlocker(blockers, "failure_bonus_claim_duplicate_same_key", matchingClaims.length <= 1);
+  validateMpgfCrecFailureBonusClaimListContext(context, blockers);
+  validateMpgfCrecFailureBonusClaimRecord(candidate, context, blockers, 0, "preliminary_mutation");
+
+  if (blockers.length > 0) {
+    return {
+      eligible: false,
+      action: "manual_review",
+      blockers,
+      idempotencyKey,
+      claim: null,
+    };
+  }
+
+  if (matchingClaims.length === 1) {
+    const [existing] = matchingClaims;
+
+    if (failureBonusClaimCreationContextMatches(existing, candidate)) {
+      return {
+        eligible: true,
+        action: "noop_replay",
+        blockers: [],
+        idempotencyKey,
+        claim: existing,
+      };
+    }
+
+    return {
+      eligible: false,
+      action: "manual_review",
+      blockers: ["failure_bonus_claim_idempotency_context_mismatch"],
+      idempotencyKey,
+      claim: null,
+    };
+  }
+
+  return {
+    eligible: true,
+    action: "create",
+    blockers: [],
+    idempotencyKey,
+    claim: candidate,
+  };
+}
+
+export function settleMpgfCrecFailureBonusClaim(
+  input: MpgfCrecFailureBonusClaimSettlementInput,
+): MpgfCrecFailureBonusClaimSettlementResult {
+  const selection = selectMpgfCrecFinalFailureBonusPayoutClaims([input.claim], input.context);
+  const blockers = [...selection.blockers];
+
+  addBlocker(blockers, "failure_bonus_claim_settlement_payout_ref_invalid", isMpgfCrecNonEmptyTrimStableString(input.payoutRef));
+  addBlocker(blockers, "failure_bonus_claim_settlement_resolved_at_invalid", isMpgfCrecCanonicalUtcTimestamp(input.resolvedAt));
+
+  if (blockers.length > 0) {
+    return {
+      eligible: false,
+      blockers,
+      claim: null,
+    };
+  }
+
+  return {
+    eligible: true,
+    blockers: [],
+    claim: {
+      ...input.claim,
+      claimState: input.settlementState,
+      payoutRef: input.payoutRef,
+      resolvedAt: input.resolvedAt,
+    },
+  };
+}
+
 export function buildMpgfCrecV1125ClearingContractSummary() {
   const summary = {
     policy: MPGF_PUBLIC_GOODS_CRECM_V1125_CLEARING_POLICY,
@@ -2343,6 +2878,21 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       ],
       finalClearingUsesSourceCutoffExactlyAtRoundClose: true,
       finalClearingMatchesCalculationVersion: true,
+    },
+    deploymentAudits: {
+      supportedAuditKinds: MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_KINDS,
+      targetModes: MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_TARGET_MODES,
+      priorModes: MPGF_PUBLIC_GOODS_CRECM_V1125_DEPLOYMENT_AUDIT_PRIOR_MODES,
+      priorOutcomeMustBePassed: true,
+      priorEvidenceArraysMustBeEqualLength: true,
+      priorRoundIdsDuplicateFreeAndNoCurrentRound: true,
+      selectedAuditCreatedNoLaterThanParameterFreeze: true,
+      fullDeploymentRequiresSamePathCappedPilotPrior: true,
+      auditHashBindsCurrentPaymentReconciliationPath: true,
+      auditHashBindsOptimizationPolicyHash: true,
+      cappedPilotExposureUsesFrozenCapsAndRemainingMaps: true,
+      remainingExposureMapsCannotRaiseFrozenPilotCaps: true,
+      shadowBindingExposureCentsAlwaysZero: true,
     },
     feeQuotes: {
       feePolicyHashBoundQuoteHashRequired: true,
@@ -2406,6 +2956,11 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       claimantConflictMustBeNoConflict: true,
       sponsorBudgetFivePercentCapUsesIntegerArithmetic: true,
       idempotentClaimKey: "(roundId,projectId,participantId,conditionalTradeIntentId)" as const,
+      claimCreationInitializesUnsettledDefaults: true,
+      claimCreationMismatchesFailClosedToManualReview: true,
+      finalPayoutListsRequireApprovedUnsettledClaims: true,
+      preliminaryMutationListsRejectTerminalOrSettledClaims: true,
+      successfulSettlementAdvancesClaimStateToPaidOrCredited: true,
       rawBonusCentsFormula: "floor(failedQualifiedMatchEligibleCents / 10)" as const,
     },
   };

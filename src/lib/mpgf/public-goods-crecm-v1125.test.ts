@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildMpgfCrecContributorBenefitContextHash,
   buildMpgfCrecCoordinationCreditLedgerEntryHash,
+  buildMpgfCrecDeploymentAuditHash,
   buildMpgfCrecFailureBonusClaimAuditContextHash,
   buildMpgfCrecFailureBonusEligibilityInputsHash,
   buildMpgfCrecAuthorizationReconciliationEventHash,
@@ -17,6 +18,8 @@ import {
   buildMpgfCrecRoundMoralBucketSnapshotHash,
   buildMpgfCrecSuccessRewardClaimHash,
   buildMpgfCrecV1125ClearingContractSummary,
+  capMpgfCrecDeploymentGrossExposure,
+  createMpgfCrecFailureBonusClaim,
   evaluateMpgfCrecContributorBenefitEligibility,
   evaluateMpgfCrecFailureBonusEligibility,
   evaluateMpgfCrecRoundStatusGate,
@@ -24,10 +27,12 @@ import {
   hashMpgfCrecV1125Value,
   selectMpgfCrecFinalFailureBonusPayoutClaims,
   selectMpgfCrecPreliminaryFailureBonusMutationClaims,
+  settleMpgfCrecFailureBonusClaim,
   sumMpgfCrecSponsorBackedCentsForFinalClearing,
   sumSelectedMpgfCrecSponsorPaidFeeSupportDemand,
   validateMpgfCrecAuthorizationReconciliationEvent,
   validateMpgfCrecCoordinationCreditLedgerEntry,
+  validateMpgfCrecDeploymentAudit,
   validateMpgfCrecFeeQuote,
   validateMpgfCrecImpactCertificateClaim,
   validateMpgfCrecOptimizationRunTrace,
@@ -38,6 +43,7 @@ import {
   type MpgfCrecAuthorizationReconciliationEvent,
   type MpgfCrecContributorBenefitEligibilityInput,
   type MpgfCrecCoordinationCreditLedgerEntry,
+  type MpgfCrecDeploymentAudit,
   type MpgfCrecFailureBonusClaimRecord,
   type MpgfCrecFailureBonusEligibilityInput,
   type MpgfCrecFeeQuote,
@@ -74,6 +80,7 @@ const opensAt = "2026-05-01T00:00:00.000Z";
 const parametersFrozenAt = "2026-04-30T20:00:00.000Z";
 const closesAt = "2026-05-14T00:00:00.000Z";
 const earlyFailureBonusCutoff = "2026-05-07T00:00:00.000Z";
+const roundCloseSourceCutoff = closesAt;
 const createdAt = "2026-04-30T19:00:00.000Z";
 
 test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route contracts", () => {
@@ -297,6 +304,39 @@ function clearingBundle(
   };
 }
 
+function deploymentAudit(
+  overrides: Partial<MpgfCrecDeploymentAudit> = {},
+): MpgfCrecDeploymentAudit {
+  const bundle = clearingBundle();
+  const base: Omit<MpgfCrecDeploymentAudit, "auditHash"> = {
+    id: "deployment-audit-1",
+    roundId,
+    auditKind: "pilot_to_full",
+    targetDeploymentMode: "full",
+    calculationVersion: bundle.calculationVersion,
+    rulebookHash,
+    feePolicyHash: bundle.feePolicyHash,
+    sponsorPoolSourceHash: sourceHash,
+    paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    solverVersion: "glpk-5.0-fixed",
+    priorRoundIds: ["prior-capped-pilot-1"],
+    priorAuditBundleHashes: [h("prior-capped-pilot-audit-bundle")],
+    priorRoundDeploymentModes: ["capped_pilot"],
+    priorPaymentReconciliationPathHashes: [bundle.paymentReconciliationPathHash],
+    priorRoundOutcomeStates: ["passed"],
+    auditState: "passed",
+    auditorId: "deployment-auditor-1",
+    createdAt: parametersFrozenAt,
+    ...overrides,
+  };
+
+  return {
+    ...base,
+    auditHash: overrides.auditHash ?? buildMpgfCrecDeploymentAuditHash(base),
+  };
+}
+
 function sponsorCommitment(
   overrides: Partial<MpgfCrecSponsorCommitment> = {},
 ): MpgfCrecSponsorCommitment {
@@ -485,6 +525,7 @@ function failureBonusClaim(
     projectRoundEligibilitySnapshotHash: projectEligibilitySnapshot().snapshotHash,
     claimantConflictSnapshotHash: h("claimant-conflict"),
     claimantConflictState: "no_conflict",
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
     earlyFailureBonusCutoff,
     paymentMethodSavedAt: "2026-05-05T00:00:00.000Z",
     paymentMethodConfirmedAt: "2026-05-05T00:01:00.000Z",
@@ -503,6 +544,45 @@ function failureBonusClaim(
     ...claim,
     eligibilityInputsHash:
       overrides.eligibilityInputsHash ?? buildMpgfCrecFailureBonusClaimAuditContextHash(claim),
+  };
+}
+
+function failureBonusClaimCreationInput(
+  overrides: Partial<Parameters<typeof createMpgfCrecFailureBonusClaim>[0]> = {},
+): Parameters<typeof createMpgfCrecFailureBonusClaim>[0] {
+  const earlyPaymentSnapshot = paymentSnapshot({
+    snapshotKind: "early_failure_bonus_cutoff",
+    asOf: earlyFailureBonusCutoff,
+    createdAt: earlyFailureBonusCutoff,
+  });
+
+  return {
+    existingClaims: [],
+    creationMode: "qualified_payout_path",
+    roundStatus: "payable",
+    backedFailureBonusPoolCents: 500,
+    failureBonusEligibilityQualified: true,
+    projectFailed: true,
+    id: "failure-claim-1",
+    roundId,
+    projectId,
+    participantId,
+    commonGroundBudgetId,
+    conditionalTradeIntentId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    failureReason: "counterparty_volume_shortfall",
+    clearingInputBundleHash: clearingBundle().bundleHash,
+    paymentCommitmentSnapshotHash: earlyPaymentSnapshot.snapshotHash,
+    projectRoundEligibilitySnapshotHash: projectEligibilitySnapshot().snapshotHash,
+    claimantConflictSnapshotHash: h("claimant-conflict"),
+    claimantConflictState: "no_conflict",
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+    earlyFailureBonusCutoff,
+    paymentMethodSavedAt: "2026-05-05T00:00:00.000Z",
+    paymentMethodConfirmedAt: "2026-05-05T00:01:00.000Z",
+    failedQualifiedMatchEligibleCents: 1_000,
+    createdAt: closesAt,
+    ...overrides,
   };
 }
 
@@ -772,6 +852,205 @@ test("CRECM v1.125 clearing bundles bind selected bundle id, cutoff, versions, a
 
   assert.equal(malformedResult.eligible, false);
   assert.ok(malformedResult.blockers.includes("clearing_input_bundle_hashes_invalid"));
+});
+
+test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps are mode-compatible", () => {
+  const bundle = clearingBundle();
+  const expectedAudit = {
+    roundId,
+    targetDeploymentMode: "full" as const,
+    calculationVersion: bundle.calculationVersion,
+    rulebookHash,
+    feePolicyHash: bundle.feePolicyHash,
+    sponsorPoolSourceHash: sourceHash,
+    paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    parametersFrozenAt,
+  };
+  const audit = deploymentAudit();
+  const result = validateMpgfCrecDeploymentAudit(audit, expectedAudit);
+
+  assert.equal(result.eligible, true);
+
+  const shadowToPilot = deploymentAudit({
+    id: "deployment-audit-shadow-to-pilot",
+    auditKind: "shadow_to_pilot",
+    targetDeploymentMode: "capped_pilot",
+    priorRoundIds: ["prior-shadow-1"],
+    priorAuditBundleHashes: [h("prior-shadow-audit-bundle")],
+    priorRoundDeploymentModes: ["shadow"],
+    priorPaymentReconciliationPathHashes: [bundle.paymentReconciliationPathHash],
+    priorRoundOutcomeStates: ["passed"],
+  });
+  const shadowToPilotResult = validateMpgfCrecDeploymentAudit(shadowToPilot, {
+    ...expectedAudit,
+    targetDeploymentMode: "capped_pilot",
+  });
+
+  assert.equal(shadowToPilotResult.eligible, true);
+
+  const failedPrior = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({ priorRoundOutcomeStates: ["failed"] }),
+    expectedAudit,
+  );
+  assert.equal(failedPrior.eligible, false);
+  assert.ok(failedPrior.blockers.includes("deployment_audit_prior_outcomes_not_all_passed"));
+
+  const postFreeze = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({ createdAt: opensAt }),
+    expectedAudit,
+  );
+  assert.equal(postFreeze.eligible, false);
+  assert.ok(postFreeze.blockers.includes("deployment_audit_created_after_parameter_freeze"));
+
+  const shadowOnlyFull = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({
+      auditKind: "shadow_or_pilot_to_full",
+      priorRoundIds: ["prior-shadow-1"],
+      priorAuditBundleHashes: [h("prior-shadow-audit-bundle")],
+      priorRoundDeploymentModes: ["shadow"],
+      priorPaymentReconciliationPathHashes: [bundle.paymentReconciliationPathHash],
+      priorRoundOutcomeStates: ["passed"],
+    }),
+    expectedAudit,
+  );
+  assert.equal(shadowOnlyFull.eligible, false);
+  assert.ok(shadowOnlyFull.blockers.includes("deployment_audit_full_missing_same_path_capped_pilot_prior"));
+
+  const pilotToFullWithShadowEvidence = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({
+      auditKind: "pilot_to_full",
+      priorRoundIds: ["prior-shadow-1"],
+      priorAuditBundleHashes: [h("prior-shadow-audit-bundle")],
+      priorRoundDeploymentModes: ["shadow"],
+      priorPaymentReconciliationPathHashes: [bundle.paymentReconciliationPathHash],
+      priorRoundOutcomeStates: ["passed"],
+    }),
+    expectedAudit,
+  );
+  assert.equal(pilotToFullWithShadowEvidence.eligible, false);
+  assert.ok(pilotToFullWithShadowEvidence.blockers.includes("deployment_audit_kind_prior_modes_mismatch"));
+
+  const selfReference = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({ priorRoundIds: [roundId] }),
+    expectedAudit,
+  );
+  assert.equal(selfReference.eligible, false);
+  assert.ok(selfReference.blockers.includes("deployment_audit_prior_round_self_reference"));
+
+  const lengthMismatch = validateMpgfCrecDeploymentAudit(
+    deploymentAudit({ priorRoundIds: ["prior-capped-pilot-1", "prior-capped-pilot-2"] }),
+    expectedAudit,
+  );
+  assert.equal(lengthMismatch.eligible, false);
+  assert.ok(lengthMismatch.blockers.includes("deployment_audit_prior_evidence_lengths_invalid"));
+
+  const shadowWithCaps = validateMpgfCrecRoundClearingInputBundle(
+    clearingBundle({ deploymentMode: "shadow" }),
+    {
+      roundId,
+      rulebookHash,
+      feePolicyVersion: bundle.feePolicyVersion,
+      feePolicyHash: bundle.feePolicyHash,
+      deploymentMode: "shadow",
+      pilotMaxRoundGrossExposureCents: null,
+      pilotMaxParticipantGrossExposureCents: null,
+      deploymentAuditState: "not_required",
+      deploymentAuditId: null,
+      deploymentAuditHash: null,
+      paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+      optimizationPolicyHash: bundle.optimizationPolicyHash,
+      calculationVersion: bundle.calculationVersion,
+      sourceCutoffAt: closesAt,
+    },
+  );
+  assert.equal(shadowWithCaps.eligible, false);
+  assert.ok(shadowWithCaps.blockers.includes("clearing_input_bundle_pilot_caps_invalid"));
+
+  const cappedPilotWithoutCaps = validateMpgfCrecRoundClearingInputBundle(
+    clearingBundle({
+      pilotMaxRoundGrossExposureCents: null,
+      pilotMaxParticipantGrossExposureCents: null,
+    }),
+    {
+      roundId,
+      rulebookHash,
+      feePolicyVersion: bundle.feePolicyVersion,
+      feePolicyHash: bundle.feePolicyHash,
+      deploymentMode: "capped_pilot",
+      pilotMaxRoundGrossExposureCents: null,
+      pilotMaxParticipantGrossExposureCents: null,
+      deploymentAuditState: "not_required",
+      deploymentAuditId: null,
+      deploymentAuditHash: null,
+      paymentReconciliationPathHash: bundle.paymentReconciliationPathHash,
+      optimizationPolicyHash: bundle.optimizationPolicyHash,
+      calculationVersion: bundle.calculationVersion,
+      sourceCutoffAt: closesAt,
+    },
+  );
+  assert.equal(cappedPilotWithoutCaps.eligible, false);
+  assert.ok(cappedPilotWithoutCaps.blockers.includes("clearing_input_bundle_pilot_caps_invalid"));
+
+  const cappedExposure = capMpgfCrecDeploymentGrossExposure({
+    deploymentMode: "capped_pilot",
+    requestedGrossExposureCents: 50_000,
+    pilotMaxRoundGrossExposureCents: 100_000,
+    pilotMaxParticipantGrossExposureCents: 10_000,
+    remainingRoundDeploymentExposureCents: 75_000,
+    remainingParticipantDeploymentExposureCents: 8_000,
+  });
+  assert.equal(cappedExposure.eligible, true);
+  assert.equal(cappedExposure.cappedGrossExposureCents, 8_000);
+  assert.equal(cappedExposure.bindingOutputAllowed, true);
+
+  const highRemainingMapsStillRespectFrozenCaps = capMpgfCrecDeploymentGrossExposure({
+    deploymentMode: "capped_pilot",
+    requestedGrossExposureCents: 50_000,
+    pilotMaxRoundGrossExposureCents: 9_000,
+    pilotMaxParticipantGrossExposureCents: 7_000,
+    remainingRoundDeploymentExposureCents: 500_000,
+    remainingParticipantDeploymentExposureCents: 500_000,
+  });
+  assert.equal(highRemainingMapsStillRespectFrozenCaps.eligible, true);
+  assert.equal(highRemainingMapsStillRespectFrozenCaps.cappedGrossExposureCents, 7_000);
+
+  const malformedRemainingExposure = capMpgfCrecDeploymentGrossExposure({
+    deploymentMode: "capped_pilot",
+    requestedGrossExposureCents: 50_000,
+    pilotMaxRoundGrossExposureCents: 100_000,
+    pilotMaxParticipantGrossExposureCents: 10_000,
+    remainingRoundDeploymentExposureCents: -1,
+    remainingParticipantDeploymentExposureCents: 8_000,
+  });
+  assert.equal(malformedRemainingExposure.eligible, false);
+  assert.equal(malformedRemainingExposure.cappedGrossExposureCents, 0);
+  assert.ok(malformedRemainingExposure.blockers.includes("deployment_exposure_remaining_round_invalid"));
+
+  const shadowExposure = capMpgfCrecDeploymentGrossExposure({
+    deploymentMode: "shadow",
+    requestedGrossExposureCents: 50_000,
+    pilotMaxRoundGrossExposureCents: null,
+    pilotMaxParticipantGrossExposureCents: null,
+    remainingRoundDeploymentExposureCents: null,
+    remainingParticipantDeploymentExposureCents: null,
+  });
+  assert.equal(shadowExposure.eligible, true);
+  assert.equal(shadowExposure.cappedGrossExposureCents, 0);
+  assert.equal(shadowExposure.bindingOutputAllowed, false);
+  assert.equal(shadowExposure.shadowOnly, true);
+
+  const fullWithPilotCaps = capMpgfCrecDeploymentGrossExposure({
+    deploymentMode: "full",
+    requestedGrossExposureCents: 50_000,
+    pilotMaxRoundGrossExposureCents: 100_000,
+    pilotMaxParticipantGrossExposureCents: 10_000,
+    remainingRoundDeploymentExposureCents: null,
+    remainingParticipantDeploymentExposureCents: null,
+  });
+  assert.equal(fullWithPilotCaps.eligible, false);
+  assert.equal(fullWithPilotCaps.cappedGrossExposureCents, 0);
+  assert.ok(fullWithPilotCaps.blockers.includes("deployment_exposure_full_pilot_caps_not_null"));
 });
 
 test("CRECM v1.125 project eligibility snapshots bind exact round-open booleans", () => {
@@ -1271,6 +1550,7 @@ test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, 
     roundStatus: "payable",
     backedFailureBonusPoolCents: 500,
     earlyFailureBonusCutoff,
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
   };
   const claim = failureBonusClaim();
 
@@ -1348,12 +1628,165 @@ test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, 
   assert.ok(unbacked.blockers.includes("failure_bonus_backed_pool_not_positive_for_mutation"));
 });
 
+test("CRECM v1.125 failure-bonus claim creation initializes defaults and is idempotent by claim key", () => {
+  const created = createMpgfCrecFailureBonusClaim(failureBonusClaimCreationInput());
+
+  assert.equal(created.eligible, true);
+  assert.equal(created.action, "create");
+  assert.equal(created.idempotencyKey, `${roundId}:${projectId}:${participantId}:${conditionalTradeIntentId}`);
+  if (!created.claim) {
+    throw new Error("Expected a created failure-bonus claim.");
+  }
+
+  assert.equal(created.claim.claimState, "approved");
+  assert.equal(created.claim.denialReason, null);
+  assert.equal(created.claim.payoutRef, null);
+  assert.equal(created.claim.resolvedAt, null);
+  assert.equal(created.claim.rawBonusCents, 0);
+  assert.equal(created.claim.participantRoundCapCents, 0);
+  assert.equal(created.claim.participantCappedProvisionalBonusCents, 0);
+  assert.equal(created.claim.bonusCents, 0);
+  assert.equal(created.claim.finalFailureBonusCents, 0);
+  assert.equal(created.claim.prorationFactorBps, 10_000);
+  assert.equal(
+    created.claim.eligibilityInputsHash,
+    buildMpgfCrecFailureBonusClaimAuditContextHash(created.claim),
+  );
+
+  const replay = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({ existingClaims: [created.claim] }),
+  );
+  assert.equal(replay.eligible, true);
+  assert.equal(replay.action, "noop_replay");
+  assert.equal(replay.claim, created.claim);
+
+  const mismatch = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({
+      existingClaims: [created.claim],
+      clearingInputBundleHash: h("different-clearing-bundle"),
+    }),
+  );
+  assert.equal(mismatch.eligible, false);
+  assert.equal(mismatch.action, "manual_review");
+  assert.ok(mismatch.blockers.includes("failure_bonus_claim_idempotency_context_mismatch"));
+
+  const intakeOnly = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({
+      id: "failure-claim-intake-1",
+      creationMode: "intake_only_review",
+      failureBonusEligibilityQualified: false,
+    }),
+  );
+  assert.equal(intakeOnly.eligible, true);
+  assert.equal(intakeOnly.action, "create");
+  assert.equal(intakeOnly.claim?.claimState, "pending");
+
+  const unqualifiedPayoutPath = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({ failureBonusEligibilityQualified: false }),
+  );
+  assert.equal(unqualifiedPayoutPath.eligible, false);
+  assert.ok(unqualifiedPayoutPath.blockers.includes("failure_bonus_claim_creation_not_fully_qualified"));
+
+  const nonPayable = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({ roundStatus: "closed" }),
+  );
+  assert.equal(nonPayable.eligible, false);
+  assert.ok(nonPayable.blockers.includes("round_status_not_payable_for_side_effect"));
+
+  const duplicate = createMpgfCrecFailureBonusClaim(
+    failureBonusClaimCreationInput({ existingClaims: [created.claim, created.claim] }),
+  );
+  assert.equal(duplicate.eligible, false);
+  assert.ok(duplicate.blockers.includes("failure_bonus_claim_duplicate_same_key"));
+});
+
+test("CRECM v1.125 failure-bonus settlement advances only approved unsettled payable claims", () => {
+  const context = {
+    roundId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    roundStatus: "payable",
+    backedFailureBonusPoolCents: 500,
+    earlyFailureBonusCutoff,
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+  };
+  const claim = failureBonusClaim();
+
+  const paid = settleMpgfCrecFailureBonusClaim({
+    claim,
+    context,
+    settlementState: "paid",
+    payoutRef: "stripe-payout-1",
+    resolvedAt: "2026-05-15T00:00:00.000Z",
+  });
+  assert.equal(paid.eligible, true);
+  assert.equal(paid.claim?.claimState, "paid");
+  assert.equal(paid.claim?.payoutRef, "stripe-payout-1");
+  assert.equal(paid.claim?.resolvedAt, "2026-05-15T00:00:00.000Z");
+
+  const credited = settleMpgfCrecFailureBonusClaim({
+    claim,
+    context,
+    settlementState: "credited",
+    payoutRef: "platform-credit-1",
+    resolvedAt: "2026-05-15T00:00:00.000Z",
+  });
+  assert.equal(credited.eligible, true);
+  assert.equal(credited.claim?.claimState, "credited");
+
+  const paidAgain = settleMpgfCrecFailureBonusClaim({
+    claim: failureBonusClaim({
+      claimState: "paid",
+      payoutRef: "stripe-payout-1",
+      resolvedAt: "2026-05-15T00:00:00.000Z",
+    }),
+    context,
+    settlementState: "paid",
+    payoutRef: "stripe-payout-2",
+    resolvedAt: "2026-05-16T00:00:00.000Z",
+  });
+  assert.equal(paidAgain.eligible, false);
+  assert.ok(paidAgain.blockers.includes("failure_bonus_claim_0_not_unsettled_approved"));
+  assert.ok(paidAgain.blockers.includes("failure_bonus_claim_0_payout_ref_present"));
+
+  const invalidSettlementEvidence = settleMpgfCrecFailureBonusClaim({
+    claim,
+    context,
+    settlementState: "paid",
+    payoutRef: " payout-1 ",
+    resolvedAt: "2026-05-15",
+  });
+  assert.equal(invalidSettlementEvidence.eligible, false);
+  assert.ok(invalidSettlementEvidence.blockers.includes("failure_bonus_claim_settlement_payout_ref_invalid"));
+  assert.ok(invalidSettlementEvidence.blockers.includes("failure_bonus_claim_settlement_resolved_at_invalid"));
+
+  const closedRound = settleMpgfCrecFailureBonusClaim({
+    claim,
+    context: {
+      ...context,
+      roundStatus: "closed",
+    },
+    settlementState: "paid",
+    payoutRef: "stripe-payout-1",
+    resolvedAt: "2026-05-15T00:00:00.000Z",
+  });
+  assert.equal(closedRound.eligible, false);
+  assert.ok(closedRound.blockers.includes("round_status_not_payable_for_side_effect"));
+});
+
 test("CRECM v1.125 rulebook summary names the executable contract predicates", () => {
   const summary = buildMpgfCrecV1125ClearingContractSummary();
 
   assert.equal(summary.policy, "crecm_v1_125_fail_closed_round_close_clearing_contract");
   assert.equal(summary.paymentCommitmentSnapshots.exactCutoffBindingRequired, true);
   assert.equal(summary.roundClearingInputBundle.bundleHashBindsSelectedBundleId, true);
+  assert.equal(summary.deploymentAudits.priorOutcomeMustBePassed, true);
+  assert.equal(summary.deploymentAudits.priorEvidenceArraysMustBeEqualLength, true);
+  assert.equal(summary.deploymentAudits.selectedAuditCreatedNoLaterThanParameterFreeze, true);
+  assert.equal(summary.deploymentAudits.fullDeploymentRequiresSamePathCappedPilotPrior, true);
+  assert.equal(summary.deploymentAudits.auditHashBindsCurrentPaymentReconciliationPath, true);
+  assert.equal(summary.deploymentAudits.cappedPilotExposureUsesFrozenCapsAndRemainingMaps, true);
+  assert.equal(summary.deploymentAudits.remainingExposureMapsCannotRaiseFrozenPilotCaps, true);
+  assert.equal(summary.deploymentAudits.shadowBindingExposureCentsAlwaysZero, true);
   assert.equal(summary.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
   assert.equal(summary.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
@@ -1367,5 +1800,10 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(summary.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
   assert.ok(summary.failureBonus.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
+  assert.equal(summary.failureBonus.claimCreationInitializesUnsettledDefaults, true);
+  assert.equal(summary.failureBonus.claimCreationMismatchesFailClosedToManualReview, true);
+  assert.equal(summary.failureBonus.finalPayoutListsRequireApprovedUnsettledClaims, true);
+  assert.equal(summary.failureBonus.preliminaryMutationListsRejectTerminalOrSettledClaims, true);
+  assert.equal(summary.failureBonus.successfulSettlementAdvancesClaimStateToPaidOrCredited, true);
   assert.match(summary.calcHash, /^sha256:[0-9a-f]{64}$/);
 });
