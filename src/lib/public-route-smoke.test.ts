@@ -2765,6 +2765,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleSource, /policy_bundle_contract_validator/);
   assert.match(releaseGateSource, /getMoralTradeReleaseGateContract/);
   assert.match(releaseGateSource, /evaluateMoralTradeReleaseGate/);
+  assert.match(releaseGateSource, /MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS/);
+  assert.match(releaseGateSource, /marketplace_intake_triage_routing_test/);
+  assert.match(releaseGateSource, /participant_ui_render_snapshot_accessibility_test/);
+  assert.match(releaseGateSource, /public_receipt_anti_gamification_test/);
+  assert.match(releaseGateSource, /micro_pledge_preperformance_lock_test/);
   assert.match(releaseGateSource, /moral_trade_policy_snapshots/);
   assert.match(releaseGateSource, /moral_trade_release_gate_requirement_results/);
   assert.match(releaseGateSource, /waiver_without_neutral_review/);

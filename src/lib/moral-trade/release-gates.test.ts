@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { POST as enforceReleaseGate } from "@/app/api/moral-trade/release-gates/enforce/route";
 
 import {
+  MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS,
   evaluateMoralTradeReleaseGate,
   getMoralTradeReleaseGateContract,
   validateMoralTradeReleaseGateContract,
@@ -70,6 +71,12 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.blockers.length, 0);
+  assert.equal(MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.length, 93);
+  assert.ok(
+    MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.every((key) =>
+      contract.requirementDefinitions.some((requirement) => requirement.key === key),
+    ),
+  );
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_policy_snapshots"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_release_gate_requirement_results"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_privileged_action_records"));
@@ -147,6 +154,34 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
         /matched volume alone/i.test(requirement.description),
     ),
   );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "marketplace_intake_triage_routing_test" &&
+        /routes ordinary donations/i.test(requirement.description),
+    ),
+  );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "participant_ui_render_snapshot_accessibility_test" &&
+        /hash-backed render snapshots/i.test(requirement.description),
+    ),
+  );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "public_receipt_anti_gamification_test" &&
+        /leaderboards/i.test(requirement.description),
+    ),
+  );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "micro_pledge_preperformance_lock_test" &&
+        /pre-performance locks/i.test(requirement.description),
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -158,8 +193,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
   assert.equal(evaluation.requiredRequirementCount, 5);
-  assert.equal(evaluation.inactiveRequirementCount, 64);
-  assert.equal(evaluation.notRequiredRequirementCount, 64);
+  assert.equal(evaluation.inactiveRequirementCount, 88);
+  assert.equal(evaluation.notRequiredRequirementCount, 88);
 });
 
 test("missing required and inactive-control results fail closed", () => {

@@ -1,5 +1,5 @@
 export const MORAL_TRADE_RELEASE_GATE_CONTRACT_VERSION =
-  "moral-trade-release-gates-v0.1-2026-06";
+  "moral-trade-release-gates-v0.2-2026-06";
 export const MORAL_TRADE_RELEASE_GATE_VALIDATOR_VERSION =
   "moral-trade-release-gate-validator-v0.1";
 
@@ -198,7 +198,7 @@ const PRIVILEGED_ACTION_KEYS = [
   "nonroutine_refund_cancellation",
 ] as const;
 
-export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS = [
+export const MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS = [
   "dry_run_calculation_bundle",
   "route_health_baseline",
   "privacy_review",
@@ -214,10 +214,26 @@ export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS = [
   "environment_data_isolation_check",
   "donation_offset_lock_confirmation_test",
   "non_public_goods_term_sheet_test",
+  "marketplace_intake_triage_routing_test",
+  "participant_ui_ux_progressive_disclosure_test",
+  "participant_ui_render_snapshot_accessibility_test",
+  "plain_language_copy_contract_test",
+  "participant_task_card_simplification_test",
+  "safe_template_default_disclosure_test",
+  "public_moral_trade_page_simplification_test",
+  "offset_creation_route_happy_path_test",
+  "worked_example_card_simplification_test",
+  "technical_detail_progressive_disclosure_test",
   "counterparty_blinding_staged_disclosure_test",
   "recipient_acceptance_association_test",
   "ai_preference_elicitation_boundary_test",
   "post_clear_audit_sampling_test",
+  "public_receipt_card_publication_test",
+  "public_receipt_causal_wording_and_reuse_test",
+  "public_receipt_net_personal_contribution_test",
+  "public_receipt_anti_gamification_test",
+  "public_receipt_authenticity_revocation_test",
+  "public_receipt_social_pressure_sensitive_action_test",
   "approved_trade_template_parameter_test",
   "review_capacity_admission_queue_test",
   "non_public_goods_subsidy_schedule_test",
@@ -226,6 +242,14 @@ export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS = [
   "resource_compatibility_assessment_test",
   "net_offset_accounting_test",
   "pledge_swap_performance_terms_test",
+  "behavioral_micro_pledge_duration_test",
+  "behavioral_micro_pledge_evidence_ladder_test",
+  "behavioral_micro_pledge_unit_baseline_test",
+  "micro_pledge_sequence_cumulative_cap_test",
+  "food_abstention_health_safety_boundary_test",
+  "behavioral_micro_pledge_low_stakes_cap_test",
+  "micro_pledge_unit_settlement_test",
+  "micro_pledge_preperformance_lock_test",
   "commitment_inventory_double_count_test",
   "atomic_settlement_group_test",
   "pledge_swap_synchronized_performance_test",
@@ -270,11 +294,14 @@ export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS = [
   "pledge_performance_bond_neutral_forfeiture_test",
 ] as const;
 
-type Moraltrade68ReleaseGateRequirementKey =
-  (typeof MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS)[number];
+export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS =
+  MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS;
 
-const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEY_SET = new Set<string>(
-  MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS,
+type Moraltrade82ReleaseGateRequirementKey =
+  (typeof MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS)[number];
+
+const MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEY_SET = new Set<string>(
+  MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS,
 );
 
 function titleCaseRequirementKey(key: string) {
@@ -284,8 +311,8 @@ function titleCaseRequirementKey(key: string) {
     .join(" ");
 }
 
-function categoryForMoraltrade68Requirement(
-  key: Moraltrade68ReleaseGateRequirementKey,
+function categoryForMoraltrade82Requirement(
+  key: Moraltrade82ReleaseGateRequirementKey,
 ): MoralTradeReleaseGateRequirementDefinition["category"] {
   if (
     /payment|donor|settlement|fx|reconciliation|capture|payout|atomic|commitment_inventory/.test(
@@ -303,7 +330,11 @@ function categoryForMoraltrade68Requirement(
     return "evidence";
   }
 
-  if (/participant|consent|term_sheet|autonomy|moral_difference|trade_burden/.test(key)) {
+  if (
+    /participant|consent|term_sheet|autonomy|moral_difference|trade_burden|marketplace_intake|plain_language|task_card|offset_creation|worked_example|technical_detail|micro_pledge|pledge_preperformance/.test(
+      key,
+    )
+  ) {
     return "participant";
   }
 
@@ -311,11 +342,15 @@ function categoryForMoraltrade68Requirement(
     return "recipient";
   }
 
-  if (/metric|net_offset|cause_bucket|classification|intrapersonal/.test(key)) {
+  if (/metric|net_offset|cause_bucket|classification|intrapersonal|public_receipt/.test(key)) {
     return "metrics";
   }
 
-  if (/schema|deployment|rollback|environment|control_applicability|tier_scope/.test(key)) {
+  if (
+    /schema|deployment|rollback|environment|control_applicability|tier_scope|public_moral_trade_page/.test(
+      key,
+    )
+  ) {
     return "operations";
   }
 
@@ -338,7 +373,7 @@ function categoryForMoraltrade68Requirement(
   return "review";
 }
 
-function descriptionForMoraltrade68Requirement(key: Moraltrade68ReleaseGateRequirementKey) {
+function descriptionForMoraltrade82Requirement(key: Moraltrade82ReleaseGateRequirementKey) {
   switch (key) {
     case "dry_run_calculation_bundle":
       return "A deterministic dry-run calculation, input bundle hash, excluded-record list, and replay evidence exist before stage promotion.";
@@ -354,13 +389,61 @@ function descriptionForMoraltrade68Requirement(key: Moraltrade68ReleaseGateRequi
       return "Donation-offset and pledge-swap pilots have reviewed market simulation, replay, red-team, participant-comprehension, and abuse-case evidence.";
     case "pilot_exit_criteria_test":
       return "Pilot promotion requires pre-registered scale-up, pause, rollback, and non-volume success criteria; matched volume alone is insufficient.";
+    case "marketplace_intake_triage_routing_test":
+      return "Marketplace intake routes ordinary donations, matching, services, self-offsets, external CRECM/public-goods work, background networking, and unsupported requests away from the non-public-goods lock path unless corrected and reviewed.";
+    case "participant_ui_ux_progressive_disclosure_test":
+      return "Participant UI separates intake, template gallery, guided builder, draft preview, review queue, matched-lock proposal, final confirmation, dashboard, and receipt publication into task-oriented progressive-disclosure surfaces.";
+    case "participant_ui_render_snapshot_accessibility_test":
+      return "Reliance-bearing or money-affecting participant screens produce hash-backed render snapshots with accessibility, visible-field, redaction, CTA, term-sheet, and maximum-exposure evidence.";
+    case "plain_language_copy_contract_test":
+      return "Participant copy maps control-plane states to one-sentence summaries, key facts, next actions, and optional details without using internal control codes as primary explanations.";
+    case "participant_task_card_simplification_test":
+      return "Participant task cards use one primary action, bounded key facts, stable term labels, and safe next steps instead of competing CTAs or validator walls.";
+    case "safe_template_default_disclosure_test":
+      return "Template defaults may simplify drafting only when every default affecting money, obligations, privacy, evidence, duration, failure handling, or publication is shown in preview and the term sheet.";
+    case "public_moral_trade_page_simplification_test":
+      return "Public Moral Trade pages keep safety concepts but collapse validator detail, internal enums, factor codes, and route diagnostics behind plain-language task surfaces.";
+    case "offset_creation_route_happy_path_test":
+      return "Signed-out donation-offset creation has a concrete draft/preview path and explains that sign-in is required before save, publication, review, disclosure, money authorization, or live-offer creation.";
+    case "worked_example_card_simplification_test":
+      return "Worked-example cards are lightweight teaching cards with status, trade type, terms, evidence, review state, and one primary action; technical proof detail stays in drawers or reviewer surfaces.";
+    case "technical_detail_progressive_disclosure_test":
+      return "Technical detail remains available through labelled details drawers or technical pages while primary public and participant copy stays plain-language and action-oriented.";
+    case "public_receipt_card_publication_test":
+      return "Completed non-public-goods trades can offer opt-in public receipt cards only after reconciliation, challenge, privacy-publication, recipient-association, content-moderation, and public-metric checks are non-blocking.";
+    case "public_receipt_causal_wording_and_reuse_test":
+      return "Receipt wording uses trade-conditioned by default; trade-unlocked, additional, matched, completed, verified, or impact claims require reviewed claim records and no reused personal contribution.";
+    case "public_receipt_net_personal_contribution_test":
+      return "Receipt cards separate gross transfer, verified net personal contribution, trade-conditioned or trade-unlocked contribution, subsidies, reimbursements, and total recipient transfer.";
+    case "public_receipt_anti_gamification_test":
+      return "Receipt publication cannot create likes, share counts, streaks, leaderboards, profile boosts, ranking, review priority, matching priority, or moral-status games.";
+    case "public_receipt_authenticity_revocation_test":
+      return "Public receipt cards resolve to a privacy-safe verification handle with issued-at time, current status, and correction, revocation, suppression, or supersession state.";
+    case "public_receipt_social_pressure_sensitive_action_test":
+      return "Receipt publication cannot be required as a trade term, and sensitive personal-behavior details require separate consent plus privacy, autonomy, user-safety, and content-moderation review.";
+    case "behavioral_micro_pledge_duration_test":
+      return "Food-abstention and similar behavioral pledge templates default to one meal, a few meals, one day, or a few days; longer variants are explicit manual-review exceptions or confirmed micro-pledge sequences.";
+    case "behavioral_micro_pledge_evidence_ladder_test":
+      return "Behavioral micro-pledge previews show self-attestation-first evidence, optional lightweight corroboration, escalation triggers, and privacy/effort costs before reliance.";
+    case "behavioral_micro_pledge_unit_baseline_test":
+      return "Each covered meal/day/few-day pledge records a unit-specific no-trade baseline, additionality review state, covered-food definition, and adequate-substitute plan before completion can count.";
+    case "micro_pledge_sequence_cumulative_cap_test":
+      return "Micro-pledge sequences enforce frozen rolling-window duration, payout, evidence-burden, and privacy-burden caps; exceeding caps requires renewed confirmation and manual review.";
+    case "food_abstention_health_safety_boundary_test":
+      return "Food-abstention templates block fasting, weight-loss, calorie restriction, medical-diet, body-image, eating-disorder, minor/dependency/coercion, and high-burden variants unless exact reviews are non-blocking.";
+    case "behavioral_micro_pledge_low_stakes_cap_test":
+      return "Behavioral micro-pledge previews freeze low-stakes per-unit caps, sequence-total caps, performance-bond caps, and personal-cash/manual-review handling.";
+    case "micro_pledge_unit_settlement_test":
+      return "Micro-pledge sequences disclose per-unit versus all-or-nothing settlement, failed-unit effect, evidence checkpoints, renewed confirmations, and release/cancellation behavior before final confirmation.";
+    case "micro_pledge_preperformance_lock_test":
+      return "Behavioral micro-pledges require server-time pre-performance locks before the covered window; retroactive claims route to bookkeeping or manual review rather than completed moral-trade status.";
     default:
       return `${titleCaseRequirementKey(key)} must resolve to a current first-class release_gate_requirement_result or frozen equivalent before this release gate can pass.`;
   }
 }
 
-function privilegedActionRequiredForMoraltrade68Requirement(
-  key: Moraltrade68ReleaseGateRequirementKey,
+function privilegedActionRequiredForMoraltrade82Requirement(
+  key: Moraltrade82ReleaseGateRequirementKey,
 ) {
   return [
     "neutral_reviewer_approval",
@@ -370,14 +453,14 @@ function privilegedActionRequiredForMoraltrade68Requirement(
   ].includes(key);
 }
 
-const MORALTRADE68_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] =
-  MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.map((key) => ({
+const MORALTRADE82_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] =
+  MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.map((key) => ({
     key,
     label: titleCaseRequirementKey(key),
-    category: categoryForMoraltrade68Requirement(key),
+    category: categoryForMoraltrade82Requirement(key),
     policySnapshotRequired: key !== "route_health_baseline",
-    privilegedActionRequired: privilegedActionRequiredForMoraltrade68Requirement(key),
-    description: descriptionForMoraltrade68Requirement(key),
+    privilegedActionRequired: privilegedActionRequiredForMoraltrade82Requirement(key),
+    description: descriptionForMoraltrade82Requirement(key),
   }));
 
 const LEGACY_COMPAT_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] = [
@@ -600,9 +683,9 @@ const LEGACY_COMPAT_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementD
 ] satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] = [
-  ...MORALTRADE68_RELEASE_GATE_REQUIREMENTS,
+  ...MORALTRADE82_RELEASE_GATE_REQUIREMENTS,
   ...LEGACY_COMPAT_RELEASE_GATE_REQUIREMENTS.filter(
-    (requirement) => !MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEY_SET.has(requirement.key),
+    (requirement) => !MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEY_SET.has(requirement.key),
   ),
 ];
 
@@ -612,18 +695,18 @@ const PUBLIC_GOODS_PREVIEW_REQUIRED_REQUIREMENTS = [
   "privacy_review",
   "anti_threat_review",
   "environment_data_isolation_check",
-] as const satisfies readonly Moraltrade68ReleaseGateRequirementKey[];
+] as const satisfies readonly Moraltrade82ReleaseGateRequirementKey[];
 
 const DOCUMENTED_RELEASE_STAGE_REQUIREMENTS = [
-  ...MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS,
+  ...MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS,
 ] as const;
 
 function inactiveDocumentRequirements(
-  requiredRequirements: readonly Moraltrade68ReleaseGateRequirementKey[],
+  requiredRequirements: readonly Moraltrade82ReleaseGateRequirementKey[],
 ) {
   const required = new Set<string>(requiredRequirements);
 
-  return MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.filter((key) => !required.has(key));
+  return MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.filter((key) => !required.has(key));
 }
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -649,7 +732,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
     inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Payable mode requires every moraltrade68 release-gate requirement to pass or be represented by a privileged neutral-review waiver outside this stage matrix.",
+      "Payable mode requires every moraltrade82 release-gate requirement to pass or be represented by a privileged neutral-review waiver outside this stage matrix.",
   },
   {
     key: "pledge_swap_reliance_manual_pilot",
@@ -661,7 +744,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
     inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Reliance-bearing swaps require every moraltrade68 release-gate requirement before lock, reliance, private disclosure, public completion, or release promotion.",
+      "Reliance-bearing swaps require every moraltrade82 release-gate requirement before lock, reliance, private disclosure, public completion, or release promotion.",
   },
   {
     key: "capped_real_money_release",
@@ -673,7 +756,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
     inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Capped real-money release requires the complete moraltrade68 release-gate bundle before capture, payout, public money claims, or release promotion.",
+      "Capped real-money release requires the complete moraltrade82 release-gate bundle before capture, payout, public money claims, or release promotion.",
   },
   {
     key: "public_metric_release",
@@ -1008,9 +1091,9 @@ export function validateMoralTradeReleaseGateContract(
     ),
     check(
       "requirement-definition-coverage",
-      "Every stage requirement and moraltrade68 release-gate key resolves to a typed definition",
+      "Every stage requirement and moraltrade82 release-gate key resolves to a typed definition",
       allStageRequirementKeys.every((key) => requirementKeys.includes(key)) &&
-        MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.every((key) =>
+        MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.every((key) =>
           requirementKeys.includes(key),
         ) &&
         requirementKeys.includes("provider_event_replay_tests") &&
