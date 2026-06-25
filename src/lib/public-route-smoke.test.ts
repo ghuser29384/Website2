@@ -5360,6 +5360,9 @@ test("create trade route family has stable signed-out entry points", () => {
   const createRoute = readRepoFile("src/app/create/page.tsx");
   const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
   const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
+  const marketplaceIntakeTriage = readRepoFile(
+    "src/lib/moral-trade/marketplace-intake-triage.ts",
+  );
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
   assert.match(createRoute, /Create trade/);
@@ -5369,8 +5372,19 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(newOfferPage, /Marketplace intake triage/);
   assert.match(newOfferPage, /MARKETPLACE_INTAKE_TRIAGE_ROUTES/);
   assert.match(newOfferPage, /data-intake-route/);
+  assert.match(newOfferPage, /Next action:/);
+  assert.match(newOfferPage, /Correction path:/);
+  assert.match(marketplaceIntakeTriage, /sourceOfTruthNote/);
+  assert.match(marketplaceIntakeTriage, /ordinary_donation/);
+  assert.match(marketplaceIntakeTriage, /ordinary_matching_or_cofunding/);
+  assert.match(marketplaceIntakeTriage, /ordinary_procurement_or_service/);
+  assert.match(marketplaceIntakeTriage, /self_offset_bookkeeping/);
+  assert.match(marketplaceIntakeTriage, /external_crecm_public_goods/);
+  assert.match(marketplaceIntakeTriage, /background_networking_request/);
+  assert.match(marketplaceIntakeTriage, /prohibited_or_unsupported/);
+  assert.match(marketplaceIntakeTriage, /route_away_points_to_lock_path/);
+  assert.match(marketplaceIntakeTriage, /triage_infers_private_moral_profile/);
   assert.match(newOfferPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
-  assert.match(newOfferPage, /sourceOfTruthNote/);
   assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
   assert.match(marketplaceBoundary, /CRECM v1\.125/);
   assert.equal(marketplaceBoundary.includes("moralpublicgoods102.md"), false);

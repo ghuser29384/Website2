@@ -11,6 +11,7 @@ import {
   DONATION_OFFSET_PLAIN_LABELS,
   getReviewedMarketplaceSeedTemplate,
 } from "@/lib/marketplace-seed-templates";
+import { MARKETPLACE_INTAKE_TRIAGE_ROUTES } from "@/lib/moral-trade/marketplace-intake-triage";
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
 import { buildCreateSimilarTemplateFromLiveOffer } from "@/lib/offer-create-similar";
 import { isPublicLiveOfferId } from "@/lib/offer-follows";
@@ -55,53 +56,6 @@ function buildOfferCreationReturnTo(searchParams: Record<string, string | string
 
   return query ? `/offers/new?${query}` : "/offers/new";
 }
-
-const MARKETPLACE_INTAKE_TRIAGE_ROUTES = [
-  {
-    key: "donation_offset",
-    label: "Donation offset",
-    href: "/offers/new?mode=offset",
-    status: "Marketplace-eligible",
-    routeEligible: true,
-    summary:
-      "Use when two opposed baseline donations can redirect into a reviewed compromise destination.",
-  },
-  {
-    key: "micro_pledge_swap",
-    label: "Micro-pledge swap",
-    href: "/offers/new?template=reciprocal-mixed",
-    status: "Marketplace-eligible",
-    routeEligible: true,
-    summary:
-      "Use for one meal, a few meals, one day, or a few days with substitutes, health boundaries, and pre-performance lock.",
-  },
-  {
-    key: "external_crecm_public_goods",
-    label: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel} public-goods module`,
-    href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
-    status: "Separate module",
-    routeEligible: false,
-    summary: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
-  },
-  {
-    key: "ordinary_paid_action",
-    label: "Ordinary paid action",
-    href: "/safety",
-    status: "Deferred",
-    routeEligible: false,
-    summary:
-      "Paid services, custody, escrow, tax, legal, investment, and pressure-bearing requests stay outside the public creation path.",
-  },
-  {
-    key: "unsupported_or_safety",
-    label: "Unsupported or safety review",
-    href: "/anti-threat-rules",
-    status: "Review first",
-    routeEligible: false,
-    summary:
-      "Threat creation, unsafe abstention, coercion, contact requests, or exact private wishes require review before any draft.",
-  },
-] as const;
 
 const PARTICIPANT_SCREEN_FLOW = [
   {
@@ -622,6 +576,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 <span className="detail-kicker">{route.status}</span>
                 <h3>{route.label}</h3>
                 <p>{route.summary}</p>
+                <p className="panel-note">Next action: {route.nextAction}</p>
+                <p className="panel-note">Correction path: {route.correctionPath}</p>
               </Link>
             ))}
           </div>
