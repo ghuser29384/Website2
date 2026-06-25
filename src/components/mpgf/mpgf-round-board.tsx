@@ -22,9 +22,10 @@ export function MpgfRoundBoard({
         <p className="eyebrow">Live rounds</p>
         <h2>Round board and budget router</h2>
         <p>
-          Review threshold progress, match projections, and the next safe participant action before
-          setting a Common Ground Budget. These cards are previews, not payment authorization or
-          public impact claims.
+          Review the next safe participant action before setting a Common Ground Budget. Exact
+          threshold progress, supporter counts, active-cluster counts, counterparty gaps, and
+          success-without-me status stay sealed before close. Public exact aggregates appear only
+          after close in final reports or audit bundles.
         </p>
       </div>
 
@@ -41,29 +42,24 @@ export function MpgfRoundBoard({
       <div className="mpgf-pool-directory" aria-label="Public goods round board">
         {cards.map((card) => (
           <article className="mpgf-panel" key={card.campaignId}>
-            <p className="eyebrow">{boardStatusLabel(card.status)}</p>
+            <p className="eyebrow">Sealed progress | {boardStatusLabel(card.status)}</p>
             <h3>{card.title}</h3>
             <dl className="mpgf-summary-grid" aria-label={`${card.title} round board metrics`}>
               <div>
-                <dt>Threshold</dt>
-                <dd>
-                  {formatUsd(card.thresholdAmountCents)} + {card.thresholdSupporters} supporters +{" "}
-                  {card.activeClusterCount} clusters
-                </dd>
+                <dt>Threshold rules</dt>
+                <dd>Published in round rules; exact live progress sealed before close</dd>
               </div>
               <div>
                 <dt>Direct counted</dt>
-                <dd>{formatUsd(card.directCountedCents)}</dd>
+                <dd>Sealed before close</dd>
               </div>
               <div>
                 <dt>Base match unlocked</dt>
-                <dd>{formatUsd(card.baseMatchUnlockedCents)}</dd>
+                <dd>Shown after close in final reports</dd>
               </div>
               <div>
                 <dt>Projected bonus match</dt>
-                <dd>
-                  {formatUsd(card.projectedBonusMinCents)}-{formatUsd(card.projectedBonusMaxCents)}
-                </dd>
+                <dd>Shown after close in final reports</dd>
               </div>
               <div>
                 <dt>Your stance</dt>
@@ -77,21 +73,18 @@ export function MpgfRoundBoard({
             <div className="mpgf-allocation-row">
               <div>
                 <span>Amount threshold</span>
-                <strong>{Math.round(card.amountProgressBps / 100)}%</strong>
+                <strong>Sealed before close</strong>
               </div>
-              <meter max={10_000} value={card.amountProgressBps} />
             </div>
             <div className="mpgf-allocation-row">
               <div>
                 <span>Supporter threshold</span>
-                <strong>
-                  {card.verifiedSupporterCount}/{card.thresholdSupporters}
-                </strong>
+                <strong>Sealed before close</strong>
               </div>
-              <meter max={10_000} value={card.supporterProgressBps} />
             </div>
             <div className="tag-row">
               <span className="badge badge-secondary">Pivotal action: {card.pivotalActionLabel}</span>
+              <span className="badge badge-secondary">Exact public aggregates after close</span>
               <span className="badge badge-secondary">{card.inviteActionLabel}</span>
             </div>
             <Link className="inline-link" href={card.href}>

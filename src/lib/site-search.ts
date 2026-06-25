@@ -257,10 +257,25 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/mpgf",
-    label: "Public Goods Fund",
-    summary: "Review external-payment evidence submission, candidate pools, and allocation workflow.",
+    label: "Common Ground Budget",
+    summary:
+      "Preview the Public Goods Fund path for moral public goods: no charge now, sealed progress before close, and final review before any binding contribution.",
     kind: "fund",
-    keywords: ["mpgf", "fund", "public goods", "evidence", "contribution", "pool"],
+    keywords: [
+      "common ground budget",
+      "public goods fund",
+      "moral public goods",
+      "mpgf",
+      "crecm",
+      "cross-view",
+      "different-view",
+      "manual evidence",
+      "evidence",
+      "contribution",
+      "pool",
+      "no charge now",
+      "sealed progress",
+    ],
   },
   {
     href: "/donate",

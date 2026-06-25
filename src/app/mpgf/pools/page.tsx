@@ -5,11 +5,6 @@ import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoAlternatives, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
-import {
-  allocateMpgfAssuranceRound,
-  formatUsd,
-  getMpgfCampaignAssuranceStatus,
-} from "@/lib/mpgf/mechanism";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
 import {
   MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS,
@@ -146,7 +141,6 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
     userId: viewer?.authUser.id,
     displayName: viewer?.displayName,
   });
-  const assuranceAllocation = allocateMpgfAssuranceRound();
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
 
@@ -254,10 +248,6 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
       <section className="mpgf-pool-directory">
         {visibleAlternatives.map((alternative) => {
           const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.poolAlternativeId === alternative.id);
-          const status = campaign ? getMpgfCampaignAssuranceStatus(campaign) : null;
-          const line = campaign
-            ? assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id)
-            : null;
           const discovery = campaign ? commonGroundByCampaignId.get(campaign.id) : null;
 
           return (
@@ -276,29 +266,27 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
                     Common-ground {formatBasisPoints(discovery.coordinatabilityScoreBps)}
                   </span>
                 ) : null}
-                {status ? <span className="badge badge-secondary">{status.status.replaceAll("_", " ")}</span> : null}
+                {campaign ? <span className="badge badge-secondary">Sealed progress</span> : null}
               </div>
               <p>{alternative.description}</p>
               <p>{alternative.moralPublicGoodRationale}</p>
-              {campaign && status ? (
+              {campaign ? (
                 <dl className="mpgf-summary-grid">
                   <div>
-                    <dt>Verified direct</dt>
-                    <dd>{formatUsd(line?.directEligibleCents ?? status.directEligibleCents)}</dd>
+                    <dt>Public progress</dt>
+                    <dd>Sealed before close</dd>
                   </div>
                   <div>
-                    <dt>Verified supporters</dt>
-                    <dd>
-                      {status.verifiedSupporterCount}/{campaign.thresholdSupporters}
-                    </dd>
+                    <dt>Supporter breadth</dt>
+                    <dd>Sealed before close</dd>
                   </div>
                   <div>
                     <dt>Base unlock</dt>
-                    <dd>{formatUsd(line?.baseMatchCents ?? 0)}</dd>
+                    <dd>Shown after close in final reports</dd>
                   </div>
                   <div>
                     <dt>Bonus range</dt>
-                    <dd>{formatUsd(line?.qfBonusCents ?? 0)}</dd>
+                    <dd>Shown after close in final reports</dd>
                   </div>
                 </dl>
               ) : null}

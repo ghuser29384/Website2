@@ -1572,6 +1572,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Match estimate/,
     /Donor count/,
     /Threshold flags/,
+    /sealedProgressActive/,
+    /sealed until close/,
     /Milestone schedule/,
     /Review summary/,
     /Destination proof/,
@@ -1606,10 +1608,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /mpgf_contribution_route/,
     /Open manual proof fallback/,
     /If verified/,
-    /Unlock gap after route/,
-    /projectedDirectCents/,
-    /projectedVerifiedSupporters/,
-    /threshold would clear after provider import or evidence review/,
+    /Sealed threshold impact/,
+    /Exact gaps and success-without-me status stay sealed before close/,
+    /Published rules; exact live status sealed before close/,
     /perDonorCapCents/,
     /countForMatching/,
     /campaignId/,
@@ -1632,8 +1633,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
   assert.match(mpgfHubPage, /title="Common Ground Budget"/);
-  assert.match(mpgfHubPage, /Preview a budget/);
+  assert.match(mpgfHubPage, /Preview a Common Ground Budget/);
   assert.match(mpgfHubPage, /Common Ground Budget status strip/);
+  assert.match(mpgfHubPage, /Public Goods Fund sealed summary/);
   assert.match(mpgfHubPage, /No charge now/);
   assert.match(mpgfHubPage, /JIT after gates/);
   assert.match(mpgfHubPage, /Sealed before close/);
@@ -1643,11 +1645,15 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.match(mpgfHubPage, /Round clears after gates/);
   assert.match(mpgfHubPage, /Trust and review/);
   assert.match(mpgfHubPage, /no-escrow-unless-true/);
-  assert.match(mpgfHubPage, /Start conditional contribution/);
+  assert.match(mpgfHubPage, /Review contribution controls/);
+  assert.equal(mpgfHubPage.includes("Start conditional contribution"), false);
   assert.match(mpgfHubPage, /collective-action metrics/);
-  assert.match(mpgfHubPage, /Verified direct contributions/);
-  assert.match(mpgfHubPage, /Guaranteed base match/);
+  assert.match(mpgfHubPage, /Exact live\s+threshold satisfaction, supporter counts, active-cluster counts, counterparty gaps/);
+  assert.match(mpgfHubPage, /Public progress/);
+  assert.match(mpgfHubPage, /Base match unlocked/);
   assert.match(mpgfHubPage, /Estimated bonus range/);
+  assert.equal(mpgfHubPage.includes("status.verifiedSupporterCount"), false);
+  assert.equal(mpgfHubPage.includes("status.amountProgressBps"), false);
   assert.match(mpgfHubPage, /Verify identity, authorize conditionally, then wait for review/);
 });
 
@@ -1848,9 +1854,11 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(contributionModal, /Max exposure/);
   assert.match(contributionModal, /Authorization timing/);
   assert.match(contributionModal, /If verified/);
-  assert.match(contributionModal, /Unlock gap after route/);
-  assert.match(contributionModal, /projectedDirectCents/);
-  assert.match(contributionModal, /projectedVerifiedSupporters/);
+  assert.match(contributionModal, /Sealed threshold impact/);
+  assert.match(contributionModal, /Exact gaps and success-without-me status stay sealed before close/);
+  assert.doesNotMatch(contributionModal, /projectedDirectCents/);
+  assert.doesNotMatch(contributionModal, /projectedVerifiedSupporters/);
+  assert.doesNotMatch(contributionModal, /threshold would clear after provider import or evidence review/);
   assert.match(contributionModal, /#manual-proof-fallback/);
   assert.doesNotMatch(contributionModal, /checkout-session/);
 
@@ -5461,6 +5469,10 @@ test("MPGF public-goods proof pages resolve campaign routes and expose public-sa
   assert.match(page, /Sponsor commitment/);
   assert.match(page, /visibleCommitment/);
   assert.match(page, /Public evidence source/);
+  assert.match(page, /Sealed public preview/);
+  assert.match(page, /Threshold rules/);
+  assert.equal(page.includes("assuranceStatus.verifiedSupporterCount"), false);
+  assert.equal(page.includes("assuranceStatus.amountProgressBps"), false);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {

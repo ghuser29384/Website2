@@ -93,7 +93,7 @@ function actionLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: 
     return "Review carry-forward fallback";
   }
 
-  return viewerPresent ? "Add $5" : "Sign in to add $5";
+  return viewerPresent ? "Preview $5 budget" : "Sign in to preview $5";
 }
 
 function projectedAllocationForBoardStatus({

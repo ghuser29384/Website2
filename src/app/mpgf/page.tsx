@@ -16,7 +16,6 @@ import {
   buildPublicSummary,
   computeExactMpgfAllocation,
   formatUsd,
-  getMpgfCampaignAssuranceStatus,
   summarizeMpgfAssuranceRound,
 } from "@/lib/mpgf/mechanism";
 import { buildMpgfRoundBoardCards } from "@/lib/mpgf/public-goods-round-board";
@@ -35,16 +34,16 @@ const MPGF_SELF_INTEREST_SENTENCE =
   "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.";
 
 export const metadata: Metadata = {
-  title: "Public Goods Fund",
+  title: "Common Ground Budget | Public Goods Fund",
   description:
-    "Review the Moral Trade Public Goods Fund overview, evidence review, demo candidate pools, allocation process, and technical notes.",
+    "Preview the Moral Trade Common Ground Budget path for moral public goods, evidence review, demo candidate pools, allocation process, and technical notes.",
   alternates: {
     canonical: "/mpgf",
   },
   openGraph: {
-    title: "Public Goods Fund",
+    title: "Common Ground Budget | Public Goods Fund",
     description:
-      "Submit manual external-payment evidence for the Moral Public Goods Fund and review shared moral public goods.",
+      "Preview the Common Ground Budget path for shared moral public goods before any binding contribution.",
     url: getAbsoluteUrl("/mpgf"),
     type: "website",
   },
@@ -82,13 +81,13 @@ export default async function MpgfPage() {
       actions={
         <>
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview a budget
+            Preview a Common Ground Budget
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
           </Link>
-          <Link className="button button-secondary" href="#trust-and-review">
-            Trust and review
+          <Link className="button button-secondary" href="#how-it-works">
+            Learn how it works / View audit and rules
           </Link>
         </>
       }
@@ -206,7 +205,7 @@ export default async function MpgfPage() {
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview a budget
+            Preview a Common Ground Budget
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
@@ -282,18 +281,18 @@ export default async function MpgfPage() {
         </div>
       </section>
 
-      <section className="mpgf-kpi-grid" aria-label="Public Goods Fund current summary">
+      <section className="mpgf-kpi-grid" aria-label="Public Goods Fund sealed summary">
         <div className="mpgf-kpi">
           <span>Sponsor pool</span>
           <strong>{formatUsd(assuranceSummary.sponsorPoolCents)}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>Payable campaigns</span>
-          <strong>{assuranceSummary.payableCampaignCount}</strong>
+          <span>Campaign progress</span>
+          <strong>Sealed before close</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>QF bonus allocated</span>
-          <strong>{formatUsd(assuranceSummary.qfBonusAllocatedCents)}</strong>
+          <span>Bonus allocation</span>
+          <strong>Final report only</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Review status</span>
@@ -314,70 +313,58 @@ export default async function MpgfPage() {
           <p>
             {demoMpgfMatchPool.visibleCommitment} The capped diversity-aware bonus is applied only
             to threshold-cleared, review-approved campaigns, so broad support allocates sponsor
-            dollars without replacing review, payment-state proof, or destination proof.
+            dollars without replacing review, payment-state proof, or destination proof. Exact live
+            threshold satisfaction, supporter counts, active-cluster counts, counterparty gaps, and
+            success-without-me status stay sealed before close.
           </p>
         </div>
         <div className="mpgf-pool-directory">
-          {demoMpgfPublicGoodsCampaigns.map((campaign) => {
-            const status = getMpgfCampaignAssuranceStatus(campaign);
-            const line = assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id);
-            const estimatedBonusCapCents = line?.qfBonusCapCents ?? 0;
-            const estimatedBonusRange =
-              estimatedBonusCapCents > 0
-                ? `${formatUsd(line?.qfBonusCents ?? 0)}-${formatUsd(estimatedBonusCapCents)}`
-                : formatUsd(0);
-
-            return (
-              <article className="mpgf-panel" key={campaign.id}>
-                <p className="eyebrow">{status.status.replaceAll("_", " ")}</p>
-                <h2>{campaign.title}</h2>
-                <p>{campaign.publicSummary}</p>
-                <dl className="mpgf-summary-grid" aria-label={`${campaign.title} collective-action metrics`}>
-                  <div>
-                    <dt>Verified direct contributions</dt>
-                    <dd>{formatUsd(status.directEligibleCents)}</dd>
-                  </div>
-                  <div>
-                    <dt>Verified supporters</dt>
-                    <dd>
-                      {status.verifiedSupporterCount}/{campaign.thresholdSupporters}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Guaranteed base match</dt>
-                    <dd>{formatUsd(line?.baseMatchCents ?? 0)}</dd>
-                  </div>
-                  <div>
-                    <dt>Estimated bonus range</dt>
-                    <dd>{estimatedBonusRange}</dd>
-                  </div>
-                </dl>
-                <div className="mpgf-allocation-row">
-                  <div>
-                    <span>Amount threshold</span>
-                    <strong>{Math.round(status.amountProgressBps / 100)}%</strong>
-                  </div>
-                  <meter max={10_000} value={status.amountProgressBps} />
+          {demoMpgfPublicGoodsCampaigns.map((campaign) => (
+            <article className="mpgf-panel" key={campaign.id}>
+              <p className="eyebrow">Sealed public preview</p>
+              <h2>{campaign.title}</h2>
+              <p>{campaign.publicSummary}</p>
+              <dl className="mpgf-summary-grid" aria-label={`${campaign.title} collective-action metrics`}>
+                <div>
+                  <dt>Public progress</dt>
+                  <dd>Sealed before close</dd>
                 </div>
-                <div className="mpgf-allocation-row">
-                  <div>
-                    <span>Supporter threshold</span>
-                    <strong>{Math.round(status.supporterProgressBps / 100)}%</strong>
-                  </div>
-                  <meter max={10_000} value={status.supporterProgressBps} />
+                <div>
+                  <dt>Supporter breadth</dt>
+                  <dd>Sealed before close</dd>
                 </div>
-                <div className="tag-row">
-                  <span className="badge badge-secondary">
-                    Deadline {new Date(campaign.deadlineAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
-                  <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
+                <div>
+                  <dt>Base match unlocked</dt>
+                  <dd>Shown after close in final reports</dd>
                 </div>
-                <Link className="inline-link" href={`/mpgf/pools/${campaign.slug}`}>
-                  View public proof path
-                </Link>
-              </article>
-            );
-          })}
+                <div>
+                  <dt>Estimated bonus range</dt>
+                  <dd>Shown after close in final reports</dd>
+                </div>
+              </dl>
+              <div className="mpgf-allocation-row">
+                <div>
+                  <span>Amount threshold</span>
+                  <strong>Sealed before close</strong>
+                </div>
+              </div>
+              <div className="mpgf-allocation-row">
+                <div>
+                  <span>Supporter threshold</span>
+                  <strong>Sealed before close</strong>
+                </div>
+              </div>
+              <div className="tag-row">
+                <span className="badge badge-secondary">
+                  Deadline {new Date(campaign.deadlineAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
+              </div>
+              <Link className="inline-link" href={`/mpgf/pools/${campaign.slug}`}>
+                View public proof path
+              </Link>
+            </article>
+          ))}
         </div>
         <p className="mpgf-small">
           Round:{" "}
@@ -575,7 +562,7 @@ export default async function MpgfPage() {
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href="/mpgf/contribute">
-            Start conditional contribution
+            Review contribution controls
           </Link>
           <Link className="button button-secondary" href="/mpgf/account/contributions">
             View contribution state

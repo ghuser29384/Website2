@@ -94,27 +94,32 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
   const previewRow = preview.rows.find((row) => row.campaignId === campaign.campaignId);
   const allocationRow = allocation.rows.find((row) => row.campaignId === campaign.campaignId);
   const ledgerRow = ledger.rows.find((row) => row.campaignId === campaign.campaignId);
+  const sealedProgressActive = campaign.sealedProgress.active;
   const finalMatchCents =
     typeof allocationRow?.baseMatchCents === "number" && typeof allocationRow.qfBonusCents === "number"
       ? allocationRow.baseMatchCents + allocationRow.qfBonusCents
       : null;
   const matchEstimateCents = previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents;
   const directProgressValue =
-    typeof campaign.directEligibleCents === "number"
+    !sealedProgressActive && typeof campaign.directEligibleCents === "number"
       ? Math.min(campaign.directEligibleCents, campaign.thresholdAmountCents)
       : 0;
   const donorProgressValue =
-    typeof campaign.verifiedDonorCount === "number"
+    !sealedProgressActive && typeof campaign.verifiedDonorCount === "number"
       ? Math.min(campaign.verifiedDonorCount, campaign.thresholdDonors)
       : 0;
   const directProgressLabel =
-    typeof campaign.directEligibleCents === "number"
-      ? `${Math.round((directProgressValue / campaign.thresholdAmountCents) * 100)}%`
-      : "sealed until close";
+    sealedProgressActive
+      ? "sealed until close"
+      : typeof campaign.directEligibleCents === "number"
+        ? `${Math.round((directProgressValue / campaign.thresholdAmountCents) * 100)}%`
+        : "sealed until close";
   const donorProgressLabel =
-    typeof campaign.verifiedDonorCount === "number"
-      ? `${Math.round((donorProgressValue / campaign.thresholdDonors) * 100)}%`
-      : "sealed until close";
+    sealedProgressActive
+      ? "sealed until close"
+      : typeof campaign.verifiedDonorCount === "number"
+        ? `${Math.round((donorProgressValue / campaign.thresholdDonors) * 100)}%`
+        : "sealed until close";
 
   return (
     <MpgfPageFrame
@@ -140,19 +145,19 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
       <section className="mpgf-kpi-grid" aria-label="Campaign totals">
         <div className="mpgf-kpi">
           <span>Direct total</span>
-          <strong>{formatPublicUsd(campaign.directEligibleCents)}</strong>
+          <strong>{sealedProgressActive ? "sealed until close" : formatPublicUsd(campaign.directEligibleCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Counted total</span>
-          <strong>{formatPublicUsd(campaign.countedForMatchCents)}</strong>
+          <strong>{sealedProgressActive ? "sealed until close" : formatPublicUsd(campaign.countedForMatchCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Match estimate</span>
-          <strong>{formatPublicUsd(matchEstimateCents)}</strong>
+          <strong>{sealedProgressActive ? "sealed until close" : formatPublicUsd(matchEstimateCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Donor count</span>
-          <strong>{formatPublicCount(campaign.verifiedDonorCount)}</strong>
+          <strong>{sealedProgressActive ? "sealed until close" : formatPublicCount(campaign.verifiedDonorCount)}</strong>
         </div>
       </section>
 
@@ -168,12 +173,20 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
             <div>
               <dt>Donor threshold</dt>
               <dd>
-                {formatPublicCount(campaign.verifiedDonorCount)}/{campaign.thresholdDonors}
+                {sealedProgressActive
+                  ? "sealed until close"
+                  : `${formatPublicCount(campaign.verifiedDonorCount)}/${campaign.thresholdDonors}`}
               </dd>
             </div>
             <div>
               <dt>Threshold status</dt>
-              <dd>{campaign.thresholdPassed === null ? "sealed until close" : campaign.thresholdPassed ? "passed" : "pending"}</dd>
+              <dd>
+                {sealedProgressActive || campaign.thresholdPassed === null
+                  ? "sealed until close"
+                  : campaign.thresholdPassed
+                    ? "passed"
+                    : "pending"}
+              </dd>
             </div>
             <div>
               <dt>Campaign status</dt>

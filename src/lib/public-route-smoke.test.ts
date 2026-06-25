@@ -293,8 +293,15 @@ test("MPGF demo pools distinguish consensus and hybrid goods without changing al
   assert.match(poolsPageSource, /Campaign order ranks coordinatability, not moral truth/);
   assert.match(poolsPageSource, /Consensus goods/);
   assert.match(poolsPageSource, /Hybrid goods/);
+  assert.match(poolsPageSource, /Sealed progress/);
+  assert.match(poolsPageSource, /Public progress/);
+  assert.equal(poolsPageSource.includes("status.verifiedSupporterCount"), false);
   assert.match(poolDetailSource, /Good type/);
   assert.match(poolDetailSource, /expectedMoralImpactTooltip/);
+  assert.match(poolDetailSource, /Sealed public preview/);
+  assert.match(poolDetailSource, /Threshold rules/);
+  assert.equal(poolDetailSource.includes("assuranceStatus.verifiedSupporterCount"), false);
+  assert.equal(poolDetailSource.includes("assuranceStatus.amountProgressBps"), false);
 });
 
 test("MPGF participant mutations require idempotency and audit evidence tables", () => {
@@ -435,6 +442,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   const globalCss = readRepoFile("src/app/globals.css");
   const animalResults = filterSiteSearchItems("animal welfare");
   const mpfgResults = filterSiteSearchItems("manual evidence");
+  const publicGoodsResults = filterSiteSearchItems("moral public goods");
+  const commonGroundResults = filterSiteSearchItems("common ground budget");
   const validationResults = filterSiteSearchItems("appeal rulebook");
 
   assert.match(topbarSource, /placeholder="Search trades"/);
@@ -477,6 +486,9 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
+  assert.equal(publicGoodsResults[0]?.href, "/mpgf");
+  assert.equal(publicGoodsResults[0]?.label, "Common Ground Budget");
+  assert.equal(commonGroundResults[0]?.href, "/mpgf");
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
@@ -2129,8 +2141,9 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
   assert.match(mpfgPage, /Coordinate around moral public goods/);
   assert.match(mpfgPage, /title="Common Ground Budget"/);
-  assert.match(mpfgPage, /Preview a budget/);
+  assert.match(mpfgPage, /Preview a Common Ground Budget/);
   assert.match(mpfgPage, /View current round/);
+  assert.match(mpfgPage, /Learn how it works \/ View audit and rules/);
   assert.match(mpfgPage, /Common Ground Budget status strip/);
   assert.match(mpfgPage, /No charge now/);
   assert.match(mpfgPage, /JIT after gates/);
@@ -5420,6 +5433,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
+  const mpgfPage = readRepoFile("src/app/mpgf/page.tsx");
   const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
@@ -5451,6 +5465,11 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Separated accounting/);
   assert.match(offersPage, /Final review consent/);
   assert.match(offersPage, /Budget to Projects to Review; no binding save before final review/);
+  assert.match(mpgfPage, /Common Ground Budget \| Public Goods Fund/);
+  assert.match(mpgfPage, /Preview a Common Ground Budget/);
+  assert.match(mpgfPage, /Learn how it works \/ View audit and rules/);
+  assert.match(mpgfPage, /Review contribution controls/);
+  assert.equal(mpgfPage.includes("Start conditional contribution"), false);
   assert.match(offersPage, /Search public-goods funding/);
   assert.match(offersPage, /Ordinary offer filters/);
   assert.match(offersPage, /Other ways to browse/);

@@ -122,23 +122,7 @@ export function MpgfContributionModal({
   const activeAmountCents = amountToCents(amountDollars);
   const countedCents =
     countForMatching && mode !== "manual_proof_fallback" ? Math.min(activeAmountCents, perDonorCapCents) : 0;
-  const projectedDirectCents = selectedCampaign ? selectedCampaign.directEligibleCents + activeAmountCents : 0;
-  const projectedVerifiedSupporters = selectedCampaign
-    ? Math.min(
-        selectedCampaign.thresholdDonors,
-        selectedCampaign.verifiedDonorCount + (activeAmountCents >= 100 ? 1 : 0),
-      )
-    : 0;
-  const thresholdGapAfterCents = selectedCampaign
-    ? Math.max(0, selectedCampaign.thresholdAmountCents - projectedDirectCents)
-    : 0;
   const minimumCounterpartyCents = amountToCents(minimumCounterpartyDollars);
-  const supporterGapAfter = selectedCampaign
-    ? Math.max(0, selectedCampaign.thresholdDonors - projectedVerifiedSupporters)
-    : 0;
-  const projectedThresholdCleared = selectedCampaign
-    ? selectedCampaign.thresholdPassed || (thresholdGapAfterCents === 0 && supporterGapAfter === 0)
-    : false;
   const modalDescription =
     "Fast-route gifts open Every.org and stay pending until webhook import. Saved commitments use Stripe SetupIntent first. Manual proof is the fallback when integrations cannot import.";
   const modeSummary = {
@@ -435,39 +419,23 @@ export function MpgfContributionModal({
                 </div>
                 <div>
                   <dt>Estimated match</dt>
-                  <dd>{formatUsd(selectedCampaign?.matchEstimateCents ?? 0)}</dd>
+                  <dd>Sealed before close</dd>
                 </div>
                 <div>
                   <dt>Campaign progress</dt>
-                  <dd>
-                    {selectedCampaign
-                      ? `${formatUsd(selectedCampaign.directEligibleCents)} direct; ${formatUsd(
-                          selectedCampaign.countedForMatchCents,
-                        )} counted`
-                      : "Common pool"}
-                  </dd>
+                  <dd>{selectedCampaign ? "Sealed before close" : "Common pool"}</dd>
                 </div>
                 <div>
                   <dt>If verified</dt>
                   <dd>
                     {selectedCampaign
-                      ? `${formatUsd(projectedDirectCents)} direct; ${projectedVerifiedSupporters}/${
-                          selectedCampaign.thresholdDonors
-                        } supporters`
+                      ? "Your route can be reviewed without revealing exact live threshold impact."
                       : "Choose a campaign"}
                   </dd>
                 </div>
                 <div>
-                  <dt>Unlock gap after route</dt>
-                  <dd>
-                    {selectedCampaign
-                      ? projectedThresholdCleared
-                        ? "threshold would clear after provider import or evidence review"
-                        : `${formatUsd(thresholdGapAfterCents)} and ${supporterGapAfter} supporter${
-                            supporterGapAfter === 1 ? "" : "s"
-                          } still needed`
-                      : "Choose a campaign"}
-                  </dd>
+                  <dt>Sealed threshold impact</dt>
+                  <dd>{selectedCampaign ? "Exact gaps and success-without-me status stay sealed before close." : "Choose a campaign"}</dd>
                 </div>
                 <div>
                   <dt>Route</dt>
@@ -487,15 +455,7 @@ export function MpgfContributionModal({
                 </div>
                 <div>
                   <dt>Threshold</dt>
-                  <dd>
-                    {selectedCampaign
-                      ? `${selectedCampaign.thresholdPassed ? "passed" : "pending"}; ${
-                          selectedCampaign.verifiedDonorCount
-                        }/${selectedCampaign.thresholdDonors} donors; ${formatUsd(
-                          selectedCampaign.thresholdAmountCents,
-                        )}`
-                      : "Not campaign-specific"}
-                  </dd>
+                  <dd>{selectedCampaign ? "Published rules; exact live status sealed before close" : "Not campaign-specific"}</dd>
                 </div>
               </dl>
             </div>
