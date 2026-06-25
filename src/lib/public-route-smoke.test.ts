@@ -1434,9 +1434,16 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(publicReceiptCardsSource, /direct_donation_parity_note_required/);
   assert.match(publicReceiptCardsSource, /gamification_or_ranking_claim/);
   assert.match(publicReceiptCardsSource, /sensitive_action_redaction_required/);
+  assert.match(publicReceiptCardsSource, /trade_unlocked_requires_reviewed_causal_support/);
+  assert.match(publicReceiptCardsSource, /unsupported_causal_wording/);
+  assert.match(publicReceiptCardsSource, /personal_contribution_reuse_disclosure_required/);
+  assert.match(publicReceiptCardsSource, /publication_as_trade_term_blocked/);
+  assert.match(publicReceiptCardsSource, /public_engagement_counters_blocked/);
   assert.match(publicReceiptVerifyRoute, /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/);
   assert.match(publicReceiptVerifyRoute, /contract_only_no_public_claim_loaded/);
   assert.match(publicReceiptVerifyRoute, /buildPublicReceiptCardPreview/);
+  assert.match(publicReceiptVerifyRoute, /tradeConditionedWordingDefault/);
+  assert.match(publicReceiptVerifyRoute, /publicationAffectsMatchingOrReview/);
   assert.match(healthRoute, /getMarketplaceMeasurementContract/);
   assert.match(healthRoute, /marketplaceMeasurementKpiKeys/);
   assert.match(healthRoute, /marketplaceMeasurementEventTypes/);

@@ -21,6 +21,11 @@ test("public receipt verification route returns contract-only validation without
   assert.equal(body.verificationStatus, "contract_only_no_public_claim_loaded");
   assert.equal(body.publicContract.participantOptInRequired, true);
   assert.equal(body.publicContract.gamificationAndRankingAllowed, false);
+  assert.equal(body.publicContract.tradeConditionedWordingDefault, true);
+  assert.equal(body.publicContract.strongerTradeUnlockedWordingRequiresReviewedCausalSupport, true);
+  assert.equal(body.publicContract.publicationCanBeTradeTerm, false);
+  assert.equal(body.publicContract.publicationAffectsMatchingOrReview, false);
+  assert.equal(body.publicContract.publicEngagementCountersAllowed, false);
   assert.equal(serialized.includes("private_note"), false);
   assert.equal(serialized.includes("raw_evidence"), false);
   assert.equal(serialized.includes("contact"), false);

@@ -20,15 +20,36 @@ interface PublicReceiptVerifyRouteContext {
 function buildContractOnlyReceiptDraft(receiptId: string): PublicReceiptCardDraft {
   return {
     claimCopy:
-      "Contract-only verification preview. No public receipt record is loaded by this route.",
+      "Contract-only verification preview. No public receipt record is loaded by this route, so any contribution claim stays trade-conditioned.",
     claimKind: "donation_offset",
+    contributionSummary: {
+      baselineAdditionalityReview: "missing",
+      causalWording: "trade_conditioned",
+      counterfactualTrustReview: "missing",
+      impactClaimReview: "missing",
+      personalContribution: "No personal contribution is loaded by this contract-only preview.",
+      personalContributionState: "suppressed_uncertain",
+      totalVerifiedRecipientTransfer: "No total verified recipient transfer is loaded by this contract-only preview.",
+      tradeConditionedContribution:
+        "No trade-conditioned contribution is loaded by this contract-only preview.",
+    },
     correctionStatus: "none",
     directDonationParityNote:
       "Direct donation remains at parity; Moral Trade has no preference for this route over giving directly.",
     evidenceLevel: "receipt_reviewed",
     netAttributionNote:
-      "Net attribution is limited to reviewed redirected amounts and excludes unmatched surplus.",
+      "Net attribution is uncertain in this contract-only preview and must be qualified before public display.",
     participantOptIn: true,
+    publicationControls: {
+      affectsMatchingOrReview: false,
+      currentStatus: "current",
+      issuedAt: new Date(0).toISOString(),
+      profileOrSearchBoost: false,
+      publicEngagementCounters: false,
+      publicationRequiredAsTradeTerm: false,
+      recommendationOrPriorityBoost: false,
+      sidecarOnly: true,
+    },
     publicActionSummary: "Contract-only public receipt verification preview",
     receiptId,
     reviewed: true,
@@ -86,7 +107,12 @@ export async function GET(
       gamificationAndRankingAllowed: false,
       objectiveMoralEndorsementAllowed: false,
       participantOptInRequired: true,
+      publicEngagementCountersAllowed: false,
+      publicationAffectsMatchingOrReview: false,
+      publicationCanBeTradeTerm: false,
       sensitiveActionRedactionRequired: true,
+      strongerTradeUnlockedWordingRequiresReviewedCausalSupport: true,
+      tradeConditionedWordingDefault: true,
       visibility: preview.visibility,
     },
     blockers: preview.validation.blockers,
