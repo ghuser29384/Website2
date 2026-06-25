@@ -87,6 +87,10 @@ import {
   getBackgroundNetworkingRolloutPlan,
   validateBackgroundNetworkingRolloutPlan,
 } from "@/lib/background-rollout";
+import {
+  buildBackgroundParticipantScreenState,
+  getBackgroundPlainLanguageTerm,
+} from "@/lib/background-ui-language";
 import { formatBackgroundIntentClaimType } from "@/lib/background-intent-claims";
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -376,6 +380,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dashboardData?.profileDataRightRequests.filter((request) =>
       ["open", "in_review"].includes(request.status),
     ).length ?? 0;
+  const activePrivacyFreeze = Boolean(
+    dashboardData?.profileDataRightRequests.some(
+      (request) =>
+        request.request_type === "restriction" &&
+        request.scope === "background_networking" &&
+        ["open", "in_review"].includes(request.status),
+    ),
+  );
   const operatorVisibleDisclosureCount =
     (dashboardData?.matchReports.length ?? 0) +
     (dashboardData?.matchConciergeRequests.length ?? 0) +
@@ -413,6 +425,57 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     purposeCode: firstCandidatePurposeCode,
     record: dashboardData?.wishProfile?.inbound_delegate_surface_budget_per_window,
   });
+  const candidateExposureExpiry =
+    candidateInboundDiscovery === "off" ? "Off" : `${candidateWindowDays} day window`;
+  const findOpportunitiesCopy = getBackgroundPlainLanguageTerm("delegate authorization");
+  const letOthersFindMeCopy = getBackgroundPlainLanguageTerm("candidate exposure");
+  const pauseEverythingCopy = getBackgroundPlainLanguageTerm("privacy freeze");
+  const activityReceiptCopy = getBackgroundPlainLanguageTerm("delegate receipt");
+  const possibleOpportunityCopy = getBackgroundPlainLanguageTerm("opportunity brief");
+  const backgroundSetupState = buildBackgroundParticipantScreenState({
+    actionKey: "find_opportunities_for_me",
+    defaultExplanation:
+      "Choose what to scan, who may see broad previews, and when permissions expire.",
+    screenKey: "dashboard.background-networking.setup",
+    statusInput: {
+      enabled: dashboardData?.personalDelegate?.status === "active",
+      opportunityAvailable: suggestedMatchCount > 0,
+      privacyFreezeActive: activePrivacyFreeze,
+      queuedOrWaiting:
+        latestBackgroundRun?.status === "queued" || latestBackgroundRun?.status === "running",
+      stale: latestBackgroundRun?.status === "failed",
+    },
+    technicalDetails: {
+      broadSignalCategories: ["wish profile", "broad preview", "saved search", "approved summary"],
+      outputSchemaVersion: "background-participant-screen-state-bg84-v1",
+      purposeCode: firstCandidatePurposeCode,
+      purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+      retentionWindow: "participant receipts plus redacted safety audit rows",
+    },
+    whySeeingThis:
+      "You have access to background networking controls from your dashboard. This view summarizes only your own setup state.",
+  });
+  const inboundExposureState = buildBackgroundParticipantScreenState({
+    actionKey: "let_others_find_me",
+    defaultExplanation:
+      "Allow a broad preview so others can ask to explore without seeing exact details.",
+    screenKey: "dashboard.background-networking.inbound-exposure",
+    statusInput: {
+      enabled: candidateInboundDiscovery !== "off",
+      needsReview: candidateInboundDiscovery !== "off" && !candidatePurposeCodes.size,
+      privacyFreezeActive: activePrivacyFreeze,
+      stale: false,
+    },
+    technicalDetails: {
+      broadSignalCategories: ["broad profile", "purpose binding", "surface budget"],
+      outputSchemaVersion: "background-candidate-exposure-response-v1",
+      purposeCode: firstCandidatePurposeCode,
+      purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+      retentionWindow: candidateExposureExpiry,
+    },
+    whySeeingThis:
+      "This control is separate from your outgoing search settings and affects whether your broad preview can be considered by others.",
+  });
   const aiShadowReadiness = summarizeBackgroundAiShadowReadiness(
     dashboardData?.sourceConnections ?? [],
   );
@@ -438,9 +501,69 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: grant.status,
       updatedAt: grant.updated_at,
     })) ?? [];
+  const profileCompletenessPercent = Math.round(
+    (profileCompletenessDone / profileCompletenessTotal) * 100,
+  );
+  const dashboardAnchorLinks = [
+    { href: "#dashboard-overview", label: "Overview" },
+    { href: "#wish-profile", label: "Wish profile" },
+    { href: "#background-networking", label: "Networking" },
+    { href: "#privacy-controls", label: "Privacy" },
+    { href: "#match-inbox", label: "Matches" },
+    { href: "#my-trades", label: "Trades" },
+    { href: "#advanced-setup", label: "Advanced" },
+  ];
+  const dashboardSnapshot = [
+    {
+      label: "Open matches",
+      value: `${suggestedMatchCount}`,
+      note: `${consentedMatchCount} with your opt-in`,
+    },
+    {
+      label: "Alerts",
+      value: `${unreadWishNotificationCount}`,
+      note: "Unread private match alerts",
+    },
+    {
+      label: "Offers",
+      value: `${dashboardData?.offers.length ?? 0}`,
+      note: `${dashboardData?.incomingInterests.length ?? 0} incoming responses`,
+    },
+    {
+      label: "Agreements",
+      value: `${dashboardData?.agreements.length ?? 0}`,
+      note: `${dashboardData?.cartItems.length ?? 0} saved offers`,
+    },
+  ];
+  const dashboardNextActions = [
+    {
+      href: dashboardData?.wishProfile ? "#background-networking" : "/wish-registry",
+      kicker: "1",
+      label: dashboardData?.wishProfile ? "Review matching setup" : "Create private wish profile",
+      note: dashboardData?.wishProfile
+        ? `${profileCompletenessPercent}% of profile details are filled in.`
+        : "Add causes, wishes, asks, limits, and proof preferences.",
+    },
+    {
+      href: "#match-inbox",
+      kicker: "2",
+      label: suggestedMatchCount ? "Review possible matches" : "Run matching",
+      note: suggestedMatchCount
+        ? `${suggestedMatchCount} suggestion(s) are waiting for a consent decision.`
+        : "Use saved searches or scan now to look for counterparties.",
+    },
+    {
+      href: "#privacy-controls",
+      kicker: "3",
+      label: activePrivacyFreeze ? "Review active privacy pause" : "Check privacy controls",
+      note: activePrivacyFreeze
+        ? "Background networking is paused until you release the freeze."
+        : `${activePrivacyGrantCount} active grants, ${openDataRightRequestCount} open data requests.`,
+    },
+  ];
 
   return (
-    <div className="page-shell">
+    <div className="page-shell dashboard-page">
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -452,12 +575,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Member dashboard</p>
-            <h1>Review your recent public record and active commitments.</h1>
+            <h1>Dashboard</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
-                  Signed in as <strong>{viewer.displayName}</strong>. This dashboard ties together
-                  your public profile, offers, interests, agreements, ratings, and saved offers.
+                  Signed in as <strong>{viewer.displayName}</strong>. Review matching, privacy,
+                  offers, responses, agreements, payments, and saved work here.
                 </>
               ) : (
                 <>Configure Supabase to enable the live dashboard and authenticated activity.</>
@@ -477,38 +600,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <aside className="hero-panel panel">
             <p className="eyebrow">Account summary</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Public profile</strong>
-                  <p>
-                    {[viewer?.profile.city, viewer?.profile.region].filter(Boolean).join(", ") ||
-                      "Location not yet listed"}
-                  </p>
+            <div className="dashboard-identity">
+              <strong>{viewer?.displayName ?? "Live account unavailable"}</strong>
+              <span>
+                {[viewer?.profile.city, viewer?.profile.region].filter(Boolean).join(", ") ||
+                  "Location not listed"}
+              </span>
+            </div>
+            <div className="dashboard-hero-metrics">
+              {dashboardSnapshot.map((item) => (
+                <div key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
                 </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Offers and interest</strong>
-                  <p>
-                    Showing recent items: {dashboardData?.offers.length ?? 0} offer(s) |{" "}
-                    {dashboardData?.incomingInterests.length ?? 0} incoming response(s) |{" "}
-                    {dashboardData?.interests.length ?? 0} outgoing response(s)
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Agreements and saved offers</strong>
-                  <p>
-                    Showing recent items: {dashboardData?.agreements.length ?? 0} agreement(s) |{" "}
-                    {dashboardData?.cartItems.length ?? 0} saved offer(s)
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
           </aside>
         </div>
@@ -541,13 +646,51 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {viewer ? <ProfilePortabilityPanel /> : null}
 
-        <section className="section section-white">
+        <section className="section section-white dashboard-overview" id="dashboard-overview">
           <div className="section-head">
-            <p className="eyebrow">Priority Correction Fund</p>
-            <h2>Monthly correction pool</h2>
+            <p className="eyebrow">Start here</p>
+            <h2>What needs attention</h2>
             <p>
-              This section tracks the current month&apos;s fund, your own share of it, and whether
-              you have been assigned an arbiter role.
+              Pick the next thing to handle, then jump directly to matching, privacy, trades, or
+              setup.
+            </p>
+          </div>
+
+          <nav className="dashboard-anchor-nav" aria-label="Dashboard sections">
+            {dashboardAnchorLinks.map((link) => (
+              <a href={link.href} key={link.href}>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="dashboard-task-grid">
+            {dashboardNextActions.map((action) => (
+              <Link className="dashboard-task-card" href={action.href} key={action.label}>
+                <span>{action.kicker}</span>
+                <strong>{action.label}</strong>
+                <small>{action.note}</small>
+              </Link>
+            ))}
+          </div>
+
+          <div className="dashboard-snapshot-grid">
+            {dashboardSnapshot.map((item) => (
+              <article className="dashboard-snapshot-card" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.note}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="payments-and-fund">
+          <div className="section-head">
+            <p className="eyebrow">Correction fund</p>
+            <h2>This month&apos;s pool</h2>
+            <p>
+              Track the current fund, your share, and any arbiter role assigned to you.
             </p>
           </div>
 
@@ -590,14 +733,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="payment-setup">
           <div className="section-head">
             <p className="eyebrow">Payments</p>
-            <h2>Stripe Connect setup</h2>
+            <h2>Payment setup</h2>
             <p>
-              Payment-mediated trades use Stripe Checkout and Connect destination charges. This is
-              not legal escrow; the platform records payment state and supports refunds/disputes
-              through Stripe workflows.
+              Connect Stripe for payment-mediated trades. Moral Trade records payment state and
+              supports Stripe refund or dispute workflows; it is not legal escrow.
             </p>
           </div>
 
@@ -666,13 +808,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="wish-profile">
           <div className="section-head">
             <p className="eyebrow">Private wish profile</p>
-            <h2>Values, wishes, asks, and constraints</h2>
+            <h2>Your private matching profile</h2>
             <p>
-              This registry is separate from your public profile. Exact wishes stay private; broad
-              previews are used only for safe match suggestions and consent-gated introductions.
+              Exact wishes stay private. Broad previews are used only for safe suggestions and
+              consent-gated introductions.
             </p>
           </div>
 
@@ -791,23 +933,78 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           )}
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle dashboard-workspace" id="background-networking">
           <div className="section-head">
             <p className="eyebrow">Background networking</p>
-            <h2>Possible counterparties</h2>
+            <h2>{possibleOpportunityCopy?.participantLabel ?? "Possible opportunities"}</h2>
             <p>
-              Suggestions show only enough information to decide whether an introduction is worth
-              exploring. Identity details remain gated until both sides opt in.
+              Suggestions show enough to decide whether to ask to explore. Identity and exact
+              details stay hidden until both sides opt in.
             </p>
           </div>
 
           <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">
+              {backgroundSetupState.statusLabel} | {activityReceiptCopy?.participantLabel ?? "Activity receipt"}
+            </p>
+            <h3>{findOpportunitiesCopy?.participantLabel ?? backgroundSetupState.actionLabel}</h3>
+            <p className="route-text">{backgroundSetupState.defaultExplanation}</p>
+            <div className="data-grid">
+              <article>
+                <h4>Setup questions</h4>
+                <div className="mini-list">
+                  {backgroundSetupState.setupQuestions.map((question) => (
+                    <div className="mini-list-item" key={question.key}>
+                      <strong>{question.label}</strong>
+                      <span>{question.plainDescription}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+              <article>
+                <h4>Privacy summary</h4>
+                <dl className="values-summary compact-summary">
+                  <div>
+                    <dt>What happens</dt>
+                    <dd>{backgroundSetupState.privacySummary.whatHappens}</dd>
+                  </div>
+                  <div>
+                    <dt>What stays hidden</dt>
+                    <dd>{backgroundSetupState.privacySummary.whatStaysHidden}</dd>
+                  </div>
+                  <div>
+                    <dt>How to stop or undo future access</dt>
+                    <dd>{backgroundSetupState.privacySummary.howToStopOrUndo}</dd>
+                  </div>
+                </dl>
+              </article>
+              <article>
+                <h4>Why am I seeing this?</h4>
+                <p className="route-text">{backgroundSetupState.whySeeingThis}</p>
+                <details className="details-panel">
+                  <summary>{backgroundSetupState.technicalDetails.title}</summary>
+                  <div className="details-content">
+                    <dl className="values-summary compact-summary">
+                      {backgroundSetupState.technicalDetails.rows.map((row) => (
+                        <div key={row.label}>
+                          <dt>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                </details>
+              </article>
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
             <p className="detail-kicker">Match inbox</p>
-            <h3>Background networking status</h3>
+            <h3>Matching status</h3>
             <p className="route-text">
-              Scans use only your saved wish profile, broad registry previews, saved searches, and
-              manual or approved source summaries. Draft source-assist runs stay review-first; raw
-              external text is not used for matching, outreach, or disclosure.
+              Scans use your saved wish profile, broad previews, saved searches, and approved
+              summaries. Draft source-assist runs stay review-first; raw external text is not used
+              for matching, outreach, or disclosure.
             </p>
             <dl className="values-summary compact-summary">
               <div>
@@ -866,16 +1063,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Candidate exposure</p>
-              <h3>Inbound delegate discovery</h3>
+              <p className="detail-kicker">{inboundExposureState.statusLabel}</p>
+              <h3>{letOthersFindMeCopy?.participantLabel ?? inboundExposureState.actionLabel}</h3>
               <p className="route-text">
-                General discoverability is separate from inbound delegate surfacing. Leave this off
-                unless you want broad-profile previews considered by authorized helpers.
+                {inboundExposureState.defaultExplanation}
               </p>
+              <dl className="values-summary compact-summary">
+                <div>
+                  <dt>What happens</dt>
+                  <dd>{inboundExposureState.privacySummary.whatHappens}</dd>
+                </div>
+                <div>
+                  <dt>What stays hidden</dt>
+                  <dd>{inboundExposureState.privacySummary.whatStaysHidden}</dd>
+                </div>
+                <div>
+                  <dt>How to stop or undo future access</dt>
+                  <dd>{inboundExposureState.privacySummary.howToStopOrUndo}</dd>
+                </div>
+                <div>
+                  <dt>Permission ends</dt>
+                  <dd>{candidateExposureExpiry}</dd>
+                </div>
+              </dl>
               <form action={saveCandidateInboundDelegateExposureAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <label className="field">
-                  <span>Audience scope</span>
+                  <span>Who may see a broad preview?</span>
                   <select name="inbound_delegate_discovery" defaultValue={candidateInboundDiscovery}>
                     <option value="off">Off</option>
                     <option value="cohort_only">Cohort only</option>
@@ -914,7 +1128,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
                 <div className="field-grid">
                   <label className="field">
-                    <span>Surface cap</span>
+                    <span>Broad preview cap</span>
                     <input
                       defaultValue={candidateSurfaceLimit}
                       max={50}
@@ -936,7 +1150,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
                 <div className="field-grid">
                   <label className="field">
-                    <span>Pending intro cap</span>
+                    <span>Ask-to-explore cap</span>
                     <input
                       defaultValue={dashboardData?.wishProfile?.inbound_delegate_pending_intro_limit ?? 3}
                       max={50}
@@ -946,7 +1160,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     />
                   </label>
                   <label className="field">
-                    <span>Cool-off until</span>
+                    <span>Pause until</span>
                     <input
                       defaultValue={
                         dashboardData?.wishProfile?.inbound_delegate_cooloff_until?.slice(0, 16) ?? ""
@@ -965,14 +1179,28 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   />
                 </label>
                 <button className="button button-secondary button-mini" type="submit">
-                  Save candidate exposure
+                  Save how others can find me
                 </button>
               </form>
+              <details className="details-panel">
+                <summary>{inboundExposureState.technicalDetails.title}</summary>
+                <div className="details-content">
+                  <p className="route-text">{inboundExposureState.whySeeingThis}</p>
+                  <dl className="values-summary compact-summary">
+                    {inboundExposureState.technicalDetails.rows.map((row) => (
+                      <div key={row.label}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </details>
             </article>
 
-            <article className="panel data-card">
+            <article className="panel data-card" id="privacy-controls">
               <p className="detail-kicker">Privacy dashboard</p>
-              <h3>Data map and active controls</h3>
+              <h3>Privacy controls</h3>
               <dl className="values-summary compact-summary">
                 <div>
                   <dt>Inventory</dt>
@@ -988,6 +1216,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     {openDataRightRequestCount} open;{" "}
                     {dashboardData?.profileDataRightRequests.length ?? 0} recent
                   </dd>
+                </div>
+                <div>
+                  <dt>{pauseEverythingCopy?.participantLabel ?? "Pause everything now"}</dt>
+                  <dd>{activePrivacyFreeze ? "Active" : "Inactive"}</dd>
                 </div>
                 <div>
                   <dt>Operator-visible</dt>
@@ -1020,11 +1252,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Notification controls</p>
-              <h3>Inbox plus digest defaults</h3>
+              <h3>Alert settings</h3>
               <p className="route-text">
-                Discovery alerts are digest-first by default. No one is contacted on your behalf.
-                Exact wishes, contact details, source notes, and sensitive constraints stay in the
-                dashboard rather than email or push copy.
+                Alerts are digest-first by default. No one is contacted on your behalf, and exact
+                wishes, contact details, source notes, and sensitive constraints stay out of email
+                or push copy.
               </p>
               <form action={saveBackgroundNotificationPreferencesAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1079,12 +1311,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Data rights</p>
-              <h3>Export, correction, deletion, and restriction</h3>
+              <h3>Export, correct, delete, or pause</h3>
+              <p className="route-text">
+                {pauseEverythingCopy?.participantLabel ?? "Pause everything now"} pauses helper
+                runs, broad previews, queued email, intro progress, and profile export until you
+                release it. Existing suggestions stay non-actionable until a fresh recompute.
+              </p>
               <div className="offer-actions">
                 <Link className="button button-secondary button-mini" href="/api/profile/export">
                   Download export
                 </Link>
               </div>
+              {activePrivacyFreeze ? (
+                <p className="route-text">
+                  A background-networking restriction request is open. Use the data-rights request
+                  log or operator review path to release it after fresh validation.
+                </p>
+              ) : null}
               <form action={createProfileDataRightRequestAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <div className="field-grid">
@@ -1136,10 +1379,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </form>
               <p className="route-text">
                 Removes: {BACKGROUND_SELF_SERVE_DELETION_SURFACES.slice(0, 6).join("; ")}.
-                Safety and budget audit rows are retained only as redacted or anonymized records.
-                Exact wishes, previews, source summaries, saved searches, grants, suggestions,
-                notifications, intro artifacts, and queued background-networking emails are removed
-                from participant-facing matching state.
+                Safety and budget audit rows stay only as redacted or anonymized records. Exact
+                wishes, previews, summaries, searches, grants, suggestions, notifications, intro
+                artifacts, and queued background-networking emails are removed from matching state.
               </p>
               {dashboardData?.errors.profileDataRightRequests ? (
                 <p className="route-text">Could not load data-right requests.</p>
@@ -1160,9 +1402,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="panel data-card data-card-wide" id="consent-center">
             <p className="detail-kicker">Consent Center</p>
-            <h3>Purpose, expiry, fields, and revocation in one place</h3>
+            <h3>Consent and permissions</h3>
             <p className="route-text">
-              Review what can influence matching or disclosure before any exact wishes, contact
+              Review what may influence matching or disclosure before exact wishes, contact
               details, or source summaries move beyond your account.
             </p>
             <div className="data-grid">
@@ -1259,13 +1501,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
+          <details className="dashboard-disclosure-group">
+            <summary>
+              <span>
+                <strong>Why suggestions appear</strong>
+                <small>Consent stages, profile signals, and completeness.</small>
+              </span>
+            </summary>
+            <div className="dashboard-group-body">
           <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">State machine</p>
-            <h3>Suggestions move through explicit consent stages</h3>
+            <p className="detail-kicker">Consent flow</p>
+            <h3>How a suggestion becomes an introduction</h3>
             <p className="route-text">
-              A match can move from broad suggestion to opt-in, narrow detail request, operator
-              review, introduction plan, and agreement room. Each transition is reversible until
-              both parties deliberately continue.
+              A match moves from broad suggestion to opt-in, detail request, operator review,
+              introduction plan, and agreement room. Each step requires a deliberate choice.
             </p>
             <div className="tag-row">
               {[
@@ -1285,12 +1534,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">What the system thinks you want</p>
-            <h3>Deterministic intent claims from explicit profile surfaces</h3>
+            <p className="detail-kicker">Profile signals</p>
+            <h3>What your saved profile says you want</h3>
             <p className="route-text">
               Active claims: {activeIntentClaims.length}. Preview-safe: {previewSafeIntentClaimCount}.
-              Owner-only matching signals: {privateIntentClaimCount}. Claims are regenerated from
-              saved profile fields, deterministic synthesis tags, and reviewed source permissions.
+              Owner-only signals: {privateIntentClaimCount}. These come from saved fields,
+              synthesis tags, and reviewed source permissions.
             </p>
             {dashboardData?.errors.intentClaims ? (
               <p className="route-text">Could not load deterministic intent claims.</p>
@@ -1352,10 +1601,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="panel data-card data-card-wide">
             <p className="detail-kicker">Profile completeness</p>
-            <h3>Structured elicitation for better matches</h3>
+            <h3>Missing matching details</h3>
             <p className="route-text">
-              {profileCompletenessDone}/{profileCompletenessTotal} profile surfaces are filled in.
-              Open prompts are generated from missing explicit fields, not private-feed inference.
+              {profileCompletenessDone}/{profileCompletenessTotal} profile areas are filled in.
+              Open prompts come from missing fields you control, not private-feed inference.
             </p>
             <div className="tag-row">
               {profileMissingFields.length ? (
@@ -1369,10 +1618,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               )}
             </div>
           </div>
+            </div>
+          </details>
 
-          <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Non-AI scan controls</p>
-            <h3>Rule-based matching, manual sources, and clarification prompts</h3>
+          <div className="panel data-card data-card-wide dashboard-core-card">
+            <p className="detail-kicker">Scan controls</p>
+            <h3>Run rule-based matching</h3>
             <p className="route-text">
               This does not connect to social media, email, or chatbot logs. It only uses the
               private registry fields you save, broad public previews, and manual source notes you
@@ -1415,32 +1666,42 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
-          <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Bg14 rollout controls</p>
-            <h3>Flagged source summaries, wish interview, and opportunity briefs</h3>
-            <p className="route-text">{backgroundRolloutPlan.deploymentNote.summary}</p>
-            <div className="tag-row">
-              <span className="source-pill">
-                Stage: {backgroundRolloutPlan.deploymentNote.currentStageLabel}
+          <details className="dashboard-disclosure-group">
+            <summary>
+              <span>
+                <strong>Release controls</strong>
+                <small>Feature flags, validation status, and rollback notes.</small>
               </span>
-              <span className="source-pill">
-                Validation: {backgroundRolloutValidation.status}
-              </span>
-              {backgroundRolloutPlan.flags.map((flag) => (
-                <span className="source-pill" key={flag.key}>
-                  {flag.envKey}: {flag.enabled ? "enabled" : "off"}
-                </span>
-              ))}
+            </summary>
+            <div className="dashboard-group-body">
+              <div className="panel data-card data-card-wide">
+                <p className="detail-kicker">Bg14 rollout controls</p>
+                <h3>Feature rollout status</h3>
+                <p className="route-text">{backgroundRolloutPlan.deploymentNote.summary}</p>
+                <div className="tag-row">
+                  <span className="source-pill">
+                    Stage: {backgroundRolloutPlan.deploymentNote.currentStageLabel}
+                  </span>
+                  <span className="source-pill">
+                    Validation: {backgroundRolloutValidation.status}
+                  </span>
+                  {backgroundRolloutPlan.flags.map((flag) => (
+                    <span className="source-pill" key={flag.key}>
+                      {flag.envKey}: {flag.enabled ? "enabled" : "off"}
+                    </span>
+                  ))}
+                </div>
+                <p className="route-text">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
+              </div>
             </div>
-            <p className="route-text">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
-          </div>
+          </details>
 
           <div className="panel data-card data-card-wide">
             <p className="detail-kicker">Opportunity briefs</p>
-            <h3>Promising leads packaged as privacy-safe next steps</h3>
+            <h3>Leads with safe next steps</h3>
             <p className="route-text">
-              Briefs explain why a lead surfaced, what stays hidden, and the next reviewed action
-              without turning a match into an automatic introduction.
+              Briefs explain why a lead appeared, what stays hidden, and the next reviewed action.
+              They do not create automatic introductions.
             </p>
             {dashboardData?.errors.opportunityBriefs ? (
               <p className="route-text">Could not load opportunity briefs.</p>
@@ -1616,11 +1877,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Private match concierge</p>
-            <h3>Request operator help turning intent into an introduction path</h3>
+            <p className="detail-kicker">Reviewed intro help</p>
+            <h3>Ask an operator to review an intro path</h3>
             <p className="route-text">
               Use this when a broad preview, saved wish, or private counterparty idea needs human
-              triage before a mutual introduction is appropriate.
+              review before a mutual introduction is appropriate.
             </p>
             <form action={createMatchConciergeRequestAction} className="compact-form">
               <input name="return_to" type="hidden" value="/dashboard" />
@@ -1695,7 +1956,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
               </div>
               <button className="button button-primary button-mini" type="submit">
-                Request concierge review
+                Request review
               </button>
             </form>
             <div className="mini-list">
@@ -1747,13 +2008,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
+          <details className="dashboard-disclosure-group" id="advanced-setup">
+            <summary>
+              <span>
+                <strong>Advanced setup and source controls</strong>
+                <small>
+                  Delegate settings, sources, helpers, collectives, grants, saved searches, drafts,
+                  and invite ideas.
+                </small>
+              </span>
+            </summary>
+            <div className="dashboard-group-body">
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Personal delegate</p>
-              <h3>Durable instructions for background search</h3>
+              <p className="detail-kicker">{backgroundSetupState.statusLabel}</p>
+              <h3>{findOpportunitiesCopy?.participantLabel ?? "Find opportunities for me"}</h3>
               <p className="route-text">
-                This is not an AI agent yet. It records stable goals and operating limits that
-                scheduled non-AI helper runs can obey.
+                Save goals and limits for scheduled rule-based scans. This does not contact anyone
+                on your behalf.
               </p>
               <form action={savePersonalDelegateAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1847,23 +2119,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </label>
                 </div>
                 <button className="button button-secondary button-mini" type="submit">
-                  Save delegate
+                  Save opportunity search settings
                 </button>
               </form>
             </article>
 
             <article className="panel data-card">
               <p className="detail-kicker">Consent Center</p>
-              <h3>Source, field, purpose, and expiry controls</h3>
+              <h3>Source permissions</h3>
               <p className="route-text">
                 Record what could be connected later. This stores consent and scope only; no
-                social, email, calendar, or chatbot data is imported. Active external connectors
-                need explicit field permissions, a retention window, and consent notes.
+                social, email, calendar, or chatbot data is imported.
               </p>
               <p className="route-text">
-                Exposure previews below show what a connection or reviewed summary can influence
-                before it affects matching. Raw source text, contact details, and exact wishes stay
-                out of public routes, emails, analytics, and autonomous outreach.
+                Previews show what a connection or reviewed summary may influence before it affects
+                matching. Raw source text, contact details, and exact wishes stay out of public
+                routes, emails, analytics, and autonomous outreach.
               </p>
               <p className="route-text">
                 Raw source content is not stored for matching. You review and approve a summary
@@ -2159,11 +2430,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </article>
 
             <article className="panel data-card">
-              <p className="detail-kicker">Synthesis layer</p>
-              <h3>Deterministic profile summary</h3>
+              <p className="detail-kicker">Profile summary</p>
+              <h3>Rule-based profile summary</h3>
               <p className="route-text">
                 A structured summary of hopes, intent, capabilities, constraints, and uncertainty
-                built from fields you entered, not generated by AI.
+                built from fields you entered.
               </p>
               {dashboardData?.profileSynthesis ? (
                 <dl className="values-summary compact-summary">
@@ -2198,11 +2469,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Helper marketplace</p>
-              <h3>Multiple non-AI search strategies</h3>
+              <p className="detail-kicker">Search helpers</p>
+              <h3>Rule-based search strategies</h3>
               <p className="route-text">
-                Strategies let background jobs behave like specialized helpers without using AI:
-                cause overlap, payments, geography, outreach, saved searches, and risk filtering.
+                Choose which rule-based strategies background jobs may use: cause overlap,
+                payments, geography, outreach, saved searches, and risk filtering.
               </p>
               <form action={saveHelperStrategyAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2326,7 +2597,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Consent-gated next steps</p>
-              <h3>Introduction plans after mutual opt-in</h3>
+              <h3>Introduction plans</h3>
               <p className="route-text">
                 When both sides consent, the app drafts a concrete intro, agenda, verification
                 plan, and privacy note. It still does not send introductions automatically.
@@ -2414,11 +2685,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Field-level privacy</p>
-              <h3>Grant specific facts for a purpose and time box</h3>
+              <h3>Share specific facts for a limited purpose</h3>
               <p className="route-text">
-                Use grants to decide which facts can move from hidden to broad, specific, or
-                contact-level visibility for a match or counterparty. Prefer intro-specific grants
-                that expire, then renew only if both sides still need the detail.
+                Decide which facts can move from hidden to broad, specific, or contact-level
+                visibility for a match. Prefer intro-specific grants that expire.
               </p>
               <p className="route-text">
                 Contact-email or contact-level grants can be drafted here, but approving them
@@ -2662,8 +2932,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Brokerage incentives</p>
-              <h3>Match bounties and speculative coordination</h3>
+              <p className="detail-kicker">Match bounties</p>
+              <h3>Record a finder reward</h3>
               <p className="route-text">
                 Record willingness to pay for finding a useful counterparty or group. This is a
                 pledge-like signal, not an automatic charge.
@@ -2739,10 +3009,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Collectives</p>
-              <h3>Groups, institutions, and delegated authority</h3>
+              <h3>Groups and institutions</h3>
               <p className="route-text">
-                Create a collective record so future workflows can distinguish individual wishes
-                from group-level authority and verification.
+                Create a collective record so workflows can distinguish individual wishes from
+                group-level authority and verification.
               </p>
               <form action={createCollectiveAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2854,11 +3124,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Collective memberships</p>
-              <h3>Delegated roles and permissions</h3>
+              <h3>Member roles</h3>
               <p className="route-text">
-                Add an existing profile to a collective with scoped authority for matches,
-                privacy grants, and bounties. This helps collectives behave like real teams
-                before any AI-assisted workflow exists.
+                Add an existing profile to a collective with scoped authority for matches, privacy
+                grants, and bounties.
               </p>
               <form action={addCollectiveMemberAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2939,7 +3208,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Collective decisions</p>
-              <h3>Open approvals and delegated responses</h3>
+              <h3>Group approvals</h3>
               <p className="route-text">
                 Record lightweight group approvals for matches, privacy grants, bounties, and verification requests.
               </p>
@@ -3022,7 +3291,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Risk and audit</p>
-              <h3>Safety signals from non-AI checks</h3>
+              <h3>Safety review signals</h3>
               <p className="route-text">
                 Signals are review prompts for underspecified profiles, suspicious patterns, or
                 unsafe matching context. They do not block users automatically.
@@ -3051,7 +3320,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Manual sources</p>
-              <h3>Source consent without automatic ingestion</h3>
+              <h3>Manual source notes</h3>
               <p className="route-text">
                 Add a public page, profile summary, or note that could later be reviewed. The app
                 stores your note with a retention timer; it does not scrape or analyze the source.
@@ -3141,10 +3410,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card" id="saved-searches">
               <p className="detail-kicker">Saved searches</p>
-              <h3>Run durable match searches</h3>
+              <h3>Recurring match searches</h3>
               <p className="route-text">
-                Save recurring search intent now; background workers can later use these records
-                for scheduled, rate-limited matching.
+                Save recurring search intent for scheduled, rate-limited matching.
               </p>
               <form action={saveSearchAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -3196,7 +3464,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Clarifying interview</p>
-              <h3>Rule-based follow-up questions</h3>
+              <h3>Follow-up questions</h3>
               {dashboardData?.errors.clarificationQuestions ? (
                 <p className="route-text">Could not load clarification questions.</p>
               ) : dashboardData?.clarificationQuestions.filter(
@@ -3281,10 +3549,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Network expansion</p>
-              <h3>Draft people or groups to invite</h3>
+              <h3>Invite ideas</h3>
               <p className="route-text">
-                Use this for early-stage adoption: note specific people, collectives, or communities
-                that might be valuable counterparties.
+                Note specific people, collectives, or communities that might be valuable
+                counterparties.
               </p>
               <form action={createNetworkInviteAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -3338,8 +3606,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : null}
             </article>
           </div>
+            </div>
+          </details>
 
-          <div className="data-grid">
+          <div className="data-grid" id="match-inbox">
             {dashboardData?.errors.matchSuggestions ? (
               <div className="empty-state">
                 <div>
@@ -3551,8 +3821,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>No possible counterparties yet.</strong>
                   <p>
-                    Save a discoverable private wish profile. Matches are generated only when the
-                    safety filter clears the profile and broad previews suggest compatibility.
+                    Save a discoverable private wish profile. Matches appear only after the safety
+                    filter clears the profile and broad previews suggest compatibility.
                   </p>
                 </div>
               </div>
@@ -3560,11 +3830,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="notifications">
           <div className="section-head">
             <p className="eyebrow">Notifications</p>
-            <h2>Private match alerts</h2>
-            <p>Alerts say that a possible moral trade was found without exposing raw wish data.</p>
+            <h2>Match alerts</h2>
+            <p>Alerts tell you a possible trade was found without exposing raw wish data.</p>
           </div>
 
           <div className="data-grid">
@@ -3616,8 +3886,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-white" id="my-trades">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
-            <h2>Recent published commitments</h2>
-            <p>These recent offers are tied to your public profile and can be rated once agreements complete.</p>
+            <h2>Published offers</h2>
+            <p>Offers are tied to your public profile and can be rated after agreements complete.</p>
           </div>
 
           <div className="data-grid">
@@ -3666,13 +3936,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="incoming-responses">
           <div className="section-head">
             <p className="eyebrow">Incoming responses</p>
-            <h2>Recent responses to your offers</h2>
+            <h2>Responses to your offers</h2>
             <p>
-              These are the responses submitted on your offers, including signed-in members and
-              people who chose to participate without creating an account first.
+              Review responses from signed-in members and legacy guest records.
             </p>
           </div>
 
@@ -3752,11 +4021,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="outgoing-responses">
           <div className="section-head">
             <p className="eyebrow">Your interests</p>
-            <h2>Recent responses you lodged</h2>
-            <p>Each recent response remains tied to a live offer and a public counterparty record.</p>
+            <h2>Your responses</h2>
+            <p>Each response stays tied to a live offer and public counterparty record.</p>
           </div>
 
           <div className="data-grid">
@@ -3813,10 +4082,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="agreements">
           <div className="section-head">
             <p className="eyebrow">Transactions</p>
-            <h2>Agreements and ratings</h2>
+            <h2>Agreements</h2>
             <p>Each completed transaction can be rated from 1 to 10 by each party.</p>
           </div>
 
@@ -4068,11 +4337,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="saved-offers">
           <div className="section-head">
             <p className="eyebrow">Saved offers</p>
-            <h2>Offers you are tracking</h2>
-            <p>Discounts or reduced burdens published by offer owners will appear here and on your saved-offers page.</p>
+            <h2>Tracked offers</h2>
+            <p>Discounts or reduced burdens appear here and on your saved-offers page.</p>
           </div>
 
           <div className="data-grid">
