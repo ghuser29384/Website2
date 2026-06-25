@@ -150,6 +150,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_pledge_performance_bond_enforce",
   "moral_trade_pledge_swap_performance_schedule_contract",
   "moral_trade_pledge_swap_performance_schedule_enforce",
+  "moral_trade_behavioral_micro_pledge_contract",
   "moral_trade_negative_commitment_scope_contract",
   "moral_trade_negative_commitment_scope_enforce",
   "moral_trade_donor_of_record_tax_contract",

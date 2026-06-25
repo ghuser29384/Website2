@@ -663,6 +663,18 @@
       "fallback": "Return pledge-swap performance-schedule blockers, first-class schedule table metadata, synchronization rule, non-punitive breach rule, reciprocal-release rule, release-gate hook, and sample evaluations; never expose participant identity hashes, private evidence, reviewer notes, or participant-specific schedule rows."
     },
     {
+      "key": "moral_trade_behavioral_micro_pledge_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/behavioral-micro-pledges/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "behavioral_micro_pledge_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return behavioral micro-pledge blockers, first-class unit, sequence, evidence-ladder, and health-safety metadata, safe default duration rules, pre-performance lock rule, low-stakes caps, settlement disclosure rule, release-gate hooks, and sample evaluations; never expose participant identity hashes, raw private evidence, exact sensitive behavior details, reviewer notes, or participant-specific micro-pledge rows."
+    },
+    {
       "key": "moral_trade_pledge_swap_performance_schedule_enforce",
       "method": "POST",
       "path": "/api/moral-trade/pledge-swap-performance-schedules/enforce",
@@ -3196,6 +3208,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class schedule tables, policy subjects, release-gate hook, transition coverage, synchronization rule, non-punitive breach rule, reciprocal-release rule, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, synchronization rule, non-punitive breach rule, reciprocal-release rule, first-class table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without participant hashes, private evidence, reviewer notes, or participant-specific schedule rows." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Pledge-swap performance-schedule blockers that prevent lock, performance start, checkpoint evidence, performance release, breach remedy, reciprocal release, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "behavioral_micro_pledge_contract_response",
+      "purpose": "Public validator-backed behavioral micro-pledge governance contract for food-abstention and similar low-stakes pledge swaps.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the behavioral micro-pledge contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the behavioral micro-pledge validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Behavioral micro-pledge contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class micro-pledge records, release-gate hooks, safe default duration rule, pre-performance lock rule, unit baseline rule, health-safety rule, cap rule, settlement disclosure rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed micro-pledge rules, first-class table names, policy subjects, release-gate hooks, safe default unit granularities, manual-review-only granularities, low-stakes caps, transition requirements, sample statuses, and test hooks without participant identity hashes, raw private evidence, exact sensitive behavior details, reviewer notes, or participant-specific micro-pledge rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Behavioral micro-pledge blockers that prevent lock, performance start, evidence acceptance, completion count, payment capture, sequence extension, public receipt publication, or release-gate promotion." }
       ]
     },
     {
