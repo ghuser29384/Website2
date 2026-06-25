@@ -116,6 +116,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_account_security_enforce",
   "moral_trade_reviewer_quality_contract",
   "moral_trade_reviewer_quality_enforce",
+  "moral_trade_reviewer_console_contract",
   "moral_trade_anti_enumeration_contract",
   "moral_trade_privacy_governance_contract",
   "moral_trade_impact_claim_contract",
