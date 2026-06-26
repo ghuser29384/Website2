@@ -15,7 +15,26 @@ export type PublicReceiptCorrectionStatus =
   | "corrected"
   | "revoked";
 export type PublicReceiptCausalWording = "trade_conditioned" | "trade_unlocked";
-export type PublicReceiptReviewState = "passed" | "not_required_for_stage" | "missing" | "blocked" | "stale";
+export type PublicReceiptReviewState =
+  | "passed"
+  | "not_required_for_stage"
+  | "missing"
+  | "blocked"
+  | "stale";
+export type PublicReceiptPublicationGateKey =
+  | "reconciliation"
+  | "challenge_window"
+  | "privacy_publication"
+  | "recipient_acceptance_adverse_association"
+  | "content_moderation"
+  | "public_metric_release";
+export type PublicReceiptPublicationGateState =
+  | "passed"
+  | "not_required_for_stage"
+  | "missing"
+  | "under_review"
+  | "blocked"
+  | "stale";
 export type PublicReceiptPersonalContributionState =
   | "verified_new"
   | "verified_already_counted"
@@ -54,6 +73,10 @@ export interface PublicReceiptCardDraft {
   evidenceLevel: "self_attestation" | "receipt_reviewed" | "witness_attested";
   netAttributionNote: string;
   participantOptIn: boolean;
+  publicationGateStates: Record<
+    PublicReceiptPublicationGateKey,
+    PublicReceiptPublicationGateState
+  >;
   publicationControls: PublicReceiptPublicationControls;
   publicActionSummary: string;
   receiptId: string;
@@ -79,6 +102,10 @@ export interface PublicReceiptCardPreview {
   directDonationParityNote: string;
   evidenceLevel: PublicReceiptCardDraft["evidenceLevel"];
   netAttributionNote: string;
+  publicationGateStates: Record<
+    PublicReceiptPublicationGateKey,
+    PublicReceiptPublicationGateState
+  >;
   publicationControls: PublicReceiptPublicationControls;
   publicActionSummary: string;
   receiptId: string;
@@ -98,6 +125,8 @@ export interface PublicReceiptCardContract {
   correctionStatuses: PublicReceiptCorrectionStatus[];
   causalWordingStates: PublicReceiptCausalWording[];
   reviewStates: PublicReceiptReviewState[];
+  publicationGateKeys: PublicReceiptPublicationGateKey[];
+  publicationGateStates: PublicReceiptPublicationGateState[];
   personalContributionStates: PublicReceiptPersonalContributionState[];
   claimHygieneRules: string[];
   defaultPublicationControls: PublicReceiptPublicationControls;
@@ -129,8 +158,33 @@ const GAMIFICATION_PATTERN =
   /(leaderboard|rank #?\d+|points|badge streak|achievement unlocked|scoreboard|like count|reaction count|share count|public streak|profile boost|search boost|matching priority|review priority|recommendation ranking)/i;
 const STRONG_CAUSAL_WORDING_PATTERN = /\b(trade-unlocked|unlocked|additional|additionality)\b/i;
 
+export const PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES: PublicReceiptPublicationGateKey[] = [
+  "reconciliation",
+  "challenge_window",
+  "privacy_publication",
+  "recipient_acceptance_adverse_association",
+  "content_moderation",
+  "public_metric_release",
+];
+
+const PUBLIC_RECEIPT_GATE_STATES: PublicReceiptPublicationGateState[] = [
+  "passed",
+  "not_required_for_stage",
+  "missing",
+  "under_review",
+  "blocked",
+  "stale",
+];
+
+const DEFAULT_PUBLICATION_GATE_STATES = Object.fromEntries(
+  PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES.map((gate) => [gate, "passed"]),
+) as Record<PublicReceiptPublicationGateKey, PublicReceiptPublicationGateState>;
+
 function isSafeVerificationUrl(value: string) {
-  return /^https:\/\/[^\s]+$/i.test(value) || /^\/api\/moral-trade\/public-receipts\/[a-z0-9-]+\/verify$/i.test(value);
+  return (
+    /^https:\/\/[^\s]+$/i.test(value) ||
+    /^\/api\/moral-trade\/public-receipts\/[a-z0-9-]+\/verify$/i.test(value)
+  );
 }
 
 function hasText(value: string | undefined) {
@@ -139,6 +193,10 @@ function hasText(value: string | undefined) {
 
 function isPassedReviewState(value: PublicReceiptReviewState) {
   return value === "passed";
+}
+
+function isNonBlockingPublicationGate(value: PublicReceiptPublicationGateState | undefined) {
+  return value === "passed" || value === "not_required_for_stage";
 }
 
 function check(
@@ -166,6 +224,13 @@ export function validatePublicReceiptCardDraft(
     if (!draft.reviewed) blockers.push("review_required_before_publication");
     if (!isSafeVerificationUrl(draft.verificationUrl)) blockers.push("verification_url_required");
     if (!draft.sensitiveActionRedacted) blockers.push("sensitive_action_redaction_required");
+    for (const gate of PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES) {
+      if (!isNonBlockingPublicationGate(draft.publicationGateStates[gate])) {
+        blockers.push(
+          `publication_gate_not_non_blocking:${gate}:${draft.publicationGateStates[gate] ?? "missing"}`,
+        );
+      }
+    }
     if (draft.correctionStatus === "revoked" || draft.publicationControls.currentStatus === "revoked") {
       blockers.push("revoked_receipt_cannot_publish");
     }
@@ -263,6 +328,7 @@ export function buildPublicReceiptCardPreview(
     directDonationParityNote: draft.directDonationParityNote,
     evidenceLevel: draft.evidenceLevel,
     netAttributionNote: draft.netAttributionNote,
+    publicationGateStates: draft.publicationGateStates,
     publicationControls: draft.publicationControls,
     publicActionSummary: draft.publicActionSummary,
     receiptId: draft.receiptId,
@@ -307,6 +373,7 @@ const SAMPLE_PUBLIC_RECEIPT_DRAFTS: PublicReceiptCardDraft[] = [
     netAttributionNote:
       "Net attribution separates personal contribution, trade-conditioned contribution, and total verified recipient transfer.",
     participantOptIn: true,
+    publicationGateStates: DEFAULT_PUBLICATION_GATE_STATES,
     publicationControls: DEFAULT_PUBLICATION_CONTROLS,
     publicActionSummary: "Reviewed donation-offset receipt",
     receiptId: "public-receipt-contract-sample-offset",
@@ -341,6 +408,7 @@ const SAMPLE_PUBLIC_RECEIPT_DRAFTS: PublicReceiptCardDraft[] = [
     netAttributionNote:
       "Net personal contribution excludes reimbursements, subsidies, refunds, and counterparty-funded amounts.",
     participantOptIn: true,
+    publicationGateStates: DEFAULT_PUBLICATION_GATE_STATES,
     publicationControls: DEFAULT_PUBLICATION_CONTROLS,
     publicActionSummary:
       "Reviewed stronger causal wording receipt with current verification status",
@@ -373,6 +441,7 @@ const SAMPLE_PUBLIC_RECEIPT_DRAFTS: PublicReceiptCardDraft[] = [
     netAttributionNote:
       "Net attribution is qualified because personal behavior details are suppressed.",
     participantOptIn: true,
+    publicationGateStates: DEFAULT_PUBLICATION_GATE_STATES,
     publicationControls: DEFAULT_PUBLICATION_CONTROLS,
     publicActionSummary: "Verified micro-pledge completed",
     receiptId: "public-receipt-contract-sample-pledge",
@@ -396,6 +465,7 @@ const CLAIM_HYGIENE_RULES = [
   "correction_revocation_state_required",
   "sensitive_action_redaction_required",
   "publication_sidecar_only",
+  "publication_gates_non_blocking_required",
 ];
 
 const PROHIBITED_PUBLIC_SIGNALS = [
@@ -435,6 +505,8 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
     correctionStatuses: ["none", "correction_requested", "corrected", "revoked"],
     causalWordingStates: ["trade_conditioned", "trade_unlocked"],
     reviewStates: ["passed", "not_required_for_stage", "missing", "blocked", "stale"],
+    publicationGateKeys: PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
+    publicationGateStates: PUBLIC_RECEIPT_GATE_STATES,
     personalContributionStates: [
       "verified_new",
       "verified_already_counted",
@@ -455,6 +527,7 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
       "contributionSummary.totalVerifiedRecipientTransfer",
       "directDonationParityNote",
       "netAttributionNote",
+      "publicationGateStates",
     ],
     prohibitedPublicSignals: PROHIBITED_PUBLIC_SIGNALS,
     samplePreviews,
@@ -488,6 +561,26 @@ export function validatePublicReceiptCardContract(
       "Contract covers causal wording, net attribution, parity, sidecar, verification, and anti-gamification rules",
       CLAIM_HYGIENE_RULES.every((rule) => contract.claimHygieneRules.includes(rule)),
       contract.claimHygieneRules.join(", "),
+    ),
+    check(
+      "publication-gate-coverage",
+      "Contract requires reconciliation, challenge-window, privacy, recipient association, content moderation, and public-metric-release gates before publication",
+      PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES.every((gate) =>
+        contract.publicationGateKeys.includes(gate),
+      ) &&
+        [
+          "passed",
+          "not_required_for_stage",
+          "missing",
+          "under_review",
+          "blocked",
+          "stale",
+        ].every((state) =>
+          contract.publicationGateStates.includes(
+            state as PublicReceiptPublicationGateState,
+          ),
+        ),
+      `${contract.publicationGateKeys.join(", ")} states=${contract.publicationGateStates.join(", ")}`,
     ),
     check(
       "publication-controls",

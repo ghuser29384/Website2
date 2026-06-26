@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
   buildPublicReceiptCardPreview,
   getPublicReceiptCardContract,
   validatePublicReceiptCardContract,
@@ -40,6 +42,14 @@ const validDraft: PublicReceiptCardDraft = {
     recommendationOrPriorityBoost: false,
     sidecarOnly: true,
   },
+  publicationGateStates: {
+    challenge_window: "passed",
+    content_moderation: "passed",
+    privacy_publication: "passed",
+    public_metric_release: "passed",
+    reconciliation: "passed",
+    recipient_acceptance_adverse_association: "passed",
+  },
   publicActionSummary: "Reviewed donation-offset receipt",
   receiptId: "receipt-card-1",
   reviewed: true,
@@ -72,6 +82,41 @@ test("public receipt card validator blocks publication without consent and revie
   assert.ok(validation.blockers.includes("participant_opt_in_required"));
   assert.ok(validation.blockers.includes("review_required_before_publication"));
   assert.ok(validation.blockers.includes("verification_url_required"));
+});
+
+test("public receipt card validator requires non-blocking publication gates before opt-in publication", () => {
+  const validation = validatePublicReceiptCardDraft({
+    ...validDraft,
+    publicationGateStates: {
+      ...validDraft.publicationGateStates,
+      challenge_window: "under_review",
+      content_moderation: "blocked",
+      public_metric_release: "stale",
+      recipient_acceptance_adverse_association: "missing",
+    },
+  });
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.includes(
+      "publication_gate_not_non_blocking:challenge_window:under_review",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication_gate_not_non_blocking:content_moderation:blocked",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication_gate_not_non_blocking:public_metric_release:stale",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication_gate_not_non_blocking:recipient_acceptance_adverse_association:missing",
+    ),
+  );
 });
 
 test("public receipt card validator blocks ranking, endorsement, private fields, and missing parity", () => {
@@ -212,6 +257,17 @@ test("public receipt card contract validates first-class claim hygiene coverage"
     ),
   );
   assert.ok(contract.claimHygieneRules.includes("publication_sidecar_only"));
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "publication_gates_non_blocking_required",
+    ),
+  );
+  assert.deepEqual(
+    contract.publicationGateKeys,
+    PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
+  );
+  assert.ok(contract.publicationGateStates.includes("under_review"));
+  assert.ok(contract.publicationGateStates.includes("blocked"));
   assert.equal(contract.defaultPublicationControls.sidecarOnly, true);
   assert.equal(contract.defaultPublicationControls.affectsMatchingOrReview, false);
   assert.equal(contract.defaultPublicationControls.publicEngagementCounters, false);
@@ -219,6 +275,30 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.ok(contract.prohibitedPublicSignals.includes("moral_scores"));
   assert.ok(contract.prohibitedPublicSignals.includes("matching_priority"));
   assert.ok(contract.samplePreviews.every((preview) => preview.validation.status === "pass"));
+});
+
+test("public receipt card source-of-truth tables are migration-backed", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260626_moral_trade_public_receipt_card_records.sql",
+    "utf8",
+  );
+
+  for (const tableName of getPublicReceiptCardContract().firstClassRecordTables) {
+    assert.match(
+      migration,
+      new RegExp(`create table if not exists public\\.${tableName}\\b`),
+    );
+  }
+
+  assert.match(migration, /publication_gate_states_jsonb/);
+  assert.match(migration, /recipient_acceptance_adverse_association/);
+  assert.match(migration, /visibility_state <> 'opt_in_public'/);
+  assert.match(migration, /publication_required_as_trade_term_bool = false/);
+  assert.match(migration, /publication_affects_marketplace_priority_bool = false/);
+  assert.match(migration, /public_engagement_counters_bool = false/);
+  assert.match(migration, /raw_evidence_public_bool = false/);
+  assert.match(migration, /private_counterparty_public_bool = false/);
+  assert.match(migration, /Receipt cards are sidecar verification records/);
 });
 
 test("public receipt card contract fails closed if publication can affect marketplace priority", () => {
@@ -233,6 +313,9 @@ test("public receipt card contract fails closed if publication can affect market
       affectsMatchingOrReview: true,
       publicEngagementCounters: true,
     },
+    publicationGateKeys: contract.publicationGateKeys.filter(
+      (gate) => gate !== "content_moderation",
+    ),
   });
 
   assert.equal(validation.status, "fail");
@@ -244,6 +327,11 @@ test("public receipt card contract fails closed if publication can affect market
   assert.ok(
     validation.blockers.includes(
       "publication-controls: Default publication controls cannot affect matching, review, engagement, ranking, or trade terms",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication-gate-coverage: Contract requires reconciliation, challenge-window, privacy, recipient association, content moderation, and public-metric-release gates before publication",
     ),
   );
 });

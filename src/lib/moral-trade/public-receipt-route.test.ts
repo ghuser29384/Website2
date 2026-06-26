@@ -30,6 +30,21 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
       "publication_sidecar_only",
     ),
   );
+  assert.ok(
+    body.publicContract.claimHygieneRules.includes(
+      "publication_gates_non_blocking_required",
+    ),
+  );
+  assert.ok(body.publicContract.publicationGateKeys.includes("reconciliation"));
+  assert.ok(body.publicContract.publicationGateKeys.includes("challenge_window"));
+  assert.ok(body.publicContract.publicationGateKeys.includes("privacy_publication"));
+  assert.ok(
+    body.publicContract.publicationGateKeys.includes(
+      "recipient_acceptance_adverse_association",
+    ),
+  );
+  assert.ok(body.publicContract.publicationGateKeys.includes("content_moderation"));
+  assert.ok(body.publicContract.publicationGateKeys.includes("public_metric_release"));
   assert.equal(
     body.publicContract.defaultPublicationControls.affectsMatchingOrReview,
     false,
@@ -68,6 +83,9 @@ test("public receipt verification route returns contract-only validation without
   assert.equal(body.receiptId, "receipt-card-1");
   assert.equal(body.verificationStatus, "contract_only_no_public_claim_loaded");
   assert.equal(body.publicContract.participantOptInRequired, true);
+  assert.equal(body.publicContract.publicationGatesMustBeNonBlocking, true);
+  assert.ok(body.publicContract.publicationGateKeys.includes("reconciliation"));
+  assert.ok(body.publicContract.publicationGateKeys.includes("public_metric_release"));
   assert.equal(body.publicContract.gamificationAndRankingAllowed, false);
   assert.equal(body.publicContract.tradeConditionedWordingDefault, true);
   assert.equal(body.publicContract.strongerTradeUnlockedWordingRequiresReviewedCausalSupport, true);

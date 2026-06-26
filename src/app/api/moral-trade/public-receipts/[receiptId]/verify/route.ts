@@ -5,6 +5,7 @@ import {
 } from "@/lib/moral-trade/api-rate-limit";
 import {
   PUBLIC_RECEIPT_CARD_POLICY_VERSION,
+  PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
   buildPublicReceiptCardPreview,
   type PublicReceiptCardDraft,
 } from "@/lib/moral-trade/public-receipt-cards";
@@ -40,6 +41,14 @@ function buildContractOnlyReceiptDraft(receiptId: string): PublicReceiptCardDraf
     netAttributionNote:
       "Net attribution is uncertain in this contract-only preview and must be qualified before public display.",
     participantOptIn: true,
+    publicationGateStates: {
+      challenge_window: "missing",
+      content_moderation: "missing",
+      privacy_publication: "missing",
+      public_metric_release: "missing",
+      reconciliation: "missing",
+      recipient_acceptance_adverse_association: "missing",
+    },
     publicationControls: {
       affectsMatchingOrReview: false,
       currentStatus: "current",
@@ -107,6 +116,8 @@ export async function GET(
       gamificationAndRankingAllowed: false,
       objectiveMoralEndorsementAllowed: false,
       participantOptInRequired: true,
+      publicationGateKeys: PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
+      publicationGatesMustBeNonBlocking: true,
       publicEngagementCountersAllowed: false,
       publicationAffectsMatchingOrReview: false,
       publicationCanBeTradeTerm: false,

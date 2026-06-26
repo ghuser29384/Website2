@@ -37,6 +37,8 @@ export async function GET(request: Request) {
       correctionStatuses: contract.correctionStatuses,
       causalWordingStates: contract.causalWordingStates,
       reviewStates: contract.reviewStates,
+      publicationGateKeys: contract.publicationGateKeys,
+      publicationGateStates: contract.publicationGateStates,
       personalContributionStates: contract.personalContributionStates,
       claimHygieneRules: contract.claimHygieneRules,
       defaultPublicationControls: contract.defaultPublicationControls,
