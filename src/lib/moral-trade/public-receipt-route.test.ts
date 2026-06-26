@@ -45,6 +45,41 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
   );
   assert.ok(body.publicContract.publicationGateKeys.includes("content_moderation"));
   assert.ok(body.publicContract.publicationGateKeys.includes("public_metric_release"));
+  assert.ok(body.publicContract.claimReviewKeys.includes("verified"));
+  assert.ok(body.publicContract.claimReviewKeys.includes("matched"));
+  assert.ok(body.publicContract.claimReviewKeys.includes("completed"));
+  assert.ok(body.publicContract.claimReviewKeys.includes("impact"));
+  assert.ok(
+    body.publicContract.claimHygieneRules.includes(
+      "direct_donation_parity_opt_in_non_preferential",
+    ),
+  );
+  assert.ok(
+    body.publicContract.claimHygieneRules.includes(
+      "net_attribution_gross_reimbursement_side_benefit_and_net_lines_separated",
+    ),
+  );
+  assert.equal(
+    body.publicContract.defaultDirectDonationParityControls.preselected,
+    false,
+  );
+  assert.equal(
+    body.publicContract.defaultDirectDonationParityControls.affectsFutureMarketplaceAccess,
+    false,
+  );
+  assert.ok(
+    body.publicContract.netPersonalAttributionStates.includes(
+      "verified_net_personal",
+    ),
+  );
+  assert.ok(
+    body.publicContract.netAttributionExclusionControls.includes(
+      "counterpartyReimbursementsExcluded",
+    ),
+  );
+  assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("generic_action_label"));
+  assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("transfer_only"));
+  assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("exact_action_details"));
   assert.equal(
     body.publicContract.defaultPublicationControls.affectsMatchingOrReview,
     false,
@@ -60,6 +95,42 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
       "public-receipt-contract-sample-offset"
     ].status,
     "pass",
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].currentStatus,
+    "current",
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].claimReviewStates.verified,
+    "passed",
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].directDonationParityControls.preselected,
+    false,
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].netAttributionState,
+    "verified_net_personal",
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-pledge"
+    ].sensitiveActionDisplayMode,
+    "generic_action_label",
+  );
+  assert.match(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].issuedAt,
+    /^2026-06-25T/,
   );
   assert.equal(serialized.includes("private_note"), false);
   assert.equal(serialized.includes("raw_evidence"), false);
@@ -82,8 +153,30 @@ test("public receipt verification route returns contract-only validation without
   assert.equal(body.ok, true);
   assert.equal(body.receiptId, "receipt-card-1");
   assert.equal(body.verificationStatus, "contract_only_no_public_claim_loaded");
+  assert.equal(body.verification.authoritativeSource, "privacy_safe_verification_url");
+  assert.equal(body.verification.currentStatus, "current");
+  assert.equal(body.verification.correctionStatus, "none");
+  assert.equal(body.verification.correctionOrRevocationState, "none");
+  assert.equal(body.verification.staticImageAuthoritative, false);
+  assert.match(body.verification.issuedAt, /^1970-01-01T00:00:00\.000Z$/);
   assert.equal(body.publicContract.participantOptInRequired, true);
   assert.equal(body.publicContract.publicationGatesMustBeNonBlocking, true);
+  assert.equal(body.publicContract.currentStatusRequired, true);
+  assert.equal(body.publicContract.issuedAtRequired, true);
+  assert.equal(body.publicContract.correctionRevocationStateRequired, true);
+  assert.equal(body.publicContract.directDonationParityControlsRequired, true);
+  assert.equal(body.publicContract.netAttributionControlsRequired, true);
+  assert.equal(body.publicContract.netPersonalContributionExcludesThirdPartyFunds, true);
+  assert.ok(
+    body.publicContract.netPersonalAttributionStates.includes(
+      "uncertain_qualified",
+    ),
+  );
+  assert.equal(
+    body.publicContract.sensitiveActionExactDetailsRequireSeparateConsentAndReview,
+    true,
+  );
+  assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("exact_action_details"));
   assert.ok(body.publicContract.publicationGateKeys.includes("reconciliation"));
   assert.ok(body.publicContract.publicationGateKeys.includes("public_metric_release"));
   assert.equal(body.publicContract.gamificationAndRankingAllowed, false);
