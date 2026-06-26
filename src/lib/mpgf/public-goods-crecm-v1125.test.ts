@@ -32,9 +32,17 @@ import {
   evaluateMpgfCrecRoundStatusGate,
   evaluateMpgfCrecSuccessRewardClaim,
   hashMpgfCrecV1125Value,
+  intersectMpgfCrecTrimStableStringArrays,
+  minMpgfCrecNonNegativeSafeInteger,
+  resolveMpgfCrecAllocatorStateInputs,
+  resolveMpgfCrecCommonGroundBudgetAllocationInputs,
+  resolveMpgfCrecConditionalIntentAllocationInputs,
+  resolveMpgfCrecIdentityEligibilityAllocationInputs,
+  resolveMpgfCrecSupportStanceAllocationInputs,
   selectMpgfCrecFinalFailureBonusPayoutClaims,
   selectMpgfCrecPreliminaryFailureBonusMutationClaims,
   settleMpgfCrecFailureBonusClaim,
+  sumMpgfCrecNonNegativeBigInt,
   sumMpgfCrecSponsorBackedCentsForFinalClearing,
   sumSelectedMpgfCrecSponsorPaidFeeSupportDemand,
   validateMpgfCrecAuthorizationReconciliationEvent,
@@ -1359,6 +1367,725 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
   assert.ok(blockedShadow.blockers.includes("project_hard_gate_externality_not_clear"));
 });
 
+test("CRECM v1.125 fail-closed helpers reject malformed payout and counterparty inputs", () => {
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(5, 3, 7), 3);
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(5, -1, 7), 0);
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(5, 1.5, 7), 0);
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(5, Number.MAX_SAFE_INTEGER + 1), 0);
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(5, "3"), 0);
+  assert.equal(minMpgfCrecNonNegativeSafeInteger(), 0);
+
+  assert.deepEqual(
+    intersectMpgfCrecTrimStableStringArrays(
+      ["bucket-c", "bucket-a", "bucket-b"],
+      ["bucket-b", "bucket-a"],
+      ["bucket-a", "bucket-b", "bucket-d"],
+    ),
+    ["bucket-a", "bucket-b"],
+  );
+  assert.deepEqual(
+    intersectMpgfCrecTrimStableStringArrays(["bucket-a", "bucket-a"], ["bucket-a"]),
+    [],
+  );
+  assert.deepEqual(
+    intersectMpgfCrecTrimStableStringArrays([" bucket-a"], ["bucket-a"]),
+    [],
+  );
+  assert.deepEqual(intersectMpgfCrecTrimStableStringArrays(["bucket-a"], "bucket-a"), []);
+
+  assert.equal(sumMpgfCrecNonNegativeBigInt([1, BigInt(2), 3]), BigInt(6));
+  assert.equal(sumMpgfCrecNonNegativeBigInt([1, -1]), BigInt(0));
+  assert.equal(sumMpgfCrecNonNegativeBigInt([1, 1.5]), BigInt(0));
+  assert.equal(sumMpgfCrecNonNegativeBigInt([1, "2"]), BigInt(0));
+  assert.equal(sumMpgfCrecNonNegativeBigInt("not-array"), BigInt(0));
+});
+
+test("CRECM v1.125 Common Ground Budget allocation inputs fail closed before payment lookup", () => {
+  const missing = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
+    roundId,
+    participantId,
+    rulebookHash,
+    selectedCommonGroundBudgetByIdRowCount: 0,
+    selectedCommonGroundBudgetByParticipantRowCount: 0,
+    commonGroundBudget: null,
+  });
+
+  assert.equal(missing.commonGroundBudgetRowEligible, false);
+  assert.equal(missing.budgetEligible, false);
+  assert.equal(missing.allocatableCents, 0);
+  assert.equal(missing.safeCommonGroundBudgetTotalCents, 0);
+  assert.equal(missing.safeCommonGroundBudgetPerProjectCapCents, 0);
+  assert.equal(missing.paymentSnapshotLookupAllowed, false);
+  assert.equal(missing.paymentSnapshotLookupKey, null);
+  assert.equal(missing.exposesPaymentAuthority, false);
+  assert.ok(missing.rowFailureCodes.includes("common_ground_budget_row_missing"));
+  assert.ok(missing.rowFailureCodes.includes("common_ground_budget_row_count_not_unique"));
+
+  const wrongRound = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
+    roundId,
+    participantId,
+    rulebookHash,
+    selectedCommonGroundBudgetByIdRowCount: 1,
+    selectedCommonGroundBudgetByParticipantRowCount: 1,
+    commonGroundBudget: {
+      id: commonGroundBudgetId,
+      roundId: "round-other",
+      participantId,
+      get totalBudgetCents() {
+        throw new Error("totalBudgetCents should not be read before row binding");
+      },
+      get perProjectCapCents() {
+        throw new Error("perProjectCapCents should not be read before row binding");
+      },
+      get paymentMethodRef() {
+        throw new Error("payment fields should not be read by budget gating");
+      },
+    },
+  });
+
+  assert.equal(wrongRound.commonGroundBudgetRowEligible, false);
+  assert.equal(wrongRound.allocatableCents, 0);
+  assert.equal(wrongRound.paymentSnapshotLookupAllowed, false);
+  assert.equal(wrongRound.exposesPaymentAuthority, false);
+  assert.ok(wrongRound.rowFailureCodes.includes("common_ground_budget_row_not_bound"));
+
+  const invalidMetadata = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
+    roundId,
+    participantId,
+    rulebookHash,
+    selectedCommonGroundBudgetByIdRowCount: 1,
+    selectedCommonGroundBudgetByParticipantRowCount: 1,
+    commonGroundBudget: {
+      id: commonGroundBudgetId,
+      roundId,
+      participantId,
+      totalBudgetCents: -1,
+      perProjectCapCents: 1.5,
+      budgetPeriod: "weekly",
+      fallbackRule: "donate_elsewhere",
+      rulebookHashAtConsent: rulebookHash,
+      state: "active",
+      canceledAt: null,
+    },
+  });
+
+  assert.equal(invalidMetadata.commonGroundBudgetRowEligible, true);
+  assert.equal(invalidMetadata.commonGroundBudgetCapsValid, false);
+  assert.equal(invalidMetadata.budgetPeriodEligible, false);
+  assert.equal(invalidMetadata.budgetFallbackRuleEligible, false);
+  assert.equal(invalidMetadata.budgetEligible, false);
+  assert.equal(invalidMetadata.allocatableCents, 0);
+  assert.ok(invalidMetadata.rowFailureCodes.includes("common_ground_budget_total_cents_invalid_zeroed"));
+  assert.ok(invalidMetadata.rowFailureCodes.includes("common_ground_budget_per_project_cap_cents_invalid_zeroed"));
+  assert.ok(invalidMetadata.rowFailureCodes.includes("common_ground_budget_period_invalid"));
+  assert.ok(invalidMetadata.rowFailureCodes.includes("common_ground_budget_fallback_rule_invalid"));
+
+  const invalidRecurring = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
+    roundId,
+    participantId,
+    rulebookHash,
+    selectedCommonGroundBudgetByIdRowCount: 1,
+    selectedCommonGroundBudgetByParticipantRowCount: 1,
+    commonGroundBudget: {
+      id: commonGroundBudgetId,
+      roundId,
+      participantId,
+      totalBudgetCents: 10_000,
+      perProjectCapCents: 2_500,
+      budgetPeriod: "monthly",
+      recurringConsentVersion: "",
+      nextCaptureAt: "2026-05-01",
+      nextCaptureRule: " monthly",
+      fallbackRule: "refund",
+      rulebookHashAtConsent: rulebookHash,
+      state: "active",
+      canceledAt: null,
+    },
+  });
+
+  assert.equal(invalidRecurring.budgetPeriodEligible, true);
+  assert.equal(invalidRecurring.recurringBudgetConsentEligible, false);
+  assert.equal(invalidRecurring.budgetEligible, false);
+  assert.equal(invalidRecurring.allocatableCents, 0);
+  assert.ok(invalidRecurring.rowFailureCodes.includes("common_ground_budget_recurring_consent_invalid"));
+});
+
+test("CRECM v1.125 valid Common Ground Budget exposes only sanitized cap and lookup inputs", () => {
+  const resolved = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
+    roundId,
+    participantId,
+    rulebookHash,
+    selectedCommonGroundBudgetByIdRowCount: 1,
+    selectedCommonGroundBudgetByParticipantRowCount: 1,
+    commonGroundBudget: {
+      id: commonGroundBudgetId,
+      roundId,
+      participantId,
+      totalBudgetCents: 10_000,
+      perProjectCapCents: 2_500,
+      budgetPeriod: "one_time",
+      recurringConsentVersion: null,
+      nextCaptureAt: null,
+      nextCaptureRule: null,
+      fallbackRule: "refund",
+      rulebookHashAtConsent: rulebookHash,
+      state: "active",
+      canceledAt: null,
+    },
+  });
+
+  assert.equal(resolved.commonGroundBudgetRowEligible, true);
+  assert.equal(resolved.commonGroundBudgetId, commonGroundBudgetId);
+  assert.equal(resolved.commonGroundBudgetParticipantId, participantId);
+  assert.equal(resolved.commonGroundBudgetCapsValid, true);
+  assert.equal(resolved.budgetPeriod, "one_time");
+  assert.equal(resolved.budgetFallbackRule, "refund");
+  assert.equal(resolved.recurringBudgetConsentEligible, true);
+  assert.equal(resolved.rulebookConsentEligible, true);
+  assert.equal(resolved.stateAllowsAllocation, true);
+  assert.equal(resolved.budgetEligible, true);
+  assert.equal(resolved.allocatableCents, 2_500);
+  assert.equal(resolved.paymentSnapshotLookupAllowed, true);
+  assert.deepEqual(resolved.paymentSnapshotLookupKey, {
+    roundId,
+    commonGroundBudgetId,
+    snapshotKind: "round_close",
+  });
+  assert.equal(resolved.exposesPaymentAuthority, false);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
+test("CRECM v1.125 support-stance allocation inputs default missing and malformed rows to abstain", () => {
+  const missing = resolveMpgfCrecSupportStanceAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    commonGroundBudgetTotalCents: 10_000,
+    supportStance: null,
+  });
+
+  assert.equal(missing.supportStanceInputEligible, false);
+  assert.equal(missing.effectiveStance, "abstain");
+  assert.equal(missing.defaultedToAbstain, true);
+  assert.equal(missing.allocatableCents, 0);
+  assert.equal(missing.stanceCapCents, 0);
+  assert.equal(missing.supportStanceMaxAllocCents, 0);
+  assert.equal(missing.supportStanceMaxAllocBps, null);
+  assert.deepEqual(missing.acceptableCounterBucketIds, []);
+  assert.equal(missing.exposesCounterpartyBuckets, false);
+  assert.equal(missing.exposesPaymentAuthority, false);
+  assert.ok(missing.rowFailureCodes.includes("support_stance_row_missing"));
+
+  const wrongBudget = resolveMpgfCrecSupportStanceAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    commonGroundBudgetTotalCents: 10_000,
+    supportStance: {
+      id: "stance-cross-budget",
+      roundId,
+      commonGroundBudgetId: "budget-other",
+      participantId,
+      projectId,
+      stance: "weak",
+      maxAllocCents: 5_000,
+      maxAllocBps: 7_500,
+      rankOrder: 1,
+      unrestrictedRoutingOptIn: true,
+      acceptableCounterBucketIds: ["bucket-animal-welfare"],
+    },
+  });
+
+  assert.equal(wrongBudget.supportStanceInputEligible, false);
+  assert.equal(wrongBudget.effectiveStance, "abstain");
+  assert.equal(wrongBudget.allocatableCents, 0);
+  assert.deepEqual(wrongBudget.acceptableCounterBucketIds, []);
+  assert.equal(wrongBudget.rankOrder, null);
+  assert.equal(wrongBudget.unrestrictedRoutingOptIn, false);
+  assert.ok(wrongBudget.rowFailureCodes.includes("support_stance_row_not_bound"));
+
+  const invalidStanceAndBuckets = resolveMpgfCrecSupportStanceAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    commonGroundBudgetTotalCents: 10_000,
+    supportStance: {
+      id: "stance-invalid",
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      stance: "maybe",
+      maxAllocCents: 5_000,
+      maxAllocBps: null,
+      rankOrder: 2,
+      unrestrictedRoutingOptIn: false,
+      acceptableCounterBucketIds: ["bucket-animal-welfare", "bucket-animal-welfare"],
+    },
+  });
+
+  assert.equal(invalidStanceAndBuckets.supportStanceInputEligible, true);
+  assert.equal(invalidStanceAndBuckets.effectiveStance, "abstain");
+  assert.equal(invalidStanceAndBuckets.defaultedToAbstain, true);
+  assert.equal(invalidStanceAndBuckets.allocatableCents, 0);
+  assert.deepEqual(invalidStanceAndBuckets.acceptableCounterBucketIds, []);
+  assert.ok(
+    invalidStanceAndBuckets.rowFailureCodes.includes("support_stance_invalid_stance_defaulted_to_abstain"),
+  );
+  assert.ok(
+    invalidStanceAndBuckets.rowFailureCodes.includes("support_stance_counterparty_buckets_malformed_empty"),
+  );
+
+  const invalidBps = resolveMpgfCrecSupportStanceAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    commonGroundBudgetTotalCents: 10_000,
+    supportStance: {
+      id: "stance-invalid-bps",
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      stance: "strong",
+      maxAllocCents: 5_000,
+      maxAllocBps: 10_001,
+      rankOrder: 1,
+      unrestrictedRoutingOptIn: false,
+      acceptableCounterBucketIds: ["bucket-animal-welfare"],
+    },
+  });
+
+  assert.equal(invalidBps.supportStanceInputEligible, true);
+  assert.equal(invalidBps.effectiveStance, "strong");
+  assert.equal(invalidBps.supportStanceCapsValid, false);
+  assert.equal(invalidBps.allocatableCents, 0);
+  assert.equal(invalidBps.stanceCapCents, 0);
+  assert.ok(invalidBps.rowFailureCodes.includes("support_stance_max_alloc_bps_invalid_zeroed"));
+});
+
+test("CRECM v1.125 valid weak support stance exposes only sanitized allocation inputs", () => {
+  const resolved = resolveMpgfCrecSupportStanceAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    commonGroundBudgetTotalCents: 10_000,
+    supportStance: {
+      id: "stance-valid-weak",
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      stance: "weak",
+      maxAllocCents: 8_000,
+      maxAllocBps: 2_500,
+      rankOrder: 3,
+      unrestrictedRoutingOptIn: true,
+      acceptableCounterBucketIds: ["bucket-global-health", "bucket-animal-welfare"],
+      minCounterpartyVolumeCents: 1,
+    },
+  });
+
+  assert.equal(resolved.supportStanceInputEligible, true);
+  assert.equal(resolved.effectiveStance, "weak");
+  assert.equal(resolved.defaultedToAbstain, false);
+  assert.equal(resolved.supportStanceCapsValid, true);
+  assert.equal(resolved.supportStanceMaxAllocCents, 8_000);
+  assert.equal(resolved.supportStanceMaxAllocBps, 2_500);
+  assert.equal(resolved.stanceCapCents, 2_500);
+  assert.equal(resolved.allocatableCents, 2_500);
+  assert.deepEqual(resolved.acceptableCounterBucketIds, [
+    "bucket-animal-welfare",
+    "bucket-global-health",
+  ]);
+  assert.equal(resolved.exposesCounterpartyBuckets, true);
+  assert.equal(resolved.exposesPaymentAuthority, false);
+  assert.equal(resolved.rankOrder, 3);
+  assert.equal(resolved.unrestrictedRoutingOptIn, true);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
+test("CRECM v1.125 conditional-intent allocation inputs fail closed on wrong rows and invalid consent", () => {
+  const missing = resolveMpgfCrecConditionalIntentAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    rulebookHash,
+    budgetFallbackRule: "refund",
+    selectedConditionalTradeIntentRowCount: 0,
+    conditionalTradeIntent: null,
+  });
+
+  assert.equal(missing.conditionalIntentRowEligible, false);
+  assert.equal(missing.conditionalIntentEligible, false);
+  assert.equal(missing.intentCapCents, 0);
+  assert.deepEqual(missing.acceptableCounterBucketIds, []);
+  assert.equal(missing.exposesFallbackAuthority, false);
+  assert.equal(missing.exposesAuthorizationAuthority, false);
+  assert.equal(missing.exposesCounterpartyBuckets, false);
+  assert.equal(missing.failureBonusEligibilityInputsAllowed, false);
+  assert.ok(missing.rowFailureCodes.includes("conditional_intent_row_missing"));
+  assert.ok(missing.rowFailureCodes.includes("conditional_intent_row_count_not_unique"));
+
+  const wrongBudget = resolveMpgfCrecConditionalIntentAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    rulebookHash,
+    budgetFallbackRule: "refund",
+    selectedConditionalTradeIntentRowCount: 1,
+    conditionalTradeIntent: {
+      id: conditionalTradeIntentId,
+      roundId,
+      commonGroundBudgetId: "budget-other",
+      participantId,
+      projectId,
+      get amountCents() {
+        throw new Error("amountCents should not be read before intent binding");
+      },
+      get acceptableCounterBucketIds() {
+        throw new Error("counterparty buckets should not be read before intent binding");
+      },
+    },
+  });
+
+  assert.equal(wrongBudget.conditionalIntentRowEligible, false);
+  assert.equal(wrongBudget.conditionalIntentEligible, false);
+  assert.equal(wrongBudget.intentCapCents, 0);
+  assert.deepEqual(wrongBudget.acceptableCounterBucketIds, []);
+  assert.equal(wrongBudget.exposesFallbackAuthority, false);
+  assert.ok(wrongBudget.rowFailureCodes.includes("conditional_intent_row_not_bound"));
+
+  const capturedIntent = resolveMpgfCrecConditionalIntentAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    rulebookHash,
+    budgetFallbackRule: "refund",
+    selectedConditionalTradeIntentRowCount: 1,
+    conditionalTradeIntent: {
+      id: conditionalTradeIntentId,
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      state: "active",
+      authorizationState: "captured",
+      fallbackRule: "reroute",
+      rulebookHashAtConsent: rulebookHash,
+      amountCents: 5_000,
+      maxExposureCents: 2_000,
+      minCounterpartyVolumeCents: 1_000,
+      acceptableCounterBucketIds: ["bucket-global-health"],
+    },
+  });
+
+  assert.equal(capturedIntent.conditionalIntentRowEligible, true);
+  assert.equal(capturedIntent.authorizationState, "captured");
+  assert.equal(capturedIntent.authorizationStateEligible, false);
+  assert.equal(capturedIntent.budgetAndIntentFallbackRuleConsistent, false);
+  assert.equal(capturedIntent.conditionalIntentEligible, false);
+  assert.equal(capturedIntent.intentCapCents, 0);
+  assert.equal(capturedIntent.exposesAuthorizationAuthority, false);
+  assert.equal(capturedIntent.exposesFallbackAuthority, false);
+  assert.equal(capturedIntent.failureBonusEligibilityInputsAllowed, false);
+  assert.ok(
+    capturedIntent.rowFailureCodes.includes("conditional_intent_authorization_state_not_precapture"),
+  );
+  assert.ok(
+    capturedIntent.rowFailureCodes.includes("conditional_intent_budget_fallback_rule_mismatch"),
+  );
+
+  const malformedInputs = resolveMpgfCrecConditionalIntentAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    rulebookHash,
+    budgetFallbackRule: "refund",
+    selectedConditionalTradeIntentRowCount: 1,
+    conditionalTradeIntent: {
+      id: conditionalTradeIntentId,
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      state: "active",
+      authorizationState: "authorized",
+      fallbackRule: "refund",
+      rulebookHashAtConsent: rulebookHash,
+      amountCents: 0,
+      maxExposureCents: Number.NaN,
+      minCounterpartyVolumeCents: "100",
+      acceptableCounterBucketIds: ["bucket-global-health", "bucket-global-health"],
+    },
+  });
+
+  assert.equal(malformedInputs.conditionalIntentEligible, false);
+  assert.equal(malformedInputs.conditionalIntentAmountCents, 0);
+  assert.equal(malformedInputs.conditionalIntentMaxExposureCents, 0);
+  assert.equal(malformedInputs.conditionalIntentMinCounterpartyVolumeCents, 0);
+  assert.deepEqual(malformedInputs.acceptableCounterBucketIds, []);
+  assert.ok(malformedInputs.rowFailureCodes.includes("conditional_intent_amount_cents_invalid_zeroed"));
+  assert.ok(malformedInputs.rowFailureCodes.includes("conditional_intent_max_exposure_cents_invalid_zeroed"));
+  assert.ok(malformedInputs.rowFailureCodes.includes("conditional_intent_min_counterparty_volume_invalid_zeroed"));
+  assert.ok(malformedInputs.rowFailureCodes.includes("conditional_intent_counterparty_buckets_malformed_empty"));
+});
+
+test("CRECM v1.125 valid conditional intent exposes sanitized caps and counterparty inputs", () => {
+  const resolved = resolveMpgfCrecConditionalIntentAllocationInputs({
+    roundId,
+    commonGroundBudgetId,
+    participantId,
+    projectId,
+    rulebookHash,
+    budgetFallbackRule: "refund",
+    selectedConditionalTradeIntentRowCount: 1,
+    conditionalTradeIntent: {
+      id: conditionalTradeIntentId,
+      roundId,
+      commonGroundBudgetId,
+      participantId,
+      projectId,
+      state: "active",
+      authorizationState: "authorized",
+      fallbackRule: "refund",
+      rulebookHashAtConsent: rulebookHash,
+      amountCents: 5_000,
+      maxExposureCents: 2_000,
+      minCounterpartyVolumeCents: 1_000,
+      acceptableCounterBucketIds: ["bucket-global-health", "bucket-animal-welfare"],
+    },
+  });
+
+  assert.equal(resolved.conditionalIntentRowEligible, true);
+  assert.equal(resolved.conditionalTradeIntentId, conditionalTradeIntentId);
+  assert.equal(resolved.conditionalIntentState, "active");
+  assert.equal(resolved.authorizationState, "authorized");
+  assert.equal(resolved.authorizationStateEligible, true);
+  assert.equal(resolved.fallbackRule, "refund");
+  assert.equal(resolved.fallbackRuleEligible, true);
+  assert.equal(resolved.budgetAndIntentFallbackRuleConsistent, true);
+  assert.equal(resolved.rulebookConsentEligible, true);
+  assert.equal(resolved.conditionalIntentAmountCents, 5_000);
+  assert.equal(resolved.conditionalIntentMaxExposureCents, 2_000);
+  assert.equal(resolved.conditionalIntentMinCounterpartyVolumeCents, 1_000);
+  assert.equal(resolved.intentCapCents, 2_000);
+  assert.deepEqual(resolved.acceptableCounterBucketIds, [
+    "bucket-animal-welfare",
+    "bucket-global-health",
+  ]);
+  assert.equal(resolved.conditionalIntentEligible, true);
+  assert.equal(resolved.crossViewIntentEligible, true);
+  assert.equal(resolved.exposesFallbackAuthority, true);
+  assert.equal(resolved.exposesAuthorizationAuthority, true);
+  assert.equal(resolved.exposesCounterpartyBuckets, true);
+  assert.equal(resolved.failureBonusEligibilityInputsAllowed, true);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
+test("CRECM v1.125 allocator-state lookups are round-keyed and fail closed", () => {
+  const wrongRoundOnly = resolveMpgfCrecAllocatorStateInputs({
+    roundId,
+    participantId,
+    projectId,
+    participantRemainingBudgetCentsByRoundAndParticipantId: {
+      "round-other": {
+        [participantId]: 10_000,
+      },
+    },
+    projectRemainingRequestedCapCentsByRoundAndProjectId: {
+      "round-other": {
+        [projectId]: 5_000,
+      },
+    },
+  });
+
+  assert.equal(wrongRoundOnly.participantRemainingRoundBudgetCents, 0);
+  assert.equal(wrongRoundOnly.projectRemainingRequestedCapCents, 0);
+  assert.equal(wrongRoundOnly.allocatorStateEligible, false);
+  assert.equal(wrongRoundOnly.actualAllocationCapCents, 0);
+  assert.equal(wrongRoundOnly.wrongRoundRowsIgnored, true);
+  assert.deepEqual(wrongRoundOnly.participantRemainingLookupKey, { roundId, participantId });
+  assert.deepEqual(wrongRoundOnly.projectRemainingLookupKey, { roundId, projectId });
+  assert.ok(
+    wrongRoundOnly.rowFailureCodes.includes("allocator_state_participant_remaining_budget_round_missing"),
+  );
+  assert.ok(wrongRoundOnly.rowFailureCodes.includes("allocator_state_project_remaining_cap_round_missing"));
+
+  const malformed = resolveMpgfCrecAllocatorStateInputs({
+    roundId,
+    participantId,
+    projectId,
+    participantRemainingBudgetCentsByRoundAndParticipantId: {
+      [roundId]: {
+        [participantId]: "10000",
+      },
+    },
+    projectRemainingRequestedCapCentsByRoundAndProjectId: {
+      [roundId]: {
+        [projectId]: -1,
+      },
+    },
+  });
+
+  assert.equal(malformed.participantRemainingRoundBudgetCents, 0);
+  assert.equal(malformed.projectRemainingRequestedCapCents, 0);
+  assert.equal(malformed.actualAllocationCapCents, 0);
+  assert.ok(
+    malformed.rowFailureCodes.includes("allocator_state_participant_remaining_budget_cents_invalid_zeroed"),
+  );
+  assert.ok(malformed.rowFailureCodes.includes("allocator_state_project_remaining_cap_cents_invalid_zeroed"));
+});
+
+test("CRECM v1.125 valid allocator-state lookups expose only round-keyed caps", () => {
+  const resolved = resolveMpgfCrecAllocatorStateInputs({
+    roundId,
+    participantId,
+    projectId,
+    participantRemainingBudgetCentsByRoundAndParticipantId: {
+      [roundId]: {
+        [participantId]: 3_000,
+      },
+      "round-other": {
+        [participantId]: 9_000,
+      },
+    },
+    projectRemainingRequestedCapCentsByRoundAndProjectId: {
+      [roundId]: {
+        [projectId]: 2_000,
+      },
+      "round-other": {
+        [projectId]: 8_000,
+      },
+    },
+  });
+
+  assert.equal(resolved.participantRemainingRoundBudgetCents, 3_000);
+  assert.equal(resolved.projectRemainingRequestedCapCents, 2_000);
+  assert.equal(resolved.allocatorStateEligible, true);
+  assert.equal(resolved.actualAllocationCapCents, 2_000);
+  assert.deepEqual(resolved.participantRemainingLookupKey, { roundId, participantId });
+  assert.deepEqual(resolved.projectRemainingLookupKey, { roundId, projectId });
+  assert.equal(resolved.wrongRoundRowsIgnored, true);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
+test("CRECM v1.125 identity eligibility inputs fail closed to zero weight", () => {
+  const missing = resolveMpgfCrecIdentityEligibilityAllocationInputs({
+    roundId,
+    participantId,
+    selectedIdentityEligibilityRowCount: 0,
+    identityEligibility: null,
+    identityWeightMinForCountingBps: 5_000,
+    identityWeightMinForBonusBps: 8_000,
+  });
+
+  assert.equal(missing.identityEligibilityRowEligible, false);
+  assert.equal(missing.identityWeightBps, 0);
+  assert.equal(missing.identityCountingClear, false);
+  assert.equal(missing.countedContributionAllowed, false);
+  assert.equal(missing.verifiedSupporterCountAllowed, false);
+  assert.equal(missing.activeClusterCountAllowed, false);
+  assert.equal(missing.counterpartyVolumeAllowed, false);
+  assert.equal(missing.sponsorMatchEligible, false);
+  assert.equal(missing.failureBonusEligible, false);
+  assert.ok(missing.rowFailureCodes.includes("identity_eligibility_row_missing"));
+  assert.ok(missing.rowFailureCodes.includes("identity_eligibility_row_count_not_unique"));
+
+  const malformedWeight = resolveMpgfCrecIdentityEligibilityAllocationInputs({
+    roundId,
+    participantId,
+    selectedIdentityEligibilityRowCount: 1,
+    identityEligibility: {
+      roundId,
+      participantId,
+      countedWeightBps: "10000",
+      humanVerified: true,
+      sybilRiskState: "clear",
+      collusionRiskState: "clear",
+    },
+    identityWeightMinForCountingBps: 5_000,
+    identityWeightMinForBonusBps: 8_000,
+  });
+
+  assert.equal(malformedWeight.identityEligibilityRowEligible, true);
+  assert.equal(malformedWeight.identityWeightBps, 0);
+  assert.equal(malformedWeight.identityCountingClear, true);
+  assert.equal(malformedWeight.countedContributionAllowed, false);
+  assert.equal(malformedWeight.counterpartyVolumeAllowed, false);
+  assert.equal(malformedWeight.sponsorMatchEligible, false);
+  assert.equal(malformedWeight.failureBonusEligible, false);
+  assert.ok(malformedWeight.rowFailureCodes.includes("identity_eligibility_weight_invalid_zeroed"));
+
+  const sybilReview = resolveMpgfCrecIdentityEligibilityAllocationInputs({
+    roundId,
+    participantId,
+    selectedIdentityEligibilityRowCount: 1,
+    identityEligibility: {
+      roundId,
+      participantId,
+      countedWeightBps: 10_000,
+      humanVerified: true,
+      sybilRiskState: "review",
+      collusionRiskState: "clear",
+    },
+    identityWeightMinForCountingBps: 5_000,
+    identityWeightMinForBonusBps: 8_000,
+  });
+
+  assert.equal(sybilReview.identityWeightBps, 10_000);
+  assert.equal(sybilReview.identityCountingClear, false);
+  assert.equal(sybilReview.countedContributionAllowed, false);
+  assert.equal(sybilReview.verifiedSupporterCountAllowed, false);
+  assert.equal(sybilReview.activeClusterCountAllowed, false);
+  assert.equal(sybilReview.counterpartyVolumeAllowed, false);
+  assert.equal(sybilReview.sponsorMatchEligible, false);
+  assert.equal(sybilReview.failureBonusEligible, false);
+});
+
+test("CRECM v1.125 verified-clear identity eligibility can unlock counted and match paths", () => {
+  const resolved = resolveMpgfCrecIdentityEligibilityAllocationInputs({
+    roundId,
+    participantId,
+    selectedIdentityEligibilityRowCount: 1,
+    identityEligibility: {
+      roundId,
+      participantId,
+      countedWeightBps: 9_000,
+      humanVerified: true,
+      sybilRiskState: "clear",
+      collusionRiskState: "clear",
+    },
+    identityWeightMinForCountingBps: 5_000,
+    identityWeightMinForBonusBps: 8_000,
+  });
+
+  assert.equal(resolved.identityEligibilityRowEligible, true);
+  assert.equal(resolved.identityWeightBps, 9_000);
+  assert.equal(resolved.identityWeightMinForCountingBps, 5_000);
+  assert.equal(resolved.identityWeightMinForBonusBps, 8_000);
+  assert.equal(resolved.humanVerified, true);
+  assert.equal(resolved.sybilRiskState, "clear");
+  assert.equal(resolved.collusionRiskState, "clear");
+  assert.equal(resolved.identityCountingClear, true);
+  assert.equal(resolved.countedContributionAllowed, true);
+  assert.equal(resolved.verifiedSupporterCountAllowed, true);
+  assert.equal(resolved.activeClusterCountAllowed, true);
+  assert.equal(resolved.counterpartyVolumeAllowed, true);
+  assert.equal(resolved.sponsorMatchEligible, true);
+  assert.equal(resolved.failureBonusEligible, true);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
 test("CRECM v1.125 round-close row-count guards reject duplicate and wrong-key bundle rows", () => {
   const input = rowUniquenessInput();
   const result = validateMpgfCrecRoundCloseBundleRowUniqueness(input);
@@ -2457,6 +3184,43 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     "(roundId,commonGroundBudgetId,snapshotKind)",
   );
   assert.equal(summary.roundCloseBundleRowUniqueness.failureBonusEligibilityRequiresRowUniquenessHash, true);
+  assert.equal(summary.commonGroundBudgetInputGating.missingRowsFailClosedWithoutDereference, true);
+  assert.equal(summary.commonGroundBudgetInputGating.rowCountsRequiredByIdAndParticipant, true);
+  assert.equal(summary.commonGroundBudgetInputGating.invalidCapsAllocateZero, true);
+  assert.equal(summary.commonGroundBudgetInputGating.invalidBudgetPeriodAllocatesZero, true);
+  assert.equal(summary.commonGroundBudgetInputGating.invalidFallbackRuleAllocatesZero, true);
+  assert.equal(summary.commonGroundBudgetInputGating.paymentSnapshotLookupRequiresEligibleBudget, true);
+  assert.equal(summary.supportStanceInputGating.missingOrInvalidDefaultsToAbstain, true);
+  assert.equal(summary.supportStanceInputGating.wrongRowsExposeZeroCapsAndNoCounterpartyBuckets, true);
+  assert.equal(summary.supportStanceInputGating.malformedCounterpartyBucketsTreatedAsEmpty, true);
+  assert.equal(summary.supportStanceInputGating.invalidCapsAllocateZero, true);
+  assert.equal(summary.supportStanceInputGating.minCounterpartyVolumeMirrorAuthoritative, false);
+  assert.equal(summary.conditionalIntentInputGating.missingInactiveOrWrongRowsAllocateZero, true);
+  assert.equal(summary.conditionalIntentInputGating.amountAndMaxExposureMustBePositive, true);
+  assert.equal(summary.conditionalIntentInputGating.minCounterpartyVolumeMustBePositive, true);
+  assert.equal(summary.conditionalIntentInputGating.malformedCounterpartyBucketsTreatedAsEmpty, true);
+  assert.equal(
+    summary.conditionalIntentInputGating.capturedReleasedFailedOrMalformedAuthorizationStatesAllocateZero,
+    true,
+  );
+  assert.equal(summary.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(summary.allocatorStateInputGating.participantRemainingBudgetKey, "(roundId,participantId)");
+  assert.equal(summary.allocatorStateInputGating.projectRemainingCapKey, "(roundId,projectId)");
+  assert.equal(summary.allocatorStateInputGating.wrongRoundRowsResolveToZero, true);
+  assert.equal(summary.allocatorStateInputGating.malformedValuesAllocateZero, true);
+  assert.equal(summary.allocatorStateInputGating.actualAllocationUsesRoundKeyedState, true);
+  assert.equal(summary.identityEligibilityInputGating.missingRowsResolveToZeroWeight, true);
+  assert.equal(summary.identityEligibilityInputGating.malformedWeightResolvesToZero, true);
+  assert.equal(summary.identityEligibilityInputGating.requiresHumanVerifiedSybilClearCollusionClear, true);
+  assert.equal(
+    summary.identityEligibilityInputGating.nonClearRowsCannotCountMatchCounterpartyOrQualifyFailureBonus,
+    true,
+  );
+  assert.equal(summary.failClosedHelpers.minReturnsZeroOnMalformedInputs, true);
+  assert.equal(summary.failClosedHelpers.payoutRelevantMinUsesHelper, true);
+  assert.equal(summary.failClosedHelpers.intersectionReturnsEmptyOnMalformedInputs, true);
+  assert.equal(summary.failClosedHelpers.sumBigIntReturnsZeroOnMalformedInputs, true);
+  assert.equal(summary.failClosedHelpers.aggregateSumsUseExactBigIntHelper, true);
   assert.equal(summary.netPublicGoodSupporterBreadth.defaultSupporterCountMinNetPublicGoodCents, 100);
   assert.equal(summary.netPublicGoodSupporterBreadth.malformedOrBelowDefaultFloorResolvesToDefault, true);
   assert.equal(summary.netPublicGoodSupporterBreadth.usesNetRecipientDisbursedPublicGoodCreditOnly, true);

@@ -1928,6 +1928,18 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.bonusScoreUnits.floatingQfAdjustedMayNotDeterminePayoutCents, true);
   assert.equal(report.clearingContract.roundCloseBundleRowUniqueness.formulaLevelGuardsRequired, true);
   assert.equal(report.clearingContract.roundCloseBundleRowUniqueness.failureBonusEligibilityRequiresRowUniquenessHash, true);
+  assert.equal(report.clearingContract.commonGroundBudgetInputGating.missingRowsFailClosedWithoutDereference, true);
+  assert.equal(report.clearingContract.commonGroundBudgetInputGating.paymentSnapshotLookupRequiresEligibleBudget, true);
+  assert.equal(report.clearingContract.supportStanceInputGating.missingOrInvalidDefaultsToAbstain, true);
+  assert.equal(report.clearingContract.supportStanceInputGating.wrongRowsExposeZeroCapsAndNoCounterpartyBuckets, true);
+  assert.equal(report.clearingContract.conditionalIntentInputGating.missingInactiveOrWrongRowsAllocateZero, true);
+  assert.equal(report.clearingContract.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(report.clearingContract.allocatorStateInputGating.participantRemainingBudgetKey, "(roundId,participantId)");
+  assert.equal(report.clearingContract.allocatorStateInputGating.wrongRoundRowsResolveToZero, true);
+  assert.equal(report.clearingContract.identityEligibilityInputGating.missingRowsResolveToZeroWeight, true);
+  assert.equal(report.clearingContract.identityEligibilityInputGating.malformedWeightResolvesToZero, true);
+  assert.equal(report.clearingContract.failClosedHelpers.minReturnsZeroOnMalformedInputs, true);
+  assert.equal(report.clearingContract.failClosedHelpers.sumBigIntReturnsZeroOnMalformedInputs, true);
   assert.equal(report.clearingContract.netPublicGoodSupporterBreadth.defaultSupporterCountMinNetPublicGoodCents, 100);
   assert.equal(report.clearingContract.netPublicGoodSupporterBreadth.usesNetRecipientDisbursedPublicGoodCreditOnly, true);
   assert.equal(report.clearingContract.contributorBenefits.requireCapturedSuccessfulContributionRow, true);
