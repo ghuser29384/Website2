@@ -31,7 +31,7 @@ const STAGES = new Set<MoralTradeReleaseStage>([
   "demo",
   "sandbox_calculation",
   "reviewed_no_money_manual_evidence_pilot",
-  "capped_real_money_external_crecm_module",
+  "capped_real_money_public_goods_module",
   "donation_offset_pilot",
   "pledge_swap_preview_only",
   "pledge_swap_manual_pilot",

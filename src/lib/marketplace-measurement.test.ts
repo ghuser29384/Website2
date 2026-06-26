@@ -111,7 +111,7 @@ test("marketplace KPI snapshot excludes seed templates, worked examples, Common 
   assert.equal(reviewableOfferCount?.publishedValue, 0);
   assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "seed_templates" && entry.count === 4));
   assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "worked_examples" && entry.count === 8));
-  assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "external_crecm" && entry.count === 1));
+  assert.ok(snapshot.excludedNonLiveInputs.some((entry) => entry.source === "public_goods" && entry.count === 1));
   assert.ok(snapshot.excludedNonLiveInputs.every((entry) => entry.includedInLiveMetrics === false));
 });
 

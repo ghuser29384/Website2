@@ -109,7 +109,7 @@ const DIRECTORY_TABS = [
   { label: "Create from template", value: "templates" },
   { label: "Worked examples", value: "worked_examples" },
   { label: "Demo data", value: "demo" },
-  { label: "Common Ground Budget", value: "external_crecm" },
+  { label: "Common Ground Budget", value: "public_goods" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
@@ -117,7 +117,7 @@ const MARKETPLACE_BOOTSTRAP_TABS = [
   "templates",
   "worked_examples",
   "demo",
-  "external_crecm",
+  "public_goods",
 ] as const;
 
 const FORMAT_FILTERS = [
@@ -182,13 +182,13 @@ interface MarketplaceListing {
 const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
   all: "All listings",
   demo: "Demo data",
-  external_crecm: "Common Ground Budget",
   live: "Live offers",
+  public_goods: "Common Ground Budget",
   templates: "Create from template",
   worked_examples: "Worked examples",
 };
 
-const EXTERNAL_CRECM_MODULE = {
+const PUBLIC_GOODS_MODULE = {
   href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
   label: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel,
   sourceNote: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
@@ -222,7 +222,7 @@ function parseDirectoryView(value: string, fallback: DirectoryView = "live"): Di
     value === "live" ||
     value === "templates" ||
     value === "demo" ||
-    value === "external_crecm" ||
+    value === "public_goods" ||
     value === "all"
   ) {
     return value;
@@ -236,8 +236,14 @@ function parseDirectoryView(value: string, fallback: DirectoryView = "live"): Di
     return "templates";
   }
 
-  if (value === "crecm" || value === "mpgf" || value === "public-goods" || value === "rounds") {
-    return "external_crecm";
+  if (
+    value === "external_crecm" ||
+    value === "crecm" ||
+    value === "mpgf" ||
+    value === "public-goods" ||
+    value === "rounds"
+  ) {
+    return "public_goods";
   }
 
   return fallback;
@@ -481,7 +487,7 @@ function listingMatchesFilters(
     return false;
   }
 
-  if (filters.view === "templates" || filters.view === "demo" || filters.view === "external_crecm") {
+  if (filters.view === "templates" || filters.view === "demo" || filters.view === "public_goods") {
     return false;
   }
 
@@ -765,12 +771,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const publicGoodsSearchIntent = isPublicGoodsDirectoryIntent({ formats, searchQuery });
   const explicitViewParam = readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view");
   const defaultView: DirectoryView = publicGoodsSearchIntent
-    ? "external_crecm"
+    ? "public_goods"
     : liveOfferCount > 0
       ? "live"
       : "worked_examples";
   const view = parseDirectoryView(explicitViewParam, defaultView);
-  const showPublicGoodsEntryCard = publicGoodsSearchIntent || view === "external_crecm";
+  const showPublicGoodsEntryCard = publicGoodsSearchIntent || view === "public_goods";
   const publicGoodsEntry = showPublicGoodsEntryCard
     ? buildPublicGoodsEntryCard({
         liveOfferCount,
@@ -781,8 +787,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     : null;
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
-    external_crecm: seedRoundCount,
     live: liveOfferCount,
+    public_goods: seedRoundCount,
     templates: seedTemplateCount,
     worked_examples: workedExampleCount,
   };
@@ -835,7 +841,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resultCountLabel =
     view === "templates"
       ? `${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"}`
-      : view === "external_crecm"
+      : view === "public_goods"
         ? `${seedRoundCount} Common Ground Budget ${seedRoundCount === 1 ? "module" : "modules"}`
         : view === "demo"
         ? `${seedRoundProjects.length} demo ${seedRoundProjects.length === 1 ? "record" : "records"}`
@@ -843,13 +849,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const toolbarResultCountLabel =
     view === "templates"
       ? `Showing ${seedTemplateCount} reviewed ${seedTemplateCount === 1 ? "template" : "templates"} in ${activeViewLabel.toLowerCase()}.`
-      : view === "external_crecm"
+      : view === "public_goods"
         ? `Showing ${seedRoundCount} linked Common Ground Budget ${seedRoundCount === 1 ? "module" : "modules"}.`
         : `Showing ${filteredListings.length} ${filteredListings.length === 1 ? "result" : "results"} in ${activeViewLabel.toLowerCase()}.`;
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
     if (view === "worked_examples" && listing.source !== "example") return false;
-    if (view === "templates" || view === "external_crecm" || view === "demo") return false;
+    if (view === "templates" || view === "public_goods" || view === "demo") return false;
     return listingMatchesSearch(listing, searchQuery);
   });
   const formatCounts = FORMAT_FILTERS.map((option) => ({
@@ -968,9 +974,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         "Demo rounds and seed projects stay clearly labeled and cannot inflate live offer or agreement counts.",
     },
     {
-      value: "external_crecm",
+      value: "public_goods",
       label: "Common Ground Budget",
-      href: createTabHref("external_crecm", filterHrefParams),
+      href: createTabHref("public_goods", filterHrefParams),
       count: String(seedRoundCount),
       status: "Public Goods Fund",
       description:
@@ -1414,7 +1420,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 completed trades, or automated clearing.
               </p>
             </div>
-            <Link className="button button-primary" href={EXTERNAL_CRECM_MODULE.href}>
+            <Link className="button button-primary" href={PUBLIC_GOODS_MODULE.href}>
               Open Common Ground Budget
             </Link>
           </div>
@@ -1433,7 +1439,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <p className="eyebrow">Public Goods Fund</p>
               <h3>{demoMpgfAssuranceRound.name}</h3>
               <p>
-                {EXTERNAL_CRECM_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
+                {PUBLIC_GOODS_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
                 public-good projects are available for no-capture budget preview in that separate
                 module. Settlement remains sandboxed until later release gates pass.
               </p>
@@ -1463,7 +1469,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <Link className="button button-primary" href={seedRoundHref}>
                   Preview budget
                 </Link>
-                <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
+                <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
                   View Public Goods Fund
                 </Link>
               </div>
@@ -1946,7 +1952,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <div className="marketplace-results-head">
                 <div>
                   <p className="eyebrow">
-                    {view === "templates" || view === "external_crecm" || view === "demo"
+                    {view === "templates" || view === "public_goods" || view === "demo"
                       ? "Marketplace lane"
                       : "Directory"}
                   </p>
@@ -2023,21 +2029,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </div>
                     </article>
                   </section>
-                ) : view === "external_crecm" ? (
+                ) : view === "public_goods" ? (
                   <section
                     aria-labelledby="marketplace-crecm-heading"
                     className="listing-group marketplace-lane-results"
                     id="marketplace-crecm-lane"
                   >
                     <div className="listing-group-head">
-                      <h3 id="marketplace-crecm-heading">{EXTERNAL_CRECM_MODULE.label}</h3>
+                      <h3 id="marketplace-crecm-heading">{PUBLIC_GOODS_MODULE.label}</h3>
                       <span>{seedRoundCount} linked Common Ground Budget module</span>
                     </div>
                     <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
                       <p className="eyebrow">Public Goods Fund scope</p>
                       <h4>{demoMpgfAssuranceRound.name}</h4>
                       <p>
-                        {EXTERNAL_CRECM_MODULE.summary} {EXTERNAL_CRECM_MODULE.sourceNote}
+                        {PUBLIC_GOODS_MODULE.summary} {PUBLIC_GOODS_MODULE.sourceNote}
                       </p>
                       <dl className="mpgf-summary-grid" aria-label="Common Ground Budget lane snapshot">
                         <div>
@@ -2069,7 +2075,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         <Link className="button button-primary" href={seedRoundHref}>
                           Preview Common Ground Budget
                         </Link>
-                        <Link className="button button-secondary" href={EXTERNAL_CRECM_MODULE.href}>
+                        <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
                           Open Public Goods Fund
                         </Link>
                       </div>

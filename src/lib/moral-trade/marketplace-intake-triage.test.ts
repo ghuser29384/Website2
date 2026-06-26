@@ -51,7 +51,7 @@ test("marketplace intake triage covers all required safe route-away categories",
     "ordinary_matching_or_cofunding",
     "ordinary_procurement_or_service",
     "self_offset_bookkeeping",
-    "external_crecm_public_goods",
+    "public_goods_module",
     "background_networking_request",
     "prohibited_or_unsupported",
   ]);
@@ -97,7 +97,7 @@ test("marketplace intake triage contract validates first-class record coverage",
     ),
   );
   assert.ok(contract.initialRoutes.includes("ordinary_donation_or_matching"));
-  assert.ok(contract.initialRoutes.includes("external_crecm_public_goods_candidate"));
+  assert.ok(contract.initialRoutes.includes("public_goods_candidate"));
   assert.ok(contract.initialRoutes.includes("unclear_manual_review"));
   assert.ok(contract.routeAwayInitialRoutes.includes("background_networking_request"));
   assert.ok(contract.inferenceProhibitions.includes("ideology_inference_prohibited"));

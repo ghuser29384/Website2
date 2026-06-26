@@ -1,11 +1,11 @@
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "./marketplace-boundary";
 
 export const MARKETPLACE_INTAKE_TRIAGE_VERSION =
-  "moral-trade-marketplace-intake-triage-v0.1-2026-06";
+  "moral-trade-marketplace-intake-triage-v0.2-2026-06";
 export const MARKETPLACE_INTAKE_TRIAGE_CONTRACT_VERSION =
-  "moral-trade-marketplace-intake-triage-contract-v0.1-2026-06";
+  "moral-trade-marketplace-intake-triage-contract-v0.2-2026-06";
 export const MARKETPLACE_INTAKE_TRIAGE_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-marketplace-intake-triage-contract-validator-v0.1";
+  "moral-trade-marketplace-intake-triage-contract-validator-v0.2";
 
 export type MarketplaceIntakeRouteKey =
   | "donation_offset"
@@ -14,7 +14,7 @@ export type MarketplaceIntakeRouteKey =
   | "ordinary_matching_or_cofunding"
   | "ordinary_procurement_or_service"
   | "self_offset_bookkeeping"
-  | "external_crecm_public_goods"
+  | "public_goods_module"
   | "background_networking_request"
   | "prohibited_or_unsupported";
 
@@ -28,7 +28,7 @@ export type MarketplaceIntakeInitialRoute =
   | "ordinary_donation_or_matching"
   | "ordinary_procurement_or_service"
   | "self_offset_or_personal_bookkeeping"
-  | "external_crecm_public_goods_candidate"
+  | "public_goods_candidate"
   | "background_networking_request"
   | "prohibited_or_unsupported"
   | "unclear_manual_review";
@@ -140,7 +140,7 @@ export const MARKETPLACE_INTAKE_ROUTE_AWAY_KEYS: MarketplaceIntakeRouteKey[] = [
   "ordinary_matching_or_cofunding",
   "ordinary_procurement_or_service",
   "self_offset_bookkeeping",
-  "external_crecm_public_goods",
+  "public_goods_module",
   "background_networking_request",
   "prohibited_or_unsupported",
 ];
@@ -231,13 +231,13 @@ export const MARKETPLACE_INTAKE_TRIAGE_ROUTES: MarketplaceIntakeTriageRoute[] = 
       "Personal self-offsets can be useful records, but they do not count as interpersonal moral-trade agreements.",
   },
   {
-    key: "external_crecm_public_goods",
+    key: "public_goods_module",
     label: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel} public-goods module`,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
     status: "Separate module",
     routeEligible: false,
     routeKind: "safe_external_path",
-    safeReasonCategory: "external CRECM public goods",
+    safeReasonCategory: "Common Ground Budget public goods",
     nextAction: "Open the Common Ground Budget module",
     correctionPath: "Return to this page only for non-public-goods donation offsets or pledge swaps.",
     summary: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
@@ -277,7 +277,7 @@ const MARKETPLACE_INTAKE_INITIAL_ROUTES: MarketplaceIntakeInitialRoute[] = [
   "ordinary_donation_or_matching",
   "ordinary_procurement_or_service",
   "self_offset_or_personal_bookkeeping",
-  "external_crecm_public_goods_candidate",
+  "public_goods_candidate",
   "background_networking_request",
   "prohibited_or_unsupported",
   "unclear_manual_review",
@@ -287,7 +287,7 @@ const MARKETPLACE_INTAKE_ROUTE_AWAY_INITIAL_ROUTES: MarketplaceIntakeInitialRout
   "ordinary_donation_or_matching",
   "ordinary_procurement_or_service",
   "self_offset_or_personal_bookkeeping",
-  "external_crecm_public_goods_candidate",
+  "public_goods_candidate",
   "background_networking_request",
   "prohibited_or_unsupported",
   "unclear_manual_review",
@@ -333,7 +333,7 @@ const INITIAL_ROUTE_TO_ROUTE_KEY: Record<
   ordinary_donation_or_matching: "ordinary_donation",
   ordinary_procurement_or_service: "ordinary_procurement_or_service",
   self_offset_or_personal_bookkeeping: "self_offset_bookkeeping",
-  external_crecm_public_goods_candidate: "external_crecm_public_goods",
+  public_goods_candidate: "public_goods_module",
   background_networking_request: "background_networking_request",
   prohibited_or_unsupported: "prohibited_or_unsupported",
   unclear_manual_review: null,
@@ -369,8 +369,8 @@ const SAMPLE_TRIAGE_RECORDS: MarketplaceIntakeTriageRecord[] = [
     intakeSurfaceRef: "/offers/new",
     userStatedGoalHash:
       "sha256:4444444444444444444444444444444444444444444444444444444444444444",
-    initialRoute: "external_crecm_public_goods_candidate",
-    routeReasonCodes: ["external_crecm_module", "public_goods_boundary"],
+    initialRoute: "public_goods_candidate",
+    routeReasonCodes: ["public_goods_module", "public_goods_boundary"],
     moralTradeCandidate: false,
     publicGoodsOrCrecMBoundary: true,
     backgroundNetworkingBoundary: false,
@@ -519,7 +519,7 @@ export function evaluateMarketplaceIntakeTriageRecord(
   }
   if (
     record.publicGoodsOrCrecMBoundary !==
-    (record.initialRoute === "external_crecm_public_goods_candidate")
+    (record.initialRoute === "public_goods_candidate")
   ) {
     blockers.push(`public_goods_boundary_mismatch:${record.initialRoute}`);
   }
@@ -635,7 +635,7 @@ export function validateMarketplaceIntakeTriageContract(
         "ordinary_donation_or_matching",
         "ordinary_procurement_or_service",
         "self_offset_or_personal_bookkeeping",
-        "external_crecm_public_goods_candidate",
+        "public_goods_candidate",
         "background_networking_request",
         "prohibited_or_unsupported",
         "unclear_manual_review",

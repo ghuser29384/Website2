@@ -1,13 +1,13 @@
 export const MORAL_TRADE_RELEASE_GATE_CONTRACT_VERSION =
-  "moral-trade-release-gates-v0.2-2026-06";
+  "moral-trade-release-gates-v0.3-2026-06";
 export const MORAL_TRADE_RELEASE_GATE_VALIDATOR_VERSION =
-  "moral-trade-release-gate-validator-v0.1";
+  "moral-trade-release-gate-validator-v0.2";
 
 export type MoralTradeReleaseStage =
   | "demo"
   | "sandbox_calculation"
   | "reviewed_no_money_manual_evidence_pilot"
-  | "capped_real_money_external_crecm_module"
+  | "capped_real_money_public_goods_module"
   | "donation_offset_pilot"
   | "pledge_swap_preview_only"
   | "pledge_swap_manual_pilot"
@@ -211,14 +211,14 @@ export const MORALTRADE82_RELEASE_STAGES = [
   "demo",
   "sandbox_calculation",
   "reviewed_no_money_manual_evidence_pilot",
-  "capped_real_money_external_crecm_module",
+  "capped_real_money_public_goods_module",
   "donation_offset_pilot",
   "pledge_swap_preview_only",
   "pledge_swap_manual_pilot",
 ] as const satisfies readonly MoralTradeReleaseStage[];
 
 export const MORALTRADE82_FEATURE_FLAGS = [
-  "external_crecm_module",
+  "public_goods_module",
   "real_money_capture",
   "non_public_goods_subsidies",
   "donation_offsets",
@@ -419,7 +419,7 @@ function descriptionForMoraltrade82Requirement(key: Moraltrade82ReleaseGateRequi
     case "pilot_exit_criteria_test":
       return "Pilot promotion requires pre-registered scale-up, pause, rollback, and non-volume success criteria; matched volume alone is insufficient.";
     case "marketplace_intake_triage_routing_test":
-      return "Marketplace intake routes ordinary donations, matching, services, self-offsets, external CRECM/public-goods work, background networking, and unsupported requests away from the non-public-goods lock path unless corrected and reviewed.";
+      return "Marketplace intake routes ordinary donations, matching, services, self-offsets, Common Ground Budget public-goods work, background networking, and unsupported requests away from the non-public-goods lock path unless corrected and reviewed.";
     case "participant_ui_ux_progressive_disclosure_test":
       return "Participant UI separates intake, template gallery, guided builder, draft preview, review queue, matched-lock proposal, final confirmation, dashboard, and receipt publication into task-oriented progressive-disclosure surfaces.";
     case "participant_ui_render_snapshot_accessibility_test":
@@ -905,16 +905,16 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "No-money manual-evidence pilots require triage, template, term-sheet, evidence, reviewer, capacity, participant UI, and plain-language checks before any participant can treat a preview as reviewed.",
   },
   {
-    key: "capped_real_money_external_crecm_module",
-    label: "Capped real-money external CRECM module handoff",
-    featureFlagKey: "moral_trade_external_crecm_module",
+    key: "capped_real_money_public_goods_module",
+    label: "Capped real-money Public Goods Fund module handoff",
+    featureFlagKey: "moral_trade_public_goods_module",
     payable: true,
     relianceBearing: true,
     publicMetricsMayPublish: false,
     requiredRequirementKeys: [...CRECM_HANDOFF_REQUIRED_REQUIREMENTS],
     inactiveRequirementKeys: inactiveDocumentRequirements(CRECM_HANDOFF_REQUIRED_REQUIREMENTS),
     hardBlockerSummary:
-      "External CRECM handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
+      "Public Goods Fund handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
   },
   {
     key: "donation_offset_pilot",

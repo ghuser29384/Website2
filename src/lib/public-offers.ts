@@ -25,9 +25,9 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import publicOfferListingSchemaJson from "../../config/moral-trade/public-offer-listing.schema.json";
 
 export const PUBLIC_OFFERS_API_CONTRACT_VERSION =
-  "public-offers-api-v0.3-2026-06";
+  "public-offers-api-v0.4-2026-06";
 export const PUBLIC_OFFERS_API_VALIDATOR_VERSION =
-  "public-offers-api-validator-v0.3";
+  "public-offers-api-validator-v0.4";
 
 export type PublicOfferFormat =
   | "pledge-swap"
@@ -45,7 +45,7 @@ export type PublicMarketplaceTab =
   | "templates"
   | "worked_examples"
   | "demo"
-  | "external_crecm";
+  | "public_goods";
 export type PublicOffersTab = PublicMarketplaceTab | "all";
 export type PublicOffersSort =
   | "newest"
@@ -108,7 +108,7 @@ export interface PublicOffersTabSummary {
     | "reviewed_seed_templates"
     | "worked_example_directory"
     | "demo_records"
-    | "external_crecm_module";
+    | "public_goods_module";
   noLiveAgreementCount: boolean;
   description: string;
 }
@@ -288,7 +288,7 @@ const PUBLIC_MARKETPLACE_TAB_ORDER = [
   "templates",
   "worked_examples",
   "demo",
-  "external_crecm",
+  "public_goods",
 ] as const satisfies readonly PublicMarketplaceTab[];
 const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
   ...PUBLIC_OFFER_NON_CLAIMS,
@@ -370,7 +370,7 @@ function parseTab(searchParams: URLSearchParams, defaultTab: PublicOffersTab) {
     value === "live" ||
     value === "templates" ||
     value === "demo" ||
-    value === "external_crecm" ||
+    value === "public_goods" ||
     value === "all"
   ) {
     return value;
@@ -384,8 +384,14 @@ function parseTab(searchParams: URLSearchParams, defaultTab: PublicOffersTab) {
     return "templates";
   }
 
-  if (value === "rounds" || value === "crecm" || value === "mpgf" || value === "public-goods") {
-    return "external_crecm";
+  if (
+    value === "external_crecm" ||
+    value === "rounds" ||
+    value === "crecm" ||
+    value === "mpgf" ||
+    value === "public-goods"
+  ) {
+    return "public_goods";
   }
 
   return defaultTab;
@@ -663,11 +669,11 @@ function buildPublicOffersTabSummaries({
       description: "Demo records stay labeled as sandbox data and cannot inflate live offer metrics.",
     },
     {
-      value: "external_crecm",
+      value: "public_goods",
       label: "Common Ground Budget",
       count: getPublicMarketplaceRoundCount(),
-      href: "/offers?tab=external_crecm",
-      source: "external_crecm_module",
+      href: "/offers?tab=public_goods",
+      source: "public_goods_module",
       noLiveAgreementCount: true,
       description: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
     },
@@ -1058,7 +1064,7 @@ export function buildPublicOffersCollectionPayload({
     .filter((format): format is PublicOfferFormat => Boolean(format));
   const publicGoodsIntent = isPublicGoodsCollectionIntent({ formats, query });
   const defaultTab: PublicOffersTab = publicGoodsIntent
-    ? "external_crecm"
+    ? "public_goods"
     : liveOfferCount > 0
       ? "live"
       : "worked_examples";
@@ -1068,7 +1074,7 @@ export function buildPublicOffersCollectionPayload({
   const tabListings = allListings.filter((listing) => {
     if (tab === "live") return listing.source === "live";
     if (tab === "worked_examples") return listing.source === "worked_example";
-    if (tab === "templates" || tab === "demo" || tab === "external_crecm") return false;
+    if (tab === "templates" || tab === "demo" || tab === "public_goods") return false;
     return true;
   });
   const facetScope = tabListings.filter((listing) => listingMatchesSearch(listing, query));
@@ -1096,7 +1102,7 @@ export function buildPublicOffersCollectionPayload({
   const start = (page - 1) * pageSize;
   const items = filtered.slice(start, start + pageSize);
   const publicGoodsEntry =
-    publicGoodsIntent || tab === "external_crecm"
+    publicGoodsIntent || tab === "public_goods"
       ? buildPublicGoodsEntryCard({
           liveOfferCount,
           publicGoodsIntent,
@@ -1120,7 +1126,7 @@ export function buildPublicOffersCollectionPayload({
       reviewedSeedTemplateCount: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
       reviewedDonationOffsetTemplateCount: REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
       reviewedPledgeSwapTemplateCount: REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
-      defaultedToPublicGoods: !requestedTab && defaultTab === "external_crecm",
+      defaultedToPublicGoods: !requestedTab && defaultTab === "public_goods",
       defaultedToWorkedExamples: !requestedTab && defaultTab === "worked_examples",
       hiddenZeroCountFacets: true,
       availableTabs: buildPublicOffersTabSummaries({
@@ -1300,7 +1306,7 @@ function publicGoodsEntryPreservesBoundaries(
     | (Pick<PublicOffersFacetsPayload, "meta" | "publicGoodsEntry"> & { items?: never[] }),
 ) {
   const expectsPublicGoodsEntry =
-    payload.meta.tab === "external_crecm" || payload.meta.defaultedToPublicGoods;
+    payload.meta.tab === "public_goods" || payload.meta.defaultedToPublicGoods;
 
   if (!expectsPublicGoodsEntry) {
     return payload.publicGoodsEntry === null;
@@ -1329,7 +1335,7 @@ function publicGoodsEntryPreservesBoundaries(
       entry.laneSeparation.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplateCount &&
       entry.laneSeparation.workedExampleCount === payload.meta.workedExampleCount &&
       entry.laneSeparation.publicGoodsModuleCount ===
-        (payload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count ?? -1) &&
+        (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
       entry.copyGuards.some((claim) => /does not count as a live offer/i.test(claim)) &&
       entry.copyGuards.some((claim) => /does not expose exact live threshold/i.test(claim)),
   );

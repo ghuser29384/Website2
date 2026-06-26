@@ -41,14 +41,20 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
 }
 
 function normalizeMarketplaceTab(value: string | null) {
-  if (value === "live" || value === "templates" || value === "demo" || value === "external_crecm") {
+  if (value === "live" || value === "templates" || value === "demo" || value === "public_goods") {
     return value;
   }
   if (value === "worked_examples" || value === "worked-examples" || value === "examples") {
     return "worked_examples";
   }
-  if (value === "rounds" || value === "crecm" || value === "mpgf" || value === "public-goods") {
-    return "external_crecm";
+  if (
+    value === "external_crecm" ||
+    value === "rounds" ||
+    value === "crecm" ||
+    value === "mpgf" ||
+    value === "public-goods"
+  ) {
+    return "public_goods";
   }
   return "default";
 }

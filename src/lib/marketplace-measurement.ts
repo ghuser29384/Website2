@@ -187,7 +187,7 @@ export interface MarketplaceLiveMetricExclusion {
   count: number;
   includedInLiveMetrics: false;
   reason: string;
-  source: "demo" | "external_crecm" | "seed_templates" | "worked_examples";
+  source: "demo" | "public_goods" | "seed_templates" | "worked_examples";
 }
 
 export interface MarketplaceKpiSnapshot {
@@ -756,10 +756,10 @@ function buildNonLiveExclusions(
       source: "worked_examples",
     },
     {
-      count: tabCounts.get("external_crecm") ?? 0,
+      count: tabCounts.get("public_goods") ?? 0,
       includedInLiveMetrics: false,
       reason: "The Common Ground Budget module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
-      source: "external_crecm",
+      source: "public_goods",
     },
     {
       count: tabCounts.get("demo") ?? 0,

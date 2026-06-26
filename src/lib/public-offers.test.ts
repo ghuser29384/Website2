@@ -35,7 +35,7 @@ test("public offers collection defaults to worked examples when live inventory i
   assert.equal(payload.meta.reviewedPledgeSwapTemplateCount, 2);
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
-    ["live", "templates", "worked_examples", "demo", "external_crecm"],
+    ["live", "templates", "worked_examples", "demo", "public_goods"],
   );
   assert.deepEqual(
     payload.meta.reviewedSeedTemplates.map((template) => template.id),
@@ -200,17 +200,17 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(validatePublicOffersCollectionPayload(crossViewSearchPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(templatesPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
-  assert.equal(publicGoodSearchPayload.contractVersion, "public-offers-api-v0.3-2026-06");
+  assert.equal(publicGoodSearchPayload.contractVersion, "public-offers-api-v0.4-2026-06");
   assert.equal(
     validatePublicOffersCollectionPayload(publicGoodSearchPayload).validatorVersion,
-    "public-offers-api-validator-v0.3",
+    "public-offers-api-validator-v0.4",
   );
-  assert.equal(externalCrecPayload.meta.tab, "external_crecm");
-  assert.equal(legacyRoundsPayload.meta.tab, "external_crecm");
-  assert.equal(publicGoodFormatPayload.meta.tab, "external_crecm");
-  assert.equal(publicGoodSearchPayload.meta.tab, "external_crecm");
-  assert.equal(assuranceSearchPayload.meta.tab, "external_crecm");
-  assert.equal(crossViewSearchPayload.meta.tab, "external_crecm");
+  assert.equal(externalCrecPayload.meta.tab, "public_goods");
+  assert.equal(legacyRoundsPayload.meta.tab, "public_goods");
+  assert.equal(publicGoodFormatPayload.meta.tab, "public_goods");
+  assert.equal(publicGoodSearchPayload.meta.tab, "public_goods");
+  assert.equal(assuranceSearchPayload.meta.tab, "public_goods");
+  assert.equal(crossViewSearchPayload.meta.tab, "public_goods");
   assert.equal(publicGoodFormatPayload.meta.defaultedToPublicGoods, true);
   assert.equal(publicGoodSearchPayload.meta.defaultedToPublicGoods, true);
   assert.equal(assuranceSearchPayload.meta.defaultedToPublicGoods, true);
@@ -254,24 +254,24 @@ test("public offers collection separates template, Common Ground Budget, and dem
   );
   assert.equal(templatesPayload.publicGoodsEntry, null);
   assert.equal(externalCrecPayload.meta.reviewedSeedTemplateCount, 4);
-  assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.count, 1);
+  assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count, 1);
   assert.equal(
-    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.label,
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.label,
     "Common Ground Budget",
   );
   assert.match(
-    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")
       ?.description ?? "",
-    /moralpublicgoods102\.md \/ CRECM v1\.96/,
+    /moralpublicgoods131\.md \/ CRECM v1\.125/,
   );
   assert.ok(
     externalCrecPayload.publicContract.nonClaims.some((claim) =>
-      /moralpublicgoods102\.md \/ CRECM v1\.96/.test(claim),
+      /moralpublicgoods131\.md \/ CRECM v1\.125/.test(claim),
     ),
   );
   assert.equal(
     externalCrecPayload.publicContract.nonClaims.some((claim) =>
-      /moralpublicgoods131\.md|CRECM v1\.125/.test(claim),
+      /moralpublicgoods102\.md|CRECM v1\.96|Verified Assurance Matching/.test(claim),
     ),
     false,
   );
@@ -280,7 +280,7 @@ test("public offers collection separates template, Common Ground Budget, and dem
     (demoPayload.meta.availableTabs.find((tab) => tab.value === "demo")?.count ?? 0) > 0,
   );
   assert.equal(
-    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.noLiveAgreementCount,
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.noLiveAgreementCount,
     true,
   );
   assert.equal(
@@ -325,14 +325,14 @@ test("public offer facets endpoint payload hides zero-count options", () => {
   assert.equal(payload.publicContract.publicApiRoute, "/api/offers/facets");
   assert.equal(payload.meta.tab, "worked_examples");
   assert.equal(payload.publicGoodsEntry, null);
-  assert.equal(publicGoodsPayload.meta.tab, "external_crecm");
+  assert.equal(publicGoodsPayload.meta.tab, "public_goods");
   assert.equal(publicGoodsPayload.publicGoodsEntry?.resultRank, 1);
   assert.match(publicGoodsPayload.publicGoodsEntry?.summary ?? "", /not an ordinary offer listing/);
   assert.equal(publicGoodsPayload.publicGoodsEntry?.countsAsLiveOffer, false);
   assert.deepEqual(Object.values(publicGoodsPayload.availableFacets).flat(), []);
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
-    ["live", "templates", "worked_examples", "demo", "external_crecm"],
+    ["live", "templates", "worked_examples", "demo", "public_goods"],
   );
   assert.equal(payload.meta.reviewedSeedTemplateCount, 4);
   assert.ok(payload.meta.reviewedSeedTemplates.every((template) => !template.liveMetricEligible));
@@ -353,7 +353,7 @@ test("public offers API route returns validator-backed collection JSON", async (
   assert.equal(body.items.length, 3);
   assert.deepEqual(
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
-    ["live", "templates", "worked_examples", "demo", "external_crecm"],
+    ["live", "templates", "worked_examples", "demo", "public_goods"],
   );
   assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.ok(
@@ -378,7 +378,7 @@ test("public offers API route returns Common Ground Budget entry for moral-publi
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(body.meta.tab, "external_crecm");
+  assert.equal(body.meta.tab, "public_goods");
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.items.length, 0);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
@@ -445,7 +445,7 @@ test("public offer facets API route returns validator-backed facets JSON", async
   assert.equal(body.meta.tab, "worked_examples");
   assert.deepEqual(
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
-    ["live", "templates", "worked_examples", "demo", "external_crecm"],
+    ["live", "templates", "worked_examples", "demo", "public_goods"],
   );
   assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");
@@ -461,7 +461,7 @@ test("public offer facets API route preserves Common Ground Budget entry for pub
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
-  assert.equal(body.meta.tab, "external_crecm");
+  assert.equal(body.meta.tab, "public_goods");
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
   assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");

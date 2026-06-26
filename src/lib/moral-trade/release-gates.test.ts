@@ -76,6 +76,8 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.equal(MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.length, 93);
   assert.deepEqual(contract.documentedReleaseStages, [...MORALTRADE82_RELEASE_STAGES]);
   assert.deepEqual(contract.documentedFeatureFlags, [...MORALTRADE82_FEATURE_FLAGS]);
+  assert.ok(contract.documentedReleaseStages.includes("capped_real_money_public_goods_module"));
+  assert.ok(contract.documentedFeatureFlags.includes("public_goods_module"));
   assert.ok(contract.stages.some((stage) => stage.key === "demo" && !stage.payable));
   assert.ok(
     contract.stages.some(
