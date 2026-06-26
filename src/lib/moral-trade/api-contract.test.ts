@@ -314,6 +314,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
           "financial_settlement_controls_contract_response",
     ),
   );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_payment_authorization_contract" &&
+        route.path === "/api/moral-trade/payment-authorizations/contract" &&
+        route.responseSchema === "payment_authorization_contract_response",
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_provenance_schema"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_schema_registry"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_security_health"));
