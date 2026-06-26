@@ -465,6 +465,11 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         ? initialTemplate
         : getMoralTradeTypeTemplate("pure-opposed-cause")
       : null;
+  const isOffsetBuilderLanding = initialMode === "offset" || initialTemplate?.mode === "offset";
+  const heroTitle = isOffsetBuilderLanding
+    ? "Draft a donation offset."
+    : "Draft one bounded, reviewable trade.";
+  const heroEyebrow = isOffsetBuilderLanding ? "Donation offset builder" : "Offer creation";
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
     donationOffsetOverview?.pools.map((pool) => ({
@@ -499,8 +504,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Offer creation</p>
-            <h1>Draft one bounded, reviewable trade.</h1>
+            <p className="eyebrow">{heroEyebrow}</p>
+            <h1>{heroTitle}</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
@@ -508,11 +513,29 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   shared record and asks you to state the act, reciprocal terms, no-trade
                   baseline, exit condition, and evidence rule plainly.
                 </>
+              ) : signedOutOffsetPreviewTemplate ? (
+                <>
+                  Compare what would happen without the trade, what should happen if it clears,
+                  where matched money would go, and what proof reviewers can inspect before
+                  creating an account.
+                </>
               ) : (
                 <>Create an account to save and publish a structured trade proposal.</>
               )}
             </p>
-            {!viewer ? (
+            {!viewer && signedOutOffsetPreviewTemplate ? (
+              <div className="hero-actions">
+                <a className="button button-primary" href="#signed-out-offset-preview-heading">
+                  Preview draft
+                </a>
+                <Link
+                  className="button button-secondary"
+                  href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}
+                >
+                  Save after sign-in
+                </Link>
+              </div>
+            ) : !viewer ? (
               <div className="hero-actions">
                 <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                   Create account
@@ -531,21 +554,28 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Be concrete</strong>
-                  <p>Describe the action you will take or fund, and the action you want in return.</p>
+                  <p>
+                    {isOffsetBuilderLanding
+                      ? "Name the baseline donation, opposed or counterparty bucket, shared destination, and maximum redirect."
+                      : "Describe the action you will take or fund, and the action you want in return."}
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
                   <strong>Name the baseline</strong>
-                  <p>Explain the no-trade default so counterfactual trust can be reviewed.</p>
+                  <p>
+                    Explain the no-trade default so counterfactual trust can be reviewed before
+                    anyone relies on the draft.
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
                   <strong>Keep it bounded</strong>
-                  <p>State evidence, expiry, and what happens when proof remains unresolved.</p>
+                  <p>State evidence, expiry, and what happens when proof or matching fails.</p>
                 </div>
               </div>
             </div>
@@ -664,8 +694,14 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   </p>
                 </details>
                 <div className="hero-actions">
-                  <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
+                  <a className="button button-primary" href="#signed-out-offset-preview-heading">
+                    Preview draft
+                  </a>
+                  <Link className="button button-secondary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                     Save after sign-in
+                  </Link>
+                  <Link className="button button-secondary" href="/offers/examples">
+                    Start from example
                   </Link>
                 </div>
               </article>
@@ -691,15 +727,19 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
             ) : (
               <article className="panel auth-side-card auth-gate-card">
                 <p className="eyebrow">Account required</p>
-                <h2>Create an account to save and publish a structured trade proposal.</h2>
+                <h2>
+                  {signedOutOffsetPreviewTemplate
+                    ? "Sign in only when you are ready to save or request review."
+                    : "Create an account to save and publish a structured trade proposal."}
+                </h2>
                 <p>
-                  You can browse worked examples without signing in. Publishing a live offer needs
-                  an account so the proposal can be saved, reviewed, edited, and returned to after
-                  sign-in.
+                  {signedOutOffsetPreviewTemplate
+                    ? "This local preview does not save terms, contact counterparties, authorize money, or create a live offer. Saving, review requests, counterparty disclosure, and publication require sign-in."
+                    : "You can browse worked examples without signing in. Publishing a live offer needs an account so the proposal can be saved, reviewed, edited, and returned to after sign-in."}
                 </p>
                 <div className="hero-actions">
                   <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
-                    Create account
+                    Save after sign-in
                   </Link>
                   <Link className="button button-secondary" href={`/login?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                     Sign in

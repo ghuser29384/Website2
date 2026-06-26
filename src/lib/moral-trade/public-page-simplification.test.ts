@@ -143,6 +143,23 @@ test("moraltrade82 offers route source keeps ranking internals out of default br
   assert.equal(marketplaceBoundary.includes("CRECM v1.125"), false);
 });
 
+test("moraltrade82 signed-out offset creation route is a preview landing, not an account wall", () => {
+  const newOfferPage = readFileSync("src/app/offers/new/page.tsx", "utf8");
+
+  assert.match(newOfferPage, /Donation offset builder/);
+  assert.match(newOfferPage, /Draft a donation offset/);
+  assert.match(newOfferPage, /Compare what would happen without the trade/);
+  assert.match(newOfferPage, /data-signed-out-offset-preview="true"/);
+  assert.match(newOfferPage, /Preview draft/);
+  assert.match(newOfferPage, /Save after sign-in/);
+  assert.match(newOfferPage, /Start from example/);
+  assert.match(newOfferPage, /Sign in only when you are ready to save or request review/);
+  assert.match(newOfferPage, /saving, publishing, requesting review, disclosing counterparties, authorizing\s+money, or creating a live offer/);
+  assert.equal(newOfferPage.includes("Match me"), false);
+  assert.equal(newOfferPage.includes("Pay now"), false);
+  assert.equal(newOfferPage.includes("Lock now"), false);
+});
+
 test("moraltrade82 public-page simplification contract route exposes safe route audit metadata", async () => {
   const response = await publicPageSimplificationRoute(
     new Request("http://localhost/api/moral-trade/public-page-simplification/contract"),
