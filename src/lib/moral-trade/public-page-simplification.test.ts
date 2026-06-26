@@ -160,6 +160,55 @@ test("moraltrade82 signed-out offset creation route is a preview landing, not an
   assert.equal(newOfferPage.includes("Lock now"), false);
 });
 
+test("moraltrade82 donation-offsets page uses plain questions and a concrete preview example", () => {
+  const donationOffsetsPage = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+
+  assert.match(donationOffsetsPage, /const offsetQuestions/);
+  assert.match(donationOffsetsPage, /What would each side donate without this trade/);
+  assert.match(donationOffsetsPage, /How much does each side redirect/);
+  assert.match(donationOffsetsPage, /Where does the shared money go/);
+  assert.match(donationOffsetsPage, /What proof can reviewers inspect/);
+  assert.match(donationOffsetsPage, /What would make this unsafe or invalid/);
+  assert.match(donationOffsetsPage, /Without the trade, A would give \$50 to Cause X/);
+  assert.match(donationOffsetsPage, /both redirect \$50 to GiveWell Top Charities Fund/);
+  assert.match(donationOffsetsPage, /Draft an offset/);
+  assert.equal(donationOffsetsPage.includes("Baseline intention"), false);
+  assert.equal(donationOffsetsPage.includes("Match ratio"), false);
+  assert.equal(donationOffsetsPage.includes("Surplus rule"), false);
+  assert.equal(donationOffsetsPage.includes("Anti-threat certification"), false);
+});
+
+test("moraltrade82 validation page leads with public claim states, not reviewer internals", () => {
+  const validationPage = readFileSync("src/app/validation/page.tsx", "utf8");
+
+  assert.match(validationPage, /Reviewers verify specific claims, not moral worth/);
+  assert.match(validationPage, /PUBLIC_VALIDATION_STATUS_PILLS/);
+  assert.match(validationPage, /label: "Draft"/);
+  assert.match(validationPage, /label: "Needs info"/);
+  assert.match(validationPage, /label: "In review"/);
+  assert.match(validationPage, /label: "Challenge open"/);
+  assert.match(validationPage, /label: "Verified"/);
+  assert.match(validationPage, /label: "Disputed"/);
+  assert.match(validationPage, /<summary>Reviewer details<\/summary>/);
+  assert.match(validationPage, /Create a reviewed draft/);
+  assert.equal(validationPage.includes("Open operator console"), false);
+});
+
+test("moraltrade82 paid-action page is closed with exactly three safe alternatives", () => {
+  const paidActionPage = readFileSync("src/app/paid-action-offers/page.tsx", "utf8");
+
+  assert.match(paidActionPage, /Paid action offers are not open to the public yet/);
+  assert.match(paidActionPage, /const paidActionAlternatives = \[/);
+  assert.match(paidActionPage, /Inspect a worked example/);
+  assert.match(paidActionPage, /Create a donation offset/);
+  assert.match(paidActionPage, /Join an invitation-only pilot/);
+  assert.match(paidActionPage, /Details on labor, exploitation, AML\/KYC, tax, and dispute risks/);
+  assert.match(paidActionPage, /Review legal and payment boundaries/);
+  assert.equal(paidActionPage.includes("Paid action offers are deferred"), false);
+  assert.equal(paidActionPage.includes("Review validation rules"), false);
+  assert.equal(paidActionPage.includes("Trade instead"), false);
+});
+
 test("moraltrade82 public-page simplification contract route exposes safe route audit metadata", async () => {
   const response = await publicPageSimplificationRoute(
     new Request("http://localhost/api/moral-trade/public-page-simplification/contract"),

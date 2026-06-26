@@ -5116,8 +5116,8 @@ test("pooled donation offset creation has visible path and server-side guardrail
     "src/lib/moral-trade/evidence-persistence.ts",
   );
 
-  assert.match(donationOffsetsPage, /Create offset/);
-  assert.match(donationOffsetsPage, /Match ratio/);
+  assert.match(donationOffsetsPage, /Draft an offset/);
+  assert.match(donationOffsetsPage, /How much does each side redirect/);
   assert.match(offerForm, /offset_pool_maximum_cap_usd/);
   assert.match(offerForm, /offset_anti_threat_certification/);
   assert.match(offerForm, /offset_verification_metadata_acknowledgement/);

@@ -45,14 +45,14 @@ export const metadata: Metadata = {
   },
 };
 
-const checklistItems = [
-  "Baseline intention",
-  "Match ratio",
-  "Destination",
-  "Surplus rule",
-  "Evidence method",
-  "Expiry",
-  "Anti-threat certification",
+const offsetQuestions = [
+  "What would each side donate without this trade?",
+  "How much does each side redirect?",
+  "Where does the shared money go?",
+  "Why does each side prefer this to no trade?",
+  "What proof can reviewers inspect?",
+  "When does this offer stop being current?",
+  "What would make this unsafe or invalid?",
 ] as const;
 
 function formatUsdFromCents(amountCents: number | null | undefined) {
@@ -171,11 +171,11 @@ export default async function DonationOffsetsPage() {
           description="When two donors would otherwise fund opposing efforts, they can redirect matched funds to a mutually acceptable destination."
           actions={
             <>
-              <Link className="button button-primary" href="/offers?mode=offset">
-                Browse offset offers
+              <Link className="button button-primary" href={createOffsetHref}>
+                Draft an offset
               </Link>
-              <Link className="button button-secondary" href={createOffsetHref}>
-                Create offset
+              <Link className="button button-secondary" href="/offers?mode=offset">
+                View offset examples
               </Link>
             </>
           }
@@ -192,6 +192,32 @@ export default async function DonationOffsetsPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="offset-example-heading">
+          <SectionHeader
+            eyebrow="One-screen example"
+            id="offset-example-heading"
+            title="A small redirect before any money moves."
+          >
+            Without the trade, A would give $50 to Cause X and B would give $50 to opposed
+            Cause Y. If it clears, both redirect $50 to GiveWell Top Charities Fund. Reviewers
+            check prior intent, payment proof, destination, and externality blockers.
+          </SectionHeader>
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>If nobody trades</h3>
+              <p>A gives $50 to Cause X. B gives $50 to opposed Cause Y.</p>
+            </article>
+            <article className="panel concept-card">
+              <h3>If this clears</h3>
+              <p>Both redirect $50 to GiveWell Top Charities Fund after review.</p>
+            </article>
+            <article className="panel concept-card">
+              <h3>What reviewers check</h3>
+              <p>Prior intent, payment proof, destination verification, and safety blockers.</p>
+            </article>
+          </div>
+        </section>
+
         <section className="section section-white" aria-labelledby="offset-steps-heading">
           <SectionHeader eyebrow="Offset flow" id="offset-steps-heading" title="Three steps make an offset reviewable." />
           <div className="step-card-grid">
@@ -208,12 +234,16 @@ export default async function DonationOffsetsPage() {
         </section>
 
         <section className="section section-subtle" aria-labelledby="valid-offset-heading">
-          <SectionHeader eyebrow="Valid offset checklist" id="valid-offset-heading" title="A public offset should expose every core term." />
+          <SectionHeader
+            eyebrow="Offset questions"
+            id="valid-offset-heading"
+            title="Answer ordinary questions before showing mechanism detail."
+          />
           <div className="checklist-card-grid">
-            {checklistItems.map((item) => (
-              <article className="panel checklist-card" key={item}>
+            {offsetQuestions.map((question) => (
+              <article className="panel checklist-card" key={question}>
                 <span aria-hidden="true">OK</span>
-                <h3>{item}</h3>
+                <h3>{question}</h3>
               </article>
             ))}
           </div>

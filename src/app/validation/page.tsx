@@ -32,18 +32,51 @@ import {
 export const metadata: Metadata = {
   title: "Validation and evidence",
   description:
-    "How Moral Trade turns manual review into validator scopes, evidence states, challenge windows, and transaction-linked trust badges.",
+    "Reviewers verify specific Moral Trade claims, not moral worth. Public states show what happens next without exposing reviewer internals.",
   alternates: {
     canonical: "/validation",
   },
   openGraph: {
     title: "Validation and evidence",
     description:
-      "Validator scopes, evidence states, challenge windows, and transaction-linked trust badges for Moral Trade.",
+      "Reviewers verify specific Moral Trade claims, not moral worth. Public states show what happens next without exposing reviewer internals.",
     url: getAbsoluteUrl("/validation"),
     type: "website",
   },
 };
+
+const PUBLIC_VALIDATION_STATUS_PILLS = [
+  {
+    label: "Draft",
+    sentence: "The terms are being written and no one should rely on them yet.",
+    nextAction: "Finish the basics or leave the draft alone.",
+  },
+  {
+    label: "Needs info",
+    sentence: "A reviewer needs a missing baseline, proof, destination, or safety answer.",
+    nextAction: "Add the requested fact or ask for manual review.",
+  },
+  {
+    label: "In review",
+    sentence: "A specific claim is being checked against the submitted evidence.",
+    nextAction: "Wait for the review result before treating it as verified.",
+  },
+  {
+    label: "Challenge open",
+    sentence: "Someone can still flag duplicate proof, coercion, or a factual problem.",
+    nextAction: "Respond only through the challenge path.",
+  },
+  {
+    label: "Verified",
+    sentence: "The reviewed evidence supports the specific claim shown.",
+    nextAction: "Use only the verified wording and keep stronger claims out.",
+  },
+  {
+    label: "Disputed",
+    sentence: "A claim remains unresolved and must not be shown as completed.",
+    nextAction: "Wait for correction, appeal, cancellation, or closure.",
+  },
+] as const;
 
 export default async function ValidationPage() {
   const viewer = await getViewer();
@@ -54,7 +87,7 @@ export default async function ValidationPage() {
   const validationStructuredData = buildWebPageJsonLd({
     name: "Validation and evidence",
     description:
-      "How Moral Trade turns manual review into validator scopes, evidence states, challenge windows, and transaction-linked trust badges.",
+      "Reviewers verify specific Moral Trade claims, not moral worth. Public states show what happens next without exposing reviewer internals.",
     path: "/validation",
   });
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
@@ -86,15 +119,15 @@ export default async function ValidationPage() {
 
         <PageHero
           eyebrow="Validation and evidence"
-          title="Manual review becomes an explicit institution."
-          description="The pilot should not rely on vague trust. Every visible proof claim needs a scope, evidence schema, challenge lane, and completion state."
+          title="Reviewers verify specific claims, not moral worth."
+          description="A review result says what was checked, what remains uncertain, and what the participant can do next. It is not a moral score, legal promise, tax opinion, or custody claim."
           actions={
             <>
               <Link className="button button-primary" href={viewer ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset"}>
-                Create reviewed offset
+                Create a reviewed draft
               </Link>
-              <Link className="button button-secondary" href="/admin">
-                Open operator console
+              <Link className="button button-secondary" href="/worked-examples">
+                View examples
               </Link>
             </>
           }
@@ -107,6 +140,27 @@ export default async function ValidationPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="public-validation-states-heading">
+          <SectionHeader
+            eyebrow="Public status"
+            id="public-validation-states-heading"
+            title="Six states, one next step each."
+          >
+            Full evidence schemas, reviewer roles, proof-reuse rules, and challenge contracts stay
+            below Reviewer details.
+          </SectionHeader>
+          <div className="data-grid">
+            {PUBLIC_VALIDATION_STATUS_PILLS.map((state) => (
+              <article className="panel data-card" key={state.label}>
+                <p className="detail-kicker">Status</p>
+                <h3>{state.label}</h3>
+                <p>{state.sentence}</p>
+                <p className="panel-note">{state.nextAction}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="section section-white" aria-labelledby="scope-heading">
           <SectionHeader eyebrow="Validator scope" id="scope-heading" title="What reviewers are allowed to certify.">
             Reviewers certify narrow evidence claims, not broad moral worth, legal enforceability, tax treatment, escrow status, or final real-world impact.
@@ -122,34 +176,38 @@ export default async function ValidationPage() {
           </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="core-protocol-heading">
-          <SectionHeader
-            eyebrow="Public validator"
-            id="core-protocol-heading"
-            title="The core Moral Trade protocol now has a public check surface."
-          >
-            The validator publishes required proposal fields, status values, factor codes, evidence
-            schemas, and provenance objects so the core feature is inspectable like MPGF.
-          </SectionHeader>
-          <div className="protocol-validator-card panel">
-            <div>
-              <p className="detail-kicker">Core profile</p>
-              <h3>{protocolValidation.profileVersion}</h3>
-              <p>
-                {protocolValidation.checks.length} check(s),{" "}
-                {protocolValidation.blockers.length} blocker(s), status {protocolValidation.status}.
-              </p>
+        <details className="section section-subtle pilot-note">
+          <summary>Reviewer details</summary>
+          <section aria-labelledby="core-protocol-heading">
+            <SectionHeader
+              eyebrow="Public validator"
+              id="core-protocol-heading"
+              title="The core Moral Trade protocol has an inspectable check surface."
+            >
+              The validator publishes required proposal fields, status values, factor codes,
+              evidence schemas, and provenance objects for reviewers and advanced users.
+            </SectionHeader>
+            <div className="protocol-validator-card panel">
+              <div>
+                <p className="detail-kicker">Core profile</p>
+                <h3>{protocolValidation.profileVersion}</h3>
+                <p>
+                  {protocolValidation.checks.length} check(s),{" "}
+                  {protocolValidation.blockers.length} blocker(s), status{" "}
+                  {protocolValidation.status}.
+                </p>
+              </div>
+              <div className="hero-actions">
+                <Link className="button button-primary" href="/moral-trade/technical-spec">
+                  Open technical spec
+                </Link>
+                <Link className="button button-secondary" href="/api/moral-trade/health">
+                  View health JSON
+                </Link>
+              </div>
             </div>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/moral-trade/technical-spec">
-                Open technical spec
-              </Link>
-              <Link className="button button-secondary" href="/api/moral-trade/health">
-                View health JSON
-              </Link>
-            </div>
-          </div>
-        </section>
+          </section>
+        </details>
 
         <section className="section section-subtle" aria-labelledby="states-heading">
           <SectionHeader eyebrow="Status taxonomy" id="states-heading" title="Every proof claim should have a visible state." />
