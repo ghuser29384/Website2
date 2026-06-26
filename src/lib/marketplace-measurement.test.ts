@@ -26,12 +26,70 @@ test("marketplace measurement contract covers privacy-safe events and KPI keys",
   assert.ok(MARKETPLACE_KPI_KEYS.every((key) => kpiKeys.includes(key)));
   assert.ok(eventTypes.includes("marketplace_intake_triage_routed"));
   assert.ok(eventTypes.includes("marketplace_claim_correction_resolved"));
+  assert.ok(eventTypes.includes("marketplace_route_simplification_audited"));
+  assert.ok(eventTypes.includes("marketplace_plain_language_copy_blocked"));
+  assert.ok(eventTypes.includes("marketplace_publication_pressure_reported"));
+  assert.ok(eventTypes.includes("marketplace_verification_status_checked"));
   assert.ok(kpiKeys.includes("public_receipt_preview_count"));
   assert.ok(kpiKeys.includes("claim_correction_resolution_count"));
+  assert.ok(kpiKeys.includes("route_simplification_audit_fail_count"));
+  assert.ok(kpiKeys.includes("plain_language_copy_omission_block_count"));
+  assert.ok(kpiKeys.includes("publication_pressure_report_count"));
+  assert.ok(kpiKeys.includes("verification_url_status_check_count"));
   assert.ok(receiptPreviewSpec?.allowedMetadata.includes("publicationState"));
+  assert.ok(
+    contract.eventSpecs.every((event) =>
+      event.allowedMetadata.every(
+        (key) =>
+          !/(profile|user|email|phone|contact|private|raw|message|note|source|evidence|receipt|counterparty|prompt|text)/i.test(
+            key,
+          ),
+      ),
+    ),
+  );
   assert.ok(contract.minimumPublicCount >= 3);
   assert.ok(contract.privacyRules.some((rule) => /raw wishes, private evidence, source notes/i.test(rule)));
   assert.ok(contract.contractTests.includes("marketplace_live_metric_exclusion"));
+});
+
+test("marketplace measurement covers moraltrade82 route and receipt quality signals", () => {
+  const contract = getMarketplaceMeasurementContract();
+  const eventTypes = new Set(contract.eventSpecs.map((event) => event.eventType));
+  const kpiKeys = new Set(contract.kpiDefinitions.map((kpi) => kpi.key));
+
+  for (const eventType of [
+    "marketplace_signed_out_offset_builder_blocked",
+    "marketplace_factor_code_primary_copy_blocked",
+    "marketplace_impact_score_default_surface_blocked",
+    "marketplace_worked_example_card_overload_blocked",
+    "marketplace_long_duration_default_example_blocked",
+    "marketplace_safe_template_default_hidden_fact_blocked",
+    "marketplace_term_map_inconsistency_blocked",
+    "marketplace_direct_donation_parity_non_preference_blocked",
+    "marketplace_sensitive_action_redacted",
+    "marketplace_moral_score_language_blocked",
+    "marketplace_anti_gamification_blocked",
+    "marketplace_publication_as_trade_term_blocked",
+  ] as const) {
+    assert.equal(eventTypes.has(eventType), true, eventType);
+  }
+
+  for (const kpiKey of [
+    "signed_out_offset_builder_dead_end_block_count",
+    "factor_code_internal_enum_primary_copy_block_count",
+    "impact_score_default_surface_block_count",
+    "worked_example_card_overload_block_count",
+    "long_duration_default_example_block_count",
+    "safe_template_default_hidden_material_fact_block_count",
+    "term_map_inconsistency_block_count",
+    "direct_donation_parity_non_preference_block_count",
+    "sensitive_action_redaction_count",
+    "moral_score_language_block_count",
+    "anti_gamification_block_count",
+    "publication_as_trade_term_block_count",
+  ] as const) {
+    assert.equal(kpiKeys.has(kpiKey), true, kpiKey);
+  }
 });
 
 test("marketplace KPI snapshot excludes seed templates, worked examples, Common Ground Budget module, and demo records from live metrics", () => {

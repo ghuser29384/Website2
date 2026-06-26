@@ -127,6 +127,14 @@ test("marketplace measurement metadata keeps template ids and filter buckets wit
   const metadata = sanitizeFunnelEventMetadata({
     contactEmail: "person@example.com",
     filterKeys: ["mode", "cause", "private_wish"],
+    blockKind: "plain_language_omission",
+    claimKind: "donation_offset",
+    displayBucket: "net_personal_separated",
+    parityMode: "opt_in",
+    publicationState: "preview_only",
+    reasonBucket: "publication_pressure",
+    resultStatus: "blocked",
+    routeEligible: false,
     liveMetricEligible: false,
     marketplaceTab: "worked_examples",
     query: "exact private wish about a counterparty",
@@ -145,11 +153,21 @@ test("marketplace measurement metadata keeps template ids and filter buckets wit
   assert.equal(isFunnelEventType("marketplace_intake_triage_routed"), true);
   assert.equal(isFunnelEventType("marketplace_public_receipt_previewed"), true);
   assert.equal(isFunnelEventType("marketplace_claim_correction_requested"), true);
+  assert.equal(isFunnelEventType("marketplace_plain_language_copy_blocked"), true);
+  assert.equal(isFunnelEventType("marketplace_verification_status_checked"), true);
+  assert.equal(metadata.blockKind, "plain_language_omission");
+  assert.equal(metadata.claimKind, "donation_offset");
+  assert.equal(metadata.displayBucket, "net_personal_separated");
   assert.deepEqual(metadata.filterKeys, ["mode", "cause"]);
   assert.equal(metadata.liveMetricEligible, false);
   assert.equal(metadata.marketplaceTab, "worked_examples");
+  assert.equal(metadata.parityMode, "opt_in");
+  assert.equal(metadata.publicationState, "preview_only");
   assert.equal(metadata.queryPresent, true);
   assert.equal(metadata.queryLengthBucket, "20-99");
+  assert.equal(metadata.reasonBucket, "publication_pressure");
+  assert.equal(metadata.resultStatus, "blocked");
+  assert.equal(metadata.routeEligible, false);
   assert.deepEqual(metadata.searchParamKeys, ["q", "mode"]);
   assert.equal(metadata.template, "pure-opposed-cause");
   assert.equal(metadata.templateKind, "donation_offset");

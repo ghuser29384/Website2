@@ -18,6 +18,34 @@ export const MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS = [
   "marketplace_public_receipt_revoked",
   "marketplace_claim_correction_requested",
   "marketplace_claim_correction_resolved",
+  "marketplace_route_simplification_audited",
+  "marketplace_plain_language_copy_blocked",
+  "marketplace_internal_jargon_primary_copy_blocked",
+  "marketplace_signed_out_offset_builder_blocked",
+  "marketplace_route_fallback_diagnostics_blocked",
+  "marketplace_factor_code_primary_copy_blocked",
+  "marketplace_impact_score_default_surface_blocked",
+  "marketplace_advanced_filter_default_expanded_blocked",
+  "marketplace_worked_example_card_overload_blocked",
+  "marketplace_long_duration_default_example_blocked",
+  "marketplace_task_card_primary_action_blocked",
+  "marketplace_safe_template_default_hidden_fact_blocked",
+  "marketplace_term_map_inconsistency_blocked",
+  "marketplace_next_action_corrected",
+  "marketplace_recipient_association_blocked",
+  "marketplace_causal_wording_blocked",
+  "marketplace_personal_contribution_reuse_blocked",
+  "marketplace_net_personal_contribution_displayed",
+  "marketplace_reimbursement_subsidy_disclosure_blocked",
+  "marketplace_direct_donation_parity_used",
+  "marketplace_direct_donation_parity_non_preference_blocked",
+  "marketplace_sensitive_action_redacted",
+  "marketplace_exact_action_publication_confirmed",
+  "marketplace_publication_pressure_reported",
+  "marketplace_moral_score_language_blocked",
+  "marketplace_anti_gamification_blocked",
+  "marketplace_publication_as_trade_term_blocked",
+  "marketplace_verification_status_checked",
 ] as const satisfies readonly FunnelEventType[];
 
 export const MARKETPLACE_KPI_KEYS = [
@@ -82,6 +110,35 @@ export const MARKETPLACE_KPI_KEYS = [
   "public_receipt_revocation_count",
   "claim_correction_request_count",
   "claim_correction_resolution_count",
+  "plain_language_copy_omission_block_count",
+  "internal_jargon_primary_copy_block_count",
+  "route_simplification_audit_pass_count",
+  "route_simplification_audit_fail_count",
+  "signed_out_offset_builder_dead_end_block_count",
+  "route_fallback_diagnostics_primary_copy_block_count",
+  "factor_code_internal_enum_primary_copy_block_count",
+  "impact_score_default_surface_block_count",
+  "advanced_filter_default_expanded_block_count",
+  "worked_example_card_overload_block_count",
+  "long_duration_default_example_block_count",
+  "task_card_single_primary_action_block_count",
+  "safe_template_default_hidden_material_fact_block_count",
+  "term_map_inconsistency_block_count",
+  "next_action_correction_count",
+  "recipient_association_block_count",
+  "causal_wording_block_count",
+  "personal_contribution_reuse_block_count",
+  "net_personal_contribution_display_count",
+  "reimbursement_subsidy_disclosure_block_count",
+  "direct_donation_parity_use_count",
+  "direct_donation_parity_non_preference_block_count",
+  "sensitive_action_redaction_count",
+  "exact_action_publication_confirmation_count",
+  "publication_pressure_report_count",
+  "moral_score_language_block_count",
+  "anti_gamification_block_count",
+  "publication_as_trade_term_block_count",
+  "verification_url_status_check_count",
 ] as const;
 
 export type MarketplaceKpiKey = (typeof MARKETPLACE_KPI_KEYS)[number];
@@ -285,6 +342,202 @@ const MARKETPLACE_MEASUREMENT_EVENT_SPECS: MarketplaceMeasurementEventSpec[] = [
     eventType: "marketplace_claim_correction_resolved",
     source: "browser_funnel",
   },
+  {
+    allowedMetadata: ["auditStage", "resultStatus", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count route-simplification pass/fail outcomes without sending page text, screenshots, or private review notes.",
+    eventType: "marketplace_route_simplification_audited",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Track missing or unsafe plain-language copy as aggregate blocker buckets before reliance-bearing screens launch.",
+    eventType: "marketplace_plain_language_copy_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count internal-jargon primary-copy blocks while keeping the blocked copy out of analytics metadata.",
+    eventType: "marketplace_internal_jargon_primary_copy_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "resultStatus", "screenFamily"],
+    decisionUse:
+      "Measure signed-out offset-builder dead-end blockers using route and status buckets only.",
+    eventType: "marketplace_signed_out_offset_builder_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Track route-fallback diagnostics that reached primary copy without storing diagnostics text.",
+    eventType: "marketplace_route_fallback_diagnostics_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count factor-code or internal-enum primary-copy blockers using safe bucket labels.",
+    eventType: "marketplace_factor_code_primary_copy_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Detect impact-score default sorting or surface blockers without recording scores or private surplus terms.",
+    eventType: "marketplace_impact_score_default_surface_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count advanced-filter default-expanded blockers as route quality signals.",
+    eventType: "marketplace_advanced_filter_default_expanded_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Track overloaded worked-example cards without exporting card text or private review detail.",
+    eventType: "marketplace_worked_example_card_overload_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count long-duration default-example blockers so pledge-swap pages keep micro-pledges as defaults.",
+    eventType: "marketplace_long_duration_default_example_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Measure task-card single-primary-action failures without logging user intent text.",
+    eventType: "marketplace_task_card_primary_action_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "policyArea", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Track hidden material safe-template defaults by policy area while excluding underlying terms.",
+    eventType: "marketplace_safe_template_default_hidden_fact_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "policyArea", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count term-map inconsistency blockers using stable public term buckets only.",
+    eventType: "marketplace_term_map_inconsistency_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["resultStatus", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Track next-action corrections as aggregate UX repair signals.",
+    eventType: "marketplace_next_action_corrected",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "policyArea", "routeFamily"],
+    decisionUse:
+      "Count recipient-association blocks for public receipts without exposing recipient private terms.",
+    eventType: "marketplace_recipient_association_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "policyArea", "routeFamily"],
+    decisionUse:
+      "Count unsupported causal-wording blocks using claim buckets instead of exact copy.",
+    eventType: "marketplace_causal_wording_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "displayBucket", "routeFamily"],
+    decisionUse:
+      "Track personal-contribution reuse blockers without exposing donation ids, URLs, or amounts.",
+    eventType: "marketplace_personal_contribution_reuse_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "displayBucket", "routeFamily"],
+    decisionUse:
+      "Count net-personal-contribution display outcomes using only attribution-safe display buckets.",
+    eventType: "marketplace_net_personal_contribution_displayed",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "displayBucket", "routeFamily"],
+    decisionUse:
+      "Count reimbursement or subsidy disclosure blockers without storing payer, amount, or receipt data.",
+    eventType: "marketplace_reimbursement_subsidy_disclosure_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["parityMode", "routeFamily"],
+    decisionUse:
+      "Measure opt-in direct-donation parity use as a non-preferential aggregate feature signal.",
+    eventType: "marketplace_direct_donation_parity_used",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "parityMode", "routeFamily"],
+    decisionUse:
+      "Count direct-donation parity non-preference blockers without recording participant identity or amount.",
+    eventType: "marketplace_direct_donation_parity_non_preference_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["actionKind", "policyArea", "routeFamily"],
+    decisionUse:
+      "Count sensitive-action redaction outcomes by coarse action bucket only.",
+    eventType: "marketplace_sensitive_action_redacted",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["actionKind", "policyArea", "routeFamily"],
+    decisionUse:
+      "Count exact-action publication confirmations without logging the exact action.",
+    eventType: "marketplace_exact_action_publication_confirmed",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["policyArea", "reasonBucket", "routeFamily"],
+    decisionUse:
+      "Track publication-pressure reports with bucketed reasons and no raw report text.",
+    eventType: "marketplace_publication_pressure_reported",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count moral-score or platform-endorsement language blockers without storing copy snippets.",
+    eventType: "marketplace_moral_score_language_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "routeFamily", "screenFamily"],
+    decisionUse:
+      "Count anti-gamification blockers for likes, ranks, streaks, boosts, and priority mechanics.",
+    eventType: "marketplace_anti_gamification_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["blockKind", "policyArea", "routeFamily"],
+    decisionUse:
+      "Track attempts to make public receipt publication a trade, payout, compensation, or evidence condition.",
+    eventType: "marketplace_publication_as_trade_term_blocked",
+    source: "browser_funnel",
+  },
+  {
+    allowedMetadata: ["claimKind", "resultStatus", "routeFamily", "visibilityState"],
+    decisionUse:
+      "Measure verification-handle status checks without logging receipt URLs or handles.",
+    eventType: "marketplace_verification_status_checked",
+    source: "browser_funnel",
+  },
 ];
 
 const COUNT_KPI_KEYS = new Set<MarketplaceKpiKey>([
@@ -300,30 +553,58 @@ const COUNT_KPI_KEYS = new Set<MarketplaceKpiKey>([
   "content_moderation_block_count",
   "claim_correction_request_count",
   "claim_correction_resolution_count",
+  "advanced_filter_default_expanded_block_count",
+  "anti_gamification_block_count",
+  "causal_wording_block_count",
   "demo_data_live_mix_block_count",
   "deployment_config_drift_block_count",
+  "direct_donation_parity_non_preference_block_count",
+  "direct_donation_parity_use_count",
   "duplicate_identity_flags",
   "environment_data_promotion_block_count",
+  "exact_action_publication_confirmation_count",
+  "factor_code_internal_enum_primary_copy_block_count",
   "impact_claim_review_block_count",
+  "impact_score_default_surface_block_count",
+  "internal_jargon_primary_copy_block_count",
+  "long_duration_default_example_block_count",
   "live_offer_count",
   "marketplace_intake_triage_route_count",
+  "moral_score_language_block_count",
+  "net_personal_contribution_display_count",
+  "next_action_correction_count",
   "participant_confirmation_expired_block_count",
   "participant_confirmation_supersession_count",
+  "personal_contribution_reuse_block_count",
+  "plain_language_copy_omission_block_count",
+  "publication_as_trade_term_block_count",
+  "publication_pressure_report_count",
   "privacy_access_log_count",
   "privacy_grant_missing_block_count",
   "public_receipt_preview_count",
   "public_receipt_publication_count",
   "public_receipt_revocation_count",
+  "recipient_association_block_count",
+  "reimbursement_subsidy_disclosure_block_count",
   "review_default_approval_block_count",
   "reviewable_offer_count",
   "reviewer_overturns",
+  "route_fallback_diagnostics_primary_copy_block_count",
+  "route_simplification_audit_fail_count",
+  "route_simplification_audit_pass_count",
+  "safe_template_default_hidden_material_fact_block_count",
   "schema_migration_dry_run_failure_count",
   "schema_migration_record_count_mismatch_block_count",
+  "sensitive_action_redaction_count",
   "test_mode_provider_event_block_count",
+  "task_card_single_primary_action_block_count",
+  "term_map_inconsistency_block_count",
   "transfer_as_impact_claim_block_count",
   "unapproved_build_deployment_block_count",
   "user_facing_status_missing_block_count",
   "user_safety_report_open_count",
+  "verification_url_status_check_count",
+  "worked_example_card_overload_block_count",
 ]);
 
 const MEDIAN_HOUR_KPI_KEYS = new Set<MarketplaceKpiKey>([
@@ -348,6 +629,8 @@ const KpiSourceTablesByPrefix: Array<[RegExp, string[]]> = [
   [/privacy/, ["privacy_grants", "privacy_access_logs"]],
   [/impact_claim|transfer_as_impact|claim_correction/, ["impact_claim_records", "claim_correction_records", "payout_milestones"]],
   [/public_receipt/, ["public_receipt_cards", "claim_correction_records"]],
+  [/plain_language|internal_jargon|route_simplification|signed_out_offset|route_fallback|factor_code|impact_score|advanced_filter|worked_example_card|long_duration|task_card|safe_template|term_map|next_action/, ["public_route_audit_records", "participant_ui_render_snapshots"]],
+  [/recipient_association|causal_wording|personal_contribution|net_personal|reimbursement|direct_donation|sensitive_action|publication_pressure|moral_score|anti_gamification|publication_as_trade_term|verification_url/, ["public_receipt_cards", "reviewer_decisions", "claim_correction_records"]],
   [/marketplace_intake/, ["marketplace_intake_triage_events"]],
   [/blocked_project|anti_threat|false_match|challenge_window/, ["dispute_cases", "appeal_cases"]],
   [/status_|opaque_blocker/, ["marketplace_state_events"]],
@@ -620,6 +903,29 @@ export function validateMarketplaceMeasurementContract(): MarketplaceMeasurement
 
   if (!contract.contractTests.includes("marketplace_live_metric_exclusion")) {
     blockers.push("live_metric_exclusion_test_missing");
+  }
+
+  const requiredMoraltrade82Signals: Array<
+    (typeof MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS)[number]
+  > = [
+    "marketplace_route_simplification_audited",
+    "marketplace_plain_language_copy_blocked",
+    "marketplace_publication_pressure_reported",
+    "marketplace_verification_status_checked",
+  ];
+  const requiredMoraltrade82Kpis: MarketplaceKpiKey[] = [
+    "plain_language_copy_omission_block_count",
+    "route_simplification_audit_fail_count",
+    "publication_pressure_report_count",
+    "verification_url_status_check_count",
+  ];
+
+  if (!requiredMoraltrade82Signals.every((eventType) => eventTypes.includes(eventType))) {
+    blockers.push("moraltrade82_quality_signal_events_missing");
+  }
+
+  if (!requiredMoraltrade82Kpis.every((key) => kpiKeys.includes(key))) {
+    blockers.push("moraltrade82_quality_signal_kpis_missing");
   }
 
   return {
