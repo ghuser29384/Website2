@@ -56,6 +56,17 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES = [
   "unknown",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES = [
+  "consensus",
+  "hybrid",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_DESTINATION_TYPES = [
+  "registered_nonprofit",
+  "fiscal_host",
+  "signed_auditable_route",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_DESTINATION_ROUTE_STATES = [
   "valid",
   "review",
@@ -335,6 +346,12 @@ export type MpgfCrecProjectEligibilityField =
 export type MpgfCrecProjectScopeState =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES>;
 
+export type MpgfCrecProjectGoodType =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES>;
+
+export type MpgfCrecProjectDestinationType =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_DESTINATION_TYPES>;
+
 export type MpgfCrecDestinationRouteState =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_DESTINATION_ROUTE_STATES>;
 
@@ -450,6 +467,43 @@ export interface MpgfCrecRoundStatusGateResult {
   finalBindingOutputAllowed: boolean;
   replayOnly: boolean;
   nonBindingPreviewOnly: boolean;
+}
+
+export interface MpgfCrecRoundMetadataGateInput {
+  roundId: unknown;
+  rulebookHash: unknown;
+  sponsorPoolSourceHash: unknown;
+  paymentReconciliationPathHash: unknown;
+  calculationVersion: unknown;
+  failureBonusPolicyVersion: unknown;
+  parametersFrozenAt: unknown;
+  opensAt: unknown;
+  earlyFailureBonusCutoff: unknown;
+  reviewFreezeAt: unknown;
+  closesAt: unknown;
+  challengeDeadline: unknown;
+}
+
+export interface MpgfCrecRoundMetadataGateResult {
+  eligible: boolean;
+  blockers: string[];
+  roundId: string | null;
+  parametersFrozenAt: string | null;
+  opensAt: string | null;
+  earlyFailureBonusCutoff: string | null;
+  reviewFreezeAt: string | null;
+  closesAt: string | null;
+  challengeDeadline: string | null;
+  rulebookHash: string | null;
+  sponsorPoolSourceHash: string | null;
+  paymentReconciliationPathHash: string | null;
+  calculationVersion: string | null;
+  failureBonusPolicyVersion: string | null;
+  lockAllowed: boolean;
+  clearingAllowed: boolean;
+  matchingAllowed: boolean;
+  authorizationAllowed: boolean;
+  failureBonusQualificationAllowed: boolean;
 }
 
 export interface MpgfCrecPaymentCommitmentSnapshot {
@@ -630,6 +684,33 @@ export interface MpgfCrecProjectHardGateResult extends MpgfCrecValidationResult 
   bindingOutputAllowed: boolean;
   shadowOnlyProvisionalLearningAllowed: boolean;
   hardGateHash: string | null;
+}
+
+export interface MpgfCrecProjectIdentityRouteGateInput {
+  roundId: string;
+  projectId: string;
+  rulebookHash: string;
+  parametersFrozenAt: string;
+  selectedPublicGoodProjectRowCount: unknown;
+  publicGoodProject: unknown;
+  roundMoralBucketSnapshot: MpgfCrecRoundMoralBucketSnapshot | null | undefined;
+}
+
+export interface MpgfCrecProjectIdentityRouteGateResult extends MpgfCrecValidationResult {
+  projectRowEligible: boolean;
+  projectIdentityAndRouteValid: boolean;
+  moralBucketSnapshotEligible: boolean;
+  bucketPresentInFrozenSnapshot: boolean;
+  projectId: string | null;
+  projectBucketId: string | null;
+  projectGoodType: MpgfCrecProjectGoodType | null;
+  projectDestinationType: MpgfCrecProjectDestinationType | null;
+  destinationRef: string | null;
+  bindingOutputAllowed: boolean;
+  matchingAllowed: boolean;
+  authorizationAllowed: boolean;
+  payoutAllowed: boolean;
+  failureBonusQualificationAllowed: boolean;
 }
 
 export interface MpgfCrecProjectRoundEligibilitySnapshot {
@@ -994,6 +1075,42 @@ export interface MpgfCrecIdentityEligibilityAllocationResult {
   counterpartyVolumeAllowed: boolean;
   sponsorMatchEligible: boolean;
   failureBonusEligible: boolean;
+  rowFailureCodes: string[];
+}
+
+export interface MpgfCrecEconomicInputSanitizationInput {
+  roundId: string;
+  projectId: string;
+  selectedPublicGoodProjectRowCount: unknown;
+  roundBaseMatchBudgetCents: unknown;
+  roundBonusMatchBudgetCents: unknown;
+  roundFailureBonusBudgetCents: unknown;
+  publicGoodProject: unknown;
+}
+
+export interface MpgfCrecEconomicInputSanitizationResult {
+  safeRoundBaseMatchBudgetCents: number;
+  safeRoundBonusMatchBudgetCents: number;
+  safeRoundFailureBonusBudgetCents: number;
+  totalSponsorPayoutAvailabilityCents: number;
+  baseMatchAvailabilityCents: number;
+  bonusMatchAvailabilityCents: number;
+  failureBonusAvailabilityCents: number;
+  roundSponsorBudgetInputsValid: boolean;
+  projectEconomicTermsRowEligible: boolean;
+  projectEconomicTermsValid: boolean;
+  projectClearingAllowed: boolean;
+  projectId: string | null;
+  projectBucketId: string | null;
+  safeRequestedMaxCents: number;
+  safeMinimumViableCents: number;
+  safeThresholdAmountCents: number;
+  safeThresholdSupporterMin: number;
+  safeThresholdClusterMin: number;
+  safeBaseMatchRatioBps: number;
+  safeBonusCapMultipleBps: number;
+  baseMatchRatioDefaulted: boolean;
+  bonusCapMultipleDefaulted: boolean;
   rowFailureCodes: string[];
 }
 
@@ -1371,6 +1488,14 @@ function timestampLte(left: unknown, right: unknown) {
   );
 }
 
+function timestampLt(left: unknown, right: unknown) {
+  return (
+    isMpgfCrecCanonicalUtcTimestamp(left) &&
+    isMpgfCrecCanonicalUtcTimestamp(right) &&
+    Date.parse(left) < Date.parse(right)
+  );
+}
+
 function timestampEquals(left: unknown, right: unknown) {
   return isMpgfCrecCanonicalUtcTimestamp(left) && left === right;
 }
@@ -1385,6 +1510,10 @@ function isPositiveSafeIntegerCents(value: unknown): value is number {
 
 function isValidBps(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === "number" && value >= 0 && value <= 10_000;
+}
+
+function isValidProjectMatchBps(value: unknown): value is number {
+  return Number.isSafeInteger(value) && typeof value === "number" && value >= 0 && value <= 100_000;
 }
 
 function floorMulDivNonNegativeSafeInteger(value: number, numerator: number, denominator: number) {
@@ -1500,6 +1629,127 @@ const MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_MUTATION_OPERATIONS = new Set<
 
 function isMpgfCrecRoundStatus(value: unknown): value is MpgfCrecRoundStatus {
   return (MPGF_PUBLIC_GOODS_CRECM_V1125_ROUND_STATUSES as readonly unknown[]).includes(value);
+}
+
+export function validateMpgfCrecRoundMetadataGate(
+  input: MpgfCrecRoundMetadataGateInput,
+): MpgfCrecRoundMetadataGateResult {
+  const blockers: string[] = [];
+
+  addBlocker(blockers, "round_metadata_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.roundId));
+  addBlocker(blockers, "round_metadata_rulebook_hash_invalid", isMpgfCrecCanonicalHash(input.rulebookHash));
+  addBlocker(
+    blockers,
+    "round_metadata_sponsor_pool_source_hash_invalid",
+    isMpgfCrecCanonicalHash(input.sponsorPoolSourceHash),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_payment_reconciliation_path_hash_invalid",
+    isMpgfCrecCanonicalHash(input.paymentReconciliationPathHash),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_calculation_version_invalid",
+    isMpgfCrecNonEmptyTrimStableString(input.calculationVersion),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_failure_bonus_policy_version_invalid",
+    isMpgfCrecNonEmptyTrimStableString(input.failureBonusPolicyVersion),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_parameters_frozen_at_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(input.parametersFrozenAt),
+  );
+  addBlocker(blockers, "round_metadata_opens_at_invalid", isMpgfCrecCanonicalUtcTimestamp(input.opensAt));
+  addBlocker(
+    blockers,
+    "round_metadata_early_failure_bonus_cutoff_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(input.earlyFailureBonusCutoff),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_review_freeze_at_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(input.reviewFreezeAt),
+  );
+  addBlocker(blockers, "round_metadata_closes_at_invalid", isMpgfCrecCanonicalUtcTimestamp(input.closesAt));
+  addBlocker(
+    blockers,
+    "round_metadata_challenge_deadline_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(input.challengeDeadline),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_parameters_frozen_after_open",
+    timestampLte(input.parametersFrozenAt, input.opensAt),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_open_after_early_failure_bonus_cutoff",
+    timestampLte(input.opensAt, input.earlyFailureBonusCutoff),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_early_failure_bonus_cutoff_after_review_freeze",
+    timestampLte(input.earlyFailureBonusCutoff, input.reviewFreezeAt),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_open_not_before_review_freeze",
+    timestampLt(input.opensAt, input.reviewFreezeAt),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_review_freeze_not_before_close",
+    timestampLt(input.reviewFreezeAt, input.closesAt),
+  );
+  addBlocker(
+    blockers,
+    "round_metadata_close_not_before_challenge_deadline",
+    timestampLt(input.closesAt, input.challengeDeadline),
+  );
+
+  const eligible = blockers.length === 0;
+
+  return {
+    eligible,
+    blockers,
+    roundId: isMpgfCrecNonEmptyTrimStableString(input.roundId) ? input.roundId : null,
+    parametersFrozenAt: isMpgfCrecCanonicalUtcTimestamp(input.parametersFrozenAt)
+      ? input.parametersFrozenAt
+      : null,
+    opensAt: isMpgfCrecCanonicalUtcTimestamp(input.opensAt) ? input.opensAt : null,
+    earlyFailureBonusCutoff: isMpgfCrecCanonicalUtcTimestamp(input.earlyFailureBonusCutoff)
+      ? input.earlyFailureBonusCutoff
+      : null,
+    reviewFreezeAt: isMpgfCrecCanonicalUtcTimestamp(input.reviewFreezeAt)
+      ? input.reviewFreezeAt
+      : null,
+    closesAt: isMpgfCrecCanonicalUtcTimestamp(input.closesAt) ? input.closesAt : null,
+    challengeDeadline: isMpgfCrecCanonicalUtcTimestamp(input.challengeDeadline)
+      ? input.challengeDeadline
+      : null,
+    rulebookHash: isMpgfCrecCanonicalHash(input.rulebookHash) ? input.rulebookHash : null,
+    sponsorPoolSourceHash: isMpgfCrecCanonicalHash(input.sponsorPoolSourceHash)
+      ? input.sponsorPoolSourceHash
+      : null,
+    paymentReconciliationPathHash: isMpgfCrecCanonicalHash(input.paymentReconciliationPathHash)
+      ? input.paymentReconciliationPathHash
+      : null,
+    calculationVersion: isMpgfCrecNonEmptyTrimStableString(input.calculationVersion)
+      ? input.calculationVersion
+      : null,
+    failureBonusPolicyVersion: isMpgfCrecNonEmptyTrimStableString(input.failureBonusPolicyVersion)
+      ? input.failureBonusPolicyVersion
+      : null,
+    lockAllowed: eligible,
+    clearingAllowed: eligible,
+    matchingAllowed: eligible,
+    authorizationAllowed: eligible,
+    failureBonusQualificationAllowed: eligible,
+  };
 }
 
 export function evaluateMpgfCrecRoundStatusGate(
@@ -2200,6 +2450,136 @@ export function evaluateMpgfCrecProjectHardGate(
     bindingOutputAllowed: eligible && bindingDeploymentMode,
     shadowOnlyProvisionalLearningAllowed: eligible && shadowDeploymentMode && hasProvisionalLearningSignal,
     hardGateHash: eligible ? buildMpgfCrecProjectHardGateHash(input) : null,
+  };
+}
+
+export function validateMpgfCrecProjectIdentityRouteGate(
+  input: MpgfCrecProjectIdentityRouteGateInput,
+): MpgfCrecProjectIdentityRouteGateResult {
+  const blockers: string[] = [];
+  const row = asObjectRow(input.publicGoodProject);
+  const contextValid =
+    isMpgfCrecNonEmptyTrimStableString(input.roundId) &&
+    isMpgfCrecNonEmptyTrimStableString(input.projectId) &&
+    isMpgfCrecCanonicalHash(input.rulebookHash) &&
+    isMpgfCrecCanonicalUtcTimestamp(input.parametersFrozenAt);
+  const rowUnique = input.selectedPublicGoodProjectRowCount === 1;
+
+  if (!contextValid) {
+    blockers.push("project_identity_route_context_invalid");
+  }
+
+  if (!rowUnique) {
+    blockers.push("project_identity_route_project_row_count_not_unique");
+  }
+
+  if (input.publicGoodProject == null) {
+    blockers.push("project_identity_route_project_row_missing");
+  } else if (row == null) {
+    blockers.push("project_identity_route_project_row_not_object");
+  }
+
+  const projectIdValid = row != null && isMpgfCrecNonEmptyTrimStableString(row.id);
+  const projectBucketIdValid = row != null && isMpgfCrecNonEmptyTrimStableString(row.bucketId);
+
+  if (row != null && !projectIdValid) {
+    blockers.push("project_identity_route_project_id_invalid");
+  }
+
+  if (row != null && !projectBucketIdValid) {
+    blockers.push("project_identity_route_bucket_id_invalid");
+  }
+
+  const rowBound =
+    contextValid &&
+    rowUnique &&
+    row != null &&
+    projectIdValid &&
+    projectBucketIdValid &&
+    row.roundId === input.roundId &&
+    row.id === input.projectId;
+
+  if (row != null && !rowBound) {
+    blockers.push("project_identity_route_project_row_not_bound");
+  }
+
+  const snapshotResult = validateMpgfCrecRoundMoralBucketSnapshot(input.roundMoralBucketSnapshot, {
+    roundId: input.roundId,
+    rulebookHash: input.rulebookHash,
+    parametersFrozenAt: input.parametersFrozenAt,
+  });
+  const moralBucketSnapshotEligible = snapshotResult.eligible;
+
+  if (!moralBucketSnapshotEligible) {
+    blockers.push("project_identity_route_moral_bucket_snapshot_ineligible");
+    blockers.push(...snapshotResult.blockers.map((blocker) => `project_identity_route_${blocker}`));
+  }
+
+  const rawGoodType = rowBound ? row.goodType : null;
+  const goodTypeValid =
+    rowBound &&
+    (MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES as readonly unknown[]).includes(rawGoodType);
+
+  if (rowBound && !goodTypeValid) {
+    blockers.push("project_identity_route_good_type_invalid");
+  }
+
+  const rawDestinationType = rowBound ? row.destinationType : null;
+  const destinationTypeValid =
+    rowBound &&
+    (MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_DESTINATION_TYPES as readonly unknown[]).includes(rawDestinationType);
+
+  if (rowBound && !destinationTypeValid) {
+    blockers.push("project_identity_route_destination_type_invalid");
+  }
+
+  const destinationRefValid =
+    rowBound && isMpgfCrecNonEmptyTrimStableString(row.destinationRef);
+
+  if (rowBound && !destinationRefValid) {
+    blockers.push("project_identity_route_destination_ref_invalid");
+  }
+
+  const projectBucketId = rowBound && typeof row.bucketId === "string" ? row.bucketId : null;
+  const bucketPresentInFrozenSnapshot =
+    projectBucketId != null &&
+    moralBucketSnapshotEligible &&
+    input.roundMoralBucketSnapshot != null &&
+    input.roundMoralBucketSnapshot.bucketIds.includes(projectBucketId);
+
+  if (rowBound && moralBucketSnapshotEligible && !bucketPresentInFrozenSnapshot) {
+    blockers.push("project_identity_route_bucket_absent_from_frozen_snapshot");
+  }
+
+  const projectIdentityAndRouteValid =
+    rowBound &&
+    goodTypeValid &&
+    destinationTypeValid &&
+    destinationRefValid &&
+    moralBucketSnapshotEligible &&
+    bucketPresentInFrozenSnapshot;
+
+  return {
+    eligible: projectIdentityAndRouteValid,
+    blockers,
+    projectRowEligible: rowBound,
+    projectIdentityAndRouteValid,
+    moralBucketSnapshotEligible,
+    bucketPresentInFrozenSnapshot,
+    projectId: rowBound && typeof row.id === "string" ? row.id : null,
+    projectBucketId,
+    projectGoodType: goodTypeValid ? rawGoodType as MpgfCrecProjectGoodType : null,
+    projectDestinationType: destinationTypeValid
+      ? rawDestinationType as MpgfCrecProjectDestinationType
+      : null,
+    destinationRef: destinationRefValid && typeof row.destinationRef === "string"
+      ? row.destinationRef
+      : null,
+    bindingOutputAllowed: projectIdentityAndRouteValid,
+    matchingAllowed: projectIdentityAndRouteValid,
+    authorizationAllowed: projectIdentityAndRouteValid,
+    payoutAllowed: projectIdentityAndRouteValid,
+    failureBonusQualificationAllowed: projectIdentityAndRouteValid,
   };
 }
 
@@ -3694,6 +4074,181 @@ export function resolveMpgfCrecIdentityEligibilityAllocationInputs(
   };
 }
 
+function sanitizeRoundSponsorBudgetCents(
+  value: unknown,
+  failureCode: string,
+  rowFailureCodes: string[],
+) {
+  if (!isNonNegativeSafeIntegerCents(value)) {
+    rowFailureCodes.push(failureCode);
+    return 0;
+  }
+
+  return value;
+}
+
+export function resolveMpgfCrecEconomicInputSanitization(
+  input: MpgfCrecEconomicInputSanitizationInput,
+): MpgfCrecEconomicInputSanitizationResult {
+  const rowFailureCodes: string[] = [];
+  const contextValid =
+    isMpgfCrecNonEmptyTrimStableString(input.roundId) &&
+    isMpgfCrecNonEmptyTrimStableString(input.projectId);
+  const rowUnique = input.selectedPublicGoodProjectRowCount === 1;
+  const row = asObjectRow(input.publicGoodProject);
+
+  if (!contextValid) {
+    rowFailureCodes.push("economic_input_context_invalid");
+  }
+
+  if (!rowUnique) {
+    rowFailureCodes.push("project_economic_terms_row_count_not_unique");
+  }
+
+  if (input.publicGoodProject == null) {
+    rowFailureCodes.push("project_economic_terms_row_missing");
+  } else if (row == null) {
+    rowFailureCodes.push("project_economic_terms_row_not_object");
+  }
+
+  const safeRoundBaseMatchBudgetCents = sanitizeRoundSponsorBudgetCents(
+    input.roundBaseMatchBudgetCents,
+    "round_base_match_budget_cents_invalid_zeroed",
+    rowFailureCodes,
+  );
+  const safeRoundBonusMatchBudgetCents = sanitizeRoundSponsorBudgetCents(
+    input.roundBonusMatchBudgetCents,
+    "round_bonus_match_budget_cents_invalid_zeroed",
+    rowFailureCodes,
+  );
+  const safeRoundFailureBonusBudgetCents = sanitizeRoundSponsorBudgetCents(
+    input.roundFailureBonusBudgetCents,
+    "round_failure_bonus_budget_cents_invalid_zeroed",
+    rowFailureCodes,
+  );
+  const totalSponsorPayoutAvailabilityExact = sumMpgfCrecNonNegativeBigInt([
+    safeRoundBaseMatchBudgetCents,
+    safeRoundBonusMatchBudgetCents,
+    safeRoundFailureBonusBudgetCents,
+  ]);
+  const totalSponsorPayoutAvailabilityCents =
+    totalSponsorPayoutAvailabilityExact <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(totalSponsorPayoutAvailabilityExact)
+      : 0;
+
+  if (totalSponsorPayoutAvailabilityExact > BigInt(Number.MAX_SAFE_INTEGER)) {
+    rowFailureCodes.push("round_sponsor_budget_total_availability_unsafe_zeroed");
+  }
+
+  const rowBound =
+    contextValid &&
+    rowUnique &&
+    row != null &&
+    isMpgfCrecNonEmptyTrimStableString(row.id) &&
+    isMpgfCrecNonEmptyTrimStableString(row.bucketId) &&
+    row.roundId === input.roundId &&
+    row.id === input.projectId;
+
+  if (row != null && !rowBound) {
+    rowFailureCodes.push("project_economic_terms_row_not_bound");
+  }
+
+  const requestedMaxCentsValid = rowBound && isNonNegativeSafeIntegerCents(row.requestedMaxCents);
+  const minimumViableCentsValid = rowBound && isNonNegativeSafeIntegerCents(row.minimumViableCents);
+  const thresholdAmountCentsValid = rowBound && isNonNegativeSafeIntegerCents(row.thresholdAmountCents);
+  const thresholdSupporterMinValid = rowBound && isNonNegativeSafeIntegerCents(row.thresholdSupporterMin);
+  const thresholdClusterMinValid = rowBound && isNonNegativeSafeIntegerCents(row.thresholdClusterMin);
+
+  if (rowBound && !requestedMaxCentsValid) {
+    rowFailureCodes.push("project_requested_max_cents_invalid_blocks_clearing");
+  }
+
+  if (rowBound && !minimumViableCentsValid) {
+    rowFailureCodes.push("project_minimum_viable_cents_invalid_blocks_clearing");
+  }
+
+  if (rowBound && !thresholdAmountCentsValid) {
+    rowFailureCodes.push("project_threshold_amount_cents_invalid_blocks_clearing");
+  }
+
+  if (rowBound && !thresholdSupporterMinValid) {
+    rowFailureCodes.push("project_threshold_supporter_min_invalid_blocks_clearing");
+  }
+
+  if (rowBound && !thresholdClusterMinValid) {
+    rowFailureCodes.push("project_threshold_cluster_min_invalid_blocks_clearing");
+  }
+
+  const rawBaseMatchRatioBps = rowBound ? row.baseMatchRatioBps ?? null : null;
+  const baseMatchRatioDefaulted = rawBaseMatchRatioBps == null;
+  const baseMatchRatioBpsValid = baseMatchRatioDefaulted || isValidProjectMatchBps(rawBaseMatchRatioBps);
+  const safeBaseMatchRatioBps = baseMatchRatioBpsValid
+    ? baseMatchRatioDefaulted
+      ? 10_000
+      : Number(rawBaseMatchRatioBps)
+    : 0;
+
+  if (rowBound && !baseMatchRatioBpsValid) {
+    rowFailureCodes.push("project_base_match_ratio_bps_invalid_zeroed");
+  }
+
+  const rawBonusCapMultipleBps = rowBound ? row.bonusCapMultipleBps ?? null : null;
+  const bonusCapMultipleDefaulted = rawBonusCapMultipleBps == null;
+  const bonusCapMultipleBpsValid =
+    bonusCapMultipleDefaulted || isValidProjectMatchBps(rawBonusCapMultipleBps);
+  const safeBonusCapMultipleBps = bonusCapMultipleBpsValid
+    ? bonusCapMultipleDefaulted
+      ? 10_000
+      : Number(rawBonusCapMultipleBps)
+    : 0;
+
+  if (rowBound && !bonusCapMultipleBpsValid) {
+    rowFailureCodes.push("project_bonus_cap_multiple_bps_invalid_zeroed");
+  }
+
+  const projectEconomicTermsValid =
+    rowBound &&
+    requestedMaxCentsValid &&
+    minimumViableCentsValid &&
+    thresholdAmountCentsValid &&
+    thresholdSupporterMinValid &&
+    thresholdClusterMinValid;
+
+  return {
+    safeRoundBaseMatchBudgetCents,
+    safeRoundBonusMatchBudgetCents,
+    safeRoundFailureBonusBudgetCents,
+    totalSponsorPayoutAvailabilityCents,
+    baseMatchAvailabilityCents: safeRoundBaseMatchBudgetCents,
+    bonusMatchAvailabilityCents: safeRoundBonusMatchBudgetCents,
+    failureBonusAvailabilityCents: safeRoundFailureBonusBudgetCents,
+    roundSponsorBudgetInputsValid:
+      isNonNegativeSafeIntegerCents(input.roundBaseMatchBudgetCents) &&
+      isNonNegativeSafeIntegerCents(input.roundBonusMatchBudgetCents) &&
+      isNonNegativeSafeIntegerCents(input.roundFailureBonusBudgetCents) &&
+      totalSponsorPayoutAvailabilityExact <= BigInt(Number.MAX_SAFE_INTEGER),
+    projectEconomicTermsRowEligible: rowBound,
+    projectEconomicTermsValid,
+    projectClearingAllowed: projectEconomicTermsValid,
+    projectId: rowBound && typeof row.id === "string" ? row.id : null,
+    projectBucketId: rowBound && typeof row.bucketId === "string" ? row.bucketId : null,
+    safeRequestedMaxCents: requestedMaxCentsValid ? Number(row.requestedMaxCents) : 0,
+    safeMinimumViableCents: minimumViableCentsValid ? Number(row.minimumViableCents) : 0,
+    safeThresholdAmountCents: thresholdAmountCentsValid ? Number(row.thresholdAmountCents) : 0,
+    safeThresholdSupporterMin: thresholdSupporterMinValid
+      ? Number(row.thresholdSupporterMin)
+      : Number.MAX_SAFE_INTEGER,
+    safeThresholdClusterMin: thresholdClusterMinValid
+      ? Number(row.thresholdClusterMin)
+      : Number.MAX_SAFE_INTEGER,
+    safeBaseMatchRatioBps,
+    safeBonusCapMultipleBps,
+    baseMatchRatioDefaulted,
+    bonusCapMultipleDefaulted,
+    rowFailureCodes,
+  };
+}
+
 export function validateMpgfCrecRoundCloseBundleRowUniqueness(
   input: MpgfCrecRoundCloseBundleRowUniquenessInput,
 ): MpgfCrecRoundCloseBundleRowUniquenessResult {
@@ -4863,6 +5418,18 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
   const summary = {
     policy: MPGF_PUBLIC_GOODS_CRECM_V1125_CLEARING_POLICY,
     sourceSpec: "moralpublicgoods131.md" as const,
+    roundMetadataGate: {
+      canonicalUtcTimestampsRequired: true,
+      parameterFreezeNoLaterThanOpen: true,
+      orderedLifecycleRequired:
+        "parametersFrozenAt<=opensAt<=earlyFailureBonusCutoff<=reviewFreezeAt<closesAt<challengeDeadline" as const,
+      rulebookHashMustBeCanonical: true,
+      sponsorPoolSourceHashMustBeCanonical: true,
+      paymentReconciliationPathHashMustBeCanonical: true,
+      calculationVersionMustBeTrimStable: true,
+      failureBonusPolicyVersionMustBeTrimStable: true,
+      locksClearingMatchingAuthorizationAndFailureBonusWhenInvalid: true,
+    },
     paymentCommitmentSnapshots: {
       providerConfirmedStateRequired: true,
       nonEmptyPaymentMethodReferenceRequired: true,
@@ -4952,6 +5519,17 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       legalCustodyStateRequired: "clear" as const,
       hardGateHashBindsBaselineActionAndReviewStates: true,
       failureBonusEligibilityRequiresProjectHardGateHash: true,
+    },
+    projectIdentityRouteGate: {
+      validGoodTypes: MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES,
+      validDestinationTypes: MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_DESTINATION_TYPES,
+      bundleDerivedProjectRowMustBeRoundBound: true,
+      destinationRefMustBeNonEmptyTrimStable: true,
+      bucketIdMustBeNonEmptyTrimStable: true,
+      bucketMustAppearInFrozenMoralBucketSnapshot: true,
+      usesFullMoralBucketSnapshotPredicate: true,
+      looseBucketMembershipCannotClear: true,
+      invalidFieldsBlockClearingMatchingAuthorizationPayoutAndFailureBonus: true,
     },
     moralBucketSnapshot: {
       frozenReciprocalGraphRequired: true,
@@ -5075,6 +5653,17 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       requiresHumanVerifiedSybilClearCollusionClear: true,
       nonClearRowsCannotCountMatchCounterpartyOrQualifyFailureBonus: true,
       malformedThresholdsFailClosed: true,
+    },
+    economicInputGating: {
+      roundSponsorBudgetsInvalidFieldsResolveToZero: true,
+      roundSponsorBudgetsNeverProduceNegativeAvailability: true,
+      totalSponsorPayoutAvailabilityUsesExactBigInt: true,
+      projectEconomicTermsRequireRoundBoundUniqueProjectRow: true,
+      projectEconomicTermsMalformedBlockClearing: true,
+      invalidProjectThresholdCountsCannotLowerRequirements: true,
+      projectMatchBpsRange: "[0,100000]" as const,
+      malformedProjectMatchBpsResolveToZeroForAffectedMatch: true,
+      defaultProjectMatchBps: 10_000,
     },
     failClosedHelpers: {
       minReturnsZeroOnMalformedInputs: true,

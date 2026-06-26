@@ -37,6 +37,7 @@ import {
   resolveMpgfCrecAllocatorStateInputs,
   resolveMpgfCrecCommonGroundBudgetAllocationInputs,
   resolveMpgfCrecConditionalIntentAllocationInputs,
+  resolveMpgfCrecEconomicInputSanitization,
   resolveMpgfCrecIdentityEligibilityAllocationInputs,
   resolveMpgfCrecSupportStanceAllocationInputs,
   selectMpgfCrecFinalFailureBonusPayoutClaims,
@@ -52,10 +53,12 @@ import {
   validateMpgfCrecImpactCertificateClaim,
   validateMpgfCrecOptimizationRunTrace,
   validateMpgfCrecPaymentCommitmentSnapshot,
+  validateMpgfCrecProjectIdentityRouteGate,
   validateMpgfCrecProjectRoundEligibilitySnapshot,
   validateMpgfCrecRoundAuditBundle,
   validateMpgfCrecRoundClearingInputBundle,
   validateMpgfCrecRoundCloseBundleRowUniqueness,
+  validateMpgfCrecRoundMetadataGate,
   validateMpgfCrecRoundMoralBucketSnapshot,
   normalizeMpgfCrecSupporterCountMinNetPublicGoodCents,
   type MpgfCrecAuthorizationReconciliationEvent,
@@ -100,6 +103,8 @@ const opensAt = "2026-05-01T00:00:00.000Z";
 const parametersFrozenAt = "2026-04-30T20:00:00.000Z";
 const closesAt = "2026-05-14T00:00:00.000Z";
 const earlyFailureBonusCutoff = "2026-05-07T00:00:00.000Z";
+const reviewFreezeAt = "2026-05-10T00:00:00.000Z";
+const challengeDeadline = "2026-05-21T00:00:00.000Z";
 const roundCloseSourceCutoff = closesAt;
 const createdAt = "2026-04-30T19:00:00.000Z";
 
@@ -983,6 +988,125 @@ test("CRECM v1.125 moral-bucket snapshots require a frozen reciprocal graph", ()
 
   assert.equal(asymmetricResult.eligible, false);
   assert.ok(asymmetricResult.blockers.includes("moral_bucket_snapshot_asymmetric_edge"));
+});
+
+test("CRECM v1.125 project identity and destination route require frozen bucket membership", () => {
+  const snapshot = moralBucketSnapshot();
+  const valid = validateMpgfCrecProjectIdentityRouteGate({
+    roundId,
+    projectId,
+    rulebookHash,
+    parametersFrozenAt,
+    selectedPublicGoodProjectRowCount: 1,
+    roundMoralBucketSnapshot: snapshot,
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "humanitarian",
+      goodType: "consensus",
+      destinationType: "registered_nonprofit",
+      destinationRef: "ein:12-3456789",
+    },
+  });
+
+  assert.equal(valid.eligible, true);
+  assert.equal(valid.projectIdentityAndRouteValid, true);
+  assert.equal(valid.moralBucketSnapshotEligible, true);
+  assert.equal(valid.bucketPresentInFrozenSnapshot, true);
+  assert.equal(valid.projectGoodType, "consensus");
+  assert.equal(valid.projectDestinationType, "registered_nonprofit");
+  assert.equal(valid.bindingOutputAllowed, true);
+  assert.equal(valid.matchingAllowed, true);
+  assert.equal(valid.authorizationAllowed, true);
+  assert.equal(valid.payoutAllowed, true);
+  assert.equal(valid.failureBonusQualificationAllowed, true);
+  assert.deepEqual(valid.blockers, []);
+
+  const malformedProject = validateMpgfCrecProjectIdentityRouteGate({
+    roundId,
+    projectId,
+    rulebookHash,
+    parametersFrozenAt,
+    selectedPublicGoodProjectRowCount: 1,
+    roundMoralBucketSnapshot: snapshot,
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "long-run-future",
+      goodType: "private_benefit",
+      destinationType: "external_charity",
+      destinationRef: " recipient-1",
+    },
+  });
+
+  assert.equal(malformedProject.eligible, false);
+  assert.equal(malformedProject.projectIdentityAndRouteValid, false);
+  assert.equal(malformedProject.bucketPresentInFrozenSnapshot, false);
+  assert.equal(malformedProject.projectGoodType, null);
+  assert.equal(malformedProject.projectDestinationType, null);
+  assert.equal(malformedProject.destinationRef, null);
+  assert.equal(malformedProject.bindingOutputAllowed, false);
+  assert.equal(malformedProject.failureBonusQualificationAllowed, false);
+  assert.ok(malformedProject.blockers.includes("project_identity_route_good_type_invalid"));
+  assert.ok(malformedProject.blockers.includes("project_identity_route_destination_type_invalid"));
+  assert.ok(malformedProject.blockers.includes("project_identity_route_destination_ref_invalid"));
+  assert.ok(malformedProject.blockers.includes("project_identity_route_bucket_absent_from_frozen_snapshot"));
+
+  const wrongRoundProject = validateMpgfCrecProjectIdentityRouteGate({
+    roundId,
+    projectId,
+    rulebookHash,
+    parametersFrozenAt,
+    selectedPublicGoodProjectRowCount: 1,
+    roundMoralBucketSnapshot: snapshot,
+    publicGoodProject: {
+      id: projectId,
+      roundId: "round-other",
+      bucketId: "humanitarian",
+      get goodType() {
+        throw new Error("goodType should not be read before project row binding");
+      },
+      get destinationType() {
+        throw new Error("destinationType should not be read before project row binding");
+      },
+      get destinationRef() {
+        throw new Error("destinationRef should not be read before project row binding");
+      },
+    },
+  });
+
+  assert.equal(wrongRoundProject.eligible, false);
+  assert.equal(wrongRoundProject.projectRowEligible, false);
+  assert.equal(wrongRoundProject.projectIdentityAndRouteValid, false);
+  assert.ok(wrongRoundProject.blockers.includes("project_identity_route_project_row_not_bound"));
+
+  const malformedSnapshot = validateMpgfCrecProjectIdentityRouteGate({
+    roundId,
+    projectId,
+    rulebookHash,
+    parametersFrozenAt,
+    selectedPublicGoodProjectRowCount: 1,
+    roundMoralBucketSnapshot: moralBucketSnapshot({
+      reciprocalDistinctFromBucketIdsByBucketId: {
+        humanitarian: ["pluralist"],
+        pluralist: [],
+      },
+    }),
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "humanitarian",
+      goodType: "hybrid",
+      destinationType: "fiscal_host",
+      destinationRef: "fiscal-host:clean-air-fund",
+    },
+  });
+
+  assert.equal(malformedSnapshot.eligible, false);
+  assert.equal(malformedSnapshot.moralBucketSnapshotEligible, false);
+  assert.equal(malformedSnapshot.bucketPresentInFrozenSnapshot, false);
+  assert.ok(malformedSnapshot.blockers.includes("project_identity_route_moral_bucket_snapshot_ineligible"));
+  assert.ok(malformedSnapshot.blockers.includes("project_identity_route_moral_bucket_snapshot_asymmetric_edge"));
 });
 
 test("CRECM v1.125 clearing bundles bind selected bundle id, cutoff, versions, and component hashes", () => {
@@ -2086,6 +2210,156 @@ test("CRECM v1.125 verified-clear identity eligibility can unlock counted and ma
   assert.deepEqual(resolved.rowFailureCodes, []);
 });
 
+test("CRECM v1.125 economic inputs sanitize sponsor budgets and block malformed project terms", () => {
+  const wrongRound = resolveMpgfCrecEconomicInputSanitization({
+    roundId,
+    projectId,
+    selectedPublicGoodProjectRowCount: 1,
+    roundBaseMatchBudgetCents: 1_000,
+    roundBonusMatchBudgetCents: 2_000,
+    roundFailureBonusBudgetCents: 300,
+    publicGoodProject: {
+      id: projectId,
+      roundId: "round-other",
+      bucketId: "bucket-global-health",
+      get requestedMaxCents() {
+        throw new Error("requestedMaxCents should not be read before project row binding");
+      },
+      get thresholdAmountCents() {
+        throw new Error("thresholdAmountCents should not be read before project row binding");
+      },
+    },
+  });
+
+  assert.equal(wrongRound.projectEconomicTermsRowEligible, false);
+  assert.equal(wrongRound.projectEconomicTermsValid, false);
+  assert.equal(wrongRound.projectClearingAllowed, false);
+  assert.equal(wrongRound.safeRequestedMaxCents, 0);
+  assert.equal(wrongRound.safeThresholdSupporterMin, Number.MAX_SAFE_INTEGER);
+  assert.ok(wrongRound.rowFailureCodes.includes("project_economic_terms_row_not_bound"));
+
+  const malformed = resolveMpgfCrecEconomicInputSanitization({
+    roundId,
+    projectId,
+    selectedPublicGoodProjectRowCount: 1,
+    roundBaseMatchBudgetCents: -1,
+    roundBonusMatchBudgetCents: 10.5,
+    roundFailureBonusBudgetCents: Number.NaN,
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "bucket-global-health",
+      requestedMaxCents: "10000",
+      minimumViableCents: -1,
+      thresholdAmountCents: 1.5,
+      thresholdSupporterMin: Number.NaN,
+      thresholdClusterMin: null,
+      baseMatchRatioBps: 100_001,
+      bonusCapMultipleBps: "10000",
+    },
+  });
+
+  assert.equal(malformed.safeRoundBaseMatchBudgetCents, 0);
+  assert.equal(malformed.safeRoundBonusMatchBudgetCents, 0);
+  assert.equal(malformed.safeRoundFailureBonusBudgetCents, 0);
+  assert.equal(malformed.baseMatchAvailabilityCents, 0);
+  assert.equal(malformed.bonusMatchAvailabilityCents, 0);
+  assert.equal(malformed.failureBonusAvailabilityCents, 0);
+  assert.equal(malformed.totalSponsorPayoutAvailabilityCents, 0);
+  assert.equal(malformed.roundSponsorBudgetInputsValid, false);
+  assert.equal(malformed.projectEconomicTermsRowEligible, true);
+  assert.equal(malformed.projectEconomicTermsValid, false);
+  assert.equal(malformed.projectClearingAllowed, false);
+  assert.equal(malformed.safeRequestedMaxCents, 0);
+  assert.equal(malformed.safeMinimumViableCents, 0);
+  assert.equal(malformed.safeThresholdAmountCents, 0);
+  assert.equal(malformed.safeThresholdSupporterMin, Number.MAX_SAFE_INTEGER);
+  assert.equal(malformed.safeThresholdClusterMin, Number.MAX_SAFE_INTEGER);
+  assert.equal(malformed.safeBaseMatchRatioBps, 0);
+  assert.equal(malformed.safeBonusCapMultipleBps, 0);
+  assert.ok(malformed.rowFailureCodes.includes("round_base_match_budget_cents_invalid_zeroed"));
+  assert.ok(malformed.rowFailureCodes.includes("round_bonus_match_budget_cents_invalid_zeroed"));
+  assert.ok(malformed.rowFailureCodes.includes("round_failure_bonus_budget_cents_invalid_zeroed"));
+  assert.ok(malformed.rowFailureCodes.includes("project_requested_max_cents_invalid_blocks_clearing"));
+  assert.ok(malformed.rowFailureCodes.includes("project_minimum_viable_cents_invalid_blocks_clearing"));
+  assert.ok(malformed.rowFailureCodes.includes("project_threshold_amount_cents_invalid_blocks_clearing"));
+  assert.ok(malformed.rowFailureCodes.includes("project_threshold_supporter_min_invalid_blocks_clearing"));
+  assert.ok(malformed.rowFailureCodes.includes("project_threshold_cluster_min_invalid_blocks_clearing"));
+  assert.ok(malformed.rowFailureCodes.includes("project_base_match_ratio_bps_invalid_zeroed"));
+  assert.ok(malformed.rowFailureCodes.includes("project_bonus_cap_multiple_bps_invalid_zeroed"));
+
+  const unsafeTotal = resolveMpgfCrecEconomicInputSanitization({
+    roundId,
+    projectId,
+    selectedPublicGoodProjectRowCount: 1,
+    roundBaseMatchBudgetCents: Number.MAX_SAFE_INTEGER,
+    roundBonusMatchBudgetCents: 1,
+    roundFailureBonusBudgetCents: 0,
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "bucket-global-health",
+      requestedMaxCents: 10_000,
+      minimumViableCents: 0,
+      thresholdAmountCents: 1_000,
+      thresholdSupporterMin: 0,
+      thresholdClusterMin: 0,
+      baseMatchRatioBps: null,
+      bonusCapMultipleBps: null,
+    },
+  });
+
+  assert.equal(unsafeTotal.totalSponsorPayoutAvailabilityCents, 0);
+  assert.equal(unsafeTotal.roundSponsorBudgetInputsValid, false);
+  assert.ok(
+    unsafeTotal.rowFailureCodes.includes("round_sponsor_budget_total_availability_unsafe_zeroed"),
+  );
+});
+
+test("CRECM v1.125 valid economic inputs expose sanitized sponsor availability and project terms", () => {
+  const resolved = resolveMpgfCrecEconomicInputSanitization({
+    roundId,
+    projectId,
+    selectedPublicGoodProjectRowCount: 1,
+    roundBaseMatchBudgetCents: 1_000,
+    roundBonusMatchBudgetCents: 2_000,
+    roundFailureBonusBudgetCents: 300,
+    publicGoodProject: {
+      id: projectId,
+      roundId,
+      bucketId: "bucket-global-health",
+      requestedMaxCents: 10_000,
+      minimumViableCents: 0,
+      thresholdAmountCents: 1_000,
+      thresholdSupporterMin: 0,
+      thresholdClusterMin: 0,
+      baseMatchRatioBps: null,
+      bonusCapMultipleBps: 25_000,
+    },
+  });
+
+  assert.equal(resolved.safeRoundBaseMatchBudgetCents, 1_000);
+  assert.equal(resolved.safeRoundBonusMatchBudgetCents, 2_000);
+  assert.equal(resolved.safeRoundFailureBonusBudgetCents, 300);
+  assert.equal(resolved.totalSponsorPayoutAvailabilityCents, 3_300);
+  assert.equal(resolved.roundSponsorBudgetInputsValid, true);
+  assert.equal(resolved.projectEconomicTermsRowEligible, true);
+  assert.equal(resolved.projectEconomicTermsValid, true);
+  assert.equal(resolved.projectClearingAllowed, true);
+  assert.equal(resolved.projectId, projectId);
+  assert.equal(resolved.projectBucketId, "bucket-global-health");
+  assert.equal(resolved.safeRequestedMaxCents, 10_000);
+  assert.equal(resolved.safeMinimumViableCents, 0);
+  assert.equal(resolved.safeThresholdAmountCents, 1_000);
+  assert.equal(resolved.safeThresholdSupporterMin, 0);
+  assert.equal(resolved.safeThresholdClusterMin, 0);
+  assert.equal(resolved.safeBaseMatchRatioBps, 10_000);
+  assert.equal(resolved.safeBonusCapMultipleBps, 25_000);
+  assert.equal(resolved.baseMatchRatioDefaulted, true);
+  assert.equal(resolved.bonusCapMultipleDefaulted, false);
+  assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
 test("CRECM v1.125 round-close row-count guards reject duplicate and wrong-key bundle rows", () => {
   const input = rowUniquenessInput();
   const result = validateMpgfCrecRoundCloseBundleRowUniqueness(input);
@@ -2841,6 +3115,74 @@ test("CRECM v1.125 failure bonuses require payable threshold-family failures and
   assert.ok(underBacked.blockers.includes("failure_bonus_pool_not_fully_backed"));
 });
 
+test("CRECM v1.125 round metadata gate requires canonical ordered lifecycle and policy fields", () => {
+  const valid = validateMpgfCrecRoundMetadataGate({
+    roundId,
+    rulebookHash,
+    sponsorPoolSourceHash: sourceHash,
+    paymentReconciliationPathHash: h("payment-reconciliation-path"),
+    calculationVersion: "crecm-v1.125-calc",
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    parametersFrozenAt,
+    opensAt,
+    earlyFailureBonusCutoff,
+    reviewFreezeAt,
+    closesAt,
+    challengeDeadline,
+  });
+
+  assert.equal(valid.eligible, true);
+  assert.deepEqual(valid.blockers, []);
+  assert.equal(valid.roundId, roundId);
+  assert.equal(valid.parametersFrozenAt, parametersFrozenAt);
+  assert.equal(valid.opensAt, opensAt);
+  assert.equal(valid.earlyFailureBonusCutoff, earlyFailureBonusCutoff);
+  assert.equal(valid.reviewFreezeAt, reviewFreezeAt);
+  assert.equal(valid.closesAt, closesAt);
+  assert.equal(valid.challengeDeadline, challengeDeadline);
+  assert.equal(valid.lockAllowed, true);
+  assert.equal(valid.clearingAllowed, true);
+  assert.equal(valid.matchingAllowed, true);
+  assert.equal(valid.authorizationAllowed, true);
+  assert.equal(valid.failureBonusQualificationAllowed, true);
+
+  const invalid = validateMpgfCrecRoundMetadataGate({
+    roundId: " round-crecm-2026-05",
+    rulebookHash: "not-a-hash",
+    sponsorPoolSourceHash: sourceHash,
+    paymentReconciliationPathHash: "",
+    calculationVersion: "crecm-v1.125-calc ",
+    failureBonusPolicyVersion: "",
+    parametersFrozenAt: "2026-05-01T00:00:00.001Z",
+    opensAt: "2026-05-01T00:00:00.000Z",
+    earlyFailureBonusCutoff: "2026-05-11T00:00:00.000Z",
+    reviewFreezeAt: "2026-05-10T00:00:00.000Z",
+    closesAt: "2026-05-10T00:00:00.000Z",
+    challengeDeadline: "2026-05-09T00:00:00.000Z",
+  });
+
+  assert.equal(invalid.eligible, false);
+  assert.equal(invalid.roundId, null);
+  assert.equal(invalid.rulebookHash, null);
+  assert.equal(invalid.paymentReconciliationPathHash, null);
+  assert.equal(invalid.calculationVersion, null);
+  assert.equal(invalid.failureBonusPolicyVersion, null);
+  assert.equal(invalid.lockAllowed, false);
+  assert.equal(invalid.clearingAllowed, false);
+  assert.equal(invalid.matchingAllowed, false);
+  assert.equal(invalid.authorizationAllowed, false);
+  assert.equal(invalid.failureBonusQualificationAllowed, false);
+  assert.ok(invalid.blockers.includes("round_metadata_round_id_invalid"));
+  assert.ok(invalid.blockers.includes("round_metadata_rulebook_hash_invalid"));
+  assert.ok(invalid.blockers.includes("round_metadata_payment_reconciliation_path_hash_invalid"));
+  assert.ok(invalid.blockers.includes("round_metadata_calculation_version_invalid"));
+  assert.ok(invalid.blockers.includes("round_metadata_failure_bonus_policy_version_invalid"));
+  assert.ok(invalid.blockers.includes("round_metadata_parameters_frozen_after_open"));
+  assert.ok(invalid.blockers.includes("round_metadata_early_failure_bonus_cutoff_after_review_freeze"));
+  assert.ok(invalid.blockers.includes("round_metadata_review_freeze_not_before_close"));
+  assert.ok(invalid.blockers.includes("round_metadata_close_not_before_challenge_deadline"));
+});
+
 test("CRECM v1.125 round status gate separates replay, authorization, payable side effects, and previews", () => {
   const payableCapture = evaluateMpgfCrecRoundStatusGate({
     roundStatus: "payable",
@@ -3141,6 +3483,16 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   const summary = buildMpgfCrecV1125ClearingContractSummary();
 
   assert.equal(summary.policy, "crecm_v1_125_fail_closed_round_close_clearing_contract");
+  assert.equal(summary.roundMetadataGate.canonicalUtcTimestampsRequired, true);
+  assert.equal(summary.roundMetadataGate.parameterFreezeNoLaterThanOpen, true);
+  assert.equal(
+    summary.roundMetadataGate.orderedLifecycleRequired,
+    "parametersFrozenAt<=opensAt<=earlyFailureBonusCutoff<=reviewFreezeAt<closesAt<challengeDeadline",
+  );
+  assert.equal(summary.roundMetadataGate.rulebookHashMustBeCanonical, true);
+  assert.equal(summary.roundMetadataGate.sponsorPoolSourceHashMustBeCanonical, true);
+  assert.equal(summary.roundMetadataGate.paymentReconciliationPathHashMustBeCanonical, true);
+  assert.equal(summary.roundMetadataGate.locksClearingMatchingAuthorizationAndFailureBonusWhenInvalid, true);
   assert.equal(summary.paymentCommitmentSnapshots.exactCutoffBindingRequired, true);
   assert.equal(summary.roundClearingInputBundle.bundleHashBindsSelectedBundleId, true);
   assert.equal(summary.deploymentAudits.priorOutcomeMustBePassed, true);
@@ -3161,6 +3513,21 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     true,
   );
   assert.equal(summary.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
+  assert.deepEqual(summary.projectIdentityRouteGate.validGoodTypes, ["consensus", "hybrid"]);
+  assert.deepEqual(summary.projectIdentityRouteGate.validDestinationTypes, [
+    "registered_nonprofit",
+    "fiscal_host",
+    "signed_auditable_route",
+  ]);
+  assert.equal(summary.projectIdentityRouteGate.bundleDerivedProjectRowMustBeRoundBound, true);
+  assert.equal(summary.projectIdentityRouteGate.destinationRefMustBeNonEmptyTrimStable, true);
+  assert.equal(summary.projectIdentityRouteGate.bucketMustAppearInFrozenMoralBucketSnapshot, true);
+  assert.equal(summary.projectIdentityRouteGate.usesFullMoralBucketSnapshotPredicate, true);
+  assert.equal(summary.projectIdentityRouteGate.looseBucketMembershipCannotClear, true);
+  assert.equal(
+    summary.projectIdentityRouteGate.invalidFieldsBlockClearingMatchingAuthorizationPayoutAndFailureBonus,
+    true,
+  );
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
@@ -3216,6 +3583,14 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     summary.identityEligibilityInputGating.nonClearRowsCannotCountMatchCounterpartyOrQualifyFailureBonus,
     true,
   );
+  assert.equal(summary.economicInputGating.roundSponsorBudgetsInvalidFieldsResolveToZero, true);
+  assert.equal(summary.economicInputGating.roundSponsorBudgetsNeverProduceNegativeAvailability, true);
+  assert.equal(summary.economicInputGating.totalSponsorPayoutAvailabilityUsesExactBigInt, true);
+  assert.equal(summary.economicInputGating.projectEconomicTermsRequireRoundBoundUniqueProjectRow, true);
+  assert.equal(summary.economicInputGating.projectEconomicTermsMalformedBlockClearing, true);
+  assert.equal(summary.economicInputGating.invalidProjectThresholdCountsCannotLowerRequirements, true);
+  assert.equal(summary.economicInputGating.projectMatchBpsRange, "[0,100000]");
+  assert.equal(summary.economicInputGating.malformedProjectMatchBpsResolveToZeroForAffectedMatch, true);
   assert.equal(summary.failClosedHelpers.minReturnsZeroOnMalformedInputs, true);
   assert.equal(summary.failClosedHelpers.payoutRelevantMinUsesHelper, true);
   assert.equal(summary.failClosedHelpers.intersectionReturnsEmptyOnMalformedInputs, true);
