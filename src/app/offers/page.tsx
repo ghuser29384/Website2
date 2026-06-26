@@ -100,8 +100,8 @@ const DURATION_FILTERS = [
 
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
-  { label: "Highest offered impact", value: "impact" },
-  { label: "Highest example fit", value: "efficient" },
+  { label: "Review-ready first", value: "reviewed" },
+  { label: "Closest template fit", value: "template-fit" },
 ] as const;
 
 const DIRECTORY_TABS = [
@@ -274,8 +274,20 @@ function isPublicGoodsDirectoryIntent(params: {
 }
 
 function parseDirectorySort(value: string): DirectorySort {
-  if (value === "impact" || value === "efficient") {
-    return value;
+  if (value === "reviewed") {
+    return "reviewed";
+  }
+
+  if (value === "template-fit") {
+    return "template-fit";
+  }
+
+  if (value === "impact") {
+    return "reviewed";
+  }
+
+  if (value === "efficient" || value === "best-fit") {
+    return "template-fit";
   }
 
   return "newest";
@@ -521,11 +533,16 @@ function listingMatchesFilters(
 
 function sortListings(listings: MarketplaceListing[], sort: DirectorySort) {
   return [...listings].sort((left, right) => {
-    if (sort === "impact") {
-      return right.offerImpact - left.offerImpact || getEfficiency(right) - getEfficiency(left);
+    if (sort === "reviewed") {
+      return (
+        Number(right.reviewState.toLowerCase().includes("review")) -
+          Number(left.reviewState.toLowerCase().includes("review")) ||
+        right.offerImpact - left.offerImpact ||
+        left.title.localeCompare(right.title)
+      );
     }
 
-    if (sort === "efficient") {
+    if (sort === "template-fit") {
       return getEfficiency(right) - getEfficiency(left) || right.offerImpact - left.offerImpact;
     }
 
@@ -631,11 +648,11 @@ function buildActiveFilterLabels(filters: {
   }
 
   if (filters.minImpact !== null) {
-    labels.push(`${filters.minImpact}+ offered impact`);
+    labels.push(`Participant threshold ${filters.minImpact}+`);
   }
 
   if (filters.minRequestedImpact !== null) {
-    labels.push(`${filters.minRequestedImpact}+ requested threshold`);
+    labels.push(`Counterparty threshold ${filters.minRequestedImpact}+`);
   }
 
   if (filters.reciprocal) {
@@ -1791,7 +1808,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
                   <details
                     className="filter-group"
-                    open={!showPublicGoodsEntryCard}
                     aria-label={
                       showPublicGoodsEntryCard
                         ? "Collapsed ordinary-offer filters for public-goods search"
@@ -1802,7 +1818,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       {showPublicGoodsEntryCard ? "Ordinary-offer filters remain separated" : "Directory filters"}
                     </summary>
                     <div className="filter-drawer-content">
-                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                      <details className="filter-group">
                         <summary>Cause area</summary>
                         <div className="filter-option-list">
                           {visibleCauseCounts.length ? visibleCauseCounts.map((option) => (
@@ -1819,7 +1835,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </div>
                       </details>
 
-                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                      <details className="filter-group">
                         <summary>Format</summary>
                         <div className="filter-option-list">
                           {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
@@ -1836,7 +1852,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </div>
                       </details>
 
-                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                      <details className="filter-group">
                         <summary>Evidence and duration</summary>
                         <label className="field">
                           <span>Verification method</span>
@@ -1877,11 +1893,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </details>
 
                       <details className="filter-group">
-                        <summary>Impact scores</summary>
+                        <summary>Reviewer detail thresholds</summary>
                         <label className="field range-field">
-                          <span>Minimum offered-impact score</span>
+                          <span>Participant-stated offer threshold</span>
                           <input
-                            aria-describedby="offered-impact-help"
+                            aria-describedby="offer-threshold-help"
                             defaultValue={minImpact ?? 0}
                             max="10"
                             min="0"
@@ -1889,12 +1905,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             step="1"
                             type="range"
                           />
-                          <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
+                          <small id="offer-threshold-help">
+                            Optional reviewer detail; not a public moral score or ranking.
+                          </small>
                         </label>
                         <label className="field range-field">
-                          <span>Minimum requested-impact threshold</span>
+                          <span>Counterparty acceptance threshold</span>
                           <input
-                            aria-describedby="requested-impact-help"
+                            aria-describedby="counterparty-threshold-help"
                             defaultValue={minRequestedImpact ?? 0}
                             max="10"
                             min="0"
@@ -1902,7 +1920,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             step="1"
                             type="range"
                           />
-                          <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
+                          <small id="counterparty-threshold-help">
+                            Internal trade parameter only; inspect terms before relying on it.
+                          </small>
                         </label>
                       </details>
 

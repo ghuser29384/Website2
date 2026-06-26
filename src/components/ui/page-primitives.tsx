@@ -376,9 +376,17 @@ export function SearchBar({
   );
 }
 
-export function FilterSidebar({ children, title = "Filters" }: { children: ReactNode; title?: string }) {
+export function FilterSidebar({
+  children,
+  defaultOpen = false,
+  title = "Filters",
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+  title?: string;
+}) {
   return (
-    <details className="filter-sidebar panel" open>
+    <details className="filter-sidebar panel" open={defaultOpen}>
       <summary className="filter-drawer-summary">{title}</summary>
       <div className="filter-sidebar-content" aria-label="Offer filters">
         {children}
@@ -484,20 +492,8 @@ export function OfferCard({
         <span>{modeLabel}</span>
         <span>{duration}</span>
         <span>{evidence}</span>
-        {typeof offeredScore === "number" ? (
-          <span>Participant-stated importance {offeredScore}/10</span>
-        ) : null}
-        {typeof requestedThreshold === "number" ? (
-          <span>Counterparty minimum acceptable importance {requestedThreshold}/10</span>
-        ) : null}
         {scoreConfidence ? <span>Confidence: {scoreConfidence}</span> : null}
       </div>
-      {typeof offeredScore === "number" || typeof requestedThreshold === "number" ? (
-        <p className="score-disclaimer">
-          Not a platform moral ranking. This score reflects the participant&apos;s stated view, not
-          Moral Trade&apos;s assessment of moral value.
-        </p>
-      ) : null}
       {actionEvidence || baselineConfidence || externalityReview ? (
         <div className="listing-review-fields" aria-label="Review fields">
           {actionEvidence ? (
@@ -520,15 +516,42 @@ export function OfferCard({
           ) : null}
         </div>
       ) : null}
-      {reviewFactorCodes?.length ? (
-        <div className="listing-factor-codes" aria-label="Review factor codes">
-          <strong>Factor codes</strong>
-          <div>
-            {reviewFactorCodes.map((code) => (
-              <span key={code}>{code}</span>
-            ))}
-          </div>
-        </div>
+      {typeof offeredScore === "number" ||
+      typeof requestedThreshold === "number" ||
+      reviewFactorCodes?.length ? (
+        <details className="listing-factor-codes" aria-label="Offer review details">
+          <summary>Why this is reviewable</summary>
+          {typeof offeredScore === "number" || typeof requestedThreshold === "number" ? (
+            <p className="score-disclaimer">
+              Participant thresholds are private trade inputs, not platform moral rankings or
+              public importance scores.
+            </p>
+          ) : null}
+          <dl className="listing-terms">
+            {typeof offeredScore === "number" ? (
+              <div>
+                <dt>Participant-stated offer threshold</dt>
+                <dd>{offeredScore}/10</dd>
+              </div>
+            ) : null}
+            {typeof requestedThreshold === "number" ? (
+              <div>
+                <dt>Counterparty acceptance threshold</dt>
+                <dd>{requestedThreshold}/10</dd>
+              </div>
+            ) : null}
+          </dl>
+          {reviewFactorCodes?.length ? (
+            <div aria-label="Technical review codes">
+              <strong>Technical review codes</strong>
+              <div>
+                {reviewFactorCodes.map((code) => (
+                  <span key={code}>{code}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </details>
       ) : null}
       {reviewNextStep ? (
         <p className="listing-next-step">

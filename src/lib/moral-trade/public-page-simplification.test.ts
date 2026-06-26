@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as publicPageSimplificationRoute } from "@/app/api/moral-trade/public-page-simplification/contract/route";
@@ -113,6 +113,34 @@ test("moraltrade82 public-page simplification fails closed on public-surface reg
   assert.ok(
     validation.blockers.includes("banned_primary_copy:offers_new_offset:impact score"),
   );
+});
+
+test("moraltrade82 offers route source keeps ranking internals out of default browse copy", () => {
+  const offersPage = readFileSync("src/app/offers/page.tsx", "utf8");
+  const pagePrimitives = readFileSync("src/components/ui/page-primitives.tsx", "utf8");
+  const marketplaceBoundary = readFileSync(
+    "src/lib/moral-trade/marketplace-boundary.ts",
+    "utf8",
+  );
+
+  assert.match(offersPage, /Review-ready first/);
+  assert.match(offersPage, /Closest template fit/);
+  assert.match(offersPage, /Reviewer detail thresholds/);
+  assert.match(pagePrimitives, /defaultOpen = false/);
+  assert.match(pagePrimitives, /<summary>Why this is reviewable<\/summary>/);
+  assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
+  assert.match(marketplaceBoundary, /CRECM v1\.96/);
+  assert.equal(offersPage.includes("Highest offered impact"), false);
+  assert.equal(offersPage.includes("Highest example fit"), false);
+  assert.equal(offersPage.includes("Impact scores"), false);
+  assert.equal(offersPage.includes("Minimum offered-impact score"), false);
+  assert.equal(pagePrimitives.includes("Participant-stated importance"), false);
+  assert.equal(
+    pagePrimitives.includes("Counterparty minimum acceptable importance"),
+    false,
+  );
+  assert.equal(marketplaceBoundary.includes("moralpublicgoods131.md"), false);
+  assert.equal(marketplaceBoundary.includes("CRECM v1.125"), false);
 });
 
 test("moraltrade82 public-page simplification contract route exposes safe route audit metadata", async () => {

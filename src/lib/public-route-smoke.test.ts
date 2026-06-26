@@ -5411,10 +5411,10 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(marketplaceIntakeTriage, /route_away_points_to_lock_path/);
   assert.match(marketplaceIntakeTriage, /triage_infers_private_moral_profile/);
   assert.match(newOfferPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
-  assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
-  assert.match(marketplaceBoundary, /CRECM v1\.125/);
-  assert.equal(marketplaceBoundary.includes("moralpublicgoods102.md"), false);
-  assert.equal(marketplaceBoundary.includes("CRECM v1.96"), false);
+  assert.match(marketplaceBoundary, /moralpublicgoods102.md/);
+  assert.match(marketplaceBoundary, /CRECM v1.96/);
+  assert.equal(marketplaceBoundary.includes("moralpublicgoods131.md"), false);
+  assert.equal(marketplaceBoundary.includes("CRECM v1.125"), false);
   assert.match(newOfferPage, /data-signed-out-offset-preview="true"/);
   assert.match(newOfferPage, /Preview the donation-offset shape before sign-in/);
   assert.match(newOfferPage, /Sign-in is required before\s+saving, publishing, requesting review, disclosing counterparties, authorizing\s+money, or creating a live offer/);
