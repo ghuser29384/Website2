@@ -336,14 +336,17 @@ test("MPGF participant mutations require idempotency and audit evidence tables",
 
 test("login supports MPGF return-to routes used by participant onboarding", () => {
   const loginPageSource = readRepoFile("src/app/login/page.tsx");
+  const authCardSource = readRepoFile("src/components/auth/auth-card.tsx");
+  const authRouteSource = readRepoFile("src/lib/auth-routes.ts");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
   const mpfgContributePageSource = readRepoFile("src/app/mpgf/contribute/page.tsx");
   const mpfgAccountPageSource = readRepoFile("src/app/mpgf/account/contributions/page.tsx");
   const participantProfile = readRepoFile("config/mpgf/participant-onboarding-profile.json");
   const smokeProfile = readRepoFile("config/mpgf/www-smoke-test-profile.json");
 
-  assert.match(loginPageSource, /resolvedSearchParams\.returnTo/);
-  assert.match(loginPageSource, /getSafeInternalPath\(requestedReturnTo \|\| requestedNext/);
+  assert.match(loginPageSource, /<AuthPage/);
+  assert.match(authCardSource, /getAuthReturnTo\(searchParams, mode\)/);
+  assert.match(authRouteSource, /readSearchParam\(searchParams, "returnTo"\) \?\? readSearchParam\(searchParams, "next"\)/);
   assert.match(appDataSource, /\/login\?returnTo=/);
   assert.match(mpfgContributePageSource, /\/login\?returnTo=\/mpgf\/contribute/);
   assert.match(mpfgAccountPageSource, /\/login\?returnTo=\/mpgf\/account\/contributions/);
@@ -353,13 +356,15 @@ test("login supports MPGF return-to routes used by participant onboarding", () =
 
 test("login exposes a Supabase password recovery flow", () => {
   const loginPageSource = readRepoFile("src/app/login/page.tsx");
+  const authCardSource = readRepoFile("src/components/auth/auth-card.tsx");
   const passwordResetPageSource = readRepoFile("src/app/password-reset/page.tsx");
   const passwordUpdatePageSource = readRepoFile("src/app/password-update/page.tsx");
   const actionSource = readRepoFile("src/app/actions.ts");
   const confirmRouteSource = readRepoFile("src/app/auth/confirm/route.ts");
 
-  assert.match(loginPageSource, /Forgot password\?/);
-  assert.match(loginPageSource, /\/password-reset\?returnTo=/);
+  assert.match(loginPageSource, /<AuthPage/);
+  assert.match(authCardSource, /Forgot password\?/);
+  assert.match(authCardSource, /\/password-reset\?returnTo=/);
   assert.match(passwordResetPageSource, /requestPasswordResetAction/);
   assert.match(passwordResetPageSource, /name="return_to"/);
   assert.match(passwordResetPageSource, /does not\s+reveal whether the address already has an account/);
@@ -1247,11 +1252,8 @@ test("cohort page exposes founding progress, referral, and one-counterparty invi
   assert.match(cohortPage, /Safety and privacy/);
   assert.match(cohortPage, /createNetworkInviteAction/);
   assert.match(cohortPage, /CANONICAL_WORKED_CASE_COUNT/);
-  assert.match(signupPage, /Start with one low-risk action/);
-  assert.match(signupPage, /Clone a worked example/);
-  assert.match(signupPage, /Create a private wish profile/);
-  assert.match(signupPage, /Choose what, if anything, becomes a broad preview/);
-  assert.match(signupPage, /Log public-good action/);
+  assert.match(signupPage, /AuthPage/);
+  assert.match(signupPage, /initialMode="signup"/);
   assert.match(actionsSource, /return_to/);
   assert.match(actionsSource, /Choose one low-risk first action/);
   assert.equal(cohortPage.includes(">Start here<"), false);
@@ -4130,7 +4132,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.69-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.72-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -5450,7 +5452,12 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Common Ground Marketplace/);
   assert.match(offersPage, /Open Common Ground Budget/);
   assert.match(offersPage, /Common Ground Budget result available/);
+  assert.match(offersPage, /id="public-goods-result-card"/);
+  assert.match(offersPage, /data-primary-result="common-ground-budget"/);
+  assert.match(offersPage, /role="status" aria-live="polite"/);
+  assert.match(offersPage, /aria-describedby="public-goods-result-announcement public-goods-result-summary"/);
   assert.match(offersPage, /Preview a Common Ground Budget/);
+  assert.match(offersPage, /public-goods-primary-action/);
   assert.match(offersPage, /No ordinary moral-trade offers match this search/);
   assert.match(offersPage, /The moral-public-goods route is separate/);
   assert.match(offersPage, /Current mode/);
@@ -5469,13 +5476,24 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /No charge\s+now/);
   assert.match(offersPage, /Exact live progress may be hidden until the round closes/);
   assert.match(offersPage, /does not\s+create, edit, clear, authorize, capture, release, reward, credit, certify, or\s+audit any CRECM record/);
+  assert.match(offersPage, /Search terms, clicks, browsing, and CTA selection do not infer allocatable\s+project stances or create a pledge/);
+  assert.match(offersPage, /Review, identity, payment, authorization,\s+sponsor, sealed-progress, failure-bonus, reward, credit, certificate, and audit\s+gates still apply/);
   assert.match(offersPage, /live progress sealed before close/);
   assert.match(offersPage, /no\s+escrow or custody claim unless a valid custody route records one/);
+  assert.match(offersPage, /no payment-protection, tax-treatment, legal-advice, impact-certainty,\s+guaranteed-match, or capture-timing claim beyond the recorded CRECM state/);
   assert.match(offersPage, /gross,\s+fee,\s+net-recipient,\s+actual,\s+counted,\s+and match-eligible accounting channels/);
   assert.match(offersPage, /requires final review before any binding budget or project stance is saved/);
+  assert.equal(offersPage.includes("escrow-backed"), false);
+  assert.equal(offersPage.includes("funds held"), false);
+  assert.equal(offersPage.includes("payment protection"), false);
+  assert.equal(offersPage.includes("tax-deductible"), false);
+  assert.equal(offersPage.includes("legal advice"), false);
+  assert.equal(offersPage.includes("guaranteed match"), false);
+  assert.equal(offersPage.includes("guaranteed impact"), false);
   assert.match(offersPage, /No escrow claim/);
   assert.match(offersPage, /Separated accounting/);
   assert.match(offersPage, /Final review consent/);
+  assert.match(offersPage, /aria-label="Common Ground Budget text status labels"/);
   assert.match(offersPage, /Budget to Projects to Review; no binding save before final review/);
   assert.match(offersPage, /Advanced details/);
   assert.match(offersPage, /Lane counts/);
@@ -5504,8 +5522,12 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Round state/);
   assert.match(offersPage, /Project bucket/);
   assert.match(offersPage, /showPublicGoodsEntryCard \? \(/);
-  assert.match(offersPage, /Ordinary offer filters/);
-  assert.match(offersPage, /Other ways to browse/);
+  assert.match(offersPage, /Collapsed ordinary-offer filters for public-goods search/);
+  assert.match(offersPage, /Ordinary-offer filters remain separated/);
+  assert.match(offersPage, /Collapsed separated-lane drawer for public-goods search/);
+  assert.match(offersPage, /Browse separated lanes/);
+  assert.match(offersPage, /Collapsed advanced Common Ground Budget audit details/);
+  assert.match(offersPage, /filter-drawer-content/);
   assert.match(offersPage, /assurance matching/);
   assert.match(offersPage, /conditional public-good pledge/);
   assert.match(offersPage, /cross-view funding/);
@@ -5537,6 +5559,14 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /buildPublicGoodsEntryCard/);
   assert.match(offersPage, /publicGoodsEntry\?\.primaryCta/);
   assert.match(offersPage, /publicGoodsEntry\?\.secondaryCtas/);
+  const mainContentIndex = offersPage.indexOf('<main id="main-content"');
+  const publicGoodsResultIndex = offersPage.indexOf('id="public-goods-result-card"');
+  const bootstrapIndex = offersPage.indexOf('id="marketplace-bootstrap-heading"');
+  const marketplaceShellIndex = offersPage.indexOf('aria-label="Offer marketplace"');
+  assert.ok(mainContentIndex > -1);
+  assert.ok(publicGoodsResultIndex > mainContentIndex);
+  assert.ok(publicGoodsResultIndex < bootstrapIndex);
+  assert.ok(publicGoodsResultIndex < marketplaceShellIndex);
   assert.match(publicOffersSource, /publicGoodsEntry/);
   assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);
   assert.match(publicOffersSource, /public-offers-api-v0\.3-2026-06/);

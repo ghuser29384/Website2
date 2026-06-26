@@ -17,6 +17,7 @@ import {
   formatUsd,
   summarizeMpgfPublicGoodsReviewConsole,
 } from "@/lib/mpgf/mechanism";
+import { getMpgfPublicGoodsAdminConsole } from "@/lib/mpgf/public-goods-admin-consoles";
 import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } from "@/lib/mpgf/types";
 import {
   approveMpgfRealMoneyGateAction,
@@ -190,6 +191,7 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
   const sectionGates = controlPlane ? mpgfGatesForAdminSection(section, controlPlane.gates) : [];
   const gateControls = gateApprovalControls[section] ?? [];
   const approvalControls = adminApprovalControls[section] ?? [];
+  const operatorConsole = getMpgfPublicGoodsAdminConsole(section);
   const publicGoodsReviewConsole = section === "public-goods" ? summarizeMpgfPublicGoodsReviewConsole() : null;
 
   return (
@@ -286,6 +288,55 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                     </form>
                   ))}
                 </div>
+              </div>
+            ) : null}
+            {operatorConsole ? (
+              <div className="mpgf-admin-action-panel">
+                <p className="eyebrow">moralpublicgoods131.md section 16</p>
+                <h3>{operatorConsole.title}</h3>
+                <p>{operatorConsole.purpose}</p>
+                <div className="mpgf-control-summary">
+                  <div>
+                    <span>MFA gate</span>
+                    <strong>{operatorConsole.requiresMfaAdminGate ? "required" : "missing"}</strong>
+                  </div>
+                  <div>
+                    <span>Live authority</span>
+                    <strong>{operatorConsole.createsLiveAuthority ? "creates authority" : "none"}</strong>
+                  </div>
+                  <div>
+                    <span>Privacy boundary</span>
+                    <strong>{operatorConsole.privacySafeOperatorView ? "public-safe summaries" : "raw private data"}</strong>
+                  </div>
+                </div>
+                <div className="mpgf-gate-list">
+                  {operatorConsole.rows.map((row) => (
+                    <article key={row.label} className="mpgf-gate-row">
+                      <div>
+                        <p className="eyebrow">{row.status.replaceAll("_", " ")}</p>
+                        <h3>{row.label}</h3>
+                        <dl className="mpgf-evidence-list">
+                          <div>
+                            <dt>Evidence source</dt>
+                            <dd>{row.evidenceSource}</dd>
+                          </div>
+                          <div>
+                            <dt>Operator action</dt>
+                            <dd>{row.operatorAction}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                      <span className={`mpgf-gate-status mpgf-gate-status-${row.status}`}>
+                        {row.status.replaceAll("_", " ")}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+                <p className="mpgf-small">
+                  These checklist rows are operator review surfaces only. They cannot create a
+                  pledge, infer allocatable project stances, authorize payment, release funds,
+                  mint rewards or certificates, or expose sealed live progress before close.
+                </p>
               </div>
             ) : null}
             {publicGoodsReviewConsole ? (

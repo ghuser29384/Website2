@@ -1064,32 +1064,41 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="collection-header-copy">
             <h1>Browse offers</h1>
             <p className="hero-text">
-              Explore live offers, reviewed templates, worked examples, demo data, and the Common
-              Ground Budget public-goods module without mixing their counts.
+              {publicGoodsSearchIntent
+                ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
+                : "Explore live offers, reviewed templates, worked examples, demo data, and the Common Ground Budget public-goods module without mixing their counts."}
             </p>
-            <div className="collection-stats" aria-label="Marketplace counts">
-              <span>
-                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
-              </span>
-              <span>
-                <strong>{workedExampleCount}</strong> worked{" "}
-                {workedExampleCount === 1 ? "example" : "examples"}
-              </span>
-              <span>
-                <strong>{seedRoundCount}</strong> Common Ground Budget{" "}
-                {seedRoundCount === 1 ? "module" : "modules"}
-              </span>
-              <span>
-                <strong>{seedRoundProjects.length}</strong> demo{" "}
-                {seedRoundProjects.length === 1 ? "record" : "records"}
-              </span>
-              <span>
-                <strong>{seedTemplateCount}</strong> reviewed{" "}
-                {seedTemplateCount === 1 ? "template" : "templates"}
-              </span>
-            </div>
+            {publicGoodsSearchIntent ? (
+              <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
+                {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
+              </Link>
+            ) : null}
+            {publicGoodsSearchIntent ? null : (
+              <div className="collection-stats" aria-label="Marketplace counts">
+                <span>
+                  <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
+                </span>
+                <span>
+                  <strong>{workedExampleCount}</strong> worked{" "}
+                  {workedExampleCount === 1 ? "example" : "examples"}
+                </span>
+                <span>
+                  <strong>{seedRoundCount}</strong> Common Ground Budget{" "}
+                  {seedRoundCount === 1 ? "module" : "modules"}
+                </span>
+                <span>
+                  <strong>{seedRoundProjects.length}</strong> demo{" "}
+                  {seedRoundProjects.length === 1 ? "record" : "records"}
+                </span>
+                <span>
+                  <strong>{seedTemplateCount}</strong> reviewed{" "}
+                  {seedTemplateCount === 1 ? "template" : "templates"}
+                </span>
+              </div>
+            )}
           </section>
 
+          {publicGoodsSearchIntent ? null : (
           <aside className="collection-action-panel panel" aria-label="Collection actions">
             <div className="collection-action-copy">
               <strong>
@@ -1131,8 +1140,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               )}
             </div>
           </aside>
+          )}
         </div>
 
+        {publicGoodsSearchIntent ? null : (
         <details className="pilot-note panel">
           <summary>About this pilot</summary>
           <p>
@@ -1150,6 +1161,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </Link>
           </div>
         </details>
+        )}
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -1166,9 +1178,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         {showPublicGoodsEntryCard ? (
           <section
             className="marketplace-bootstrap panel"
+            data-primary-result="common-ground-budget"
+            id="public-goods-result-card"
+            aria-describedby="public-goods-result-announcement public-goods-result-summary"
             aria-labelledby="public-goods-intent-heading"
             aria-live="polite"
           >
+            <p className="sr-only" id="public-goods-result-announcement" role="status" aria-live="polite">
+              Common Ground Budget result available.
+            </p>
             <div className="marketplace-bootstrap-head">
               <div>
                 <p className="eyebrow">{publicGoodsEntry?.eyebrow ?? "Public Goods Fund"}</p>
@@ -1180,7 +1198,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   The moral-public-goods route is separate: Common Ground Budget / Public Goods
                   Fund.
                 </p>
-                <p>
+                <p id="public-goods-result-summary">
                   {publicGoodsEntry?.summary ??
                     "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
                 </p>
@@ -1191,17 +1209,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   audit any CRECM record.
                 </p>
                 <p>
+                  Search terms, clicks, browsing, and CTA selection do not infer allocatable
+                  project stances or create a pledge. Review, identity, payment, authorization,
+                  sponsor, sealed-progress, failure-bonus, reward, credit, certificate, and audit
+                  gates still apply.
+                </p>
+                <p>
                   The Common Ground Budget path keeps live progress sealed before close, makes no
                   escrow or custody claim unless a valid custody route records one, separates gross,
                   fee, net-recipient, actual, counted, and match-eligible accounting channels, and
                   requires final review before any binding budget or project stance is saved.
                 </p>
+                <p>
+                  It makes no payment-protection, tax-treatment, legal-advice, impact-certainty,
+                  guaranteed-match, or capture-timing claim beyond the recorded CRECM state.
+                </p>
               </div>
-              <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
-              </Link>
             </div>
-            <div className="tag-row" aria-label="Common Ground Budget status">
+            <div className="tag-row" aria-label="Common Ground Budget text status labels">
               <span className="badge badge-secondary">
                 {publicGoodsEntry?.mechanismVersion ?? MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion}
               </span>
@@ -1271,8 +1296,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 Browse ordinary offers instead
               </Link>
             </div>
-            <details className="pilot-note" aria-label="Other ways to browse marketplace lanes">
-              <summary>Other ways to browse</summary>
+            <details className="pilot-note" aria-label="Collapsed separated-lane drawer for public-goods search">
+              <summary>Browse separated lanes</summary>
               <dl className="mpgf-summary-grid">
                 <div>
                   <dt>Live offers</dt>
@@ -1296,7 +1321,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </div>
               </dl>
             </details>
-            <details className="pilot-note" aria-label="Advanced Common Ground Budget details">
+            <details className="pilot-note" aria-label="Collapsed advanced Common Ground Budget audit details">
               <summary>Advanced details</summary>
               <dl className="mpgf-summary-grid">
                 <div>
@@ -1360,6 +1385,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </section>
         ) : null}
 
+        {showPublicGoodsEntryCard ? null : (
         <section className="marketplace-bootstrap panel" aria-labelledby="marketplace-bootstrap-heading">
           <div className="marketplace-bootstrap-head">
             <div>
@@ -1478,6 +1504,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </article>
           </div>
         </section>
+        )}
 
         <section className="marketplace-shell" aria-label="Offer marketplace">
           <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
@@ -1762,119 +1789,131 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     </div>
                   ) : null}
 
-                  <details className="filter-group" open={!showPublicGoodsEntryCard}>
-                    <summary>{showPublicGoodsEntryCard ? "Ordinary offer filters" : "Directory filters"}</summary>
-                  <details className="filter-group" open>
-                    <summary>Cause area</summary>
-                    <div className="filter-option-list">
-                      {visibleCauseCounts.length ? visibleCauseCounts.map((option) => (
-                        <label className="check-row" key={option.label}>
-                          <input
-                            defaultChecked={causes.includes(option.label)}
-                            name="cause"
-                            type="checkbox"
-                            value={option.label}
-                          />
-                          <span>{withCount(option.label, option.count)}</span>
+                  <details
+                    className="filter-group"
+                    open={!showPublicGoodsEntryCard}
+                    aria-label={
+                      showPublicGoodsEntryCard
+                        ? "Collapsed ordinary-offer filters for public-goods search"
+                        : "Directory filters"
+                    }
+                  >
+                    <summary>
+                      {showPublicGoodsEntryCard ? "Ordinary-offer filters remain separated" : "Directory filters"}
+                    </summary>
+                    <div className="filter-drawer-content">
+                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                        <summary>Cause area</summary>
+                        <div className="filter-option-list">
+                          {visibleCauseCounts.length ? visibleCauseCounts.map((option) => (
+                            <label className="check-row" key={option.label}>
+                              <input
+                                defaultChecked={causes.includes(option.label)}
+                                name="cause"
+                                type="checkbox"
+                                value={option.label}
+                              />
+                              <span>{withCount(option.label, option.count)}</span>
+                            </label>
+                          )) : <p className="filter-empty-note">No cause facets available for this view.</p>}
+                        </div>
+                      </details>
+
+                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                        <summary>Format</summary>
+                        <div className="filter-option-list">
+                          {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
+                            <label className="check-row" key={option.value}>
+                              <input
+                                defaultChecked={formats.includes(option.value)}
+                                name="mode"
+                                type="checkbox"
+                                value={option.value}
+                              />
+                              <span>{withCount(option.label, option.count)}</span>
+                            </label>
+                          )) : <p className="filter-empty-note">No formats available for this view.</p>}
+                        </div>
+                      </details>
+
+                      <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                        <summary>Evidence and duration</summary>
+                        <label className="field">
+                          <span>Verification method</span>
+                          <select name="verification" defaultValue={verification}>
+                            <option value="">Any verification method</option>
+                            {visibleVerificationCounts.map((option) => (
+                              <option key={option.label} value={option.label}>
+                                {withCount(option.label, option.count)}
+                              </option>
+                            ))}
+                          </select>
                         </label>
-                      )) : <p className="filter-empty-note">No cause facets available for this view.</p>}
-                    </div>
-                  </details>
-
-                  <details className="filter-group" open>
-                    <summary>Format</summary>
-                    <div className="filter-option-list">
-                      {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
-                        <label className="check-row" key={option.value}>
-                          <input
-                            defaultChecked={formats.includes(option.value)}
-                            name="mode"
-                            type="checkbox"
-                            value={option.value}
-                          />
-                          <span>{withCount(option.label, option.count)}</span>
+                        <label className="field">
+                          <span>Duration</span>
+                          <select name="duration" defaultValue={duration}>
+                            <option value="">Any duration</option>
+                            {visibleDurationCounts.map((option) => (
+                              <option key={option.label} value={option.label}>
+                                {withCount(option.label, option.count)}
+                              </option>
+                            ))}
+                          </select>
                         </label>
-                      )) : <p className="filter-empty-note">No formats available for this view.</p>}
+                      </details>
+
+                      <details className="filter-group">
+                        <summary>Review status</summary>
+                        <label className="field">
+                          <span>Review status</span>
+                          <select name="review" defaultValue={reviewStatus}>
+                            {visibleReviewStatusCounts.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {withCount(option.label, option.count)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </details>
+
+                      <details className="filter-group">
+                        <summary>Impact scores</summary>
+                        <label className="field range-field">
+                          <span>Minimum offered-impact score</span>
+                          <input
+                            aria-describedby="offered-impact-help"
+                            defaultValue={minImpact ?? 0}
+                            max="10"
+                            min="0"
+                            name="min_impact"
+                            step="1"
+                            type="range"
+                          />
+                          <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
+                        </label>
+                        <label className="field range-field">
+                          <span>Minimum requested-impact threshold</span>
+                          <input
+                            aria-describedby="requested-impact-help"
+                            defaultValue={minRequestedImpact ?? 0}
+                            max="10"
+                            min="0"
+                            name="min_requested"
+                            step="1"
+                            type="range"
+                          />
+                          <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
+                        </label>
+                      </details>
+
+                      <details className="filter-group">
+                        <summary>Match state</summary>
+                        <label className="check-row">
+                          <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
+                          <span>{withCount("Has reciprocal match", reciprocalCount)}</span>
+                        </label>
+                      </details>
                     </div>
-                  </details>
-
-                  <details className="filter-group" open>
-                    <summary>Evidence and duration</summary>
-                    <label className="field">
-                      <span>Verification method</span>
-                      <select name="verification" defaultValue={verification}>
-                        <option value="">Any verification method</option>
-                        {visibleVerificationCounts.map((option) => (
-                          <option key={option.label} value={option.label}>
-                            {withCount(option.label, option.count)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Duration</span>
-                      <select name="duration" defaultValue={duration}>
-                        <option value="">Any duration</option>
-                        {visibleDurationCounts.map((option) => (
-                          <option key={option.label} value={option.label}>
-                            {withCount(option.label, option.count)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </details>
-
-                  <details className="filter-group">
-                    <summary>Review status</summary>
-                    <label className="field">
-                      <span>Review status</span>
-                      <select name="review" defaultValue={reviewStatus}>
-                        {visibleReviewStatusCounts.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {withCount(option.label, option.count)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </details>
-
-                  <details className="filter-group">
-                    <summary>Impact scores</summary>
-                    <label className="field range-field">
-                      <span>Minimum offered-impact score</span>
-                      <input
-                        aria-describedby="offered-impact-help"
-                        defaultValue={minImpact ?? 0}
-                        max="10"
-                        min="0"
-                        name="min_impact"
-                        step="1"
-                        type="range"
-                      />
-                      <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
-                    </label>
-                    <label className="field range-field">
-                      <span>Minimum requested-impact threshold</span>
-                      <input
-                        aria-describedby="requested-impact-help"
-                        defaultValue={minRequestedImpact ?? 0}
-                        max="10"
-                        min="0"
-                        name="min_requested"
-                        step="1"
-                        type="range"
-                      />
-                      <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
-                    </label>
-                  </details>
-
-                  <details className="filter-group">
-                    <summary>Match state</summary>
-                    <label className="check-row">
-                      <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
-                      <span>{withCount("Has reciprocal match", reciprocalCount)}</span>
-                    </label>
-                  </details>
                   </details>
 
                   <button className="button button-secondary sticky-filter-action" type="submit">

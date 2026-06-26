@@ -60,7 +60,9 @@ import {
   getScoreConfidence,
 } from "@/lib/proposal-review";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
@@ -69,6 +71,12 @@ interface OfferPageProps {
 }
 
 type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BaselineWitnessInviteRow =
+  Database["public"]["Tables"]["baseline_witness_invites"]["Row"];
+type ParticipantWitnessInviteStatus = Pick<
+  BaselineWitnessInviteRow,
+  "expires_at" | "id" | "invite_status" | "participant_claimed_relationship"
+>;
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -162,6 +170,31 @@ function PerformanceBondSummary({
   );
 }
 
+async function listBaselineWitnessInviteStatusesForOffer(
+  offerId: string,
+  participantUserId: string,
+): Promise<ParticipantWitnessInviteStatus[]> {
+  if (!hasSupabaseEnv() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return [];
+  }
+
+  const supabase = createServiceClient();
+  const result = await supabase
+    .from("baseline_witness_invites")
+    .select("id, invite_status, participant_claimed_relationship, expires_at")
+    .eq("participant_user_id", participantUserId)
+    .eq("purchase_envelope_type", "offer")
+    .eq("purchase_envelope_id", offerId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (result.error) {
+    return [];
+  }
+
+  return (result.data ?? []) as ParticipantWitnessInviteStatus[];
+}
+
 export async function generateMetadata({ params }: OfferPageProps): Promise<Metadata> {
   const { offerId } = await params;
   const offer = await getOfferById(offerId);
@@ -203,7 +236,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const [myInterest, incomingResponses, recommendations, comments, cartState, recommendableOffers] =
+  const [
+    myInterest,
+    incomingResponses,
+    recommendations,
+    comments,
+    cartState,
+    recommendableOffers,
+    baselineWitnessInviteStatuses,
+  ] =
     await Promise.all([
       viewer ? await getInterestForOffer(offerId, viewer.authUser.id) : null,
       isOwner ? await listOfferResponses(offerId, viewer?.authUser.id) : Promise.resolve([]),
@@ -212,6 +253,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
       await getOfferCartState(offerId, viewer?.authUser.id, offer.owner_id),
       isOwner && viewer
         ? await listRecommendableOffers(viewer.authUser.id, offer.id)
+        : Promise.resolve([]),
+      isOwner && viewer && offer.mode === "pledge"
+        ? await listBaselineWitnessInviteStatusesForOffer(offer.id, viewer.authUser.id)
         : Promise.resolve([]),
     ]);
   const relatedDonationTarget =
@@ -869,6 +913,78 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       </button>
                     </div>
                   </form>
+
+                  {offer.mode === "pledge" ? (
+                    <section className="panel subtle-panel">
+                      <p className="eyebrow">Optional baseline witness</p>
+                      <h3>Invite a private witness</h3>
+                      <p className="route-text">
+                        A guest witness can privately tell reviewers what they directly know about
+                        your ordinary baseline before the pledge window. You will only see invite
+                        status, not refusal reasons, pressure reports, testimony, social provider,
+                        or scoring effects.
+                      </p>
+                      <form action="/api/moral-trade/guest-witness/invites" className="stack-form" method="post">
+                        <input name="offer_id" type="hidden" value={offer.id} />
+                        <input name="return_to" type="hidden" value={offerReturnTo} />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Witness email</span>
+                            <input name="witness_email" placeholder="witness@example.com" type="email" />
+                          </label>
+                          <label className="field">
+                            <span>Witness phone</span>
+                            <input name="witness_phone" placeholder="+1..." type="tel" />
+                          </label>
+                          <label className="field">
+                            <span>Relationship</span>
+                            <select defaultValue="dining_companion" name="participant_claimed_relationship">
+                              <option value="dining_companion">Dining companion</option>
+                              <option value="roommate">Roommate</option>
+                              <option value="friend">Friend</option>
+                              <option value="family">Family</option>
+                              <option value="romantic_partner">Romantic partner</option>
+                              <option value="classmate">Classmate</option>
+                              <option value="coworker">Coworker</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Action window starts</span>
+                            <input name="action_window_start_at" required type="datetime-local" />
+                          </label>
+                          <label className="field">
+                            <span>Action window ends</span>
+                            <input name="action_window_end_at" required type="datetime-local" />
+                          </label>
+                        </div>
+                        <label className="radio-row">
+                          <input name="shareable_link_only" type="checkbox" />
+                          <span>Create a private link without storing witness contact hash.</span>
+                        </label>
+                        <button className="button button-secondary" type="submit">
+                          Create witness link
+                        </button>
+                      </form>
+
+                      {baselineWitnessInviteStatuses.length ? (
+                        <div className="mini-list">
+                          {baselineWitnessInviteStatuses.map((invite) => (
+                            <span className="source-pill" key={invite.id}>
+                              {invite.invite_status.replaceAll("_", " ")}
+                              {invite.participant_claimed_relationship
+                                ? ` | ${invite.participant_claimed_relationship.replaceAll("_", " ")}`
+                                : ""}
+                              {" | expires "}
+                              {formatDate(invite.expires_at)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="panel-note">No baseline witness invites for this offer yet.</p>
+                      )}
+                    </section>
+                  ) : null}
                 </div>
               ) : viewer && offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
                 <div className="clean-stack">

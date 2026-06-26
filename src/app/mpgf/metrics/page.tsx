@@ -175,6 +175,51 @@ export default async function MpgfMetricsPage() {
         </div>
       </section>
 
+      <section className="mpgf-panel">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">moralpublicgoods131.md section 17</p>
+          <h2>Public metric catalog</h2>
+          <p>
+            The KPI API publishes the full required public-metric catalog as aggregate-only
+            fields. The optimization target is incremental, verified, cross-view, review-cleared funding, not gross donation volume alone.
+          </p>
+        </div>
+        <dl className="mpgf-summary-grid">
+          <div>
+            <dt>Required metrics</dt>
+            <dd>{snapshot.publicMetrics.requiredMetricCount}</dd>
+          </div>
+          <div>
+            <dt>Computed now</dt>
+            <dd>{snapshot.publicMetrics.computedMetricCount}</dd>
+          </div>
+          <div>
+            <dt>Instrumentation pending</dt>
+            <dd>{snapshot.publicMetrics.pendingMetricCount}</dd>
+          </div>
+          <div>
+            <dt>Privacy scope</dt>
+            <dd>{snapshot.publicMetrics.privacyPolicy.replaceAll("_", " ")}</dd>
+          </div>
+        </dl>
+        <div className="mpgf-table" aria-label="MPGF public metric catalog sample">
+          <div className="mpgf-table-row mpgf-table-head">
+            <span>Required metric</span>
+            <span>Status</span>
+            <span>Category</span>
+            <span>Unit</span>
+          </div>
+          {snapshot.publicMetrics.metrics.slice(0, 8).map((metric) => (
+            <div className="mpgf-table-row" key={metric.key}>
+              <span>{metric.label}</span>
+              <span>{metric.instrumentationStatus.replaceAll("_", " ")}</span>
+              <span>{metric.category.replaceAll("_", " ")}</span>
+              <span>{metric.unit.replaceAll("_", " ")}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="mpgf-detail-grid">
         <article className="mpgf-panel">
           <p className="eyebrow">Experiment backlog</p>

@@ -102,9 +102,11 @@ import {
   summarizeMpgfPublicGoodsProof,
 } from "./mpgf/public-goods-proof";
 import {
+  MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS,
   buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows,
   buildMpgfPublicGoodsKpiSnapshot,
   loadMpgfPublicGoodsKpiSnapshot,
+  validateMpgfPublicGoodsPublicMetricCatalog,
 } from "./mpgf/public-goods-kpis";
 import {
   MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
@@ -5014,8 +5016,43 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     const secretGateIndex = route.indexOf("if (!kpiSecret())");
     const kpis = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
     const serialized = JSON.stringify(snapshot);
+    const publicMetricValidation = validateMpgfPublicGoodsPublicMetricCatalog(snapshot.publicMetrics);
 
     assert.equal(snapshot.privacyPolicy, "aggregate_only_no_user_or_reason_text");
+    assert.equal(publicMetricValidation.passed, true);
+    assert.equal(publicMetricValidation.missingLabels.length, 0);
+    assert.equal(publicMetricValidation.requiredMetricCount, MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length);
+    assert.equal(publicMetricValidation.publishedMetricCount, MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length);
+    assert.equal(publicMetricValidation.rawPrivateFieldsExposed, false);
+    assert.equal(publicMetricValidation.doesNotOptimizeGrossDonationVolumeAlone, true);
+    assert.equal(snapshot.publicMetrics.optimizationTarget, "incremental_verified_cross_view_review_cleared_funding");
+    assert.equal(snapshot.publicMetrics.privacyPolicy, "aggregate_only_no_user_or_reason_text");
+    assert.ok(snapshot.publicMetrics.requiredMetricCount > 100);
+    assert.ok(snapshot.publicMetrics.computedMetricCount > 10);
+    assert.equal(
+      snapshot.publicMetrics.computedMetricCount + snapshot.publicMetrics.pendingMetricCount,
+      snapshot.publicMetrics.requiredMetricCount,
+    );
+    assert.ok(
+      snapshot.publicMetrics.metrics.some(
+        (metric) => metric.label === "gross-captured dollars" && metric.currentValue === snapshot.funding.verifiedDollarsRoutedCents,
+      ),
+    );
+    assert.ok(
+      snapshot.publicMetrics.metrics.some(
+        (metric) => metric.label === "fee dollars excluded from public-good credit" && metric.currentValue === 0,
+      ),
+    );
+    assert.ok(
+      snapshot.publicMetrics.metrics.some(
+        (metric) => metric.label === "failure-bonus denied-by-reason counts" && metric.instrumentationStatus === "instrumentation_pending",
+      ),
+    );
+    assert.ok(
+      snapshot.publicMetrics.metrics.every(
+        (metric) => metric.privacyScope === "aggregate_only_no_user_or_reason_text",
+      ),
+    );
     assert.equal(snapshot.coordination.supportSignalEventCount, 2);
     assert.equal(snapshot.coordination.commonGroundSupportSignalEventCount, 1);
     assert.equal(snapshot.coordination.dissentReviewSignalEventCount, 1);
@@ -5092,6 +5129,9 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.match(metricsPage, /Dispute rate and overturn rate/);
     assert.match(metricsPage, /Donor retention into next round/);
     assert.match(metricsPage, /Aggregate only/);
+    assert.match(metricsPage, /Public metric catalog/);
+    assert.match(metricsPage, /snapshot\.publicMetrics\.requiredMetricCount/);
+    assert.match(metricsPage, /incremental, verified, cross-view, review-cleared funding/);
     assert.match(metricsPage, /A\/B tests without moral ranking/);
     assert.match(metricsPage, /widensPublicAccessAutomatically/);
     assert.match(hubPage, /\/mpgf\/metrics/);

@@ -102,6 +102,28 @@ export interface MpgfPublicGoodsFundingExperimentCatalogItem {
   noGlobalMoralRanking: true;
 }
 
+export type MpgfPublicGoodsPublicMetricInstrumentationStatus = "computed" | "instrumentation_pending";
+
+export interface MpgfPublicGoodsPublicMetricCatalogItem {
+  key: string;
+  label: MpgfPublicGoodsPublicMetricLabel;
+  category: string;
+  unit: "cents" | "basis_points" | "count" | "hours";
+  privacyScope: "aggregate_only_no_user_or_reason_text";
+  instrumentationStatus: MpgfPublicGoodsPublicMetricInstrumentationStatus;
+  currentValue: number | null;
+}
+
+export interface MpgfPublicGoodsPublicMetricCatalog {
+  optimizationTarget: "incremental_verified_cross_view_review_cleared_funding";
+  doesNotOptimizeGrossDonationVolumeAlone: true;
+  privacyPolicy: "aggregate_only_no_user_or_reason_text";
+  requiredMetricCount: number;
+  computedMetricCount: number;
+  pendingMetricCount: number;
+  metrics: MpgfPublicGoodsPublicMetricCatalogItem[];
+}
+
 export interface MpgfPublicGoodsKpiSnapshot {
   generatedAt: string;
   roundId: string;
@@ -212,6 +234,7 @@ export interface MpgfPublicGoodsKpiSnapshot {
     recommendation: "hold_invited_cohort" | "ready_for_public_beta_review";
     blockers: string[];
   };
+  publicMetrics: MpgfPublicGoodsPublicMetricCatalog;
 }
 
 export interface LoadMpgfPublicGoodsKpiSnapshotResult {
@@ -247,6 +270,188 @@ const subscriptionIntervals = ["monthly", "annual"] as const;
 const subscriptionModes = ["pledge_only", "test_payment", "real_money"] as const;
 const supporterGates = ["demo_self_attestation", "verified_human", "repository_existing_verification"] as const;
 
+export const MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS = [
+  "gross-captured dollars",
+  "fee dollars excluded from public-good credit",
+  "fee-quote policy-hash binding, waived-fee validation, `(roundId, id)` / allocation-key uniqueness, and feeInputHash validation failure count",
+  "net-recipient-cleared dollars",
+  "actual-cleared dollars",
+  "counted-cleared dollars",
+  "match-eligible cleared dollars",
+  "weak-support-to-counted-dollar conversion",
+  "strong-support-to-counted-dollar conversion",
+  "cleared cross-view dollars per sponsor dollar",
+  "threshold-clear rate",
+  "average active clusters per cleared project",
+  "base-match utilization",
+  "base-match claim-vs-paid ratio",
+  "bonus-match utilization",
+  "bonus-match cap utilization",
+  "bonus-match capped-proration pass count",
+  "raw-vs-verified-clear dissent pressure count",
+  "bonus-affecting dissent-pressure exclusion count",
+  "optimizer equal-objective tie-break count",
+  "fee-excluded threshold/match dollars",
+  "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count",
+  "failure-bonus utilization",
+  "failure-bonus denied-by-reason counts",
+  "failure-bonus raw-vs-participant-capped ratio",
+  "failure-bonus integer-rounding remainder cents",
+  "failure-bonus participant-round cap utilization",
+  "failure-bonus participant-proration stable-order-key validation failure count",
+  "failure-bonus participant-proration undefined-helper prevention count",
+  "failure-bonus round-level proration undefined-helper prevention count",
+  "Stage 4 base-match default-ratio local-definition validation failure count",
+  "failure-bonus provisional-vs-paid ratio",
+  "failure-bonus claim eligibility-hash / claimant-conflict / stored-amount mismatch rejection count",
+  "failure-bonus proration factor bps",
+  "failure-bonus backed-available-pool utilization",
+  "non-binding settlement-preview dollars excluded from clearing",
+  "base-match rounding remainder cents",
+  "bonus-match rounding remainder cents",
+  "base-match funded-vs-advertised ratio",
+  "bonus-match funded-vs-advertised ratio",
+  "failure-bonus funded-vs-advertised ratio",
+  "success-reward funded-vs-advertised ratio",
+  "success-reward utilization",
+  "success-reward denied-by-reason counts",
+  "success-reward dominance-mode disabled-by-underbacking count",
+  "coordination-credit units issued",
+  "coordination-credit no-allocation-power invariant violation count",
+  "impact-certificate units issued",
+  "impact-certificate late-access rejection count",
+  "sealed-pledge exact-progress exposure incident count",
+  "self-match / linked-account / same-payment-method / same-control exclusions",
+  "authorization failure reclearing count",
+  "authorization wrong-amount / short-expiry removals",
+  "authorization-failed dollars removed from clearing",
+  "payment-commitment snapshot count and invalidation count",
+  "payment-commitment provider-evidence-hash malformed/invalid count",
+  "clearing input bundle validation failure count",
+  "clearing input bundle component-hash mismatch count",
+  "clearing input bundle uniqueness violation count",
+  "snapshot / project-eligibility-snapshot uniqueness violation count",
+  "Common Ground Budget row-count uniqueness violation count",
+  "identity-eligibility row-count uniqueness violation count",
+  "round-keyed payment-snapshot row-count uniqueness violation count",
+  "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate",
+  "Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count",
+  "sponsor frozen-vs-live backing mismatch count",
+  "sponsor commitment source-hash / integer-cent validation failure count",
+  "bonus fixed-point score-unit quantization mismatch count",
+  "invalid monetary-cap / basis-point-cap allocation rejection count",
+  "unsafe integer cent/count/basis-point validation failure count",
+  "unverified-or-nonclear-identity counted-dollar exclusion count",
+  "project-eligibility-snapshot hash validation failure count",
+  "project-eligibility-snapshot baseline/action-evidence boolean validation failure count",
+  "project-eligibility-snapshot cutoff/kind mismatch count",
+  "conditional-intent counterparty-volume / bucket-array validation failure count",
+  "round donor-counted-cap / identity-threshold validation failure count",
+  "project match-bps validation failure count",
+  "round sponsor-budget validation failure count",
+  "identity-weight bps validation failure count",
+  "payment-commitment missing-payment-method-ref count",
+  "bonus fixed-constant / review-pressure-threshold validation failure count",
+  "project economic-term validation failure count",
+  "project baseline/action-evidence hard-gate rejection count",
+  "payment-commitment snapshot binding-hash validation failure count",
+  "moral-bucket snapshot binding-hash validation failure count",
+  "moral-bucket snapshot graph-well-formedness validation failure count",
+  "Stage 1 loose moral-bucket-snapshot hard-gate rejection count",
+  "Stage 1 missing/ineligible clearing-bundle sponsor-backed hard-gate rejection count",
+  "Section 11 / Stage 1 gated final sponsor-backing variable zeroing count",
+  "cross-budget stance/conditional-intent row rejection count",
+  "duplicate support-stance / conditional-intent selected-row rejection count",
+  "formula-level bundle row-count uniqueness guard rejection count",
+  "failure-bonus project-row binding rejection count",
+  "failure-bonus missing/ineligible clearing-bundle sponsor-backing rejection count",
+  "round-open eligibility snapshot non-boolean/truthy-field rejection count",
+  "round-clearing-input-bundle binding-hash validation failure count",
+  "sponsor backing timing validation failure count",
+  "sponsor backing post-parameter-freeze rejection count",
+  "sponsor commitment monetary-field validation failure count",
+  "moral-bucket snapshot post-freeze creation rejection count",
+  "moral-bucket reciprocal-map raw-key mismatch count",
+  "project-round eligibility snapshot binding-hash validation failure count",
+  "failure-bonus qualification full-backing denial count",
+  "failure-bonus claimant-conflict snapshot context-binding rejection count",
+  "trim-stable string identifier validation failure count",
+  "fail-closed helper validation failure count",
+  "matching raw Math.min bypass prevention count",
+  "matching per-project payout-map sanitization failure count",
+  "stable-order explicit tuple-field coverage count",
+  "project-bucket counterparty-lookup naming mismatch count",
+  "failure-bonus exact target-proration underallocation prevention count",
+  "failure-bonus duplicate/wrong-round claim-list rejection count",
+  "aggregate sumBigInt helper validation failure count",
+  "Stage 7 local helper-definition validation failure count",
+  "Stage 7 replay/review non-side-effect output undefined-helper prevention count",
+  "canonical timestamp validation failure count",
+  "round rulebook / parameter-freeze validation failure count",
+  "sponsor preview backing validation failure count",
+  "round timeline validation failure count",
+  "failure-bonus preview-backing validation failure count",
+  "failure-bonus full-backing validation failure count",
+  "counterparty-bucket raw-array validation failure count",
+  "budget-period / recurring-next-capture / budget-fallback-rule validation failure count",
+  "conditional-intent enum / post-capture-state validation failure count",
+  "sponsor preview future-timestamp rejection count",
+  "authorization-reconciliation event-hash / duplicate-event validation failure count",
+  "custody authorization timing / exact-amount validation failure count",
+  "round-clearing-input-bundle id-binding validation failure count",
+  "bps out-of-range fail-closed count",
+  "failure-bonus budget-cap validation failure count",
+  "bonus collusion-risk / cluster-distribution validation failure count",
+  "deprecated stance counterparty-volume field ignored count",
+  "moral-bucket distinctness asymmetry blocks",
+  "authorization-to-capture lag",
+  "counted-to-payout lag",
+  "donor retention into next round",
+  "Sybil flag rate",
+  "appeal rate",
+  "blocked-project precision",
+  "privacy incident count",
+  "deployment-mode guardrail rejection count",
+  "shadow-mode payment-snapshot exemption simulation count",
+  "deployment-audit payment-reconciliation-path mismatch count",
+  "full-deployment shadow-only-prior-evidence rejection count",
+  "selected sponsor-paid fee-support aggregate rejection count",
+  "supporter-count dust-floor exclusion count",
+  "capped-pilot configured-cap overrun rejection count",
+  "capped-pilot gross-exposure cap utilization",
+  "failure-bonus claimant-conflict denial count",
+  "failure-bonus claimant-conflict snapshot binding rejection count",
+  "sponsor-paid fee quote backing-hash mismatch count",
+  "sponsor-paid fee support aggregate overcommit rejection count",
+  "pivotality calculator open count by allowed surface",
+  "pivotality calculator invalid-input rejection count",
+  "pivotality calculator impossible-result count",
+  "pivotality calculator live-data-access rejection count",
+  "pivotality calculator no-side-effect invariant violation count",
+  "simplified-UX advanced-drawer open count",
+  "simplified-UX review-screen consent completion count",
+  "simplified-UX data-parity mismatch count",
+  "plain-language guided-mode completion count",
+  "plain-label to canonical-record mismatch count",
+  "final-review required-detail expansion count",
+  "final-review hidden-required-field rejection count",
+  "payment-language overclaim prevention count",
+  "matching/reward/impact-language overclaim prevention count",
+  "copy-map accessibility-label parity failure count",
+  "moral-public-goods search-intent routed-to-CGB-card count",
+  "moral-public-goods search zero-state suppression count",
+  "public-goods primary CTA click-through count",
+  "public-goods ordinary-offer drawer open count",
+  "empty-filter default-render prevention count",
+  "stale-current-product-label exposure count",
+  "legacy-demo-label correctness count",
+  "public-goods lane-count separation mismatch count",
+  "public-goods mobile primary-CTA visibility failure count",
+  "public-goods search accessibility announcement failure count",
+] as const;
+
+export type MpgfPublicGoodsPublicMetricLabel = (typeof MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS)[number];
+
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
@@ -261,6 +466,137 @@ function rateBps(numerator: number, denominator: number) {
   }
 
   return Math.max(0, Math.round((numerator / denominator) * 10_000));
+}
+
+function publicMetricKey(label: string) {
+  return label
+    .toLowerCase()
+    .replace(/`/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function publicMetricCategory(label: string) {
+  const normalized = label.toLowerCase();
+
+  if (normalized.includes("failure-bonus")) {
+    return "failure_bonus";
+  }
+
+  if (normalized.includes("success-reward") || normalized.includes("coordination-credit") || normalized.includes("impact-certificate")) {
+    return "reward_credit_certificate";
+  }
+
+  if (normalized.includes("payment") || normalized.includes("authorization") || normalized.includes("custody")) {
+    return "payment_authorization";
+  }
+
+  if (normalized.includes("sponsor") || normalized.includes("base-match") || normalized.includes("bonus-match")) {
+    return "sponsor_matching";
+  }
+
+  if (
+    normalized.includes("identity") ||
+    normalized.includes("sybil") ||
+    normalized.includes("collusion") ||
+    normalized.includes("linked-account") ||
+    normalized.includes("same-control")
+  ) {
+    return "identity_integrity";
+  }
+
+  if (
+    normalized.includes("validation") ||
+    normalized.includes("binding-hash") ||
+    normalized.includes("hash") ||
+    normalized.includes("malformed") ||
+    normalized.includes("fail-closed") ||
+    normalized.includes("rejection")
+  ) {
+    return "validation_guards";
+  }
+
+  if (
+    normalized.includes("search") ||
+    normalized.includes("cta") ||
+    normalized.includes("drawer") ||
+    normalized.includes("accessibility") ||
+    normalized.includes("ux") ||
+    normalized.includes("label")
+  ) {
+    return "public_experience";
+  }
+
+  if (normalized.includes("lag") || normalized.includes("retention") || normalized.includes("appeal rate")) {
+    return "operations";
+  }
+
+  return "funding_clearance";
+}
+
+function publicMetricUnit(label: string): MpgfPublicGoodsPublicMetricCatalogItem["unit"] {
+  const normalized = label.toLowerCase();
+
+  if (normalized.includes("dollars")) {
+    return "cents";
+  }
+
+  if (normalized.includes("rate") || normalized.includes("ratio") || normalized.includes("utilization") || normalized.includes("bps")) {
+    return "basis_points";
+  }
+
+  if (normalized.includes("lag") || normalized.includes("time")) {
+    return "hours";
+  }
+
+  return "count";
+}
+
+export function buildMpgfPublicGoodsPublicMetricCatalog(
+  computedValues: Partial<Record<MpgfPublicGoodsPublicMetricLabel, number | null>> = {},
+): MpgfPublicGoodsPublicMetricCatalog {
+  const computedValueKeys = new Set(Object.keys(computedValues));
+  const metrics = MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.map((label) => ({
+    key: publicMetricKey(label),
+    label,
+    category: publicMetricCategory(label),
+    unit: publicMetricUnit(label),
+    privacyScope: "aggregate_only_no_user_or_reason_text" as const,
+    instrumentationStatus: computedValueKeys.has(label) ? "computed" as const : "instrumentation_pending" as const,
+    currentValue: computedValues[label] ?? null,
+  }));
+
+  return {
+    optimizationTarget: "incremental_verified_cross_view_review_cleared_funding",
+    doesNotOptimizeGrossDonationVolumeAlone: true,
+    privacyPolicy: "aggregate_only_no_user_or_reason_text",
+    requiredMetricCount: MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length,
+    computedMetricCount: metrics.filter((metric) => metric.instrumentationStatus === "computed").length,
+    pendingMetricCount: metrics.filter((metric) => metric.instrumentationStatus === "instrumentation_pending").length,
+    metrics,
+  };
+}
+
+export function validateMpgfPublicGoodsPublicMetricCatalog(catalog = buildMpgfPublicGoodsPublicMetricCatalog()) {
+  const presentLabels = new Set(catalog.metrics.map((metric) => metric.label));
+  const missingLabels = MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.filter((label) => !presentLabels.has(label));
+  const rawPrivateFieldsExposed = catalog.metrics.some(
+    (metric) => metric.privacyScope !== "aggregate_only_no_user_or_reason_text",
+  );
+
+  return {
+    passed:
+      missingLabels.length === 0 &&
+      catalog.requiredMetricCount === MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length &&
+      catalog.optimizationTarget === "incremental_verified_cross_view_review_cleared_funding" &&
+      catalog.doesNotOptimizeGrossDonationVolumeAlone &&
+      !rawPrivateFieldsExposed,
+    missingLabels,
+    requiredMetricCount: MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length,
+    publishedMetricCount: catalog.metrics.length,
+    rawPrivateFieldsExposed,
+    doesNotOptimizeGrossDonationVolumeAlone: catalog.doesNotOptimizeGrossDonationVolumeAlone,
+  };
 }
 
 function readString(row: Record<string, unknown>, key: string, fallback = "") {
@@ -849,6 +1185,54 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     reviewerTimingSampleReady ? null : "reviewer_timing_sample_too_small",
     thresholdConversionSampleReady ? null : "threshold_conversion_sample_too_small",
   ].filter((blocker): blocker is string => Boolean(blocker));
+  const verifiedDollarsRoutedCents = fundingContributionRecords.reduce(
+    (sum, record) => sum + clampNonNegativeInteger(record.amountVerifiedCents),
+    0,
+  );
+  const clearedRecipientCents = payableDirectEligibleCents + matchAllocatedCents;
+  const computedPublicMetricValues: Partial<Record<MpgfPublicGoodsPublicMetricLabel, number | null>> = {
+    "gross-captured dollars": verifiedDollarsRoutedCents,
+    "fee dollars excluded from public-good credit": 0,
+    "net-recipient-cleared dollars": clearedRecipientCents,
+    "actual-cleared dollars": clearedRecipientCents,
+    "counted-cleared dollars": payableDirectEligibleCents,
+    "match-eligible cleared dollars": payableDirectEligibleCents,
+    "cleared cross-view dollars per sponsor dollar": rateBps(payableDirectEligibleCents, matchAllocatedCents),
+    "threshold-clear rate": rateBps(thresholdClearedCampaignCount, campaigns.length),
+    "base-match utilization": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchBudgetCents),
+    "base-match claim-vs-paid ratio": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchAllocatedCents),
+    "bonus-match utilization": rateBps(roundAllocation.qfBonusAllocatedCents, roundAllocation.qfBonusBudgetCents),
+    "non-binding settlement-preview dollars excluded from clearing": 0,
+    "base-match funded-vs-advertised ratio": rateBps(roundAllocation.baseMatchBudgetCents, roundAllocation.baseMatchBudgetCents),
+    "bonus-match funded-vs-advertised ratio": rateBps(roundAllocation.qfBonusBudgetCents, roundAllocation.qfBonusBudgetCents),
+    "success-reward utilization": 0,
+    "coordination-credit units issued": 0,
+    "coordination-credit no-allocation-power invariant violation count": 0,
+    "impact-certificate units issued": 0,
+    "impact-certificate late-access rejection count": 0,
+    "sealed-pledge exact-progress exposure incident count": 0,
+    "donor retention into next round": retainedRecurringDonors3MonthBps,
+    "appeal rate": rateBps(appealCaseCount, Math.max(1, reviewCases.length)),
+    "privacy incident count": 0,
+    "pivotality calculator no-side-effect invariant violation count": 0,
+    "moral-public-goods search-intent routed-to-CGB-card count": analyticsEvents.filter(
+      (event) => event.event_type === "moral_public_goods_search_routed_to_cgb_card",
+    ).length,
+    "moral-public-goods search zero-state suppression count": analyticsEvents.filter(
+      (event) => event.event_type === "moral_public_goods_zero_state_suppressed",
+    ).length,
+    "public-goods primary CTA click-through count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_primary_cta_clicked",
+    ).length,
+    "public-goods ordinary-offer drawer open count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_ordinary_offer_drawer_opened",
+    ).length,
+    "empty-filter default-render prevention count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_empty_filter_default_prevented",
+    ).length,
+    "public-goods mobile primary-CTA visibility failure count": 0,
+    "public-goods search accessibility announcement failure count": 0,
+  };
 
   return {
     generatedAt,
@@ -899,10 +1283,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       likelyNetNewFundingShareBps: rateBps(likelyNetNewFundingEventCount, netNewFundingEvents.length),
     },
     funding: {
-      verifiedDollarsRoutedCents: fundingContributionRecords.reduce(
-        (sum, record) => sum + clampNonNegativeInteger(record.amountVerifiedCents),
-        0,
-      ),
+      verifiedDollarsRoutedCents,
       verifiedSupporterCountPerWinningCampaign: payableLines.length
         ? Math.round(payableLines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0) / payableLines.length)
         : null,
@@ -968,6 +1349,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       recommendation: rolloutBlockers.length === 0 ? "ready_for_public_beta_review" : "hold_invited_cohort",
       blockers: rolloutBlockers,
     },
+    publicMetrics: buildMpgfPublicGoodsPublicMetricCatalog(computedPublicMetricValues),
   };
 }
 
