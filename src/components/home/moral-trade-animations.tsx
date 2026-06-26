@@ -22,7 +22,7 @@ const animationCards: ReadonlyArray<{
 }> = [
   {
     id: "reciprocal-mixed",
-    href: "/offers/new?template=reciprocal-mixed",
+    href: "/offers/examples/reciprocal-mixed",
     scene: "reciprocal",
     typeLabel: "A. Reciprocal mixed trade",
     title: "Two sacrifices become two moral gains",
@@ -33,7 +33,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "moral-for-prudential",
-    href: "/offers/new?template=moral-for-prudential",
+    href: "/offers/examples/moral-for-prudential",
     scene: "prudential",
     typeLabel: "B. Moral-for-prudential trade",
     title: "An incentive buys a behavior change",
@@ -44,7 +44,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "pure-opposed-cause",
-    href: "/offers/new?template=pure-opposed-cause",
+    href: "/offers/examples/pure-opposed-cause",
     scene: "pure",
     typeLabel: "C. Pure opposed-cause trade",
     title: "Opposed efforts redirect into a shared good",
@@ -55,7 +55,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "intrapersonal",
-    href: "/offers/new?template=intrapersonal",
+    href: "/offers/examples/intrapersonal",
     scene: "intrapersonal",
     typeLabel: "D. Intrapersonal trade",
     title: "A divided self finds a better bundle",
@@ -66,7 +66,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "bargained-coordination",
-    href: "/offers/new?template=bargained-coordination",
+    href: "/offers/examples/bargained-coordination",
     scene: "bargained",
     typeLabel: "E. Bargained coordination",
     title: "Repeated structure recovers blocked gains",
@@ -77,7 +77,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "lottery-mediated",
-    href: "/offers/new?template=lottery-mediated",
+    href: "/offers/examples/lottery-mediated",
     scene: "lottery",
     typeLabel: "F. Lottery-mediated trade",
     title: "Chance creates a bridge certainty cannot",
@@ -88,7 +88,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "side-payment",
-    href: "/offers/new?template=side-payment",
+    href: "/offers/examples/side-payment",
     scene: "sidePayment",
     typeLabel: "G. Side-payment trade",
     title: "Compensation reshapes the feasible set",
@@ -99,7 +99,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "market-mediated",
-    href: "/offers/new?template=market-mediated",
+    href: "/offers/examples/market-mediated",
     scene: "market",
     typeLabel: "H. Market-mediated trade",
     title: "A clearing layer scales moral barter",

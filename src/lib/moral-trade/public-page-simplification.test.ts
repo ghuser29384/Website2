@@ -160,6 +160,45 @@ test("moraltrade82 signed-out offset creation route is a preview landing, not an
   assert.equal(newOfferPage.includes("Lock now"), false);
 });
 
+test("moraltrade82 typology examples do not become draft-prefill defaults", () => {
+  const newOfferPage = readFileSync("src/app/offers/new/page.tsx", "utf8");
+  const animationSource = readFileSync(
+    "src/components/home/moral-trade-animations.tsx",
+    "utf8",
+  );
+
+  assert.equal(newOfferPage.includes("const MORAL_TRADE_TYPE_TEMPLATES"), false);
+  assert.match(newOfferPage, /getReviewedMarketplaceSeedTemplate\(templateId\)/);
+  assert.match(newOfferPage, /WORKED_EXAMPLE_TEMPLATE_NOTICE/);
+  assert.match(newOfferPage, /is not a draft template/);
+  assert.match(newOfferPage, /Choose reviewed template/);
+  assert.equal(newOfferPage.includes('title: "Lottery-mediated trade"'), false);
+  assert.equal(newOfferPage.includes('title: "Side-payment trade"'), false);
+  assert.equal(newOfferPage.includes('duration: "30 days"'), false);
+
+  for (const exampleId of [
+    "reciprocal-mixed",
+    "moral-for-prudential",
+    "pure-opposed-cause",
+    "intrapersonal",
+    "bargained-coordination",
+    "lottery-mediated",
+    "side-payment",
+    "market-mediated",
+  ]) {
+    assert.match(
+      animationSource,
+      new RegExp(`/offers/examples/${exampleId}`),
+      exampleId,
+    );
+    assert.equal(
+      animationSource.includes(`/offers/new?template=${exampleId}`),
+      false,
+      exampleId,
+    );
+  }
+});
+
 test("moraltrade82 donation-offsets page uses plain questions and a concrete preview example", () => {
   const donationOffsetsPage = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
 
