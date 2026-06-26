@@ -9,6 +9,7 @@ import {
   buildMpgfCrecCoordinationCreditLedgerEntryHash,
   buildMpgfCrecDeploymentAuditHash,
   buildMpgfCrecFailureBonusClaimAuditContextHash,
+  buildMpgfCrecFailureBonusClaimantConflictSnapshotHash,
   buildMpgfCrecFailureBonusEligibilityInputsHash,
   buildMpgfCrecAuthorizationReconciliationEventHash,
   buildMpgfCrecFeeQuoteHash,
@@ -26,6 +27,7 @@ import {
   capMpgfCrecDeploymentGrossExposure,
   createMpgfCrecFailureBonusClaim,
   evaluateMpgfCrecContributorBenefitEligibility,
+  evaluateMpgfCrecCounterpartyVolumeSatisfaction,
   evaluateMpgfCrecFailureBonusEligibility,
   evaluateMpgfCrecNetPublicGoodSupporterBreadth,
   evaluateMpgfCrecProjectHardGate,
@@ -50,6 +52,7 @@ import {
   validateMpgfCrecCoordinationCreditLedgerEntry,
   validateMpgfCrecDeploymentAudit,
   validateMpgfCrecFeeQuote,
+  validateMpgfCrecFailureBonusClaimantConflictSnapshot,
   validateMpgfCrecImpactCertificateClaim,
   validateMpgfCrecOptimizationRunTrace,
   validateMpgfCrecPaymentCommitmentSnapshot,
@@ -66,6 +69,7 @@ import {
   type MpgfCrecCoordinationCreditLedgerEntry,
   type MpgfCrecDeploymentAudit,
   type MpgfCrecFailureBonusClaimRecord,
+  type MpgfCrecFailureBonusClaimantConflictSnapshot,
   type MpgfCrecFailureBonusEligibilityInput,
   type MpgfCrecFeeQuote,
   type MpgfCrecImpactCertificateClaim,
@@ -650,6 +654,31 @@ function supporterCreditRow(
   };
 }
 
+function counterpartyVolumeRow(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    roundId,
+    projectId,
+    participantId,
+    counterpartyParticipantId: "participant-bo",
+    counterpartyBucketId: "bucket-animal-welfare",
+    counterpartyVolumeSource: "net_recipient_public_good_credit",
+    netRecipientDisbursedCents: 1_000,
+    matchEligibleCents: 800,
+    counterpartyHumanVerified: true,
+    counterpartySybilRiskState: "clear",
+    counterpartyCollusionRiskState: "clear",
+    participantLinkedAccountClusterId: "linked-alix",
+    counterpartyLinkedAccountClusterId: "linked-bo",
+    participantSamePaymentMethodClusterId: "payment-alix",
+    counterpartySamePaymentMethodClusterId: "payment-bo",
+    participantSameControlEntityId: "control-alix",
+    counterpartySameControlEntityId: "control-bo",
+    ...overrides,
+  };
+}
+
 function projectHardGateInput(
   overrides: Partial<MpgfCrecProjectHardGateInput> = {},
 ): MpgfCrecProjectHardGateInput {
@@ -675,6 +704,7 @@ function failureBonusInput(
 ): MpgfCrecFailureBonusEligibilityInput {
   const hardGate = evaluateMpgfCrecProjectHardGate(projectHardGateInput());
   const rowUniqueness = validateMpgfCrecRoundCloseBundleRowUniqueness(rowUniquenessInput());
+  const conflictSnapshot = failureBonusClaimantConflictSnapshot();
 
   return {
     roundId,
@@ -701,8 +731,38 @@ function failureBonusInput(
     roundFailureBonusBudgetCents: 500,
     backedFailureBonusPoolCents: 500,
     totalSponsorBudgetCents: 10_000,
+    claimantConflictSnapshotEligible: true,
+    claimantConflictSnapshotId: conflictSnapshot.id,
+    claimantConflictSnapshotHash: conflictSnapshot.snapshotHash,
+    claimantConflictSourceCutoff: conflictSnapshot.sourceCutoffAt,
     claimantConflictState: "no_conflict",
     ...overrides,
+  };
+}
+
+function failureBonusClaimantConflictSnapshot(
+  overrides: Partial<MpgfCrecFailureBonusClaimantConflictSnapshot> = {},
+): MpgfCrecFailureBonusClaimantConflictSnapshot {
+  const base: Omit<MpgfCrecFailureBonusClaimantConflictSnapshot, "snapshotHash"> = {
+    id: "claimant-conflict-snapshot-1",
+    snapshotKind: "failure_bonus_claimant_conflict",
+    roundId,
+    projectId,
+    participantId,
+    commonGroundBudgetId,
+    conditionalTradeIntentId,
+    rulebookHash,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    sourceCutoffAt: roundCloseSourceCutoff,
+    conflictState: "no_conflict",
+    createdAt: roundCloseSourceCutoff,
+    ...overrides,
+  };
+
+  return {
+    ...base,
+    snapshotHash:
+      overrides.snapshotHash ?? buildMpgfCrecFailureBonusClaimantConflictSnapshotHash(base),
   };
 }
 
@@ -714,6 +774,7 @@ function failureBonusClaim(
     asOf: earlyFailureBonusCutoff,
     createdAt: earlyFailureBonusCutoff,
   });
+  const conflictSnapshot = failureBonusClaimantConflictSnapshot();
   const claim: MpgfCrecFailureBonusClaimRecord = {
     id: "failure-claim-1",
     roundId,
@@ -731,9 +792,10 @@ function failureBonusClaim(
     clearingInputBundleHash: clearingBundle().bundleHash,
     paymentCommitmentSnapshotHash: earlyPaymentSnapshot.snapshotHash,
     projectRoundEligibilitySnapshotHash: projectEligibilitySnapshot().snapshotHash,
-    claimantConflictSnapshotHash: h("claimant-conflict"),
-    claimantConflictState: "no_conflict",
-    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+    claimantConflictSnapshotId: conflictSnapshot.id,
+    claimantConflictSnapshotHash: conflictSnapshot.snapshotHash,
+    claimantConflictState: conflictSnapshot.conflictState,
+    claimantConflictSourceCutoff: conflictSnapshot.sourceCutoffAt,
     earlyFailureBonusCutoff,
     paymentMethodSavedAt: "2026-05-05T00:00:00.000Z",
     paymentMethodConfirmedAt: "2026-05-05T00:01:00.000Z",
@@ -763,6 +825,7 @@ function failureBonusClaimCreationInput(
     asOf: earlyFailureBonusCutoff,
     createdAt: earlyFailureBonusCutoff,
   });
+  const conflictSnapshot = failureBonusClaimantConflictSnapshot();
 
   return {
     existingClaims: [],
@@ -782,9 +845,10 @@ function failureBonusClaimCreationInput(
     clearingInputBundleHash: clearingBundle().bundleHash,
     paymentCommitmentSnapshotHash: earlyPaymentSnapshot.snapshotHash,
     projectRoundEligibilitySnapshotHash: projectEligibilitySnapshot().snapshotHash,
-    claimantConflictSnapshotHash: h("claimant-conflict"),
-    claimantConflictState: "no_conflict",
-    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+    claimantConflictSnapshotId: conflictSnapshot.id,
+    claimantConflictSnapshotHash: conflictSnapshot.snapshotHash,
+    claimantConflictState: conflictSnapshot.conflictState,
+    claimantConflictSourceCutoff: conflictSnapshot.sourceCutoffAt,
     earlyFailureBonusCutoff,
     paymentMethodSavedAt: "2026-05-05T00:00:00.000Z",
     paymentMethodConfirmedAt: "2026-05-05T00:01:00.000Z",
@@ -1329,6 +1393,8 @@ test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps a
   });
   assert.equal(cappedExposure.eligible, true);
   assert.equal(cappedExposure.cappedGrossExposureCents, 8_000);
+  assert.equal(cappedExposure.bindingGrossExposureCents, 8_000);
+  assert.equal(cappedExposure.shadowPreviewGrossExposureCents, 0);
   assert.equal(cappedExposure.bindingOutputAllowed, true);
 
   const highRemainingMapsStillRespectFrozenCaps = capMpgfCrecDeploymentGrossExposure({
@@ -1341,6 +1407,7 @@ test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps a
   });
   assert.equal(highRemainingMapsStillRespectFrozenCaps.eligible, true);
   assert.equal(highRemainingMapsStillRespectFrozenCaps.cappedGrossExposureCents, 7_000);
+  assert.equal(highRemainingMapsStillRespectFrozenCaps.bindingGrossExposureCents, 7_000);
 
   const malformedRemainingExposure = capMpgfCrecDeploymentGrossExposure({
     deploymentMode: "capped_pilot",
@@ -1352,6 +1419,8 @@ test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps a
   });
   assert.equal(malformedRemainingExposure.eligible, false);
   assert.equal(malformedRemainingExposure.cappedGrossExposureCents, 0);
+  assert.equal(malformedRemainingExposure.bindingGrossExposureCents, 0);
+  assert.equal(malformedRemainingExposure.shadowPreviewGrossExposureCents, 0);
   assert.ok(malformedRemainingExposure.blockers.includes("deployment_exposure_remaining_round_invalid"));
 
   const shadowExposure = capMpgfCrecDeploymentGrossExposure({
@@ -1364,6 +1433,8 @@ test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps a
   });
   assert.equal(shadowExposure.eligible, true);
   assert.equal(shadowExposure.cappedGrossExposureCents, 0);
+  assert.equal(shadowExposure.bindingGrossExposureCents, 0);
+  assert.equal(shadowExposure.shadowPreviewGrossExposureCents, 50_000);
   assert.equal(shadowExposure.bindingOutputAllowed, false);
   assert.equal(shadowExposure.shadowOnly, true);
 
@@ -1377,6 +1448,8 @@ test("CRECM v1.125 deployment audits bind passed prior evidence and pilot caps a
   });
   assert.equal(fullWithPilotCaps.eligible, false);
   assert.equal(fullWithPilotCaps.cappedGrossExposureCents, 0);
+  assert.equal(fullWithPilotCaps.bindingGrossExposureCents, 0);
+  assert.equal(fullWithPilotCaps.shadowPreviewGrossExposureCents, 0);
   assert.ok(fullWithPilotCaps.blockers.includes("deployment_exposure_full_pilot_caps_not_null"));
 });
 
@@ -2016,6 +2089,117 @@ test("CRECM v1.125 valid conditional intent exposes sanitized caps and counterpa
   assert.deepEqual(resolved.rowFailureCodes, []);
 });
 
+test("CRECM v1.125 counterparty-volume satisfaction counts only frozen reciprocal net public-good credit", () => {
+  const satisfied = evaluateMpgfCrecCounterpartyVolumeSatisfaction({
+    roundId,
+    projectId,
+    participantId,
+    projectBucketId: "bucket-global-health",
+    conditionalIntentMinCounterpartyVolumeCents: 1_300,
+    acceptableCounterBucketIds: ["bucket-animal-welfare", "bucket-future"],
+    frozenReciprocalCounterBucketIds: [
+      "bucket-animal-welfare",
+      "bucket-future",
+      "bucket-global-health",
+    ],
+    rows: [
+      counterpartyVolumeRow({
+        counterpartyParticipantId: "participant-bo",
+        counterpartyBucketId: "bucket-animal-welfare",
+        netRecipientDisbursedCents: 1_000,
+        matchEligibleCents: 800,
+      }),
+      counterpartyVolumeRow({
+        counterpartyParticipantId: "participant-cy",
+        counterpartyBucketId: "bucket-future",
+        netRecipientDisbursedCents: 600,
+        matchEligibleCents: 1_000,
+        counterpartyLinkedAccountClusterId: "linked-cy",
+        counterpartySamePaymentMethodClusterId: "payment-cy",
+        counterpartySameControlEntityId: "control-cy",
+      }),
+    ],
+  });
+
+  assert.equal(satisfied.eligible, true);
+  assert.equal(satisfied.conditionalIntentMinCounterpartyVolumeCents, 1_300);
+  assert.deepEqual(satisfied.validatedCounterBucketIds, ["bucket-animal-welfare", "bucket-future"]);
+  assert.equal(satisfied.countedCounterpartyVolumeCents, 1_400);
+  assert.equal(satisfied.counterpartyVolumeSatisfied, true);
+  assert.deepEqual(satisfied.countedCounterpartyParticipantIds, ["participant-bo", "participant-cy"]);
+  assert.deepEqual(satisfied.excludedRowCodes, []);
+});
+
+test("CRECM v1.125 counterparty-volume satisfaction excludes self, cluster, source, bucket, and malformed rows", () => {
+  const blocked = evaluateMpgfCrecCounterpartyVolumeSatisfaction({
+    roundId,
+    projectId,
+    participantId,
+    projectBucketId: "bucket-global-health",
+    conditionalIntentMinCounterpartyVolumeCents: 900,
+    acceptableCounterBucketIds: ["bucket-animal-welfare"],
+    frozenReciprocalCounterBucketIds: ["bucket-animal-welfare"],
+    rows: [
+      counterpartyVolumeRow(),
+      counterpartyVolumeRow({ counterpartyParticipantId: participantId }),
+      counterpartyVolumeRow({ counterpartyLinkedAccountClusterId: "linked-alix" }),
+      counterpartyVolumeRow({ counterpartySamePaymentMethodClusterId: "payment-alix" }),
+      counterpartyVolumeRow({ counterpartySameControlEntityId: "control-alix" }),
+      counterpartyVolumeRow({ counterpartyBucketId: "bucket-global-health" }),
+      counterpartyVolumeRow({ counterpartyBucketId: "bucket-nonreciprocal" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "sponsor_funds" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "platform_funds" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "fee" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "success_reward" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "coordination_credit" }),
+      counterpartyVolumeRow({ counterpartyVolumeSource: "impact_certificate" }),
+      counterpartyVolumeRow({ counterpartyHumanVerified: false }),
+      counterpartyVolumeRow({ counterpartySybilRiskState: "review" }),
+      counterpartyVolumeRow({ counterpartyCollusionRiskState: "blocked" }),
+      counterpartyVolumeRow({ participantSamePaymentMethodClusterId: " payment-alix" }),
+    ],
+  });
+
+  assert.equal(blocked.eligible, true);
+  assert.equal(blocked.countedCounterpartyVolumeCents, 800);
+  assert.equal(blocked.counterpartyVolumeSatisfied, false);
+  assert.deepEqual(blocked.countedCounterpartyParticipantIds, ["participant-bo"]);
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_1_self_match"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_2_linked_account_cluster"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_3_same_payment_method_cluster"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_4_same_control_entity"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_5_same_bucket"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_6_bucket_not_frozen_reciprocal"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_7_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_8_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_9_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_10_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_11_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_12_non_public_good_credit_source"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_13_counterparty_identity_not_verified"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_14_counterparty_sybil_not_clear"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_15_counterparty_collusion_not_clear"));
+  assert.ok(blocked.excludedRowCodes.includes("counterparty_volume_row_16_malformed"));
+
+  const malformedInputs = evaluateMpgfCrecCounterpartyVolumeSatisfaction({
+    roundId,
+    projectId,
+    participantId,
+    projectBucketId: "bucket-global-health",
+    conditionalIntentMinCounterpartyVolumeCents: "900",
+    acceptableCounterBucketIds: ["bucket-animal-welfare", "bucket-animal-welfare"],
+    frozenReciprocalCounterBucketIds: ["bucket-animal-welfare"],
+    rows: "not-rows",
+  });
+
+  assert.equal(malformedInputs.eligible, false);
+  assert.equal(malformedInputs.counterpartyVolumeSatisfied, false);
+  assert.equal(malformedInputs.countedCounterpartyVolumeCents, 0);
+  assert.ok(malformedInputs.blockers.includes("counterparty_volume_threshold_invalid"));
+  assert.ok(malformedInputs.blockers.includes("counterparty_volume_acceptable_buckets_invalid"));
+  assert.ok(malformedInputs.blockers.includes("counterparty_volume_rows_not_array"));
+});
+
 test("CRECM v1.125 allocator-state lookups are round-keyed and fail closed", () => {
   const wrongRoundOnly = resolveMpgfCrecAllocatorStateInputs({
     roundId,
@@ -2648,6 +2832,7 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
       feePolicyHash: bundle.feePolicyHash,
       sponsorPoolSourceHash: sourceHash,
       backedFeeSupportPoolCents: 45,
+      roundCloseBundleEligible: true,
     },
   );
 
@@ -2664,6 +2849,7 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
       feePolicyHash: bundle.feePolicyHash,
       sponsorPoolSourceHash: sourceHash,
       backedFeeSupportPoolCents: 45,
+      roundCloseBundleEligible: true,
     },
   );
 
@@ -2679,11 +2865,29 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
       feePolicyHash: bundle.feePolicyHash,
       sponsorPoolSourceHash: sourceHash,
       backedFeeSupportPoolCents: 44,
+      roundCloseBundleEligible: true,
     },
   );
 
   assert.equal(underBacked.eligible, false);
   assert.ok(underBacked.blockers.includes("fee_support_pool_underbacked"));
+
+  const bundleBlocked = sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
+    [selectedSponsorPaid],
+    [selectedSponsorPaid.id],
+    {
+      roundId,
+      feePolicyVersion: bundle.feePolicyVersion,
+      feePolicyHash: bundle.feePolicyHash,
+      sponsorPoolSourceHash: sourceHash,
+      backedFeeSupportPoolCents: 45,
+      roundCloseBundleEligible: false,
+    },
+  );
+
+  assert.equal(bundleBlocked.eligible, false);
+  assert.equal(bundleBlocked.demandCents, 0);
+  assert.ok(bundleBlocked.blockers.includes("fee_support_round_close_bundle_not_eligible"));
 });
 
 test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => {
@@ -3075,6 +3279,50 @@ test("CRECM v1.125 sponsor backing filters frozen commitments by round, pool, so
   assert.ok(lateResult.blockers.includes("sponsor_commitment_0_invalid"));
 });
 
+test("CRECM v1.125 failure-bonus claimant conflict snapshots bind the exact payout context", () => {
+  const validSnapshot = failureBonusClaimantConflictSnapshot();
+  const expected = {
+    roundId,
+    projectId,
+    participantId,
+    commonGroundBudgetId,
+    conditionalTradeIntentId,
+    rulebookHash,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    sourceCutoffAt: roundCloseSourceCutoff,
+  };
+  const valid = validateMpgfCrecFailureBonusClaimantConflictSnapshot(validSnapshot, expected);
+
+  assert.equal(valid.eligible, true);
+
+  const wrongBudget = validateMpgfCrecFailureBonusClaimantConflictSnapshot(
+    failureBonusClaimantConflictSnapshot({ commonGroundBudgetId: "budget-other" }),
+    expected,
+  );
+  assert.equal(wrongBudget.eligible, false);
+  assert.ok(
+    wrongBudget.blockers.includes("failure_bonus_claimant_conflict_snapshot_wrong_budget"),
+  );
+
+  const staleCutoff = validateMpgfCrecFailureBonusClaimantConflictSnapshot(
+    failureBonusClaimantConflictSnapshot({ sourceCutoffAt: earlyFailureBonusCutoff }),
+    expected,
+  );
+  assert.equal(staleCutoff.eligible, false);
+  assert.ok(
+    staleCutoff.blockers.includes("failure_bonus_claimant_conflict_snapshot_source_cutoff_mismatch"),
+  );
+
+  const conflicted = validateMpgfCrecFailureBonusClaimantConflictSnapshot(
+    failureBonusClaimantConflictSnapshot({ conflictState: "recipient_affiliate" }),
+    expected,
+  );
+  assert.equal(conflicted.eligible, false);
+  assert.ok(
+    conflicted.blockers.includes("failure_bonus_claimant_conflict_snapshot_not_clear"),
+  );
+});
+
 test("CRECM v1.125 failure bonuses require payable threshold-family failures and fully backed sponsor budget", () => {
   const input = failureBonusInput();
   const result = evaluateMpgfCrecFailureBonusEligibility(input);
@@ -3106,6 +3354,21 @@ test("CRECM v1.125 failure bonuses require payable threshold-family failures and
 
   assert.equal(rowUniquenessBlocked.qualified, false);
   assert.ok(rowUniquenessBlocked.blockers.includes("failure_bonus_row_uniqueness_ineligible"));
+
+  const conflictSnapshotBlocked = evaluateMpgfCrecFailureBonusEligibility(
+    failureBonusInput({
+      claimantConflictSnapshotEligible: false,
+      claimantConflictState: "recipient_affiliate",
+    }),
+  );
+
+  assert.equal(conflictSnapshotBlocked.qualified, false);
+  assert.ok(
+    conflictSnapshotBlocked.blockers.includes("failure_bonus_claimant_conflict_snapshot_ineligible"),
+  );
+  assert.ok(
+    conflictSnapshotBlocked.blockers.includes("failure_bonus_claimant_conflict_not_clear"),
+  );
 
   const underBacked = evaluateMpgfCrecFailureBonusEligibility(
     failureBonusInput({ backedFailureBonusPoolCents: 499 }),
@@ -3503,7 +3766,9 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.deploymentAudits.cappedPilotExposureUsesFrozenCapsAndRemainingMaps, true);
   assert.equal(summary.deploymentAudits.remainingExposureMapsCannotRaiseFrozenPilotCaps, true);
   assert.equal(summary.deploymentAudits.shadowBindingExposureCentsAlwaysZero, true);
+  assert.equal(summary.deploymentAudits.shadowPreviewExposureCentsCanSimulateRequestedGross, true);
   assert.equal(summary.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
+  assert.equal(summary.feeQuotes.sponsorPaidFeeSupportRequiresEligibleRoundCloseBundle, true);
   assert.equal(summary.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
   assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
   assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineConfidence, true);
@@ -3571,6 +3836,32 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     true,
   );
   assert.equal(summary.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.thresholdSource,
+    "ConditionalTradeIntent.minCounterpartyVolumeCents",
+  );
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.validatesFrozenReciprocalDistinctBucketIntersection,
+    true,
+  );
+  assert.equal(summary.counterpartyVolumeSatisfaction.sameBucketRowsNeverCount, true);
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.countsOnlyNetRecipientDisbursedMatchEligiblePublicGoodCredit,
+    true,
+  );
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.excludesSponsorPlatformFeeRewardCreditCertificateRows,
+    true,
+  );
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.excludesSelfLinkedAccountSamePaymentClusterAndSameControlRows,
+    true,
+  );
+  assert.equal(
+    summary.counterpartyVolumeSatisfaction.requiresCounterpartyHumanVerifiedSybilClearCollusionClear,
+    true,
+  );
+  assert.equal(summary.counterpartyVolumeSatisfaction.malformedRowsDoNotCount, true);
   assert.equal(summary.allocatorStateInputGating.participantRemainingBudgetKey, "(roundId,participantId)");
   assert.equal(summary.allocatorStateInputGating.projectRemainingCapKey, "(roundId,projectId)");
   assert.equal(summary.allocatorStateInputGating.wrongRoundRowsResolveToZero, true);
@@ -3608,6 +3899,8 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(summary.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
   assert.ok(summary.failureBonus.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
+  assert.equal(summary.failureBonus.claimantConflictSnapshotBindsExactPayoutContext, true);
+  assert.equal(summary.failureBonus.claimantConflictSnapshotIdStoredOnClaims, true);
   assert.equal(summary.failureBonus.claimCreationInitializesUnsettledDefaults, true);
   assert.equal(summary.failureBonus.claimCreationMismatchesFailClosedToManualReview, true);
   assert.equal(summary.failureBonus.finalPayoutListsRequireApprovedUnsettledClaims, true);

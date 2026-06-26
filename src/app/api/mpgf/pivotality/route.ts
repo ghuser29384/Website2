@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
+  MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES,
   MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS,
   MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
   MPGF_PUBLIC_GOODS_PIVOTALITY_POLICY,
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const SAMPLE_INPUT = {
+  calculatorSurface: "advanced_explainer",
   contributionCents: 5_000,
   thresholdCents: 50_000,
   valueRatio: "0.20",
@@ -23,6 +25,7 @@ const SAMPLE_INPUT = {
 
 function formDataToInput(formData: FormData) {
   return {
+    calculatorSurface: String(formData.get("calculatorSurface") ?? ""),
     contributionCents: Number(formData.get("contributionCents")),
     thresholdCents: Number(formData.get("thresholdCents")),
     valueRatio: String(formData.get("valueRatio") ?? ""),
@@ -50,12 +53,7 @@ export async function GET() {
     {
       ok: true,
       policy: MPGF_PUBLIC_GOODS_PIVOTALITY_POLICY,
-      allowedSurfaces: [
-        "advanced_explainer_page",
-        "shadow_simulation",
-        "post_round_educational_analysis",
-        "labeled_project_card_educational_drawer",
-      ],
+      allowedSurfaces: MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES,
       forbiddenLiveKeys: MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS,
       isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
       sampleInput: SAMPLE_INPUT,

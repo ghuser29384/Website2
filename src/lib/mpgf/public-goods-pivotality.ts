@@ -4,6 +4,13 @@ export const MPGF_PUBLIC_GOODS_PIVOTALITY_POLICY =
 export const MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE =
   "This is a simplified model. It does not use live sealed-round data, does not estimate whether you are actually pivotal, and does not affect your pledge or the round clearing.";
 
+export const MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES = [
+  "advanced_explainer",
+  "shadow_simulation",
+  "post_round_analysis",
+  "project_card_educational_drawer",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS = [
   "roundId",
   "projectId",
@@ -11,16 +18,23 @@ export const MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS = [
   "commonGroundBudgetId",
   "conditionalTradeIntentId",
   "liveThresholdCents",
+  "liveThresholdGapCents",
   "liveCounterpartyGapCents",
+  "liveCounterpartyVolumeGapCents",
   "liveSupporterCount",
   "liveActiveClusterCount",
   "liveSuccessWithoutMe",
+  "liveSuccessWithoutMeProbability",
+  "liveRoundProgress",
+  "platformEstimatedPDecisive",
+  "platformGeneratedDecisiveProbability",
 ] as const;
 
 const DECIMAL_SCALE = BigInt(1_000_000);
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
 
 export interface MpgfPivotalityCalculatorInput {
+  calculatorSurface: MpgfPivotalityCalculatorSurface;
   contributionCents: number;
   thresholdCents: number;
   valueRatio: string;
@@ -29,6 +43,9 @@ export interface MpgfPivotalityCalculatorInput {
   signerOnlyRewardValue?: string;
   nonDecisiveExtraFundingValueFraction?: string;
 }
+
+export type MpgfPivotalityCalculatorSurface =
+  typeof MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES[number];
 
 export type MpgfPivotalityResultCode =
   | "invalid"
@@ -44,6 +61,7 @@ export interface MpgfPivotalityCalculatorResult {
   requiredPDecisiveScaled: string | null;
   requiredPDecisivePercent: string | null;
   userEstimatedPDecisivePercent: string | null;
+  calculatorSurface: MpgfPivotalityCalculatorSurface | null;
   resultCode: MpgfPivotalityResultCode;
   interpretation: string;
   isolationNotice: typeof MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE;
@@ -106,6 +124,7 @@ function invalidResult(blockers: string[]): MpgfPivotalityCalculatorResult {
     requiredPDecisiveScaled: null,
     requiredPDecisivePercent: null,
     userEstimatedPDecisivePercent: null,
+    calculatorSurface: null,
     resultCode: "invalid",
     interpretation: "The calculator inputs are invalid under the fixed-point validation rules.",
     isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
@@ -127,6 +146,16 @@ export function evaluateMpgfPivotalityCalculator(
     if (Object.prototype.hasOwnProperty.call(input, key)) {
       blockers.push(`pivotality_forbidden_live_key_${key}`);
     }
+  }
+
+  const calculatorSurface = input.calculatorSurface;
+  if (
+    typeof calculatorSurface !== "string" ||
+    !MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES.includes(
+      calculatorSurface as MpgfPivotalityCalculatorSurface,
+    )
+  ) {
+    blockers.push("pivotality_calculator_surface_invalid");
   }
 
   const contributionCents = input.contributionCents;
@@ -211,6 +240,7 @@ export function evaluateMpgfPivotalityCalculator(
       requiredPDecisiveScaled: null,
       requiredPDecisivePercent: null,
       userEstimatedPDecisivePercent: scaledPercent(userEstimatedPDecisive.scaled),
+      calculatorSurface: calculatorSurface as MpgfPivotalityCalculatorSurface,
       resultCode: "impossible_under_model",
       interpretation:
         "Under these inputs, being decisive is not enough to make the pledge best by this simplified model.",
@@ -242,6 +272,7 @@ export function evaluateMpgfPivotalityCalculator(
     requiredPDecisiveScaled: requiredPDecisive.toString(),
     requiredPDecisivePercent: scaledPercent(requiredPDecisive),
     userEstimatedPDecisivePercent: scaledPercent(userEstimatedPDecisive.scaled),
+    calculatorSurface: calculatorSurface as MpgfPivotalityCalculatorSurface,
     resultCode,
     interpretation,
     isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,

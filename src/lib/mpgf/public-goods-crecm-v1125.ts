@@ -33,6 +33,17 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_THRESHOLD_FAMILY_FAILURE_REASONS = [
   "counterparty_volume_shortfall",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_CLAIMANT_CONFLICT_STATES = [
+  "no_conflict",
+  "project_proposer",
+  "recipient_affiliate",
+  "fiscal_host_affiliate",
+  "sponsor_affiliate",
+  "reviewer_affiliate",
+  "same_control_affiliate",
+  "unknown",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_ELIGIBILITY_FIELDS = [
   "scopeValidMoralPublicGood",
   "destinationRouteValid",
@@ -236,6 +247,17 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_CONTRIBUTOR_BENEFIT_KINDS = [
   "impact_certificate",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_COUNTERPARTY_VOLUME_SOURCES = [
+  "net_recipient_public_good_credit",
+  "sponsor_funds",
+  "platform_funds",
+  "self_funded",
+  "fee",
+  "success_reward",
+  "coordination_credit",
+  "impact_certificate",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_COORDINATION_CREDIT_KINDS = [
   "future_coordination_access",
   "public_recognition",
@@ -328,6 +350,9 @@ export type MpgfCrecConditionalIntentState =
 export type MpgfCrecConditionalIntentAuthorizationState =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_CONDITIONAL_INTENT_AUTHORIZATION_STATES>;
 
+export type MpgfCrecCounterpartyVolumeSource =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_COUNTERPARTY_VOLUME_SOURCES>;
+
 export type MpgfCrecPaymentSnapshotKind =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PAYMENT_SNAPSHOT_KINDS>;
 
@@ -339,6 +364,9 @@ export type MpgfCrecSponsorBackingState =
 
 export type MpgfCrecThresholdFamilyFailureReason =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_THRESHOLD_FAMILY_FAILURE_REASONS>;
+
+export type MpgfCrecFailureBonusClaimantConflictState =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_CLAIMANT_CONFLICT_STATES>;
 
 export type MpgfCrecProjectEligibilityField =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_ELIGIBILITY_FIELDS>;
@@ -661,6 +689,8 @@ export interface MpgfCrecDeploymentExposureCapResult {
   eligible: boolean;
   blockers: string[];
   cappedGrossExposureCents: number;
+  bindingGrossExposureCents: number;
+  shadowPreviewGrossExposureCents: number;
   bindingOutputAllowed: boolean;
   shadowOnly: boolean;
 }
@@ -1021,6 +1051,46 @@ export interface MpgfCrecConditionalIntentAllocationResult {
   rowFailureCodes: string[];
 }
 
+export interface MpgfCrecCounterpartyVolumeCandidateRow {
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  counterpartyParticipantId: string;
+  counterpartyBucketId: string;
+  counterpartyVolumeSource: MpgfCrecCounterpartyVolumeSource;
+  netRecipientDisbursedCents: number;
+  matchEligibleCents: number;
+  counterpartyHumanVerified: boolean;
+  counterpartySybilRiskState: MpgfCrecIdentityRiskState;
+  counterpartyCollusionRiskState: MpgfCrecIdentityRiskState;
+  participantLinkedAccountClusterId: string;
+  counterpartyLinkedAccountClusterId: string;
+  participantSamePaymentMethodClusterId: string;
+  counterpartySamePaymentMethodClusterId: string;
+  participantSameControlEntityId: string;
+  counterpartySameControlEntityId: string;
+}
+
+export interface MpgfCrecCounterpartyVolumeSatisfactionInput {
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  projectBucketId: string;
+  conditionalIntentMinCounterpartyVolumeCents: unknown;
+  acceptableCounterBucketIds: unknown;
+  frozenReciprocalCounterBucketIds: unknown;
+  rows: unknown;
+}
+
+export interface MpgfCrecCounterpartyVolumeSatisfactionResult extends MpgfCrecValidationResult {
+  conditionalIntentMinCounterpartyVolumeCents: number;
+  validatedCounterBucketIds: string[];
+  countedCounterpartyVolumeCents: number;
+  counterpartyVolumeSatisfied: boolean;
+  countedCounterpartyParticipantIds: string[];
+  excludedRowCodes: string[];
+}
+
 export interface MpgfCrecAllocatorStateInput {
   roundId: string;
   participantId: string;
@@ -1299,6 +1369,33 @@ export interface MpgfCrecSponsorBackingResult {
   blockers: string[];
 }
 
+export interface MpgfCrecFailureBonusClaimantConflictSnapshot {
+  id: string;
+  snapshotKind: "failure_bonus_claimant_conflict";
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  commonGroundBudgetId: string;
+  conditionalTradeIntentId: string;
+  rulebookHash: string;
+  failureBonusPolicyVersion: string;
+  sourceCutoffAt: string;
+  conflictState: MpgfCrecFailureBonusClaimantConflictState;
+  createdAt: string;
+  snapshotHash: string;
+}
+
+export interface MpgfCrecFailureBonusClaimantConflictSnapshotExpectedContext {
+  roundId: string;
+  projectId: string;
+  participantId: string;
+  commonGroundBudgetId: string;
+  conditionalTradeIntentId: string;
+  rulebookHash: string;
+  failureBonusPolicyVersion: string;
+  sourceCutoffAt: string;
+}
+
 export interface MpgfCrecFailureBonusEligibilityInput {
   roundId: string;
   projectId: string;
@@ -1322,7 +1419,11 @@ export interface MpgfCrecFailureBonusEligibilityInput {
   roundFailureBonusBudgetCents: number;
   backedFailureBonusPoolCents: number;
   totalSponsorBudgetCents: number;
-  claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  claimantConflictSnapshotEligible: boolean;
+  claimantConflictSnapshotId: string;
+  claimantConflictSnapshotHash: string;
+  claimantConflictSourceCutoff: string;
+  claimantConflictState: MpgfCrecFailureBonusClaimantConflictState;
 }
 
 export interface MpgfCrecFailureBonusEligibilityResult {
@@ -1352,8 +1453,9 @@ export interface MpgfCrecFailureBonusClaimRecord {
   clearingInputBundleHash: string;
   paymentCommitmentSnapshotHash: string;
   projectRoundEligibilitySnapshotHash: string;
+  claimantConflictSnapshotId: string;
   claimantConflictSnapshotHash: string;
-  claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  claimantConflictState: MpgfCrecFailureBonusClaimantConflictState;
   claimantConflictSourceCutoff: string;
   earlyFailureBonusCutoff: string;
   paymentMethodSavedAt: string;
@@ -1408,8 +1510,9 @@ export interface MpgfCrecFailureBonusClaimCreationInput {
   clearingInputBundleHash: string;
   paymentCommitmentSnapshotHash: string;
   projectRoundEligibilitySnapshotHash: string;
+  claimantConflictSnapshotId: string;
   claimantConflictSnapshotHash: string;
-  claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
+  claimantConflictState: MpgfCrecFailureBonusClaimantConflictState;
   claimantConflictSourceCutoff: string;
   earlyFailureBonusCutoff: string;
   paymentMethodSavedAt: string;
@@ -2287,6 +2390,8 @@ export function capMpgfCrecDeploymentGrossExposure(
       eligible: blockers.length === 0,
       blockers,
       cappedGrossExposureCents: 0,
+      bindingGrossExposureCents: 0,
+      shadowPreviewGrossExposureCents: blockers.length === 0 ? input.requestedGrossExposureCents : 0,
       bindingOutputAllowed: false,
       shadowOnly: true,
     };
@@ -2299,6 +2404,8 @@ export function capMpgfCrecDeploymentGrossExposure(
       eligible: blockers.length === 0,
       blockers,
       cappedGrossExposureCents: blockers.length === 0 ? input.requestedGrossExposureCents : 0,
+      bindingGrossExposureCents: blockers.length === 0 ? input.requestedGrossExposureCents : 0,
+      shadowPreviewGrossExposureCents: 0,
       bindingOutputAllowed: blockers.length === 0,
       shadowOnly: false,
     };
@@ -2316,19 +2423,23 @@ export function capMpgfCrecDeploymentGrossExposure(
     isNonNegativeSafeIntegerCents(input.remainingParticipantDeploymentExposureCents),
   );
 
+  const cappedGrossExposureCents =
+    blockers.length === 0
+      ? minMpgfCrecNonNegativeSafeInteger(
+          input.requestedGrossExposureCents,
+          input.pilotMaxRoundGrossExposureCents as number,
+          input.pilotMaxParticipantGrossExposureCents as number,
+          input.remainingRoundDeploymentExposureCents as number,
+          input.remainingParticipantDeploymentExposureCents as number,
+        )
+      : 0;
+
   return {
     eligible: blockers.length === 0,
     blockers,
-    cappedGrossExposureCents:
-      blockers.length === 0
-        ? minMpgfCrecNonNegativeSafeInteger(
-            input.requestedGrossExposureCents,
-            input.pilotMaxRoundGrossExposureCents as number,
-            input.pilotMaxParticipantGrossExposureCents as number,
-            input.remainingRoundDeploymentExposureCents as number,
-            input.remainingParticipantDeploymentExposureCents as number,
-          )
-        : 0,
+    cappedGrossExposureCents,
+    bindingGrossExposureCents: cappedGrossExposureCents,
+    shadowPreviewGrossExposureCents: 0,
     bindingOutputAllowed: blockers.length === 0,
     shadowOnly: false,
   };
@@ -2853,9 +2964,16 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
   selectedFeeQuoteIds: unknown,
   expected: MpgfCrecFeeQuoteExpectedContext & {
     backedFeeSupportPoolCents: number;
+    roundCloseBundleEligible: boolean;
   },
 ): MpgfCrecSponsorPaidFeeSupportDemandResult {
   const blockers: string[] = [];
+
+  addBlocker(
+    blockers,
+    "fee_support_round_close_bundle_not_eligible",
+    expected.roundCloseBundleEligible === true,
+  );
 
   if (!Array.isArray(feeQuotes)) {
     return {
@@ -2863,7 +2981,7 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
       selectedFeeQuoteCount: 0,
       demandCents: 0,
       demandCentsExact: "0",
-      blockers: ["fee_quote_rows_not_array"],
+      blockers: [...blockers, "fee_quote_rows_not_array"],
     };
   }
 
@@ -2873,7 +2991,7 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
       selectedFeeQuoteCount: 0,
       demandCents: 0,
       demandCentsExact: "0",
-      blockers: ["selected_fee_quote_ids_invalid"],
+      blockers: [...blockers, "selected_fee_quote_ids_invalid"],
     };
   }
 
@@ -3867,6 +3985,178 @@ export function resolveMpgfCrecConditionalIntentAllocationInputs(
     exposesCounterpartyBuckets: conditionalIntentEligible && acceptableCounterBucketIds.length > 0,
     failureBonusEligibilityInputsAllowed: conditionalIntentEligible,
     rowFailureCodes,
+  };
+}
+
+function isMpgfCrecCounterpartyVolumeSource(value: unknown): value is MpgfCrecCounterpartyVolumeSource {
+  return MPGF_PUBLIC_GOODS_CRECM_V1125_COUNTERPARTY_VOLUME_SOURCES.includes(
+    value as MpgfCrecCounterpartyVolumeSource,
+  );
+}
+
+function isMpgfCrecCounterpartyVolumeCandidateRow(
+  row: unknown,
+): row is MpgfCrecCounterpartyVolumeCandidateRow {
+  if (row == null || typeof row !== "object" || Array.isArray(row)) {
+    return false;
+  }
+
+  const candidate = row as MpgfCrecCounterpartyVolumeCandidateRow;
+
+  return (
+    isMpgfCrecNonEmptyTrimStableString(candidate.roundId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.projectId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.participantId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.counterpartyParticipantId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.counterpartyBucketId) &&
+    isMpgfCrecCounterpartyVolumeSource(candidate.counterpartyVolumeSource) &&
+    isPositiveSafeIntegerCents(candidate.netRecipientDisbursedCents) &&
+    isPositiveSafeIntegerCents(candidate.matchEligibleCents) &&
+    typeof candidate.counterpartyHumanVerified === "boolean" &&
+    MPGF_PUBLIC_GOODS_CRECM_V1125_IDENTITY_RISK_STATES.includes(candidate.counterpartySybilRiskState) &&
+    MPGF_PUBLIC_GOODS_CRECM_V1125_IDENTITY_RISK_STATES.includes(candidate.counterpartyCollusionRiskState) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.participantLinkedAccountClusterId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.counterpartyLinkedAccountClusterId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.participantSamePaymentMethodClusterId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.counterpartySamePaymentMethodClusterId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.participantSameControlEntityId) &&
+    isMpgfCrecNonEmptyTrimStableString(candidate.counterpartySameControlEntityId)
+  );
+}
+
+export function evaluateMpgfCrecCounterpartyVolumeSatisfaction(
+  input: MpgfCrecCounterpartyVolumeSatisfactionInput,
+): MpgfCrecCounterpartyVolumeSatisfactionResult {
+  const blockers: string[] = [];
+  const excludedRowCodes: string[] = [];
+
+  addBlocker(blockers, "counterparty_volume_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.roundId));
+  addBlocker(blockers, "counterparty_volume_project_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.projectId));
+  addBlocker(blockers, "counterparty_volume_participant_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.participantId));
+  addBlocker(blockers, "counterparty_volume_project_bucket_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.projectBucketId));
+
+  const thresholdValid = isPositiveSafeIntegerCents(input.conditionalIntentMinCounterpartyVolumeCents);
+  addBlocker(blockers, "counterparty_volume_threshold_invalid", thresholdValid);
+
+  const acceptableCounterBucketIdsValid = isTrimStableStringArray(input.acceptableCounterBucketIds);
+  const frozenReciprocalCounterBucketIdsValid = isTrimStableStringArray(input.frozenReciprocalCounterBucketIds);
+  addBlocker(blockers, "counterparty_volume_acceptable_buckets_invalid", acceptableCounterBucketIdsValid);
+  addBlocker(blockers, "counterparty_volume_frozen_reciprocal_buckets_invalid", frozenReciprocalCounterBucketIdsValid);
+  addBlocker(blockers, "counterparty_volume_rows_not_array", Array.isArray(input.rows));
+
+  const validatedCounterBucketIds =
+    acceptableCounterBucketIdsValid && frozenReciprocalCounterBucketIdsValid
+      ? intersectMpgfCrecTrimStableStringArrays(
+          input.acceptableCounterBucketIds,
+          input.frozenReciprocalCounterBucketIds,
+        ).filter((bucketId) => bucketId !== input.projectBucketId)
+      : [];
+
+  const countedCounterpartyParticipantIds = new Set<string>();
+  const countedCents: number[] = [];
+
+  if (blockers.length === 0 && Array.isArray(input.rows)) {
+    input.rows.forEach((row, index) => {
+      if (!isMpgfCrecCounterpartyVolumeCandidateRow(row)) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_malformed`);
+        return;
+      }
+
+      if (
+        row.roundId !== input.roundId ||
+        row.projectId !== input.projectId ||
+        row.participantId !== input.participantId
+      ) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_wrong_context`);
+        return;
+      }
+
+      if (row.counterpartyParticipantId === input.participantId) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_self_match`);
+        return;
+      }
+
+      if (row.counterpartyVolumeSource !== "net_recipient_public_good_credit") {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_non_public_good_credit_source`);
+        return;
+      }
+
+      if (row.counterpartyBucketId === input.projectBucketId) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_same_bucket`);
+        return;
+      }
+
+      if (!validatedCounterBucketIds.includes(row.counterpartyBucketId)) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_bucket_not_frozen_reciprocal`);
+        return;
+      }
+
+      if (row.counterpartyHumanVerified !== true) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_counterparty_identity_not_verified`);
+        return;
+      }
+
+      if (row.counterpartySybilRiskState !== "clear") {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_counterparty_sybil_not_clear`);
+        return;
+      }
+
+      if (row.counterpartyCollusionRiskState !== "clear") {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_counterparty_collusion_not_clear`);
+        return;
+      }
+
+      if (row.participantLinkedAccountClusterId === row.counterpartyLinkedAccountClusterId) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_linked_account_cluster`);
+        return;
+      }
+
+      if (row.participantSamePaymentMethodClusterId === row.counterpartySamePaymentMethodClusterId) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_same_payment_method_cluster`);
+        return;
+      }
+
+      if (row.participantSameControlEntityId === row.counterpartySameControlEntityId) {
+        excludedRowCodes.push(`counterparty_volume_row_${index}_same_control_entity`);
+        return;
+      }
+
+      countedCounterpartyParticipantIds.add(row.counterpartyParticipantId);
+      countedCents.push(
+        minMpgfCrecNonNegativeSafeInteger(
+          row.netRecipientDisbursedCents,
+          row.matchEligibleCents,
+        ),
+      );
+    });
+  }
+
+  const countedCounterpartyVolumeExact = sumMpgfCrecNonNegativeBigInt(countedCents);
+  const countedCounterpartyVolumeCents =
+    countedCounterpartyVolumeExact <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(countedCounterpartyVolumeExact)
+      : 0;
+
+  if (countedCounterpartyVolumeExact > BigInt(Number.MAX_SAFE_INTEGER)) {
+    excludedRowCodes.push("counterparty_volume_aggregate_unsafe_zeroed");
+  }
+
+  const conditionalIntentMinCounterpartyVolumeCents = thresholdValid
+    ? Number(input.conditionalIntentMinCounterpartyVolumeCents)
+    : 0;
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    conditionalIntentMinCounterpartyVolumeCents,
+    validatedCounterBucketIds,
+    countedCounterpartyVolumeCents,
+    counterpartyVolumeSatisfied:
+      blockers.length === 0 &&
+      countedCounterpartyVolumeCents >= conditionalIntentMinCounterpartyVolumeCents,
+    countedCounterpartyParticipantIds: [...countedCounterpartyParticipantIds]
+      .sort((left, right) => left.localeCompare(right)),
+    excludedRowCodes,
   };
 }
 
@@ -4907,6 +5197,76 @@ export function buildMpgfCrecFailureBonusClaimKey(input: {
   return `${input.roundId}:${input.projectId}:${input.participantId}:${input.conditionalTradeIntentId}`;
 }
 
+function failureBonusClaimantConflictSnapshotHashPayload(
+  snapshot: Omit<MpgfCrecFailureBonusClaimantConflictSnapshot, "snapshotHash">,
+) {
+  return {
+    id: snapshot.id,
+    snapshotKind: snapshot.snapshotKind,
+    roundId: snapshot.roundId,
+    projectId: snapshot.projectId,
+    participantId: snapshot.participantId,
+    commonGroundBudgetId: snapshot.commonGroundBudgetId,
+    conditionalTradeIntentId: snapshot.conditionalTradeIntentId,
+    rulebookHash: snapshot.rulebookHash,
+    failureBonusPolicyVersion: snapshot.failureBonusPolicyVersion,
+    sourceCutoffAt: snapshot.sourceCutoffAt,
+    conflictState: snapshot.conflictState,
+    createdAt: snapshot.createdAt,
+  };
+}
+
+export function buildMpgfCrecFailureBonusClaimantConflictSnapshotHash(
+  snapshot: Omit<MpgfCrecFailureBonusClaimantConflictSnapshot, "snapshotHash">,
+) {
+  return hashMpgfCrecV1125Value(failureBonusClaimantConflictSnapshotHashPayload(snapshot));
+}
+
+export function validateMpgfCrecFailureBonusClaimantConflictSnapshot(
+  snapshot: MpgfCrecFailureBonusClaimantConflictSnapshot | null | undefined,
+  expected: MpgfCrecFailureBonusClaimantConflictSnapshotExpectedContext,
+) {
+  const blockers: string[] = [];
+
+  if (snapshot == null) {
+    return validationResult(["failure_bonus_claimant_conflict_snapshot_missing"]);
+  }
+
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.id));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_kind_invalid", snapshot.snapshotKind === "failure_bonus_claimant_conflict");
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_round_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.roundId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_round", snapshot.roundId === expected.roundId);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_project_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.projectId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_project", snapshot.projectId === expected.projectId);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_participant_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.participantId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_participant", snapshot.participantId === expected.participantId);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_budget_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.commonGroundBudgetId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_budget", snapshot.commonGroundBudgetId === expected.commonGroundBudgetId);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_intent_id_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.conditionalTradeIntentId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_intent", snapshot.conditionalTradeIntentId === expected.conditionalTradeIntentId);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_rulebook_hash_invalid", isMpgfCrecCanonicalHash(snapshot.rulebookHash));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_rulebook_hash", snapshot.rulebookHash === expected.rulebookHash);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_policy_version_invalid", isMpgfCrecNonEmptyTrimStableString(snapshot.failureBonusPolicyVersion));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_wrong_policy_version", snapshot.failureBonusPolicyVersion === expected.failureBonusPolicyVersion);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_source_cutoff_invalid", isMpgfCrecCanonicalUtcTimestamp(snapshot.sourceCutoffAt));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_source_cutoff_mismatch", snapshot.sourceCutoffAt === expected.sourceCutoffAt);
+  addBlocker(
+    blockers,
+    "failure_bonus_claimant_conflict_snapshot_state_invalid",
+    MPGF_PUBLIC_GOODS_CRECM_V1125_FAILURE_BONUS_CLAIMANT_CONFLICT_STATES.includes(snapshot.conflictState),
+  );
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_not_clear", snapshot.conflictState === "no_conflict");
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_created_at_invalid", isMpgfCrecCanonicalUtcTimestamp(snapshot.createdAt));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_hash_invalid", isMpgfCrecCanonicalHash(snapshot.snapshotHash));
+  addBlocker(
+    blockers,
+    "failure_bonus_claimant_conflict_snapshot_hash_mismatch",
+    snapshot.snapshotHash === buildMpgfCrecFailureBonusClaimantConflictSnapshotHash(snapshot),
+  );
+
+  return validationResult(blockers);
+}
+
 function failureBonusEligibilityHashPayload(input: MpgfCrecFailureBonusEligibilityInput) {
   return {
     roundId: input.roundId,
@@ -4924,6 +5284,9 @@ function failureBonusEligibilityHashPayload(input: MpgfCrecFailureBonusEligibili
     participantRoundFailureBonusCapCents: input.participantRoundFailureBonusCapCents,
     roundFailureBonusBudgetCents: input.roundFailureBonusBudgetCents,
     backedFailureBonusPoolCents: input.backedFailureBonusPoolCents,
+    claimantConflictSnapshotId: input.claimantConflictSnapshotId,
+    claimantConflictSnapshotHash: input.claimantConflictSnapshotHash,
+    claimantConflictSourceCutoff: input.claimantConflictSourceCutoff,
     claimantConflictState: input.claimantConflictState,
   };
 }
@@ -4963,6 +5326,14 @@ export function evaluateMpgfCrecFailureBonusEligibility(
   addBlocker(blockers, "failure_bonus_row_uniqueness_hash_invalid", isMpgfCrecCanonicalHash(input.rowUniquenessHash));
   addBlocker(blockers, "failure_bonus_payment_snapshot_ineligible", input.paymentSnapshotEligible === true);
   addBlocker(blockers, "failure_bonus_payment_snapshot_hash_invalid", isMpgfCrecCanonicalHash(input.paymentCommitmentSnapshotHash));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_ineligible", input.claimantConflictSnapshotEligible === true);
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_id_invalid", isMpgfCrecNonEmptyTrimStableString(input.claimantConflictSnapshotId));
+  addBlocker(blockers, "failure_bonus_claimant_conflict_snapshot_hash_invalid", isMpgfCrecCanonicalHash(input.claimantConflictSnapshotHash));
+  addBlocker(
+    blockers,
+    "failure_bonus_claimant_conflict_source_cutoff_invalid",
+    isMpgfCrecCanonicalUtcTimestamp(input.claimantConflictSourceCutoff),
+  );
   addBlocker(blockers, "failure_bonus_claimant_conflict_not_clear", input.claimantConflictState === "no_conflict");
   addBlocker(blockers, "failure_bonus_failed_qualified_cents_invalid", isPositiveSafeIntegerCents(input.failedQualifiedMatchEligibleCents));
   addBlocker(blockers, "failure_bonus_participant_cap_invalid", isPositiveSafeIntegerCents(input.participantRoundFailureBonusCapCents));
@@ -5016,6 +5387,7 @@ function failureBonusClaimAuditHashPayload(claim: MpgfCrecFailureBonusClaimRecor
     clearingInputBundleHash: claim.clearingInputBundleHash,
     paymentCommitmentSnapshotHash: claim.paymentCommitmentSnapshotHash,
     projectRoundEligibilitySnapshotHash: claim.projectRoundEligibilitySnapshotHash,
+    claimantConflictSnapshotId: claim.claimantConflictSnapshotId,
     claimantConflictSnapshotHash: claim.claimantConflictSnapshotHash,
     claimantConflictState: claim.claimantConflictState,
     claimantConflictSourceCutoff: claim.claimantConflictSourceCutoff,
@@ -5104,6 +5476,7 @@ function validateMpgfCrecFailureBonusClaimRecord(
     `${prefix}_project_eligibility_snapshot_hash_invalid`,
     isMpgfCrecCanonicalHash(claim.projectRoundEligibilitySnapshotHash),
   );
+  addBlocker(blockers, `${prefix}_claimant_conflict_snapshot_id_invalid`, isMpgfCrecNonEmptyTrimStableString(claim.claimantConflictSnapshotId));
   addBlocker(blockers, `${prefix}_claimant_conflict_snapshot_hash_invalid`, isMpgfCrecCanonicalHash(claim.claimantConflictSnapshotHash));
   addBlocker(blockers, `${prefix}_claimant_conflict_not_clear`, claim.claimantConflictState === "no_conflict");
   addBlocker(
@@ -5261,6 +5634,7 @@ function buildMpgfCrecFailureBonusClaimFromCreationInput(
     clearingInputBundleHash: input.clearingInputBundleHash,
     paymentCommitmentSnapshotHash: input.paymentCommitmentSnapshotHash,
     projectRoundEligibilitySnapshotHash: input.projectRoundEligibilitySnapshotHash,
+    claimantConflictSnapshotId: input.claimantConflictSnapshotId,
     claimantConflictSnapshotHash: input.claimantConflictSnapshotHash,
     claimantConflictState: input.claimantConflictState,
     claimantConflictSourceCutoff: input.claimantConflictSourceCutoff,
@@ -5293,6 +5667,7 @@ function failureBonusClaimCreationContextMatches(
     existing.clearingInputBundleHash === candidate.clearingInputBundleHash &&
     existing.paymentCommitmentSnapshotHash === candidate.paymentCommitmentSnapshotHash &&
     existing.projectRoundEligibilitySnapshotHash === candidate.projectRoundEligibilitySnapshotHash &&
+    existing.claimantConflictSnapshotId === candidate.claimantConflictSnapshotId &&
     existing.claimantConflictSnapshotHash === candidate.claimantConflictSnapshotHash &&
     existing.claimantConflictState === candidate.claimantConflictState &&
     existing.claimantConflictSourceCutoff === candidate.claimantConflictSourceCutoff &&
@@ -5487,6 +5862,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       cappedPilotExposureUsesFrozenCapsAndRemainingMaps: true,
       remainingExposureMapsCannotRaiseFrozenPilotCaps: true,
       shadowBindingExposureCentsAlwaysZero: true,
+      shadowPreviewExposureCentsCanSimulateRequestedGross: true,
     },
     feeQuotes: {
       feePolicyHashBoundQuoteHashRequired: true,
@@ -5495,6 +5871,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       donorDeductedNetEqualsGrossMinusFee: true,
       sponsorPaidNetEqualsGrossAndRequiresFeeSupportPool: true,
       selectedSponsorPaidFeeIdsMustResolveExactlyOnce: true,
+      sponsorPaidFeeSupportRequiresEligibleRoundCloseBundle: true,
     },
     projectRoundEligibilitySnapshots: {
       snapshotKind: "round_open" as const,
@@ -5638,6 +6015,16 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       exposesFallbackAuthorityOnlyWhenEligible: true,
       exposesAuthorizationAuthorityOnlyWhenEligible: true,
     },
+    counterpartyVolumeSatisfaction: {
+      thresholdSource: "ConditionalTradeIntent.minCounterpartyVolumeCents" as const,
+      validatesFrozenReciprocalDistinctBucketIntersection: true,
+      sameBucketRowsNeverCount: true,
+      countsOnlyNetRecipientDisbursedMatchEligiblePublicGoodCredit: true,
+      excludesSponsorPlatformFeeRewardCreditCertificateRows: true,
+      excludesSelfLinkedAccountSamePaymentClusterAndSameControlRows: true,
+      requiresCounterpartyHumanVerifiedSybilClearCollusionClear: true,
+      malformedRowsDoNotCount: true,
+    },
     allocatorStateInputGating: {
       participantRemainingBudgetKey: "(roundId,participantId)" as const,
       projectRemainingCapKey: "(roundId,projectId)" as const,
@@ -5702,6 +6089,8 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       thresholdFamilyFailureReasonsOnly: MPGF_PUBLIC_GOODS_CRECM_V1125_THRESHOLD_FAMILY_FAILURE_REASONS,
       lockedEligibleBundleAndEarlyPaymentSnapshotRequired: true,
       claimantConflictMustBeNoConflict: true,
+      claimantConflictSnapshotBindsExactPayoutContext: true,
+      claimantConflictSnapshotIdStoredOnClaims: true,
       sponsorBudgetFivePercentCapUsesIntegerArithmetic: true,
       idempotentClaimKey: "(roundId,projectId,participantId,conditionalTradeIntentId)" as const,
       claimCreationInitializesUnsettledDefaults: true,

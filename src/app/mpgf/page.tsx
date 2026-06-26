@@ -64,6 +64,7 @@ export default async function MpgfPage() {
   });
   const roundBoardCardByCampaignId = new Map(roundBoardCards.map((card) => [card.campaignId, card]));
   const pivotalityExample = evaluateMpgfPivotalityCalculator({
+    calculatorSurface: "advanced_explainer",
     contributionCents: 5_000,
     thresholdCents: 50_000,
     valueRatio: "0.20",
@@ -421,6 +422,7 @@ export default async function MpgfPage() {
             className="panel stacked-form"
             method="post"
           >
+            <input name="calculatorSurface" type="hidden" value="advanced_explainer" />
             <label className="field">
               <span>Your possible contribution, x</span>
               <input min="1" name="contributionCents" type="number" defaultValue={5000} />

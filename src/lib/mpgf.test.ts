@@ -1921,7 +1921,10 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.roundMetadataGate.locksClearingMatchingAuthorizationAndFailureBonusWhenInvalid, true);
   assert.equal(report.clearingContract.paymentCommitmentSnapshots.exactCutoffBindingRequired, true);
   assert.equal(report.clearingContract.roundClearingInputBundle.bundleHashBindsSelectedBundleId, true);
+  assert.equal(report.clearingContract.deploymentAudits.shadowBindingExposureCentsAlwaysZero, true);
+  assert.equal(report.clearingContract.deploymentAudits.shadowPreviewExposureCentsCanSimulateRequestedGross, true);
   assert.equal(report.clearingContract.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
+  assert.equal(report.clearingContract.feeQuotes.sponsorPaidFeeSupportRequiresEligibleRoundCloseBundle, true);
   assert.equal(report.clearingContract.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
   assert.equal(report.clearingContract.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
   assert.equal(report.clearingContract.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
@@ -1948,6 +1951,18 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.supportStanceInputGating.wrongRowsExposeZeroCapsAndNoCounterpartyBuckets, true);
   assert.equal(report.clearingContract.conditionalIntentInputGating.missingInactiveOrWrongRowsAllocateZero, true);
   assert.equal(report.clearingContract.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(
+    report.clearingContract.counterpartyVolumeSatisfaction.thresholdSource,
+    "ConditionalTradeIntent.minCounterpartyVolumeCents",
+  );
+  assert.equal(
+    report.clearingContract.counterpartyVolumeSatisfaction.excludesSelfLinkedAccountSamePaymentClusterAndSameControlRows,
+    true,
+  );
+  assert.equal(
+    report.clearingContract.counterpartyVolumeSatisfaction.excludesSponsorPlatformFeeRewardCreditCertificateRows,
+    true,
+  );
   assert.equal(report.clearingContract.allocatorStateInputGating.participantRemainingBudgetKey, "(roundId,participantId)");
   assert.equal(report.clearingContract.allocatorStateInputGating.wrongRoundRowsResolveToZero, true);
   assert.equal(report.clearingContract.identityEligibilityInputGating.missingRowsResolveToZeroWeight, true);
@@ -1965,6 +1980,8 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(report.clearingContract.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
   assert.ok(report.clearingContract.failureBonus.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
+  assert.equal(report.clearingContract.failureBonus.claimantConflictSnapshotBindsExactPayoutContext, true);
+  assert.equal(report.clearingContract.failureBonus.claimantConflictSnapshotIdStoredOnClaims, true);
   assert.equal(report.hardGatesV1125.projectScopeState, "valid_moral_public_good");
   assert.equal(report.hardGatesV1125.externalityStateRequired, "clear");
   assert.equal(report.hardGatesV1125.baselineIntegrityStateRequired, "approved");
