@@ -8293,6 +8293,60 @@ export interface Database {
         };
         Relationships: [];
       };
+      baseline_witness_invites: {
+        Row: {
+          id: string;
+          participant_user_id: string;
+          pledge_swap_id: string | null;
+          purchase_envelope_type: string | null;
+          purchase_envelope_id: string | null;
+          participant_action_commitment_id: string | null;
+          invited_email_hash: string | null;
+          invited_phone_hash: string | null;
+          invite_token_hash: string;
+          invite_status: "pending" | "opened" | "submitted" | "declined" | "expired" | "revoked" | "reported" | "blocked";
+          participant_claimed_relationship: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other" | null;
+          action_template_id: string;
+          action_window_start_at: string;
+          action_window_end_at: string;
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_user_id: string;
+          pledge_swap_id?: string | null;
+          purchase_envelope_type?: string | null;
+          purchase_envelope_id?: string | null;
+          participant_action_commitment_id?: string | null;
+          invited_email_hash?: string | null;
+          invited_phone_hash?: string | null;
+          invite_token_hash: string;
+          invite_status?: "pending" | "opened" | "submitted" | "declined" | "expired" | "revoked" | "reported" | "blocked";
+          participant_claimed_relationship?: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other" | null;
+          action_template_id: string;
+          action_window_start_at: string;
+          action_window_end_at: string;
+          expires_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          pledge_swap_id?: string | null;
+          purchase_envelope_type?: string | null;
+          purchase_envelope_id?: string | null;
+          participant_action_commitment_id?: string | null;
+          invite_status?: "pending" | "opened" | "submitted" | "declined" | "expired" | "revoked" | "reported" | "blocked";
+          participant_claimed_relationship?: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other" | null;
+          action_template_id?: string;
+          action_window_start_at?: string;
+          action_window_end_at?: string;
+          expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       moral_trade_state_interpretation_policies: {
         Row: {
           id: string;
