@@ -225,6 +225,10 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(demoPayload.items.length, 0);
   assert.equal(externalCrecPayload.publicGoodsEntry?.resultRank, 1);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "Common Ground Budget");
+  assert.match(
+    publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
+    /Fund public goods only if enough different-view support joins/,
+  );
   assert.match(publicGoodSearchPayload.publicGoodsEntry?.summary ?? "", /No charge now/);
   assert.match(
     publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",

@@ -558,7 +558,7 @@ export function buildPublicGoodsEntryCard({
     mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
     summary:
-      "Fund moral public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes. This is a separate Public Goods Fund entry, not an ordinary offer listing.",
+      "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes. This is a separate Public Goods Fund entry, not an ordinary offer listing.",
     resultRank: 1,
     visibleForPublicGoodsIntent: publicGoodsIntent,
     countsAsLiveOffer: false,

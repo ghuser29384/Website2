@@ -42,9 +42,13 @@ export function MpgfRoundBoard({
       <div className="mpgf-pool-directory" aria-label="Public goods round board">
         {cards.map((card) => (
           <article className="mpgf-panel" key={card.campaignId}>
-            <p className="eyebrow">Sealed progress | {boardStatusLabel(card.status)}</p>
+            <p className="eyebrow">Sealed progress | {card.sealedProgressLabel}</p>
             <h3>{card.title}</h3>
             <dl className="mpgf-summary-grid" aria-label={`${card.title} round board metrics`}>
+              <div>
+                <dt>Qualitative progress</dt>
+                <dd>{card.sealedProgressLabel}</dd>
+              </div>
               <div>
                 <dt>Threshold rules</dt>
                 <dd>Published in round rules; exact live progress sealed before close</dd>
@@ -83,6 +87,7 @@ export function MpgfRoundBoard({
               </div>
             </div>
             <div className="tag-row">
+              <span className="badge badge-secondary">{boardStatusLabel(card.status)}</span>
               <span className="badge badge-secondary">Pivotal action: {card.pivotalActionLabel}</span>
               <span className="badge badge-secondary">Exact public aggregates after close</span>
               <span className="badge badge-secondary">{card.inviteActionLabel}</span>

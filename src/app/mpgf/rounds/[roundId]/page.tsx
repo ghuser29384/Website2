@@ -86,6 +86,36 @@ function sealedThresholdStatus(sealed: boolean, passed: boolean) {
   return sealed ? "sealed until close" : passed ? "passed" : "pending";
 }
 
+function qualitativeSealedProgressLabel({
+  reviewStatus,
+  sealed,
+  status,
+  thresholdPassed,
+}: {
+  reviewStatus: string;
+  sealed: boolean;
+  status: string;
+  thresholdPassed: boolean;
+}) {
+  if (!sealed && (status === "payable" || status === "finalized")) {
+    return "Closed; final audit available";
+  }
+
+  if (reviewStatus !== "approved" && reviewStatus !== "finalized") {
+    return "Review pending";
+  }
+
+  if (thresholdPassed) {
+    return "Review pending";
+  }
+
+  if (status === "threshold_pending") {
+    return "Needs more support";
+  }
+
+  return "Likely near threshold";
+}
+
 function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
   if (stance === "strong") {
     return "Fund this";
@@ -343,6 +373,12 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       directEligibleCents: publicNumber(campaign.directEligibleCents),
       estimatedBaseMatchCents: previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents,
       estimatedBonusCapCents: cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents,
+      qualitativeProgressLabel: qualitativeSealedProgressLabel({
+        reviewStatus: campaign.reviewStatus,
+        sealed: sealedProgressActive,
+        status: campaign.campaignStatus,
+        thresholdPassed: publicBoolean(campaign.thresholdPassed),
+      }),
       status: campaign.campaignStatus,
       thresholdDonors: campaign.thresholdDonors,
       title: campaign.title,
@@ -387,9 +423,13 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
         <div className="mpgf-pool-directory">
           {campaignUnlockMetrics.map((campaign) => (
             <article className="mpgf-panel" key={`unlock-${campaign.campaignId}`}>
-              <p className="eyebrow">{statusLabel(campaign.status)}</p>
+              <p className="eyebrow">{campaign.qualitativeProgressLabel}</p>
               <h3>{campaign.title}</h3>
               <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} top campaign funding metrics`}>
+                <div>
+                  <dt>Qualitative progress</dt>
+                  <dd>{campaign.qualitativeProgressLabel}</dd>
+                </div>
                 <div>
                   <dt>Verified direct</dt>
                   <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.directEligibleCents)))}</dd>
@@ -1210,12 +1250,19 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
               payable: allocationRow?.status === "payable",
               thresholdPassed: publicBoolean(campaign.thresholdPassed),
             });
+            const qualitativeProgressLabel = qualitativeSealedProgressLabel({
+              reviewStatus: campaign.reviewStatus,
+              sealed: sealedProgressActive,
+              status: campaign.campaignStatus,
+              thresholdPassed: publicBoolean(campaign.thresholdPassed),
+            });
 
             return (
               <article className="mpgf-panel" key={campaign.campaignId}>
-                <p className="eyebrow">{statusLabel(campaign.campaignStatus)}</p>
+                <p className="eyebrow">{qualitativeProgressLabel}</p>
                 <h3>{campaign.title}</h3>
                 <div className="tag-row">
+                  <span className="badge badge-secondary">Qualitative progress: {qualitativeProgressLabel}</span>
                   <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
                   <span className="badge badge-secondary">
                     Threshold {sealedThresholdStatus(sealedProgressActive, publicBoolean(campaign.thresholdPassed))}
@@ -1225,6 +1272,10 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   </span>
                 </div>
                 <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} headline funding metrics`}>
+                  <div>
+                    <dt>Qualitative progress</dt>
+                    <dd>{qualitativeProgressLabel}</dd>
+                  </div>
                   <div>
                     <dt>Verified direct contributions</dt>
                     <dd>{sealedProgressText(sealedProgressActive, formatUsd(publicNumber(campaign.directEligibleCents)))}</dd>

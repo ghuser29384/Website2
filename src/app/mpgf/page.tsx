@@ -62,6 +62,7 @@ export default async function MpgfPage() {
     campaigns: demoMpgfPublicGoodsCampaigns,
     viewerPresent: Boolean(viewer),
   });
+  const roundBoardCardByCampaignId = new Map(roundBoardCards.map((card) => [card.campaignId, card]));
   const pivotalityExample = evaluateMpgfPivotalityCalculator({
     contributionCents: 5_000,
     thresholdCents: 50_000,
@@ -319,52 +320,61 @@ export default async function MpgfPage() {
           </p>
         </div>
         <div className="mpgf-pool-directory">
-          {demoMpgfPublicGoodsCampaigns.map((campaign) => (
-            <article className="mpgf-panel" key={campaign.id}>
-              <p className="eyebrow">Sealed public preview</p>
-              <h2>{campaign.title}</h2>
-              <p>{campaign.publicSummary}</p>
-              <dl className="mpgf-summary-grid" aria-label={`${campaign.title} collective-action metrics`}>
-                <div>
-                  <dt>Public progress</dt>
-                  <dd>Sealed before close</dd>
+          {demoMpgfPublicGoodsCampaigns.map((campaign) => {
+            const sealedProgressLabel =
+              roundBoardCardByCampaignId.get(campaign.id)?.sealedProgressLabel ?? "Needs more support";
+
+            return (
+              <article className="mpgf-panel" key={campaign.id}>
+                <p className="eyebrow">Sealed public preview | {sealedProgressLabel}</p>
+                <h2>{campaign.title}</h2>
+                <p>{campaign.publicSummary}</p>
+                <dl className="mpgf-summary-grid" aria-label={`${campaign.title} collective-action metrics`}>
+                  <div>
+                    <dt>Qualitative progress</dt>
+                    <dd>{sealedProgressLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Public progress</dt>
+                    <dd>Sealed before close</dd>
+                  </div>
+                  <div>
+                    <dt>Supporter breadth</dt>
+                    <dd>Sealed before close</dd>
+                  </div>
+                  <div>
+                    <dt>Base match unlocked</dt>
+                    <dd>Shown after close in final reports</dd>
+                  </div>
+                  <div>
+                    <dt>Estimated bonus range</dt>
+                    <dd>Shown after close in final reports</dd>
+                  </div>
+                </dl>
+                <div className="mpgf-allocation-row">
+                  <div>
+                    <span>Amount threshold</span>
+                    <strong>Sealed before close</strong>
+                  </div>
                 </div>
-                <div>
-                  <dt>Supporter breadth</dt>
-                  <dd>Sealed before close</dd>
+                <div className="mpgf-allocation-row">
+                  <div>
+                    <span>Supporter threshold</span>
+                    <strong>Sealed before close</strong>
+                  </div>
                 </div>
-                <div>
-                  <dt>Base match unlocked</dt>
-                  <dd>Shown after close in final reports</dd>
+                <div className="tag-row">
+                  <span className="badge badge-secondary">
+                    Deadline {new Date(campaign.deadlineAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
                 </div>
-                <div>
-                  <dt>Estimated bonus range</dt>
-                  <dd>Shown after close in final reports</dd>
-                </div>
-              </dl>
-              <div className="mpgf-allocation-row">
-                <div>
-                  <span>Amount threshold</span>
-                  <strong>Sealed before close</strong>
-                </div>
-              </div>
-              <div className="mpgf-allocation-row">
-                <div>
-                  <span>Supporter threshold</span>
-                  <strong>Sealed before close</strong>
-                </div>
-              </div>
-              <div className="tag-row">
-                <span className="badge badge-secondary">
-                  Deadline {new Date(campaign.deadlineAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-                <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
-              </div>
-              <Link className="inline-link" href={`/mpgf/pools/${campaign.slug}`}>
-                View public proof path
-              </Link>
-            </article>
-          ))}
+                <Link className="inline-link" href={`/mpgf/pools/${campaign.slug}`}>
+                  View public proof path
+                </Link>
+              </article>
+            );
+          })}
         </div>
         <p className="mpgf-small">
           Round:{" "}

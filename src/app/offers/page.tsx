@@ -24,6 +24,8 @@ import {
 } from "@/lib/marketplace-seed-templates";
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { getMpgfCrecV1125AuditBundleApi } from "@/lib/mpgf/public-goods-crecm-route-contract";
+import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
 import { buildPublicGoodsEntryCard } from "@/lib/public-offers";
@@ -730,6 +732,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const seedTemplateCount: number = seedTemplates.length;
   const seedRoundCount = demoMpgfAssuranceRound.id ? 1 : 0;
   const seedRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}#common-ground-budget-preview`;
+  const publicGoodsRulebook = getMpgfPublicGoodsEcmRulebookReportApi(demoMpgfAssuranceRound.id);
+  const publicGoodsAuditBundle = getMpgfCrecV1125AuditBundleApi(demoMpgfAssuranceRound.id);
+  const publicGoodsRulebookHref = `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/rulebook`;
+  const publicGoodsAuditBundleHref = publicGoodsAuditBundle
+    ? `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/audit-bundle`
+    : null;
   const createTemplateHref = viewer ? "/offers/new" : "/signup?returnTo=/offers/new";
   const createDonationOffsetTemplateHref = viewer
     ? "/offers/new?mode=offset"
@@ -1174,7 +1182,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </p>
                 <p>
                   {publicGoodsEntry?.summary ??
-                    "Fund moral public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
+                    "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
                 </p>
                 <p>
                   Projects must pass threshold, review, challenge, payment, and authorization
@@ -1229,6 +1237,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <dd>open preview</dd>
               </div>
               <div>
+                <dt>Qualitative progress</dt>
+                <dd>Needs more support</dd>
+              </div>
+              <div>
                 <dt>Candidate projects</dt>
                 <dd>{seedRoundProjects.length}</dd>
               </div>
@@ -1237,8 +1249,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <dd>{demoMpgfMatchPool.budgetCents > 0 ? "backed" : "not backed"}</dd>
               </div>
               <div>
-                <dt>Capture</dt>
-                <dd>disabled in preview</dd>
+                <dt>Capture enabled</dt>
+                <dd>disabled</dd>
               </div>
               <div>
                 <dt>Accounting lanes</dt>
@@ -1283,6 +1295,67 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <dd>{seedRoundCount}</dd>
                 </div>
               </dl>
+            </details>
+            <details className="pilot-note" aria-label="Advanced Common Ground Budget details">
+              <summary>Advanced details</summary>
+              <dl className="mpgf-summary-grid">
+                <div>
+                  <dt>Lane counts</dt>
+                  <dd>shown separately; no merged marketplace count</dd>
+                </div>
+                <div>
+                  <dt>Live offers lane</dt>
+                  <dd>{liveOfferCount}</dd>
+                </div>
+                <div>
+                  <dt>Reviewed templates lane</dt>
+                  <dd>{seedTemplateCount}</dd>
+                </div>
+                <div>
+                  <dt>Worked examples lane</dt>
+                  <dd>{workedExampleCount}</dd>
+                </div>
+                <div>
+                  <dt>Demo records lane</dt>
+                  <dd>{seedRoundProjects.length}</dd>
+                </div>
+                <div>
+                  <dt>Public-goods module lane</dt>
+                  <dd>{seedRoundCount}</dd>
+                </div>
+                <div>
+                  <dt>Rulebook hash</dt>
+                  <dd>{publicGoodsRulebook?.calcHash ?? "unavailable"}</dd>
+                </div>
+                <div>
+                  <dt>Calculation version</dt>
+                  <dd>{publicGoodsRulebook?.clearingContract.policy ?? "crecm_v1_125"}</dd>
+                </div>
+                <div>
+                  <dt>Deployment mode</dt>
+                  <dd>capped pilot</dd>
+                </div>
+                <div>
+                  <dt>Audit bundle</dt>
+                  <dd>
+                    {publicGoodsAuditBundleHref ? (
+                      <Link href={publicGoodsAuditBundleHref}>Audit bundle contract</Link>
+                    ) : (
+                      "Final audit bundle not available before close"
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Rulebook report</dt>
+                  <dd>
+                    <Link href={publicGoodsRulebookHref}>View current rulebook report</Link>
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                Public exact threshold, counterparty, supporter, active-cluster, and
+                success-without-me progress stays sealed before close.
+              </p>
             </details>
           </section>
         ) : null}

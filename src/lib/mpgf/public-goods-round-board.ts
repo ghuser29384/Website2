@@ -8,6 +8,11 @@ import type {
 export const MPGF_ROUND_BOARD_SCHEMA_VERSION = "mpgf-round-board-v1";
 
 export type MpgfRoundBoardStatus = "cleared" | "near_threshold" | "needs_review" | "failed";
+export type MpgfSealedProgressLabel =
+  | "Needs more support"
+  | "Likely near threshold"
+  | "Review pending"
+  | "Closed; final audit available";
 
 export interface MpgfRoundBoardCard {
   activeClusterCount: number;
@@ -22,6 +27,7 @@ export interface MpgfRoundBoardCard {
   projectedBonusMaxCents: number;
   projectedBonusMinCents: number;
   schemaVersion: typeof MPGF_ROUND_BOARD_SCHEMA_VERSION;
+  sealedProgressLabel: MpgfSealedProgressLabel;
   status: MpgfRoundBoardStatus;
   supporterProgressBps: number;
   thresholdAmountCents: number;
@@ -58,6 +64,22 @@ function mapRoundBoardStatus(
   }
 
   return "near_threshold";
+}
+
+export function sealedProgressLabelForBoardStatus(status: MpgfRoundBoardStatus): MpgfSealedProgressLabel {
+  if (status === "cleared") {
+    return "Closed; final audit available";
+  }
+
+  if (status === "needs_review") {
+    return "Review pending";
+  }
+
+  if (status === "failed") {
+    return "Needs more support";
+  }
+
+  return "Likely near threshold";
 }
 
 function stanceLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: boolean) {
@@ -154,6 +176,7 @@ export function buildMpgfRoundBoardCards({
       projectedBonusMaxCents: line?.qfBonusCapCents ?? 0,
       projectedBonusMinCents: line?.qfBonusCents ?? 0,
       schemaVersion: MPGF_ROUND_BOARD_SCHEMA_VERSION,
+      sealedProgressLabel: sealedProgressLabelForBoardStatus(status),
       status,
       supporterProgressBps: assuranceStatus.supporterProgressBps,
       thresholdAmountCents: assuranceStatus.thresholdAmountCents,

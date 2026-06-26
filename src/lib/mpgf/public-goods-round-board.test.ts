@@ -21,18 +21,27 @@ test("MPGF round board exposes threshold, match, stance, allocation, and action 
   assert.ok(cards.every((card) => card.thresholdAmountCents > 0));
   assert.ok(cards.every((card) => card.thresholdSupporters > 0));
   assert.ok(cards.every((card) => card.activeClusterCount > 0));
+  assert.ok(
+    cards.every((card) =>
+      ["Needs more support", "Likely near threshold", "Review pending", "Closed; final audit available"].includes(
+        card.sealedProgressLabel,
+      ),
+    ),
+  );
   assert.ok(cards.every((card) => card.yourStanceLabel.length > 0));
   assert.ok(cards.every((card) => card.pivotalActionLabel.length > 0));
   assert.ok(cards.every((card) => card.inviteActionLabel.length > 0));
 
   const cleared = cards.find((card) => card.status === "cleared");
   assert.ok(cleared);
+  assert.equal(cleared.sealedProgressLabel, "Closed; final audit available");
   assert.ok(cleared.directCountedCents > 0);
   assert.ok(cleared.baseMatchUnlockedCents > 0);
   assert.ok(cleared.projectedBonusMaxCents >= cleared.projectedBonusMinCents);
 
   const nearThreshold = cards.find((card) => card.status === "near_threshold");
   assert.ok(nearThreshold);
+  assert.equal(nearThreshold.sealedProgressLabel, "Likely near threshold");
   assert.equal(nearThreshold.pivotalActionLabel, "Preview $5 budget");
   assert.equal(nearThreshold.inviteActionLabel, "Copy user-initiated invite link");
   assert.equal(nearThreshold.projectedAllocationCents, 500);
@@ -51,6 +60,8 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.match(component, /Exact\s+threshold progress, supporter counts, active-cluster counts/);
   assert.match(component, /Public exact aggregates appear only\s+after close in final reports or audit bundles/);
   assert.match(component, /Sealed before close/);
+  assert.match(component, /Qualitative progress/);
+  assert.match(component, /card\.sealedProgressLabel/);
   assert.match(component, /Your stance/);
   assert.match(component, /Your projected allocation/);
   assert.match(component, /Pivotal action:/);
@@ -58,4 +69,8 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.equal(component.includes("{card.verifiedSupporterCount}/{card.thresholdSupporters}"), false);
   assert.match(helper, /Copy user-initiated invite link/);
   assert.match(helper, /Preview \$5 budget/);
+  assert.match(helper, /Likely near threshold/);
+  assert.match(helper, /Needs more support/);
+  assert.match(helper, /Review pending/);
+  assert.match(helper, /Closed; final audit available/);
 });
