@@ -51,6 +51,11 @@ export type PublicReceiptSensitiveActionDisplayMode =
   | "generic_action_label"
   | "transfer_only"
   | "exact_action_details";
+export type PublicReceiptPublicityAsTradeTermBlockState =
+  | "not_required"
+  | "possible"
+  | "blocked"
+  | "manual_review";
 export type PublicReceiptClaimReviewKey =
   | "verified"
   | "recipient_transfer"
@@ -78,7 +83,10 @@ export interface PublicReceiptContributionSummary {
 export interface PublicReceiptPublicationControls {
   currentStatus: "current" | "corrected" | "revoked" | "superseded";
   issuedAt: string;
+  publicationPressureReportingRequired: boolean;
+  publicationPressureReportRefs: string[];
   publicationRequiredAsTradeTerm: boolean;
+  publicityAsTradeTermBlockState: PublicReceiptPublicityAsTradeTermBlockState;
   affectsMatchingOrReview: boolean;
   publicEngagementCounters: boolean;
   profileOrSearchBoost: boolean;
@@ -198,6 +206,7 @@ export interface PublicReceiptCardContract {
   personalContributionStates: PublicReceiptPersonalContributionState[];
   netPersonalAttributionStates: PublicReceiptNetPersonalAttributionState[];
   sensitiveActionDisplayModes: PublicReceiptSensitiveActionDisplayMode[];
+  publicityAsTradeTermBlockStates: PublicReceiptPublicityAsTradeTermBlockState[];
   claimHygieneRules: string[];
   defaultPublicationControls: PublicReceiptPublicationControls;
   defaultDirectDonationParityControls: PublicReceiptDirectDonationParityControls;
@@ -240,6 +249,8 @@ const GAMIFICATION_PATTERN =
 const STRONG_CAUSAL_WORDING_PATTERN = /\b(trade-unlocked|unlocked|additional|additionality)\b/i;
 const EXACT_SENSITIVE_ACTION_PATTERN =
   /\b(no[- ]?meat|meat[- ]?free|vegetarian|vegan|diet|fasting|calorie|weight[- ]?loss|medical diet|religious|political|family|lifestyle)\b/i;
+const PUBLICATION_PRESSURE_PATTERN =
+  /\b(required to publish|must publish|keep (it|the receipt|this receipt) public|publicity as a trade term|publish (to|before|for) (matching|payout|compensation|evidence|dispute|completion)|receipt publication (condition|required)|publication condition)\b/i;
 
 export const PUBLIC_RECEIPT_CLAIM_REVIEW_KEYS: PublicReceiptClaimReviewKey[] = [
   "verified",
@@ -280,6 +291,13 @@ const PUBLIC_RECEIPT_SENSITIVE_ACTION_DISPLAY_MODES: PublicReceiptSensitiveActio
   "generic_action_label",
   "transfer_only",
   "exact_action_details",
+];
+
+const PUBLICITY_AS_TRADE_TERM_BLOCK_STATES: PublicReceiptPublicityAsTradeTermBlockState[] = [
+  "not_required",
+  "possible",
+  "blocked",
+  "manual_review",
 ];
 
 const PUBLIC_RECEIPT_NET_PERSONAL_ATTRIBUTION_STATES: PublicReceiptNetPersonalAttributionState[] = [
@@ -419,6 +437,20 @@ export function validatePublicReceiptCardDraft(
     }
     if (draft.correctionStatus === "revoked" || draft.publicationControls.currentStatus === "revoked") {
       blockers.push("revoked_receipt_cannot_publish");
+    }
+    if (!draft.publicationControls.publicationPressureReportingRequired) {
+      blockers.push("publication_pressure_reporting_required");
+    }
+    if (draft.publicationControls.publicityAsTradeTermBlockState !== "not_required") {
+      blockers.push(
+        `publicity_as_trade_term_not_cleared:${draft.publicationControls.publicityAsTradeTermBlockState}`,
+      );
+    }
+    if (
+      draft.publicationControls.publicityAsTradeTermBlockState !== "not_required" &&
+      draft.publicationControls.publicationPressureReportRefs.length === 0
+    ) {
+      blockers.push("publication_pressure_report_ref_required");
     }
   }
 
@@ -632,6 +664,9 @@ export function validatePublicReceiptCardDraft(
   if (GAMIFICATION_PATTERN.test(draft.claimCopy) || GAMIFICATION_PATTERN.test(draft.title)) {
     blockers.push("gamification_or_ranking_claim");
   }
+  if (PUBLICATION_PRESSURE_PATTERN.test(publicText)) {
+    blockers.push("publication_pressure_or_trade_term_claim");
+  }
 
   return {
     blockers,
@@ -673,7 +708,10 @@ const DEFAULT_PUBLICATION_CONTROLS: PublicReceiptPublicationControls = {
   issuedAt: "2026-06-25T00:00:00.000Z",
   profileOrSearchBoost: false,
   publicEngagementCounters: false,
+  publicationPressureReportingRequired: true,
+  publicationPressureReportRefs: [],
   publicationRequiredAsTradeTerm: false,
+  publicityAsTradeTermBlockState: "not_required",
   recommendationOrPriorityBoost: false,
   sidecarOnly: true,
 };
@@ -858,6 +896,8 @@ const CLAIM_HYGIENE_RULES = [
   "direct_donation_parity_no_default_recommendation_access_or_priority",
   "net_attribution_gross_reimbursement_side_benefit_and_net_lines_separated",
   "net_personal_contribution_excludes_trade_conditioned_and_third_party_funds",
+  "publication_pressure_reporting_required",
+  "publicity_as_trade_term_blocks_publication",
   "sensitive_action_redaction_required",
   "publication_sidecar_only",
   "publication_gates_non_blocking_required",
@@ -878,6 +918,8 @@ const PROHIBITED_PUBLIC_SIGNALS = [
   "review_priority",
   "eligibility_advantage",
   "future_marketplace_access_advantage",
+  "publication_pressure",
+  "publicity_as_trade_term",
   "recommendation_ranking",
 ];
 
@@ -914,6 +956,7 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
     ],
     netPersonalAttributionStates: PUBLIC_RECEIPT_NET_PERSONAL_ATTRIBUTION_STATES,
     sensitiveActionDisplayModes: PUBLIC_RECEIPT_SENSITIVE_ACTION_DISPLAY_MODES,
+    publicityAsTradeTermBlockStates: PUBLICITY_AS_TRADE_TERM_BLOCK_STATES,
     claimHygieneRules: CLAIM_HYGIENE_RULES,
     defaultPublicationControls: DEFAULT_PUBLICATION_CONTROLS,
     defaultDirectDonationParityControls: DEFAULT_DIRECT_DONATION_PARITY_CONTROLS,
@@ -938,6 +981,9 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
       "directDonationParityControls.affectsFutureMarketplaceAccess",
       "publicationControls.issuedAt",
       "publicationControls.currentStatus",
+      "publicationControls.publicationPressureReportingRequired",
+      "publicationControls.publicationPressureReportRefs",
+      "publicationControls.publicityAsTradeTermBlockState",
       "sensitiveActionDisclosure.displayMode",
       "contributionSummary.personalContribution",
       "contributionSummary.tradeConditionedContribution",
@@ -1011,7 +1057,10 @@ export function validatePublicReceiptCardContract(
         !contract.defaultPublicationControls.affectsMatchingOrReview &&
         !contract.defaultPublicationControls.publicEngagementCounters &&
         !contract.defaultPublicationControls.profileOrSearchBoost &&
+        contract.defaultPublicationControls.publicationPressureReportingRequired &&
+        contract.defaultPublicationControls.publicationPressureReportRefs.length === 0 &&
         !contract.defaultPublicationControls.publicationRequiredAsTradeTerm &&
+        contract.defaultPublicationControls.publicityAsTradeTermBlockState === "not_required" &&
         !contract.defaultPublicationControls.recommendationOrPriorityBoost,
       JSON.stringify(contract.defaultPublicationControls),
     ),
@@ -1074,6 +1123,26 @@ export function validatePublicReceiptCardContract(
           "sensitiveActionDisclosure.displayMode",
       ),
       `${contract.sensitiveActionDisplayModes.join(", ")} fields=${contract.requiredPublicFields.join(", ")}`,
+    ),
+    check(
+      "publication-pressure-controls",
+      "Public receipt publication requires a pressure-reporting path and blocks possible publicity-as-trade-term pressure",
+      PUBLICITY_AS_TRADE_TERM_BLOCK_STATES.every((state) =>
+        contract.publicityAsTradeTermBlockStates.includes(state),
+      ) &&
+        contract.defaultPublicationControls.publicationPressureReportingRequired &&
+        contract.defaultPublicationControls.publicityAsTradeTermBlockState === "not_required" &&
+        contract.defaultPublicationControls.publicationPressureReportRefs.length === 0 &&
+        contract.claimHygieneRules.includes("publication_pressure_reporting_required") &&
+        contract.claimHygieneRules.includes(
+          "publicity_as_trade_term_blocks_publication",
+        ) &&
+        [
+          "publicationControls.publicationPressureReportingRequired",
+          "publicationControls.publicationPressureReportRefs",
+          "publicationControls.publicityAsTradeTermBlockState",
+        ].every((field) => contract.requiredPublicFields.includes(field)),
+      `${contract.publicityAsTradeTermBlockStates.join(", ")} controls=${JSON.stringify(contract.defaultPublicationControls)}`,
     ),
     check(
       "direct-donation-parity-controls",

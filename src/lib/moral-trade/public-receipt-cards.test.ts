@@ -74,7 +74,10 @@ const validDraft: PublicReceiptCardDraft = {
     issuedAt: "2026-06-25T04:00:00.000Z",
     profileOrSearchBoost: false,
     publicEngagementCounters: false,
+    publicationPressureReportingRequired: true,
+    publicationPressureReportRefs: [],
     publicationRequiredAsTradeTerm: false,
+    publicityAsTradeTermBlockState: "not_required",
     recommendationOrPriorityBoost: false,
     sidecarOnly: true,
   },
@@ -336,12 +339,15 @@ test("public receipt card validator maps claim words to passed claim reviews", (
 test("public receipt card validator blocks engagement infrastructure and publication pressure", () => {
   const validation = validatePublicReceiptCardDraft({
     ...validDraft,
-    claimCopy: "Show like count and matching priority after this receipt publishes.",
+    claimCopy:
+      "Show like count and matching priority after this receipt publishes. Participant must publish before payout.",
     publicationControls: {
       ...validDraft.publicationControls,
       affectsMatchingOrReview: true,
       profileOrSearchBoost: true,
       publicEngagementCounters: true,
+      publicationPressureReportingRequired: false,
+      publicityAsTradeTermBlockState: "possible",
       publicationRequiredAsTradeTerm: true,
       recommendationOrPriorityBoost: true,
       sidecarOnly: false,
@@ -351,11 +357,47 @@ test("public receipt card validator blocks engagement infrastructure and publica
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.includes("publication_must_be_sidecar_only"));
   assert.ok(validation.blockers.includes("publication_as_trade_term_blocked"));
+  assert.ok(validation.blockers.includes("publication_pressure_reporting_required"));
+  assert.ok(validation.blockers.includes("publicity_as_trade_term_not_cleared:possible"));
+  assert.ok(validation.blockers.includes("publication_pressure_report_ref_required"));
+  assert.ok(validation.blockers.includes("publication_pressure_or_trade_term_claim"));
   assert.ok(validation.blockers.includes("receipt_publication_marketplace_priority_blocked"));
   assert.ok(validation.blockers.includes("public_engagement_counters_blocked"));
   assert.ok(validation.blockers.includes("profile_or_search_boost_blocked"));
   assert.ok(validation.blockers.includes("recommendation_or_priority_boost_blocked"));
   assert.ok(validation.blockers.includes("gamification_or_ranking_claim"));
+});
+
+test("public receipt card validator requires pressure reports to block publicity-as-trade-term risk", () => {
+  const manualReview = validatePublicReceiptCardDraft({
+    ...validDraft,
+    publicationControls: {
+      ...validDraft.publicationControls,
+      publicationPressureReportRefs: ["publication-pressure-report:test"],
+      publicityAsTradeTermBlockState: "manual_review",
+    },
+  });
+
+  assert.equal(manualReview.status, "fail");
+  assert.ok(
+    manualReview.blockers.includes("publicity_as_trade_term_not_cleared:manual_review"),
+  );
+  assert.equal(
+    manualReview.blockers.includes("publication_pressure_report_ref_required"),
+    false,
+  );
+
+  const blocked = validatePublicReceiptCardDraft({
+    ...validDraft,
+    publicationControls: {
+      ...validDraft.publicationControls,
+      publicationPressureReportRefs: ["publication-pressure-report:test"],
+      publicityAsTradeTermBlockState: "blocked",
+    },
+  });
+
+  assert.equal(blocked.status, "fail");
+  assert.ok(blocked.blockers.includes("publicity_as_trade_term_not_cleared:blocked"));
 });
 
 test("public receipt card validator keeps direct-donation parity opt-in and non-preferential", () => {
@@ -557,6 +599,16 @@ test("public receipt card contract validates first-class claim hygiene coverage"
       "net_personal_contribution_excludes_trade_conditioned_and_third_party_funds",
     ),
   );
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "publication_pressure_reporting_required",
+    ),
+  );
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "publicity_as_trade_term_blocks_publication",
+    ),
+  );
   assert.ok(contract.claimHygieneRules.includes("publication_sidecar_only"));
   assert.ok(
     contract.claimHygieneRules.includes(
@@ -603,6 +655,12 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.ok(contract.sensitiveActionDisplayModes.includes("generic_action_label"));
   assert.ok(contract.sensitiveActionDisplayModes.includes("transfer_only"));
   assert.ok(contract.sensitiveActionDisplayModes.includes("exact_action_details"));
+  assert.deepEqual(contract.publicityAsTradeTermBlockStates, [
+    "not_required",
+    "possible",
+    "blocked",
+    "manual_review",
+  ]);
   assert.deepEqual(
     contract.publicationGateKeys,
     PUBLIC_RECEIPT_REQUIRED_PUBLICATION_GATES,
@@ -611,6 +669,21 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.ok(contract.requiredPublicFields.includes("correctionStatus"));
   assert.ok(contract.requiredPublicFields.includes("publicationControls.issuedAt"));
   assert.ok(contract.requiredPublicFields.includes("publicationControls.currentStatus"));
+  assert.ok(
+    contract.requiredPublicFields.includes(
+      "publicationControls.publicationPressureReportingRequired",
+    ),
+  );
+  assert.ok(
+    contract.requiredPublicFields.includes(
+      "publicationControls.publicationPressureReportRefs",
+    ),
+  );
+  assert.ok(
+    contract.requiredPublicFields.includes(
+      "publicationControls.publicityAsTradeTermBlockState",
+    ),
+  );
   assert.ok(
     contract.requiredPublicFields.includes(
       "directDonationParityControls.participantOptIn",
@@ -642,6 +715,15 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.equal(contract.defaultPublicationControls.sidecarOnly, true);
   assert.equal(contract.defaultPublicationControls.affectsMatchingOrReview, false);
   assert.equal(contract.defaultPublicationControls.publicEngagementCounters, false);
+  assert.equal(
+    contract.defaultPublicationControls.publicationPressureReportingRequired,
+    true,
+  );
+  assert.deepEqual(contract.defaultPublicationControls.publicationPressureReportRefs, []);
+  assert.equal(
+    contract.defaultPublicationControls.publicityAsTradeTermBlockState,
+    "not_required",
+  );
   assert.ok(contract.prohibitedPublicSignals.includes("leaderboards"));
   assert.ok(contract.prohibitedPublicSignals.includes("moral_scores"));
   assert.ok(contract.prohibitedPublicSignals.includes("matching_priority"));
@@ -651,6 +733,8 @@ test("public receipt card contract validates first-class claim hygiene coverage"
       "future_marketplace_access_advantage",
     ),
   );
+  assert.ok(contract.prohibitedPublicSignals.includes("publication_pressure"));
+  assert.ok(contract.prohibitedPublicSignals.includes("publicity_as_trade_term"));
   assert.ok(contract.samplePreviews.every((preview) => preview.validation.status === "pass"));
 });
 
@@ -665,6 +749,10 @@ test("public receipt card source-of-truth tables are migration-backed", () => {
   );
   const parityAndNetAttributionMigration = readFileSync(
     "supabase/migrations/20260626_moral_trade_public_receipt_parity_net_attribution_controls.sql",
+    "utf8",
+  );
+  const publicationPressureMigration = readFileSync(
+    "supabase/migrations/20260626_moral_trade_public_receipt_publication_pressure_controls.sql",
     "utf8",
   );
 
@@ -755,6 +843,34 @@ test("public receipt card source-of-truth tables are migration-backed", () => {
     parityAndNetAttributionMigration,
     /Gross transfer, reimbursement or subsidy, side benefit, and net personal contribution/i,
   );
+  assert.match(
+    publicationPressureMigration,
+    /publication_pressure_reporting_required_bool/,
+  );
+  assert.match(
+    publicationPressureMigration,
+    /publication_pressure_report_refs_jsonb/,
+  );
+  assert.match(
+    publicationPressureMigration,
+    /publicity_as_trade_term_block_state/,
+  );
+  assert.match(publicationPressureMigration, /'not_required'/);
+  assert.match(publicationPressureMigration, /'possible'/);
+  assert.match(publicationPressureMigration, /'blocked'/);
+  assert.match(publicationPressureMigration, /'manual_review'/);
+  assert.match(
+    publicationPressureMigration,
+    /visibility_state <> 'opt_in_public'/,
+  );
+  assert.match(
+    publicationPressureMigration,
+    /publicity_as_trade_term_block_state = 'not_required'/,
+  );
+  assert.match(
+    publicationPressureMigration,
+    /Publication-pressure reporting remains available/i,
+  );
 });
 
 test("public receipt card contract fails closed if publication can affect marketplace priority", () => {
@@ -768,9 +884,14 @@ test("public receipt card contract fails closed if publication can affect market
     sensitiveActionDisplayModes: contract.sensitiveActionDisplayModes.filter(
       (mode) => mode !== "exact_action_details",
     ),
+    publicityAsTradeTermBlockStates: contract.publicityAsTradeTermBlockStates.filter(
+      (state) => state !== "manual_review",
+    ),
     defaultPublicationControls: {
       ...contract.defaultPublicationControls,
       affectsMatchingOrReview: true,
+      publicationPressureReportingRequired: false,
+      publicityAsTradeTermBlockState: "possible",
       publicEngagementCounters: true,
     },
     defaultDirectDonationParityControls: {
@@ -821,6 +942,11 @@ test("public receipt card contract fails closed if publication can affect market
   assert.ok(
     validation.blockers.includes(
       "sensitive-action-disclosure-controls: Pledge-swap receipt action details default to generic or transfer-only unless exact details have consent and non-blocking reviews",
+    ),
+  );
+  assert.ok(
+    validation.blockers.includes(
+      "publication-pressure-controls: Public receipt publication requires a pressure-reporting path and blocks possible publicity-as-trade-term pressure",
     ),
   );
   assert.ok(

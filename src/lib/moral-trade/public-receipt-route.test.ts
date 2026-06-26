@@ -80,6 +80,8 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
   assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("generic_action_label"));
   assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("transfer_only"));
   assert.ok(body.publicContract.sensitiveActionDisplayModes.includes("exact_action_details"));
+  assert.ok(body.publicContract.publicityAsTradeTermBlockStates.includes("not_required"));
+  assert.ok(body.publicContract.publicityAsTradeTermBlockStates.includes("manual_review"));
   assert.equal(
     body.publicContract.defaultPublicationControls.affectsMatchingOrReview,
     false,
@@ -87,6 +89,14 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
   assert.equal(
     body.publicContract.defaultPublicationControls.publicEngagementCounters,
     false,
+  );
+  assert.equal(
+    body.publicContract.defaultPublicationControls.publicationPressureReportingRequired,
+    true,
+  );
+  assert.equal(
+    body.publicContract.defaultPublicationControls.publicityAsTradeTermBlockState,
+    "not_required",
   );
   assert.ok(body.publicContract.prohibitedPublicSignals.includes("leaderboards"));
   assert.ok(body.publicContract.prohibitedPublicSignals.includes("moral_scores"));
@@ -119,6 +129,24 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
       "public-receipt-contract-sample-offset"
     ].netAttributionState,
     "verified_net_personal",
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].publicationPressureReportingRequired,
+    true,
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].publicationPressureReportCount,
+    0,
+  );
+  assert.equal(
+    body.publicContract.sampleEvaluationStatuses[
+      "public-receipt-contract-sample-offset"
+    ].publicityAsTradeTermBlockState,
+    "not_required",
   );
   assert.equal(
     body.publicContract.sampleEvaluationStatuses[
@@ -160,6 +188,9 @@ test("public receipt verification route returns contract-only validation without
   assert.equal(body.verification.staticImageAuthoritative, false);
   assert.match(body.verification.issuedAt, /^1970-01-01T00:00:00\.000Z$/);
   assert.equal(body.publicContract.participantOptInRequired, true);
+  assert.equal(body.publicContract.publicationPressureReportingRequired, true);
+  assert.equal(body.publicContract.publicityAsTradeTermBlocksPublication, true);
+  assert.ok(body.publicContract.publicityAsTradeTermBlockStates.includes("blocked"));
   assert.equal(body.publicContract.publicationGatesMustBeNonBlocking, true);
   assert.equal(body.publicContract.currentStatusRequired, true);
   assert.equal(body.publicContract.issuedAtRequired, true);
