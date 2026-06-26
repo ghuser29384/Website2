@@ -331,9 +331,31 @@ const defaultPledgeReciprocalReleaseRule =
 const defaultPledgeWithdrawalBeforeLockRule =
   "Either side can withdraw before final lock without penalty or private-detail escalation.";
 const defaultPledgeEvidencePlan =
-  "Use a public log, dated receipt, or similarly narrow artifact for the promised action.";
+  "Use private self-attestation first, with an optional dated note, receipt, photo, or witness only when the amount, duration, or challenge state justifies the added burden.";
 const defaultPledgeLeastIntrusiveAlternative =
-  "Use a dated self-log or receipt before private messages, location history, protected-trait disclosure, or third-party exposure.";
+  "Use self-attestation or a dated private note before photos, receipts, private messages, location history, protected-trait disclosure, or third-party exposure.";
+const MICRO_PLEDGE_DEFAULT_DURATION = "One meal";
+const MICRO_PLEDGE_DEFAULT_DURATIONS = new Set(["One meal", "A few meals", "One day", "A few days"]);
+
+function getPledgeMaxObligationDaysForDuration(duration: string) {
+  if (duration === "One meal" || duration === "A few meals" || duration === "One day") {
+    return "1";
+  }
+
+  if (duration === "A few days") {
+    return "4";
+  }
+
+  if (duration === "30 days") {
+    return "30";
+  }
+
+  return "90";
+}
+
+function isLongerDurationPledge(duration: string) {
+  return !MICRO_PLEDGE_DEFAULT_DURATIONS.has(duration);
+}
 
 function formatPledgeGateStatus(status: PledgeSwapGateStatus) {
   return status.replaceAll("_", " ");
@@ -959,7 +981,10 @@ export function OfferCreateForm({
   performanceBondMaxCents,
   provenanceValidationRules,
 }: OfferCreateFormProps) {
-  const [mode, setMode] = useState<OfferMode>(initialTemplate?.mode ?? initialMode);
+  const resolvedInitialMode = initialTemplate?.mode ?? initialMode;
+  const initialReviewPeriod =
+    initialTemplate?.duration ?? (resolvedInitialMode === "pledge" ? MICRO_PLEDGE_DEFAULT_DURATION : "3 months");
+  const [mode, setMode] = useState<OfferMode>(resolvedInitialMode);
   const [offeredCause, setOfferedCause] = useState(initialTemplate?.offeredCause ?? "Animal welfare");
   const [requestedCause, setRequestedCause] = useState(initialTemplate?.requestedCause ?? "Global poverty");
   const [compromiseCause, setCompromiseCause] = useState(initialTemplate?.compromiseCause ?? "Not needed");
@@ -980,7 +1005,11 @@ export function OfferCreateForm({
   const [requestAction, setRequestAction] = useState(initialTemplate?.requestAction ?? "");
   const [baselineStatement, setBaselineStatement] = useState(initialTemplate?.baselineStatement ?? "");
   const [additionalityStatement, setAdditionalityStatement] = useState("");
-  const [pledgeMaxObligationDays, setPledgeMaxObligationDays] = useState("30");
+  const [pledgeMaxObligationDays, setPledgeMaxObligationDays] = useState(
+    resolvedInitialMode === "pledge"
+      ? getPledgeMaxObligationDaysForDuration(initialReviewPeriod)
+      : "1",
+  );
   const [pledgeReciprocalReleaseRule, setPledgeReciprocalReleaseRule] = useState(
     defaultPledgeReciprocalReleaseRule,
   );
@@ -1308,7 +1337,7 @@ export function OfferCreateForm({
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
-  const [reviewPeriod, setReviewPeriod] = useState(initialTemplate?.duration ?? "6 months");
+  const [reviewPeriod, setReviewPeriod] = useState(initialReviewPeriod);
   const [paymentIntervalUnit, setPaymentIntervalUnit] = useState<PaymentIntervalUnit>(initialTemplate?.paymentIntervalUnit ?? "none");
   const [paymentIntervalValue, setPaymentIntervalValue] = useState(initialTemplate?.paymentIntervalValue ?? "1");
   const [trustLevel, setTrustLevel] = useState(initialTemplate?.trustLevel ?? "3");
@@ -2419,22 +2448,6 @@ export function OfferCreateForm({
         })
       : null;
 
-  function getTemplateMaxObligationDays(duration: string) {
-    if (duration === "One meal" || duration === "A few meals" || duration === "One day") {
-      return "1";
-    }
-
-    if (duration === "A few days") {
-      return "4";
-    }
-
-    if (duration === "30 days") {
-      return "30";
-    }
-
-    return "90";
-  }
-
   function applyOfferTemplate(template: OfferTemplate) {
     setMode(template.mode);
     setOfferedCause(template.offeredCause);
@@ -2454,7 +2467,7 @@ export function OfferCreateForm({
     setTrustLevel(template.trustLevel);
 
     if (template.mode === "pledge") {
-      setPledgeMaxObligationDays(getTemplateMaxObligationDays(template.duration));
+      setPledgeMaxObligationDays(getPledgeMaxObligationDaysForDuration(template.duration));
       setPledgeChallengeWindowDays("14");
       setPledgeReciprocalReleaseRule(defaultPledgeReciprocalReleaseRule);
       setPledgeWithdrawalBeforeLockRule(defaultPledgeWithdrawalBeforeLockRule);
@@ -2569,6 +2582,25 @@ export function OfferCreateForm({
       setOffsetNoReportingSuppressionAcknowledged(false);
       setOffsetNoDiscriminationAcknowledged(false);
       setOffsetNoCoercionAcknowledged(false);
+    }
+  }
+
+  function handleModeChange(nextMode: OfferMode) {
+    setMode(nextMode);
+
+    if (nextMode === "pledge" && isLongerDurationPledge(reviewPeriod)) {
+      setReviewPeriod(MICRO_PLEDGE_DEFAULT_DURATION);
+      setPledgeMaxObligationDays(
+        getPledgeMaxObligationDaysForDuration(MICRO_PLEDGE_DEFAULT_DURATION),
+      );
+    }
+  }
+
+  function handleReviewPeriodChange(nextDuration: string) {
+    setReviewPeriod(nextDuration);
+
+    if (isPledge) {
+      setPledgeMaxObligationDays(getPledgeMaxObligationDaysForDuration(nextDuration));
     }
   }
 
@@ -3120,7 +3152,7 @@ export function OfferCreateForm({
           <select
             value={mode}
             name="mode"
-            onChange={(event) => setMode(readFormControlValue(event) as OfferMode)}
+            onChange={(event) => handleModeChange(readFormControlValue(event) as OfferMode)}
           >
             {OFFER_MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -3549,6 +3581,20 @@ export function OfferCreateForm({
                 A match candidate does not create a deal. Final reliance requires a frozen lock
                 proposal, fresh confirmations, commitment reservation, and neutral review.
               </p>
+              {isLongerDurationPledge(reviewPeriod) ? (
+                <div className="status-banner status-banner-warning">
+                  <p>
+                    Longer-duration pledges are manual-review exceptions. Default food-abstention
+                    and similar pledge swaps stay one meal, a few meals, one day, or a few days
+                    unless reviewers approve a sequenced exception with renewed confirmations.
+                  </p>
+                </div>
+              ) : (
+                <p className="panel-note">
+                  Default micro-pledge duration is active. Keep evidence self-attestation first
+                  unless a challenge, amount, duration, or review policy requires more.
+                </p>
+              )}
 
               <div className="field-grid">
                 <label className="field">
@@ -6578,7 +6624,7 @@ export function OfferCreateForm({
             <select
               name="duration"
               value={reviewPeriod}
-              onChange={(event) => setReviewPeriod(readFormControlValue(event))}
+              onChange={(event) => handleReviewPeriodChange(readFormControlValue(event))}
             >
               {DURATION_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -6586,6 +6632,13 @@ export function OfferCreateForm({
                 </option>
               ))}
             </select>
+            {isPledge ? (
+              <small>
+                {isLongerDurationPledge(reviewPeriod)
+                  ? "Longer-duration pledge selected: this stays preview/manual-review only and needs renewed confirmation before reliance."
+                  : "Default pledge durations are one meal, a few meals, one day, or a few days."}
+              </small>
+            ) : null}
           </label>
         </div>
 

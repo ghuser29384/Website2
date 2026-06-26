@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -123,4 +124,27 @@ test("public receipt publication blocks engagement infrastructure and publicatio
   assert.ok(result.blockers.includes("receipt_engagement_counter_allowed:public_receipt_card_publication"));
   assert.ok(result.blockers.includes("receipt_publication_as_trade_term:public_receipt_card_publication"));
   assert.ok(result.blockers.includes("receipt_net_attribution_lines_required:public_receipt_card_publication"));
+});
+
+test("offer builder defaults pledge swaps to micro-pledge duration and self-attestation-first evidence", () => {
+  const offerForm = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+
+  assert.match(offerForm, /const MICRO_PLEDGE_DEFAULT_DURATION = "One meal"/);
+  assert.match(offerForm, /const MICRO_PLEDGE_DEFAULT_DURATIONS = new Set/);
+  assert.match(offerForm, /initialTemplate\?\.duration \?\? \(resolvedInitialMode === "pledge" \? MICRO_PLEDGE_DEFAULT_DURATION : "3 months"\)/);
+  assert.match(offerForm, /useState\(initialReviewPeriod\)/);
+  assert.match(offerForm, /getPledgeMaxObligationDaysForDuration\(initialReviewPeriod\)/);
+  assert.match(offerForm, /function handleModeChange\(nextMode: OfferMode\)/);
+  assert.match(offerForm, /function handleReviewPeriodChange\(nextDuration: string\)/);
+  assert.match(offerForm, /setPledgeMaxObligationDays\(getPledgeMaxObligationDaysForDuration\(nextDuration\)\)/);
+  assert.match(offerForm, /Use private self-attestation first/);
+  assert.match(offerForm, /Use self-attestation or a dated private note before photos/);
+  assert.match(offerForm, /Longer-duration pledges are manual-review exceptions/);
+  assert.match(offerForm, /Default pledge durations are one meal, a few meals, one day, or a few days/);
+  assert.equal(
+    offerForm.includes('const [pledgeMaxObligationDays, setPledgeMaxObligationDays] = useState("30")'),
+    false,
+  );
+  assert.equal(offerForm.includes('initialTemplate?.duration ?? "6 months"'), false);
+  assert.equal(offerForm.includes("Use a public log, dated receipt"), false);
 });
