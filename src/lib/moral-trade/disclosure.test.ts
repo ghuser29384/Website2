@@ -160,7 +160,7 @@ test("disclosure contract validation fails when consent and redaction safeguards
   const contract: MoralTradeDisclosureContract = {
     ...getMoralTradeDisclosureContract(),
     audienceStages: ["registry"],
-    disclosureFields: [],
+    disclosureFields: [] as unknown as MoralTradeDisclosureContract["disclosureFields"],
     redactedFields: ["contact_details_before_introduction"],
     searchPrivacyControls: [],
     approvedFactorCodes: ["field_level_grant"],

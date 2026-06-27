@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { signInAction } from "@/app/actions";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteTopbar } from "@/components/layout/site-topbar";
+import { AuthPage } from "@/components/auth/auth-card";
 import { getViewer } from "@/lib/app-data";
-import { getFormMessage } from "@/lib/form-state";
-import { getSafeInternalPath } from "@/lib/paths";
-import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Login",
+  title: "Log in or create an account",
   description:
-    "Sign in to publish offers, review match suggestions, and manage your Moral Trade dashboard.",
+    "Log in or create a Moral Trade account with Google, Apple, or email.",
   robots: {
     index: false,
     follow: false,
@@ -26,147 +19,13 @@ interface LoginPageProps {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = await searchParams;
-  const formMessage = getFormMessage(resolvedSearchParams);
-  const requestedReturnTo = Array.isArray(resolvedSearchParams.returnTo)
-    ? resolvedSearchParams.returnTo[0]
-    : resolvedSearchParams.returnTo;
-  const requestedNext = Array.isArray(resolvedSearchParams.next)
-    ? resolvedSearchParams.next[0]
-    : resolvedSearchParams.next;
-  const next = getSafeInternalPath(requestedReturnTo || requestedNext, "/dashboard");
-  const resetHref =
-    next === "/dashboard" ? "/password-reset" : `/password-reset?returnTo=${encodeURIComponent(next)}`;
-  const supabaseReady = hasSupabaseEnv();
   const viewer = await getViewer();
 
   return (
-    <div className="page-shell">
-      <header className="hero">
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
-        />
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Account access</p>
-            <h1>Log in to Moral Trade.</h1>
-            <p className="hero-text">
-              Sign in with email and password to publish public offers, respond to structured
-              commitments, and review your background-networking dashboard.
-            </p>
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Member actions</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Publish public offers</strong>
-                  <p>Place offers on the shared board.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Express interest</strong>
-                  <p>Register interest in a live offer and leave a short message.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Review match signals</strong>
-                  <p>See your own offers, private alerts, and delegate settings in one place.</p>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </header>
-
-      <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
-          <div className="auth-grid">
-            <article className="panel auth-card">
-              <div className="section-head auth-head">
-                <p className="eyebrow">Email and password</p>
-                <h2>Login</h2>
-                <p>Use the same credentials you created during signup.</p>
-              </div>
-
-              {!supabaseReady ? (
-                <div className="status-banner status-banner-error">
-                  Supabase is not configured yet. Add the environment variables before using
-                  live auth.
-                </div>
-              ) : null}
-
-              {formMessage ? (
-                <div
-                  className={`status-banner ${
-                    formMessage.tone === "error"
-                      ? "status-banner-error"
-                      : "status-banner-success"
-                  }`}
-                >
-                  {formMessage.text}
-                </div>
-              ) : null}
-
-              <form action={signInAction} className="stack-form">
-                <input name="next" type="hidden" value={next} />
-
-                <label className="field">
-                  <span>Email</span>
-                  <input name="email" placeholder="you@example.com" type="email" />
-                </label>
-
-                <label className="field">
-                  <span>Password</span>
-                  <input name="password" placeholder="Your password" type="password" />
-                </label>
-
-                <p className="auth-recovery-link">
-                  <Link href={resetHref}>Forgot password?</Link>
-                </p>
-
-                <div className="form-actions">
-                  <button className="button button-primary" type="submit">
-                    Log in
-                  </button>
-                  <Link className="button button-secondary" href="/signup">
-                    Create account
-                  </Link>
-                </div>
-              </form>
-            </article>
-
-            <article className="panel auth-side-card">
-              <p className="eyebrow">What unlocks after login</p>
-              <div className="clean-stack">
-                <div>
-                  <h3>Create offers</h3>
-                  <p>State an offer on the shared board rather than keeping it only local.</p>
-                </div>
-                <div>
-                  <h3>Track interest and alerts</h3>
-                  <p>Your dashboard lists the offers you own, the offers you engaged with, and new private match signals.</p>
-                </div>
-                <div>
-                  <h3>Prepare delegate and registry settings</h3>
-                  <p>Saved searches, privacy grants, and source permissions all live behind login.</p>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
-      </main>
-
-      <SiteFooter />
-    </div>
+    <AuthPage
+      initialMode="login"
+      isAuthenticated={Boolean(viewer)}
+      searchParams={resolvedSearchParams}
+    />
   );
 }

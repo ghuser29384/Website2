@@ -33,7 +33,7 @@ import {
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
@@ -76,6 +76,16 @@ type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
 type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
 type PerformanceBondAuditEventRow =
   Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
+type BaselineWitnessInviteRow =
+  Database["public"]["Tables"]["baseline_witness_invites"]["Row"];
+type BaselineWitnessTestimonialRow =
+  Database["public"]["Tables"]["baseline_witness_testimonials"]["Row"];
+type BaselineWitnessQualityAssessmentRow =
+  Database["public"]["Tables"]["baseline_witness_quality_assessments"]["Row"];
+type ExternalWitnessAccountRow =
+  Database["public"]["Tables"]["external_witness_accounts"]["Row"];
+type BaselineWitnessRiskReportRow =
+  Database["public"]["Tables"]["baseline_witness_risk_reports"]["Row"];
 
 interface MatchConciergeReviewRecord {
   request: MatchConciergeRequestRow;
@@ -102,6 +112,14 @@ interface PerformanceBondReviewRecord {
   auditEvents: PerformanceBondAuditEventRow[];
   offer: OfferRow | null;
   agreement: AgreementRow | null;
+}
+
+interface BaselineWitnessReviewRecord {
+  testimonial: BaselineWitnessTestimonialRow;
+  invite: BaselineWitnessInviteRow | null;
+  assessment: BaselineWitnessQualityAssessmentRow | null;
+  externalAccount: ExternalWitnessAccountRow | null;
+  riskReports: BaselineWitnessRiskReportRow[];
 }
 
 function formatPaymentAmount(amountCents: number, currency: string) {
@@ -159,6 +177,15 @@ function getMetadataBoolean(metadata: Record<string, unknown>, key: string) {
 function getMetadataString(metadata: Record<string, unknown>, key: string) {
   const value = getMetadataValue(metadata, key);
   return typeof value === "string" ? value : "";
+}
+
+function getJsonString(value: Json, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  const field = value[key];
+  return typeof field === "string" ? field : "";
 }
 
 async function loadAdminQueues() {
@@ -271,6 +298,18 @@ async function loadAdminQueues() {
     .in("status", ["challenged", "under_review", "rejected_after_review", "evidence_due"])
     .order("updated_at", { ascending: false })
     .limit(50);
+  const baselineWitnessReviewsResult = await supabase
+    .from("baseline_witness_testimonials")
+    .select("*")
+    .in("testimonial_status", ["submitted", "under_review", "disputed"])
+    .order("submitted_at", { ascending: false })
+    .limit(50);
+  const baselineWitnessRiskReportsResult = await supabase
+    .from("baseline_witness_risk_reports")
+    .select("*")
+    .in("review_status", ["open", "under_review", "escalated"])
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   const errors = [
     reports.error,
@@ -288,6 +327,8 @@ async function loadAdminQueues() {
     flaggedOffsetsResult.error,
     baselineBondReviewsResult.error,
     performanceBondReviewsResult.error,
+    baselineWitnessReviewsResult.error,
+    baselineWitnessRiskReportsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
@@ -300,6 +341,10 @@ async function loadAdminQueues() {
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
   const baselineBondReviewOffsets = (baselineBondReviewsResult.data ?? []) as DonationOffsetOfferRow[];
   const performanceBondRows = (performanceBondReviewsResult.data ?? []) as PerformanceBondRow[];
+  const baselineWitnessRows =
+    (baselineWitnessReviewsResult.data ?? []) as BaselineWitnessTestimonialRow[];
+  const baselineWitnessRiskRows =
+    (baselineWitnessRiskReportsResult.data ?? []) as BaselineWitnessRiskReportRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
   const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
@@ -425,6 +470,51 @@ async function loadAdminQueues() {
     throw new Error(performanceBondRelatedError.message);
   }
 
+  const baselineWitnessIds = baselineWitnessRows.map((row) => row.id);
+  const baselineWitnessInviteIds = [
+    ...new Set([
+      ...baselineWitnessRows.map((row) => row.invite_id),
+      ...baselineWitnessRiskRows.map((row) => row.invite_id).filter((id): id is string => Boolean(id)),
+    ]),
+  ];
+  const baselineWitnessExternalAccountIds = [
+    ...new Set(
+      baselineWitnessRows
+        .map((row) => row.external_witness_account_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const [
+    baselineWitnessAssessmentsResult,
+    baselineWitnessInvitesResult,
+    baselineWitnessExternalAccountsResult,
+  ] = await Promise.all([
+    baselineWitnessIds.length
+      ? supabase
+          .from("baseline_witness_quality_assessments")
+          .select("*")
+          .in("baseline_witness_testimonial_id", baselineWitnessIds)
+      : Promise.resolve({ data: [] as BaselineWitnessQualityAssessmentRow[], error: null }),
+    baselineWitnessInviteIds.length
+      ? supabase.from("baseline_witness_invites").select("*").in("id", baselineWitnessInviteIds)
+      : Promise.resolve({ data: [] as BaselineWitnessInviteRow[], error: null }),
+    baselineWitnessExternalAccountIds.length
+      ? supabase
+          .from("external_witness_accounts")
+          .select("*")
+          .in("id", baselineWitnessExternalAccountIds)
+      : Promise.resolve({ data: [] as ExternalWitnessAccountRow[], error: null }),
+  ]);
+
+  const baselineWitnessRelatedError =
+    baselineWitnessAssessmentsResult.error ??
+    baselineWitnessInvitesResult.error ??
+    baselineWitnessExternalAccountsResult.error;
+
+  if (baselineWitnessRelatedError) {
+    throw new Error(baselineWitnessRelatedError.message);
+  }
+
   const offerMap = new Map(
     ((flaggedOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
   );
@@ -473,6 +563,30 @@ async function loadAdminQueues() {
   const reviewEvidenceMap = new Map(
     ((reviewEvidenceItemsResult.data ?? []) as AgreementEvidenceItemRow[]).map((row) => [row.id, row] as const),
   );
+  const baselineWitnessAssessmentByTestimonial = new Map(
+    ((baselineWitnessAssessmentsResult.data ?? []) as BaselineWitnessQualityAssessmentRow[]).map(
+      (row) => [row.baseline_witness_testimonial_id, row] as const,
+    ),
+  );
+  const baselineWitnessInviteById = new Map(
+    ((baselineWitnessInvitesResult.data ?? []) as BaselineWitnessInviteRow[]).map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const baselineWitnessExternalAccountById = new Map(
+    ((baselineWitnessExternalAccountsResult.data ?? []) as ExternalWitnessAccountRow[]).map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const baselineWitnessRiskReportsBySubject = new Map<string, BaselineWitnessRiskReportRow[]>();
+  for (const row of baselineWitnessRiskRows) {
+    for (const key of [row.baseline_witness_testimonial_id, row.invite_id]) {
+      if (!key) continue;
+      const bucket = baselineWitnessRiskReportsBySubject.get(key) ?? [];
+      bucket.push(row);
+      baselineWitnessRiskReportsBySubject.set(key, bucket);
+    }
+  }
 
   const loadedAtIso = new Date().toISOString();
 
@@ -520,6 +634,19 @@ async function loadAdminQueues() {
       offer: performanceBondOffersById.get(bond.offer_id) ?? null,
       agreement: bond.swap_id ? performanceBondAgreementsById.get(bond.swap_id) ?? null : null,
     })) satisfies PerformanceBondReviewRecord[],
+    baselineWitnessReviews: baselineWitnessRows.map((testimonial) => ({
+      assessment: baselineWitnessAssessmentByTestimonial.get(testimonial.id) ?? null,
+      externalAccount: testimonial.external_witness_account_id
+        ? baselineWitnessExternalAccountById.get(testimonial.external_witness_account_id) ?? null
+        : null,
+      invite: baselineWitnessInviteById.get(testimonial.invite_id) ?? null,
+      riskReports: [
+        ...(baselineWitnessRiskReportsBySubject.get(testimonial.id) ?? []),
+        ...(baselineWitnessRiskReportsBySubject.get(testimonial.invite_id) ?? []),
+      ],
+      testimonial,
+    })) satisfies BaselineWitnessReviewRecord[],
+    baselineWitnessRiskReports: baselineWitnessRiskRows,
   };
 }
 
@@ -664,19 +791,30 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">09</span>
                 <div>
+                  <strong>
+                    {(queues?.baselineWitnessReviews.length ?? 0) +
+                      (queues?.baselineWitnessRiskReports.length ?? 0)}{" "}
+                    witness review item(s)
+                  </strong>
+                  <p>Private baseline testimony, identity assurance, and risk reports.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">10</span>
+                <div>
                   <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
                   <p>Paused donation offsets needing baseline or legality review.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">10</span>
+                <span className="flow-number">11</span>
                 <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">11</span>
+                <span className="flow-number">12</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -1053,6 +1191,190 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No agreement evidence reviews.</strong>
                       <p>Evidence submitted from agreement rooms will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Baseline witness review</p>
+                <h2>Guest witness testimony queue</h2>
+                <p>
+                  Review baseline-only witness statements before they affect additionality or
+                  credibility. Social-account verification is identity assurance only; claim
+                  credibility depends on relationship, direct knowledge, specificity, consistency,
+                  and risk review.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.baselineWitnessRiskReports
+                  .filter((report) => !report.baseline_witness_testimonial_id)
+                  .map((report) => (
+                    <article className="panel data-card" key={report.id}>
+                      <p className="detail-kicker">
+                        {report.report_kind.replaceAll("_", " ")} |{" "}
+                        {report.review_status.replaceAll("_", " ")}
+                      </p>
+                      <h3>Witness risk report</h3>
+                      <p className="route-text">{report.redacted_summary}</p>
+                      <p className="panel-note">
+                        Invite {report.invite_id ?? "not attached"}; participant{" "}
+                        {report.participant_user_id ?? "not attached"}. Private report text is
+                        stored only by reference hash.
+                      </p>
+                    </article>
+                  ))}
+                {queues?.baselineWitnessReviews.length ? (
+                  queues.baselineWitnessReviews.map(({ testimonial, invite, assessment, externalAccount, riskReports }) => {
+                    const basisText = getJsonString(testimonial.basis_json, "basisText");
+
+                    return (
+                      <article className="panel data-card data-card-wide" key={testimonial.id}>
+                        <p className="detail-kicker">
+                          {testimonial.testimonial_status.replaceAll("_", " ")} |{" "}
+                          {testimonial.relationship_type.replaceAll("_", " ")}
+                        </p>
+                        <h3>
+                          Baseline credence{" "}
+                          {Math.round(testimonial.baseline_counterfactual_credence_decimal * 100)}%
+                        </h3>
+                        <div className="tag-row">
+                          <span className="badge">
+                            Identity{" "}
+                            {assessment?.identity_assurance_level.replaceAll("_", " ") ?? "pending"}
+                          </span>
+                          <span className="source-pill">
+                            Provider {externalAccount?.provider ?? "not recorded"}
+                          </span>
+                          <span className="source-pill">
+                            Knowledge {testimonial.baseline_knowledge_level}
+                          </span>
+                          <span className="source-pill">
+                            Observed {testimonial.recent_meal_observation_frequency.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        {invite ? (
+                          <p className="route-text">
+                            Invite status {invite.invite_status.replaceAll("_", " ")}; action
+                            window {new Date(invite.action_window_start_at).toLocaleDateString()} to{" "}
+                            {new Date(invite.action_window_end_at).toLocaleDateString()}.
+                          </p>
+                        ) : null}
+                        <div className="field-grid">
+                          <div>
+                            <h4>Private testimony basis</h4>
+                            <p className="route-text">{basisText || "No basis text recorded."}</p>
+                            {testimonial.uncertainty_notes_private ? (
+                              <p className="route-text">
+                                <strong>Uncertainty:</strong> {testimonial.uncertainty_notes_private}
+                              </p>
+                            ) : null}
+                            {testimonial.concern_notes_private ? (
+                              <p className="route-text">
+                                <strong>Concern notes:</strong> {testimonial.concern_notes_private}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div>
+                            <h4>Quality assessment</h4>
+                            {assessment ? (
+                              <div className="mini-list">
+                                <span className="source-pill">
+                                  Probative {assessment.baseline_probative_value_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Relationship {assessment.relationship_weight_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Knowledge {assessment.knowledge_basis_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Specificity {assessment.specificity_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Independence {assessment.independence_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Consistency {assessment.consistency_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Collusion risk {assessment.collusion_risk_score_decimal.toFixed(2)}
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="route-text">No quality assessment is attached.</p>
+                            )}
+                          </div>
+                        </div>
+                        {riskReports.length ? (
+                          <div className="status-banner status-banner-error">
+                            <strong>Private risk report</strong>
+                            <div className="mini-list">
+                              {riskReports.map((report) => (
+                                <span className="source-pill" key={report.id}>
+                                  {report.report_kind.replaceAll("_", " ")} |{" "}
+                                  {report.review_status.replaceAll("_", " ")}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        <p className="panel-note">
+                          Participant-visible state remains status-only. Do not copy private notes,
+                          social handles, provider ids, refusal reasons, or scores into participant
+                          summaries.
+                        </p>
+                        <form action="/api/moral-trade/guest-witness/review" className="compact-form" method="post">
+                          <input name="testimonial_id" type="hidden" value={testimonial.id} />
+                          <input name="assessment_id" type="hidden" value={assessment?.id ?? ""} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>Decision</span>
+                              <select defaultValue="needs_more_info" name="decision">
+                                <option value="accept">Accept for additionality and credibility</option>
+                                <option value="partial">Accept for additionality only</option>
+                                <option value="reject">Reject</option>
+                                <option value="needs_more_info">Needs more information</option>
+                                <option value="dispute">Disputed</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Participant-safe summary</span>
+                              <input
+                                name="participant_visible_summary"
+                                placeholder="Optional coarse status summary only"
+                              />
+                            </label>
+                          </div>
+                          <label className="field">
+                            <span>Private reviewer notes</span>
+                            <textarea
+                              name="private_reviewer_notes"
+                              placeholder="Policy trace, uncertainty, and risk rationale."
+                              rows={4}
+                            />
+                          </label>
+                          <button
+                            className="button button-primary button-mini"
+                            disabled={!assessment}
+                            type="submit"
+                          >
+                            Save witness decision
+                          </button>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : queues?.baselineWitnessRiskReports.some(
+                    (report) => !report.baseline_witness_testimonial_id,
+                  ) ? null : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No guest witness reviews.</strong>
+                      <p>Submitted baseline testimony and witness pressure reports will appear here.</p>
                     </div>
                   </div>
                 )}

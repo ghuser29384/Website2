@@ -1,0 +1,46 @@
+{
+  "version": "moral-trade-guest-witness-demo-v0.1-2026-06",
+  "participant": {
+    "id": "participant-a",
+    "pledgeSwap": "2-day no-meat pledge-swap",
+    "actionWindowStartAt": "2026-06-27T00:00:00.000Z",
+    "actionWindowEndAt": "2026-06-29T00:00:00.000Z"
+  },
+  "witnesses": [
+    {
+      "id": "witness-a",
+      "provider": "email_magic_link",
+      "baselineCounterfactualCredenceDecimal": 0.85,
+      "baselineKnowledgeLevel": "high",
+      "relationshipType": "dining_companion",
+      "expectedReviewUse": "accepted_for_additionality"
+    },
+    {
+      "id": "witness-b",
+      "provider": "x",
+      "baselineCounterfactualCredenceDecimal": 0.99,
+      "baselineKnowledgeLevel": "low",
+      "expectedReviewUse": "low_weight_despite_social_identity_assurance"
+    },
+    {
+      "id": "witness-c",
+      "provider": "email_magic_link",
+      "concernFlag": "possible_pressure",
+      "participantVisibleStatusOnly": true,
+      "expectedReviewUse": "private_pressure_review"
+    }
+  ],
+  "publicReport": {
+    "allowedCopy": "Additionality estimate used reviewed baseline evidence.",
+    "suppressedFields": [
+      "witness_identity",
+      "social_handle",
+      "provider",
+      "relationship",
+      "raw_testimony",
+      "concern_text",
+      "reviewer_notes"
+    ]
+  },
+  "frozenPolicyRule": "Only reviewed baseline testimony accepted under a frozen pre-action policy may affect additionality or credibility; it cannot prove completion or retroactively change fixed consideration."
+}

@@ -49,8 +49,8 @@ test("private-overlap contract rejects free-text namespaces and raw stored field
         allowedSource: "free text notes",
         key: "free_text" as never,
         label: "Free text",
-        rawValueRetention: "forbidden",
-        storedRepresentation: "blinded_token_only",
+        rawValueRetention: "forbidden" as const,
+        storedRepresentation: "blinded_token_only" as const,
       },
     ],
   };

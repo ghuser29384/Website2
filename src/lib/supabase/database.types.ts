@@ -1674,6 +1674,8 @@ export interface Database {
           inbound_delegate_surface_budget_per_window: Record<string, unknown>;
           inbound_delegate_pending_intro_limit: number | null;
           inbound_delegate_cooloff_until: string | null;
+          inbound_delegate_confirmed_at: string | null;
+          inbound_delegate_expires_at: string | null;
           candidate_inbound_budget_version: string;
           candidate_exposure_version: string;
           allowed_cohort_ids: string[];
@@ -1719,6 +1721,8 @@ export interface Database {
           inbound_delegate_surface_budget_per_window?: Record<string, unknown>;
           inbound_delegate_pending_intro_limit?: number | null;
           inbound_delegate_cooloff_until?: string | null;
+          inbound_delegate_confirmed_at?: string | null;
+          inbound_delegate_expires_at?: string | null;
           candidate_inbound_budget_version?: string;
           candidate_exposure_version?: string;
           allowed_cohort_ids?: string[];
@@ -1763,6 +1767,8 @@ export interface Database {
           inbound_delegate_surface_budget_per_window?: Record<string, unknown>;
           inbound_delegate_pending_intro_limit?: number | null;
           inbound_delegate_cooloff_until?: string | null;
+          inbound_delegate_confirmed_at?: string | null;
+          inbound_delegate_expires_at?: string | null;
           candidate_inbound_budget_version?: string;
           candidate_exposure_version?: string;
           allowed_cohort_ids?: string[];
@@ -2637,6 +2643,558 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_candidate_reference_handles: {
+        Row: {
+          id: string;
+          delegate_run_id: string;
+          handle_token: string;
+          candidate_profile_id: string | null;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          cohort_scope_id: string | null;
+          handle_state: "active" | "redacted" | "anonymized" | "expired";
+          allowed_resolution_reasons: Array<
+            "operator_review" | "mutual_consent" | "safety_hold" | "legal_hold"
+          >;
+          policy_decision_id: string | null;
+          retention_expires_at: string;
+          resolved_at: string | null;
+          redacted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          delegate_run_id: string;
+          handle_token: string;
+          candidate_profile_id?: string | null;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          cohort_scope_id?: string | null;
+          handle_state?: "active" | "redacted" | "anonymized" | "expired";
+          allowed_resolution_reasons?: Array<
+            "operator_review" | "mutual_consent" | "safety_hold" | "legal_hold"
+          >;
+          policy_decision_id?: string | null;
+          retention_expires_at: string;
+          resolved_at?: string | null;
+          redacted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          handle_state?: "active" | "redacted" | "anonymized" | "expired";
+          candidate_profile_id?: string | null;
+          allowed_resolution_reasons?: Array<
+            "operator_review" | "mutual_consent" | "safety_hold" | "legal_hold"
+          >;
+          policy_decision_id?: string | null;
+          retention_expires_at?: string;
+          resolved_at?: string | null;
+          redacted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      background_entity_resolution_claims: {
+        Row: {
+          id: string;
+          subject_profile_id: string;
+          entity_kind: "person" | "organization" | "collective" | "partner_seat";
+          resolution_kind:
+            | "self_claimed"
+            | "verified_domain"
+            | "verified_document"
+            | "operator_confirmed"
+            | "partner_attested"
+            | "imported_alias"
+            | "model_suggested_duplicate";
+          resolution_state:
+            | "confirmed"
+            | "pending_review"
+            | "disputed"
+            | "rejected"
+            | "stale"
+            | "expired";
+          canonical_entity_ref: string | null;
+          evidence_redacted_summary: string;
+          allowed_purpose_bindings: Array<Record<string, unknown>>;
+          allowed_surface_keys: string[];
+          reviewed_by: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject_profile_id: string;
+          entity_kind: "person" | "organization" | "collective" | "partner_seat";
+          resolution_kind:
+            | "self_claimed"
+            | "verified_domain"
+            | "verified_document"
+            | "operator_confirmed"
+            | "partner_attested"
+            | "imported_alias"
+            | "model_suggested_duplicate";
+          resolution_state?:
+            | "confirmed"
+            | "pending_review"
+            | "disputed"
+            | "rejected"
+            | "stale"
+            | "expired";
+          canonical_entity_ref?: string | null;
+          evidence_redacted_summary?: string;
+          allowed_purpose_bindings?: Array<Record<string, unknown>>;
+          allowed_surface_keys?: string[];
+          reviewed_by?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          resolution_kind?:
+            | "self_claimed"
+            | "verified_domain"
+            | "verified_document"
+            | "operator_confirmed"
+            | "partner_attested"
+            | "imported_alias"
+            | "model_suggested_duplicate";
+          resolution_state?:
+            | "confirmed"
+            | "pending_review"
+            | "disputed"
+            | "rejected"
+            | "stale"
+            | "expired";
+          canonical_entity_ref?: string | null;
+          evidence_redacted_summary?: string;
+          allowed_purpose_bindings?: Array<Record<string, unknown>>;
+          allowed_surface_keys?: string[];
+          reviewed_by?: string | null;
+          expires_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_power_asymmetry_reviews: {
+        Row: {
+          id: string;
+          requester_handle_id: string | null;
+          candidate_handle_id: string | null;
+          relationship_context:
+            | "none"
+            | "funder_grantee"
+            | "employer_applicant"
+            | "landlord_tenant"
+            | "clinician_client"
+            | "legal_or_immigration_adviser_client"
+            | "mentor_mentee"
+            | "platform_admin_user"
+            | "regulator_regulated_party";
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          review_state: "pending_review" | "approved" | "blocked" | "expired" | "revoked";
+          allowed_surface_keys: string[];
+          safeguard_label: string;
+          boost_policy: "boosts_prohibited";
+          redacted_summary: string;
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          requester_handle_id?: string | null;
+          candidate_handle_id?: string | null;
+          relationship_context:
+            | "none"
+            | "funder_grantee"
+            | "employer_applicant"
+            | "landlord_tenant"
+            | "clinician_client"
+            | "legal_or_immigration_adviser_client"
+            | "mentor_mentee"
+            | "platform_admin_user"
+            | "regulator_regulated_party";
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          review_state?: "pending_review" | "approved" | "blocked" | "expired" | "revoked";
+          allowed_surface_keys?: string[];
+          safeguard_label?: string;
+          boost_policy?: "boosts_prohibited";
+          redacted_summary?: string;
+          expires_at: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          review_state?: "pending_review" | "approved" | "blocked" | "expired" | "revoked";
+          allowed_surface_keys?: string[];
+          safeguard_label?: string;
+          boost_policy?: "boosts_prohibited";
+          redacted_summary?: string;
+          expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_claim_assurance_records: {
+        Row: {
+          id: string;
+          participant_id: string;
+          claim_kind:
+            | "credential"
+            | "authority"
+            | "funding_capacity"
+            | "institutional_affiliation"
+            | "legal_expertise"
+            | "medical_expertise"
+            | "immigration_expertise"
+            | "fiscal_sponsorship"
+            | "scarce_resource"
+            | "safety_relevant_capability"
+            | "other_high_impact";
+          broad_claim_key: string;
+          assurance_level:
+            | "self_attested"
+            | "evidence_submitted"
+            | "operator_reviewed"
+            | "externally_verified"
+            | "expired"
+            | "revoked"
+            | "rejected";
+          allowed_purpose_bindings: Array<Record<string, unknown>>;
+          allowed_surface_keys: string[];
+          evidence_state:
+            | "none"
+            | "redacted_summary"
+            | "vault_bound_evidence"
+            | "external_verification_ref";
+          redacted_evidence_summary: string | null;
+          review_state: "pending" | "approved" | "rejected" | "stale" | "revoked";
+          assurance_version: string;
+          claim_assurance_taxonomy_version_snapshot: string;
+          claim_assurance_taxonomy_hash_snapshot: string;
+          confirmed_at: string | null;
+          expires_at: string;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          claim_kind:
+            | "credential"
+            | "authority"
+            | "funding_capacity"
+            | "institutional_affiliation"
+            | "legal_expertise"
+            | "medical_expertise"
+            | "immigration_expertise"
+            | "fiscal_sponsorship"
+            | "scarce_resource"
+            | "safety_relevant_capability"
+            | "other_high_impact";
+          broad_claim_key: string;
+          assurance_level?:
+            | "self_attested"
+            | "evidence_submitted"
+            | "operator_reviewed"
+            | "externally_verified"
+            | "expired"
+            | "revoked"
+            | "rejected";
+          allowed_purpose_bindings?: Array<Record<string, unknown>>;
+          allowed_surface_keys?: string[];
+          evidence_state?:
+            | "none"
+            | "redacted_summary"
+            | "vault_bound_evidence"
+            | "external_verification_ref";
+          redacted_evidence_summary?: string | null;
+          review_state?: "pending" | "approved" | "rejected" | "stale" | "revoked";
+          assurance_version: string;
+          claim_assurance_taxonomy_version_snapshot: string;
+          claim_assurance_taxonomy_hash_snapshot: string;
+          confirmed_at?: string | null;
+          expires_at: string;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          assurance_level?:
+            | "self_attested"
+            | "evidence_submitted"
+            | "operator_reviewed"
+            | "externally_verified"
+            | "expired"
+            | "revoked"
+            | "rejected";
+          allowed_purpose_bindings?: Array<Record<string, unknown>>;
+          allowed_surface_keys?: string[];
+          evidence_state?:
+            | "none"
+            | "redacted_summary"
+            | "vault_bound_evidence"
+            | "external_verification_ref";
+          redacted_evidence_summary?: string | null;
+          review_state?: "pending" | "approved" | "rejected" | "stale" | "revoked";
+          assurance_version?: string;
+          claim_assurance_taxonomy_version_snapshot?: string;
+          claim_assurance_taxonomy_hash_snapshot?: string;
+          confirmed_at?: string | null;
+          expires_at?: string;
+          revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_pairwise_safety_preferences: {
+        Row: {
+          id: string;
+          participant_id: string;
+          preference_kind: "do_not_match" | "block" | "mute" | "no_reminders" | "no_recontact";
+          scope_kind:
+            | "profile"
+            | "organization"
+            | "cohort"
+            | "partner"
+            | "intro_request"
+            | "purpose_code"
+            | "global_background_networking";
+          scope_value_internal: string;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro"
+            | null;
+          purpose_policy_version: "background-purpose-policy-v1" | null;
+          purpose_code_scope: string;
+          state: "active" | "paused" | "revoked" | "expired";
+          reason_code:
+            | "privacy"
+            | "safety"
+            | "not_relevant"
+            | "bad_timing"
+            | "already_connected"
+            | "participant_request"
+            | "operator_safety"
+            | null;
+          created_from_event_kind:
+            | "manual"
+            | "dismissal"
+            | "report"
+            | "declined_intro"
+            | "post_consent_interaction"
+            | "operator_safety_action"
+            | null;
+          safety_preference_version: string;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          preference_kind: "do_not_match" | "block" | "mute" | "no_reminders" | "no_recontact";
+          scope_kind:
+            | "profile"
+            | "organization"
+            | "cohort"
+            | "partner"
+            | "intro_request"
+            | "purpose_code"
+            | "global_background_networking";
+          scope_value_internal: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro"
+            | null;
+          purpose_policy_version?: "background-purpose-policy-v1" | null;
+          state?: "active" | "paused" | "revoked" | "expired";
+          reason_code?:
+            | "privacy"
+            | "safety"
+            | "not_relevant"
+            | "bad_timing"
+            | "already_connected"
+            | "participant_request"
+            | "operator_safety"
+            | null;
+          created_from_event_kind?:
+            | "manual"
+            | "dismissal"
+            | "report"
+            | "declined_intro"
+            | "post_consent_interaction"
+            | "operator_safety_action"
+            | null;
+          safety_preference_version: string;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          revoked_at?: string | null;
+        };
+        Update: {
+          state?: "active" | "paused" | "revoked" | "expired";
+          reason_code?:
+            | "privacy"
+            | "safety"
+            | "not_relevant"
+            | "bad_timing"
+            | "already_connected"
+            | "participant_request"
+            | "operator_safety"
+            | null;
+          safety_preference_version?: string;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_subject_identity_profiles: {
+        Row: {
+          id: string;
+          participant_id: string;
+          subject_kind:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated_agent"
+            | "service_account"
+            | "partner_operator";
+          sanitized_subject_label:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated helper"
+            | "service account"
+            | "partner/operator seat";
+          human_accountable_owner_id: string | null;
+          representative_authority_state:
+            | "not_required"
+            | "pending"
+            | "confirmed"
+            | "disputed"
+            | "expired"
+            | "revoked";
+          representative_authority_scope: Record<string, unknown>;
+          automation_disclosure_state:
+            | "not_automated"
+            | "disclosed_broadly"
+            | "pending_review"
+            | "blocked";
+          authority_expires_at: string | null;
+          subject_identity_version: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          subject_kind:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated_agent"
+            | "service_account"
+            | "partner_operator";
+          sanitized_subject_label:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated helper"
+            | "service account"
+            | "partner/operator seat";
+          human_accountable_owner_id?: string | null;
+          representative_authority_state?:
+            | "not_required"
+            | "pending"
+            | "confirmed"
+            | "disputed"
+            | "expired"
+            | "revoked";
+          representative_authority_scope?: Record<string, unknown>;
+          automation_disclosure_state?:
+            | "not_automated"
+            | "disclosed_broadly"
+            | "pending_review"
+            | "blocked";
+          authority_expires_at?: string | null;
+          subject_identity_version: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          subject_kind?:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated_agent"
+            | "service_account"
+            | "partner_operator";
+          sanitized_subject_label?:
+            | "individual"
+            | "organisation"
+            | "collective"
+            | "automated helper"
+            | "service account"
+            | "partner/operator seat";
+          human_accountable_owner_id?: string | null;
+          representative_authority_state?:
+            | "not_required"
+            | "pending"
+            | "confirmed"
+            | "disputed"
+            | "expired"
+            | "revoked";
+          representative_authority_scope?: Record<string, unknown>;
+          automation_disclosure_state?:
+            | "not_automated"
+            | "disclosed_broadly"
+            | "pending_review"
+            | "blocked";
+          authority_expires_at?: string | null;
+          subject_identity_version?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       background_source_summaries: {
         Row: {
           id: string;
@@ -2932,6 +3490,20 @@ export interface Database {
             | "safety_constraints";
           sensitivity: "broad" | "specific";
           confidence_band: "low" | "medium" | "high";
+          signal_fingerprint: string | null;
+          source_summary_version: number | null;
+          confirmation_kind:
+            | "explicit_participant_confirmation"
+            | "profile_apply"
+            | "interview_apply"
+            | "wish_dialogue_apply"
+            | null;
+          confirmation_actor_profile_id: string | null;
+          confirmed_at: string | null;
+          confirmation_policy_version: string | null;
+          lineage_status: "active" | "stale" | "revoked" | "expired";
+          purpose_code: string | null;
+          purpose_policy_version: string | null;
           status: "active" | "stale" | "expired" | "revoked";
           expires_at: string | null;
           created_at: string;
@@ -2954,6 +3526,20 @@ export interface Database {
             | "safety_constraints";
           sensitivity: "broad" | "specific";
           confidence_band: "low" | "medium" | "high";
+          signal_fingerprint?: string | null;
+          source_summary_version?: number | null;
+          confirmation_kind?:
+            | "explicit_participant_confirmation"
+            | "profile_apply"
+            | "interview_apply"
+            | "wish_dialogue_apply"
+            | null;
+          confirmation_actor_profile_id?: string | null;
+          confirmed_at?: string | null;
+          confirmation_policy_version?: string | null;
+          lineage_status?: "active" | "stale" | "revoked" | "expired";
+          purpose_code?: string | null;
+          purpose_policy_version?: string | null;
           status?: "active" | "stale" | "expired" | "revoked";
           expires_at?: string | null;
           created_at?: string;
@@ -2974,6 +3560,20 @@ export interface Database {
             | "safety_constraints";
           sensitivity?: "broad" | "specific";
           confidence_band?: "low" | "medium" | "high";
+          signal_fingerprint?: string | null;
+          source_summary_version?: number | null;
+          confirmation_kind?:
+            | "explicit_participant_confirmation"
+            | "profile_apply"
+            | "interview_apply"
+            | "wish_dialogue_apply"
+            | null;
+          confirmation_actor_profile_id?: string | null;
+          confirmed_at?: string | null;
+          confirmation_policy_version?: string | null;
+          lineage_status?: "active" | "stale" | "revoked" | "expired";
+          purpose_code?: string | null;
+          purpose_policy_version?: string | null;
           status?: "active" | "stale" | "expired" | "revoked";
           expires_at?: string | null;
           updated_at?: string;
@@ -6332,6 +6932,66 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_participant_credibility_profiles: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_credibility_events: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_credibility_scoring_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_credibility_appeals: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_friend_testimonial_invites: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_friend_testimonials: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_testimonial_quality_assessments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_testimonial_credibility_events: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_testimonial_stake_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_testimonial_stakes: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_pledge_performance_bond_policies: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -8137,6 +8797,9 @@ export interface Database {
             | "batch_clearing_objective"
             | "sensitive_evidence_attestation"
             | "pilot_evidence"
+            | "baseline_witness_testimony"
+            | "witness_identity_assurance"
+            | "witness_additionality_adjustment"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -8209,6 +8872,9 @@ export interface Database {
             | "batch_clearing_objective"
             | "sensitive_evidence_attestation"
             | "pilot_evidence"
+            | "baseline_witness_testimony"
+            | "witness_identity_assurance"
+            | "witness_additionality_adjustment"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -8280,6 +8946,9 @@ export interface Database {
             | "batch_clearing_objective"
             | "sensitive_evidence_attestation"
             | "pilot_evidence"
+            | "baseline_witness_testimony"
+            | "witness_identity_assurance"
+            | "witness_additionality_adjustment"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;
@@ -8290,6 +8959,92 @@ export interface Database {
           approved_at?: string | null;
           immutable_after?: string | null;
           superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
+      guest_witness_identities: {
+        Row: {
+          id: string;
+          primary_email_hash: string | null;
+          phone_hash: string | null;
+          converted_user_id: string | null;
+          witness_status: "active" | "restricted" | "blocked" | "deleted";
+          witness_credibility_decimal: number | null;
+          witness_credibility_confidence_decimal: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          primary_email_hash?: string | null;
+          phone_hash?: string | null;
+          converted_user_id?: string | null;
+          witness_status?: "active" | "restricted" | "blocked" | "deleted";
+          witness_credibility_decimal?: number | null;
+          witness_credibility_confidence_decimal?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          primary_email_hash?: string | null;
+          phone_hash?: string | null;
+          converted_user_id?: string | null;
+          witness_status?: "active" | "restricted" | "blocked" | "deleted";
+          witness_credibility_decimal?: number | null;
+          witness_credibility_confidence_decimal?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      external_witness_accounts: {
+        Row: {
+          id: string;
+          guest_witness_identity_id: string;
+          provider: "x" | "facebook" | "instagram" | "google" | "apple" | "email_magic_link" | "manual_review";
+          provider_account_id_hash: string;
+          provider_account_display_snapshot: string | null;
+          provider_profile_url_snapshot: string | null;
+          provider_verified_at: string;
+          oauth_scope_snapshot_json: Json | null;
+          token_storage_policy: "no_token" | "short_lived_token" | "long_lived_token_ref" | "manual";
+          token_ref: string | null;
+          token_expires_at: string | null;
+          account_status: "connected" | "expired" | "revoked" | "failed" | "blocked";
+          privacy_notice_version: string;
+          terms_acceptance_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          guest_witness_identity_id: string;
+          provider: "x" | "facebook" | "instagram" | "google" | "apple" | "email_magic_link" | "manual_review";
+          provider_account_id_hash: string;
+          provider_account_display_snapshot?: string | null;
+          provider_profile_url_snapshot?: string | null;
+          provider_verified_at: string;
+          oauth_scope_snapshot_json?: Json | null;
+          token_storage_policy?: "no_token" | "short_lived_token" | "long_lived_token_ref" | "manual";
+          token_ref?: string | null;
+          token_expires_at?: string | null;
+          account_status?: "connected" | "expired" | "revoked" | "failed" | "blocked";
+          privacy_notice_version: string;
+          terms_acceptance_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          provider_account_display_snapshot?: string | null;
+          provider_profile_url_snapshot?: string | null;
+          provider_verified_at?: string;
+          oauth_scope_snapshot_json?: Json | null;
+          token_storage_policy?: "no_token" | "short_lived_token" | "long_lived_token_ref" | "manual";
+          token_ref?: string | null;
+          token_expires_at?: string | null;
+          account_status?: "connected" | "expired" | "revoked" | "failed" | "blocked";
+          privacy_notice_version?: string;
+          terms_acceptance_id?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -8343,6 +9098,208 @@ export interface Database {
           action_window_start_at?: string;
           action_window_end_at?: string;
           expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      baseline_witness_testimonials: {
+        Row: {
+          id: string;
+          invite_id: string;
+          guest_witness_identity_id: string;
+          external_witness_account_id: string | null;
+          participant_user_id: string;
+          pledge_swap_id: string | null;
+          purchase_envelope_type: string | null;
+          purchase_envelope_id: string | null;
+          participant_action_commitment_id: string | null;
+          relationship_type: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other";
+          baseline_knowledge_level: "none" | "low" | "moderate" | "high";
+          recent_meal_observation_frequency: "never" | "once" | "few_times" | "weekly" | "daily" | "lived_together";
+          baseline_counterfactual_credence_decimal: number;
+          basis_json: Json;
+          uncertainty_notes_private: string | null;
+          concern_flag: "none" | "possible_baseline_overstatement" | "possible_pressure" | "possible_side_payment" | "insufficient_knowledge" | "other";
+          concern_notes_private: string | null;
+          testimonial_status: "submitted" | "under_review" | "accepted" | "partially_accepted" | "rejected" | "disputed" | "blocked";
+          reviewer_user_id: string | null;
+          participant_visible_summary: string | null;
+          private_reviewer_notes_ref: string | null;
+          submitted_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          invite_id: string;
+          guest_witness_identity_id: string;
+          external_witness_account_id?: string | null;
+          participant_user_id: string;
+          pledge_swap_id?: string | null;
+          purchase_envelope_type?: string | null;
+          purchase_envelope_id?: string | null;
+          participant_action_commitment_id?: string | null;
+          relationship_type: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other";
+          baseline_knowledge_level: "none" | "low" | "moderate" | "high";
+          recent_meal_observation_frequency: "never" | "once" | "few_times" | "weekly" | "daily" | "lived_together";
+          baseline_counterfactual_credence_decimal: number;
+          basis_json?: Json;
+          uncertainty_notes_private?: string | null;
+          concern_flag?: "none" | "possible_baseline_overstatement" | "possible_pressure" | "possible_side_payment" | "insufficient_knowledge" | "other";
+          concern_notes_private?: string | null;
+          testimonial_status?: "submitted" | "under_review" | "accepted" | "partially_accepted" | "rejected" | "disputed" | "blocked";
+          reviewer_user_id?: string | null;
+          participant_visible_summary?: string | null;
+          private_reviewer_notes_ref?: string | null;
+          submitted_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          external_witness_account_id?: string | null;
+          relationship_type?: "friend" | "family" | "roommate" | "romantic_partner" | "classmate" | "coworker" | "dining_companion" | "other";
+          baseline_knowledge_level?: "none" | "low" | "moderate" | "high";
+          recent_meal_observation_frequency?: "never" | "once" | "few_times" | "weekly" | "daily" | "lived_together";
+          baseline_counterfactual_credence_decimal?: number;
+          basis_json?: Json;
+          uncertainty_notes_private?: string | null;
+          concern_flag?: "none" | "possible_baseline_overstatement" | "possible_pressure" | "possible_side_payment" | "insufficient_knowledge" | "other";
+          concern_notes_private?: string | null;
+          testimonial_status?: "submitted" | "under_review" | "accepted" | "partially_accepted" | "rejected" | "disputed" | "blocked";
+          reviewer_user_id?: string | null;
+          participant_visible_summary?: string | null;
+          private_reviewer_notes_ref?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      baseline_witness_quality_assessments: {
+        Row: {
+          id: string;
+          baseline_witness_testimonial_id: string;
+          guest_witness_identity_id: string;
+          participant_user_id: string;
+          identity_assurance_level: "email_only" | "social_verified" | "prior_user" | "manual_verified" | "weak";
+          relationship_weight_decimal: number;
+          knowledge_basis_score_decimal: number;
+          specificity_score_decimal: number;
+          independence_score_decimal: number;
+          consistency_score_decimal: number;
+          collusion_risk_score_decimal: number;
+          baseline_probative_value_score_decimal: number;
+          accepted_for_additionality: boolean;
+          accepted_for_credibility_update: boolean;
+          proposed_additionality_adjustment_decimal: number | null;
+          review_status: "pending" | "accepted" | "rejected" | "needs_more_info" | "disputed";
+          reviewer_id: string | null;
+          private_notes_ref: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          baseline_witness_testimonial_id: string;
+          guest_witness_identity_id: string;
+          participant_user_id: string;
+          identity_assurance_level: "email_only" | "social_verified" | "prior_user" | "manual_verified" | "weak";
+          relationship_weight_decimal: number;
+          knowledge_basis_score_decimal: number;
+          specificity_score_decimal: number;
+          independence_score_decimal: number;
+          consistency_score_decimal: number;
+          collusion_risk_score_decimal: number;
+          baseline_probative_value_score_decimal: number;
+          accepted_for_additionality?: boolean;
+          accepted_for_credibility_update?: boolean;
+          proposed_additionality_adjustment_decimal?: number | null;
+          review_status?: "pending" | "accepted" | "rejected" | "needs_more_info" | "disputed";
+          reviewer_id?: string | null;
+          private_notes_ref?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          identity_assurance_level?: "email_only" | "social_verified" | "prior_user" | "manual_verified" | "weak";
+          relationship_weight_decimal?: number;
+          knowledge_basis_score_decimal?: number;
+          specificity_score_decimal?: number;
+          independence_score_decimal?: number;
+          consistency_score_decimal?: number;
+          collusion_risk_score_decimal?: number;
+          baseline_probative_value_score_decimal?: number;
+          accepted_for_additionality?: boolean;
+          accepted_for_credibility_update?: boolean;
+          proposed_additionality_adjustment_decimal?: number | null;
+          review_status?: "pending" | "accepted" | "rejected" | "needs_more_info" | "disputed";
+          reviewer_id?: string | null;
+          private_notes_ref?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      baseline_witness_audit_events: {
+        Row: {
+          id: string;
+          invite_id: string | null;
+          baseline_witness_testimonial_id: string | null;
+          baseline_witness_quality_assessment_id: string | null;
+          event_type: "invite_created" | "invite_opened" | "magic_link_verified" | "testimonial_submitted" | "witness_declined" | "pressure_reported" | "quality_assessed" | "review_decision" | "policy_effect_applied" | "unlink_requested" | "deletion_requested";
+          actor_kind: "participant" | "witness" | "reviewer" | "system";
+          actor_id_hash: string | null;
+          redacted_summary: string;
+          event_payload_redacted: Json;
+          private_ref_hash: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          invite_id?: string | null;
+          baseline_witness_testimonial_id?: string | null;
+          baseline_witness_quality_assessment_id?: string | null;
+          event_type: "invite_created" | "invite_opened" | "magic_link_verified" | "testimonial_submitted" | "witness_declined" | "pressure_reported" | "quality_assessed" | "review_decision" | "policy_effect_applied" | "unlink_requested" | "deletion_requested";
+          actor_kind: "participant" | "witness" | "reviewer" | "system";
+          actor_id_hash?: string | null;
+          redacted_summary: string;
+          event_payload_redacted?: Json;
+          private_ref_hash?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      baseline_witness_risk_reports: {
+        Row: {
+          id: string;
+          invite_id: string | null;
+          baseline_witness_testimonial_id: string | null;
+          participant_user_id: string | null;
+          guest_witness_identity_id: string | null;
+          report_kind: "pressure_or_coercion" | "possible_side_payment" | "testimonial_ring" | "duplicate_witness" | "other";
+          review_status: "open" | "under_review" | "resolved" | "dismissed" | "escalated";
+          redacted_summary: string;
+          private_report_ref_hash: string | null;
+          routed_to: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          invite_id?: string | null;
+          baseline_witness_testimonial_id?: string | null;
+          participant_user_id?: string | null;
+          guest_witness_identity_id?: string | null;
+          report_kind: "pressure_or_coercion" | "possible_side_payment" | "testimonial_ring" | "duplicate_witness" | "other";
+          review_status?: "open" | "under_review" | "resolved" | "dismissed" | "escalated";
+          redacted_summary: string;
+          private_report_ref_hash?: string | null;
+          routed_to?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          review_status?: "open" | "under_review" | "resolved" | "dismissed" | "escalated";
+          redacted_summary?: string;
+          routed_to?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -9917,6 +10874,36 @@ export interface Database {
         Relationships: [];
       };
       moral_trade_participant_eligibility_reviews: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_opportunity_constraint_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_opportunity_meal_evidence_bundles: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_meal_witness_testimonials: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_opportunity_constraint_assessments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_opportunity_meal_audit_events: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
         Update: SupabaseMoralTradeOperationalUpdate;

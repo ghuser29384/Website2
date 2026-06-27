@@ -43,6 +43,11 @@ export type MoralTradeApiRateLimitSurface =
   | "preference_integrity_enforce"
   | "commitment_settlement_enforce"
   | "group_buying_enforce"
+  | "participant_credibility_enforce"
+  | "opportunity_meal_evidence_enforce"
+  | "guest_witness_invite_write"
+  | "guest_witness_testimony_write"
+  | "guest_witness_review_write"
   | "pledge_performance_bond_enforce"
   | "pledge_swap_performance_schedule_enforce"
   | "negative_commitment_scope_enforce"
@@ -69,6 +74,9 @@ export type MoralTradeApiRateLimitSurface =
   | "background_helper_run_write"
   | "background_wish_interview_write"
   | "background_source_summary_write"
+  | "background_subject_identity_write"
+  | "background_claim_assurance_write"
+  | "background_pairwise_safety_write"
   | "background_intro_packet_write"
   | "background_private_overlap_check"
   | "wish_registry_search"
@@ -116,6 +124,11 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   preference_integrity_enforce: { limit: 20, windowMs: 60_000 },
   commitment_settlement_enforce: { limit: 20, windowMs: 60_000 },
   group_buying_enforce: { limit: 20, windowMs: 60_000 },
+  participant_credibility_enforce: { limit: 20, windowMs: 60_000 },
+  opportunity_meal_evidence_enforce: { limit: 20, windowMs: 60_000 },
+  guest_witness_invite_write: { limit: 12, windowMs: 60_000 },
+  guest_witness_testimony_write: { limit: 20, windowMs: 60_000 },
+  guest_witness_review_write: { limit: 20, windowMs: 60_000 },
   pledge_performance_bond_enforce: { limit: 20, windowMs: 60_000 },
   pledge_swap_performance_schedule_enforce: { limit: 20, windowMs: 60_000 },
   negative_commitment_scope_enforce: { limit: 20, windowMs: 60_000 },
@@ -142,6 +155,9 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   background_helper_run_write: { limit: 12, windowMs: 60_000 },
   background_wish_interview_write: { limit: 20, windowMs: 60_000 },
   background_source_summary_write: { limit: 12, windowMs: 60_000 },
+  background_subject_identity_write: { limit: 8, windowMs: 60_000 },
+  background_claim_assurance_write: { limit: 8, windowMs: 60_000 },
+  background_pairwise_safety_write: { limit: 12, windowMs: 60_000 },
   background_intro_packet_write: { limit: 12, windowMs: 60_000 },
   background_private_overlap_check: { limit: 12, windowMs: 60_000 },
   wish_registry_search: { limit: 60, windowMs: 60_000 },

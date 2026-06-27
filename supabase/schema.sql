@@ -997,6 +997,8 @@ create table if not exists public.wish_profiles (
   inbound_delegate_surface_budget_per_window jsonb not null default '{}'::jsonb,
   inbound_delegate_pending_intro_limit integer check (inbound_delegate_pending_intro_limit is null or inbound_delegate_pending_intro_limit between 0 and 50),
   inbound_delegate_cooloff_until timestamptz,
+  inbound_delegate_confirmed_at timestamptz,
+  inbound_delegate_expires_at timestamptz,
   candidate_inbound_budget_version text not null default 'candidate-budget-v1',
   candidate_exposure_version text not null default 'candidate-exposure-v1',
   allowed_cohort_ids text[] not null default '{}',
@@ -5635,6 +5637,26 @@ create table if not exists public.background_profile_signals (
   ),
   sensitivity text not null check (sensitivity in ('broad', 'specific')),
   confidence_band text not null check (confidence_band in ('low', 'medium', 'high')),
+  signal_fingerprint text check (
+    signal_fingerprint is null
+    or signal_fingerprint ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  source_summary_version integer,
+  confirmation_kind text check (
+    confirmation_kind is null
+    or confirmation_kind in (
+      'explicit_participant_confirmation',
+      'profile_apply',
+      'interview_apply',
+      'wish_dialogue_apply'
+    )
+  ),
+  confirmation_actor_profile_id uuid references public.profiles (id) on delete set null,
+  confirmed_at timestamptz,
+  confirmation_policy_version text,
+  lineage_status text not null default 'active' check (lineage_status in ('active', 'stale', 'revoked', 'expired')),
+  purpose_code text,
+  purpose_policy_version text,
   status text not null default 'active' check (status in ('active', 'stale', 'expired', 'revoked')),
   expires_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
@@ -5766,6 +5788,17 @@ where source_summary_id is not null;
 create index if not exists background_profile_signals_source_connection_idx
 on public.background_profile_signals (source_connection_id, profile_id)
 where source_connection_id is not null;
+
+create unique index if not exists background_profile_signals_confirmed_source_tag_uidx
+on public.background_profile_signals (
+  profile_id,
+  source_summary_id,
+  source_summary_version,
+  signal_fingerprint
+)
+where source = 'approved_source_summary'
+  and status = 'active'
+  and signal_fingerprint is not null;
 
 create index if not exists background_shadow_runs_profile_created_idx
 on public.background_shadow_runs (profile_id, created_at desc);
@@ -6889,9 +6922,14 @@ create table if not exists public.mpgf_user_budgets (
   monthly_budget_cents bigint check (monthly_budget_cents is null or monthly_budget_cents >= 0),
   round_budget_cents bigint check (round_budget_cents is null or round_budget_cents >= 0),
   total_budget_cents bigint not null check (total_budget_cents > 0),
+  per_project_cap_cents bigint not null default 0 check (per_project_cap_cents >= 0),
   settlement_currency text not null default 'usd' check (settlement_currency = 'usd'),
   currency text not null default 'usd' check (currency = 'usd'),
   recurrence_rule text,
+  next_capture_at timestamptz,
+  next_capture_rule text not null default 'none_before_final_review' check (
+    next_capture_rule in ('none_before_final_review', 'monthly_after_final_review', 'manual_review_required')
+  ),
   payment_profile_ref_hash text check (
     payment_profile_ref_hash is null or payment_profile_ref_hash ~ '^sha256:[0-9a-f]{64}$'
   ),
@@ -7924,6 +7962,8 @@ alter table public.wish_profiles
   add column if not exists inbound_delegate_surface_budget_per_window jsonb not null default '{}'::jsonb,
   add column if not exists inbound_delegate_pending_intro_limit integer,
   add column if not exists inbound_delegate_cooloff_until timestamptz,
+  add column if not exists inbound_delegate_confirmed_at timestamptz,
+  add column if not exists inbound_delegate_expires_at timestamptz,
   add column if not exists candidate_inbound_budget_version text not null default 'candidate-budget-v1',
   add column if not exists candidate_exposure_version text not null default 'candidate-exposure-v1',
   add column if not exists allowed_cohort_ids text[] not null default '{}';
@@ -8278,6 +8318,16 @@ on public.background_opportunity_briefs (profile_id, purpose_code, purpose_polic
 
 create index if not exists background_intro_packets_purpose_idx
 on public.background_intro_packets (requester_profile_id, purpose_code, purpose_policy_version, review_state);
+
+create unique index if not exists background_intro_packets_active_brief_uidx
+on public.background_intro_packets (
+  requester_profile_id,
+  opportunity_brief_id,
+  purpose_code,
+  purpose_policy_version
+)
+where opportunity_brief_id is not null
+  and review_state in ('requested', 'under_review', 'approved', 'changes_requested', 'sent');
 
 create index if not exists helper_strategies_purpose_idx
 on public.helper_strategies (profile_id, purpose_code, purpose_policy_version, audience_scope, status);
@@ -19985,3 +20035,734 @@ create policy "moral_trade_authority_obligation_enforcement_records_insert_owner
     and third_party_obligation_transfer_allowed_bool = false
     and state_mutation_allowed_bool = false
   );
+
+create table if not exists public.moral_trade_credibility_scoring_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  max_single_testimonial_evidence_quality_delta_decimal numeric(6,5) not null check (max_single_testimonial_evidence_quality_delta_decimal between 0 and 1),
+  max_single_testimonial_additionality_delta_decimal numeric(6,5) not null check (max_single_testimonial_additionality_delta_decimal between 0 and 1),
+  max_single_testimonial_verification_confidence_delta_decimal numeric(6,5) not null check (max_single_testimonial_verification_confidence_delta_decimal between 0 and 1),
+  max_single_testimonial_credibility_delta_decimal numeric(6,5) not null check (max_single_testimonial_credibility_delta_decimal between 0 and 1),
+  high_stakes_standalone_testimonial_verification_allowed_bool boolean not null default false,
+  privacy_invasive_evidence_overreward_cap_decimal numeric(6,5) not null default 0.04 check (privacy_invasive_evidence_overreward_cap_decimal between 0 and 1),
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (high_stakes_standalone_testimonial_verification_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_testimonial_stake_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  default_stake_required_bool boolean not null default false,
+  optional_stake_enabled_bool boolean not null default false,
+  minimum_stake_minor integer,
+  maximum_stake_minor integer,
+  percentage_of_consideration_decimal numeric(6,5),
+  destination_policy text not null check (destination_policy in ('same_charity', 'neutral_approved_charity', 'random_same_cause_charity', 'no_stake')),
+  refund_or_forfeit_policy text,
+  legal_compliance_review_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (default_stake_required_bool = false),
+  check (optional_stake_enabled_bool = false or (minimum_stake_minor is not null and maximum_stake_minor is not null and percentage_of_consideration_decimal is not null and legal_compliance_review_ref is not null and minimum_stake_minor >= 0 and maximum_stake_minor >= minimum_stake_minor and percentage_of_consideration_decimal between 0 and 0.02 and maximum_stake_minor <= 1000))
+);
+
+create table if not exists public.moral_trade_participant_credibility_profiles (
+  participant_user_id uuid primary key references public.profiles (id) on delete cascade,
+  credibility_score_decimal numeric(6,5) not null default 0.5 check (credibility_score_decimal between 0 and 1),
+  credibility_tier text not null default 'new' check (credibility_tier in ('new', 'limited', 'standard', 'high', 'under_review')),
+  expected_completion_probability_decimal numeric(6,5) not null default 0.5 check (expected_completion_probability_decimal between 0 and 1),
+  evidence_reliability_decimal numeric(6,5) not null default 0.5 check (evidence_reliability_decimal between 0 and 1),
+  fraud_risk_decimal numeric(6,5) not null default 0.1 check (fraud_risk_decimal between 0 and 1),
+  future_verification_burden text not null default 'standard' check (future_verification_burden in ('light', 'standard', 'heightened', 'manual_review')),
+  last_credibility_event_id uuid,
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_friend_testimonial_invites (
+  id uuid primary key default gen_random_uuid(),
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  invited_friend_user_id uuid references public.profiles (id) on delete set null,
+  invited_friend_email_hash text,
+  invite_token_hash text not null unique check (invite_token_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_status text not null check (invite_status in ('pending', 'accepted', 'declined', 'expired', 'revoked', 'blocked', 'reported')),
+  relationship_claimed_by_participant text check (relationship_claimed_by_participant in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'other')),
+  minimum_necessary_disclosure_json jsonb not null,
+  hidden_from_invite text[] not null default '{}',
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  abuse_report_count integer not null default 0 check (abuse_report_count >= 0),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (invited_friend_user_id is not null or invited_friend_email_hash is not null),
+  check (expires_at > created_at)
+);
+
+create table if not exists public.moral_trade_friend_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid not null references public.moral_trade_friend_testimonial_invites (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  action_template_id text not null,
+  action_window_start_at timestamptz not null,
+  action_window_end_at timestamptz not null,
+  relationship_type text not null check (relationship_type in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'other')),
+  relationship_context_private text,
+  baseline_knowledge_level text not null check (baseline_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  completion_knowledge_level text not null check (completion_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  baseline_counterfactual_credence_decimal numeric(6,5) check (baseline_counterfactual_credence_decimal between 0 and 1),
+  completion_credence_decimal numeric(6,5) check (completion_credence_decimal between 0 and 1),
+  baseline_basis_json jsonb not null,
+  completion_basis_json jsonb not null,
+  concern_flag text not null default 'none' check (concern_flag in ('none', 'possible_noncompletion', 'possible_baseline_manipulation', 'possible_pressure', 'possible_side_payment', 'other')),
+  concern_notes_private text,
+  testimony_text_private text,
+  friend_terms_acceptance_id text not null,
+  submitted_at timestamptz not null,
+  testimonial_status text not null check (testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed', 'blocked')),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (action_window_start_at < action_window_end_at)
+);
+
+create table if not exists public.moral_trade_testimonial_quality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null default 'friend_testimonial',
+  source_id uuid not null,
+  relationship_weight_decimal numeric(6,5) not null check (relationship_weight_decimal between 0 and 1),
+  friend_credibility_weight_decimal numeric(6,5) not null check (friend_credibility_weight_decimal between 0 and 1),
+  specificity_score_decimal numeric(6,5) not null check (specificity_score_decimal between 0 and 1),
+  knowledge_basis_score_decimal numeric(6,5) not null check (knowledge_basis_score_decimal between 0 and 1),
+  consistency_score_decimal numeric(6,5) not null check (consistency_score_decimal between 0 and 1),
+  independence_score_decimal numeric(6,5) not null check (independence_score_decimal between 0 and 1),
+  collusion_risk_score_decimal numeric(6,5) not null check (collusion_risk_score_decimal between 0 and 1),
+  privacy_sensitivity_score_decimal numeric(6,5) not null check (privacy_sensitivity_score_decimal between 0 and 1),
+  baseline_probative_value_score_decimal numeric(6,5) not null check (baseline_probative_value_score_decimal between 0 and 1),
+  completion_probative_value_score_decimal numeric(6,5) not null check (completion_probative_value_score_decimal between 0 and 1),
+  accepted_for_additionality_bool boolean not null default false,
+  accepted_for_completion_verification_bool boolean not null default false,
+  accepted_for_credibility_update_bool boolean not null default false,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  review_status text not null check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  participant_visible_summary text,
+  private_notes_ref text,
+  risk_review_flags text[] not null default '{}',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (source_type = 'friend_testimonial')
+);
+
+create table if not exists public.moral_trade_credibility_events (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null check (source_type in ('pledge_swap', 'friend_testimonial', 'review', 'appeal')),
+  source_id text not null,
+  event_type text not null check (event_type in ('pledge_swap_completed', 'pledge_swap_failed', 'pledge_swap_withdrawn', 'pledge_swap_disputed', 'pledge_swap_appeal_correction', 'friend_testimonial_consistent', 'friend_testimonial_contradicted', 'friend_concern_report_supported')),
+  prior_credibility_score_decimal numeric(6,5) not null check (prior_credibility_score_decimal between 0 and 1),
+  credibility_delta_decimal numeric(7,5) not null check (credibility_delta_decimal between -1 and 1),
+  new_credibility_score_decimal numeric(6,5) not null check (new_credibility_score_decimal between 0 and 1),
+  evidence_quality_score_decimal numeric(6,5) not null check (evidence_quality_score_decimal between 0 and 1),
+  final_additionality_probability_decimal numeric(6,5) not null check (final_additionality_probability_decimal between 0 and 1),
+  verification_confidence_decimal numeric(6,5) not null check (verification_confidence_decimal between 0 and 1),
+  policy_snapshot_hash text not null check (policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_visible_reason text,
+  private_reviewer_notes_ref text,
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  correction_of_event_id uuid references public.moral_trade_credibility_events (id) on delete restrict,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.moral_trade_participant_credibility_profiles
+  add constraint moral_trade_participant_credibility_profiles_last_event_fk
+  foreign key (last_credibility_event_id)
+  references public.moral_trade_credibility_events (id)
+  on delete set null;
+
+create table if not exists public.moral_trade_testimonial_credibility_events (
+  id uuid primary key default gen_random_uuid(),
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  related_participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  event_type text not null check (event_type in ('accurate_supportive_testimony', 'inaccurate_testimony', 'contradicted_testimony', 'concern_report_supported', 'concern_report_not_supported', 'reckless_or_fraudulent_testimony', 'appeal_correction')),
+  prior_testimonial_credibility_decimal numeric(6,5) not null check (prior_testimonial_credibility_decimal between 0 and 1),
+  delta_decimal numeric(7,5) not null check (delta_decimal between -1 and 1),
+  new_testimonial_credibility_decimal numeric(6,5) not null check (new_testimonial_credibility_decimal between 0 and 1),
+  participant_visible_reason text,
+  friend_visible_reason text not null,
+  private_reviewer_notes_ref text,
+  policy_snapshot_hash text not null check (policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_credibility_appeals (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_credibility_event_id uuid not null references public.moral_trade_credibility_events (id) on delete restrict,
+  appeal_status text not null check (appeal_status in ('available', 'submitted', 'under_review', 'resolved', 'expired')),
+  participant_visible_reason text not null,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  resolved_at timestamptz
+);
+
+create table if not exists public.moral_trade_testimonial_stakes (
+  id uuid primary key default gen_random_uuid(),
+  friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  amount_minor integer not null check (amount_minor between 0 and 1000),
+  currency text not null default 'USD',
+  destination_policy text not null check (destination_policy in ('same_charity', 'neutral_approved_charity', 'random_same_cause_charity', 'no_stake')),
+  donation_recipient_id text,
+  stake_status text not null check (stake_status in ('proposed', 'authorized', 'donated', 'released', 'failed', 'cancelled', 'blocked')),
+  payment_operation_id text,
+  donor_of_record_policy_snapshot_hash text check (donor_of_record_policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_participant_credibility_profiles is
+  'Private participant credibility profiles estimating future pledge-swap completion, evidence reliability, fraud risk, pricing, selection, and future verification burden. These are not public social credit, credit-score, or reputation-score surfaces.';
+
+comment on table public.moral_trade_friend_testimonials is
+  'Private friend testimonials for pledge-swap evidence. Baseline/additionality credence and completion credence are captured separately; raw testimony, concern notes, and friend identity are not public or funder-visible.';
+
+comment on table public.moral_trade_credibility_events is
+  'Append-only participant credibility events. Corrections and appeals create new events instead of mutating historical credibility events.';
+
+comment on table public.moral_trade_testimonial_credibility_events is
+  'Append-only testimonial-provider credibility events. Later contradiction, corroboration, and appeal corrections are recorded without public social-proof exposure.';
+
+alter table public.moral_trade_participant_credibility_profiles enable row level security;
+alter table public.moral_trade_friend_testimonial_invites enable row level security;
+alter table public.moral_trade_friend_testimonials enable row level security;
+alter table public.moral_trade_testimonial_quality_assessments enable row level security;
+alter table public.moral_trade_credibility_events enable row level security;
+alter table public.moral_trade_testimonial_credibility_events enable row level security;
+alter table public.moral_trade_credibility_appeals enable row level security;
+alter table public.moral_trade_testimonial_stakes enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure',
+      'recipient_acceptance',
+      'adverse_association',
+      'ai_preference_elicitation',
+      'post_clear_audit',
+      'non_public_goods_subsidy',
+      'subsidy_schedule',
+      'cause_bucket_taxonomy',
+      'resource_compatibility',
+      'net_offset_accounting',
+      'offer_validity',
+      'direct_pair_clearing',
+      'private_exchange_rate_quote',
+      'noncompensable_blocker',
+      'batch_clearing_objective',
+      'sensitive_evidence_attestation',
+      'pilot_evidence',
+      'option_set_comparison',
+      'preference_comparability',
+      'trade_burden_accounting',
+      'moral_difference_attestation',
+      'bargaining_protocol',
+      'empirical_assumption',
+      'moral_side_constraint',
+      'intrapersonal_self_offset',
+      'commitment_inventory',
+      'atomic_settlement',
+      'breach_remedy',
+      'pledge_performance_bond',
+      'baseline_witness_testimony',
+      'witness_identity_assurance',
+      'witness_additionality_adjustment'
+    )
+  );
+
+create table if not exists public.guest_witness_identities (
+  id uuid primary key default gen_random_uuid(),
+  primary_email_hash text check (primary_email_hash is null or primary_email_hash ~ '^sha256:[a-f0-9]{64}$'),
+  phone_hash text check (phone_hash is null or phone_hash ~ '^sha256:[a-f0-9]{64}$'),
+  converted_user_id uuid references public.profiles (id) on delete set null,
+  witness_status text not null default 'active' check (witness_status in ('active', 'restricted', 'blocked', 'deleted')),
+  witness_credibility_decimal numeric(5,4) check (witness_credibility_decimal is null or (witness_credibility_decimal >= 0 and witness_credibility_decimal <= 1)),
+  witness_credibility_confidence_decimal numeric(5,4) check (witness_credibility_confidence_decimal is null or (witness_credibility_confidence_decimal >= 0 and witness_credibility_confidence_decimal <= 1)),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.guest_witness_identities is
+  'Private guest witness identity records for non-user baseline testimony. Contact fields are stored only as hashes, and conversion to a full user account is optional.';
+
+create unique index if not exists guest_witness_identities_email_hash_idx
+  on public.guest_witness_identities (primary_email_hash)
+  where primary_email_hash is not null;
+
+create unique index if not exists guest_witness_identities_phone_hash_idx
+  on public.guest_witness_identities (phone_hash)
+  where phone_hash is not null;
+
+create table if not exists public.external_witness_accounts (
+  id uuid primary key default gen_random_uuid(),
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete cascade,
+  provider text not null check (provider in ('x', 'facebook', 'instagram', 'google', 'apple', 'email_magic_link', 'manual_review')),
+  provider_account_id_hash text not null check (provider_account_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  provider_account_display_snapshot text,
+  provider_profile_url_snapshot text,
+  provider_verified_at timestamptz not null,
+  oauth_scope_snapshot_json jsonb,
+  token_storage_policy text not null default 'no_token' check (token_storage_policy in ('no_token', 'short_lived_token', 'long_lived_token_ref', 'manual')),
+  token_ref text,
+  token_expires_at timestamptz,
+  account_status text not null default 'connected' check (account_status in ('connected', 'expired', 'revoked', 'failed', 'blocked')),
+  privacy_notice_version text not null,
+  terms_acceptance_id text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    token_storage_policy <> 'no_token'
+    or (token_ref is null and token_expires_at is null)
+  )
+);
+
+comment on table public.external_witness_accounts is
+  'Optional privacy-minimized external account verification for guest witnesses. Stable provider ids are hashed; posting permissions and raw tokens are not stored by default.';
+
+create unique index if not exists external_witness_accounts_provider_hash_idx
+  on public.external_witness_accounts (provider, provider_account_id_hash);
+
+create index if not exists external_witness_accounts_identity_idx
+  on public.external_witness_accounts (guest_witness_identity_id, account_status, created_at desc);
+
+create table if not exists public.baseline_witness_invites (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id uuid references public.offers (id) on delete set null,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text references public.moral_goods_participant_action_commitments (id) on delete set null,
+  invited_email_hash text check (invited_email_hash is null or invited_email_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invited_phone_hash text check (invited_phone_hash is null or invited_phone_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_token_hash text not null unique check (invite_token_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_status text not null default 'pending' check (invite_status in ('pending', 'opened', 'submitted', 'declined', 'expired', 'revoked', 'reported', 'blocked')),
+  participant_claimed_relationship text check (
+    participant_claimed_relationship is null or participant_claimed_relationship in (
+      'friend',
+      'family',
+      'roommate',
+      'romantic_partner',
+      'classmate',
+      'coworker',
+      'dining_companion',
+      'other'
+    )
+  ),
+  action_template_id text not null,
+  action_window_start_at timestamptz not null,
+  action_window_end_at timestamptz not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (action_window_end_at > action_window_start_at),
+  check (expires_at > created_at),
+  check (
+    invited_email_hash is not null
+    or invited_phone_hash is not null
+    or invite_token_hash is not null
+  )
+);
+
+comment on table public.baseline_witness_invites is
+  'Private expiring invites for baseline-only pre-pledge guest witness testimony. Raw invite tokens are never stored.';
+
+create index if not exists baseline_witness_invites_participant_status_idx
+  on public.baseline_witness_invites (participant_user_id, invite_status, created_at desc);
+
+create index if not exists baseline_witness_invites_pledge_status_idx
+  on public.baseline_witness_invites (pledge_swap_id, invite_status, created_at desc);
+
+create table if not exists public.baseline_witness_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid not null references public.baseline_witness_invites (id) on delete restrict,
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete restrict,
+  external_witness_account_id uuid references public.external_witness_accounts (id) on delete set null,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id uuid references public.offers (id) on delete set null,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text references public.moral_goods_participant_action_commitments (id) on delete set null,
+  relationship_type text not null check (relationship_type in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'dining_companion', 'other')),
+  baseline_knowledge_level text not null check (baseline_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  recent_meal_observation_frequency text not null check (recent_meal_observation_frequency in ('never', 'once', 'few_times', 'weekly', 'daily', 'lived_together')),
+  baseline_counterfactual_credence_decimal numeric(5,4) not null check (baseline_counterfactual_credence_decimal >= 0 and baseline_counterfactual_credence_decimal <= 1),
+  basis_json jsonb not null default '{}'::jsonb,
+  uncertainty_notes_private text,
+  concern_flag text not null default 'none' check (concern_flag in ('none', 'possible_baseline_overstatement', 'possible_pressure', 'possible_side_payment', 'insufficient_knowledge', 'other')),
+  concern_notes_private text,
+  testimonial_status text not null default 'submitted' check (testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed', 'blocked')),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  submitted_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (invite_id),
+  check (jsonb_typeof(basis_json) = 'object')
+);
+
+comment on table public.baseline_witness_testimonials is
+  'Private baseline/additionality guest witness testimony. It is not completion proof, public testimony, or social proof of truth.';
+
+create unique index if not exists baseline_witness_testimonials_external_pledge_idx
+  on public.baseline_witness_testimonials (pledge_swap_id, external_witness_account_id)
+  where pledge_swap_id is not null and external_witness_account_id is not null;
+
+create index if not exists baseline_witness_testimonials_review_idx
+  on public.baseline_witness_testimonials (testimonial_status, submitted_at desc);
+
+create index if not exists baseline_witness_testimonials_participant_idx
+  on public.baseline_witness_testimonials (participant_user_id, pledge_swap_id, submitted_at desc);
+
+create table if not exists public.baseline_witness_quality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  baseline_witness_testimonial_id uuid not null references public.baseline_witness_testimonials (id) on delete cascade,
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  identity_assurance_level text not null check (identity_assurance_level in ('email_only', 'social_verified', 'prior_user', 'manual_verified', 'weak')),
+  relationship_weight_decimal numeric(5,4) not null check (relationship_weight_decimal >= 0 and relationship_weight_decimal <= 1),
+  knowledge_basis_score_decimal numeric(5,4) not null check (knowledge_basis_score_decimal >= 0 and knowledge_basis_score_decimal <= 1),
+  specificity_score_decimal numeric(5,4) not null check (specificity_score_decimal >= 0 and specificity_score_decimal <= 1),
+  independence_score_decimal numeric(5,4) not null check (independence_score_decimal >= 0 and independence_score_decimal <= 1),
+  consistency_score_decimal numeric(5,4) not null check (consistency_score_decimal >= 0 and consistency_score_decimal <= 1),
+  collusion_risk_score_decimal numeric(5,4) not null check (collusion_risk_score_decimal >= 0 and collusion_risk_score_decimal <= 1),
+  baseline_probative_value_score_decimal numeric(5,4) not null check (baseline_probative_value_score_decimal >= 0 and baseline_probative_value_score_decimal <= 1),
+  accepted_for_additionality boolean not null default false,
+  accepted_for_credibility_update boolean not null default false,
+  proposed_additionality_adjustment_decimal numeric(5,4) check (proposed_additionality_adjustment_decimal is null or (proposed_additionality_adjustment_decimal >= 0 and proposed_additionality_adjustment_decimal <= 1)),
+  review_status text not null default 'pending' check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (baseline_witness_testimonial_id)
+);
+
+comment on table public.baseline_witness_quality_assessments is
+  'Reviewer-visible witness quality assessment records. Identity assurance is stored separately from claim credibility.';
+
+create index if not exists baseline_witness_quality_assessments_review_idx
+  on public.baseline_witness_quality_assessments (review_status, baseline_probative_value_score_decimal desc, created_at desc);
+
+create table if not exists public.baseline_witness_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid references public.baseline_witness_invites (id) on delete set null,
+  baseline_witness_testimonial_id uuid references public.baseline_witness_testimonials (id) on delete set null,
+  baseline_witness_quality_assessment_id uuid references public.baseline_witness_quality_assessments (id) on delete set null,
+  event_type text not null check (event_type in ('invite_created', 'invite_opened', 'magic_link_verified', 'testimonial_submitted', 'witness_declined', 'pressure_reported', 'quality_assessed', 'review_decision', 'policy_effect_applied', 'unlink_requested', 'deletion_requested')),
+  actor_kind text not null check (actor_kind in ('participant', 'witness', 'reviewer', 'system')),
+  actor_id_hash text check (actor_id_hash is null or actor_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  redacted_summary text not null,
+  event_payload_redacted jsonb not null default '{}'::jsonb,
+  private_ref_hash text check (private_ref_hash is null or private_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  check (jsonb_typeof(event_payload_redacted) = 'object')
+);
+
+comment on table public.baseline_witness_audit_events is
+  'Append-only redacted audit records for invite, submission, review, risk, and policy-effect guest witness events.';
+
+create index if not exists baseline_witness_audit_events_subject_idx
+  on public.baseline_witness_audit_events (invite_id, baseline_witness_testimonial_id, created_at desc);
+
+create table if not exists public.baseline_witness_risk_reports (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid references public.baseline_witness_invites (id) on delete set null,
+  baseline_witness_testimonial_id uuid references public.baseline_witness_testimonials (id) on delete set null,
+  participant_user_id uuid references public.profiles (id) on delete set null,
+  guest_witness_identity_id uuid references public.guest_witness_identities (id) on delete set null,
+  report_kind text not null check (report_kind in ('pressure_or_coercion', 'possible_side_payment', 'testimonial_ring', 'duplicate_witness', 'other')),
+  review_status text not null default 'open' check (review_status in ('open', 'under_review', 'resolved', 'dismissed', 'escalated')),
+  redacted_summary text not null,
+  private_report_ref_hash text check (private_report_ref_hash is null or private_report_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  routed_to text not null default 'risk_review',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.baseline_witness_risk_reports is
+  'Private witness pressure, side-payment, duplicate, and testimonial-ring risk reports. Participants never receive raw refusal reasons or pressure notes.';
+
+create index if not exists baseline_witness_risk_reports_status_idx
+  on public.baseline_witness_risk_reports (review_status, report_kind, created_at desc);
+
+alter table public.guest_witness_identities enable row level security;
+alter table public.external_witness_accounts enable row level security;
+alter table public.baseline_witness_invites enable row level security;
+alter table public.baseline_witness_testimonials enable row level security;
+alter table public.baseline_witness_quality_assessments enable row level security;
+alter table public.baseline_witness_audit_events enable row level security;
+alter table public.baseline_witness_risk_reports enable row level security;
+
+create table if not exists public.moral_trade_opportunity_constraint_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  base_self_attestation_completion_confidence_decimal numeric(6,5) not null check (base_self_attestation_completion_confidence_decimal between 0 and 1),
+  seed_posterior_completion_confidence_decimal numeric(6,5) not null check (seed_posterior_completion_confidence_decimal between 0 and 1),
+  max_completion_confidence_decimal numeric(6,5) not null check (max_completion_confidence_decimal between 0 and 1),
+  max_completion_confidence_with_contrary_evidence_decimal numeric(6,5) not null check (max_completion_confidence_with_contrary_evidence_decimal between 0 and 1),
+  max_completion_confidence_without_direct_observer_decimal numeric(6,5) not null check (max_completion_confidence_without_direct_observer_decimal between 0 and 1),
+  max_additionality_adjustment_decimal numeric(6,5) not null check (max_additionality_adjustment_decimal between 0 and 1),
+  privacy_invasive_evidence_overreward_cap_decimal numeric(6,5) not null check (privacy_invasive_evidence_overreward_cap_decimal between 0 and 1),
+  weights_json jsonb not null,
+  fixed_consideration_adjustment_allowed_bool boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (fixed_consideration_adjustment_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_opportunity_meal_evidence_bundles (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  action_template_id text not null,
+  meal_label text not null check (meal_label in ('breakfast', 'lunch', 'dinner', 'snack', 'other')),
+  meal_window_start_at timestamptz not null,
+  meal_window_end_at timestamptz not null,
+  ordinary_meal_venue_type text not null check (
+    ordinary_meal_venue_type in ('school_cafeteria', 'employer_cafeteria', 'dining_hall', 'home', 'restaurant', 'other')
+  ),
+  ordinary_meal_venue_description_private text,
+  venue_access_model text not null check (
+    venue_access_model in ('swipe_based', 'meal_plan', 'cash_register', 'open_access', 'unknown', 'other')
+  ),
+  participant_claims_usual_venue_for_meal_bool boolean not null,
+  participant_claims_usually_eats_once_for_meal_bool boolean not null,
+  post_meal_commitment_claimed_bool boolean not null,
+  post_meal_commitment_type text check (
+    post_meal_commitment_type in ('class', 'exam', 'work_shift', 'meeting', 'travel', 'appointment', 'other')
+  ),
+  post_meal_commitment_start_at timestamptz,
+  post_meal_commitment_evidence_ref text,
+  cafeteria_or_venue_record_ref text,
+  co_diner_count integer not null default 0 check (co_diner_count >= 0),
+  baseline_witness_count integer not null default 0 check (baseline_witness_count >= 0),
+  direct_observer_testimonial_count integer not null default 0 check (direct_observer_testimonial_count >= 0),
+  contrary_report_count integer not null default 0 check (contrary_report_count >= 0),
+  bundle_status text not null check (
+    bundle_status in ('draft', 'submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed')
+  ),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (meal_window_start_at < meal_window_end_at)
+);
+
+create table if not exists public.moral_trade_meal_witness_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid not null references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  witness_user_id uuid references public.profiles (id) on delete set null,
+  witness_identity_ref text,
+  witness_role text not null check (
+    witness_role in ('baseline_witness', 'co_diner_direct_observer', 'schedule_constraint_witness')
+  ),
+  meal_label text not null check (meal_label in ('breakfast', 'lunch', 'dinner', 'snack', 'other')),
+  observed_meal_venue_private text,
+  observation_coverage text not null check (
+    observation_coverage in ('whole_meal', 'most_of_meal', 'part_of_meal', 'not_observed')
+  ),
+  directly_observed_meal_bool boolean not null default false,
+  participant_left_and_returned_during_meal_bool boolean not null default false,
+  saw_participant_eat_meat_or_fish_bool boolean not null default false,
+  reason_to_think_ate_meat_fish_before_or_after_bool boolean not null default false,
+  no_meat_fish_completion_credence_decimal numeric(6,5) check (no_meat_fish_completion_credence_decimal between 0 and 1),
+  baseline_counterfactual_credence_decimal numeric(6,5) check (baseline_counterfactual_credence_decimal between 0 and 1),
+  knows_usual_venue_for_meal_bool boolean,
+  knows_usually_eats_once_for_meal_bool boolean,
+  basis_text_private text not null,
+  pressured_to_submit_bool boolean not null default false,
+  side_payment_concern_bool boolean not null default false,
+  misleading_evidence_concern_bool boolean not null default false,
+  testimonial_status text not null check (
+    testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed')
+  ),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  submitted_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_opportunity_constraint_assessments (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid not null references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null,
+  source_id text not null,
+  ordinary_venue_support_score_decimal numeric(6,5) not null check (ordinary_venue_support_score_decimal between 0 and 1),
+  swipe_or_access_constraint_score_decimal numeric(6,5) not null check (swipe_or_access_constraint_score_decimal between 0 and 1),
+  co_diner_observation_score_decimal numeric(6,5) not null check (co_diner_observation_score_decimal between 0 and 1),
+  post_meal_commitment_score_decimal numeric(6,5) not null check (post_meal_commitment_score_decimal between 0 and 1),
+  usual_single_meal_habit_score_decimal numeric(6,5) not null check (usual_single_meal_habit_score_decimal between 0 and 1),
+  baseline_witness_score_decimal numeric(6,5) not null check (baseline_witness_score_decimal between 0 and 1),
+  independence_score_decimal numeric(6,5) not null check (independence_score_decimal between 0 and 1),
+  consistency_score_decimal numeric(6,5) not null check (consistency_score_decimal between 0 and 1),
+  collusion_risk_score_decimal numeric(6,5) not null check (collusion_risk_score_decimal between 0 and 1),
+  contrary_evidence_score_decimal numeric(6,5) not null check (contrary_evidence_score_decimal between 0 and 1),
+  privacy_sensitivity_score_decimal numeric(6,5) not null check (privacy_sensitivity_score_decimal between 0 and 1),
+  proposed_completion_confidence_decimal numeric(6,5) not null check (proposed_completion_confidence_decimal between 0 and 1),
+  proposed_additionality_adjustment_decimal numeric(6,5) check (proposed_additionality_adjustment_decimal between 0 and 1),
+  cap_applied_decimal numeric(6,5) check (cap_applied_decimal between 0 and 1),
+  accepted_for_completion_verification_bool boolean not null default false,
+  accepted_for_additionality_bool boolean not null default false,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  review_status text not null check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  participant_visible_summary text,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_opportunity_meal_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  opportunity_constraint_assessment_id uuid references public.moral_trade_opportunity_constraint_assessments (id) on delete cascade,
+  actor_user_id uuid references public.profiles (id) on delete set null,
+  actor_kind text not null check (actor_kind in ('participant', 'witness', 'reviewer', 'system')),
+  event_type text not null check (
+    event_type in (
+      'bundle_submitted',
+      'witness_testimony_submitted',
+      'assessment_created',
+      'risk_review_flagged',
+      'review_decision_recorded',
+      'policy_evaluation_trace_created',
+      'public_summary_generated'
+    )
+  ),
+  policy_hash text check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  material_effects text[] not null default '{}',
+  redacted_summary text not null,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_opportunity_meal_evidence_bundles is
+  'Private opportunity-constrained meal evidence bundles for optional one-meal or one-day no-meat pledge-swap verification. Private venue, schedule, and raw context are review-scoped and not public or funder-visible.';
+
+comment on table public.moral_trade_meal_witness_testimonials is
+  'Private meal witness testimonials with separate baseline, co-diner/direct-observer, and schedule-constraint roles. Baseline testimony affects additionality; direct meal observation affects completion verification.';
+
+comment on table public.moral_trade_opportunity_constraint_assessments is
+  'Reviewer-scoped opportunity-constraint assessments that can feed verification confidence and additionality only through a frozen policy, without retroactive fixed-consideration changes.';
+
+alter table public.moral_trade_opportunity_constraint_policies enable row level security;
+alter table public.moral_trade_opportunity_meal_evidence_bundles enable row level security;
+alter table public.moral_trade_meal_witness_testimonials enable row level security;
+alter table public.moral_trade_opportunity_constraint_assessments enable row level security;
+alter table public.moral_trade_opportunity_meal_audit_events enable row level security;

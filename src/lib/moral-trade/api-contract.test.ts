@@ -125,6 +125,45 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_guest_witness_contract" &&
+        route.path === "/api/moral-trade/guest-witness/contract" &&
+        route.responseSchema === "guest_witness_contract_response" &&
+        route.rateLimitSurface === "public_contract_read",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_guest_witness_invite_write" &&
+        route.path === "/api/moral-trade/guest-witness/invites" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "guest_witness_invite_write",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_guest_witness_testimony_write" &&
+        route.path === "/api/moral-trade/guest-witness/testimonials" &&
+        route.auth === "optional" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "guest_witness_testimony_write",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_guest_witness_review_write" &&
+        route.path === "/api/moral-trade/guest-witness/review" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "guest_witness_review_write",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_agreement_amendment_contract" &&
         route.path === "/api/moral-trade/agreement-amendments/contract" &&
         route.responseSchema === "agreement_amendment_contract_response",

@@ -85,8 +85,14 @@ test("baseline credibility bond pauses likely payment-extraction baselines", () 
 });
 
 test("baseline credibility bond payment collection is gated by feature flag and reviewer approval", () => {
-  assert.equal(isPaymentBondsEnabled({ PAYMENT_BONDS_ENABLED: "false" }), false);
-  assert.equal(isPaymentBondsEnabled({ PAYMENT_BONDS_ENABLED: "true" }), true);
+  assert.equal(
+    isPaymentBondsEnabled({ PAYMENT_BONDS_ENABLED: "false" } as unknown as NodeJS.ProcessEnv),
+    false,
+  );
+  assert.equal(
+    isPaymentBondsEnabled({ PAYMENT_BONDS_ENABLED: "true" } as unknown as NodeJS.ProcessEnv),
+    true,
+  );
   assert.equal(
     canCollectBaselineBondPayment({
       paymentBondsEnabled: false,

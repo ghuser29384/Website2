@@ -1,6 +1,6 @@
 {
   "version": "moral-trade-api-contract-v0.72-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, reviewer-console checklist governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, batch-clearing objective governance, sensitive-evidence attestation governance, pilot-evidence governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, payment-event replay-safety governance, payment-authorization stub governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, reviewer-console checklist governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, batch-clearing objective governance, sensitive-evidence attestation governance, pilot-evidence governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, guest-witness baseline testimony governance, payment-event replay-safety governance, payment-authorization stub governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -637,6 +637,102 @@
       "rateLimitSurface": "group_buying_enforce",
       "cacheControl": "private_no_store",
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, unauthenticated, disabled-module, stale-plan, or unsafe-proposal requests create no launch, activation, settlement, donation, payout, proposal-publication, or public-report state change."
+    },
+    {
+      "key": "moral_trade_participant_credibility_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/participant-credibility/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "participant_credibility_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return participant-credibility validation blockers, renamed model terms, private friend-testimonial boundaries, scoring caps, stake policy, and seed-demo metadata; never expose raw friend testimony, friend identity, concern notes, reviewer notes, or exact scoring rules."
+    },
+    {
+      "key": "moral_trade_participant_credibility_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/participant-credibility/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "participant_credibility_enforce_request",
+      "responseSchema": "participant_credibility_enforce_response",
+      "rateLimitSurface": "participant_credibility_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, unauthenticated, unsupported-operation, unsafe, stale-policy, or high-risk testimonial requests create no invite, testimony, payment, credibility, verification, settlement, disclosure, public-report, or payout state change."
+    },
+    {
+      "key": "moral_trade_opportunity_meal_evidence_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/opportunity-meal-evidence/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "opportunity_meal_evidence_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return opportunity-constrained meal evidence contract metadata, scoring-policy caps, witness-role questions, privacy rules, reviewer panel fields, and seed-demo summaries; never expose cafeteria names, schedules, witness identities, relationship details, raw testimony, or private context."
+    },
+    {
+      "key": "moral_trade_opportunity_meal_evidence_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/opportunity-meal-evidence/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "opportunity_meal_evidence_enforce_request",
+      "responseSchema": "opportunity_meal_evidence_enforce_response",
+      "rateLimitSurface": "opportunity_meal_evidence_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, unauthenticated, rate-limited, unsupported-operation, stale-policy, privacy-risk, contrary-evidence, or malformed opportunity-constrained meal evidence requests create no public report, settlement, payout, fixed-consideration, or disclosure mutation."
+    },
+    {
+      "key": "moral_trade_guest_witness_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/guest-witness/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "guest_witness_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return guest-witness testimonial contract metadata and validation blockers; never expose invite tokens, witness identities, raw testimony, private concern notes, or reviewer notes."
+    },
+    {
+      "key": "moral_trade_guest_witness_invite_write",
+      "method": "POST",
+      "path": "/api/moral-trade/guest-witness/invites",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "guest_witness_invite_request",
+      "responseSchema": "guest_witness_invite_response",
+      "rateLimitSurface": "guest_witness_invite_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authenticated offer ownership before creating a guest-witness invite; invalid, duplicate, rate-limited, unconfigured, or unauthenticated requests create no invite and reveal no witness token."
+    },
+    {
+      "key": "moral_trade_guest_witness_testimony_write",
+      "method": "POST",
+      "path": "/api/moral-trade/guest-witness/testimonials",
+      "auth": "optional",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "guest_witness_testimony_request",
+      "responseSchema": "guest_witness_testimony_response",
+      "rateLimitSurface": "guest_witness_testimony_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, expired, rate-limited, unconfigured, duplicate, or unsupported guest-witness testimony requests create no testimonial, no quality assessment, no public evidence, and no participant-visible private concern text."
+    },
+    {
+      "key": "moral_trade_guest_witness_review_write",
+      "method": "POST",
+      "path": "/api/moral-trade/guest-witness/review",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "guest_witness_review_request",
+      "responseSchema": "guest_witness_review_response",
+      "rateLimitSurface": "guest_witness_review_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authenticated admin or reviewer authority before changing guest-witness review status; invalid, rate-limited, unconfigured, unauthenticated, or conflicted-review requests create no review decision."
     },
     {
       "key": "moral_trade_pledge_performance_bond_contract",
@@ -2007,6 +2103,42 @@
       "fallback": "Require viewer authentication, curated exact-tag namespace, governance gates, and redacted transparency receipt logging; free text and raw tag inputs are rejected, and results expose only a bucket and receipt id."
     },
     {
+      "key": "background_subject_identity_write",
+      "method": "POST",
+      "path": "/api/background/subject-identity",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_subject_identity_request",
+      "responseSchema": "background_subject_identity_response",
+      "rateLimitSurface": "background_subject_identity_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, purpose-bound subject authority, and supported subject type before writing subject-identity profiles; invalid, rate-limited, unconfigured, unauthorized, or disabled-lane requests do not update matching authority."
+    },
+    {
+      "key": "background_claim_assurance_write",
+      "method": "POST",
+      "path": "/api/background/claim-assurance-records",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_claim_assurance_request",
+      "responseSchema": "background_claim_assurance_response",
+      "rateLimitSurface": "background_claim_assurance_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, current taxonomy, scoped evidence, and policy permission before writing claim-assurance records; invalid, rate-limited, unconfigured, unauthorized, disabled-lane, or stale-taxonomy requests do not update matching influence."
+    },
+    {
+      "key": "background_pairwise_safety_write",
+      "method": "POST",
+      "path": "/api/background/pairwise-safety-preferences",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_pairwise_safety_request",
+      "responseSchema": "background_pairwise_safety_response",
+      "rateLimitSurface": "background_pairwise_safety_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, participant-scoped subject identity, and safety-policy permission before writing pairwise safety preferences; invalid, rate-limited, unconfigured, unauthorized, or disabled-lane requests do not update matching suppression."
+    },
+    {
       "key": "wish_registry_search",
       "method": "GET",
       "path": "/api/wish-registry/search",
@@ -3200,6 +3332,163 @@
         { "key": "proposalSafety", "type": "object", "required": false, "privacy": "private", "description": "Private proposal anti-threat flags and participant-visible reason." },
         { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "Always false for this enforcement preview route." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, operation, disabled-module, unsafe-proposal, stale-plan, rate-limit, input, or readiness blockers." }
+      ]
+    },
+    {
+      "key": "participant_credibility_contract_response",
+      "purpose": "Public validator-backed participant credibility contract for renamed credibility models, optional private friend testimonials, capped frozen scoring policy, redacted funder/public summaries, and optional-stake governance.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the participant-credibility contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the participant-credibility contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Participant credibility contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable participant credibility purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for terminology, first-class tables, private friend-testimonial rules, scoring caps, default stake policy, anti-gaming, and seed demo coverage." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Public contract terms, renamed model names, table names, invite rules, question prompts, scoring caps, stake policy, redaction rules, reviewer governance, anti-gaming controls, and seed-demo summaries without raw testimony, friend identity, concern notes, reviewer notes, private anti-fraud notes, or exact private scoring rules." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on participant credibility, testimonial scoring, public reporting, or enforcement behavior." }
+      ]
+    },
+    {
+      "key": "participant_credibility_enforce_request",
+      "purpose": "Authenticated private fail-closed participant-credibility enforcement request for optional friend testimonial invite, decline, submission, and capped scoring preview.",
+      "fields": [
+        { "key": "operation", "type": "enum", "required": true, "privacy": "private_request", "description": "invite_friend_testimonial, decline_friend_testimonial, submit_friend_testimonial, or evaluate_friend_testimonial." },
+        { "key": "invite", "type": "object", "required": false, "privacy": "private_request", "description": "Private friend testimonial invite data or previously returned invite object." },
+        { "key": "form", "type": "object", "required": false, "privacy": "private_request", "description": "Friend testimonial form data with separate baseline/additionality credence, completion credence, knowledge basis, optional concern notes, and terms acceptance." },
+        { "key": "participantProfile", "type": "object", "required": false, "privacy": "private_request", "description": "Private participant credibility profile snapshot used only for deterministic capped preview." },
+        { "key": "friendProfile", "type": "object", "required": false, "privacy": "private_request", "description": "Private friend testimonial credibility and verified-account snapshot used for weighting." },
+        { "key": "context", "type": "object", "required": false, "privacy": "private_request", "description": "Private consistency, contradiction, related-party, testimonial-volume, and risk-review context." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-stable idempotency key for later persistent mutation paths." }
+      ]
+    },
+    {
+      "key": "participant_credibility_enforce_response",
+      "purpose": "Authenticated private participant-credibility enforcement result that previews invite, decline, submission receipt, quality assessment, and capped credibility impact while creating no invite, testimony, scoring, payment, settlement, disclosure, payout, or public-report mutation.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the requested participant-credibility preview is non-blocking." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": false, "privacy": "private", "description": "Server time for evaluated requests." },
+        { "key": "invite", "type": "object", "required": false, "privacy": "private", "description": "Private invite preview with minimum-necessary disclosure and hidden-field list." },
+        { "key": "testimonial", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Private friend testimonial preview. Raw text, concern notes, and relationship context are review-scoped and never public or funder-visible." },
+        { "key": "receipt", "type": "object", "required": false, "privacy": "private", "description": "Private submission receipt preview for auditability." },
+        { "key": "auditEvent", "type": "object", "required": false, "privacy": "private", "description": "Private audit-event preview for testimonial submission or concern routing." },
+        { "key": "accessLog", "type": "object", "required": false, "privacy": "private", "description": "Private access-log preview proving raw testimony is not public or funder-visible." },
+        { "key": "assessment", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Review-scoped testimonial quality assessment with relationship weight, friend credibility weight, knowledge basis, consistency, collusion risk, and proposed accepted uses." },
+        { "key": "impact", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Frozen-policy capped preview of evidence-quality, additionality, verification-confidence, participant-credibility, and friend testimonial-credibility effects. Fixed post-action consideration adjustment is always zero." },
+        { "key": "participantCredibilityGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "pass or blocked for the participant-credibility preview gate." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "Always false for this enforcement preview route." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, operation, invite, terms, scoring-policy, risk-review, rate-limit, input, or privacy blockers." }
+      ]
+    },
+    {
+      "key": "opportunity_meal_evidence_contract_response",
+      "purpose": "Public validator-backed opportunity-constrained meal evidence contract for optional one-meal/no-meat pledge-swap verification, private witness roles, configurable scoring policy, privacy-preserving public reports, and fixed-consideration boundaries.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the opportunity-constrained meal evidence contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Opportunity-constrained meal evidence contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable purpose for opportunity-constrained meal evidence." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class records, separated witness roles, configurable scoring, privacy, seed demo, and integration boundaries." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Public contract terms, role questions, privacy warnings, reviewer fields, scoring-policy caps, seed-demo summaries, and public-reporting rules without cafeteria names, schedules, witness identities, relationship details, raw testimony, or private context." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on opportunity-constrained meal evidence behavior." }
+      ]
+    },
+    {
+      "key": "opportunity_meal_evidence_enforce_request",
+      "purpose": "Authenticated private fail-closed request to submit or evaluate optional opportunity-constrained meal evidence for a pledge-swap or group-buying purchase envelope.",
+      "fields": [
+        { "key": "operation", "type": "enum", "required": true, "privacy": "private_request", "description": "submit_bundle or evaluate_bundle." },
+        { "key": "bundle", "type": "object", "required": true, "privacy": "private_request", "description": "Private OpportunityConstrainedMealEvidenceBundle input with meal window, venue/access model, post-meal commitment claim, optional private venue refs, witness counts, and contrary-report count." },
+        { "key": "testimonials", "type": "object_array", "required": false, "privacy": "review_scoped_private", "description": "Private baseline, co-diner/direct-observer, or schedule-constraint testimony. Raw basis text, venue names, pressure reports, side-payment concerns, and relationship details stay review-scoped." },
+        { "key": "currentVerificationConfidenceDecimal", "type": "decimal", "required": false, "privacy": "private_request", "description": "Current completion confidence used for deterministic capped preview." },
+        { "key": "currentFinalAdditionalityProbabilityDecimal", "type": "decimal", "required": false, "privacy": "private_request", "description": "Current additionality probability used for deterministic capped preview." },
+        { "key": "fixedConsiderationLocked", "type": "boolean", "required": false, "privacy": "private_request", "description": "Whether the participant has acted under frozen terms; fixed consideration cannot be reduced by this route." },
+        { "key": "strongerContradictoryEvidence", "type": "boolean", "required": false, "privacy": "private_request", "description": "Reviewer-supplied signal that stronger contrary evidence controls completion and prevents this mechanism from overriding it." }
+      ]
+    },
+    {
+      "key": "opportunity_meal_evidence_enforce_response",
+      "purpose": "Authenticated private opportunity-constrained meal evidence result that previews bundle submission, opportunity-constraint assessment, application to verification/additionality, reviewer panel, and privacy-preserving public summary while creating no public-report, payout, settlement, or fixed-consideration mutation.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the bundle input is non-blocking." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for evaluated requests." },
+        { "key": "bundle", "type": "object", "required": true, "privacy": "review_scoped_private", "description": "Private evidence bundle preview. Venue description and schedule refs are not public or funder-visible." },
+        { "key": "testimonials", "type": "object_array", "required": true, "privacy": "review_scoped_private", "description": "Private meal witness testimonial previews with raw testimony suppressed from funder and public reporting." },
+        { "key": "assessment", "type": "object", "required": true, "privacy": "review_scoped_private", "description": "OpportunityConstraintAssessment with venue, access, co-diner, commitment, single-meal habit, baseline, independence, consistency, collusion risk, contrary evidence, privacy sensitivity, confidence, additionality, cap, and accepted-use fields." },
+        { "key": "application", "type": "object", "required": true, "privacy": "review_scoped_private", "description": "Frozen-policy application showing verification/additionality effects, PolicyEvaluationTrace preview, no fixed consideration adjustment, and contradictory-evidence blockers." },
+        { "key": "reviewerPanel", "type": "object", "required": true, "privacy": "review_scoped_private", "description": "Reviewer panel sections for baseline support, direct observation, venue/access, post-meal commitment, single-meal habit, consistency, risk, confidence, additionality, and cap rationale." },
+        { "key": "publicReport", "type": "object", "required": true, "privacy": "privacy_thresholded_public_preview", "description": "Privacy-preserving public/funder summary that may disclose only coarse reviewed meal-context use and suppresses small cells and private details." },
+        { "key": "opportunityMealEvidenceGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "pass or blocked for the opportunity meal evidence preview gate." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "Always false for this deterministic enforcement preview; persistent writes use first-class tables and review paths." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, operation, bundle, scoring-policy, privacy, contrary-evidence, or rate-limit blockers." }
+      ]
+    },
+    {
+      "key": "guest_witness_contract_response",
+      "purpose": "Public validator-backed guest-witness testimonial contract for baseline witness invites, private testimony, quality assessment, and review-state boundaries.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the guest-witness contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the guest-witness contract response." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Guest-witness policy metadata, table names, allowed relationship and knowledge values, and privacy boundaries without tokens, witness identities, raw testimony, private concern notes, or reviewer notes." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on guest-witness testimonial behavior." }
+      ]
+    },
+    {
+      "key": "guest_witness_invite_request",
+      "purpose": "Authenticated private request to create a baseline guest-witness invite for an owned offer.",
+      "fields": [
+        { "key": "offer_id", "type": "string", "required": true, "privacy": "private_request", "description": "Offer id for the baseline witness invite." },
+        { "key": "witness_email", "type": "string", "required": false, "privacy": "private_request", "description": "Optional witness email used only for a private invite." },
+        { "key": "relationship_type", "type": "enum", "required": false, "privacy": "private_request", "description": "Participant-claimed relationship type for the invite." },
+        { "key": "return_to", "type": "string", "required": false, "privacy": "private_request", "description": "Safe same-origin return path for form submissions." }
+      ]
+    },
+    {
+      "key": "guest_witness_invite_response",
+      "purpose": "Authenticated private guest-witness invite response that exposes no raw invite token except the caller-owned witness path when allowed.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the invite draft or stored invite is non-blocking." },
+        { "key": "invite", "type": "object", "required": false, "privacy": "private", "description": "Private invite metadata with hashed token storage." },
+        { "key": "witnessUrl", "type": "string", "required": false, "privacy": "private", "description": "Private same-origin URL to share with the intended witness when configured." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Authentication, ownership, configuration, validation, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
+      "key": "guest_witness_testimony_request",
+      "purpose": "Optional-auth private request for a guest witness to submit baseline testimony and concern flags.",
+      "fields": [
+        { "key": "invite_token", "type": "string", "required": true, "privacy": "private_request", "description": "Opaque guest-witness invite token." },
+        { "key": "relationship_type", "type": "enum", "required": true, "privacy": "private_request", "description": "Witness relationship to the participant." },
+        { "key": "baseline_knowledge_level", "type": "enum", "required": true, "privacy": "private_request", "description": "Witness knowledge of ordinary baseline behavior." },
+        { "key": "baseline_counterfactual_credence_decimal", "type": "decimal", "required": false, "privacy": "private_request", "description": "Bounded witness credence about baseline/additionality." },
+        { "key": "concern_flag", "type": "enum", "required": false, "privacy": "private_request", "description": "Private concern flag such as pressure, side payment, or insufficient knowledge." },
+        { "key": "private_notes", "type": "string", "required": false, "privacy": "private_request", "description": "Private witness notes visible only to allowed review contexts." }
+      ]
+    },
+    {
+      "key": "guest_witness_testimony_response",
+      "purpose": "Private guest-witness testimony response with testimonial, quality-assessment, and redirect-safe status while keeping raw testimony out of funder and public views.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the testimonial was accepted for private review." },
+        { "key": "testimonial", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Private testimonial metadata; raw notes and concern text stay review-scoped." },
+        { "key": "assessment", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Private quality assessment and proposed weight." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Invite, token, expiry, validation, rate-limit, configuration, or persistence blockers." }
+      ]
+    },
+    {
+      "key": "guest_witness_review_request",
+      "purpose": "Authenticated private admin/reviewer request to accept, partially accept, reject, escalate, or dispute a guest-witness testimonial.",
+      "fields": [
+        { "key": "testimonial_id", "type": "string", "required": true, "privacy": "private_request", "description": "Guest-witness testimonial id under review." },
+        { "key": "decision", "type": "enum", "required": true, "privacy": "private_request", "description": "accept, partial, reject, needs_more_info, or dispute." },
+        { "key": "private_reviewer_notes", "type": "string", "required": false, "privacy": "private_request", "description": "Private reviewer notes excluded from public and funder views." }
+      ]
+    },
+    {
+      "key": "guest_witness_review_response",
+      "purpose": "Authenticated private guest-witness review response that records no public evidence disclosure and preserves private reviewer notes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the review decision was accepted." },
+        { "key": "review", "type": "object", "required": false, "privacy": "review_scoped_private", "description": "Private review status, accepted uses, and reviewer metadata." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Authentication, authorization, conflict, validation, rate-limit, configuration, or persistence blockers." }
       ]
     },
     {
@@ -5206,6 +5495,62 @@
       ]
     },
     {
+      "key": "background_subject_identity_request",
+      "purpose": "Authenticated private request to write a purpose-bound subject-identity profile for background matching authority.",
+      "fields": [
+        { "key": "subjectType", "type": "enum", "required": true, "privacy": "private_request", "description": "Subject type such as individual, organization, collective, or non-individual background subject." },
+        { "key": "subjectRef", "type": "string", "required": true, "privacy": "private_request", "description": "Private subject reference owned or administered by the viewer." },
+        { "key": "authorityBasis", "type": "string", "required": false, "privacy": "private_request", "description": "Private basis for the viewer's authority to represent or configure the subject." }
+      ]
+    },
+    {
+      "key": "background_subject_identity_response",
+      "purpose": "Authenticated private subject-identity write response with disabled-lane and policy blockers.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the subject-identity profile write is non-blocking." },
+        { "key": "record", "type": "object", "required": false, "privacy": "private", "description": "Private subject-identity profile metadata." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Authentication, authorization, disabled-lane, policy, validation, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
+      "key": "background_claim_assurance_request",
+      "purpose": "Authenticated private request to write a current claim-assurance record for background matching influence.",
+      "fields": [
+        { "key": "claimRef", "type": "string", "required": true, "privacy": "private_request", "description": "Private claim reference being assured." },
+        { "key": "taxonomyKey", "type": "string", "required": true, "privacy": "private_request", "description": "Current claim-assurance taxonomy key." },
+        { "key": "evidenceRefs", "type": "string_array", "required": false, "privacy": "private_request", "description": "Private evidence references supporting the assurance." }
+      ]
+    },
+    {
+      "key": "background_claim_assurance_response",
+      "purpose": "Authenticated private claim-assurance write response with policy and taxonomy blockers.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the claim-assurance record write is non-blocking." },
+        { "key": "record", "type": "object", "required": false, "privacy": "private", "description": "Private claim-assurance record metadata." },
+        { "key": "influenceState", "type": "string", "required": false, "privacy": "private", "description": "Private matching-influence state such as current broad assurance only or blocked until current assurance." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Authentication, disabled-lane, taxonomy, validation, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
+      "key": "background_pairwise_safety_request",
+      "purpose": "Authenticated private request to write pairwise safety preferences for background matching suppression.",
+      "fields": [
+        { "key": "subjectRef", "type": "string", "required": true, "privacy": "private_request", "description": "Private subject reference for the safety preference." },
+        { "key": "counterpartyRef", "type": "string", "required": true, "privacy": "private_request", "description": "Private counterparty or cluster reference to suppress or review." },
+        { "key": "safetyPreference", "type": "enum", "required": true, "privacy": "private_request", "description": "Pairwise safety preference under the frozen safety taxonomy." }
+      ]
+    },
+    {
+      "key": "background_pairwise_safety_response",
+      "purpose": "Authenticated private pairwise-safety write response with suppression bucket and policy blockers.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True when the pairwise safety preference write is non-blocking." },
+        { "key": "record", "type": "object", "required": false, "privacy": "private", "description": "Private pairwise-safety preference metadata." },
+        { "key": "suppressionState", "type": "string", "required": false, "privacy": "private", "description": "Private suppression or review state applied to future matching." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Authentication, disabled-lane, policy, validation, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "wish_registry_search_request",
       "purpose": "Privacy-thresholded public wish-registry query parameters.",
       "fields": [
@@ -5316,6 +5661,10 @@
     "group_buying_collection_route_contract",
     "group_buying_contract_route",
     "group_buying_enforce_route_contract",
+    "guest_witness_contract_route",
+    "guest_witness_invite_route_contract",
+    "guest_witness_testimony_route_contract",
+    "guest_witness_review_route_contract",
     "pledge_performance_bond_enforce_route_contract",
     "pledge_swap_performance_schedule_enforce_route_contract",
     "negative_commitment_scope_enforce_route_contract",

@@ -88,6 +88,7 @@ const REQUIRED_METRIC_KEYS = [
   "participant_reports_submitted",
   "concierge_appeals_requested",
   "agreement_evidence_reviewed",
+  "reviewed_baseline_witness_statements",
   "unresolved_disputes_current",
   "median_concierge_review_hours",
   "median_agreement_review_hours",
@@ -202,6 +203,13 @@ const METRIC_DEFINITIONS: MoralTradeTransparencyMetricDefinition[] = [
     sourceTables: ["agreement_evidence_items"],
   },
   {
+    description: "Guest baseline witness statements reaching a reviewed outcome during the report period.",
+    key: "reviewed_baseline_witness_statements",
+    kind: "count",
+    label: "Reviewed baseline witness statements",
+    sourceTables: ["baseline_witness_testimonials"],
+  },
+  {
     description: "Open unresolved agreement disputes at report generation time.",
     key: "unresolved_disputes_current",
     kind: "count",
@@ -236,6 +244,7 @@ const PRIVACY_RULES = [
   "Suppress nonzero counts and derived metrics when the sample is below the minimum public count.",
   "Keep the report useful for trust and operations, not for ranking users, counterparties, or moral views.",
   "When live aggregate data is unavailable, publish the contract and fallback status rather than inventing numbers.",
+  "For guest witness testimony, publish only aggregate reviewed-statement counts; never expose witness identity, provider, relationship, raw testimony, concern text, or private reviewer fields.",
 ] as const;
 
 function formatQuarterLabel(start: Date) {
@@ -590,6 +599,7 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     opportunityInterest,
     introPackets,
     evidenceReviewed,
+    baselineWitnessStatementsReviewed,
     unresolvedDisputes,
     reviewHourMetrics,
   ] = await Promise.all([
@@ -683,6 +693,17 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       supabase,
     }),
     safeCount({
+      apply: (query) =>
+        periodFilter(period, "updated_at")(query).in("testimonial_status", [
+          "accepted",
+          "partially_accepted",
+          "rejected",
+          "disputed",
+        ]),
+      label: "baseline_witness_testimonials",
+      supabase,
+    }),
+    safeCount({
       apply: (query) => query.eq("status", "disputed_unresolved"),
       label: "agreement_review_cases",
       supabase,
@@ -720,6 +741,7 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       { key: "participant_reports_submitted", value: reportsSubmitted },
       { key: "concierge_appeals_requested", value: appealsRequested },
       { key: "agreement_evidence_reviewed", value: evidenceReviewed },
+      { key: "reviewed_baseline_witness_statements", value: baselineWitnessStatementsReviewed },
       { key: "unresolved_disputes_current", value: unresolvedDisputes },
       {
         key: "median_concierge_review_hours",
