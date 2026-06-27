@@ -107,8 +107,50 @@ export default async function PledgeSwapsPage() {
               State when the pledge starts, when it ends, and how either side can stop relying on it.
             </StepCard>
             <StepCard index={3} title="Evidence standard.">
-              Name whether receipts, public pledges, peer witness, or qualitative notes are expected.
+              Name whether check-ins, declarations, redacted receipts, private friend testimonials,
+              or qualitative notes are expected.
             </StepCard>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="friend-testimonial-heading">
+          <SectionHeader
+            eyebrow="Optional evidence"
+            id="friend-testimonial-heading"
+            title="Invite a friend to support this claim."
+          >
+            A friend can privately tell reviewers what they know about your ordinary diet or
+            whether they think you completed this pledge. This is optional.
+          </SectionHeader>
+          <div className="step-card-grid">
+            <StepCard index={1} title="Minimum necessary invite.">
+              Inviting a friend may reveal the pledge, action type, action window, and your
+              context to that friend, but not funder identities, payout details, private baseline
+              answers, other evidence, risk flags, reviewer notes, or exact scoring rules.
+            </StepCard>
+            <StepCard index={2} title="Separate baseline and completion views.">
+              The friend can give a private baseline/additionality credence and a separate
+              completion credence, each with their basis of knowledge.
+            </StepCard>
+            <StepCard index={3} title="Participant credibility input only.">
+              A testimonial may improve evidence strength or participant credibility under a
+              capped frozen policy, but it does not guarantee verification, higher payout, or
+              public proof.
+            </StepCard>
+          </div>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Private testimonial status</p>
+                <h3>Reviewed as one evidence source.</h3>
+                <p>
+                  Status can be invited, submitted, declined, expired, under review, accepted, or
+                  not used. Declining has no penalty, and private concern notes stay hidden from
+                  participants, funders, and public reports.
+                </p>
+              </div>
+              <span className="protocol-review-status">optional</span>
+            </div>
           </div>
         </section>
 

@@ -156,6 +156,42 @@
       "publicExposure": "Public offers expose only reviewed or preview-safe terms and must not imply escrow, legal enforceability, tax treatment, or objective moral endorsement."
     },
     {
+      "key": "pledge_swap",
+      "label": "Pledge swap",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "offer_id", "participant_user_id", "counterparty_user_id", "frozen_terms_hash", "evidence_standard", "status"],
+      "relationships": ["offer", "participant", "baseline_statement", "evidence_claim", "review_decision", "dispute", "appeal"],
+      "publicExposure": "Pledge-swap public exposure is limited to reviewed or preview-safe terms and aggregate status; private evidence, contact details, consideration internals, and reviewer notes stay out of public reports."
+    },
+    {
+      "key": "purchase_envelope",
+      "label": "Purchase envelope",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "envelope_type", "envelope_id", "public_envelope_id", "lifecycle_state_group", "policy_bundle_hash", "visibility_policy"],
+      "relationships": ["participant", "pledge_swap", "payment_record", "evidence_claim", "review_decision"],
+      "publicExposure": "Purchase-envelope records expose only public or aggregate status allowed by the visibility policy; private settlement, payment, provider, and participant evidence details are not public."
+    },
+    {
+      "key": "participant_action_commitment",
+      "label": "Participant action commitment",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "purchase_envelope_id", "participant_user_id", "action_template_id", "action_window_start_at", "action_window_end_at", "commitment_status"],
+      "relationships": ["participant", "purchase_envelope", "pledge_swap", "evidence_claim", "review_decision"],
+      "publicExposure": "Participant action commitments reveal only public-safe action status and timing where policy allows; private evidence, contact context, and reviewer notes stay review-scoped."
+    },
+    {
+      "key": "policy_evaluation_trace",
+      "label": "Policy evaluation trace",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject_type", "subject_id", "policy_hash", "material_effects", "effect_summary", "created_at"],
+      "relationships": ["review_decision", "evidence_claim", "participant", "payment_record"],
+      "publicExposure": "Policy evaluation traces support auditability for private review and payment-impact decisions; public reports expose only redacted or aggregate trace summaries."
+    },
+    {
       "key": "baseline_statement",
       "label": "Baseline statement",
       "category": "proposal",
@@ -172,6 +208,51 @@
       "requiredFields": ["id", "proposal_id", "claim_type", "artifact_ids", "claim_scope", "reviewer_confidence", "uniqueness_checked"],
       "relationships": ["offer", "evidence_artifact", "review_decision"],
       "publicExposure": "Claims disclose only scoped summaries and confidence; artifacts and private locators stay behind review controls."
+    },
+    {
+      "key": "participant_credibility_profile",
+      "label": "Participant credibility profile",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["participant_user_id", "credibility_score_decimal", "credibility_tier", "expected_completion_probability_decimal", "evidence_reliability_decimal", "fraud_risk_decimal", "last_credibility_event_id"],
+      "relationships": ["participant", "credibility_event", "credibility_appeal"],
+      "publicExposure": "Private estimate of future pledge-swap completion and evidence reliability; it is not public social proof, a public scoring surface, or a reputation market."
+    },
+    {
+      "key": "credibility_event",
+      "label": "Credibility event",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "source_type", "source_id", "event_type", "prior_credibility_score_decimal", "credibility_delta_decimal", "new_credibility_score_decimal", "policy_snapshot_hash", "created_at"],
+      "relationships": ["participant", "participant_credibility_profile", "friend_testimonial", "credibility_appeal", "review_decision"],
+      "publicExposure": "Append-only private credibility update with non-sensitive participant-visible reasons and correction or appeal events instead of mutable history."
+    },
+    {
+      "key": "friend_testimonial_invite",
+      "label": "Friend testimonial invite",
+      "category": "evidence",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "participant_user_id", "invite_token_hash", "invite_status", "minimum_necessary_disclosure_json", "expires_at", "created_at"],
+      "relationships": ["participant", "friend_testimonial"],
+      "publicExposure": "Private, revocable, expiring invite that reveals only action type, action window, participant context, and the testimonial request to the invited friend."
+    },
+    {
+      "key": "friend_testimonial",
+      "label": "Friend testimonial",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "invite_id", "participant_user_id", "friend_user_id", "action_template_id", "action_window_start_at", "action_window_end_at", "relationship_type", "baseline_counterfactual_credence_decimal", "completion_credence_decimal", "friend_terms_acceptance_id", "testimonial_status"],
+      "relationships": ["friend_testimonial_invite", "participant", "evidence_claim", "testimonial_quality_assessment", "testimonial_credibility_event"],
+      "publicExposure": "Private third-party evidence by default. Raw testimony, friend identity, relationship context, concern notes, and anti-fraud notes are not shown to funders or public reports."
+    },
+    {
+      "key": "testimonial_quality_assessment",
+      "label": "Testimonial quality assessment",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "friend_testimonial_id", "relationship_weight_decimal", "friend_credibility_weight_decimal", "knowledge_basis_score_decimal", "consistency_score_decimal", "collusion_risk_score_decimal", "accepted_for_credibility_update_bool", "review_status"],
+      "relationships": ["friend_testimonial", "review_decision", "credibility_event"],
+      "publicExposure": "Reviewer-scoped weighting record that can produce only coarse participant or aggregate summaries."
     },
     {
       "key": "opportunity_constrained_meal_evidence_bundle",
@@ -199,6 +280,33 @@
       "requiredFields": ["id", "evidence_bundle_id", "participant_user_id", "ordinary_venue_support_score_decimal", "swipe_or_access_constraint_score_decimal", "co_diner_observation_score_decimal", "post_meal_commitment_score_decimal", "usual_single_meal_habit_score_decimal", "baseline_witness_score_decimal", "independence_score_decimal", "consistency_score_decimal", "collusion_risk_score_decimal", "contrary_evidence_score_decimal", "privacy_sensitivity_score_decimal", "proposed_completion_confidence_decimal", "accepted_for_completion_verification_bool", "accepted_for_additionality_bool", "review_status"],
       "relationships": ["opportunity_constrained_meal_evidence_bundle", "meal_witness_testimonial", "policy_evaluation_trace", "review_decision"],
       "publicExposure": "Reviewer-scoped scorecard for meal-context evidence. Material use can affect verification confidence or additionality only through the frozen policy and cannot retroactively reduce fixed consideration."
+    },
+    {
+      "key": "testimonial_credibility_event",
+      "label": "Testimonial credibility event",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "friend_user_id", "source_friend_testimonial_id", "event_type", "prior_testimonial_credibility_decimal", "delta_decimal", "new_testimonial_credibility_decimal", "policy_snapshot_hash", "created_at"],
+      "relationships": ["participant", "friend_testimonial", "review_decision"],
+      "publicExposure": "Append-only private update to a testimonial provider's credibility. It is visible through private correction or appeal paths, not public social proof."
+    },
+    {
+      "key": "credibility_appeal",
+      "label": "Credibility appeal",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "source_credibility_event_id", "appeal_status", "participant_visible_reason", "created_at"],
+      "relationships": ["participant", "credibility_event", "appeal", "review_decision"],
+      "publicExposure": "Private correction path for material adverse credibility effects. Public reports do not expose individual credibility appeal details."
+    },
+    {
+      "key": "testimonial_stake_policy",
+      "label": "Testimonial stake policy",
+      "category": "payment",
+      "privacyClass": "public_contract",
+      "requiredFields": ["id", "policy_version", "canonical_json", "policy_hash", "default_stake_required_bool", "optional_stake_enabled_bool", "destination_policy", "legal_compliance_review_ref"],
+      "relationships": ["friend_testimonial", "payment_record"],
+      "publicExposure": "Frozen policy for optional capped testimonial integrity stakes. Default requires no monetary stake and negative or concern testimony is free."
     },
     {
       "key": "evidence_artifact",
