@@ -141,11 +141,11 @@ test("expired or unreviewed source surfaces do not become intent claims", () => 
   });
 
   assert.equal(
-    claims.some((claim) => claim.claim_value?.includes("email:cause_priorities") ?? false),
+    claims.some((claim) => claim.claim_value.includes("email:cause_priorities")),
     false,
   );
   assert.equal(
-    claims.some((claim) => claim.claim_value?.includes("chat_history:capability_tags") ?? false),
+    claims.some((claim) => claim.claim_value.includes("chat_history:capability_tags")),
     false,
   );
 });

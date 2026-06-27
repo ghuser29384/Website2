@@ -152,26 +152,18 @@ test("public route metadata has unique titles, descriptions, canonicals, and ind
   const descriptions = new Set<string>();
 
   for (const [path, metadata] of publicMetadata) {
-    const title = metadata.title;
-    const description = metadata.description;
-
-    if (typeof title !== "string") {
-      assert.fail(`${path} title must be a string`);
-    }
-    if (typeof description !== "string") {
-      assert.fail(`${path} description must be a string`);
-    }
-
+    assert.equal(typeof metadata.title, "string", `${path} title must be a string`);
+    assert.equal(typeof metadata.description, "string", `${path} description must be a string`);
     assert.equal(metadata.alternates?.canonical, path, `${path} canonical mismatch`);
     assert.equal(JSON.stringify(metadata.robots ?? {}).includes("false"), false, `${path} blocks indexing`);
 
-    assert.equal(titles.has(title), false, `${path} duplicate title`);
-    assert.equal(descriptions.has(description), false, `${path} duplicate description`);
-    titles.add(title);
-    descriptions.add(description);
+    assert.equal(titles.has(metadata.title), false, `${path} duplicate title`);
+    assert.equal(descriptions.has(metadata.description), false, `${path} duplicate description`);
+    titles.add(metadata.title);
+    descriptions.add(metadata.description);
 
     if (metadata.openGraph && "url" in metadata.openGraph) {
-      assert.equal(String(metadata.openGraph.url), getAbsoluteUrl(path), `${path} Open Graph URL mismatch`);
+      assert.equal(metadata.openGraph.url, getAbsoluteUrl(path), `${path} Open Graph URL mismatch`);
     }
   }
 });
