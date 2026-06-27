@@ -152,6 +152,7 @@ const REQUIRED_RATE_LIMITS = [
   "risk_control_matrix_enforce",
   "preference_integrity_enforce",
   "commitment_settlement_enforce",
+  "opportunity_meal_evidence_enforce",
   "pledge_performance_bond_enforce",
   "pledge_swap_performance_schedule_enforce",
   "negative_commitment_scope_enforce",

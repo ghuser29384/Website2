@@ -80,6 +80,7 @@
     { "key": "risk_control_matrix_enforce", "window": "1 minute", "limit": 20 },
     { "key": "preference_integrity_enforce", "window": "1 minute", "limit": 20 },
     { "key": "commitment_settlement_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "opportunity_meal_evidence_enforce", "window": "1 minute", "limit": 20 },
     { "key": "pledge_performance_bond_enforce", "window": "1 minute", "limit": 20 },
     { "key": "pledge_swap_performance_schedule_enforce", "window": "1 minute", "limit": 20 },
     { "key": "negative_commitment_scope_enforce", "window": "1 minute", "limit": 20 },

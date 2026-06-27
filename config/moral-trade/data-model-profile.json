@@ -174,6 +174,33 @@
       "publicExposure": "Claims disclose only scoped summaries and confidence; artifacts and private locators stay behind review controls."
     },
     {
+      "key": "opportunity_constrained_meal_evidence_bundle",
+      "label": "Opportunity-constrained meal evidence bundle",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "action_template_id", "meal_label", "meal_window_start_at", "meal_window_end_at", "ordinary_meal_venue_type", "venue_access_model", "participant_claims_usual_venue_for_meal_bool", "participant_claims_usually_eats_once_for_meal_bool", "bundle_status", "created_at"],
+      "relationships": ["participant", "pledge_swap", "purchase_envelope", "participant_action_commitment", "meal_witness_testimonial", "opportunity_constraint_assessment", "policy_evaluation_trace"],
+      "publicExposure": "Private meal-context evidence for optional pledge-swap verification. Public reports may expose only coarse reviewed meal-context use and must suppress cafeteria names, schedules, witness names, relationship details, raw testimony, and private context."
+    },
+    {
+      "key": "meal_witness_testimonial",
+      "label": "Meal witness testimonial",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "evidence_bundle_id", "participant_user_id", "witness_role", "meal_label", "observation_coverage", "basis_text_private", "testimonial_status", "submitted_at"],
+      "relationships": ["opportunity_constrained_meal_evidence_bundle", "participant", "opportunity_constraint_assessment", "review_decision"],
+      "publicExposure": "Private baseline, co-diner/direct-observer, or schedule-constraint testimony. Raw basis text, witness identity, relationship details, venue names, pressure reports, and side-payment concerns are never shown to funders or public reports."
+    },
+    {
+      "key": "opportunity_constraint_assessment",
+      "label": "Opportunity constraint assessment",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "evidence_bundle_id", "participant_user_id", "ordinary_venue_support_score_decimal", "swipe_or_access_constraint_score_decimal", "co_diner_observation_score_decimal", "post_meal_commitment_score_decimal", "usual_single_meal_habit_score_decimal", "baseline_witness_score_decimal", "independence_score_decimal", "consistency_score_decimal", "collusion_risk_score_decimal", "contrary_evidence_score_decimal", "privacy_sensitivity_score_decimal", "proposed_completion_confidence_decimal", "accepted_for_completion_verification_bool", "accepted_for_additionality_bool", "review_status"],
+      "relationships": ["opportunity_constrained_meal_evidence_bundle", "meal_witness_testimonial", "policy_evaluation_trace", "review_decision"],
+      "publicExposure": "Reviewer-scoped scorecard for meal-context evidence. Material use can affect verification confidence or additionality only through the frozen policy and cannot retroactively reduce fixed consideration."
+    },
+    {
       "key": "evidence_artifact",
       "label": "Artifact",
       "category": "evidence",
