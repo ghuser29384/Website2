@@ -247,6 +247,14 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.exactLiveProgressExposed, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.publicGoodsModuleCount, 1);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.liveOfferCount, 0);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.copyValidation.ok, true);
+  assert.equal(
+    publicGoodSearchPayload.publicGoodsEntry?.copyValidation.policy,
+    "crecm_v1_125_recorded_state_public_copy_validation_v3",
+  );
+  assert.match(publicGoodSearchPayload.publicGoodsEntry?.copyValidation.stateHash ?? "", /^sha256:[a-f0-9]{64}$/);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.copyValidation.blockedSurfaceCount, 0);
+  assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.copyValidation.blockers, []);
   assert.ok(
     publicGoodSearchPayload.publicGoodsEntry?.copyGuards.some((claim) =>
       /does not expose exact live threshold/i.test(claim),
@@ -286,6 +294,32 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(
     templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.noLiveAgreementCount,
     true,
+  );
+});
+
+test("public offers validation fails unsafe public-goods entry copy against CRECM state", () => {
+  const payload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("search=moral%20public%20goods"),
+  });
+  assert.ok(payload.publicGoodsEntry);
+
+  const unsafePayload = {
+    ...payload,
+    publicGoodsEntry: {
+      ...payload.publicGoodsEntry,
+      summary:
+        "Funds are held in escrow, matching is guaranteed, and certified impact is guaranteed.",
+    },
+  };
+  const validation = validatePublicOffersCollectionPayload(unsafePayload);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("public-goods-entry-card")));
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "public-goods-entry-card" && check.status === "fail",
+    ),
   );
 });
 
@@ -390,6 +424,13 @@ test("public offers API route returns Common Ground Budget entry for moral-publi
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
   assert.equal(body.publicGoodsEntry.ordinaryOfferFiltersCollapsed, true);
   assert.equal(body.publicGoodsEntry.exactLiveProgressExposed, false);
+  assert.equal(body.publicGoodsEntry.copyValidation.ok, true);
+  assert.equal(
+    body.publicGoodsEntry.copyValidation.policy,
+    "crecm_v1_125_recorded_state_public_copy_validation_v3",
+  );
+  assert.match(body.publicGoodsEntry.copyValidation.stateHash, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(body.publicGoodsEntry.copyValidation.blockers, []);
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);
 });

@@ -45,38 +45,48 @@ test("public navigation exposes professional marketplace routes", () => {
   const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
   const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
-  const understandMenu = getPrimaryNavLinks(false).find((link) => link.label === "Understand");
-  const exploreMenu = getPrimaryNavLinks(false).find((link) => link.label === "Explore");
-  const joinMenu = getPrimaryNavLinks(false).find((link) => link.label === "Join");
-  const trustMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trust");
+  const tradeMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trade");
+  const publicGoodsMenu = getPrimaryNavLinks(false).find((link) => link.label === "Moral Public Goods");
+  const groupBuyingSearchResults = filterSiteSearchItems("group buying", 6);
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
 
-  assert.deepEqual(labels, ["Understand", "Explore", "Join", "Trust"]);
-  assert.equal(getTopbarActions(false).primaryAction.href, "/worked-examples");
-  assert.equal(getTopbarActions(false).primaryAction.label, "See example");
+  assert.deepEqual(labels, ["Trade", "Moral Public Goods"]);
+  assert.equal(getTopbarActions(false).primaryAction.href, "/moral-goods-group-buying");
+  assert.equal(getTopbarActions(false).primaryAction.label, "Group buying");
   assert.equal(getTopbarActions(true).primaryAction.href, "/offers/new?mode=offset");
-  assert.equal(getTopbarActions(true).primaryAction.label, "Trade");
+  assert.equal(getTopbarActions(true).primaryAction.label, "Create trade");
   assert.equal(getTopbarActions(false).authLink.label, "Sign in");
-  assert.match(understandMenu?.summary ?? "", /Start with the idea/);
-  assert.match(exploreMenu?.summary ?? "", /live enough/);
-  assert.match(joinMenu?.summary ?? "", /one supported pilot action/);
-  assert.match(trustMenu?.summary ?? "", /review rules/);
+  assert.match(tradeMenu?.summary ?? "", /bounded moral trade commitments/);
+  assert.match(publicGoodsMenu?.summary ?? "", /common budgets, and group-buying pools/);
   assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.description)));
-  assert.ok(joinMenu?.items?.some((item) => item.label === "Create donation offset"));
+  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.section)));
+  assert.ok(tradeMenu?.items?.some((item) => item.label === "Create donation offset" && item.section === "Participate"));
+  assert.ok(tradeMenu?.items?.some((item) => item.label === "Group buying" && item.section === "Trade lanes"));
+  assert.ok(
+    publicGoodsMenu?.items?.some(
+      (item) => item.label === "Moral goods group buying" && item.section === "Funding routes",
+    ),
+  );
+  assert.ok(groupBuyingSearchResults.some((item) => item.href === "/moral-goods-group-buying"));
   assert.ok(hrefs.includes("/projects"));
   assert.ok(hrefs.includes("/start"));
-  assert.ok(hrefs.includes("/about"));
   assert.ok(hrefs.includes("/how-it-works"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/pledge-swaps"));
+  assert.ok(hrefs.includes("/moral-goods-group-buying"));
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/validation"));
   assert.ok(hrefs.includes("/worked-examples"));
+  assert.ok(hrefs.includes("/mpgf"));
+  assert.ok(hrefs.includes("/mpgf/about"));
+  assert.ok(hrefs.includes("/mpgf/contribute"));
+  assert.ok(hrefs.includes("/mpgf/pools"));
+  assert.ok(hrefs.includes("/mpgf/governance"));
+  assert.ok(hrefs.includes("/mpgf/metrics"));
   assert.ok(hrefs.includes("/measurement"));
-  assert.ok(hrefs.includes("/accessibility"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/background-networking"));
@@ -88,18 +98,23 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/status"));
   assert.equal(hrefs.includes("/paid-action-offers"), false);
   assert.equal(hrefs.includes("/saved-offers"), false);
-  assert.equal(hrefs.includes("/mpgf"), false);
   assert.equal(hrefs.includes("/moral-trade/technical-spec"), false);
   assert.equal(hrefs.includes("/reasoning-center"), false);
-  assert.equal(hrefs.includes("/priority-correction-fund"), false);
+  assert.equal(hrefs.includes("/accessibility"), false);
+  assert.equal(hrefs.includes("/priority-correction-fund"), true);
   assert.equal(footerHrefs.includes("/paid-action-offers"), true);
   assert.equal(footerHrefs.includes("/mpgf"), true);
+  assert.equal(footerHrefs.includes("/moral-goods-group-buying"), true);
   assert.equal(footerHrefs.includes("/moral-trade/technical-spec"), true);
   assert.equal(footerHrefs.includes("/reasoning-center"), true);
   assert.equal(footerHrefs.includes("/priority-correction-fund"), true);
   assert.ok(!hrefs.includes("/cart"));
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
+  assert.match(siteSource, /label: "Trade"/);
+  assert.match(siteSource, /label: "Moral Public Goods"/);
+  assert.match(siteSource, /section: "Trade lanes"/);
+  assert.match(siteSource, /section: "Funding routes"/);
   assert.match(siteSource, /\/contact/);
   assert.match(siteSource, /\/status/);
   assert.match(siteSource, /\/trust/);
@@ -111,9 +126,11 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
   assert.equal(siteSource.includes("/methodology#sources"), false);
   assert.match(topbarSource, /topbar-menu-heading/);
+  assert.match(topbarSource, /topbar-menu-section/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
   assert.match(topbarSource, /showSearch = true/);
+  assert.match(globalCss, /\.topbar-menu-section\s*\{/);
   assert.match(
     globalCss,
     /\.button-secondary\.button-nav\.is-active\s*\{[\s\S]*background:\s*var\(--accent-soft\);[\s\S]*color:\s*var\(--accent-deep\);/,
@@ -5575,6 +5592,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.ok(publicGoodsResultIndex < marketplaceShellIndex);
   assert.match(publicOffersSource, /publicGoodsEntry/);
   assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);
+  assert.match(publicOffersSource, /validateMpgfCrecPublishedCopyBundle/);
+  assert.match(publicOffersSource, /copyValidation/);
+  assert.match(publicOffersSource, /MPGF_CRECM_COPY_VALIDATION_POLICY/);
   assert.match(publicOffersSource, /public-offers-api-v0\.4-2026-06/);
   assert.match(publicOffersSource, /public-offers-api-validator-v0\.4/);
   assert.match(publicOffersSource, /noPrimaryZeroState/);

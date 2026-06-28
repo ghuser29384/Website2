@@ -13,6 +13,12 @@ import {
 } from "@/lib/marketplace-seed-templates";
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
 import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import {
+  MPGF_CRECM_COPY_VALIDATION_POLICY,
+  validateMpgfCrecPublishedCopyBundle,
+  type MpgfCrecPublishedCopySnippet,
+  type MpgfCrecRecordedStateForCopy,
+} from "@/lib/mpgf/public-goods-crecm-copy";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -123,6 +129,16 @@ export interface PublicGoodsEntryAction {
   createsBindingIntent: false;
 }
 
+export interface PublicGoodsEntryCopyValidation {
+  ok: boolean;
+  policy: typeof MPGF_CRECM_COPY_VALIDATION_POLICY;
+  stateHash: string;
+  surfaceCount: number;
+  blockedSurfaceCount: number;
+  claims: string[];
+  blockers: string[];
+}
+
 export interface PublicGoodsEntryCard {
   id: "common-ground-budget-public-goods-fund";
   label: "Common Ground Budget";
@@ -149,6 +165,7 @@ export interface PublicGoodsEntryCard {
   };
   statusChips: string[];
   copyGuards: string[];
+  copyValidation: PublicGoodsEntryCopyValidation;
 }
 
 export interface PublicOffersMeta {
@@ -283,6 +300,20 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
+const PUBLIC_GOODS_ENTRY_RECORDED_COPY_STATE = {
+  paymentCaptureAllowed: false,
+  postClearPaymentAuthorizationRecorded: false,
+  escrowClaimAllowed: false,
+  custodyState: "not_claimed_without_legal_custody_route",
+  baseMatchPoolBacked: false,
+  bonusMatchPoolBacked: false,
+  successRewardPoolFullyBacked: false,
+  coordinationCreditsEnabledForCapturedRows: false,
+  impactCertificatesEnabledForCapturedRows: false,
+  capturedContributionRowsAvailable: false,
+  impactOutcomeClaimAllowed: false,
+  donationInsuranceClaimAllowed: false,
+} as const satisfies MpgfCrecRecordedStateForCopy;
 const PUBLIC_MARKETPLACE_TAB_ORDER = [
   "live",
   "templates",
@@ -543,6 +574,68 @@ function getPublicMarketplaceDemoCount() {
   return demoMpgfPublicGoodsCampaigns.filter((campaign) => campaign.reviewStatus === "approved").length;
 }
 
+function buildPublicGoodsEntryCopySnippets({
+  copyGuards,
+  eyebrow,
+  label,
+  mechanismVersion,
+  primaryCta,
+  secondaryCtas,
+  statusChips,
+  summary,
+}: {
+  copyGuards: readonly string[];
+  eyebrow: PublicGoodsEntryCard["eyebrow"];
+  label: PublicGoodsEntryCard["label"];
+  mechanismVersion: PublicGoodsEntryCard["mechanismVersion"];
+  primaryCta: PublicGoodsEntryAction;
+  secondaryCtas: readonly PublicGoodsEntryAction[];
+  statusChips: readonly string[];
+  summary: string;
+}): MpgfCrecPublishedCopySnippet[] {
+  return [
+    {
+      surface: "public-goods-entry-card-title",
+      text: `${eyebrow}. ${label}. ${mechanismVersion}.`,
+    },
+    {
+      surface: "public-goods-entry-card-summary",
+      text: summary,
+    },
+    {
+      surface: "public-goods-entry-card-status-chips",
+      text: statusChips.join(". "),
+    },
+    {
+      surface: "public-goods-entry-card-actions",
+      text: [primaryCta.label, ...secondaryCtas.map((action) => action.label)].join(". "),
+    },
+    {
+      surface: "public-goods-entry-card-copy-guards",
+      text: copyGuards.join(" "),
+    },
+  ];
+}
+
+function buildPublicGoodsEntryCopyValidation(
+  input: Parameters<typeof buildPublicGoodsEntryCopySnippets>[0],
+): PublicGoodsEntryCopyValidation {
+  const validation = validateMpgfCrecPublishedCopyBundle(
+    buildPublicGoodsEntryCopySnippets(input),
+    PUBLIC_GOODS_ENTRY_RECORDED_COPY_STATE,
+  );
+
+  return {
+    ok: validation.ok,
+    policy: MPGF_CRECM_COPY_VALIDATION_POLICY,
+    stateHash: validation.stateHash,
+    surfaceCount: validation.surfaceCount,
+    blockedSurfaceCount: validation.blockedSurfaceCount,
+    claims: validation.claims,
+    blockers: validation.blockers,
+  };
+}
+
 export function buildPublicGoodsEntryCard({
   liveOfferCount,
   publicGoodsIntent,
@@ -556,6 +649,49 @@ export function buildPublicGoodsEntryCard({
 }): PublicGoodsEntryCard {
   const currentRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
   const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
+  const primaryCta: PublicGoodsEntryAction = {
+    key: "preview-common-ground-budget",
+    label: "Preview a Common Ground Budget",
+    href: previewHref,
+    method: "GET",
+    rank: 1,
+    authRequired: false,
+    createsBindingIntent: false,
+  };
+  const secondaryCtas: PublicGoodsEntryAction[] = [
+    {
+      key: "view-current-round",
+      label: "View current round",
+      href: currentRoundHref,
+      method: "GET",
+      rank: 2,
+      authRequired: false,
+      createsBindingIntent: false,
+    },
+    {
+      key: "learn-how-it-works",
+      label: "Learn how it works / View audit and rules",
+      href: "/mpgf",
+      method: "GET",
+      rank: 3,
+      authRequired: false,
+      createsBindingIntent: false,
+    },
+  ];
+  const summary =
+    "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes. This is a separate Public Goods Fund entry, not an ordinary offer listing.";
+  const statusChips = [
+    "No charge now",
+    "No escrow claim",
+    "Sealed progress before close",
+    "Separated accounting",
+    "Final review consent",
+  ];
+  const copyGuards = [
+    "Does not create, edit, clear, authorize, capture, release, reward, credit, certify, or audit a CRECM record.",
+    "Does not count as a live offer, ordinary listing, completed agreement, or live liquidity.",
+    "Does not expose exact live threshold satisfaction, counterparty gaps, supporter counts, active-cluster counts, or success-without-me status before close.",
+  ];
 
   return {
     id: "common-ground-budget-public-goods-fund",
@@ -563,8 +699,7 @@ export function buildPublicGoodsEntryCard({
     eyebrow: "Public Goods Fund",
     mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
-    summary:
-      "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes. This is a separate Public Goods Fund entry, not an ordinary offer listing.",
+    summary,
     resultRank: 1,
     visibleForPublicGoodsIntent: publicGoodsIntent,
     countsAsLiveOffer: false,
@@ -573,35 +708,8 @@ export function buildPublicGoodsEntryCard({
     noPrimaryZeroState: true,
     ordinaryOfferFiltersCollapsed: true,
     exactLiveProgressExposed: false,
-    primaryCta: {
-      key: "preview-common-ground-budget",
-      label: "Preview a Common Ground Budget",
-      href: previewHref,
-      method: "GET",
-      rank: 1,
-      authRequired: false,
-      createsBindingIntent: false,
-    },
-    secondaryCtas: [
-      {
-        key: "view-current-round",
-        label: "View current round",
-        href: currentRoundHref,
-        method: "GET",
-        rank: 2,
-        authRequired: false,
-        createsBindingIntent: false,
-      },
-      {
-        key: "learn-how-it-works",
-        label: "Learn how it works / View audit and rules",
-        href: "/mpgf",
-        method: "GET",
-        rank: 3,
-        authRequired: false,
-        createsBindingIntent: false,
-      },
-    ],
+    primaryCta,
+    secondaryCtas,
     laneSeparation: {
       liveOfferCount,
       reviewedSeedTemplateCount,
@@ -609,18 +717,18 @@ export function buildPublicGoodsEntryCard({
       demoRecordCount: getPublicMarketplaceDemoCount(),
       publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
     },
-    statusChips: [
-      "No charge now",
-      "No escrow claim",
-      "Sealed progress before close",
-      "Separated accounting",
-      "Final review consent",
-    ],
-    copyGuards: [
-      "Does not create, edit, clear, authorize, capture, release, reward, credit, certify, or audit a CRECM record.",
-      "Does not count as a live offer, ordinary listing, completed agreement, or live liquidity.",
-      "Does not expose exact live threshold satisfaction, counterparty gaps, supporter counts, active-cluster counts, or success-without-me status before close.",
-    ],
+    statusChips,
+    copyGuards,
+    copyValidation: buildPublicGoodsEntryCopyValidation({
+      copyGuards,
+      eyebrow: "Public Goods Fund",
+      label: "Common Ground Budget",
+      mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
+      primaryCta,
+      secondaryCtas,
+      statusChips,
+      summary,
+    }),
   };
 }
 
@@ -1313,6 +1421,9 @@ function publicGoodsEntryPreservesBoundaries(
   }
 
   const entry = payload.publicGoodsEntry;
+  const recomputedCopyValidation = entry
+    ? buildPublicGoodsEntryCopyValidation(entry)
+    : null;
 
   return Boolean(
     entry &&
@@ -1337,7 +1448,15 @@ function publicGoodsEntryPreservesBoundaries(
       entry.laneSeparation.publicGoodsModuleCount ===
         (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
       entry.copyGuards.some((claim) => /does not count as a live offer/i.test(claim)) &&
-      entry.copyGuards.some((claim) => /does not expose exact live threshold/i.test(claim)),
+      entry.copyGuards.some((claim) => /does not expose exact live threshold/i.test(claim)) &&
+      entry.copyValidation.ok &&
+      entry.copyValidation.policy === MPGF_CRECM_COPY_VALIDATION_POLICY &&
+      entry.copyValidation.blockers.length === 0 &&
+      entry.copyValidation.blockedSurfaceCount === 0 &&
+      /^sha256:[a-f0-9]{64}$/.test(entry.copyValidation.stateHash) &&
+      recomputedCopyValidation?.ok === true &&
+      recomputedCopyValidation.stateHash === entry.copyValidation.stateHash &&
+      recomputedCopyValidation.blockers.length === 0,
   );
 }
 
