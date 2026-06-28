@@ -141,7 +141,7 @@ export interface PublicGoodsEntryCopyValidation {
 
 export interface PublicGoodsEntryCard {
   id: "common-ground-budget-public-goods-fund";
-  label: "Common Ground Budget";
+  label: "moral public goods";
   eyebrow: "Public Goods Fund";
   mechanismVersion: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion;
   href: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href;
@@ -651,7 +651,7 @@ export function buildPublicGoodsEntryCard({
   const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
   const primaryCta: PublicGoodsEntryAction = {
     key: "preview-common-ground-budget",
-    label: "Preview a Common Ground Budget",
+    label: "Preview moral public goods",
     href: previewHref,
     method: "GET",
     rank: 1,
@@ -695,7 +695,7 @@ export function buildPublicGoodsEntryCard({
 
   return {
     id: "common-ground-budget-public-goods-fund",
-    label: "Common Ground Budget",
+    label: "moral public goods",
     eyebrow: "Public Goods Fund",
     mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
@@ -722,7 +722,7 @@ export function buildPublicGoodsEntryCard({
     copyValidation: buildPublicGoodsEntryCopyValidation({
       copyGuards,
       eyebrow: "Public Goods Fund",
-      label: "Common Ground Budget",
+      label: "moral public goods",
       mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
       primaryCta,
       secondaryCtas,
@@ -778,7 +778,7 @@ function buildPublicOffersTabSummaries({
     },
     {
       value: "public_goods",
-      label: "Common Ground Budget",
+      label: "moral public goods",
       count: getPublicMarketplaceRoundCount(),
       href: "/offers?tab=public_goods",
       source: "public_goods_module",
@@ -1428,7 +1428,7 @@ function publicGoodsEntryPreservesBoundaries(
   return Boolean(
     entry &&
       entry.resultRank === 1 &&
-      entry.label === "Common Ground Budget" &&
+      entry.label === "moral public goods" &&
       entry.primaryCta.key === "preview-common-ground-budget" &&
       entry.primaryCta.rank === 1 &&
       entry.secondaryCtas.map((action) => action.rank).join(",") === "2,3" &&
@@ -1481,7 +1481,7 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "zero-live-default",
-      "Zero live inventory defaults to worked examples unless public-goods intent routes to Common Ground Budget",
+      "Zero live inventory defaults to worked examples unless public-goods intent routes to moral public goods",
       payload.meta.liveOfferCount > 0 ||
         payload.meta.defaultTab === "worked_examples" ||
         payload.meta.defaultedToPublicGoods,
@@ -1489,13 +1489,13 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and Common Ground Budget lanes",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and moral public goods lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
     validationCheck(
       "public-goods-entry-card",
-      "Public-goods intent returns a first-rank Common Ground Budget entry without treating it as a live listing",
+      "Public-goods intent returns a first-rank moral public goods entry without treating it as a live listing",
       publicGoodsEntryPreservesBoundaries(payload),
       payload.publicGoodsEntry
         ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; items=${payload.items.length}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`
@@ -1652,7 +1652,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "zero-live-default",
-      "Zero live inventory defaults facets to worked examples unless public-goods intent routes to Common Ground Budget",
+      "Zero live inventory defaults facets to worked examples unless public-goods intent routes to moral public goods",
       payload.meta.liveOfferCount > 0 ||
         payload.meta.defaultTab === "worked_examples" ||
         payload.meta.defaultedToPublicGoods,
@@ -1660,7 +1660,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and Common Ground Budget lanes",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and moral public goods lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1683,7 +1683,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "public-goods-entry-card",
-      "Public-goods facet responses preserve the Common Ground Budget entry without treating it as a facet or listing",
+      "Public-goods facet responses preserve the moral public goods entry without treating it as a facet or listing",
       publicGoodsEntryPreservesBoundaries({ ...payload, items: [] }),
       payload.publicGoodsEntry
         ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`

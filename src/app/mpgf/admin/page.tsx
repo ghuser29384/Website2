@@ -82,7 +82,7 @@ export default async function MpgfAdminPage() {
               <p>
                 Registry, round, safety, sybil/collusion, and sponsor/governance consoles are
                 mapped as MFA-gated, privacy-safe operator surfaces. They create no live authority
-                and do not bypass Common Ground Budget review, payment, authorization, sponsor, or
+                and do not bypass moral public goods review, payment, authorization, sponsor, or
                 audit gates.
               </p>
               <div className="mpgf-control-summary">

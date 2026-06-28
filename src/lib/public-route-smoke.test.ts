@@ -509,7 +509,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
   assert.equal(publicGoodsResults[0]?.href, "/mpgf");
-  assert.equal(publicGoodsResults[0]?.label, "Common Ground Budget");
+  assert.equal(publicGoodsResults[0]?.label, "moral public goods");
   assert.equal(commonGroundResults[0]?.href, "/mpgf");
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
@@ -2162,11 +2162,11 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
   assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
   assert.match(mpfgPage, /Coordinate around moral public goods/);
-  assert.match(mpfgPage, /title="Common Ground Budget"/);
-  assert.match(mpfgPage, /Preview a Common Ground Budget/);
+  assert.match(mpfgPage, /title="moral public goods"/);
+  assert.match(mpfgPage, /Preview moral public goods/);
   assert.match(mpfgPage, /View current round/);
   assert.match(mpfgPage, /Learn how it works \/ View audit and rules/);
-  assert.match(mpfgPage, /Common Ground Budget status strip/);
+  assert.match(mpfgPage, /moral public goods status strip/);
   assert.match(mpfgPage, /No charge now/);
   assert.match(mpfgPage, /JIT after gates/);
   assert.match(mpfgPage, /Sealed before close/);
@@ -5058,7 +5058,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersSource, /reviewedSeedTemplates/);
   assert.match(publicOffersSource, /reviewed-seed-templates/);
   assert.match(publicOffersSource, /marketplace-tab-separation/);
-  assert.match(publicOffersSource, /Common Ground Budget/);
+  assert.match(publicOffersSource, /moral public goods/);
   assert.match(publicOffersSource, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
   assert.match(publicOffersSource, /sourceOfTruthNote/);
   assert.equal(publicOffersSource.includes("external CRECM module"), false);
@@ -5472,13 +5472,13 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Start template/);
   assert.match(offersPage, /Demo records/);
   assert.match(offersPage, /Common Ground Marketplace/);
-  assert.match(offersPage, /Open Common Ground Budget/);
-  assert.match(offersPage, /Common Ground Budget result available/);
+  assert.match(offersPage, /Open moral public goods/);
+  assert.match(offersPage, /moral public goods result available/);
   assert.match(offersPage, /id="public-goods-result-card"/);
   assert.match(offersPage, /data-primary-result="common-ground-budget"/);
   assert.match(offersPage, /role="status" aria-live="polite"/);
   assert.match(offersPage, /aria-describedby="public-goods-result-announcement public-goods-result-summary"/);
-  assert.match(offersPage, /Preview a Common Ground Budget/);
+  assert.match(offersPage, /Preview moral public goods/);
   assert.match(offersPage, /public-goods-primary-action/);
   assert.match(offersPage, /No ordinary moral-trade offers match this search/);
   assert.match(offersPage, /The moral-public-goods route is separate/);
@@ -5515,7 +5515,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /No escrow claim/);
   assert.match(offersPage, /Separated accounting/);
   assert.match(offersPage, /Final review consent/);
-  assert.match(offersPage, /aria-label="Common Ground Budget text status labels"/);
+  assert.match(offersPage, /aria-label="moral public goods text status labels"/);
   assert.match(offersPage, /Budget to Projects to Review; no binding save before final review/);
   assert.match(offersPage, /Advanced details/);
   assert.match(offersPage, /Lane counts/);
@@ -5526,8 +5526,8 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Audit bundle contract/);
   assert.match(offersPage, /Rulebook report/);
   assert.match(offersPage, /success-without-me progress stays sealed before close/);
-  assert.match(mpgfPage, /Common Ground Budget \| Public Goods Fund/);
-  assert.match(mpgfPage, /Preview a Common Ground Budget/);
+  assert.match(mpgfPage, /moral public goods \| Public Goods Fund/);
+  assert.match(mpgfPage, /Preview moral public goods/);
   assert.match(mpgfPage, /Learn how it works \/ View audit and rules/);
   assert.match(mpgfPage, /roundBoardCardByCampaignId/);
   assert.match(mpgfPage, /Qualitative progress/);
@@ -5548,7 +5548,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Ordinary-offer filters remain separated/);
   assert.match(offersPage, /Collapsed separated-lane drawer for public-goods search/);
   assert.match(offersPage, /Browse separated lanes/);
-  assert.match(offersPage, /Collapsed advanced Common Ground Budget audit details/);
+  assert.match(offersPage, /Collapsed advanced moral public goods audit details/);
   assert.match(offersPage, /filter-drawer-content/);
   assert.match(offersPage, /assurance matching/);
   assert.match(offersPage, /conditional public-good pledge/);
@@ -5571,7 +5571,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);
   assert.match(offersPage, /<h1>Browse offers<\/h1>/);
-  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the Common/);
+  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the moral public goods module/);
   assert.match(offersPage, /Create an offer/);
   assert.match(offersPage, /Save search/);
   assert.match(offersPage, /Worked example, not live liquidity/);

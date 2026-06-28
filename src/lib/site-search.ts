@@ -242,6 +242,25 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["pledge", "swap", "reciprocal", "commitment", "vegetarian"],
   },
   {
+    href: "/moral-goods-group-buying",
+    label: "Group buying",
+    summary:
+      "Fund verified moral actions together through rounds, pledge-swap lots, baskets, and standing budgets.",
+    kind: "fund",
+    keywords: [
+      "group buying",
+      "moral goods",
+      "group buy",
+      "crowdfund",
+      "microfund",
+      "standing budget",
+      "basket",
+      "pledge swap lot",
+      "animal welfare",
+      "vegetarian",
+    ],
+  },
+  {
     href: "/donation-offsets",
     label: "Donation offsets",
     summary: "Redirect opposed donations toward a named compromise destination.",
@@ -257,7 +276,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/mpgf",
-    label: "Common Ground Budget",
+    label: "moral public goods",
     summary:
       "Preview the Public Goods Fund path for moral public goods: no charge now, sealed progress before close, and final review before any binding contribution.",
     kind: "fund",

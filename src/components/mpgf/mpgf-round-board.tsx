@@ -22,7 +22,7 @@ export function MpgfRoundBoard({
         <p className="eyebrow">Live rounds</p>
         <h2>Round board and budget router</h2>
         <p>
-          Review the next safe participant action before setting a Common Ground Budget. Exact
+          Review the next safe participant action before setting moral public goods. Exact
           threshold progress, supporter counts, active-cluster counts, counterparty gaps, and
           success-without-me status stay sealed before close. Public exact aggregates appear only
           after close in final reports or audit bundles.

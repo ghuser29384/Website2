@@ -25,6 +25,10 @@ import {
   getMoralTradeEvaluationSampleAudits,
   validateMoralTradeEvaluationProfile,
 } from "@/lib/moral-trade/evaluation";
+import {
+  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 import { buildPublicOffersCollectionPayload } from "@/lib/public-offers";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -184,14 +188,40 @@ export default async function MeasurementPage() {
           rank moral views, expose exact wishes, or optimize for engagement.
         </p>
 
+        <section className="panel data-card data-card-wide">
+          <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.eyebrow}</p>
+          <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.heading}</h2>
+          <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.summary}</p>
+          <ul className="compact-list">
+            {BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.cards.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <details className="details-panel">
+            <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.technicalDetailsLabel}</summary>
+            <div className="details-content">
+              <div className="hero-actions">
+                {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                  <Link className="button button-secondary" href={link.href} key={link.href}>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </details>
+        </section>
+
         <section>
-          <h2>What we measure now</h2>
-          <p>
-            The current event taxonomy follows the same privacy limits as the product: public route
-            paths, coarse stage labels, consent state, and bucketed performance signals. Query
-            strings, hashes, raw search text, source notes, receipts, and private messages stay out
-            of funnel events.
-          </p>
+          <details className="details-panel">
+            <summary>Measurement event taxonomy</summary>
+            <div className="details-content">
+              <h2>What we measure now</h2>
+              <p>
+                The current event taxonomy follows the same privacy limits as the product: public
+                route paths, coarse stage labels, consent state, and bucketed performance signals.
+                Query strings, hashes, raw search text, source notes, receipts, and private
+                messages stay out of funnel events.
+              </p>
           {stageOrder.map((stage) => (
             <div key={stage}>
               <h3>{stageLabels[stage]}</h3>
@@ -213,6 +243,8 @@ export default async function MeasurementPage() {
               </div>
             </div>
           ))}
+            </div>
+          </details>
         </section>
 
         <section aria-labelledby="marketplace-kpis-heading">
@@ -234,7 +266,7 @@ export default async function MeasurementPage() {
           </div>
           <p>
             The marketplace KPI contract covers live inventory, reviewable activity, agreement
-            completion, Common Ground Budget activation, support conversion, threshold clearing,
+            completion, moral public goods activation, support conversion, threshold clearing,
             sponsor leverage, safety blockers, deployment blockers, and privacy failures. Public
             release uses small-cell suppression and never treats seed templates, worked examples,
             rounds, or demo records as live agreement volume.

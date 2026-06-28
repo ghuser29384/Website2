@@ -10,6 +10,7 @@ import { validateMpgfCrecPublishedCopyBundle } from "./public-goods-crecm-copy";
 import {
   buildMpgfCrecV1125ClearingContractSummary,
 } from "./public-goods-crecm-v1125";
+import { MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER } from "./public-goods-contribution-ledger";
 import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsMatchPool,
@@ -76,7 +77,7 @@ export interface MpgfPublicGoodsEcmRulebookReport {
   mechanism: {
     abbreviation: "CRECM";
     technicalLabel: "CRECM v1.125";
-    userFacingLabel: "Common Ground Budget";
+    userFacingLabel: "moral public goods";
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125";
     sourceSpec: "moralpublicgoods131.md";
     deploymentFlag: "crecm_v1_125";
@@ -116,6 +117,10 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     matchEligibleDollarsOnlyUnlockSponsorMatch: true;
     feeQuotesMustBindFeePolicyHash: true;
     rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true;
+    plainSettlementSummaryGroups: typeof MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER;
+    plainSettlementSummaryDetailsDrawerRequired: true;
+    plainSettlementSummaryFinalReceiptRequired: true;
+    plainSummaryCannotCombineAccountingChannels: true;
   };
   clearingInputIntegrity: {
     roundClosePaymentCommitmentSnapshotsRequired: true;
@@ -420,7 +425,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
   const mechanism = {
     abbreviation: "CRECM" as const,
     technicalLabel: "CRECM v1.125" as const,
-    userFacingLabel: "Common Ground Budget" as const,
+    userFacingLabel: "moral public goods" as const,
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125" as const,
     sourceSpec: "moralpublicgoods131.md" as const,
     deploymentFlag: "crecm_v1_125" as const,
@@ -438,6 +443,10 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     matchEligibleDollarsOnlyUnlockSponsorMatch: true as const,
     feeQuotesMustBindFeePolicyHash: true as const,
     rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true as const,
+    plainSettlementSummaryGroups: MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER,
+    plainSettlementSummaryDetailsDrawerRequired: true as const,
+    plainSettlementSummaryFinalReceiptRequired: true as const,
+    plainSummaryCannotCombineAccountingChannels: true as const,
   };
   const clearingInputIntegrity = {
     roundClosePaymentCommitmentSnapshotsRequired: true as const,
@@ -521,9 +530,15 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
         text:
           "Contributor-only benefits require captured successful rows and never affect allocation power.",
       },
+      {
+        surface: "public-goods-entry-page",
+        text:
+          "Public Goods Fund pages explain matching and impact records without guaranteeing matching, impact, outcomes, effectiveness, escrow, custody, or payment protection.",
+      },
     ],
     {
       paymentCaptureAllowed: false,
+      postClearPaymentAuthorizationRecorded: false,
       escrowClaimAllowed: custodyAndRelease.escrowClaimAllowed,
       custodyState: custodyAndRelease.postClearCustodialState,
       baseMatchPoolBacked: sponsorPoolBacking.poolSpecificBackingRequired,
@@ -534,6 +549,8 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       impactCertificatesEnabledForCapturedRows:
         participantIncentives.impactCertificatesForCapturedSuccessfulContributionRowsOnly,
       capturedContributionRowsAvailable: false,
+      impactOutcomeClaimAllowed: false,
+      donationInsuranceClaimAllowed: false,
     },
   );
 

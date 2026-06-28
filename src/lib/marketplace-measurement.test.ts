@@ -149,7 +149,7 @@ test("marketplace measurement covers moraltrade82 route and receipt quality sign
   );
 });
 
-test("marketplace KPI snapshot excludes seed templates, worked examples, Common Ground Budget module, and demo records from live metrics", () => {
+test("marketplace KPI snapshot excludes seed templates, worked examples, moral public goods module, and demo records from live metrics", () => {
   const publicOffersPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=all"),

@@ -1,36 +1,22 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     {
-      label: "Understand",
-      summary: "Start with the idea, source, and safest first route.",
+      label: "Trade",
+      summary: "Browse, compare, and create bounded moral trade commitments.",
       items: [
-        { href: "/start", label: "Choose your path", description: "Route by intent: learn, test an example, donate, or join/build." },
-        { href: "/what-is-moral-trade", label: "What is Moral Trade?", description: "A plain-language primer for new visitors." },
-        { href: "/how-it-works", label: "How it works", description: "A simple walkthrough from example to review." },
-        { href: "/sources", label: "Sources", description: "Primary references and product-boundary notes." },
-        { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
-      ],
-    },
-    {
-      label: "Explore",
-      summary: "Inspect what is live enough to read, clone, or donate through.",
-      items: [
-        { href: "/projects", label: "Projects", description: "What is live, illustrative, or upcoming." },
-        { href: "/worked-examples", label: "Worked examples", description: "Seeded structures, not live offers." },
-        { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
-        { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
-        { href: "/moral-goods-group-buying", label: "Group buying", description: "Fund verified moral actions together." },
-        { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
-        { href: "/donate", label: "Donate through a route", description: "Use a vetted external donation handoff." },
-      ],
-    },
-    {
-      label: "Join",
-      summary: "Move from examples into one supported pilot action.",
-      items: [
+        { href: "/start", label: "Choose your path", section: "Start here", description: "Route by intent: learn, test an example, donate, or join/build." },
+        { href: "/what-is-moral-trade", label: "What is Moral Trade?", section: "Start here", description: "A plain-language primer for new visitors." },
+        { href: "/how-it-works", label: "How it works", section: "Start here", description: "A simple walkthrough from example to review." },
+        { href: "/faq", label: "FAQ", section: "Start here", description: "Common questions and operating limits." },
+        { href: "/offers", label: "Browse all trades", section: "Trade lanes", description: "Live offers, reviewed templates, and worked examples." },
+        { href: "/pledge-swaps", label: "Pledge swaps", section: "Trade lanes", description: "Exchange bounded commitments." },
+        { href: "/moral-goods-group-buying", label: "Group buying", section: "Trade lanes", description: "Fund verified moral actions through rounds, lots, baskets, and standing budgets." },
+        { href: "/donation-offsets", label: "Donation offsets", section: "Trade lanes", description: "Redirect matched opposed donations." },
+        { href: "/worked-examples", label: "Worked examples", section: "Trade lanes", description: "Seeded structures, not live offers." },
         {
           href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
           label: "Create bounded trade",
+          section: "Participate",
           description: "Draft terms with baseline, exit, evidence, and review gates.",
         },
         {
@@ -38,34 +24,45 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
             ? "/offers/new?mode=offset"
             : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
           label: "Create donation offset",
+          section: "Participate",
           description: "Set baseline, match, destination, surplus, and evidence rules.",
         },
         {
           href: isAuthenticated ? "/dashboard#wish-profile" : "/signup?returnTo=/dashboard%23wish-profile",
           label: "Create wish profile",
+          section: "Participate",
           description: "Describe broad wishes before mutual disclosure.",
         },
-        { href: "/cohort", label: "Founding cohort", description: "Invite one serious counterparty and start small." },
-        { href: "/background-networking", label: "Private matching", description: "Consent-gated counterparty discovery." },
-        { href: isAuthenticated ? "/dashboard" : "/signup", label: isAuthenticated ? "Open dashboard" : "Create account", description: "Use member workflows after the public primer." },
+        { href: "/background-networking", label: "Private matching", section: "Participate", description: "Consent-gated counterparty discovery." },
+        { href: "/cohort", label: "Founding cohort", section: "Participate", description: "Invite one serious counterparty and start small." },
+        { href: isAuthenticated ? "/dashboard" : "/signup", label: isAuthenticated ? "Open dashboard" : "Create account", section: "Participate", description: "Use member workflows after the public primer." },
+        { href: "/trust", label: "What you can rely on", section: "Reliability", description: "Prototype guarantees, review states, and non-guarantees." },
+        { href: "/status", label: "Pilot status", section: "Reliability", description: "What is real, reviewed, or still prototype-stage." },
+        { href: "/validation", label: "Validation", section: "Reliability", description: "Evidence states, challenge windows, and review scopes." },
+        { href: "/safety", label: "Safety", section: "Reliability", description: "Coercion, fraud, and pressure boundaries." },
       ],
     },
     {
-      label: "Trust",
-      summary: "Check status, review rules, safety boundaries, and recourse.",
+      label: "Moral Public Goods",
+      summary: "Fund public-good routes, common budgets, and group-buying pools.",
       items: [
-        { href: "/about", label: "About", description: "What exists today, what does not, and what comes next." },
-        { href: "/trust", label: "What you can rely on", description: "Prototype guarantees, review states, and non-guarantees." },
-        { href: "/status", label: "Pilot status", description: "What is real, reviewed, or still prototype-stage." },
-        { href: "/validation", label: "Validation", description: "Evidence states, challenge windows, and review scopes." },
-        { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
-        { href: "/anti-threat-rules", label: "Anti-threat rules", description: "Baseline integrity and externality checks." },
-        { href: "/accessibility", label: "Accessibility", description: "WCAG-oriented QA scope, limitations, and support route." },
-        { href: "/measurement", label: "Measurement", description: "Privacy-safe event taxonomy and performance baselines." },
-        { href: "/transparency", label: "Transparency", description: "Aggregate review, disclosure, report, appeal, and operator timing counts." },
-        { href: "/team-and-governance", label: "Team and governance", description: "Operator routes, reviewer roles, and public gaps." },
-        { href: "/pilot-updates", label: "Pilot updates", description: "Public logs, governance updates, and case-study notes." },
-        { href: "/contact", label: "Contact", description: "Reach the pilot operators or report a support issue." },
+        { href: "/mpgf", label: "moral public goods", section: "Funding routes", description: "Preview the Public Goods Fund path for cross-view moral public goods." },
+        { href: "/moral-goods-group-buying", label: "Moral goods group buying", section: "Funding routes", description: "Pool small pledges into verified moral-action rounds, lots, baskets, and standing budgets." },
+        { href: "/donate", label: "Donate through a route", section: "Funding routes", description: "Use a vetted external donation handoff." },
+        { href: "/priority-correction-fund", label: "Priority Correction Fund", section: "Funding routes", description: "Inspect correction cycles, arbiters, and published reasoning." },
+        { href: "/projects", label: "Projects", section: "Funding routes", description: "What is live, illustrative, or upcoming." },
+        { href: "/mpgf/about", label: "Public Goods Fund overview", section: "MPGF", description: "Read the public-goods mechanism and participant boundaries." },
+        { href: "/mpgf/contribute", label: "Contribute evidence", section: "MPGF", description: "Use reviewed evidence routes for public-goods contributions." },
+        { href: "/mpgf/pools", label: "Candidate pools", section: "MPGF", description: "Browse public-goods pools and candidate funding routes." },
+        { href: "/mpgf/governance", label: "Governance", section: "MPGF", description: "Review ballots, challenges, and rule changes." },
+        { href: "/mpgf/metrics", label: "Metrics", section: "MPGF", description: "Inspect public-goods aggregate metrics." },
+        { href: "/sources", label: "Sources", section: "Evidence and governance", description: "Primary references and product-boundary notes." },
+        { href: "/measurement", label: "Measurement", section: "Evidence and governance", description: "Privacy-safe event taxonomy and performance baselines." },
+        { href: "/transparency", label: "Transparency", section: "Evidence and governance", description: "Aggregate review, disclosure, report, appeal, and operator timing counts." },
+        { href: "/anti-threat-rules", label: "Anti-threat rules", section: "Evidence and governance", description: "Baseline integrity and externality checks." },
+        { href: "/team-and-governance", label: "Team and governance", section: "Evidence and governance", description: "Operator routes, reviewer roles, and public gaps." },
+        { href: "/pilot-updates", label: "Pilot updates", section: "Evidence and governance", description: "Public logs, governance updates, and case-study notes." },
+        { href: "/contact", label: "Contact", section: "Evidence and governance", description: "Reach the pilot operators or report a support issue." },
       ],
     },
   ];
@@ -79,15 +76,15 @@ export function getTopbarActions(isAuthenticated = false) {
       ? { href: "/dashboard", label: "Dashboard" }
       : { href: "/login", label: "Sign in" },
     primaryAction: {
-      href: isAuthenticated ? "/offers/new?mode=offset" : "/worked-examples",
-      label: isAuthenticated ? "Trade" : "See example",
+      href: isAuthenticated ? "/offers/new?mode=offset" : "/moral-goods-group-buying",
+      label: isAuthenticated ? "Create trade" : "Group buying",
     },
   };
 }
 
 export const FOOTER_LINK_GROUPS = [
   {
-    title: "Marketplace",
+    title: "Trade",
     links: [
       { href: "/projects", label: "Projects" },
       { href: "/start", label: "Choose your path" },
@@ -96,9 +93,21 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/pledge-swaps", label: "Pledge swaps" },
       { href: "/moral-goods-group-buying", label: "Group buying" },
       { href: "/donation-offsets", label: "Donation offsets" },
-      { href: "/donate", label: "Donate through a route" },
-      { href: "/mpgf", label: "Public Goods Fund" },
       { href: "/background-networking", label: "Private matching" },
+    ],
+  },
+  {
+    title: "Moral Public Goods",
+    links: [
+      { href: "/mpgf", label: "moral public goods" },
+      { href: "/moral-goods-group-buying", label: "Moral goods group buying" },
+      { href: "/donate", label: "Donate through a route" },
+      { href: "/priority-correction-fund", label: "Priority Correction Fund" },
+      { href: "/mpgf/about", label: "Public Goods Fund overview" },
+      { href: "/mpgf/contribute", label: "Contribute evidence" },
+      { href: "/mpgf/pools", label: "Candidate pools" },
+      { href: "/mpgf/governance", label: "Governance" },
+      { href: "/mpgf/metrics", label: "Metrics" },
     ],
   },
   {
@@ -142,8 +151,6 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/transparency", label: "Transparency report" },
       { href: "/research", label: "Research and governance" },
       { href: "/reasoning-center", label: "Reasoning Center" },
-      { href: "/priority-correction-fund", label: "Allocation notes" },
-      { href: "/mpgf/pools", label: "Candidate pools" },
     ],
   },
   {

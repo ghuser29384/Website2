@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useId, useMemo, useState, useTransition, type FormEvent } from "react";
+import { Fragment, useId, useMemo, useState, useTransition, type FormEvent } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
 import { filterSiteSearchItems } from "@/lib/site-search";
@@ -11,6 +11,7 @@ interface NavRouteItem {
   href: string;
   label: string;
   description?: string;
+  section?: string;
 }
 
 interface NavLinkItem {
@@ -94,24 +95,28 @@ function NavMenu({
           <strong>{label}</strong>
           {summary ? <span>{summary}</span> : null}
         </div>
-        {items.map((item) =>
-          item.href ? (
-            <Link
-              key={`${item.href}-${item.label}`}
-              className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
-                .filter(Boolean)
-                .join(" ")}
-              href={item.href}
-              onClick={() => onOpenChange(false)}
-            >
-              <span className="topbar-menu-icon" aria-hidden="true" />
-              <span className="topbar-menu-copy">
-                <span>{item.label}</span>
-                {item.description ? <small>{item.description}</small> : null}
-              </span>
-            </Link>
-          ) : null,
-        )}
+        {items.map((item, index) => {
+          const showSection = item.section && item.section !== items[index - 1]?.section;
+
+          return item.href ? (
+            <Fragment key={`${item.href}-${item.label}`}>
+              {showSection ? <div className="topbar-menu-section">{item.section}</div> : null}
+              <Link
+                className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
+                  .filter(Boolean)
+                  .join(" ")}
+                href={item.href}
+                onClick={() => onOpenChange(false)}
+              >
+                <span className="topbar-menu-icon" aria-hidden="true" />
+                <span className="topbar-menu-copy">
+                  <span>{item.label}</span>
+                  {item.description ? <small>{item.description}</small> : null}
+                </span>
+              </Link>
+            </Fragment>
+          ) : null;
+        })}
       </div>
     </details>
   );

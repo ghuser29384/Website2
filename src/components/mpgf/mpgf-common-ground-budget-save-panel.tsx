@@ -2,12 +2,18 @@
 
 import { useState } from "react";
 
+import {
+  MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  getMpgfCrecPlainLanguageLabelForStance,
+  type MpgfCrecGuidedStance,
+} from "@/lib/mpgf/public-goods-crecm-labels";
+
 type BudgetPeriod = "monthly" | "round_limited";
 type BaselineConfidence = "low" | "medium" | "high";
 type FallbackRule = "carry_forward" | "reroute" | "release_hold";
 type NextCaptureRule = "none_before_final_review" | "monthly_after_final_review" | "manual_review_required";
 type UnroutableBudgetPolicy = "carry_forward" | "release_hold" | "manual_review";
-type SupportStance = "strong" | "weak" | "dissent" | "abstain";
+type SupportStance = MpgfCrecGuidedStance;
 
 interface CommonGroundBudgetStancePayload {
   acceptableCounterBucketIds: string[];
@@ -91,16 +97,7 @@ function formatCents(cents: number) {
 }
 
 function stanceLabel(value: SupportStance) {
-  switch (value) {
-    case "strong":
-      return "Fund this";
-    case "weak":
-      return "Fund if different-view support joins";
-    case "dissent":
-      return "Needs review";
-    case "abstain":
-      return "Skip";
-  }
+  return getMpgfCrecPlainLanguageLabelForStance(value);
 }
 
 function fallbackLabel(value: FallbackRule) {
@@ -178,7 +175,7 @@ export function MpgfCommonGroundBudgetSavePanel({
     }
 
     setPending(true);
-    setStatusMessage("Saving no-capture Common Ground Budget.");
+    setStatusMessage("Saving no-capture moral public goods.");
 
     try {
       const response = await fetch(apiPath, {
@@ -210,22 +207,22 @@ export function MpgfCommonGroundBudgetSavePanel({
   }
 
   return (
-    <div className="notice-card" aria-label="Save Common Ground Budget preview">
+    <div className="notice-card" aria-label="Save moral public goods preview">
       <strong>Save no-capture budget preview</strong>
       <p>
         This saves your frozen baseline, eligible-set hash, fallback rule, participant confirmation,
         and private project stances. It still does not authorize payment capture.
       </p>
       <section aria-label="Final review consent boundary">
-        <h3>Review your Common Ground Budget</h3>
+        <h3>Review your moral public goods</h3>
         <p>
           This review screen is the consent boundary. Hidden defaults, suggestions, project-card
           text, status chips, emails, or calculator outputs that are not shown here cannot become
           binding.
         </p>
-        <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review summary">
+        <dl className="mpgf-summary-grid" aria-label="moral public goods final review summary">
           <div>
-            <dt>Maximum this round</dt>
+            <dt>{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.maximumThisRound}</dt>
             <dd>{formatCents(maximumBudgetCents)}</dd>
           </div>
           <div>
@@ -256,7 +253,7 @@ export function MpgfCommonGroundBudgetSavePanel({
             <dd>Exact live threshold and counterparty gaps hidden until close.</dd>
           </div>
         </dl>
-        <div aria-label="Common Ground Budget project review">
+        <div aria-label="moral public goods project review">
           <h4>Projects</h4>
           <ul>
             {projectRows.map((project) => (
@@ -272,14 +269,17 @@ export function MpgfCommonGroundBudgetSavePanel({
             ))}
           </ul>
         </div>
-        <div aria-label="Common Ground Budget settlement preview">
+        <div aria-label="moral public goods settlement preview">
           <h4>What you may see after settlement</h4>
           <ul>
             <li>Charged from you: gross captured amount, if any.</li>
-            <li>Sent to projects: net recipient-disbursed public-good dollars.</li>
-            <li>Counts for matching: counted and match-eligible dollars.</li>
-            <li>Sponsor added: base match and capped bonus, if backed and eligible.</li>
-            <li>Contributor benefits: success reward / coordination credit / impact certificate, if eligible.</li>
+            <li>{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sentToProject}: net recipient-disbursed public-good dollars.</li>
+            <li>{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.countsForMatching}: counted and match-eligible dollars.</li>
+            <li>{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sponsorAdded}: base match and capped bonus, if backed and eligible.</li>
+            <li>
+              {MPGF_CRECM_PLAIN_LANGUAGE_LABELS.contributorBenefit}: success reward / coordination credit / impact
+              certificate, if eligible.
+            </li>
             <li>Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback.</li>
           </ul>
         </div>
@@ -290,7 +290,7 @@ export function MpgfCommonGroundBudgetSavePanel({
             saved. This save records a no-capture preview only; later authorization, capture, reward,
             credit, certificate, reroute, or release requires the recorded CRECM state to pass.
           </p>
-          <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review required details">
+          <dl className="mpgf-summary-grid" aria-label="moral public goods final review required details">
             <div>
               <dt>Binding caps</dt>
               <dd>
@@ -403,7 +403,7 @@ export function MpgfCommonGroundBudgetSavePanel({
       </dl>
       <div className="mpgf-admin-action-grid">
         <button className="button button-primary" disabled={!canSave || pending} type="button" onClick={saveBudgetPreview}>
-          {pending ? "Saving Common Ground Budget" : "Save Common Ground Budget"}
+          {pending ? "Saving moral public goods" : "Save moral public goods"}
         </button>
       </div>
       <p className="mpgf-small" aria-live="polite">

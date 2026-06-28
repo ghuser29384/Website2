@@ -184,7 +184,7 @@ async function persistCommonGroundBudgetPreview({
     return {
       status: "not_configured" as const,
       stateMutation: "none_preview_only" as const,
-      message: "Supabase is not configured; Common Ground Budget preview was validated but not saved.",
+      message: "Supabase is not configured; moral public goods preview was validated but not saved.",
       savedBudgetId: null,
       savedStanceCount: 0,
       paymentCaptureAllowed: false as const,
@@ -253,10 +253,10 @@ async function persistCommonGroundBudgetPreview({
     const message = summarizeDbError(budgetWrite.error);
 
     if (isMissingRelationError(budgetWrite.error)) {
-      throw new Error(`Common Ground Budget tables are unavailable: ${message}. Apply 20260604_mpgf_coalition_routing.sql.`);
+      throw new Error(`moral public goods tables are unavailable: ${message}. Apply 20260604_mpgf_coalition_routing.sql.`);
     }
 
-    throw new Error(`Could not save Common Ground Budget preview: ${message}`);
+    throw new Error(`Could not save moral public goods preview: ${message}`);
   }
 
   const stanceRows = preview.rows.map((row) => ({
@@ -285,10 +285,10 @@ async function persistCommonGroundBudgetPreview({
     const message = summarizeDbError(stanceWrite.error);
 
     if (isMissingRelationError(stanceWrite.error)) {
-      throw new Error(`Common Ground Budget stance table is unavailable: ${message}. Apply 20260604_mpgf_coalition_routing.sql.`);
+      throw new Error(`moral public goods stance table is unavailable: ${message}. Apply 20260604_mpgf_coalition_routing.sql.`);
     }
 
-    throw new Error(`Could not save Common Ground Budget stances: ${message}`);
+    throw new Error(`Could not save moral public goods stances: ${message}`);
   }
 
   const conditionalIntentRows = preview.rows.flatMap((row) => {
@@ -332,11 +332,11 @@ async function persistCommonGroundBudgetPreview({
 
       if (isMissingRelationError(conditionalIntentWrite.error)) {
         throw new Error(
-          `Common Ground Budget conditional-intent table is unavailable: ${message}. Apply 20260628_mpgf_common_ground_conditional_trade_intents.sql.`,
+          `moral public goods conditional-intent table is unavailable: ${message}. Apply 20260628_mpgf_common_ground_conditional_trade_intents.sql.`,
         );
       }
 
-      throw new Error(`Could not save Common Ground Budget conditional intents: ${message}`);
+      throw new Error(`Could not save moral public goods conditional intents: ${message}`);
     }
   }
 
@@ -344,7 +344,7 @@ async function persistCommonGroundBudgetPreview({
     status: "saved_no_capture" as const,
     stateMutation: "common_ground_budget_preview_saved" as const,
     message:
-      "Saved the no-capture Common Ground Budget preview, private project stances, and explicit conditional-intent setup records.",
+      "Saved the no-capture moral public goods preview, private project stances, and explicit conditional-intent setup records.",
     savedBudgetId: String(budgetWrite.data.id),
     savedStanceCount: stanceRows.length,
     savedConditionalIntentCount: conditionalIntentRows.length,
@@ -357,7 +357,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
 
   if (!viewer) {
     return NextResponse.json(
-      { ok: false, error: "Sign in to preview a Common Ground Budget." },
+      { ok: false, error: "Sign in to preview moral public goods." },
       { status: 401, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
@@ -368,14 +368,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
     body = await request.json();
   } catch {
     return NextResponse.json(
-      { ok: false, error: "Common Ground Budget preview expects a JSON object." },
+      { ok: false, error: "moral public goods preview expects a JSON object." },
       { status: 400, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
 
   if (!isRecord(body)) {
     return NextResponse.json(
-      { ok: false, error: "Common Ground Budget preview expects a JSON object." },
+      { ok: false, error: "moral public goods preview expects a JSON object." },
       { status: 400, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
@@ -468,7 +468,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       return NextResponse.json(
         {
           ok: false,
-          error: error instanceof Error ? error.message : "Could not save Common Ground Budget preview.",
+          error: error instanceof Error ? error.message : "Could not save moral public goods preview.",
           preview,
           stateMutation: "none_preview_only",
           paymentCaptureAllowed: false,
@@ -547,8 +547,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
           supportSignalSource: "demo_fixture",
           warnings: [
             error instanceof Error
-              ? `Could not load persisted Common Ground Budget state: ${error.message}`
-              : "Could not load persisted Common Ground Budget state.",
+              ? `Could not load persisted moral public goods state: ${error.message}`
+              : "Could not load persisted moral public goods state.",
           ],
         },
         { status: 202, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
@@ -558,7 +558,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Could not preview Common Ground Budget.",
+        error: error instanceof Error ? error.message : "Could not preview moral public goods.",
       },
       { status: 500, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );

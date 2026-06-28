@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  MPGF_PUBLIC_GOODS_CRECM_V1125_CANONICAL_STANCE_TO_PLAIN_LABEL,
+  MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_LABELS,
+  MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE,
   allocateMpgfCrecBonusMatchByScoreUnits,
   buildMpgfCrecBonusScoreHash,
   buildMpgfCrecContributorBenefitContextHash,
@@ -41,6 +44,7 @@ import {
   resolveMpgfCrecConditionalIntentAllocationInputs,
   resolveMpgfCrecEconomicInputSanitization,
   resolveMpgfCrecIdentityEligibilityAllocationInputs,
+  resolveMpgfCrecPlainStanceLabel,
   resolveMpgfCrecSupportStanceAllocationInputs,
   selectMpgfCrecFinalFailureBonusPayoutClaims,
   selectMpgfCrecPreliminaryFailureBonusMutationClaims,
@@ -1597,7 +1601,7 @@ test("CRECM v1.125 fail-closed helpers reject malformed payout and counterparty 
   assert.equal(sumMpgfCrecNonNegativeBigInt("not-array"), BigInt(0));
 });
 
-test("CRECM v1.125 Common Ground Budget allocation inputs fail closed before payment lookup", () => {
+test("CRECM v1.125 moral public goods allocation inputs fail closed before payment lookup", () => {
   const missing = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
     roundId,
     participantId,
@@ -1707,7 +1711,7 @@ test("CRECM v1.125 Common Ground Budget allocation inputs fail closed before pay
   assert.ok(invalidRecurring.rowFailureCodes.includes("common_ground_budget_recurring_consent_invalid"));
 });
 
-test("CRECM v1.125 valid Common Ground Budget exposes only sanitized cap and lookup inputs", () => {
+test("CRECM v1.125 valid moral public goods exposes only sanitized cap and lookup inputs", () => {
   const resolved = resolveMpgfCrecCommonGroundBudgetAllocationInputs({
     roundId,
     participantId,
@@ -1905,6 +1909,78 @@ test("CRECM v1.125 valid weak support stance exposes only sanitized allocation i
   assert.equal(resolved.rankOrder, 3);
   assert.equal(resolved.unrestrictedRoutingOptIn, true);
   assert.deepEqual(resolved.rowFailureCodes, []);
+});
+
+test("CRECM v1.125 plain-language guided stance labels map exactly to canonical CRECM stance records", () => {
+  assert.deepEqual(MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_LABELS, [
+    "Fund this",
+    "Fund if different-view support joins",
+    "Needs review",
+    "Skip",
+  ]);
+  assert.deepEqual(MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE, {
+    "Fund this": "strong",
+    "Fund if different-view support joins": "weak",
+    "Needs review": "dissent",
+    Skip: "abstain",
+  });
+  assert.deepEqual(MPGF_PUBLIC_GOODS_CRECM_V1125_CANONICAL_STANCE_TO_PLAIN_LABEL, {
+    strong: "Fund this",
+    weak: "Fund if different-view support joins",
+    dissent: "Needs review",
+    abstain: "Skip",
+  });
+
+  const fundThis = resolveMpgfCrecPlainStanceLabel("Fund this");
+  assert.equal(fundThis.labelEligible, true);
+  assert.equal(fundThis.canonicalStance, "strong");
+  assert.equal(fundThis.allocatableAfterExplicitSave, true);
+  assert.equal(fundThis.counterpartyConditionRequired, false);
+  assert.equal(fundThis.finalReviewCanonicalDisclosureRequired, true);
+  assert.equal(fundThis.explicitSaveRequiredBeforeAllocation, true);
+  assert.match(fundThis.canonicalEffectDescription ?? "", /ProjectSupportStance\.stance = strong/);
+
+  const weak = resolveMpgfCrecPlainStanceLabel("Fund if different-view support joins");
+  assert.equal(weak.labelEligible, true);
+  assert.equal(weak.canonicalStance, "weak");
+  assert.equal(weak.allocatableAfterExplicitSave, true);
+  assert.equal(weak.counterpartyConditionRequired, true);
+  assert.equal(weak.zeroAllocationRequired, false);
+
+  const dissent = resolveMpgfCrecPlainStanceLabel("Needs review");
+  assert.equal(dissent.labelEligible, true);
+  assert.equal(dissent.canonicalStance, "dissent");
+  assert.equal(dissent.allocatableAfterExplicitSave, false);
+  assert.equal(dissent.reviewPressureOnly, true);
+  assert.equal(dissent.zeroAllocationRequired, true);
+
+  const skip = resolveMpgfCrecPlainStanceLabel("Skip");
+  assert.equal(skip.labelEligible, true);
+  assert.equal(skip.canonicalStance, "abstain");
+  assert.equal(skip.defaultSkip, true);
+  assert.equal(skip.allocatableAfterExplicitSave, false);
+  assert.equal(skip.zeroAllocationRequired, true);
+});
+
+test("CRECM v1.125 plain-language guided stance labels reject aliases and whitespace", () => {
+  const lowercase = resolveMpgfCrecPlainStanceLabel("fund this");
+  assert.equal(lowercase.labelEligible, false);
+  assert.equal(lowercase.canonicalStance, null);
+  assert.equal(lowercase.allocatableAfterExplicitSave, false);
+  assert.ok(lowercase.rowFailureCodes.includes("plain_stance_label_not_recognized"));
+
+  const padded = resolveMpgfCrecPlainStanceLabel("Fund this ");
+  assert.equal(padded.labelEligible, false);
+  assert.equal(padded.canonicalStance, null);
+  assert.equal(padded.zeroAllocationRequired, true);
+  assert.ok(padded.rowFailureCodes.includes("plain_stance_label_not_trim_stable"));
+  assert.ok(padded.rowFailureCodes.includes("plain_stance_label_not_recognized"));
+
+  const nonString = resolveMpgfCrecPlainStanceLabel({ label: "Fund this" });
+  assert.equal(nonString.labelEligible, false);
+  assert.equal(nonString.canonicalStance, null);
+  assert.equal(nonString.explicitSaveRequiredBeforeAllocation, true);
+  assert.ok(nonString.rowFailureCodes.includes("plain_stance_label_not_string"));
 });
 
 test("CRECM v1.125 conditional-intent allocation inputs fail closed on wrong rows and invalid consent", () => {
@@ -3827,6 +3903,36 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.supportStanceInputGating.malformedCounterpartyBucketsTreatedAsEmpty, true);
   assert.equal(summary.supportStanceInputGating.invalidCapsAllocateZero, true);
   assert.equal(summary.supportStanceInputGating.minCounterpartyVolumeMirrorAuthoritative, false);
+  assert.equal(summary.plainLanguageGuidedMode.presentationLayerOnly, true);
+  assert.deepEqual(summary.plainLanguageGuidedMode.allowedPlainLabels, [
+    "Fund this",
+    "Fund if different-view support joins",
+    "Needs review",
+    "Skip",
+  ]);
+  assert.deepEqual(summary.plainLanguageGuidedMode.canonicalStanceByPlainLabel, {
+    "Fund this": "strong",
+    "Fund if different-view support joins": "weak",
+    "Needs review": "dissent",
+    Skip: "abstain",
+  });
+  assert.deepEqual(summary.plainLanguageGuidedMode.plainLabelByCanonicalStance, {
+    strong: "Fund this",
+    weak: "Fund if different-view support joins",
+    dissent: "Needs review",
+    abstain: "Skip",
+  });
+  assert.equal(summary.plainLanguageGuidedMode.plainLabelsCannotIntroduceNewStates, true);
+  assert.equal(summary.plainLanguageGuidedMode.exactLabelsRequiredNoTrimOrAlias, true);
+  assert.deepEqual(summary.plainLanguageGuidedMode.allocatableCanonicalStances, ["strong", "weak"]);
+  assert.deepEqual(summary.plainLanguageGuidedMode.zeroAllocationCanonicalStances, [
+    "dissent",
+    "abstain",
+  ]);
+  assert.equal(summary.plainLanguageGuidedMode.explicitSaveRequiredBeforeAllocation, true);
+  assert.equal(summary.plainLanguageGuidedMode.finalReviewMustExposeCanonicalMeaning, true);
+  assert.equal(summary.plainLanguageGuidedMode.advancedAndPlainModesShareCanonicalProjectSupportStanceRecords, true);
+  assert.equal(summary.plainLanguageGuidedMode.uiBrowsingCalculatorOrSuggestionCannotInferAllocatableStance, true);
   assert.equal(summary.conditionalIntentInputGating.missingInactiveOrWrongRowsAllocateZero, true);
   assert.equal(summary.conditionalIntentInputGating.amountAndMaxExposureMustBePositive, true);
   assert.equal(summary.conditionalIntentInputGating.minCounterpartyVolumeMustBePositive, true);

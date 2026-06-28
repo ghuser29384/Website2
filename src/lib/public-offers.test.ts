@@ -159,7 +159,7 @@ test("public offers live-mode parser maps public formats to internal offer modes
   );
 });
 
-test("public offers collection separates template, Common Ground Budget, and demo lanes from offer listings", () => {
+test("public offers collection separates template, moral public goods, and demo lanes from offer listings", () => {
   const externalCrecPayload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=external_crecm"),
@@ -224,7 +224,7 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(templatesPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
   assert.equal(externalCrecPayload.publicGoodsEntry?.resultRank, 1);
-  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "Common Ground Budget");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "moral public goods");
   assert.match(
     publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
     /Fund public goods only if enough different-view support joins/,
@@ -234,7 +234,7 @@ test("public offers collection separates template, Common Ground Budget, and dem
     publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
     /Exact live progress may be hidden until the round closes/,
   );
-  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview moral public goods");
   assert.deepEqual(
     publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.label),
     ["View current round", "Learn how it works / View audit and rules"],
@@ -265,7 +265,7 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count, 1);
   assert.equal(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.label,
-    "Common Ground Budget",
+    "moral public goods",
   );
   assert.match(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")
@@ -404,7 +404,7 @@ test("public offers API route returns validator-backed collection JSON", async (
   assert.deepEqual(body.blockers, []);
 });
 
-test("public offers API route returns Common Ground Budget entry for moral-public-goods search", async () => {
+test("public offers API route returns moral public goods entry for moral-public-goods search", async () => {
   const response = await publicOffersRoute(
     new Request("http://localhost/api/offers?search=moral%20public%20goods"),
   );
@@ -416,7 +416,7 @@ test("public offers API route returns Common Ground Budget entry for moral-publi
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.items.length, 0);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
-  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
+  assert.equal(body.publicGoodsEntry.label, "moral public goods");
   assert.equal(body.publicGoodsEntry.primaryCta.key, "preview-common-ground-budget");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.countsAsOrdinaryListing, false);
@@ -494,7 +494,7 @@ test("public offer facets API route returns validator-backed facets JSON", async
   assert.deepEqual(body.blockers, []);
 });
 
-test("public offer facets API route preserves Common Ground Budget entry for public-goods intent", async () => {
+test("public offer facets API route preserves moral public goods entry for public-goods intent", async () => {
   const response = await publicOffersFacetsRoute(
     new Request("http://localhost/api/offers/facets?search=moral%20public%20goods"),
   );
@@ -505,7 +505,7 @@ test("public offer facets API route preserves Common Ground Budget entry for pub
   assert.equal(body.meta.tab, "public_goods");
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
-  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
+  assert.equal(body.publicGoodsEntry.label, "moral public goods");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
   assert.deepEqual(Object.values(body.availableFacets).flat(), []);

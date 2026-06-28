@@ -53,7 +53,7 @@ test("moraltrade82 public-page simplification contract validates route audit cov
     "Create from template",
     "Worked examples",
     "Demo data",
-    "Common Ground Budget",
+    "moral public goods",
   ]);
   assert.deepEqual(contract.validationStatusLabels, [
     "Draft",
@@ -291,7 +291,7 @@ test("moraltrade82 public-page simplification contract route exposes safe route 
     "Create from template",
     "Worked examples",
     "Demo data",
-    "Common Ground Budget",
+    "moral public goods",
   ]);
   assert.equal(
     body.publicContract.donationOffsetPlainLabelMap.destination,

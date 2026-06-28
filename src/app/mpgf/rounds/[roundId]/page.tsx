@@ -641,15 +641,15 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
         </article>
 
         <article className="mpgf-panel" id="common-ground-budget-preview">
-          <p className="eyebrow">Common Ground Budget preview</p>
+          <p className="eyebrow">moral public goods preview</p>
           <h2>Choose your maximum</h2>
           <p>
             Preview a monthly or round-limited budget, freeze the eligible project set, and confirm
             that the routing is acceptable relative to your stated default allocation. This preview
             does not authorize payment capture or create a reliance-bearing agreement.
           </p>
-          <div className="notice-card" aria-label="Common Ground Budget guided setup checklist">
-            <strong>Common Ground Budget</strong>
+          <div className="notice-card" aria-label="moral public goods guided setup checklist">
+            <strong>moral public goods</strong>
             <dl className="mpgf-summary-grid">
               <div>
                 <dt>1. Choose budget</dt>
@@ -702,7 +702,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
             </div>
           ) : (
             <>
-              <form className="stacked-form" method="get" aria-label="Common Ground Budget setup">
+              <form className="stacked-form" method="get" aria-label="moral public goods setup">
                 <div className="form-grid">
                   <label className="field">
                     <span>Budget type</span>
@@ -1041,7 +1041,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 </button>
               </form>
 
-              <dl className="mpgf-summary-grid" aria-label="Common Ground Budget preview summary">
+              <dl className="mpgf-summary-grid" aria-label="moral public goods preview summary">
                 <div>
                   <dt>Release stage</dt>
                   <dd>{commonGroundBudgetPreview.releaseStage.replaceAll("_", " ")}</dd>
@@ -1075,7 +1075,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dd>{commonGroundBudgetPreview.activationState.replaceAll("_", " ")}</dd>
                 </div>
               </dl>
-              <div className="notice-card" aria-label="Common Ground Budget preview release gate">
+              <div className="notice-card" aria-label="moral public goods preview release gate">
                 <strong>Preview release gate</strong>
                 <p>{commonGroundBudgetReleaseGate.userFacingSummary}</p>
                 <dl className="mpgf-summary-grid">
@@ -1101,7 +1101,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 ))}
               </div>
               {commonGroundBudgetPreview.userFacingBlockers.length ? (
-                <div className="notice-card" aria-label="Common Ground Budget blockers">
+                <div className="notice-card" aria-label="moral public goods blockers">
                   <strong>Next action</strong>
                   {commonGroundBudgetPreview.userFacingBlockers.map((blocker) => (
                     <p key={`${blocker.reasonCategory}-${blocker.nextAction}`}>
@@ -1174,7 +1174,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
 
         <article className="mpgf-panel">
           <p className="eyebrow">{ecmRulebook.mechanism.technicalLabel}</p>
-          <h2>Common Ground Budget safeguards stay public before clearing</h2>
+          <h2>moral public goods safeguards stay public before clearing</h2>
           <p>
             Donors see maximum exposure, counterpart-bucket conditions, refund or reroute
             outcomes, separated accounting channels, sponsor-match rules, a one-to-two-week batch

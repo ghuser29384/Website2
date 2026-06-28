@@ -796,7 +796,7 @@ function buildNonLiveExclusions(
     {
       count: tabCounts.get("public_goods") ?? 0,
       includedInLiveMetrics: false,
-      reason: "The Common Ground Budget module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
+      reason: "The moral public goods module is a separate public-goods preview and cannot count as live non-public-goods marketplace liquidity.",
       source: "public_goods",
     },
     {

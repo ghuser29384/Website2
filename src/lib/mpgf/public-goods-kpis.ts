@@ -331,7 +331,7 @@ export const MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS = [
   "clearing input bundle component-hash mismatch count",
   "clearing input bundle uniqueness violation count",
   "snapshot / project-eligibility-snapshot uniqueness violation count",
-  "Common Ground Budget row-count uniqueness violation count",
+  "moral public goods row-count uniqueness violation count",
   "identity-eligibility row-count uniqueness violation count",
   "round-keyed payment-snapshot row-count uniqueness violation count",
   "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate",

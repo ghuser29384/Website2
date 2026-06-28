@@ -125,7 +125,7 @@ export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
       "searchParamKeys",
     ],
     decisionUse:
-      "Separate live inventory, reviewed templates, worked examples, demo data, and Common Ground Budget views without counting non-live lanes as liquidity.",
+      "Separate live inventory, reviewed templates, worked examples, demo data, and moral public goods views without counting non-live lanes as liquidity.",
   },
   {
     eventType: "marketplace_filter_applied",

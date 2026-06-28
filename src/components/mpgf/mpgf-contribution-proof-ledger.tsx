@@ -1,4 +1,8 @@
-import type { MpgfContributionProofLedger } from "@/lib/mpgf/public-goods-contribution-ledger";
+import type {
+  MpgfContributionProofLedger,
+  MpgfContributionSettlementSummaryGroup,
+  MpgfContributionSettlementSummaryLine,
+} from "@/lib/mpgf/public-goods-contribution-ledger";
 
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", {
@@ -17,7 +21,7 @@ function formatCount(count: number, singular: string, plural = `${singular}s`) {
 }
 
 function currentState(ledger: MpgfContributionProofLedger) {
-  if (ledger.authorizedBudgetCents <= 0 && ledger.accounting.grossCapturedCents <= 0) {
+  if (ledger.maximumBudgetCents <= 0 && ledger.accounting.grossCapturedCents <= 0) {
     return "no charge";
   }
 
@@ -30,6 +34,32 @@ function settlementValue(state: string, cents: number) {
   }
 
   return formatUsd(cents);
+}
+
+function settlementLineValue(state: string, line: MpgfContributionSettlementSummaryLine) {
+  if (line.cents != null) {
+    return settlementValue(state, line.cents);
+  }
+
+  if (line.technicalField === "coordinationCreditCount") {
+    return formatCount(line.count ?? 0, "credit");
+  }
+
+  if (line.technicalField === "impactCertificateCount") {
+    return formatCount(line.count ?? 0, "certificate");
+  }
+
+  return String(line.count ?? 0);
+}
+
+function settlementGroupText(state: string, group: MpgfContributionSettlementSummaryGroup) {
+  if (group.lines.length === 1) {
+    return settlementLineValue(state, group.lines[0]);
+  }
+
+  return group.lines
+    .map((line) => `${line.label.toLowerCase()}: ${settlementLineValue(state, line)}`)
+    .join("; ");
 }
 
 export function MpgfContributionProofLedger({
@@ -58,12 +88,12 @@ export function MpgfContributionProofLedger({
         </p>
       </div>
 
-      <section className="notice-card" aria-label="Your Common Ground Budget">
-        <strong>Your Common Ground Budget</strong>
+      <section className="notice-card" aria-label="Your moral public goods">
+        <strong>Your moral public goods</strong>
         <dl className="mpgf-summary-grid">
           <div>
             <dt>Maximum this round</dt>
-            <dd>{formatUsd(ledger.authorizedBudgetCents)}</dd>
+            <dd>{formatUsd(ledger.maximumBudgetCents)}</dd>
           </div>
           <div>
             <dt>Current state</dt>
@@ -72,25 +102,15 @@ export function MpgfContributionProofLedger({
         </dl>
         <h3>Plain summary</h3>
         <ul>
-          <li>Charged from you: {settlementValue(state, accounting.grossCapturedCents)}</li>
-          <li>Sent to projects: {settlementValue(state, accounting.netRecipientDisbursedCents)}</li>
-          <li>
-            Counted for matching: {settlementValue(state, accounting.countedContributionCents)} counted;{" "}
-            {settlementValue(state, accounting.matchEligibleContributionCents)} match-eligible.
-          </li>
-          <li>
-            Sponsor added: base {settlementValue(state, accounting.sponsorBaseMatchCents)}; bonus{" "}
-            {settlementValue(state, accounting.sponsorBonusMatchCents)}.
-          </li>
-          <li>
-            Contributor benefits: reward {settlementValue(state, accounting.successRewardCents)},{" "}
-            {formatCount(accounting.coordinationCreditCount, "credit")},{" "}
-            {formatCount(accounting.impactCertificateCount, "certificate")}.
-          </li>
-          <li>
-            Failed or carried forward: {formatUsd(ledger.failedAllocationsCents)} failed;{" "}
-            {formatUsd(ledger.carryForwardCreditCents)} carry-forward credit.
-          </li>
+          {ledger.settlementSummary.groupOrder.map((groupKey) => {
+            const group = ledger.settlementSummary.groups[groupKey];
+
+            return (
+              <li key={group.key}>
+                {group.label}: {settlementGroupText(state, group)}.
+              </li>
+            );
+          })}
         </ul>
         <p className="mpgf-small">
           Summary numbers keep accounting channels separate: sent-to-project dollars exclude fees,
@@ -98,8 +118,8 @@ export function MpgfContributionProofLedger({
         </p>
       </section>
 
-      <section className="notice-card" aria-label="Proof details">
-        <strong>Proof details</strong>
+      <details className="notice-card" aria-label="Technical accounting details drawer">
+        <summary>Technical accounting details</summary>
         <ul>
           <li>Gross captured</li>
           <li>Fees</li>
@@ -113,12 +133,16 @@ export function MpgfContributionProofLedger({
           <li>Success-reward / coordination-credit / impact-certificate state</li>
           <li>Review, threshold, challenge, payment, and authorization reconciliation states</li>
         </ul>
-      </section>
+        <p className="mpgf-small">
+          The final receipt uses this same separated technical ledger; the plain summary cannot
+          collapse these fields into one impact number.
+        </p>
+      </details>
 
       <div className="mpgf-kpi-grid" aria-label="Contribution ledger totals">
         <div className="mpgf-kpi">
           <span>Maximum this round</span>
-          <strong>{formatUsd(ledger.authorizedBudgetCents)}</strong>
+          <strong>{formatUsd(ledger.maximumBudgetCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Currently routed allocations</span>
@@ -230,7 +254,7 @@ export function MpgfContributionProofLedger({
         {ledger.rows.map((row) => (
           <div key={row.pledgeId} className="mpgf-table-row">
             <span>{row.campaignTitle}</span>
-            <span>{formatUsd(row.authorizedBudgetCents)}</span>
+            <span>{formatUsd(row.maximumBudgetCents)}</span>
             <span>
               {row.identityStatus.label}; {row.thresholdStatus.label}; {row.destinationProofStatus.label};{" "}
               {row.challengeWindowStatus.label}; {row.payoutMilestoneStatus.label}

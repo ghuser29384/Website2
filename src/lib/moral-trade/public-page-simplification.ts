@@ -143,7 +143,7 @@ const OFFERS_TAB_ORDER = [
   "Create from template",
   "Worked examples",
   "Demo data",
-  "Common Ground Budget",
+  "moral public goods",
 ];
 
 const SIGNED_OUT_OFFSET_PREVIEW_STEPS = [
@@ -551,7 +551,7 @@ export function validateMoralTradePublicPageSimplificationContract(
         "Create from template",
         "Worked examples",
         "Demo data",
-        "Common Ground Budget",
+        "moral public goods",
       ].every((tab, index) => contract.offersTabOrder[index] === tab),
       contract.offersTabOrder.join(" > "),
     ),

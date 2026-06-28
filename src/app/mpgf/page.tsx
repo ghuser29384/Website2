@@ -34,16 +34,16 @@ const MPGF_SELF_INTEREST_SENTENCE =
   "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.";
 
 export const metadata: Metadata = {
-  title: "Common Ground Budget | Public Goods Fund",
+  title: "moral public goods | Public Goods Fund",
   description:
-    "Preview the Moral Trade Common Ground Budget path for moral public goods, evidence review, demo candidate pools, allocation process, and technical notes.",
+    "Preview the Moral Trade moral public goods path for moral public goods, evidence review, demo candidate pools, allocation process, and technical notes.",
   alternates: {
     canonical: "/mpgf",
   },
   openGraph: {
-    title: "Common Ground Budget | Public Goods Fund",
+    title: "moral public goods | Public Goods Fund",
     description:
-      "Preview the Common Ground Budget path for shared moral public goods before any binding contribution.",
+      "Preview the moral public goods path for shared moral public goods before any binding contribution.",
     url: getAbsoluteUrl("/mpgf"),
     type: "website",
   },
@@ -83,7 +83,7 @@ export default async function MpgfPage() {
       actions={
         <>
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview a Common Ground Budget
+            Preview moral public goods
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
@@ -95,7 +95,7 @@ export default async function MpgfPage() {
       }
       description="One budget. Pick projects. Funding happens only if enough different-view support joins and review gates pass. Coordinate around moral public goods without treating preview, match, reward, credit, or certificate estimates as live capture."
       eyebrow="Public Goods Fund"
-      title="Common Ground Budget"
+      title="moral public goods"
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
@@ -118,7 +118,7 @@ export default async function MpgfPage() {
         <a href="#technical-notes">Technical notes</a>
       </nav>
 
-      <section className="mpgf-kpi-grid" aria-label="Common Ground Budget status strip">
+      <section className="mpgf-kpi-grid" aria-label="moral public goods status strip">
         <div className="mpgf-kpi">
           <span>No charge now</span>
           <strong>Preview only</strong>
@@ -148,7 +148,7 @@ export default async function MpgfPage() {
           <p>
             The Moral Public Goods Fund, or MPGF, is the mechanism name. Public pages use Public
             Goods Fund so newcomers can understand the purpose before the acronym. Coordinate
-            around moral public goods with a Common Ground Budget first, then inspect technical
+            around moral public goods first, then inspect technical
             details below.
           </p>
         </div>
@@ -187,7 +187,7 @@ export default async function MpgfPage() {
           <article className="panel step-card">
             <span className="step-index">01</span>
             <h3>Choose your maximum</h3>
-            <p>Set a Common Ground Budget and fallback rule without any charge, hold, or custody claim.</p>
+            <p>Set moral public goods preferences and a fallback rule without any charge, hold, or custody claim.</p>
           </article>
           <article className="panel step-card">
             <span className="step-index">02</span>
@@ -207,7 +207,7 @@ export default async function MpgfPage() {
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview a Common Ground Budget
+            Preview moral public goods
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
@@ -274,7 +274,7 @@ export default async function MpgfPage() {
           <p className="eyebrow">What this pilot tests</p>
           <h2>Threshold commitments before broad marketplace mechanics</h2>
           <p>
-            The Fund tests Common Ground Budgets, explicit project stances, threshold commitments,
+            The Fund tests moral public goods, explicit project stances, threshold commitments,
             payment-commitment snapshots, dissent notes, candidate pools, reviewer verification,
             and non-custodial coordination in one public workflow. Its motivating layer is CRECM
             v1.125: pledges count only after amount, supporter, review, payment, and evidence gates
@@ -311,7 +311,7 @@ export default async function MpgfPage() {
       <section className="section section-white" id="assurance-matching">
         <div className="section-head section-head-compact">
           <p className="eyebrow">CRECM v1.125</p>
-          <h2>Common Ground Budgets clear only after enough verified cross-view support joins</h2>
+          <h2>moral public goods clear only after enough verified cross-view support joins</h2>
           <p>
             {demoMpgfMatchPool.visibleCommitment} The capped diversity-aware bonus is applied only
             to threshold-cleared, review-approved campaigns, so broad support allocates sponsor

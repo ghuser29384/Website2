@@ -419,7 +419,7 @@ function descriptionForMoraltrade82Requirement(key: Moraltrade82ReleaseGateRequi
     case "pilot_exit_criteria_test":
       return "Pilot promotion requires pre-registered scale-up, pause, rollback, and non-volume success criteria; matched volume alone is insufficient.";
     case "marketplace_intake_triage_routing_test":
-      return "Marketplace intake routes ordinary donations, matching, services, self-offsets, Common Ground Budget public-goods work, background networking, and unsupported requests away from the non-public-goods lock path unless corrected and reviewed.";
+      return "Marketplace intake routes ordinary donations, matching, services, self-offsets, moral public goods public-goods work, background networking, and unsupported requests away from the non-public-goods lock path unless corrected and reviewed.";
     case "participant_ui_ux_progressive_disclosure_test":
       return "Participant UI separates intake, template gallery, guided builder, draft preview, review queue, matched-lock proposal, final confirmation, dashboard, and receipt publication into task-oriented progressive-disclosure surfaces.";
     case "participant_ui_render_snapshot_accessibility_test":
