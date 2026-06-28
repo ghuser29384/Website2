@@ -540,7 +540,7 @@ export function buildMpgfPublicGoodsRoundApi({
         savePreviewStateMutation: "common_ground_budget_preview_saved",
         savePreviewRequiresParticipantSurplusConfirmation: true,
         savePreviewPaymentCaptureAllowed: false,
-        savedRecords: ["mpgf_user_budgets", "mpgf_support_stances"],
+        savedRecords: ["mpgf_user_budgets", "mpgf_support_stances", "mpgf_conditional_trade_intents"],
         budgetPeriodOptions: ["monthly", "round_limited"],
         stanceOptions: ["strong", "weak", "dissent", "abstain"],
         participantSurplusConfirmationRequired: true,

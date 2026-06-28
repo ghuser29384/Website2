@@ -203,6 +203,7 @@ import {
 } from "./mpgf/public-goods-cg-vqaf";
 import {
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CONDITIONAL_INTENT_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
@@ -1179,7 +1180,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.commonGroundBudget.savePreviewStateMutation, "common_ground_budget_preview_saved");
   assert.equal(round.round.commonGroundBudget.savePreviewRequiresParticipantSurplusConfirmation, true);
   assert.equal(round.round.commonGroundBudget.savePreviewPaymentCaptureAllowed, false);
-  assert.deepEqual(round.round.commonGroundBudget.savedRecords, ["mpgf_user_budgets", "mpgf_support_stances"]);
+  assert.deepEqual(round.round.commonGroundBudget.savedRecords, [
+    "mpgf_user_budgets",
+    "mpgf_support_stances",
+    "mpgf_conditional_trade_intents",
+  ]);
   assert.equal(round.round.commonGroundBudget.releaseGatePolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY);
   assert.equal(
     round.round.commonGroundBudget.releaseGateRequirementCount,
@@ -1907,6 +1912,17 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.separatedAccounting.actualCountedMatchEligibleSeparated, true);
   assert.equal(report.separatedAccounting.matchEligibleDollarsOnlyUnlockSponsorMatch, true);
   assert.equal(report.separatedAccounting.rewardsCreditsCertificatesExcludedFromPublicGoodDollars, true);
+  assert.deepEqual(report.separatedAccounting.plainSettlementSummaryGroups, [
+    "charged",
+    "sent_to_projects",
+    "counted_for_matching",
+    "sponsor_added",
+    "rewards_credits_certificates",
+    "failed_carry_forward",
+  ]);
+  assert.equal(report.separatedAccounting.plainSettlementSummaryDetailsDrawerRequired, true);
+  assert.equal(report.separatedAccounting.plainSettlementSummaryFinalReceiptRequired, true);
+  assert.equal(report.separatedAccounting.plainSummaryCannotCombineAccountingChannels, true);
   assert.equal(report.clearingInputIntegrity.roundClosePaymentCommitmentSnapshotsRequired, true);
   assert.equal(report.clearingInputIntegrity.clearingBundleHashAndComponentHashesRequired, true);
   assert.equal(report.clearingInputIntegrity.frozenReciprocalMoralBucketSnapshotRequired, true);
@@ -1925,6 +1941,20 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.deploymentAudits.shadowPreviewExposureCentsCanSimulateRequestedGross, true);
   assert.equal(report.clearingContract.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
   assert.equal(report.clearingContract.feeQuotes.sponsorPaidFeeSupportRequiresEligibleRoundCloseBundle, true);
+  assert.deepEqual(report.clearingContract.plainLanguageGuidedMode.canonicalStanceByPlainLabel, {
+    "Fund this": "strong",
+    "Fund if different-view support joins": "weak",
+    "Needs review": "dissent",
+    Skip: "abstain",
+  });
+  assert.equal(report.clearingContract.plainLanguageGuidedMode.exactLabelsRequiredNoTrimOrAlias, true);
+  assert.equal(report.clearingContract.plainLanguageGuidedMode.explicitSaveRequiredBeforeAllocation, true);
+  assert.equal(report.clearingContract.plainLanguageGuidedMode.finalReviewMustExposeCanonicalMeaning, true);
+  assert.equal(
+    report.clearingContract.plainLanguageGuidedMode.advancedAndPlainModesShareCanonicalProjectSupportStanceRecords,
+    true,
+  );
+  assert.equal(report.clearingContract.plainLanguageGuidedMode.uiBrowsingCalculatorOrSuggestionCannotInferAllocatableStance, true);
   assert.equal(report.clearingContract.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
   assert.equal(report.clearingContract.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
   assert.equal(report.clearingContract.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
@@ -2949,6 +2979,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
     coalitionRouting: persistedReport,
     budgetPeriod: "round_limited",
     roundBudgetCents: 7_500,
+    perProjectCapCents: 3_000,
+    nextCaptureAt: "2026-07-15T00:00:00.000Z",
+    nextCaptureRule: "monthly_after_final_review",
     defaultAllocationBaseline: "I would otherwise donate this to my usual preferred charity.",
     baselineConfidenceLevel: "medium",
     baselineConfidenceRationale: "Self-attested default for sandbox calculation.",
@@ -2959,6 +2992,35 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
       campaignId: persistedCampaign.id,
       stance: "weak",
       maxAllocCents: 7_500,
+      maxAllocPctBps: 10_000,
+      conditionAccepted: true,
+      acceptableCounterBucketIds: [
+        "bucket-animal-welfare",
+        "bucket-long-run-future",
+        "bucket-public-interest-knowledge",
+      ],
+      minCounterpartyVolumeCents: 20_000,
+      rankOrder: 1,
+    }],
+  });
+  const missingConditionPreview = buildMpgfCommonGroundBudgetPreview({
+    roundId: persistedRound.id,
+    roundLockTime: persistedRound.endsAt,
+    projects: [{
+      id: persistedCampaign.id,
+      title: persistedCampaign.title,
+      thresholdAmountCents: persistedCampaign.thresholdAmountCents,
+      thresholdSupporters: persistedCampaign.thresholdSupporters,
+    }],
+    coalitionRouting: persistedReport,
+    budgetPeriod: "round_limited",
+    roundBudgetCents: 7_500,
+    perProjectCapCents: 3_000,
+    participantSurplusConfirmed: true,
+    stances: [{
+      campaignId: persistedCampaign.id,
+      stance: "weak",
+      maxAllocCents: 3_000,
       maxAllocPctBps: 10_000,
       rankOrder: 1,
     }],
@@ -2986,6 +3048,14 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
   const schemaSql = readFileSync("supabase/schema.sql", "utf8");
   const migration = readFileSync("supabase/migrations/20260604_mpgf_coalition_routing.sql", "utf8");
+  const conditionalIntentMigration = readFileSync(
+    "supabase/migrations/20260628_mpgf_common_ground_conditional_trade_intents.sql",
+    "utf8",
+  );
+  const capsCaptureMigration = readFileSync(
+    "supabase/migrations/20260626_mpgf_common_ground_budget_caps_capture.sql",
+    "utf8",
+  );
   const serialized = JSON.stringify({ report, persistedReport, supportSignalContract });
 
   assert.ok(report);
@@ -3028,6 +3098,21 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.equal(budgetPreview.participantSurplusConfirmationRequired, true);
   assert.equal(budgetPreview.participantSurplusConfirmed, true);
   assert.equal(budgetPreview.activationState, "ready_for_confirmation");
+  assert.equal(
+    budgetPreview.rows[0]?.conditionalTradeIntent?.policy,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CONDITIONAL_INTENT_POLICY,
+  );
+  assert.equal(budgetPreview.rows[0]?.conditionAccepted, true);
+  assert.deepEqual(budgetPreview.rows[0]?.acceptableCounterBucketIds, [
+    "bucket-animal-welfare",
+    "bucket-long-run-future",
+    "bucket-public-interest-knowledge",
+  ]);
+  assert.equal(budgetPreview.rows[0]?.minCounterpartyVolumeCents, 20_000);
+  assert.equal(budgetPreview.rows[0]?.conditionalTradeIntent?.canonicalRecordType, "ConditionalTradeIntent");
+  assert.equal(budgetPreview.rows[0]?.conditionalTradeIntent?.authorizationState, "not_authorized_no_capture_preview");
+  assert.equal(budgetPreview.rows[0]?.conditionalTradeIntent?.maxExposureCents, 3_000);
+  assert.equal(budgetPreview.rows[0]?.conditionalTradeIntent?.paymentCaptureAllowed, false);
   assert.equal(
     budgetPreview.releaseGateRequirementBundle.policy,
     MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
@@ -3076,16 +3161,33 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.equal(budgetPreview.noGlobalMoralRanking, true);
   assert.equal(budgetPreview.moralReputationAffectsAllocationPower, false);
   assert.equal(budgetPreview.eligibleProjectCount, 1);
-  assert.equal(budgetPreview.routedAllocationCents, 7_500);
+  assert.equal(budgetPreview.perProjectCapCents, 3_000);
+  assert.equal(budgetPreview.nextCaptureAt, null);
+  assert.equal(budgetPreview.nextCaptureRule, "none_before_final_review");
+  assert.equal(budgetPreview.routedAllocationCents, 3_000);
   assert.equal(budgetPreview.unroutableBudgetPolicy, "manual_review");
   assert.match(budgetPreview.eligibleProjectSetHash, /^sha256:/);
   assert.match(budgetPreview.termsSnapshotHash, /^sha256:/);
   assert.match(budgetPreview.participantConfirmationHash ?? "", /^sha256:/);
   assert.equal(budgetPreview.rows[0]?.stance, "weak");
+  assert.equal(budgetPreview.rows[0]?.maxAllocCents, 3_000);
+  assert.equal(budgetPreview.rows[0]?.projectedAllocationCents, 3_000);
   assert.equal(budgetPreview.rows[0]?.allocationState, "currently_routed");
+  assert.equal(defaultSkipPreview.perProjectCapCents, 7_500);
+  assert.equal(defaultSkipPreview.nextCaptureAt, null);
+  assert.equal(defaultSkipPreview.nextCaptureRule, "none_before_final_review");
   assert.equal(defaultSkipPreview.rows[0]?.stance, "abstain");
   assert.equal(defaultSkipPreview.routedAllocationCents, 0);
   assert.equal(defaultSkipPreview.activationState, "preview_only_confirmation_required");
+  assert.equal(missingConditionPreview.rows[0]?.stance, "weak");
+  assert.equal(missingConditionPreview.rows[0]?.conditionAccepted, false);
+  assert.equal(missingConditionPreview.rows[0]?.conditionalTradeIntent, null);
+  assert.equal(missingConditionPreview.activationState, "preview_only_confirmation_required");
+  assert.ok(
+    missingConditionPreview.userFacingBlockers.some((blocker) =>
+      blocker.nextAction.includes("Accept a positive project cap and explicit cross-view condition"),
+    ),
+  );
   assert.ok(
     defaultSkipPreview.userFacingBlockers.some((blocker) =>
       blocker.nextAction.includes("Choose Fund this or Fund if different-view support joins"),
@@ -3111,22 +3213,36 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreviewRoute, /not_saved_confirmation_required/);
   assert.match(budgetPreviewRoute, /\.from\("mpgf_user_budgets"\)/);
   assert.match(budgetPreviewRoute, /\.from\("mpgf_support_stances"\)/);
+  assert.match(budgetPreviewRoute, /\.from\("mpgf_conditional_trade_intents"\)/);
   assert.match(budgetPreviewRoute, /onConflict: "round_id,user_ref_hash"/);
   assert.match(budgetPreviewRoute, /onConflict: "id"/);
   assert.match(budgetPreviewRoute, /common_ground_budget_preview_saved/);
+  assert.match(budgetPreviewRoute, /savedConditionalIntentCount/);
   assert.match(budgetPreviewRoute, /paymentCaptureAllowed: false/);
+  assert.match(budgetPreviewRoute, /conditionAccepted/);
+  assert.match(budgetPreviewRoute, /acceptableCounterBucketIds/);
+  assert.match(budgetPreviewRoute, /minCounterpartyVolumeCents/);
   assert.match(budgetPreviewRoute, /counts_for_common_ground: row\.stance === "strong" \|\| row\.stance === "weak"/);
   assert.match(budgetPreviewRoute, /stateMutation/);
   assert.match(budgetPreviewRoute, /paymentCaptureAllowed/);
   assert.match(budgetPreviewRoute, /releaseGateRequirementBundle/);
   assert.match(budgetPreviewRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(budgetPreviewRoute, /perProjectCapCents/);
+  assert.match(budgetPreviewRoute, /nextCaptureAt/);
+  assert.match(budgetPreviewRoute, /nextCaptureRule/);
+  assert.match(budgetPreviewRoute, /per_project_cap_cents: preview\.perProjectCapCents/);
+  assert.match(budgetPreviewRoute, /next_capture_at: preview\.nextCaptureAt/);
+  assert.match(budgetPreviewRoute, /next_capture_rule: preview\.nextCaptureRule/);
   assert.match(publicApi, /coalitionRouting/);
   assert.match(publicApi, /commonGroundBudget/);
   assert.match(publicApi, /releaseGateRequirementCount/);
   assert.match(publicApi, /savePreviewStateMutation/);
   assert.match(publicApi, /savePreviewRequiresParticipantSurplusConfirmation/);
   assert.match(publicApi, /savePreviewPaymentCaptureAllowed/);
-  assert.match(publicApi, /savedRecords: \["mpgf_user_budgets", "mpgf_support_stances"\]/);
+  assert.match(
+    publicApi,
+    /savedRecords: \["mpgf_user_budgets", "mpgf_support_stances", "mpgf_conditional_trade_intents"\]/,
+  );
   assert.match(publicApi, /laterStageTracksFailClosed/);
   assert.match(publicApi, /common-ground-budget-preview/);
   assert.match(publicApi, /routedWeakSupportBudgetCents/);
@@ -3147,6 +3263,12 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /Every round \(requires final review\)/);
   assert.match(roundPage, /Maximum this round, cents/);
   assert.match(roundPage, /Maximum monthly, cents/);
+  assert.match(roundPage, /Per-project cap, cents/);
+  assert.match(roundPage, /Next capture rule/);
+  assert.match(roundPage, /Next capture at/);
+  assert.match(roundPage, /perProjectCapCents/);
+  assert.match(roundPage, /nextCaptureRule/);
+  assert.match(roundPage, /nextCaptureAt/);
   assert.match(roundPage, /Maximum this round/);
   assert.doesNotMatch(roundPage, /Maximum budget/);
   assert.match(roundPage, /No charge in this preview/);
@@ -3192,6 +3314,11 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /Needs review/);
   assert.match(roundPage, /Skip/);
   assert.match(roundPage, /Maximum for this project, cents/);
+  assert.match(roundPage, /Condition accepted/);
+  assert.match(roundPage, /minCounterpartyVolumeCents_/);
+  assert.match(roundPage, /acceptableCounterBucketIds_/);
+  assert.match(roundPage, /conditionAccepted_/);
+  assert.match(roundPage, /conditionalTradeIntent/);
   assert.match(roundPage, /commonGroundStanceLabel/);
   assert.doesNotMatch(roundPage, /Strong support/);
   assert.doesNotMatch(roundPage, /Weak common-ground/);
@@ -3215,6 +3342,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Hidden defaults, suggestions, project-card/);
   assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
   assert.match(budgetSavePanel, /Maximum this round/);
+  assert.match(budgetSavePanel, /Per-project cap/);
+  assert.match(budgetSavePanel, /Next capture rule/);
+  assert.match(budgetSavePanel, /Next capture/);
+  assert.match(budgetSavePanel, /no capture happens\s+before final review/);
   assert.match(budgetSavePanel, /Payment/);
   assert.match(budgetSavePanel, /Saved method required for final clearing; no charge or hold now/);
   assert.match(budgetSavePanel, /If something does not clear/);
@@ -3225,6 +3356,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Projects/);
   assert.match(budgetSavePanel, /canonical \{project\.stance\}/);
   assert.match(budgetSavePanel, /condition accepted/);
+  assert.match(budgetSavePanel, /condition still missing/);
+  assert.match(budgetSavePanel, /canonical ConditionalTradeIntent records/);
+  assert.match(budgetSavePanel, /Minimum verified counterparty volume/);
+  assert.match(budgetSavePanel, /explicit conditional-intent setup record/);
   assert.match(budgetSavePanel, /What you may see after settlement/);
   assert.match(budgetSavePanel, /Charged from you: gross captured amount, if any/);
   assert.match(budgetSavePanel, /Sent to projects: net recipient-disbursed public-good dollars/);
@@ -3267,6 +3402,19 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
     assert.match(migration, new RegExp(`comment on table public\\.${table}`));
     assert.match(schemaSql, new RegExp(`comment on table public\\.${table}`));
   }
+  assert.match(
+    conditionalIntentMigration,
+    /create table if not exists public\.mpgf_conditional_trade_intents/,
+  );
+  assert.match(
+    schemaSql,
+    /create table if not exists public\.mpgf_conditional_trade_intents/,
+  );
+  assert.match(conditionalIntentMigration, /condition_accepted boolean not null default false/);
+  assert.match(conditionalIntentMigration, /payment_capture_allowed boolean not null default false/);
+  assert.match(conditionalIntentMigration, /final_review_disclosure_required boolean not null default true/);
+  assert.match(conditionalIntentMigration, /grant select, insert, update on public\.mpgf_conditional_trade_intents/);
+  assert.match(conditionalIntentMigration, /comment on table public\.mpgf_conditional_trade_intents/);
 
   assert.match(migration, /stance in \('strong', 'weak', 'dissent', 'abstain'\)/);
   assert.match(migration, /budget_period text not null default 'monthly'/);
@@ -3284,6 +3432,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(migration, /mpgf_user_budgets_write_own/);
   assert.match(migration, /mpgf_support_stances_write_own/);
   assert.match(schemaSql, /budget_period text not null default 'monthly'/);
+  assert.match(schemaSql, /per_project_cap_cents bigint not null default 0/);
+  assert.match(schemaSql, /next_capture_at timestamptz/);
+  assert.match(schemaSql, /next_capture_rule text not null default 'none_before_final_review'/);
   assert.match(schemaSql, /default_allocation_baseline text not null/);
   assert.match(schemaSql, /participant_surplus_confirmation_required boolean not null default true/);
   assert.match(schemaSql, /eligible_project_set_hash text not null/);
@@ -3297,6 +3448,11 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(schemaSql, /mpgf_user_budgets_write_own/);
   assert.match(schemaSql, /mpgf_support_stances_write_own/);
   assert.match(schemaSql, /grant select on[\s\S]*public\.mpgf_coalition_candidates[\s\S]*to anon, authenticated/);
+  assert.match(capsCaptureMigration, /add column if not exists per_project_cap_cents bigint not null default 0/);
+  assert.match(capsCaptureMigration, /add column if not exists next_capture_at timestamptz/);
+  assert.match(capsCaptureMigration, /add column if not exists next_capture_rule text not null default 'none_before_final_review'/);
+  assert.match(capsCaptureMigration, /Common Ground Budget candidate allocation/);
+  assert.match(capsCaptureMigration, /no preview capture authority/);
 
   for (const forbidden of [
     "private-persisted-coalition-strong",

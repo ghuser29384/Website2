@@ -14,6 +14,9 @@ export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY =
 export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY =
   "common_ground_budget_sandbox_requirement_results_v1";
 
+export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CONDITIONAL_INTENT_POLICY =
+  "simple_mode_canonical_conditional_trade_intents_no_capture_v1";
+
 export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES = [
   "dry_run_calculation_bundle",
   "route_health_baseline",
@@ -70,6 +73,10 @@ export type MpgfCommonGroundBudgetBaselineConfidence = "low" | "medium" | "high"
 export type MpgfCommonGroundBudgetStance = "strong" | "weak" | "dissent" | "abstain";
 export type MpgfCommonGroundBudgetFallbackRule = "carry_forward" | "reroute" | "release_hold";
 export type MpgfCommonGroundBudgetUnroutablePolicy = "carry_forward" | "release_hold" | "manual_review";
+export type MpgfCommonGroundBudgetNextCaptureRule =
+  | "none_before_final_review"
+  | "monthly_after_final_review"
+  | "manual_review_required";
 export type MpgfCommonGroundBudgetActivationState =
   | "ready_for_confirmation"
   | "preview_only_confirmation_required"
@@ -149,6 +156,9 @@ export interface MpgfCommonGroundBudgetStanceInput {
   stance: MpgfCommonGroundBudgetStance;
   maxAllocCents?: number | null;
   maxAllocPctBps?: number | null;
+  conditionAccepted?: boolean;
+  acceptableCounterBucketIds?: string[] | string | null;
+  minCounterpartyVolumeCents?: number | null;
   rankOrder?: number | null;
   redactedNote?: string | null;
 }
@@ -161,6 +171,9 @@ export interface MpgfCommonGroundBudgetPreviewInput {
   budgetPeriod?: MpgfCommonGroundBudgetPeriod;
   monthlyBudgetCents?: number | null;
   roundBudgetCents?: number | null;
+  perProjectCapCents?: number | null;
+  nextCaptureAt?: string | null;
+  nextCaptureRule?: MpgfCommonGroundBudgetNextCaptureRule | null;
   settlementCurrency?: string | null;
   defaultAllocationBaseline?: string | null;
   baselineConfidenceLevel?: MpgfCommonGroundBudgetBaselineConfidence | null;
@@ -176,9 +189,15 @@ export interface MpgfCommonGroundBudgetPreviewRow {
   campaignId: string;
   title: string;
   stance: MpgfCommonGroundBudgetStance;
+  plainLabel: string;
+  canonicalStance: MpgfCommonGroundBudgetStance;
   rankOrder: number;
   maxAllocCents: number;
   maxAllocPctBps: number;
+  conditionAccepted: boolean;
+  acceptableCounterBucketIds: string[];
+  minCounterpartyVolumeCents: number;
+  conditionalTradeIntent: MpgfCommonGroundBudgetConditionalTradeIntentPreview | null;
   projectedAllocationCents: number;
   allocationState: "currently_routed" | "pending_threshold" | "waiting_for_review" | "blocked" | "not_routed";
   candidateStatus: string;
@@ -189,6 +208,22 @@ export interface MpgfCommonGroundBudgetPreviewRow {
   supporterGap: number;
   clusterGap: number;
   pivotalAction: string;
+}
+
+export interface MpgfCommonGroundBudgetConditionalTradeIntentPreview {
+  policy: typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CONDITIONAL_INTENT_POLICY;
+  canonicalRecordType: "ConditionalTradeIntent";
+  intentState: "active";
+  authorizationState: "not_authorized_no_capture_preview";
+  projectId: string;
+  amountCents: number;
+  maxExposureCents: number;
+  acceptableCounterBucketIds: string[];
+  minCounterpartyVolumeCents: number;
+  fallbackRule: MpgfCommonGroundBudgetFallbackRule;
+  conditionAccepted: true;
+  paymentCaptureAllowed: false;
+  finalReviewDisclosureRequired: true;
 }
 
 export interface MpgfCommonGroundBudgetPreview {
@@ -215,6 +250,9 @@ export interface MpgfCommonGroundBudgetPreview {
   budgetPeriod: MpgfCommonGroundBudgetPeriod;
   settlementCurrency: "usd";
   maximumBudgetCents: number;
+  perProjectCapCents: number;
+  nextCaptureAt: string | null;
+  nextCaptureRule: MpgfCommonGroundBudgetNextCaptureRule;
   defaultAllocationBaseline: string;
   baselineConfidenceLevel: MpgfCommonGroundBudgetBaselineConfidence;
   baselineConfidenceRationale: string;
@@ -434,12 +472,51 @@ function normalizeCents(value: number | null | undefined, fallback: number) {
   return Number.isFinite(value) && Number(value) > 0 ? Math.floor(Number(value)) : fallback;
 }
 
+function normalizeCapCents(value: number | null | undefined, fallback: number) {
+  const normalized = normalizeCents(value, fallback);
+
+  return Math.max(0, Math.min(fallback, normalized));
+}
+
 function normalizeBps(value: number | null | undefined, fallback: number) {
   if (!Number.isFinite(value)) {
     return fallback;
   }
 
   return Math.max(0, Math.min(10_000, Math.floor(Number(value))));
+}
+
+function normalizePositiveCents(value: number | null | undefined, fallback: number) {
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.floor(Number(value)));
+}
+
+function normalizeCounterBucketId(value: string) {
+  return value
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+function normalizeCounterBucketIds(value: string[] | string | null | undefined) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]/)
+      : [];
+  const bucketIds = rawItems
+    .map((item) => normalizeCounterBucketId(String(item)))
+    .filter(Boolean);
+  const uniqueBucketIds = [...new Set(bucketIds)].slice(0, 12);
+
+  return uniqueBucketIds.length > 0
+    ? uniqueBucketIds
+    : ["bucket-animal-welfare", "bucket-long-run-future", "bucket-public-interest-knowledge"];
 }
 
 function compactText(value: string | null | undefined, fallback: string) {
@@ -474,6 +551,57 @@ function normalizeProjectSetChangePolicy(value: MpgfCommonGroundBudgetPreviewInp
     : "require_reconfirmation";
 }
 
+function isCanonicalFutureUtcTimestamp(value: string | null | undefined, after: string) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return false;
+  }
+
+  const timestamp = Date.parse(value);
+  const afterTimestamp = Date.parse(after);
+
+  return Number.isFinite(timestamp) && Number.isFinite(afterTimestamp) && timestamp > afterTimestamp;
+}
+
+function defaultMonthlyNextCaptureAt(roundLockTime: string) {
+  const timestamp = Date.parse(roundLockTime);
+  const base = Number.isFinite(timestamp) ? timestamp : Date.now();
+
+  return new Date(base + 30 * 86_400_000).toISOString();
+}
+
+function normalizeNextCapture({
+  budgetPeriod,
+  nextCaptureAt,
+  nextCaptureRule,
+  roundLockTime,
+}: {
+  budgetPeriod: MpgfCommonGroundBudgetPeriod;
+  nextCaptureAt: string | null | undefined;
+  nextCaptureRule: MpgfCommonGroundBudgetNextCaptureRule | null | undefined;
+  roundLockTime: string;
+}) {
+  if (budgetPeriod === "round_limited") {
+    return {
+      nextCaptureAt: null,
+      nextCaptureRule: "none_before_final_review" as const,
+    };
+  }
+
+  if (nextCaptureRule === "manual_review_required") {
+    return {
+      nextCaptureAt: null,
+      nextCaptureRule,
+    };
+  }
+
+  return {
+    nextCaptureAt: isCanonicalFutureUtcTimestamp(nextCaptureAt, roundLockTime)
+      ? String(nextCaptureAt)
+      : defaultMonthlyNextCaptureAt(roundLockTime),
+    nextCaptureRule: "monthly_after_final_review" as const,
+  };
+}
+
 function stanceWeight(stance: MpgfCommonGroundBudgetStance) {
   if (stance === "strong") {
     return 10_000;
@@ -484,6 +612,26 @@ function stanceWeight(stance: MpgfCommonGroundBudgetStance) {
   }
 
   return 0;
+}
+
+function plainLabelForStance(stance: MpgfCommonGroundBudgetStance) {
+  if (stance === "strong") {
+    return "Fund this";
+  }
+
+  if (stance === "weak") {
+    return "Fund if different-view support joins";
+  }
+
+  if (stance === "dissent") {
+    return "Needs review";
+  }
+
+  return "Skip";
+}
+
+function isAllocatableStance(stance: MpgfCommonGroundBudgetStance) {
+  return stance === "strong" || stance === "weak";
 }
 
 function allocationStateFor(
@@ -536,6 +684,7 @@ function defaultStances(projects: MpgfCommonGroundBudgetProject[]) {
   return projects.map((project, index): MpgfCommonGroundBudgetStanceInput => ({
     campaignId: project.id,
     stance: "abstain",
+    conditionAccepted: false,
     maxAllocPctBps: 0,
     rankOrder: index + 1,
   }));
@@ -549,6 +698,13 @@ export function buildMpgfCommonGroundBudgetPreview(
     budgetPeriod === "monthly" ? input.monthlyBudgetCents : input.roundBudgetCents,
     2_500,
   );
+  const perProjectCapCents = normalizeCapCents(input.perProjectCapCents ?? null, maximumBudgetCents);
+  const { nextCaptureAt, nextCaptureRule } = normalizeNextCapture({
+    budgetPeriod,
+    nextCaptureAt: input.nextCaptureAt,
+    nextCaptureRule: input.nextCaptureRule,
+    roundLockTime: input.roundLockTime,
+  });
   const projectSetChangePolicy = normalizeProjectSetChangePolicy(input.projectSetChangePolicy);
   const fallbackRule = normalizeFallbackRule(input.fallbackRule);
   const unroutableBudgetPolicy = normalizeUnroutablePolicy(input.unroutableBudgetPolicy);
@@ -561,8 +717,11 @@ export function buildMpgfCommonGroundBudgetPreview(
     .map((stance, index) => ({
       campaignId: stance.campaignId,
       stance: stance.stance,
-      maxAllocCents: normalizeCents(stance.maxAllocCents ?? null, maximumBudgetCents),
+      maxAllocCents: normalizeCapCents(stance.maxAllocCents ?? null, perProjectCapCents),
       maxAllocPctBps: normalizeBps(stance.maxAllocPctBps ?? null, stance.stance === "abstain" ? 0 : 10_000),
+      conditionAccepted: stance.conditionAccepted === true,
+      acceptableCounterBucketIds: normalizeCounterBucketIds(stance.acceptableCounterBucketIds),
+      minCounterpartyVolumeCents: normalizePositiveCents(stance.minCounterpartyVolumeCents ?? null, 20_000),
       rankOrder: Number.isFinite(stance.rankOrder) && Number(stance.rankOrder) > 0
         ? Math.floor(Number(stance.rankOrder))
         : index + 1,
@@ -570,7 +729,14 @@ export function buildMpgfCommonGroundBudgetPreview(
     }))
     .sort((left, right) => left.rankOrder - right.rankOrder || left.campaignId.localeCompare(right.campaignId));
   const eligibleProjectIds = normalizedStances
-    .filter((stance) => stance.stance === "strong" || stance.stance === "weak")
+    .filter((stance) =>
+      isAllocatableStance(stance.stance) &&
+      stance.conditionAccepted &&
+      stance.maxAllocCents > 0 &&
+      stance.maxAllocPctBps > 0 &&
+      stance.minCounterpartyVolumeCents > 0 &&
+      stance.acceptableCounterBucketIds.length > 0,
+    )
     .map((stance) => stance.campaignId)
     .sort();
   const eligibleProjectSetHash = hashValue([
@@ -587,7 +753,14 @@ export function buildMpgfCommonGroundBudgetPreview(
     unroutableBudgetPolicy,
   ]);
   const eligiblePoolSetHash = hashValue([input.roundId, "eligible-pool-set", "project_pool_only_v1"]);
-  const budgetableStances = normalizedStances.filter((stance) => stanceWeight(stance.stance) > 0);
+  const budgetableStances = normalizedStances.filter((stance) =>
+    stanceWeight(stance.stance) > 0 &&
+    stance.conditionAccepted &&
+    stance.maxAllocCents > 0 &&
+    stance.maxAllocPctBps > 0 &&
+    stance.minCounterpartyVolumeCents > 0 &&
+    stance.acceptableCounterBucketIds.length > 0,
+  );
   const totalWeight = budgetableStances.reduce((sum, stance) => sum + stanceWeight(stance.stance), 0);
   const projectedAllocations = new Map<string, number>();
   let initiallyAllocatedCents = 0;
@@ -623,13 +796,42 @@ export function buildMpgfCommonGroundBudgetPreview(
   const rows = normalizedStances.map((stance): MpgfCommonGroundBudgetPreviewRow => {
     const project = projectsById.get(stance.campaignId);
     const coalition = coalitionRowsById.get(stance.campaignId);
+    const conditionalTradeIntent: MpgfCommonGroundBudgetConditionalTradeIntentPreview | null =
+      isAllocatableStance(stance.stance) &&
+      stance.conditionAccepted &&
+      stance.maxAllocCents > 0 &&
+      stance.maxAllocPctBps > 0 &&
+      stance.minCounterpartyVolumeCents > 0 &&
+      stance.acceptableCounterBucketIds.length > 0
+        ? {
+            policy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CONDITIONAL_INTENT_POLICY,
+            canonicalRecordType: "ConditionalTradeIntent",
+            intentState: "active",
+            authorizationState: "not_authorized_no_capture_preview",
+            projectId: stance.campaignId,
+            amountCents: Math.min(stance.maxAllocCents, perProjectCapCents),
+            maxExposureCents: Math.min(stance.maxAllocCents, perProjectCapCents),
+            acceptableCounterBucketIds: stance.acceptableCounterBucketIds,
+            minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
+            fallbackRule,
+            conditionAccepted: true,
+            paymentCaptureAllowed: false,
+            finalReviewDisclosureRequired: true,
+          }
+        : null;
     const partial = {
       campaignId: stance.campaignId,
       title: project?.title ?? stance.campaignId,
       stance: stance.stance,
+      plainLabel: plainLabelForStance(stance.stance),
+      canonicalStance: stance.stance,
       rankOrder: stance.rankOrder,
       maxAllocCents: stance.maxAllocCents,
       maxAllocPctBps: stance.maxAllocPctBps,
+      conditionAccepted: stance.conditionAccepted,
+      acceptableCounterBucketIds: stance.acceptableCounterBucketIds,
+      minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
+      conditionalTradeIntent,
       projectedAllocationCents: projectedAllocations.get(stance.campaignId) ?? 0,
       candidateStatus: coalition?.candidateStatus ?? "hard_gate_pending",
       hardGateStatus: coalition?.hardGateStatus ?? "pending_review",
@@ -685,10 +887,32 @@ export function buildMpgfCommonGroundBudgetPreview(
     });
   }
 
+  if (
+    normalizedStances.some((stance) =>
+      isAllocatableStance(stance.stance) &&
+      (!stance.conditionAccepted ||
+        stance.maxAllocCents <= 0 ||
+        stance.maxAllocPctBps <= 0 ||
+        stance.minCounterpartyVolumeCents <= 0 ||
+        stance.acceptableCounterBucketIds.length === 0),
+    )
+  ) {
+    userFacingBlockers.push({
+      reasonCategory: "user_action_needed",
+      nextAction:
+        "Accept a positive project cap and explicit cross-view condition before a Fund this or Fund if different-view support joins choice can save.",
+      moneyOrObligationsAffected: false as const,
+      appealOrCorrectionPath: null,
+    });
+  }
+
   const termsSnapshotHash = hashValue([
     input.roundId,
     budgetPeriod,
     maximumBudgetCents,
+    perProjectCapCents,
+    nextCaptureAt,
+    nextCaptureRule,
     "usd",
     input.defaultAllocationBaseline,
     baselineConfidenceLevel,
@@ -733,6 +957,9 @@ export function buildMpgfCommonGroundBudgetPreview(
     budgetPeriod,
     settlementCurrency: "usd",
     maximumBudgetCents,
+    perProjectCapCents,
+    nextCaptureAt,
+    nextCaptureRule,
     defaultAllocationBaseline: compactText(
       input.defaultAllocationBaseline,
       "I would otherwise hold this budget or donate through my usual default allocation.",
@@ -773,9 +1000,16 @@ export function buildMpgfCommonGroundBudgetPreview(
       input.roundId,
       termsSnapshotHash,
       releaseGateRequirementBundle.bundleHash,
+      perProjectCapCents,
+      nextCaptureAt,
+      nextCaptureRule,
       rows.map((row) => [
         row.campaignId,
         row.stance,
+        row.conditionAccepted,
+        row.acceptableCounterBucketIds,
+        row.minCounterpartyVolumeCents,
+        row.conditionalTradeIntent,
         row.projectedAllocationCents,
         row.allocationState,
       ]),

@@ -5,14 +5,18 @@ import { useState } from "react";
 type BudgetPeriod = "monthly" | "round_limited";
 type BaselineConfidence = "low" | "medium" | "high";
 type FallbackRule = "carry_forward" | "reroute" | "release_hold";
+type NextCaptureRule = "none_before_final_review" | "monthly_after_final_review" | "manual_review_required";
 type UnroutableBudgetPolicy = "carry_forward" | "release_hold" | "manual_review";
 type SupportStance = "strong" | "weak" | "dissent" | "abstain";
 
 interface CommonGroundBudgetStancePayload {
+  acceptableCounterBucketIds: string[];
   campaignId: string;
+  conditionAccepted: boolean;
   stance: SupportStance;
   maxAllocCents: number;
   maxAllocPctBps: number;
+  minCounterpartyVolumeCents: number;
   rankOrder: number;
   redactedNote?: string;
 }
@@ -24,7 +28,10 @@ export interface CommonGroundBudgetSavePayload {
   defaultAllocationBaseline: string;
   fallbackRule: FallbackRule;
   monthlyBudgetCents: number;
+  nextCaptureAt: string | null;
+  nextCaptureRule: NextCaptureRule;
   participantSurplusConfirmed: boolean;
+  perProjectCapCents: number;
   roundBudgetCents: number;
   savePreview: true;
   settlementCurrency: "usd";
@@ -54,6 +61,7 @@ interface CommonGroundBudgetSaveResponse {
   persistence?: {
     message?: string;
     savedBudgetId?: string | null;
+    savedConditionalIntentCount?: number;
     savedStanceCount?: number;
     status?: string;
     stateMutation?: string;
@@ -61,8 +69,11 @@ interface CommonGroundBudgetSaveResponse {
 }
 
 interface CommonGroundBudgetReviewProject {
+  acceptableCounterBucketIds: string[];
   campaignId: string;
+  conditionAccepted: boolean;
   maxAllocCents: number;
+  minCounterpartyVolumeCents: number;
   rankOrder: number;
   stance: SupportStance;
   title: string;
@@ -107,6 +118,17 @@ function budgetPeriodLabel(value: BudgetPeriod) {
   return value === "monthly" ? "monthly" : "one-time";
 }
 
+function nextCaptureRuleLabel(value: NextCaptureRule) {
+  switch (value) {
+    case "monthly_after_final_review":
+      return "monthly after final review";
+    case "manual_review_required":
+      return "manual review required";
+    case "none_before_final_review":
+      return "none before final review";
+  }
+}
+
 export function MpgfCommonGroundBudgetSavePanel({
   activationState,
   apiPath,
@@ -139,8 +161,11 @@ export function MpgfCommonGroundBudgetSavePanel({
     projectReviewRows.length > 0
       ? projectReviewRows
       : payload.stances.map((stance) => ({
+          acceptableCounterBucketIds: stance.acceptableCounterBucketIds,
           campaignId: stance.campaignId,
+          conditionAccepted: stance.conditionAccepted,
           maxAllocCents: stance.maxAllocCents,
+          minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
           rankOrder: stance.rankOrder,
           stance: stance.stance,
           title: stance.campaignId,
@@ -172,7 +197,9 @@ export function MpgfCommonGroundBudgetSavePanel({
       setSavedBudgetId(result.persistence?.savedBudgetId ?? null);
       setStatusMessage(
         result.persistence?.status === "saved_no_capture"
-          ? `Saved ${result.persistence.savedStanceCount ?? 0} private stance(s). No payment capture was authorized.`
+          ? `Saved ${result.persistence.savedStanceCount ?? 0} private stance(s) and ${
+              result.persistence.savedConditionalIntentCount ?? 0
+            } explicit conditional-intent setup record(s). No payment capture was authorized.`
           : result.persistence?.message ?? "Preview returned without saving.",
       );
     } catch (error) {
@@ -202,6 +229,17 @@ export function MpgfCommonGroundBudgetSavePanel({
             <dd>{formatCents(maximumBudgetCents)}</dd>
           </div>
           <div>
+            <dt>Per-project cap</dt>
+            <dd>{formatCents(payload.perProjectCapCents)}</dd>
+          </div>
+          <div>
+            <dt>Next capture rule</dt>
+            <dd>
+              {nextCaptureRuleLabel(payload.nextCaptureRule)}
+              {payload.nextCaptureAt ? ` at ${payload.nextCaptureAt}` : ""}
+            </dd>
+          </div>
+          <div>
             <dt>Payment</dt>
             <dd>Saved method required for final clearing; no charge or hold now.</dd>
           </div>
@@ -226,7 +264,9 @@ export function MpgfCommonGroundBudgetSavePanel({
                 {project.title}: {stanceLabel(project.stance)} / canonical {project.stance},{" "}
                 {project.stance === "dissent" || project.stance === "abstain"
                   ? "allocation $0"
-                  : `max ${formatCents(project.maxAllocCents)}, condition accepted`}, priority{" "}
+                  : `max ${formatCents(project.maxAllocCents)}, ${
+                      project.conditionAccepted ? "condition accepted" : "condition still missing"
+                    }`}, priority{" "}
                 {project.rankOrder}
               </li>
             ))}
@@ -255,19 +295,36 @@ export function MpgfCommonGroundBudgetSavePanel({
               <dt>Binding caps</dt>
               <dd>
                 {budgetPeriodLabel(payload.budgetPeriod)} cap {formatCents(maximumBudgetCents)};
-                per-project caps are recorded in cents and basis points.
+                per-project cap {formatCents(payload.perProjectCapCents)}; per-project caps are
+                recorded in cents and basis points.
+              </dd>
+            </div>
+            <div>
+              <dt>Next capture</dt>
+              <dd>
+                {nextCaptureRuleLabel(payload.nextCaptureRule)}
+                {payload.nextCaptureAt ? ` at ${payload.nextCaptureAt}` : ""}; no capture happens
+                before final review and the recorded rule passes.
               </dd>
             </div>
             <div>
               <dt>Cross-view conditions</dt>
               <dd>
-                Strong and weak stances map to canonical records; weak support clears only with
-                different-view support.
+                Strong and weak stances map to canonical ConditionalTradeIntent records only after
+                condition acceptance. Minimum verified counterparty volume is shown for each selected
+                project.
               </dd>
             </div>
             <div>
               <dt>Counterpart buckets</dt>
-              <dd>Counterpart-bucket eligibility uses the frozen eligible-set hash and canonical CRECM rules.</dd>
+              <dd>
+                {projectRows
+                  .filter((project) => project.stance === "strong" || project.stance === "weak")
+                  .map((project) =>
+                    `${project.title}: ${formatCents(project.minCounterpartyVolumeCents)} from ${project.acceptableCounterBucketIds.join(", ")}`,
+                  )
+                  .join("; ") || "No allocatable project condition selected."}
+              </dd>
             </div>
             <div>
               <dt>Fallback rule</dt>

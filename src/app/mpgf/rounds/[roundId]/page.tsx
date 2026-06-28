@@ -16,6 +16,7 @@ import {
   buildMpgfCommonGroundBudgetPreview,
   type MpgfCommonGroundBudgetBaselineConfidence,
   type MpgfCommonGroundBudgetFallbackRule,
+  type MpgfCommonGroundBudgetNextCaptureRule,
   type MpgfCommonGroundBudgetPeriod,
   type MpgfCommonGroundBudgetStance,
   type MpgfCommonGroundBudgetUnroutablePolicy,
@@ -182,6 +183,22 @@ function unroutablePolicyFromParams(
   return value === "release_hold" || value === "manual_review" ? value : "carry_forward";
 }
 
+function nextCaptureRuleFromParams(
+  params: Record<string, string | string[] | undefined>,
+): MpgfCommonGroundBudgetNextCaptureRule | null {
+  const value = searchParamValue(params, "nextCaptureRule");
+
+  if (
+    value === "none_before_final_review" ||
+    value === "monthly_after_final_review" ||
+    value === "manual_review_required"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
 function stanceFromParams(
   params: Record<string, string | string[] | undefined>,
   campaignId: string,
@@ -286,6 +303,11 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
   const budgetPeriod = budgetPeriodFromParams(resolvedSearchParams);
   const monthlyBudgetCents = searchParamNumber(resolvedSearchParams, "monthlyBudgetCents", 2_500);
   const roundBudgetCents = searchParamNumber(resolvedSearchParams, "roundBudgetCents", 2_500);
+  const perProjectCapCents = searchParamNumber(
+    resolvedSearchParams,
+    "perProjectCapCents",
+    budgetPeriod === "monthly" ? monthlyBudgetCents : roundBudgetCents,
+  );
   const participantSurplusConfirmed =
     searchParamValue(resolvedSearchParams, "participantSurplusConfirmed") === "on";
   const commonGroundBudgetPreview = buildMpgfCommonGroundBudgetPreview({
@@ -301,6 +323,9 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
     budgetPeriod,
     monthlyBudgetCents,
     roundBudgetCents,
+    perProjectCapCents,
+    nextCaptureAt: searchParamValue(resolvedSearchParams, "nextCaptureAt"),
+    nextCaptureRule: nextCaptureRuleFromParams(resolvedSearchParams),
     defaultAllocationBaseline: searchParamValue(
       resolvedSearchParams,
       "defaultAllocationBaseline",
@@ -320,6 +345,17 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       stance: stanceFromParams(resolvedSearchParams, campaign.campaignId),
       maxAllocCents: searchParamNumber(resolvedSearchParams, `maxAllocCents_${campaign.campaignId}`, 0),
       maxAllocPctBps: searchParamNumber(resolvedSearchParams, `maxAllocPctBps_${campaign.campaignId}`, 0),
+      conditionAccepted: searchParamValue(resolvedSearchParams, `conditionAccepted_${campaign.campaignId}`) === "on",
+      acceptableCounterBucketIds: searchParamValue(
+        resolvedSearchParams,
+        `acceptableCounterBucketIds_${campaign.campaignId}`,
+        "bucket-animal-welfare,bucket-long-run-future,bucket-public-interest-knowledge",
+      ),
+      minCounterpartyVolumeCents: searchParamNumber(
+        resolvedSearchParams,
+        `minCounterpartyVolumeCents_${campaign.campaignId}`,
+        20_000,
+      ),
       rankOrder: index + 1,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${campaign.campaignId}`),
     })),
@@ -339,15 +375,21 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
     defaultAllocationBaseline: commonGroundBudgetPreview.defaultAllocationBaseline,
     fallbackRule: commonGroundBudgetPreview.fallbackRule,
     monthlyBudgetCents,
+    nextCaptureAt: commonGroundBudgetPreview.nextCaptureAt,
+    nextCaptureRule: commonGroundBudgetPreview.nextCaptureRule,
     participantSurplusConfirmed: commonGroundBudgetPreview.participantSurplusConfirmed,
+    perProjectCapCents: commonGroundBudgetPreview.perProjectCapCents,
     roundBudgetCents,
     savePreview: true,
     settlementCurrency: commonGroundBudgetPreview.settlementCurrency,
     stances: commonGroundBudgetPreview.rows.map((row) => ({
+      acceptableCounterBucketIds: row.acceptableCounterBucketIds,
       campaignId: row.campaignId,
+      conditionAccepted: row.conditionAccepted,
       stance: row.stance,
       maxAllocCents: row.maxAllocCents,
       maxAllocPctBps: row.maxAllocPctBps,
+      minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
       rankOrder: row.rankOrder,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
     })),
@@ -689,6 +731,32 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     />
                   </label>
                   <label className="field">
+                    <span>Per-project cap, cents</span>
+                    <input
+                      min="0"
+                      name="perProjectCapCents"
+                      type="number"
+                      defaultValue={commonGroundBudgetPreview.perProjectCapCents}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Next capture rule</span>
+                    <select name="nextCaptureRule" defaultValue={commonGroundBudgetPreview.nextCaptureRule}>
+                      <option value="none_before_final_review">None before final review</option>
+                      <option value="monthly_after_final_review">Monthly after final review</option>
+                      <option value="manual_review_required">Manual review required</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Next capture at</span>
+                    <input
+                      name="nextCaptureAt"
+                      placeholder="2026-07-26T00:00:00.000Z"
+                      type="text"
+                      defaultValue={commonGroundBudgetPreview.nextCaptureAt ?? ""}
+                    />
+                  </label>
+                  <label className="field">
                     <span>Baseline confidence</span>
                     <select
                       name="baselineConfidenceLevel"
@@ -741,13 +809,19 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dl className="mpgf-summary-grid">
                     <div>
                       <dt>Per-project maximum</dt>
-                      <dd>Shown in the project picker below and repeated on final review.</dd>
+                      <dd>
+                        Budget-level cap {formatUsd(commonGroundBudgetPreview.perProjectCapCents)}; project
+                        rows below cannot exceed this cap and final review repeats it.
+                      </dd>
                     </div>
                     <div>
                       <dt>Next capture rule and cancellation deadline</dt>
                       <dd>
-                        No capture in preview; later capture can occur only after hard gates and exact
-                        authorization reconciliation. Cancellation deadline:{" "}
+                        {commonGroundBudgetPreview.nextCaptureRule.replaceAll("_", " ")}
+                        {commonGroundBudgetPreview.nextCaptureAt
+                          ? ` at ${commonGroundBudgetPreview.nextCaptureAt}`
+                          : ""}. No capture in preview; later capture can occur only after hard gates
+                        and exact authorization reconciliation. Cancellation deadline:{" "}
                         {formatDate(commonGroundBudgetPreview.cancelUntil)}.
                       </dd>
                     </div>
@@ -881,6 +955,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                         <th scope="col">Your choice</th>
                         <th scope="col">Maximum for this project, cents</th>
                         <th scope="col">Maximum for this project, bps</th>
+                        <th scope="col">Condition</th>
                         <th scope="col">Review note</th>
                       </tr>
                     </thead>
@@ -912,6 +987,32 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                               type="number"
                               defaultValue={row.maxAllocPctBps}
                             />
+                          </td>
+                          <td>
+                            <label className="checkbox-row">
+                              <input
+                                name={`conditionAccepted_${row.campaignId}`}
+                                type="checkbox"
+                                defaultChecked={row.conditionAccepted}
+                              />
+                              <span>Condition accepted</span>
+                            </label>
+                            <input
+                              name={`acceptableCounterBucketIds_${row.campaignId}`}
+                              type="hidden"
+                              value={row.acceptableCounterBucketIds.join(",")}
+                            />
+                            <input
+                              min="1"
+                              name={`minCounterpartyVolumeCents_${row.campaignId}`}
+                              type="number"
+                              defaultValue={row.minCounterpartyVolumeCents}
+                              aria-label={`${row.title} minimum counterparty volume cents`}
+                            />
+                            <p className="mpgf-small">
+                              At least {formatUsd(row.minCounterpartyVolumeCents)} from{" "}
+                              {row.acceptableCounterBucketIds.join(", ")}.
+                            </p>
                           </td>
                           <td>
                             <input
@@ -1017,8 +1118,11 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                 payload={commonGroundBudgetSavePayload}
                 paymentCaptureAllowed={commonGroundBudgetPreview.paymentCaptureAllowed}
                 projectReviewRows={commonGroundBudgetPreview.rows.map((row) => ({
+                  acceptableCounterBucketIds: row.acceptableCounterBucketIds,
                   campaignId: row.campaignId,
+                  conditionAccepted: row.conditionAccepted,
                   maxAllocCents: row.maxAllocCents,
+                  minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
                   rankOrder: row.rankOrder,
                   stance: row.stance,
                   title: row.title,
@@ -1042,6 +1146,14 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                       <div>
                         <dt>Possible allocation if gates pass</dt>
                         <dd>{formatUsd(row.projectedAllocationCents)}</dd>
+                      </div>
+                      <div>
+                        <dt>Condition</dt>
+                        <dd>
+                          {row.conditionalTradeIntent
+                            ? `accepted; at least ${formatUsd(row.minCounterpartyVolumeCents)} different-view support`
+                            : "not binding"}
+                        </dd>
                       </div>
                       <div>
                         <dt>Supporters</dt>

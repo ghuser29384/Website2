@@ -8,6 +8,7 @@ import {
   buildMpgfCommonGroundBudgetPreview,
   type MpgfCommonGroundBudgetBaselineConfidence,
   type MpgfCommonGroundBudgetFallbackRule,
+  type MpgfCommonGroundBudgetNextCaptureRule,
   type MpgfCommonGroundBudgetPeriod,
   type MpgfCommonGroundBudgetStance,
   type MpgfCommonGroundBudgetUnroutablePolicy,
@@ -61,6 +62,16 @@ function booleanField(record: Record<string, unknown>, key: string) {
   return value === true || value === "true" || value === "on";
 }
 
+function stringArrayField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  return typeof value === "string" ? value : null;
+}
+
 function summarizeDbError(error: DbErrorLike) {
   return [error.code, error.message || error.details].filter(Boolean).join(": ") || "unknown database error";
 }
@@ -91,6 +102,20 @@ function unroutablePolicyField(record: Record<string, unknown>): MpgfCommonGroun
   return value === "release_hold" || value === "manual_review" ? value : "carry_forward";
 }
 
+function nextCaptureRuleField(record: Record<string, unknown>): MpgfCommonGroundBudgetNextCaptureRule | null {
+  const value = stringField(record, "nextCaptureRule");
+
+  if (
+    value === "none_before_final_review" ||
+    value === "monthly_after_final_review" ||
+    value === "manual_review_required"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
 function stanceField(value: unknown): MpgfCommonGroundBudgetStance {
   return value === "strong" || value === "dissent" || value === "abstain" ? value : "weak";
 }
@@ -105,9 +130,20 @@ function stancesField(value: unknown) {
     stance: stanceField(record.stance),
     maxAllocCents: numberField(record, "maxAllocCents"),
     maxAllocPctBps: numberField(record, "maxAllocPctBps"),
+    conditionAccepted: booleanField(record, "conditionAccepted"),
+    acceptableCounterBucketIds: stringArrayField(record, "acceptableCounterBucketIds"),
+    minCounterpartyVolumeCents: numberField(record, "minCounterpartyVolumeCents"),
     rankOrder: numberField(record, "rankOrder") ?? index + 1,
     redactedNote: stringField(record, "redactedNote"),
   }));
+}
+
+function stanceIdFor(budgetId: string, campaignId: string) {
+  return `mpgf-cg-stance-${hashValue([budgetId, campaignId]).slice(7, 19)}`;
+}
+
+function conditionalIntentIdFor(budgetId: string, campaignId: string) {
+  return `mpgf-cg-intent-${hashValue([budgetId, campaignId, "conditional-trade-intent"]).slice(7, 19)}`;
 }
 
 function redactedNoteHashesByCampaign(stances: ReturnType<typeof stancesField>) {
@@ -180,9 +216,12 @@ async function persistCommonGroundBudgetPreview({
         monthly_budget_cents: preview.budgetPeriod === "monthly" ? preview.maximumBudgetCents : null,
         round_budget_cents: preview.budgetPeriod === "round_limited" ? preview.maximumBudgetCents : null,
         total_budget_cents: preview.maximumBudgetCents,
+        per_project_cap_cents: preview.perProjectCapCents,
         settlement_currency: preview.settlementCurrency,
         currency: preview.settlementCurrency,
         recurrence_rule: preview.budgetPeriod === "monthly" ? "FREQ=MONTHLY;INTERVAL=1" : null,
+        next_capture_at: preview.nextCaptureAt,
+        next_capture_rule: preview.nextCaptureRule,
         external_payment_evidence_mode: "reviewed_manual_evidence_only",
         default_visibility: "private_aggregate_only",
         default_allocation_baseline: preview.defaultAllocationBaseline,
@@ -221,7 +260,7 @@ async function persistCommonGroundBudgetPreview({
   }
 
   const stanceRows = preview.rows.map((row) => ({
-    id: `mpgf-cg-stance-${hashValue([budgetWrite.data.id, row.campaignId]).slice(7, 19)}`,
+    id: stanceIdFor(String(budgetWrite.data.id), row.campaignId),
     budget_id: String(budgetWrite.data.id),
     round_id: roundId,
     campaign_id: row.campaignId,
@@ -233,7 +272,7 @@ async function persistCommonGroundBudgetPreview({
     max_alloc_pct_bps: row.maxAllocPctBps,
     rank_order: row.rankOrder,
     redacted_note_hash: redactedNoteHashes.get(row.campaignId) ?? null,
-    acceptable_counter_buckets: [],
+    acceptable_counter_buckets: row.acceptableCounterBucketIds,
     private_by_default: true,
     counts_for_common_ground: row.stance === "strong" || row.stance === "weak",
     no_global_moral_ranking: true,
@@ -252,12 +291,63 @@ async function persistCommonGroundBudgetPreview({
     throw new Error(`Could not save Common Ground Budget stances: ${message}`);
   }
 
+  const conditionalIntentRows = preview.rows.flatMap((row) => {
+    if (!row.conditionalTradeIntent) {
+      return [];
+    }
+
+    return [{
+      id: conditionalIntentIdFor(String(budgetWrite.data.id), row.campaignId),
+      budget_id: String(budgetWrite.data.id),
+      support_stance_id: stanceIdFor(String(budgetWrite.data.id), row.campaignId),
+      round_id: roundId,
+      campaign_id: row.campaignId,
+      profile_id: profileId,
+      user_ref_hash: userRefHash,
+      intent_state: row.conditionalTradeIntent.intentState,
+      authorization_state: row.conditionalTradeIntent.authorizationState,
+      amount_cents: row.conditionalTradeIntent.amountCents,
+      max_exposure_cents: row.conditionalTradeIntent.maxExposureCents,
+      min_counterparty_volume_cents: row.conditionalTradeIntent.minCounterpartyVolumeCents,
+      acceptable_counter_bucket_ids: row.conditionalTradeIntent.acceptableCounterBucketIds,
+      condition_accepted: row.conditionalTradeIntent.conditionAccepted,
+      fallback_rule: row.conditionalTradeIntent.fallbackRule,
+      rulebook_hash_at_consent: null,
+      terms_snapshot_hash: preview.termsSnapshotHash,
+      conditional_intent_policy: row.conditionalTradeIntent.policy,
+      payment_capture_allowed: row.conditionalTradeIntent.paymentCaptureAllowed,
+      final_review_disclosure_required: row.conditionalTradeIntent.finalReviewDisclosureRequired,
+      no_global_moral_ranking: true,
+      updated_at: now,
+    }];
+  });
+
+  if (conditionalIntentRows.length > 0) {
+    const conditionalIntentWrite = await supabase
+      .from("mpgf_conditional_trade_intents")
+      .upsert(conditionalIntentRows, { onConflict: "id" });
+
+    if (conditionalIntentWrite.error) {
+      const message = summarizeDbError(conditionalIntentWrite.error);
+
+      if (isMissingRelationError(conditionalIntentWrite.error)) {
+        throw new Error(
+          `Common Ground Budget conditional-intent table is unavailable: ${message}. Apply 20260628_mpgf_common_ground_conditional_trade_intents.sql.`,
+        );
+      }
+
+      throw new Error(`Could not save Common Ground Budget conditional intents: ${message}`);
+    }
+  }
+
   return {
     status: "saved_no_capture" as const,
     stateMutation: "common_ground_budget_preview_saved" as const,
-    message: "Saved the no-capture Common Ground Budget preview and private project stances.",
+    message:
+      "Saved the no-capture Common Ground Budget preview, private project stances, and explicit conditional-intent setup records.",
     savedBudgetId: String(budgetWrite.data.id),
     savedStanceCount: stanceRows.length,
+    savedConditionalIntentCount: conditionalIntentRows.length,
     paymentCaptureAllowed: false as const,
   };
 }
@@ -337,6 +427,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       budgetPeriod: budgetPeriodField(body),
       monthlyBudgetCents: numberField(body, "monthlyBudgetCents"),
       roundBudgetCents: numberField(body, "roundBudgetCents"),
+      perProjectCapCents: numberField(body, "perProjectCapCents"),
+      nextCaptureAt: stringField(body, "nextCaptureAt"),
+      nextCaptureRule: nextCaptureRuleField(body),
       settlementCurrency: stringField(body, "settlementCurrency", "usd"),
       defaultAllocationBaseline: stringField(body, "defaultAllocationBaseline"),
       baselineConfidenceLevel: baselineConfidenceField(body),
