@@ -48,6 +48,30 @@ test("moraltrade82 public-page simplification contract validates route audit cov
     contract.fallbackCopy.body,
     "No draft was submitted and no review state changed.",
   );
+  assert.deepEqual(contract.offersTabOrder, [
+    "Live offers",
+    "Create from template",
+    "Worked examples",
+    "Demo data",
+    "Common Ground Budget",
+  ]);
+  assert.deepEqual(contract.validationStatusLabels, [
+    "Draft",
+    "Needs info",
+    "In review",
+    "Challenge open",
+    "Verified",
+    "Disputed",
+  ]);
+  assert.deepEqual(contract.paidActionSafeAlternatives, [
+    "Inspect a worked example",
+    "Create a donation offset",
+    "Join an invitation-only pilot",
+  ]);
+  assert.equal(
+    contract.donationOffsetPlainLabelMap.baseline_intention,
+    "What would each side donate without this trade?",
+  );
   assert.deepEqual(contract.fallbackCopy.actions, [
     "Retry",
     "Go to examples",
@@ -262,6 +286,22 @@ test("moraltrade82 public-page simplification contract route exposes safe route 
   assert.ok(body.publicContract.requiredRouteKeys.includes("offers_new_offset"));
   assert.ok(body.publicContract.requiredRouteKeys.includes("pledge_swaps"));
   assert.ok(body.publicContract.requiredQaContexts.includes("default_mobile"));
+  assert.deepEqual(body.publicContract.offersTabOrder, [
+    "Live offers",
+    "Create from template",
+    "Worked examples",
+    "Demo data",
+    "Common Ground Budget",
+  ]);
+  assert.equal(
+    body.publicContract.donationOffsetPlainLabelMap.destination,
+    "Where does the shared money go?",
+  );
+  assert.deepEqual(body.publicContract.paidActionSafeAlternatives, [
+    "Inspect a worked example",
+    "Create a donation offset",
+    "Join an invitation-only pilot",
+  ]);
   assert.ok(
     body.publicContract.firstClassRecordTables.includes(
       "moral_trade_route_simplification_audit_records",
@@ -282,4 +322,21 @@ test("moraltrade82 public-page simplification contract route exposes safe route 
   assert.equal(serialized.includes("private_note"), false);
   assert.equal(serialized.includes("raw_evidence"), false);
   assert.equal(serialized.includes("reviewer_notes"), false);
+});
+
+test("moraltrade82 public-page simplification migration creates route audit records", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260626_moral_trade_public_page_simplification_records.sql",
+    "utf8",
+  );
+
+  assert.match(migration, /create table if not exists public\.moral_trade_route_simplification_audit_records/);
+  assert.match(migration, /create table if not exists public\.moral_trade_public_page_qa_artifacts/);
+  assert.match(migration, /create table if not exists public\.moral_trade_public_page_plain_language_copy_policies/);
+  assert.match(migration, /create table if not exists public\.moral_trade_route_fallback_copy_records/);
+  assert.match(migration, /signed_out_local_preview_allowed_bool/);
+  assert.match(migration, /default_cards_max_facts integer not null default 6 check \(default_cards_max_facts between 1 and 6\)/);
+  assert.match(migration, /title text not null check \(title = 'This page did not load\.'\)/);
+  assert.match(migration, /No draft was submitted and no review state changed\./);
+  assert.match(migration, /enable row level security/);
 });

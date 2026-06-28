@@ -64,6 +64,12 @@ export interface MoralTradePublicPageSimplificationContract {
   requiredRouteKeys: MoralTradePublicPageRouteKey[];
   requiredQaContexts: MoralTradePublicPageQaContext[];
   approvedStatusLabels: MoralTradePublicPageStatus[];
+  publicPageDefaultShape: string[];
+  offersTabOrder: string[];
+  signedOutOffsetPreviewSteps: string[];
+  donationOffsetPlainLabelMap: Record<string, string>;
+  validationStatusLabels: string[];
+  paidActionSafeAlternatives: string[];
   bannedPrimaryCopyPatterns: string[];
   fallbackCopy: {
     title: string;
@@ -121,6 +127,56 @@ const APPROVED_STATUS_LABELS: MoralTradePublicPageStatus[] = [
   "sign_in_required",
   "manual_review_required",
   "external_module",
+];
+
+const PUBLIC_PAGE_DEFAULT_SHAPE = [
+  "one-sentence hero",
+  "one primary CTA and at most one secondary CTA above the fold",
+  "small status strip",
+  "task cards before validator tables",
+  "plain labels before technical labels",
+  "advanced details collapsed by default",
+];
+
+const OFFERS_TAB_ORDER = [
+  "Live offers",
+  "Create from template",
+  "Worked examples",
+  "Demo data",
+  "Common Ground Budget",
+];
+
+const SIGNED_OUT_OFFSET_PREVIEW_STEPS = [
+  "What would happen if there were no trade?",
+  "What should happen if this clears?",
+  "Where would the money go?",
+  "What proof should reviewers check?",
+  "Preview before sign-in or save after sign-in.",
+];
+
+const DONATION_OFFSET_PLAIN_LABEL_MAP = {
+  baseline_intention: "What would each side donate without this trade?",
+  match_ratio: "How much does each side redirect?",
+  destination: "Where does the shared money go?",
+  surplus_rule: "Why does each side prefer this to no trade?",
+  evidence_method: "What proof reviewers check",
+  expiry: "When the offer expires",
+  anti_threat_certification: "What would make this unsafe or invalid?",
+} as const;
+
+const VALIDATION_STATUS_LABELS = [
+  "Draft",
+  "Needs info",
+  "In review",
+  "Challenge open",
+  "Verified",
+  "Disputed",
+];
+
+const PAID_ACTION_SAFE_ALTERNATIVES = [
+  "Inspect a worked example",
+  "Create a donation offset",
+  "Join an invitation-only pilot",
 ];
 
 const BANNED_PRIMARY_COPY_PATTERNS = [
@@ -405,6 +461,12 @@ export function getMoralTradePublicPageSimplificationContract(): MoralTradePubli
     requiredRouteKeys: REQUIRED_ROUTE_KEYS,
     requiredQaContexts: REQUIRED_QA_CONTEXTS,
     approvedStatusLabels: APPROVED_STATUS_LABELS,
+    publicPageDefaultShape: PUBLIC_PAGE_DEFAULT_SHAPE,
+    offersTabOrder: OFFERS_TAB_ORDER,
+    signedOutOffsetPreviewSteps: SIGNED_OUT_OFFSET_PREVIEW_STEPS,
+    donationOffsetPlainLabelMap: DONATION_OFFSET_PLAIN_LABEL_MAP,
+    validationStatusLabels: VALIDATION_STATUS_LABELS,
+    paidActionSafeAlternatives: PAID_ACTION_SAFE_ALTERNATIVES,
     bannedPrimaryCopyPatterns: BANNED_PRIMARY_COPY_PATTERNS,
     fallbackCopy: {
       title: "This page did not load.",
@@ -467,6 +529,73 @@ export function validateMoralTradePublicPageSimplificationContract(
         ) &&
         contract.fallbackCopy.actions.length === 4,
       `${contract.fallbackCopy.title} ${contract.fallbackCopy.actions.join(",")}`,
+    ),
+    check(
+      "public-page-default-shape",
+      "Default public routes use the approved simple page shape",
+      [
+        "one-sentence hero",
+        "one primary CTA and at most one secondary CTA above the fold",
+        "small status strip",
+        "task cards before validator tables",
+        "plain labels before technical labels",
+        "advanced details collapsed by default",
+      ].every((shapeItem) => contract.publicPageDefaultShape.includes(shapeItem)),
+      contract.publicPageDefaultShape.join(", "),
+    ),
+    check(
+      "offers-tab-order",
+      "Marketplace tabs separate live offers, templates, examples, demo data, and external public goods",
+      [
+        "Live offers",
+        "Create from template",
+        "Worked examples",
+        "Demo data",
+        "Common Ground Budget",
+      ].every((tab, index) => contract.offersTabOrder[index] === tab),
+      contract.offersTabOrder.join(" > "),
+    ),
+    check(
+      "signed-out-offset-preview",
+      "Signed-out offset route exposes local preview steps before account creation",
+      [
+        "What would happen if there were no trade?",
+        "What should happen if this clears?",
+        "Where would the money go?",
+        "What proof should reviewers check?",
+        "Preview before sign-in or save after sign-in.",
+      ].every((step) => contract.signedOutOffsetPreviewSteps.includes(step)),
+      contract.signedOutOffsetPreviewSteps.join(" | "),
+    ),
+    check(
+      "donation-offset-label-map",
+      "Donation-offset pages use approved plain labels for baseline, redirect, destination, proof, expiry, and safety",
+      contract.donationOffsetPlainLabelMap.baseline_intention ===
+        "What would each side donate without this trade?" &&
+        contract.donationOffsetPlainLabelMap.match_ratio ===
+          "How much does each side redirect?" &&
+        contract.donationOffsetPlainLabelMap.destination ===
+          "Where does the shared money go?" &&
+        contract.donationOffsetPlainLabelMap.anti_threat_certification ===
+          "What would make this unsafe or invalid?",
+      Object.values(contract.donationOffsetPlainLabelMap).join(", "),
+    ),
+    check(
+      "validation-status-labels",
+      "Validation page public status labels stay small and participant-facing",
+      ["Draft", "Needs info", "In review", "Challenge open", "Verified", "Disputed"].every(
+        (label, index) => contract.validationStatusLabels[index] === label,
+      ),
+      contract.validationStatusLabels.join(", "),
+    ),
+    check(
+      "paid-action-safe-alternatives",
+      "Paid action page has exactly three safe alternatives",
+      contract.paidActionSafeAlternatives.length === 3 &&
+        contract.paidActionSafeAlternatives[0] === "Inspect a worked example" &&
+        contract.paidActionSafeAlternatives[1] === "Create a donation offset" &&
+        contract.paidActionSafeAlternatives[2] === "Join an invitation-only pilot",
+      contract.paidActionSafeAlternatives.join(", "),
     ),
     check(
       "release-gate-hooks",

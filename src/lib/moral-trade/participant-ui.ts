@@ -31,6 +31,43 @@ export type MoralTradeParticipantUiDisclosure =
   | "receipt_verification_status"
   | "receipt_correction_revocation";
 
+export type MoralTradeParticipantUiStableTermKey =
+  | "if_i_do_nothing"
+  | "if_this_clears"
+  | "make_it_final"
+  | "what_we_check"
+  | "my_maximum_cost"
+  | "what_stays_private"
+  | "proof_needed"
+  | "if_it_fails"
+  | "why_this_counts"
+  | "exact_terms_fingerprint"
+  | "what_still_needs_review"
+  | "what_this_receipt_claims"
+  | "current_receipt_status"
+  | "correct_or_unpublish";
+
+export type MoralTradeParticipantUiSafeTemplateDefaultFact =
+  | "money"
+  | "obligations"
+  | "privacy"
+  | "evidence"
+  | "duration"
+  | "failure_handling"
+  | "public_display";
+
+export type MoralTradePublicReceiptPreviewQuestion =
+  | "personal_contribution_claimed"
+  | "personal_contribution_new_or_reused"
+  | "trade_conditioned_contribution"
+  | "trade_unlocked_wording_allowed"
+  | "total_verified_transfer"
+  | "remaining_uncertainty"
+  | "private_information_hidden"
+  | "publicly_named_entities"
+  | "not_moral_score_or_endorsement"
+  | "verification_correction_or_unpublish_path";
+
 export interface MoralTradeParticipantUiRenderSnapshot {
   snapshotId: string;
   screenType: MoralTradeParticipantUiSurface;
@@ -55,15 +92,21 @@ export interface MoralTradeParticipantUiRenderSnapshot {
 export interface MoralTradeParticipantUiSurfaceRecord {
   surface: MoralTradeParticipantUiSurface;
   routePath: string;
+  plainLanguageCopyPolicyRef: string;
+  taskCardStatusLabel: string;
   oneSentenceSummary: string;
   keyFacts: string[];
+  nextAction: string;
   primaryAction: string;
   secondaryActions: string[];
   optionalDetailsDrawer: string[];
   participantTermMap: Record<string, string>;
+  stableTermKeys: MoralTradeParticipantUiStableTermKey[];
   materialDisclosures: MoralTradeParticipantUiDisclosure[];
   safeTemplateDefaultDisclosure: string | null;
+  safeTemplateDefaultFactsShown: MoralTradeParticipantUiSafeTemplateDefaultFact[];
   renderSnapshot: MoralTradeParticipantUiRenderSnapshot | null;
+  publicReceiptPreviewQuestionsAnswered?: MoralTradePublicReceiptPreviewQuestion[];
   publicReceiptPolicy?: {
     participantOptInRequired: boolean;
     profileOptInDefault: boolean;
@@ -93,6 +136,11 @@ export interface MoralTradeParticipantUiContract {
   requiredSurfaces: MoralTradeParticipantUiSurface[];
   requiredRenderSnapshotSurfaces: MoralTradeParticipantUiSurface[];
   bannedPrimaryCopyTerms: string[];
+  stableTermMap: Record<MoralTradeParticipantUiStableTermKey, string>;
+  safeTemplateDefaultFacts: MoralTradeParticipantUiSafeTemplateDefaultFact[];
+  requiredLockSafeTemplateDefaultFacts: MoralTradeParticipantUiSafeTemplateDefaultFact[];
+  requiredReceiptSafeTemplateDefaultFacts: MoralTradeParticipantUiSafeTemplateDefaultFact[];
+  requiredReceiptPreviewQuestions: MoralTradePublicReceiptPreviewQuestion[];
   maxKeyFactsPerScreen: number;
   requiredRelianceDisclosures: MoralTradeParticipantUiDisclosure[];
   requiredReceiptDisclosures: MoralTradeParticipantUiDisclosure[];
@@ -153,6 +201,79 @@ const REQUIRED_RECEIPT_DISCLOSURES: MoralTradeParticipantUiDisclosure[] = [
   "receipt_correction_revocation",
 ];
 
+const STABLE_TERM_MAP: Record<MoralTradeParticipantUiStableTermKey, string> = {
+  correct_or_unpublish: "Correct or unpublish",
+  current_receipt_status: "Current receipt status",
+  exact_terms_fingerprint: "Exact terms fingerprint",
+  if_i_do_nothing: "If I do nothing",
+  if_it_fails: "If it fails",
+  if_this_clears: "If this clears",
+  make_it_final: "Make it final",
+  my_maximum_cost: "My maximum cost",
+  proof_needed: "Proof needed",
+  what_stays_private: "What stays private",
+  what_still_needs_review: "What still needs review",
+  what_this_receipt_claims: "What this receipt claims",
+  what_we_check: "What we check",
+  why_this_counts: "Why this counts",
+};
+
+const DISCLOSURE_STABLE_TERM_KEYS: Record<
+  MoralTradeParticipantUiDisclosure,
+  MoralTradeParticipantUiStableTermKey
+> = {
+  counterparty_or_batch_condition: "if_this_clears",
+  distinct_final_confirmation: "make_it_final",
+  evidence_burden: "proof_needed",
+  maximum_exposure: "my_maximum_cost",
+  no_trade_comparison: "if_i_do_nothing",
+  payment_refund_cancellation: "if_it_fails",
+  privacy_change: "what_stays_private",
+  receipt_claim_scope: "what_this_receipt_claims",
+  receipt_correction_revocation: "correct_or_unpublish",
+  receipt_verification_status: "current_receipt_status",
+  remaining_uncertainty: "what_still_needs_review",
+  term_sheet_hash: "exact_terms_fingerprint",
+};
+
+const SAFE_TEMPLATE_DEFAULT_FACTS: MoralTradeParticipantUiSafeTemplateDefaultFact[] = [
+  "money",
+  "obligations",
+  "privacy",
+  "evidence",
+  "duration",
+  "failure_handling",
+  "public_display",
+];
+
+const REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS: MoralTradeParticipantUiSafeTemplateDefaultFact[] = [
+  "money",
+  "obligations",
+  "privacy",
+  "evidence",
+  "duration",
+  "failure_handling",
+];
+
+const REQUIRED_RECEIPT_SAFE_TEMPLATE_DEFAULT_FACTS: MoralTradeParticipantUiSafeTemplateDefaultFact[] = [
+  "privacy",
+  "failure_handling",
+  "public_display",
+];
+
+const REQUIRED_RECEIPT_PREVIEW_QUESTIONS: MoralTradePublicReceiptPreviewQuestion[] = [
+  "personal_contribution_claimed",
+  "personal_contribution_new_or_reused",
+  "trade_conditioned_contribution",
+  "trade_unlocked_wording_allowed",
+  "total_verified_transfer",
+  "remaining_uncertainty",
+  "private_information_hidden",
+  "publicly_named_entities",
+  "not_moral_score_or_endorsement",
+  "verification_correction_or_unpublish_path",
+];
+
 const BANNED_PRIMARY_COPY_TERMS = [
   "counterfactual_trust_assessment",
   "baseline_integrity_assessment",
@@ -164,6 +285,8 @@ const BANNED_PRIMARY_COPY_TERMS = [
   "policy_snapshot_hash",
   "source_hash",
 ];
+
+const APPROVED_COPY_POLICY_REF = "moral-trade-plain-language-copy-policy:v0.1";
 
 function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {
@@ -199,29 +322,99 @@ function hasAll<T extends string>(actual: readonly T[], required: readonly T[]) 
 
 function primaryCopy(record: MoralTradeParticipantUiSurfaceRecord) {
   return [
+    record.taskCardStatusLabel,
     record.oneSentenceSummary,
     ...record.keyFacts,
+    record.nextAction,
     record.primaryAction,
     ...Object.values(record.participantTermMap),
   ].join(" ");
 }
 
+function primaryActionHasMultipleChoices(label: string) {
+  return /[,/]/.test(label) || /\bor\b/i.test(label);
+}
+
+function requiredStableTermKeys(record: MoralTradeParticipantUiSurfaceRecord) {
+  return Array.from(
+    new Set(record.materialDisclosures.map((disclosure) => DISCLOSURE_STABLE_TERM_KEYS[disclosure])),
+  );
+}
+
+function requiredSafeTemplateDefaultFacts(record: MoralTradeParticipantUiSurfaceRecord) {
+  if (
+    record.surface === "draft_preview" ||
+    record.surface === "matched_trade_lock_proposal" ||
+    record.surface === "final_lock_confirmation"
+  ) {
+    return REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS;
+  }
+
+  if (record.surface === "public_receipt_card_preview" || record.surface === "public_receipt_card_publication") {
+    return REQUIRED_RECEIPT_SAFE_TEMPLATE_DEFAULT_FACTS;
+  }
+
+  return [];
+}
+
 function validateScreen(record: MoralTradeParticipantUiSurfaceRecord, contract: MoralTradeParticipantUiContract) {
   const blockers: string[] = [];
 
+  if (!record.plainLanguageCopyPolicyRef.trim()) {
+    blockers.push(`plain_language_copy_policy_missing:${record.surface}`);
+  }
+
+  if (!record.taskCardStatusLabel.trim()) {
+    blockers.push(`task_card_status_required:${record.surface}`);
+  }
+
   if (!record.oneSentenceSummary.trim()) {
     blockers.push(`summary_required:${record.surface}`);
+  }
+
+  if (!record.nextAction.trim()) {
+    blockers.push(`next_action_required:${record.surface}`);
   }
 
   if (!record.primaryAction.trim()) {
     blockers.push(`primary_action_required:${record.surface}`);
   }
 
+  if (record.nextAction !== record.primaryAction) {
+    blockers.push(`next_action_primary_action_mismatch:${record.surface}`);
+  }
+
+  if (primaryActionHasMultipleChoices(record.primaryAction)) {
+    blockers.push(`multiple_primary_actions:${record.surface}`);
+  }
+
   if (record.keyFacts.length > contract.maxKeyFactsPerScreen) {
     blockers.push(`too_many_key_facts:${record.surface}`);
   }
 
+  if (!record.optionalDetailsDrawer.length) {
+    blockers.push(`details_drawer_required:${record.surface}`);
+  }
+
+  if (!record.stableTermKeys.length) {
+    blockers.push(`stable_term_keys_required:${record.surface}`);
+  }
+  for (const termKey of record.stableTermKeys) {
+    if (!contract.stableTermMap[termKey]) {
+      blockers.push(`unknown_stable_term_key:${record.surface}:${termKey}`);
+    }
+  }
+  for (const termKey of requiredStableTermKeys(record)) {
+    if (!record.stableTermKeys.includes(termKey)) {
+      blockers.push(`stable_term_key_missing:${record.surface}:${termKey}`);
+    }
+  }
+
   const copy = primaryCopy(record).toLowerCase();
+  const rawIdentifier = copy.match(/\b[a-z]+(?:_[a-z0-9]+)+\b/);
+  if (rawIdentifier) {
+    blockers.push(`raw_enum_primary_copy:${record.surface}:${rawIdentifier[0]}`);
+  }
   for (const bannedTerm of contract.bannedPrimaryCopyTerms) {
     if (copy.includes(bannedTerm.toLowerCase())) {
       blockers.push(`internal_jargon_primary_copy:${record.surface}:${bannedTerm}`);
@@ -247,6 +440,16 @@ function validateScreen(record: MoralTradeParticipantUiSurfaceRecord, contract: 
     }
   }
 
+  const requiredDefaultFacts = requiredSafeTemplateDefaultFacts(record);
+  if (requiredDefaultFacts.length) {
+    if (!record.safeTemplateDefaultDisclosure?.trim()) {
+      blockers.push(`safe_template_default_disclosure_missing:${record.surface}`);
+    }
+    if (!hasAll(record.safeTemplateDefaultFactsShown, requiredDefaultFacts)) {
+      blockers.push(`safe_template_default_facts_missing:${record.surface}`);
+    }
+  }
+
   if (record.surface === "final_lock_confirmation") {
     if (!record.materialDisclosures.includes("term_sheet_hash")) {
       blockers.push("final_lock_term_sheet_hash_missing");
@@ -268,6 +471,9 @@ function validateScreen(record: MoralTradeParticipantUiSurfaceRecord, contract: 
   }
 
   if (record.surface === "public_receipt_card_preview" || record.surface === "public_receipt_card_publication") {
+    if (!hasAll(record.publicReceiptPreviewQuestionsAnswered ?? [], contract.requiredReceiptPreviewQuestions)) {
+      blockers.push(`receipt_preview_answers_missing:${record.surface}`);
+    }
     if (!hasAll(record.materialDisclosures, contract.requiredReceiptDisclosures)) {
       blockers.push(`receipt_disclosures_missing:${record.surface}`);
     }
@@ -409,11 +615,14 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
   {
     surface: "intake_triage",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Choose route",
     oneSentenceSummary: "Tell us what you are trying to do before choosing a Moral Trade template.",
     keyFacts: [
       "Ordinary donations, public-goods work, services, self-offset bookkeeping, background networking, and unsafe requests route elsewhere.",
       "You can correct the routing or request manual review.",
     ],
+    nextAction: "Choose route",
     primaryAction: "Choose route",
     secondaryActions: ["Request manual review"],
     optionalDetailsDrawer: ["Why this route was suggested", "What is not a commitment yet"],
@@ -421,19 +630,24 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       route: "Where this request belongs",
       manual_review: "A reviewer can check whether the route misunderstood the request",
     },
+    stableTermKeys: ["what_we_check", "if_it_fails"],
     materialDisclosures: [],
     safeTemplateDefaultDisclosure: null,
+    safeTemplateDefaultFactsShown: [],
     renderSnapshot: null,
   },
   {
     surface: "template_gallery",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Create from template",
     oneSentenceSummary: "Start from reviewed donation-offset or micro-pledge templates, or view examples.",
     keyFacts: [
       "Live, preview-only, worked-example, demo, and external public-goods module cards are separated.",
       "Food-abstention defaults are one meal, a few meals, one day, or a few days.",
       "Templates show evidence ladder, per-unit band, money movement, recipient review, and manual-review state.",
     ],
+    nextAction: "Create draft",
     primaryAction: "Create draft",
     secondaryActions: ["Preview only", "Request review", "View example"],
     optionalDetailsDrawer: ["Template defaults", "Manual-review exceptions"],
@@ -441,20 +655,25 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       default_duration: "Short default window",
       evidence_ladder: "How proof starts light and escalates only if needed",
     },
+    stableTermKeys: ["proof_needed", "my_maximum_cost", "what_we_check"],
     materialDisclosures: [],
     safeTemplateDefaultDisclosure:
       "Safe defaults can prefill the draft, but money, privacy, evidence, duration, and failure behavior appear again before lock.",
+    safeTemplateDefaultFactsShown: ["money", "privacy", "evidence", "duration", "failure_handling"],
     renderSnapshot: null,
   },
   {
     surface: "guided_builder",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Draft only",
     oneSentenceSummary: "Draft the baseline, action, destination, evidence, privacy, cancellation, and side constraints in short steps.",
     keyFacts: [
       "The no-trade baseline comes before trade terms.",
       "Behavior pledges ask unit, duration, covered food, substitute, and health boundary before compensation.",
       "Self-attestation is the default evidence path for low-stakes micro-pledges.",
     ],
+    nextAction: "Save draft",
     primaryAction: "Save draft",
     secondaryActions: ["Preview only"],
     optionalDetailsDrawer: ["Template defaults", "Manual-review triggers"],
@@ -462,19 +681,24 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       no_trade_baseline: "What would happen without this trade",
       health_boundary: "Conditions under which the pledge should not proceed",
     },
+    stableTermKeys: ["if_i_do_nothing", "my_maximum_cost", "proof_needed", "what_stays_private", "if_it_fails"],
     materialDisclosures: [],
     safeTemplateDefaultDisclosure:
       "Defaults simplify drafting only; they are repeated in preview and the term sheet before final confirmation.",
+    safeTemplateDefaultFactsShown: ["duration", "evidence"],
     renderSnapshot: null,
   },
   {
     surface: "draft_preview",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Ready for review",
     oneSentenceSummary: "Compare no trade against the proposal before review or matching.",
     keyFacts: [
       "The preview shows maximum exposure, matched condition, destination, evidence, privacy, deadlines, and fallback behavior.",
       "Internal checks appear as plain-language summary chips with details for reviewers.",
     ],
+    nextAction: "Request review",
     primaryAction: "Request review",
     secondaryActions: ["Edit draft", "Save for later"],
     optionalDetailsDrawer: ["Review checks", "Advanced policy details"],
@@ -482,18 +706,31 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       maximum_exposure: "Most you can owe or authorize before renewed confirmation",
       remaining_uncertainty: "What still needs review before anything is locked",
     },
+    stableTermKeys: [
+      "if_i_do_nothing",
+      "if_this_clears",
+      "my_maximum_cost",
+      "what_stays_private",
+      "proof_needed",
+      "if_it_fails",
+      "what_still_needs_review",
+    ],
     materialDisclosures: REQUIRED_RELIANCE_DISCLOSURES,
     safeTemplateDefaultDisclosure: "All template defaults that affect money, privacy, evidence, duration, or failure handling are shown here.",
+    safeTemplateDefaultFactsShown: REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS,
     renderSnapshot: sampleSnapshot("draft_preview", "Request review"),
   },
   {
     surface: "review_queue_status",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Waiting for review",
     oneSentenceSummary: "See whether the draft is waiting, needs changes, or is blocked before it can move forward.",
     keyFacts: [
       "Reviewer capacity is a marketplace constraint.",
       "Blocked states explain the next action without exposing private counterparty details.",
     ],
+    nextAction: "View requested changes",
     primaryAction: "View requested changes",
     secondaryActions: ["Withdraw draft"],
     optionalDetailsDrawer: ["Queue status", "Manual-review reason"],
@@ -501,18 +738,23 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       waiting_for_review: "A reviewer has not cleared this yet",
       blocked: "This cannot proceed unless the named issue is resolved",
     },
+    stableTermKeys: ["what_we_check", "what_still_needs_review", "if_it_fails"],
     materialDisclosures: [],
     safeTemplateDefaultDisclosure: null,
+    safeTemplateDefaultFactsShown: [],
     renderSnapshot: null,
   },
   {
     surface: "matched_trade_lock_proposal",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Needs confirmation",
     oneSentenceSummary: "Review the frozen matched proposal before either side can rely on it.",
     keyFacts: [
       "The proposal freezes matched volume, ratio, destination, evidence standard, deadline, baselines, residual obligations, and cancellation terms.",
       "Counterparty identity and private caps remain staged or redacted unless disclosure policy permits them.",
     ],
+    nextAction: "Review lock proposal",
     primaryAction: "Review lock proposal",
     secondaryActions: ["Request changes", "Decline"],
     optionalDetailsDrawer: ["Matched condition", "Counterparty disclosure"],
@@ -520,18 +762,31 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       matched_volume: "The amount or action unit this proposal covers",
       residual_obligation: "What remains unmatched or unresolved",
     },
+    stableTermKeys: [
+      "if_i_do_nothing",
+      "if_this_clears",
+      "my_maximum_cost",
+      "what_stays_private",
+      "proof_needed",
+      "if_it_fails",
+      "what_still_needs_review",
+    ],
     materialDisclosures: REQUIRED_RELIANCE_DISCLOSURES,
     safeTemplateDefaultDisclosure: "No material term can be hidden in template defaults at this stage.",
+    safeTemplateDefaultFactsShown: REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS,
     renderSnapshot: sampleSnapshot("matched_trade_lock_proposal", "Review lock proposal"),
   },
   {
     surface: "final_lock_confirmation",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Final confirmation",
     oneSentenceSummary: "Confirm the locked terms only after the exact participant-facing term sheet is shown.",
     keyFacts: [
       "This repeats maximum exposure, batch condition, payment, cancellation, privacy change, evidence ladder, renewal rule, and remaining uncertainty.",
       "The action is distinct from saving a draft or requesting review.",
     ],
+    nextAction: "Confirm locked terms",
     primaryAction: "Confirm locked terms",
     secondaryActions: ["Decline", "Request amended proposal"],
     optionalDetailsDrawer: ["Term sheet", "What changes require new confirmation"],
@@ -539,23 +794,38 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       term_sheet_hash: "The fingerprint of the exact terms shown to you",
       final_confirmation: "The separate action that locks these terms",
     },
+    stableTermKeys: [
+      "if_i_do_nothing",
+      "if_this_clears",
+      "make_it_final",
+      "my_maximum_cost",
+      "what_stays_private",
+      "proof_needed",
+      "if_it_fails",
+      "exact_terms_fingerprint",
+      "what_still_needs_review",
+    ],
     materialDisclosures: [
       ...REQUIRED_RELIANCE_DISCLOSURES,
       "term_sheet_hash",
       "distinct_final_confirmation",
     ],
     safeTemplateDefaultDisclosure: "Template defaults cannot bind the participant unless they are visible in the final term sheet.",
+    safeTemplateDefaultFactsShown: REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS,
     renderSnapshot: sampleSnapshot("final_lock_confirmation", "Confirm locked terms"),
   },
   {
     surface: "participant_dashboard",
     routePath: "/dashboard",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Continue next step",
     oneSentenceSummary: "Track drafts, review, confirmation, locked agreements, evidence, payout or transfer state, and closed records.",
     keyFacts: [
       "Each card has one main next action where possible.",
       "Micro-pledge progress is shown by unit without streak pressure or shame language.",
       "Share receipt appears only after the required completion and publication checks are non-blocking.",
     ],
+    nextAction: "Continue next step",
     primaryAction: "Continue next step",
     secondaryActions: ["View details"],
     optionalDetailsDrawer: ["Evidence status", "Payment or transfer status"],
@@ -563,19 +833,24 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       needs_confirmation: "Review the exact proposal before anything is locked",
       closed: "Completed, refunded, cancelled, or no longer active",
     },
+    stableTermKeys: ["make_it_final", "proof_needed", "if_it_fails", "current_receipt_status"],
     materialDisclosures: [],
     safeTemplateDefaultDisclosure: null,
+    safeTemplateDefaultFactsShown: [],
     renderSnapshot: null,
   },
   {
     surface: "public_receipt_card_preview",
     routePath: "/offers/new",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Private by default",
     oneSentenceSummary: "Preview an optional verified contribution receipt before any public display.",
     keyFacts: [
       "The preview separates personal contribution, trade-conditioned contribution, reviewed trade-unlocked contribution where allowed, and total verified transfer.",
       "Direct-donation parity is factual, optional, and non-preferential.",
       "Sensitive behavior details stay generic unless separate publication consent and review allow exact action copy.",
     ],
+    nextAction: "Keep private",
     primaryAction: "Keep private",
     secondaryActions: ["Request publication review"],
     optionalDetailsDrawer: ["Claim hygiene", "Correction and revocation"],
@@ -583,22 +858,33 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       trade_conditioned: "Contribution conditioned on the completed trade",
       verification_handle: "Where current receipt status can be checked",
     },
+    stableTermKeys: [
+      "what_this_receipt_claims",
+      "current_receipt_status",
+      "correct_or_unpublish",
+      "what_stays_private",
+    ],
     materialDisclosures: REQUIRED_RECEIPT_DISCLOSURES,
     safeTemplateDefaultDisclosure: "Receipts are private by default and never required for matching, payout, or review.",
+    safeTemplateDefaultFactsShown: REQUIRED_RECEIPT_SAFE_TEMPLATE_DEFAULT_FACTS,
     renderSnapshot: sampleSnapshot("public_receipt_card_preview", "Keep private", {
       maxExposureShown: null,
       termSheetHashShown: null,
     }),
+    publicReceiptPreviewQuestionsAnswered: REQUIRED_RECEIPT_PREVIEW_QUESTIONS,
     publicReceiptPolicy: receiptPolicy,
   },
   {
     surface: "public_receipt_card_publication",
     routePath: "/api/moral-trade/public-receipts/[receiptId]/verify",
+    plainLanguageCopyPolicyRef: APPROVED_COPY_POLICY_REF,
+    taskCardStatusLabel: "Ready to publish",
     oneSentenceSummary: "Publish only a reviewed, opt-in receipt with current verification and correction status.",
     keyFacts: [
       "Publication never creates moral rank, review priority, matching priority, profile boosts, or engagement counters.",
       "Static images and stale shares are not authoritative; the verification page is the current status source.",
     ],
+    nextAction: "Publish reviewed receipt",
     primaryAction: "Publish reviewed receipt",
     secondaryActions: ["Keep private", "Request correction"],
     optionalDetailsDrawer: ["Verification status", "Revocation status"],
@@ -606,12 +892,20 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
       current_status: "Whether this receipt is current, corrected, revoked, or superseded",
       no_status_game: "Receipt publication does not affect matching, review, or ranking",
     },
+    stableTermKeys: [
+      "what_this_receipt_claims",
+      "current_receipt_status",
+      "correct_or_unpublish",
+      "what_stays_private",
+    ],
     materialDisclosures: REQUIRED_RECEIPT_DISCLOSURES,
     safeTemplateDefaultDisclosure: "Publication is a sidecar event, not a trade term.",
+    safeTemplateDefaultFactsShown: REQUIRED_RECEIPT_SAFE_TEMPLATE_DEFAULT_FACTS,
     renderSnapshot: sampleSnapshot("public_receipt_card_publication", "Publish reviewed receipt", {
       maxExposureShown: null,
       termSheetHashShown: null,
     }),
+    publicReceiptPreviewQuestionsAnswered: REQUIRED_RECEIPT_PREVIEW_QUESTIONS,
     publicReceiptPolicy: receiptPolicy,
   },
 ];
@@ -633,6 +927,11 @@ export function getMoralTradeParticipantUiContract(
     requiredSurfaces: REQUIRED_SURFACES,
     requiredRenderSnapshotSurfaces: REQUIRED_RENDER_SNAPSHOT_SURFACES,
     bannedPrimaryCopyTerms: BANNED_PRIMARY_COPY_TERMS,
+    stableTermMap: STABLE_TERM_MAP,
+    safeTemplateDefaultFacts: SAFE_TEMPLATE_DEFAULT_FACTS,
+    requiredLockSafeTemplateDefaultFacts: REQUIRED_LOCK_SAFE_TEMPLATE_DEFAULT_FACTS,
+    requiredReceiptSafeTemplateDefaultFacts: REQUIRED_RECEIPT_SAFE_TEMPLATE_DEFAULT_FACTS,
+    requiredReceiptPreviewQuestions: REQUIRED_RECEIPT_PREVIEW_QUESTIONS,
     maxKeyFactsPerScreen: 5,
     requiredRelianceDisclosures: REQUIRED_RELIANCE_DISCLOSURES,
     requiredReceiptDisclosures: REQUIRED_RECEIPT_DISCLOSURES,
@@ -682,10 +981,44 @@ export function validateMoralTradeParticipantUiContract(
     {
       id: "plain-language-primary-copy",
       label: "Primary participant copy excludes internal control names",
-      status: evaluation.blockers.some((blocker) => blocker.startsWith("internal_jargon_primary_copy"))
+      status: evaluation.blockers.some(
+        (blocker) =>
+          blocker.startsWith("internal_jargon_primary_copy") || blocker.startsWith("raw_enum_primary_copy"),
+      )
         ? ("fail" as const)
         : ("pass" as const),
       evidence: `bannedTerms=${contract.bannedPrimaryCopyTerms.length}`,
+    },
+    {
+      id: "task-card-term-map",
+      label: "Task cards provide status labels, one next action, details drawers, and stable term keys",
+      status: evaluation.blockers.some(
+        (blocker) =>
+          blocker.startsWith("task_card_") ||
+          blocker.startsWith("next_action_") ||
+          blocker.startsWith("multiple_primary_actions") ||
+          blocker.startsWith("details_drawer") ||
+          blocker.startsWith("stable_term"),
+      )
+        ? ("fail" as const)
+        : ("pass" as const),
+      evidence: Object.values(contract.stableTermMap).join(", "),
+    },
+    {
+      id: "safe-template-defaults",
+      label: "Preview, lock, and receipt surfaces disclose material safe template defaults",
+      status: evaluation.blockers.some((blocker) => blocker.startsWith("safe_template_default"))
+        ? ("fail" as const)
+        : ("pass" as const),
+      evidence: `lock=${contract.requiredLockSafeTemplateDefaultFacts.join(",")}; receipt=${contract.requiredReceiptSafeTemplateDefaultFacts.join(",")}`,
+    },
+    {
+      id: "receipt-preview-questions",
+      label: "Public receipt preview answers required publication and correction questions",
+      status: evaluation.blockers.some((blocker) => blocker.startsWith("receipt_preview_answers_missing"))
+        ? ("fail" as const)
+        : ("pass" as const),
+      evidence: contract.requiredReceiptPreviewQuestions.join(","),
     },
     {
       id: "receipt-sidecar-boundary",
