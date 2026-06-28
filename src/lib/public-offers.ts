@@ -141,7 +141,7 @@ export interface PublicGoodsEntryCopyValidation {
 
 export interface PublicGoodsEntryCard {
   id: "common-ground-budget-public-goods-fund";
-  label: "Common Ground Budget";
+  label: "moral public goods";
   eyebrow: "Public Goods Fund";
   mechanismVersion: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion;
   href: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href;
@@ -651,7 +651,7 @@ export function buildPublicGoodsEntryCard({
   const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
   const primaryCta: PublicGoodsEntryAction = {
     key: "preview-common-ground-budget",
-    label: "Preview Common Ground Budget",
+    label: "Preview moral public goods",
     href: previewHref,
     method: "GET",
     rank: 1,
@@ -695,7 +695,7 @@ export function buildPublicGoodsEntryCard({
 
   return {
     id: "common-ground-budget-public-goods-fund",
-    label: "Common Ground Budget",
+    label: "moral public goods",
     eyebrow: "Public Goods Fund",
     mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
@@ -722,7 +722,7 @@ export function buildPublicGoodsEntryCard({
     copyValidation: buildPublicGoodsEntryCopyValidation({
       copyGuards,
       eyebrow: "Public Goods Fund",
-      label: "Common Ground Budget",
+      label: "moral public goods",
       mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
       primaryCta,
       secondaryCtas,
@@ -1426,7 +1426,7 @@ function publicGoodsEntryPreservesBoundaries(
     : null;
 
   return Boolean(
-    entry &&
+      entry &&
       entry.resultRank === 1 &&
       entry.label === "moral public goods" &&
       entry.primaryCta.key === "preview-common-ground-budget" &&
@@ -1489,7 +1489,7 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and moral public goods lanes",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and Public Goods Fund lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1660,7 +1660,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and moral public goods lanes",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and Public Goods Fund lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),

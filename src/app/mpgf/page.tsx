@@ -34,14 +34,14 @@ const MPGF_SELF_INTEREST_SENTENCE =
   "With this coordination mechanism, it's in people's best self-interest to fund moral public goods.";
 
 export const metadata: Metadata = {
-  title: "Common Ground Budget | Public Goods Fund",
+  title: "moral public goods | Public Goods Fund",
   description:
     "Preview the Moral Trade moral public goods path for moral public goods, evidence review, demo candidate pools, allocation process, and technical notes.",
   alternates: {
     canonical: "/mpgf",
   },
   openGraph: {
-    title: "Common Ground Budget | Public Goods Fund",
+    title: "moral public goods | Public Goods Fund",
     description:
       "Preview the moral public goods path for shared moral public goods before any binding contribution.",
     url: getAbsoluteUrl("/mpgf"),
@@ -83,7 +83,7 @@ export default async function MpgfPage() {
       actions={
         <>
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview Common Ground Budget
+            Preview moral public goods
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
@@ -95,7 +95,7 @@ export default async function MpgfPage() {
       }
       description="One budget. Pick projects. Funding happens only if enough different-view support joins and review gates pass. Coordinate around moral public goods without treating preview, match, reward, credit, or certificate estimates as live capture."
       eyebrow="Public Goods Fund"
-      title="Common Ground Budget"
+      title="moral public goods"
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
@@ -118,7 +118,7 @@ export default async function MpgfPage() {
         <a href="#technical-notes">Technical notes</a>
       </nav>
 
-      <section className="mpgf-kpi-grid" aria-label="Common Ground Budget status strip">
+      <section className="mpgf-kpi-grid" aria-label="moral public goods status strip">
         <div className="mpgf-kpi">
           <span>No charge now</span>
           <strong>Preview only</strong>
@@ -207,7 +207,7 @@ export default async function MpgfPage() {
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview Common Ground Budget
+            Preview moral public goods
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round

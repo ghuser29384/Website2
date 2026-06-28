@@ -1088,12 +1088,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <h1>Browse offers</h1>
             <p className="hero-text">
               {publicGoodsSearchIntent
-                ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
+                ? "Public-goods searches open the moral public goods result before ordinary offer listings."
                 : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund module without mixing their counts."}
             </p>
             {publicGoodsSearchIntent ? (
               <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
+                {publicGoodsEntry?.primaryCta.label ?? "Preview moral public goods"}
               </Link>
             ) : null}
             {publicGoodsSearchIntent ? null : (
@@ -1126,14 +1126,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="collection-action-copy">
               <strong>
                 {publicGoodsSearchIntent
-                  ? "Common Ground Budget result available."
+                  ? "moral public goods result available."
                   : defaultView === "worked_examples"
                     ? "Examples are first today."
                     : "Live offers are ready."}
               </strong>
               <p>
                 {publicGoodsSearchIntent
-                  ? "Public-goods searches open the Common Ground Budget entry before ordinary offer listings."
+                  ? "Public-goods searches open the moral public goods entry before ordinary offer listings."
                   : defaultView === "worked_examples"
                     ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
                     : "Start with live offers, then inspect examples when you want to understand the evidence model."}
@@ -1143,7 +1143,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {publicGoodsSearchIntent ? (
                 <>
                   <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                    {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
+                    {publicGoodsEntry?.primaryCta.label ?? "Preview moral public goods"}
                   </Link>
                   {publicGoodsEntry?.secondaryCtas.map((action) => (
                     <Link className="button button-secondary" href={action.href} key={action.key}>
@@ -1208,13 +1208,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             aria-live="polite"
           >
             <p className="sr-only" id="public-goods-result-announcement" role="status" aria-live="polite">
-              Common Ground Budget result available.
+              moral public goods result available.
             </p>
             <div className="marketplace-bootstrap-head">
               <div>
                 <p className="eyebrow">{publicGoodsEntry?.eyebrow ?? "Public Goods Fund"}</p>
                 <h2 id="public-goods-intent-heading">
-                  {publicGoodsEntry?.label ?? "Common Ground Budget"}
+                  {publicGoodsEntry?.label ?? "moral public goods"}
                 </h2>
                 <p>No ordinary moral-trade offers match this search.</p>
                 <p>
@@ -2073,7 +2073,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </dl>
                       <div className="marketplace-bootstrap-actions">
                         <Link className="button button-primary" href={seedRoundHref}>
-                          Preview Common Ground Budget
+                          Preview moral public goods
                         </Link>
                         <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
                           Open Public Goods Fund

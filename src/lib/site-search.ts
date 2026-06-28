@@ -276,7 +276,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/mpgf",
-    label: "Common Ground Budget",
+    label: "moral public goods",
     summary:
       "Preview the Public Goods Fund path for moral public goods: no charge now, sealed progress before close, and final review before any binding contribution.",
     kind: "fund",
