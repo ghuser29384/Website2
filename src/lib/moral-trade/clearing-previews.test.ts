@@ -70,15 +70,29 @@ function baseInput(
     adverseAssociationStatus: "passed",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    approvedTemplateConformanceStatus: "passed",
+    reviewCapacityAdmissionStatus: "passed",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
     privateExchangeRateStatus: "passed",
+    riskControlPackStatus: "passed",
+    marketSimulationStatus: "passed",
+    optionSetParetoComparisonStatus: "passed",
+    preferenceIncomparabilityStatus: "passed",
+    tradeBurdenAccountingStatus: "passed",
+    moralDifferenceAttestationStatus: "passed",
+    bargainingProtocolStatus: "passed",
+    empiricalAssumptionSnapshotStatus: "passed",
+    sideConstraintStatus: "not_required_for_stage",
+    intrapersonalSelfOffsetStatus: "not_required_for_stage",
+    antiCorruptionProcessIntegrityStatus: "passed",
     noncompensableBlockerStatus: "passed",
     sensitiveEvidenceAttestationStatus: "passed",
     pilotEvidenceStatus: "passed",
+    pledgePerformanceBondStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -95,6 +109,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.tracks.includes("pledge_swap"));
   assert.ok(contract.requiredSections.includes("ratio-and-residual"));
   assert.ok(contract.requiredSections.includes("batch-clearing-objective"));
+  assert.ok(contract.requiredSections.includes("template-and-review-admission"));
   assert.ok(contract.requiredSections.includes("commitment-reservation"));
   assert.ok(contract.requiredSections.includes("atomic-settlement"));
   assert.ok(contract.requiredSections.includes("direct-pair-or-batch-mode"));
@@ -103,11 +118,17 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("net-offset-accounting"));
   assert.ok(contract.requiredSections.includes("offer-validity"));
   assert.ok(contract.requiredSections.includes("private-exchange-rate"));
+  assert.ok(contract.requiredSections.includes("option-preference-and-burden"));
+  assert.ok(contract.requiredSections.includes("assumptions-and-bargaining"));
+  assert.ok(contract.requiredSections.includes("side-constraints-and-process"));
+  assert.ok(contract.requiredSections.includes("risk-control-pack"));
   assert.ok(contract.requiredSections.includes("noncompensable-blockers"));
   assert.ok(contract.requiredSections.includes("sensitive-evidence-attestations"));
-  assert.ok(contract.requiredSections.includes("pilot-evidence"));
+  assert.ok(contract.requiredSections.includes("market-simulation-and-pilot-evidence"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
+  assert.ok(contract.requiredSections.includes("micro-pledge-unit-policy"));
+  assert.ok(contract.requiredSections.includes("pledge-performance-bond"));
   assert.ok(contract.requiredUserFacingSectionFields.includes("safeReasonCategory"));
   assert.ok(contract.requiredUserFacingSectionFields.includes("nextAction"));
   assert.ok(contract.requiredUserFacingSectionFields.includes("correctionPath"));
@@ -119,6 +140,8 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("adverse_association"));
   assert.ok(contract.requiredControlStatuses.includes("ai_preference_elicitation"));
   assert.ok(contract.requiredControlStatuses.includes("post_clear_audit_sampling"));
+  assert.ok(contract.requiredControlStatuses.includes("approved_template_conformance"));
+  assert.ok(contract.requiredControlStatuses.includes("review_capacity_admission"));
   assert.ok(contract.requiredControlStatuses.includes("non_public_goods_subsidy"));
   assert.ok(contract.requiredControlStatuses.includes("direct_pair_clearing"));
   assert.ok(contract.requiredControlStatuses.includes("cause_bucket_taxonomy"));
@@ -126,9 +149,25 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("net_offset_accounting"));
   assert.ok(contract.requiredControlStatuses.includes("offer_validity"));
   assert.ok(contract.requiredControlStatuses.includes("private_exchange_rate_quote"));
+  assert.ok(contract.requiredControlStatuses.includes("option_set_pareto_comparison"));
+  assert.ok(contract.requiredControlStatuses.includes("preference_incomparability"));
+  assert.ok(contract.requiredControlStatuses.includes("trade_burden_accounting"));
+  assert.ok(contract.requiredControlStatuses.includes("moral_difference_attestation"));
+  assert.ok(contract.requiredControlStatuses.includes("bargaining_protocol"));
+  assert.ok(contract.requiredControlStatuses.includes("empirical_assumption_snapshot"));
+  assert.ok(contract.requiredControlStatuses.includes("side_constraint"));
+  assert.ok(contract.requiredControlStatuses.includes("intrapersonal_self_offset"));
+  assert.ok(contract.requiredControlStatuses.includes("anti_corruption_process_integrity"));
+  assert.ok(contract.requiredControlStatuses.includes("risk_control_pack"));
+  assert.ok(contract.requiredControlStatuses.includes("market_simulation"));
   assert.ok(contract.requiredControlStatuses.includes("noncompensable_blocker"));
   assert.ok(contract.requiredControlStatuses.includes("sensitive_evidence_attestation"));
   assert.ok(contract.requiredControlStatuses.includes("pilot_evidence"));
+  assert.ok(contract.requiredControlStatuses.includes("pledge_performance_bond"));
+  assert.ok(contract.requiredControlStatuses.includes("micro_pledge_unit_baseline"));
+  assert.ok(contract.requiredControlStatuses.includes("micro_pledge_health_safety_boundary"));
+  assert.ok(contract.requiredControlStatuses.includes("micro_pledge_pre_performance_lock"));
+  assert.ok(contract.requiredControlStatuses.includes("micro_pledge_no_auto_rollover"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -339,6 +378,80 @@ test("clearing preview fails closed when private exchange-rate quote handling is
   );
 });
 
+test("clearing preview fails closed when template conformance or review admission is missing", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      approvedTemplateConformanceStatus: "missing",
+      reviewCapacityAdmissionStatus: "needs_review",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.boundaryStatuses.approvedTemplateConformanceStatus, "missing");
+  assert.equal(preview.boundaryStatuses.reviewCapacityAdmissionStatus, "needs_review");
+  assert.ok(preview.blockerCodes.includes("approved_template_conformance_not_passed"));
+  assert.ok(preview.blockerCodes.includes("review_capacity_admission_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "template-and-review-admission")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /approved template and frozen parameter policy/i.test(blocker),
+    ),
+  );
+});
+
+test("clearing preview fails closed for missing option, assumption, burden, and process controls", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      optionSetParetoComparisonStatus: "missing",
+      preferenceIncomparabilityStatus: "missing",
+      tradeBurdenAccountingStatus: "missing",
+      moralDifferenceAttestationStatus: "missing",
+      bargainingProtocolStatus: "missing",
+      empiricalAssumptionSnapshotStatus: "missing",
+      sideConstraintStatus: "missing",
+      intrapersonalSelfOffsetStatus: "missing",
+      antiCorruptionProcessIntegrityStatus: "missing",
+      riskControlPackStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.ok(preview.blockerCodes.includes("option_set_pareto_comparison_not_passed"));
+  assert.ok(preview.blockerCodes.includes("preference_incomparability_not_passed"));
+  assert.ok(preview.blockerCodes.includes("trade_burden_accounting_not_passed"));
+  assert.ok(preview.blockerCodes.includes("moral_difference_attestation_not_passed"));
+  assert.ok(preview.blockerCodes.includes("bargaining_protocol_not_passed"));
+  assert.ok(preview.blockerCodes.includes("empirical_assumption_snapshot_not_passed"));
+  assert.ok(preview.blockerCodes.includes("side_constraint_not_passed"));
+  assert.ok(preview.blockerCodes.includes("intrapersonal_self_offset_not_passed"));
+  assert.ok(preview.blockerCodes.includes("anti_corruption_process_integrity_not_passed"));
+  assert.ok(preview.blockerCodes.includes("risk_control_pack_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "option-preference-and-burden")?.status,
+    "blocked",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "assumptions-and-bargaining")?.status,
+    "blocked",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "side-constraints-and-process")?.status,
+    "blocked",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "risk-control-pack")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /noncardinal tradeoffs/i.test(blocker),
+    ),
+  );
+});
+
 test("clearing preview fails closed when noncompensable blocker review is missing", () => {
   const preview = buildMoralTradeClearingPreview(
     baseInput({
@@ -385,14 +498,17 @@ test("clearing preview fails closed when pilot evidence is missing", () => {
   const preview = buildMoralTradeClearingPreview(
     baseInput({
       pilotEvidenceStatus: "missing",
+      marketSimulationStatus: "missing",
     }),
   );
 
   assert.equal(preview.status, "blocked_preview_only");
   assert.equal(preview.boundaryStatuses.pilotEvidenceStatus, "missing");
+  assert.equal(preview.boundaryStatuses.marketSimulationStatus, "missing");
   assert.ok(preview.blockerCodes.includes("pilot_evidence_not_passed"));
+  assert.ok(preview.blockerCodes.includes("market_simulation_not_passed"));
   assert.equal(
-    preview.sections.find((section) => section.key === "pilot-evidence")?.status,
+    preview.sections.find((section) => section.key === "market-simulation-and-pilot-evidence")?.status,
     "blocked",
   );
   assert.ok(
@@ -531,6 +647,67 @@ test("pledge-swap preview blocks missing reciprocal release and least-intrusive 
   assert.ok(preview.blockerCodes.includes("neutral_review_missing"));
   assert.ok(preview.blockerCodes.includes("least_intrusive_evidence_alternative_missing"));
   assert.ok(preview.blockerCodes.includes("pledge_schedule_not_passed"));
+});
+
+test("pledge-swap preview blocks missing micro-pledge unit and bond controls", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      track: "pledge_swap",
+      releaseStage: "pledge_swap_preview_manual_review_only",
+      destinationVerificationStatus: "not_required_for_stage",
+      verifiedPaymentDestinationStatus: "not_required_for_stage",
+      donorOfRecordTaxStatus: "not_required_for_stage",
+      pledgePerformanceBondStatus: "needs_review",
+      performanceTerms: {
+        maxObligationDays: 3,
+        reciprocalReleaseRule: "Either side can release future duties before lock.",
+        withdrawalBeforeLockRule: "Either side can withdraw before final lock.",
+        challengeWindowDays: 7,
+        neutralReviewRequired: true,
+        evidencePlan: "Use self-attestation first.",
+        leastIntrusiveAlternative: "Use self-report before private artifacts.",
+        scheduleStatus: "passed",
+        performanceTermsStatus: "passed",
+        compensationTermsStatus: "not_required_for_stage",
+      },
+      microPledgeControls: {
+        unitBaselineStatus: "missing",
+        unitAdditionalityStatus: "missing",
+        coveredFoodDefinitionStatus: "missing",
+        adequateSubstitutePlanStatus: "missing",
+        healthSafetyBoundaryStatus: "missing",
+        prePerformanceLockStatus: "missing",
+        retroactiveClaimStatus: "blocked",
+        evidenceLadderStatus: "missing",
+        perUnitAmountBandStatus: "missing",
+        sequenceCapStatus: "missing",
+        noAutoRolloverStatus: "missing",
+        longerDurationReviewStatus: "missing",
+      },
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.ok(preview.blockerCodes.includes("micro_pledge_unit_baseline_not_passed"));
+  assert.ok(preview.blockerCodes.includes("micro_pledge_additionality_not_passed"));
+  assert.ok(preview.blockerCodes.includes("micro_pledge_health_safety_boundary_not_passed"));
+  assert.ok(preview.blockerCodes.includes("micro_pledge_pre_performance_lock_not_passed"));
+  assert.ok(preview.blockerCodes.includes("micro_pledge_retroactive_claim_not_passed"));
+  assert.ok(preview.blockerCodes.includes("micro_pledge_no_auto_rollover_not_passed"));
+  assert.ok(preview.blockerCodes.includes("pledge_performance_bond_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "micro-pledge-unit-policy")?.status,
+    "blocked",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "pledge-performance-bond")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /unit-specific baseline, additionality, covered-food/i.test(blocker),
+    ),
+  );
 });
 
 test("clearing preview execute route is fail-closed before persistence on invalid input", async () => {

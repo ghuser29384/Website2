@@ -64,9 +64,11 @@ const REQUEST_KEYS = new Set([
 ]);
 const PREVIEW_INPUT_KEYS = new Set([
   "antiThreatStatus",
+  "antiCorruptionProcessIntegrityStatus",
   "adverseAssociationStatus",
   "aiPreferenceElicitationStatus",
   "atomicSettlementStatus",
+  "approvedTemplateConformanceStatus",
   "baselineConfidenceLevel",
   "baselineIntegrityStatus",
   "baselineSnapshotHash",
@@ -79,17 +81,23 @@ const PREVIEW_INPUT_KEYS = new Set([
   "directPairClearingStatus",
   "donorOfRecordTaxStatus",
   "doubleCountStatus",
+  "empiricalAssumptionSnapshotStatus",
   "evidenceAuthenticityStatus",
   "fallbackRule",
   "finalLockProposalRef",
   "finalLockProposalStatus",
   "financialCrimeStatus",
   "freshConfirmationCount",
+  "bargainingProtocolStatus",
   "inputBundleHash",
+  "intrapersonalSelfOffsetStatus",
+  "marketSimulationStatus",
   "matchedCounterpartyVolumeCents",
   "matchingClearingRunHash",
   "matchingClearingRunRef",
   "matchingClearingRunStatus",
+  "microPledgeControls",
+  "moralDifferenceAttestationStatus",
   "mode",
   "noTradeBaseline",
   "causeBucketTaxonomyStatus",
@@ -100,6 +108,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "noncompensableBlockerStatus",
   "sensitiveEvidenceAttestationStatus",
   "pilotEvidenceStatus",
+  "optionSetParetoComparisonStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -107,8 +116,10 @@ const PREVIEW_INPUT_KEYS = new Set([
   "participantRatioMinBps",
   "participantSurplusConfirmed",
   "performanceTerms",
+  "pledgePerformanceBondStatus",
   "policySnapshotRef",
   "postClearAuditSamplingStatus",
+  "preferenceIncomparabilityStatus",
   "privacyDisclosureStatus",
   "protectiveAssessmentStatus",
   "ratioBoundsStatus",
@@ -116,11 +127,15 @@ const PREVIEW_INPUT_KEYS = new Set([
   "releaseStage",
   "reproducibilityStatus",
   "requiredFreshConfirmations",
+  "reviewCapacityAdmissionStatus",
   "residualNoTradeAction",
   "resultHash",
+  "riskControlPackStatus",
   "sideAgreementStatus",
+  "sideConstraintStatus",
   "stateInterpretationPolicyRef",
   "track",
+  "tradeBurdenAccountingStatus",
   "tradeClassificationStatus",
   "unmatchedResidualCents",
   "userSafetyStatus",
@@ -137,6 +152,20 @@ const PERFORMANCE_TERMS_KEYS = new Set([
   "reciprocalReleaseRule",
   "scheduleStatus",
   "withdrawalBeforeLockRule",
+]);
+const MICRO_PLEDGE_CONTROL_KEYS = new Set([
+  "adequateSubstitutePlanStatus",
+  "coveredFoodDefinitionStatus",
+  "evidenceLadderStatus",
+  "healthSafetyBoundaryStatus",
+  "longerDurationReviewStatus",
+  "noAutoRolloverStatus",
+  "perUnitAmountBandStatus",
+  "prePerformanceLockStatus",
+  "retroactiveClaimStatus",
+  "sequenceCapStatus",
+  "unitAdditionalityStatus",
+  "unitBaselineStatus",
 ]);
 
 type ClearingPreviewRecordInsert =
@@ -273,6 +302,80 @@ function normalizePerformanceTerms(
   };
 }
 
+function normalizeMicroPledgeControls(
+  value: unknown,
+  blockers: string[],
+): MoralTradeClearingPreviewInput["microPledgeControls"] {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  blockers.push(...unsupportedKeys(value, MICRO_PLEDGE_CONTROL_KEYS, "microPledgeControls"));
+
+  return {
+    adequateSubstitutePlanStatus: gateStatus(
+      value.adequateSubstitutePlanStatus,
+      "microPledgeControls.adequateSubstitutePlanStatus",
+      blockers,
+    ),
+    coveredFoodDefinitionStatus: gateStatus(
+      value.coveredFoodDefinitionStatus,
+      "microPledgeControls.coveredFoodDefinitionStatus",
+      blockers,
+    ),
+    evidenceLadderStatus: gateStatus(
+      value.evidenceLadderStatus,
+      "microPledgeControls.evidenceLadderStatus",
+      blockers,
+    ),
+    healthSafetyBoundaryStatus: gateStatus(
+      value.healthSafetyBoundaryStatus,
+      "microPledgeControls.healthSafetyBoundaryStatus",
+      blockers,
+    ),
+    longerDurationReviewStatus: gateStatus(
+      value.longerDurationReviewStatus,
+      "microPledgeControls.longerDurationReviewStatus",
+      blockers,
+    ),
+    noAutoRolloverStatus: gateStatus(
+      value.noAutoRolloverStatus,
+      "microPledgeControls.noAutoRolloverStatus",
+      blockers,
+    ),
+    perUnitAmountBandStatus: gateStatus(
+      value.perUnitAmountBandStatus,
+      "microPledgeControls.perUnitAmountBandStatus",
+      blockers,
+    ),
+    prePerformanceLockStatus: gateStatus(
+      value.prePerformanceLockStatus,
+      "microPledgeControls.prePerformanceLockStatus",
+      blockers,
+    ),
+    retroactiveClaimStatus: gateStatus(
+      value.retroactiveClaimStatus,
+      "microPledgeControls.retroactiveClaimStatus",
+      blockers,
+    ),
+    sequenceCapStatus: gateStatus(
+      value.sequenceCapStatus,
+      "microPledgeControls.sequenceCapStatus",
+      blockers,
+    ),
+    unitAdditionalityStatus: gateStatus(
+      value.unitAdditionalityStatus,
+      "microPledgeControls.unitAdditionalityStatus",
+      blockers,
+    ),
+    unitBaselineStatus: gateStatus(
+      value.unitBaselineStatus,
+      "microPledgeControls.unitBaselineStatus",
+      blockers,
+    ),
+  };
+}
+
 function normalizePreviewInput(value: unknown) {
   const blockers: string[] = [];
 
@@ -304,7 +407,16 @@ function normalizePreviewInput(value: unknown) {
     blockers,
   );
   const performanceTerms = normalizePerformanceTerms(value.performanceTerms, blockers);
+  const microPledgeControls = normalizeMicroPledgeControls(
+    value.microPledgeControls,
+    blockers,
+  );
   const input: MoralTradeClearingPreviewInput = {
+    antiCorruptionProcessIntegrityStatus: gateStatus(
+      value.antiCorruptionProcessIntegrityStatus,
+      "previewInput.antiCorruptionProcessIntegrityStatus",
+      blockers,
+    ),
     antiThreatStatus: gateStatus(value.antiThreatStatus, "previewInput.antiThreatStatus", blockers),
     adverseAssociationStatus: gateStatus(
       value.adverseAssociationStatus,
@@ -324,6 +436,11 @@ function normalizePreviewInput(value: unknown) {
     batchClearingObjectiveStatus: gateStatus(
       value.batchClearingObjectiveStatus,
       "previewInput.batchClearingObjectiveStatus",
+      blockers,
+    ),
+    approvedTemplateConformanceStatus: gateStatus(
+      value.approvedTemplateConformanceStatus,
+      "previewInput.approvedTemplateConformanceStatus",
       blockers,
     ),
     causeBucketTaxonomyStatus: gateStatus(
@@ -351,6 +468,56 @@ function normalizePreviewInput(value: unknown) {
       "previewInput.privateExchangeRateStatus",
       blockers,
     ),
+    riskControlPackStatus: gateStatus(
+      value.riskControlPackStatus,
+      "previewInput.riskControlPackStatus",
+      blockers,
+    ),
+    marketSimulationStatus: gateStatus(
+      value.marketSimulationStatus,
+      "previewInput.marketSimulationStatus",
+      blockers,
+    ),
+    optionSetParetoComparisonStatus: gateStatus(
+      value.optionSetParetoComparisonStatus,
+      "previewInput.optionSetParetoComparisonStatus",
+      blockers,
+    ),
+    preferenceIncomparabilityStatus: gateStatus(
+      value.preferenceIncomparabilityStatus,
+      "previewInput.preferenceIncomparabilityStatus",
+      blockers,
+    ),
+    tradeBurdenAccountingStatus: gateStatus(
+      value.tradeBurdenAccountingStatus,
+      "previewInput.tradeBurdenAccountingStatus",
+      blockers,
+    ),
+    moralDifferenceAttestationStatus: gateStatus(
+      value.moralDifferenceAttestationStatus,
+      "previewInput.moralDifferenceAttestationStatus",
+      blockers,
+    ),
+    bargainingProtocolStatus: gateStatus(
+      value.bargainingProtocolStatus,
+      "previewInput.bargainingProtocolStatus",
+      blockers,
+    ),
+    empiricalAssumptionSnapshotStatus: gateStatus(
+      value.empiricalAssumptionSnapshotStatus,
+      "previewInput.empiricalAssumptionSnapshotStatus",
+      blockers,
+    ),
+    sideConstraintStatus: gateStatus(
+      value.sideConstraintStatus,
+      "previewInput.sideConstraintStatus",
+      blockers,
+    ),
+    intrapersonalSelfOffsetStatus: gateStatus(
+      value.intrapersonalSelfOffsetStatus,
+      "previewInput.intrapersonalSelfOffsetStatus",
+      blockers,
+    ),
     noncompensableBlockerStatus: gateStatus(
       value.noncompensableBlockerStatus,
       "previewInput.noncompensableBlockerStatus",
@@ -364,6 +531,11 @@ function normalizePreviewInput(value: unknown) {
     pilotEvidenceStatus: gateStatus(
       value.pilotEvidenceStatus,
       "previewInput.pilotEvidenceStatus",
+      blockers,
+    ),
+    pledgePerformanceBondStatus: gateStatus(
+      value.pledgePerformanceBondStatus,
+      "previewInput.pledgePerformanceBondStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(
@@ -458,6 +630,7 @@ function normalizePreviewInput(value: unknown) {
     participantRatioMinBps: numberField(value.participantRatioMinBps, 0),
     participantSurplusConfirmed: booleanField(value.participantSurplusConfirmed),
     performanceTerms,
+    microPledgeControls,
     policySnapshotRef: stringField(value.policySnapshotRef),
     postClearAuditSamplingStatus: gateStatus(
       value.postClearAuditSamplingStatus,
@@ -467,6 +640,11 @@ function normalizePreviewInput(value: unknown) {
     nonPublicGoodsSubsidyStatus: gateStatus(
       value.nonPublicGoodsSubsidyStatus,
       "previewInput.nonPublicGoodsSubsidyStatus",
+      blockers,
+    ),
+    reviewCapacityAdmissionStatus: gateStatus(
+      value.reviewCapacityAdmissionStatus,
+      "previewInput.reviewCapacityAdmissionStatus",
       blockers,
     ),
     privacyDisclosureStatus: gateStatus(

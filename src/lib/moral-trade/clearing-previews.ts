@@ -49,6 +49,21 @@ export interface MoralTradeClearingPreviewPerformanceTerms {
   compensationTermsStatus: MoralTradeClearingPreviewGateStatus;
 }
 
+export interface MoralTradeClearingPreviewMicroPledgeControls {
+  unitBaselineStatus: MoralTradeClearingPreviewGateStatus;
+  unitAdditionalityStatus: MoralTradeClearingPreviewGateStatus;
+  coveredFoodDefinitionStatus: MoralTradeClearingPreviewGateStatus;
+  adequateSubstitutePlanStatus: MoralTradeClearingPreviewGateStatus;
+  healthSafetyBoundaryStatus: MoralTradeClearingPreviewGateStatus;
+  prePerformanceLockStatus: MoralTradeClearingPreviewGateStatus;
+  retroactiveClaimStatus: MoralTradeClearingPreviewGateStatus;
+  evidenceLadderStatus: MoralTradeClearingPreviewGateStatus;
+  perUnitAmountBandStatus: MoralTradeClearingPreviewGateStatus;
+  sequenceCapStatus: MoralTradeClearingPreviewGateStatus;
+  noAutoRolloverStatus: MoralTradeClearingPreviewGateStatus;
+  longerDurationReviewStatus: MoralTradeClearingPreviewGateStatus;
+}
+
 export interface MoralTradeClearingPreviewInput {
   track: MoralTradeClearingPreviewTrack;
   mode: MoralTradeClearingPreviewMode;
@@ -99,19 +114,34 @@ export interface MoralTradeClearingPreviewInput {
   adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
   aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
   postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
+  approvedTemplateConformanceStatus: MoralTradeClearingPreviewGateStatus;
+  reviewCapacityAdmissionStatus: MoralTradeClearingPreviewGateStatus;
   nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
   causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
   resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
   netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
   offerValidityStatus: MoralTradeClearingPreviewGateStatus;
   privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
+  riskControlPackStatus: MoralTradeClearingPreviewGateStatus;
+  marketSimulationStatus: MoralTradeClearingPreviewGateStatus;
+  optionSetParetoComparisonStatus: MoralTradeClearingPreviewGateStatus;
+  preferenceIncomparabilityStatus: MoralTradeClearingPreviewGateStatus;
+  tradeBurdenAccountingStatus: MoralTradeClearingPreviewGateStatus;
+  moralDifferenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
+  bargainingProtocolStatus: MoralTradeClearingPreviewGateStatus;
+  empiricalAssumptionSnapshotStatus: MoralTradeClearingPreviewGateStatus;
+  sideConstraintStatus: MoralTradeClearingPreviewGateStatus;
+  intrapersonalSelfOffsetStatus: MoralTradeClearingPreviewGateStatus;
+  antiCorruptionProcessIntegrityStatus: MoralTradeClearingPreviewGateStatus;
   noncompensableBlockerStatus: MoralTradeClearingPreviewGateStatus;
   sensitiveEvidenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
   pilotEvidenceStatus: MoralTradeClearingPreviewGateStatus;
+  pledgePerformanceBondStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
   performanceTerms?: MoralTradeClearingPreviewPerformanceTerms;
+  microPledgeControls?: MoralTradeClearingPreviewMicroPledgeControls;
 }
 
 export interface MoralTradeClearingPreviewSection {
@@ -163,6 +193,8 @@ export interface MoralTradeClearingPreview {
     adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
     aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
     postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
+    approvedTemplateConformanceStatus: MoralTradeClearingPreviewGateStatus;
+    reviewCapacityAdmissionStatus: MoralTradeClearingPreviewGateStatus;
     nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
     causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
     resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
@@ -170,9 +202,21 @@ export interface MoralTradeClearingPreview {
     batchClearingObjectiveStatus: MoralTradeClearingPreviewGateStatus;
     offerValidityStatus: MoralTradeClearingPreviewGateStatus;
     privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
+    riskControlPackStatus: MoralTradeClearingPreviewGateStatus;
+    marketSimulationStatus: MoralTradeClearingPreviewGateStatus;
+    optionSetParetoComparisonStatus: MoralTradeClearingPreviewGateStatus;
+    preferenceIncomparabilityStatus: MoralTradeClearingPreviewGateStatus;
+    tradeBurdenAccountingStatus: MoralTradeClearingPreviewGateStatus;
+    moralDifferenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
+    bargainingProtocolStatus: MoralTradeClearingPreviewGateStatus;
+    empiricalAssumptionSnapshotStatus: MoralTradeClearingPreviewGateStatus;
+    sideConstraintStatus: MoralTradeClearingPreviewGateStatus;
+    intrapersonalSelfOffsetStatus: MoralTradeClearingPreviewGateStatus;
+    antiCorruptionProcessIntegrityStatus: MoralTradeClearingPreviewGateStatus;
     noncompensableBlockerStatus: MoralTradeClearingPreviewGateStatus;
     sensitiveEvidenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
     pilotEvidenceStatus: MoralTradeClearingPreviewGateStatus;
+    pledgePerformanceBondStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -227,6 +271,7 @@ const NON_BLOCKING_STATUSES = new Set<MoralTradeClearingPreviewGateStatus>([
 const REQUIRED_SECTIONS = [
   "matching-run",
   "batch-clearing-objective",
+  "template-and-review-admission",
   "baseline-comparison",
   "ratio-and-residual",
   "commitment-reservation",
@@ -237,9 +282,13 @@ const REQUIRED_SECTIONS = [
   "net-offset-accounting",
   "offer-validity",
   "private-exchange-rate",
+  "option-preference-and-burden",
+  "assumptions-and-bargaining",
+  "side-constraints-and-process",
+  "risk-control-pack",
   "noncompensable-blockers",
   "sensitive-evidence-attestations",
-  "pilot-evidence",
+  "market-simulation-and-pilot-evidence",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -248,6 +297,8 @@ const REQUIRED_SECTIONS = [
   "subsidy-governance",
   "privacy-and-policy",
   "pledge-performance-terms",
+  "micro-pledge-unit-policy",
+  "pledge-performance-bond",
 ] as const;
 
 const REQUIRED_USER_FACING_SECTION_FIELDS = [
@@ -295,7 +346,33 @@ const REQUIRED_CONTROL_STATUSES = [
   "adverse_association",
   "ai_preference_elicitation",
   "post_clear_audit_sampling",
+  "approved_template_conformance",
+  "review_capacity_admission",
   "non_public_goods_subsidy",
+  "risk_control_pack",
+  "market_simulation",
+  "option_set_pareto_comparison",
+  "preference_incomparability",
+  "trade_burden_accounting",
+  "moral_difference_attestation",
+  "bargaining_protocol",
+  "empirical_assumption_snapshot",
+  "side_constraint",
+  "intrapersonal_self_offset",
+  "anti_corruption_process_integrity",
+  "pledge_performance_bond",
+  "micro_pledge_unit_baseline",
+  "micro_pledge_additionality",
+  "micro_pledge_covered_food_definition",
+  "micro_pledge_adequate_substitute_plan",
+  "micro_pledge_health_safety_boundary",
+  "micro_pledge_pre_performance_lock",
+  "micro_pledge_retroactive_claim",
+  "micro_pledge_evidence_ladder",
+  "micro_pledge_per_unit_amount_band",
+  "micro_pledge_sequence_cap",
+  "micro_pledge_no_auto_rollover",
+  "micro_pledge_longer_duration_review",
   "privacy_disclosure",
   "policy_snapshot",
   "state_interpretation_policy",
@@ -312,6 +389,7 @@ const CONTRACT_TESTS = [
   "clearing_preview_execute_route_contract",
   "clearing_preview_record_schema_contract",
   "offer_create_form_clearing_preview_wiring",
+  "moraltrade82_clearing_preview_control_matrix",
 ] as const;
 
 function check(
@@ -360,6 +438,7 @@ function sectionGuidance(key: string) {
     case "offer-validity":
     case "final-lock":
     case "pledge-performance-terms":
+    case "micro-pledge-unit-policy":
       return {
         safeReasonCategory: "Participant confirmation is incomplete",
         correctionPath:
@@ -380,6 +459,8 @@ function sectionGuidance(key: string) {
     case "cause-bucket-taxonomy":
     case "resource-compatibility":
     case "private-exchange-rate":
+    case "option-preference-and-burden":
+    case "assumptions-and-bargaining":
       return {
         safeReasonCategory: "Matching boundary review is incomplete",
         correctionPath:
@@ -389,6 +470,7 @@ function sectionGuidance(key: string) {
       };
     case "destination-and-tax":
     case "subsidy-governance":
+    case "pledge-performance-bond":
       return {
         safeReasonCategory: "Money movement review is incomplete",
         correctionPath:
@@ -399,6 +481,8 @@ function sectionGuidance(key: string) {
     case "externality-and-safety":
     case "classification-and-assessments":
     case "noncompensable-blockers":
+    case "side-constraints-and-process":
+    case "risk-control-pack":
       return {
         safeReasonCategory: "Safety review is incomplete",
         correctionPath:
@@ -416,7 +500,7 @@ function sectionGuidance(key: string) {
         appealPath:
           "Request privacy, recipient, or AI-boundary review if a disclosure or consent block is disputed.",
       };
-    case "pilot-evidence":
+    case "market-simulation-and-pilot-evidence":
       return {
         safeReasonCategory: "Pilot evidence is incomplete",
         correctionPath:
@@ -509,6 +593,16 @@ export function buildMoralTradeClearingPreview(
       : input.batchClearingObjectiveStatus === "passed"
         ? ["batch_clearing_objective_passed_for_non_batch_mode"]
         : [];
+  const templateAdmissionBlockers = [
+    ...statusBlocker(
+      input.approvedTemplateConformanceStatus,
+      "approved_template_conformance_not_passed",
+    ),
+    ...statusBlocker(
+      input.reviewCapacityAdmissionStatus,
+      "review_capacity_admission_not_passed",
+    ),
+  ];
   const baselineBlockers = [
     ...(hasMeaningfulText(input.noTradeBaseline) ? [] : ["no_trade_baseline_missing"]),
     ...(input.baselineVersion.trim() ? [] : ["baseline_version_missing"]),
@@ -556,6 +650,49 @@ export function buildMoralTradeClearingPreview(
     input.privateExchangeRateStatus,
     "private_exchange_rate_not_passed",
   );
+  const optionPreferenceBurdenBlockers = [
+    ...statusBlocker(
+      input.optionSetParetoComparisonStatus,
+      "option_set_pareto_comparison_not_passed",
+    ),
+    ...statusBlocker(
+      input.preferenceIncomparabilityStatus,
+      "preference_incomparability_not_passed",
+    ),
+    ...statusBlocker(
+      input.tradeBurdenAccountingStatus,
+      "trade_burden_accounting_not_passed",
+    ),
+    ...statusBlocker(
+      input.moralDifferenceAttestationStatus,
+      "moral_difference_attestation_not_passed",
+    ),
+  ];
+  const assumptionBargainingBlockers = [
+    ...statusBlocker(
+      input.bargainingProtocolStatus,
+      "bargaining_protocol_not_passed",
+    ),
+    ...statusBlocker(
+      input.empiricalAssumptionSnapshotStatus,
+      "empirical_assumption_snapshot_not_passed",
+    ),
+  ];
+  const sideConstraintProcessBlockers = [
+    ...statusBlocker(input.sideConstraintStatus, "side_constraint_not_passed"),
+    ...statusBlocker(
+      input.intrapersonalSelfOffsetStatus,
+      "intrapersonal_self_offset_not_passed",
+    ),
+    ...statusBlocker(
+      input.antiCorruptionProcessIntegrityStatus,
+      "anti_corruption_process_integrity_not_passed",
+    ),
+  ];
+  const riskControlPackBlockers = statusBlocker(
+    input.riskControlPackStatus,
+    "risk_control_pack_not_passed",
+  );
   const noncompensableBlockerBlockers = statusBlocker(
     input.noncompensableBlockerStatus,
     "noncompensable_blocker_not_passed",
@@ -567,6 +704,10 @@ export function buildMoralTradeClearingPreview(
   const pilotEvidenceBlockers = statusBlocker(
     input.pilotEvidenceStatus,
     "pilot_evidence_not_passed",
+  );
+  const marketSimulationBlockers = statusBlocker(
+    input.marketSimulationStatus,
+    "market_simulation_not_passed",
   );
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
@@ -622,6 +763,7 @@ export function buildMoralTradeClearingPreview(
       : ["state_interpretation_policy_missing"]),
   ];
   const pledgeTerms = input.performanceTerms;
+  const microPledge = input.microPledgeControls;
   const pledgeBlockers =
     input.track === "pledge_swap"
       ? [
@@ -662,6 +804,91 @@ export function buildMoralTradeClearingPreview(
             : []),
         ]
       : [];
+  const microPledgeBlockers =
+    input.track === "pledge_swap"
+      ? [
+          ...(microPledge ? [] : ["micro_pledge_controls_missing"]),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.unitBaselineStatus,
+                "micro_pledge_unit_baseline_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.unitAdditionalityStatus,
+                "micro_pledge_additionality_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.coveredFoodDefinitionStatus,
+                "micro_pledge_covered_food_definition_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.adequateSubstitutePlanStatus,
+                "micro_pledge_adequate_substitute_plan_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.healthSafetyBoundaryStatus,
+                "micro_pledge_health_safety_boundary_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.prePerformanceLockStatus,
+                "micro_pledge_pre_performance_lock_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.retroactiveClaimStatus,
+                "micro_pledge_retroactive_claim_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.evidenceLadderStatus,
+                "micro_pledge_evidence_ladder_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.perUnitAmountBandStatus,
+                "micro_pledge_per_unit_amount_band_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.sequenceCapStatus,
+                "micro_pledge_sequence_cap_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.noAutoRolloverStatus,
+                "micro_pledge_no_auto_rollover_not_passed",
+              )
+            : []),
+          ...(microPledge
+            ? statusBlocker(
+                microPledge.longerDurationReviewStatus,
+                "micro_pledge_longer_duration_review_not_passed",
+              )
+            : []),
+        ]
+      : [];
+  const pledgeBondBlockers =
+    input.track === "pledge_swap"
+      ? statusBlocker(
+          input.pledgePerformanceBondStatus,
+          "pledge_performance_bond_not_passed",
+        )
+      : [];
   const allBlockers = [
     ...matchingRunBlockers,
     ...baselineBlockers,
@@ -669,15 +896,21 @@ export function buildMoralTradeClearingPreview(
     ...reservationBlockers,
     ...atomicBlockers,
     ...batchObjectiveBlockers,
+    ...templateAdmissionBlockers,
     ...directPairBlockers,
     ...causeBucketBlockers,
     ...resourceCompatibilityBlockers,
     ...netOffsetAccountingBlockers,
     ...offerValidityBlockers,
     ...privateExchangeRateBlockers,
+    ...optionPreferenceBurdenBlockers,
+    ...assumptionBargainingBlockers,
+    ...sideConstraintProcessBlockers,
+    ...riskControlPackBlockers,
     ...noncompensableBlockerBlockers,
     ...sensitiveEvidenceAttestationBlockers,
     ...pilotEvidenceBlockers,
+    ...marketSimulationBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -686,6 +919,8 @@ export function buildMoralTradeClearingPreview(
     ...subsidyBlockers,
     ...privacyPolicyBlockers,
     ...pledgeBlockers,
+    ...microPledgeBlockers,
+    ...pledgeBondBlockers,
   ];
 
   return {
@@ -725,6 +960,8 @@ export function buildMoralTradeClearingPreview(
       adverseAssociationStatus: input.adverseAssociationStatus,
       aiPreferenceElicitationStatus: input.aiPreferenceElicitationStatus,
       postClearAuditSamplingStatus: input.postClearAuditSamplingStatus,
+      approvedTemplateConformanceStatus: input.approvedTemplateConformanceStatus,
+      reviewCapacityAdmissionStatus: input.reviewCapacityAdmissionStatus,
       nonPublicGoodsSubsidyStatus: input.nonPublicGoodsSubsidyStatus,
       causeBucketTaxonomyStatus: input.causeBucketTaxonomyStatus,
       resourceCompatibilityStatus: input.resourceCompatibilityStatus,
@@ -732,9 +969,21 @@ export function buildMoralTradeClearingPreview(
       batchClearingObjectiveStatus: input.batchClearingObjectiveStatus,
       offerValidityStatus: input.offerValidityStatus,
       privateExchangeRateStatus: input.privateExchangeRateStatus,
+      riskControlPackStatus: input.riskControlPackStatus,
+      marketSimulationStatus: input.marketSimulationStatus,
+      optionSetParetoComparisonStatus: input.optionSetParetoComparisonStatus,
+      preferenceIncomparabilityStatus: input.preferenceIncomparabilityStatus,
+      tradeBurdenAccountingStatus: input.tradeBurdenAccountingStatus,
+      moralDifferenceAttestationStatus: input.moralDifferenceAttestationStatus,
+      bargainingProtocolStatus: input.bargainingProtocolStatus,
+      empiricalAssumptionSnapshotStatus: input.empiricalAssumptionSnapshotStatus,
+      sideConstraintStatus: input.sideConstraintStatus,
+      intrapersonalSelfOffsetStatus: input.intrapersonalSelfOffsetStatus,
+      antiCorruptionProcessIntegrityStatus: input.antiCorruptionProcessIntegrityStatus,
       noncompensableBlockerStatus: input.noncompensableBlockerStatus,
       sensitiveEvidenceAttestationStatus: input.sensitiveEvidenceAttestationStatus,
       pilotEvidenceStatus: input.pilotEvidenceStatus,
+      pledgePerformanceBondStatus: input.pledgePerformanceBondStatus,
     },
     sections: [
       makeSection({
@@ -767,6 +1016,18 @@ export function buildMoralTradeClearingPreview(
           "Batch clearing still needs a frozen objective, deterministic tie-break fairness rule, and reproducible objective result.",
         nextAction:
           "Record the batch-clearing objective result; do not allocate scarce matches by moral score, operator preference, public pressure, timestamp races, private-cap leakage, or database order.",
+      }),
+      makeSection({
+        key: "template-and-review-admission",
+        label: "Template and review admission",
+        status: templateAdmissionBlockers.length ? "blocked" : "passed",
+        blockerCodes: templateAdmissionBlockers,
+        passedMessage:
+          "The preview conforms to an approved template and has review-capacity admission for this stage.",
+        blockedMessage:
+          "The preview still needs approved-template and parameter conformance plus non-overflow review-capacity admission.",
+        nextAction:
+          "Route off-template terms to explicit reviewer decision, freeze the parameter policy, and waitlist rather than capture when reviewer capacity is exhausted.",
       }),
       makeSection({
         key: "baseline-comparison",
@@ -896,6 +1157,54 @@ export function buildMoralTradeClearingPreview(
           "Record affected participants' private quote terms, suppress public moral prices and exact willingness-to-trade terms, and expose only compatibility bands unless a narrower disclosure is granted.",
       }),
       makeSection({
+        key: "option-preference-and-burden",
+        label: "Option, preference, and burden review",
+        status: optionPreferenceBurdenBlockers.length ? "blocked" : "passed",
+        blockerCodes: optionPreferenceBurdenBlockers,
+        passedMessage:
+          "Option-set/Pareto comparison, preference-incomparability handling, trade-burden accounting, and moral-difference attestation are non-blocking.",
+        blockedMessage:
+          "The preview still needs option-set/Pareto, preference-incomparability, burden-accounting, or moral-difference review before lock or reliance.",
+        nextAction:
+          "Record the no-trade versus if-this-clears option set, noncardinal/incomparable preference handling, burden allocation, and moral-difference attestation.",
+      }),
+      makeSection({
+        key: "assumptions-and-bargaining",
+        label: "Assumptions and bargaining review",
+        status: assumptionBargainingBlockers.length ? "blocked" : "passed",
+        blockerCodes: assumptionBargainingBlockers,
+        passedMessage:
+          "Bargaining/anti-holdup screening and empirical-assumption snapshots are non-blocking.",
+        blockedMessage:
+          "Bargaining protocol, anti-holdup, or empirical-assumption snapshots still block reliance.",
+        nextAction:
+          "Freeze empirical assumptions separately from moral valuation and screen the bargaining protocol for holdup, pressure, and stale-assumption risk.",
+      }),
+      makeSection({
+        key: "side-constraints-and-process",
+        label: "Side constraints and process integrity",
+        status: sideConstraintProcessBlockers.length ? "blocked" : "passed",
+        blockerCodes: sideConstraintProcessBlockers,
+        passedMessage:
+          "Side-constraint, intrapersonal/self-offset, and anti-corruption/process-integrity reviews are non-blocking.",
+        blockedMessage:
+          "Agent-relative limits, self-offset classification, or process-integrity review still blocks lock, reliance, payment, or completion claims.",
+        nextAction:
+          "Record side-constraint limits, classify intrapersonal or self-offset cases separately, and block improper inducement or process-integrity risks.",
+      }),
+      makeSection({
+        key: "risk-control-pack",
+        label: "Risk-control pack",
+        status: riskControlPackBlockers.length ? "blocked" : "passed",
+        blockerCodes: riskControlPackBlockers,
+        passedMessage:
+          "Applicable risk-control pack and control-result bundle are non-blocking for this preview stage.",
+        blockedMessage:
+          "The preview still needs the applicable risk-control pack and control-result bundle.",
+        nextAction:
+          "Attach the frozen risk-control pack, control applicability result, and blocker summary before lock or reliance.",
+      }),
+      makeSection({
         key: "noncompensable-blockers",
         label: "Noncompensable blockers",
         status: noncompensableBlockerBlockers.length ? "blocked" : "passed",
@@ -920,14 +1229,17 @@ export function buildMoralTradeClearingPreview(
           "Record privacy-preserving attestations for private receipts, identity artifacts, payment destinations, provider records, and reviewer notes before counterparties rely on the claim.",
       }),
       makeSection({
-        key: "pilot-evidence",
-        label: "Pilot evidence",
-        status: pilotEvidenceBlockers.length ? "blocked" : "passed",
-        blockerCodes: pilotEvidenceBlockers,
+        key: "market-simulation-and-pilot-evidence",
+        label: "Market simulation and pilot evidence",
+        status:
+          pilotEvidenceBlockers.length || marketSimulationBlockers.length
+            ? "blocked"
+            : "passed",
+        blockerCodes: [...marketSimulationBlockers, ...pilotEvidenceBlockers],
         passedMessage:
           "Pilot promotion evidence includes simulation, red-team review, pre-registered scale-up criteria, pause criteria, rollback criteria, and non-volume success metrics.",
         blockedMessage:
-          "Pilot evidence still blocks payable, reliance-bearing, public-metric, or release-promotion states.",
+          "Market simulation, red-team, pilot-exit, or release-promotion evidence still blocks payable, reliance-bearing, public-metric, or release-promotion states.",
         nextAction:
           "Record market simulation, red-team evidence, scale-up criteria, pause criteria, rollback criteria, and non-volume success metrics; matched volume alone cannot satisfy pilot success.",
       }),
@@ -1034,6 +1346,44 @@ export function buildMoralTradeClearingPreview(
         nextAction:
           "Freeze action unit, schedule, evidence due dates, challenge window, cure rule, and reciprocal release before reliance.",
       }),
+      makeSection({
+        key: "micro-pledge-unit-policy",
+        label: "Micro-pledge unit policy",
+        status:
+          input.track === "donation_offset"
+            ? "not_required_for_stage"
+            : microPledgeBlockers.length
+              ? "blocked"
+              : "passed",
+        blockerCodes: microPledgeBlockers,
+        passedMessage:
+          input.track === "donation_offset"
+            ? "Food-abstention micro-pledge unit policy is not required for donation-offset previews."
+            : "The pledge preview covers unit baseline, additionality, covered food, substitute plan, health-safety boundary, pre-performance lock, evidence ladder, amount band, sequence cap, no-auto-rollover, and longer-duration review.",
+        blockedMessage:
+          "Food-abstention micro-pledge unit controls are incomplete, so the pledge stays preview/manual-review only.",
+        nextAction:
+          "Freeze one-meal/few-meal/one-day/few-day unit terms, unit-specific baseline and additionality, covered-food definition, adequate substitute, health-safety review, pre-performance lock, evidence ladder, amount band, sequence cap, no-auto-rollover, and longer-duration review state.",
+      }),
+      makeSection({
+        key: "pledge-performance-bond",
+        label: "Pledge performance bond",
+        status:
+          input.track === "donation_offset"
+            ? "not_required_for_stage"
+            : pledgeBondBlockers.length
+              ? "blocked"
+              : "passed",
+        blockerCodes: pledgeBondBlockers,
+        passedMessage:
+          input.track === "donation_offset"
+            ? "Pledge performance bonds are not required for donation-offset previews."
+            : "Any pledge performance bond is either not required or has reviewed amount, return, forfeiture, destination, challenge, and neutral-review terms.",
+        blockedMessage:
+          "Pledge performance-bond amount, return, forfeiture, destination, challenge, or neutral-review terms are still blocking.",
+        nextAction:
+          "Preview performance bonds as optional factual-trust support only; freeze amount, posting mode, return and forfeiture terms, destination, challenge window, and neutral-review rule.",
+      }),
     ],
     userFacingBlockers: allBlockers.map((code) => {
       switch (code) {
@@ -1062,6 +1412,10 @@ export function buildMoralTradeClearingPreview(
           return "Donation-offset batch clearing needs a frozen objective, deterministic tie-break fairness rule, and reproducible objective result; scarce matches cannot be allocated by moral score, operator preference, public pressure, timestamp races, private-cap leakage, or database order.";
         case "batch_clearing_objective_passed_for_non_batch_mode":
           return "Batch-clearing objective status must match the selected clearing mode.";
+        case "approved_template_conformance_not_passed":
+          return "Donation-offset and pledge-swap terms must conform to an approved template and frozen parameter policy, or receive explicit off-template reviewer approval before lock or reliance.";
+        case "review_capacity_admission_not_passed":
+          return "Review capacity is a release and matching constraint; exhausted or stale reviewer capacity keeps the preview draft, queued, or waitlisted with no capture or reliance.";
         case "cause_bucket_taxonomy_not_passed":
           return "Cause-bucket assignments need versioned plural-reviewed taxonomy approval before they affect distinctness, classification, clearing, or public metrics.";
         case "resource_compatibility_not_passed":
@@ -1072,12 +1426,34 @@ export function buildMoralTradeClearingPreview(
           return "This offer needs a current validity record or renewed confirmation because baselines, terms, evidence standards, payment methods, jurisdictions, destinations, or counterparty buckets can go stale.";
         case "private_exchange_rate_not_passed":
           return "Clearing ratios, side payments, and cause tradeoffs need private quote records and cannot be published as cause prices, global moral exchange rates, exact willingness-to-trade terms, or inferred moral values.";
+        case "option_set_pareto_comparison_not_passed":
+          return "The preview needs a no-trade versus if-this-clears option-set/Pareto comparison before the participant can rely on it.";
+        case "preference_incomparability_not_passed":
+          return "Preference incomparability or noncardinal tradeoffs must be handled explicitly rather than forced into a fake numeric moral price.";
+        case "trade_burden_accounting_not_passed":
+          return "Trade burden, privacy burden, evidence burden, and obligation burden must be accounted for before lock or reliance.";
+        case "moral_difference_attestation_not_passed":
+          return "The exchange still needs a moral-difference attestation; same-view co-funding or ordinary matching cannot be counted as moral trade.";
+        case "bargaining_protocol_not_passed":
+          return "The bargaining protocol and anti-holdup screen must be non-blocking before scarce matches, lock, or reliance.";
+        case "empirical_assumption_snapshot_not_passed":
+          return "Empirical assumptions must be snapshot separately from moral valuation; stale or missing assumptions require renewed preview and confirmation.";
+        case "side_constraint_not_passed":
+          return "Agent-relative limits and side constraints cannot be priced away by compensation or reciprocal favors.";
+        case "intrapersonal_self_offset_not_passed":
+          return "Intrapersonal or self-offset cases must be classified separately and cannot be silently promoted into counterparty moral trade.";
+        case "anti_corruption_process_integrity_not_passed":
+          return "Anti-corruption and process-integrity review must be non-blocking before payment, reliance, or completion claims.";
+        case "risk_control_pack_not_passed":
+          return "The applicable risk-control pack and control-result bundle must be attached before lock or reliance.";
         case "noncompensable_blocker_not_passed":
           return "Safety, legal, privacy, third-party-rights, reporting-integrity, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers are constraints, not prices; side payments, higher donations, performance bonds, reciprocal favors, private agreements, or private waivers cannot clear them by themselves.";
         case "sensitive_evidence_attestation_not_passed":
           return "Sensitive evidence must be represented by claim-typed attestation results, uncertainty, scope, and challenge routes; raw private artifacts cannot go to counterparties without a current privacy grant and passed confidentiality review, and cannot be public.";
         case "pilot_evidence_not_passed":
           return "Donation-offset and pledge-swap pilots need market simulation, red-team evidence, pre-registered scale-up, pause, and rollback criteria, and non-volume success metrics; matched volume alone cannot satisfy pilot success.";
+        case "market_simulation_not_passed":
+          return "Market simulation and red-team evidence must be non-blocking before promotion into payable or reliance-bearing states.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -1094,6 +1470,22 @@ export function buildMoralTradeClearingPreview(
         case "baseline_integrity_not_non_blocking":
         case "baseline_confidence_low":
           return "The baseline needs stronger review before it can support clearing.";
+        case "micro_pledge_controls_missing":
+        case "micro_pledge_unit_baseline_not_passed":
+        case "micro_pledge_additionality_not_passed":
+        case "micro_pledge_covered_food_definition_not_passed":
+        case "micro_pledge_adequate_substitute_plan_not_passed":
+        case "micro_pledge_health_safety_boundary_not_passed":
+        case "micro_pledge_pre_performance_lock_not_passed":
+        case "micro_pledge_retroactive_claim_not_passed":
+        case "micro_pledge_evidence_ladder_not_passed":
+        case "micro_pledge_per_unit_amount_band_not_passed":
+        case "micro_pledge_sequence_cap_not_passed":
+        case "micro_pledge_no_auto_rollover_not_passed":
+        case "micro_pledge_longer_duration_review_not_passed":
+          return "Food-abstention micro-pledges need unit-specific baseline, additionality, covered-food, substitute, health-safety, pre-performance lock, evidence ladder, amount-band, sequence-cap, no-auto-rollover, and longer-duration review controls before completion or reliance.";
+        case "pledge_performance_bond_not_passed":
+          return "Any pledge performance bond must be optional factual-trust support with frozen amount, posting mode, return, forfeiture, destination, challenge window, and neutral-review terms.";
         default:
           return "This control must be resolved before lock, capture, reliance, or completion claims.";
       }
@@ -1106,9 +1498,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, noncompensable blocker review, sensitive-evidence attestation, pilot evidence, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, batch-clearing objective, approved-template conformance, review-capacity admission, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, option/Pareto review, preference-incomparability handling, trade-burden accounting, moral-difference attestation, bargaining/anti-holdup screening, empirical-assumption snapshots, side-constraint and process-integrity review, risk-control-pack gating, noncompensable blocker review, sensitive-evidence attestation, market simulation, pilot evidence, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, micro-pledge unit controls, optional pledge-bond review, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, noncompensable blocker, sensitive-evidence attestation, pilot evidence, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, batch-clearing objective, template/review admission, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, option/Pareto, preference-incomparability, trade-burden, moral-difference, bargaining, empirical-assumption, side-constraint, intrapersonal/self-offset, anti-corruption/process-integrity, risk-control-pack, noncompensable blocker, sensitive-evidence attestation, market-simulation, pilot-evidence, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, micro-pledge unit, and pledge-bond controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -1166,7 +1558,7 @@ export function validateMoralTradeClearingPreviewContract(
     ),
     check(
       "required_sections",
-      "Contract exposes all moraltrade68 preview sections",
+      "Contract exposes all moraltrade82 preview sections",
       REQUIRED_SECTIONS.every((section) => contract.requiredSections.includes(section)),
       `${contract.requiredSections.length} section(s)`,
     ),
@@ -1284,15 +1676,29 @@ export function buildDemoDonationOffsetClearingPreview() {
     adverseAssociationStatus: "passed",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    approvedTemplateConformanceStatus: "passed",
+    reviewCapacityAdmissionStatus: "passed",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
     privateExchangeRateStatus: "passed",
+    riskControlPackStatus: "passed",
+    marketSimulationStatus: "passed",
+    optionSetParetoComparisonStatus: "passed",
+    preferenceIncomparabilityStatus: "passed",
+    tradeBurdenAccountingStatus: "passed",
+    moralDifferenceAttestationStatus: "passed",
+    bargainingProtocolStatus: "passed",
+    empiricalAssumptionSnapshotStatus: "passed",
+    sideConstraintStatus: "not_required_for_stage",
+    intrapersonalSelfOffsetStatus: "not_required_for_stage",
+    antiCorruptionProcessIntegrityStatus: "passed",
     noncompensableBlockerStatus: "passed",
     sensitiveEvidenceAttestationStatus: "passed",
     pilotEvidenceStatus: "passed",
+    pledgePerformanceBondStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -1356,15 +1762,29 @@ export function buildDemoPledgeSwapClearingPreview() {
     adverseAssociationStatus: "not_required_for_stage",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    approvedTemplateConformanceStatus: "passed",
+    reviewCapacityAdmissionStatus: "needs_review",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
     privateExchangeRateStatus: "passed",
+    riskControlPackStatus: "passed",
+    marketSimulationStatus: "needs_review",
+    optionSetParetoComparisonStatus: "passed",
+    preferenceIncomparabilityStatus: "passed",
+    tradeBurdenAccountingStatus: "passed",
+    moralDifferenceAttestationStatus: "passed",
+    bargainingProtocolStatus: "passed",
+    empiricalAssumptionSnapshotStatus: "passed",
+    sideConstraintStatus: "passed",
+    intrapersonalSelfOffsetStatus: "not_required_for_stage",
+    antiCorruptionProcessIntegrityStatus: "passed",
     noncompensableBlockerStatus: "passed",
     sensitiveEvidenceAttestationStatus: "needs_review",
     pilotEvidenceStatus: "needs_review",
+    pledgePerformanceBondStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",
@@ -1382,6 +1802,20 @@ export function buildDemoPledgeSwapClearingPreview() {
       scheduleStatus: "passed",
       performanceTermsStatus: "passed",
       compensationTermsStatus: "not_required_for_stage",
+    },
+    microPledgeControls: {
+      unitBaselineStatus: "passed",
+      unitAdditionalityStatus: "passed",
+      coveredFoodDefinitionStatus: "passed",
+      adequateSubstitutePlanStatus: "passed",
+      healthSafetyBoundaryStatus: "passed",
+      prePerformanceLockStatus: "needs_review",
+      retroactiveClaimStatus: "passed",
+      evidenceLadderStatus: "passed",
+      perUnitAmountBandStatus: "passed",
+      sequenceCapStatus: "passed",
+      noAutoRolloverStatus: "passed",
+      longerDurationReviewStatus: "passed",
     },
   });
 }
