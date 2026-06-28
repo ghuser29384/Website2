@@ -1639,9 +1639,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
-  assert.match(mpgfHubPage, /title="moral public goods"/);
-  assert.match(mpgfHubPage, /Preview moral public goods/);
-  assert.match(mpgfHubPage, /moral public goods status strip/);
+  assert.match(mpgfHubPage, /title="Common Ground Budget"/);
+  assert.match(mpgfHubPage, /Preview Common Ground Budget/);
+  assert.match(mpgfHubPage, /Common Ground Budget status strip/);
   assert.match(mpgfHubPage, /Public Goods Fund sealed summary/);
   assert.match(mpgfHubPage, /No charge now/);
   assert.match(mpgfHubPage, /JIT after gates/);
@@ -1895,7 +1895,7 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
   assert.equal(report.mechanism.abbreviation, "CRECM");
   assert.equal(report.mechanism.technicalLabel, "CRECM v1.125");
-  assert.equal(report.mechanism.userFacingLabel, "moral public goods");
+  assert.equal(report.mechanism.userFacingLabel, "Common Ground Budget");
   assert.equal(report.mechanism.sourceSpec, "moralpublicgoods131.md");
   assert.equal(report.mechanism.deploymentFlag, "crecm_v1_125");
   assert.ok(report.mechanism.notPureMechanism.includes("not_pure_ecm_without_common_ground_budget"));
@@ -3338,7 +3338,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /"use client"/);
   assert.match(budgetSavePanel, /Save no-capture budget preview/);
   assert.match(budgetSavePanel, /Final review consent boundary/);
-  assert.match(budgetSavePanel, /Review your moral public goods/);
+  assert.match(budgetSavePanel, /Review your Common Ground Budget/);
   assert.match(budgetSavePanel, /This review screen is the consent boundary/);
   assert.match(budgetSavePanel, /Hidden defaults, suggestions, project-card/);
   assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
@@ -3411,7 +3411,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /paymentCaptureAllowed: false/);
   assert.match(budgetSavePanel, /saved_no_capture/);
   assert.match(budgetSavePanel, /No payment capture was authorized/);
-  assert.match(budgetSavePanel, /Save moral public goods/);
+  assert.match(budgetSavePanel, /Save Common Ground Budget/);
 
   for (const table of [
     "mpgf_user_budgets",

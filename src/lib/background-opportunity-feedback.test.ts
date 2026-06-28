@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -90,4 +91,24 @@ test("opportunity feedback rows avoid raw free-text detail", () => {
     profile_id: "profile-1",
     reason_code: "too_vague",
   });
+});
+
+test("opportunity feedback routes use policy decisions and reject stale briefs", () => {
+  const briefRoute = readFileSync(
+    "src/app/api/background/opportunity-briefs/[id]/feedback/route.ts",
+    "utf8",
+  );
+  const compatibilityRoute = readFileSync(
+    "src/app/api/background/opportunity-feedback/route.ts",
+    "utf8",
+  );
+
+  for (const route of [briefRoute, compatibilityRoute]) {
+    assert.match(route, /background\.opportunity_feedback\.record/);
+    assert.match(route, /evaluateBackgroundPolicyDecision/);
+    assert.match(route, /policyDecisionId/);
+    assert.match(route, /This opportunity brief is stale or no longer actionable/);
+    assert.match(route, /review_status === "blocked"/);
+    assert.match(route, /delivery_state === "expired"/);
+  }
 });

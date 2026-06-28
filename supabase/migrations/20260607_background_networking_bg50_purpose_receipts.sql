@@ -70,6 +70,8 @@ alter table public.wish_profiles
   add column if not exists inbound_delegate_surface_budget_per_window jsonb not null default '{}'::jsonb,
   add column if not exists inbound_delegate_pending_intro_limit integer,
   add column if not exists inbound_delegate_cooloff_until timestamptz,
+  add column if not exists inbound_delegate_confirmed_at timestamptz,
+  add column if not exists inbound_delegate_expires_at timestamptz,
   add column if not exists candidate_inbound_budget_version text not null default 'candidate-budget-v1',
   add column if not exists candidate_exposure_version text not null default 'candidate-exposure-v1',
   add column if not exists allowed_cohort_ids text[] not null default '{}';

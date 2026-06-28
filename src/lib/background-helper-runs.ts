@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { BACKGROUND_OPPORTUNITY_NOTIFICATION } from "@/lib/background-notification-policy";
 import type { Database } from "@/lib/supabase/database.types";
 
 export const BACKGROUND_HELPER_RUN_VERSION = "background-helper-run-v1";
@@ -140,11 +141,10 @@ export function buildBackgroundSourceSyncJobRow({
 
 export function buildBackgroundOpportunityNotificationCopy() {
   return {
-    body:
-      "A privacy-safe opportunity brief is ready for review. Exact wishes, private asks, source notes, sensitive constraints, and contact details remain hidden until the appropriate consent stage.",
+    body: BACKGROUND_OPPORTUNITY_NOTIFICATION.body,
     notificationVersion: BACKGROUND_HELPER_NOTIFICATION_VERSION,
     subject: "Moral Trade: background opportunity ready",
-    title: "New broad-overlap opportunity",
+    title: BACKGROUND_OPPORTUNITY_NOTIFICATION.title,
   };
 }
 

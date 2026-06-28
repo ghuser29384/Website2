@@ -16,7 +16,19 @@ import type {
   MpgfPublicGoodsRoundAllocation,
 } from "./types";
 
-export const MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION = "mpgf-contribution-proof-ledger-v2";
+export const MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION = "mpgf-contribution-proof-ledger-v3";
+
+export const MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER = [
+  "charged",
+  "sent_to_projects",
+  "counted_for_matching",
+  "sponsor_added",
+  "rewards_credits_certificates",
+  "failed_carry_forward",
+] as const;
+
+export type MpgfContributionSettlementSummaryGroupKey =
+  (typeof MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER)[number];
 
 export type MpgfContributionProofLedgerTone = "passed" | "pending" | "paused" | "blocked" | "not_started";
 
@@ -60,11 +72,41 @@ export interface MpgfContributionProofLedgerAccounting {
   proofDetail: string;
 }
 
+export interface MpgfContributionSettlementSummaryLine {
+  label: string;
+  technicalField: string;
+  cents: number | null;
+  count: number | null;
+  includedInSentToProjects: boolean;
+  includedInMatchEligibleDollars: boolean;
+}
+
+export interface MpgfContributionSettlementSummaryGroup {
+  key: MpgfContributionSettlementSummaryGroupKey;
+  label: string;
+  lines: MpgfContributionSettlementSummaryLine[];
+}
+
+export interface MpgfContributionSettlementSummary {
+  groupOrder: typeof MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER;
+  groups: Record<MpgfContributionSettlementSummaryGroupKey, MpgfContributionSettlementSummaryGroup>;
+  detailsDrawerRequired: true;
+  finalReceiptRequired: true;
+  summaryNumbersMustNotCombineChannels: true;
+  sentToProjectsExcludesFeesRewardsCreditsCertificatesAndSponsorMatch: true;
+  countedForMatchingUsesCountedAndMatchEligibleOnly: true;
+  rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true;
+  technicalAccounting: MpgfContributionProofLedgerAccounting & {
+    failedAllocationsCents: number;
+    carryForwardCreditCents: number;
+  };
+}
+
 export interface MpgfContributionProofLedgerRow {
   pledgeId: string;
   campaignId: string;
   campaignTitle: string;
-  authorizedBudgetCents: number;
+  maximumBudgetCents: number;
   currentlyRoutedAllocationsCents: number;
   pendingThresholdAllocationsCents: number;
   failedAllocationsCents: number;
@@ -76,12 +118,13 @@ export interface MpgfContributionProofLedgerRow {
   payoutMilestoneStatus: MpgfContributionProofLedgerStatus;
   payoutMilestones: MpgfContributionProofLedgerMilestone[];
   accounting: MpgfContributionProofLedgerAccounting;
+  settlementSummary: MpgfContributionSettlementSummary;
 }
 
 export interface MpgfContributionProofLedger {
   schemaVersion: typeof MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION;
   participantLabel: string;
-  authorizedBudgetCents: number;
+  maximumBudgetCents: number;
   currentlyRoutedAllocationsCents: number;
   pendingThresholdAllocationsCents: number;
   failedAllocationsCents: number;
@@ -93,6 +136,7 @@ export interface MpgfContributionProofLedger {
   challengeWindowStatus: MpgfContributionProofLedgerStatus;
   payoutMilestones: MpgfContributionProofLedgerMilestone[];
   accounting: MpgfContributionProofLedgerAccounting;
+  settlementSummary: MpgfContributionSettlementSummary;
   rows: MpgfContributionProofLedgerRow[];
   warnings: string[];
 }
@@ -559,6 +603,134 @@ function emptyAccounting(): MpgfContributionProofLedgerAccounting {
   };
 }
 
+function nonNegativeSafeInteger(value: number) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function centsLine(
+  label: string,
+  technicalField: string,
+  cents: number,
+  {
+    includedInMatchEligibleDollars = false,
+    includedInSentToProjects = false,
+  }: {
+    includedInMatchEligibleDollars?: boolean;
+    includedInSentToProjects?: boolean;
+  } = {},
+): MpgfContributionSettlementSummaryLine {
+  return {
+    label,
+    technicalField,
+    cents: nonNegativeSafeInteger(cents),
+    count: null,
+    includedInSentToProjects,
+    includedInMatchEligibleDollars,
+  };
+}
+
+function countLine(
+  label: string,
+  technicalField: string,
+  count: number,
+): MpgfContributionSettlementSummaryLine {
+  return {
+    label,
+    technicalField,
+    cents: null,
+    count: nonNegativeSafeInteger(count),
+    includedInSentToProjects: false,
+    includedInMatchEligibleDollars: false,
+  };
+}
+
+export function buildMpgfContributionSettlementSummary({
+  accounting,
+  carryForwardCreditCents,
+  failedAllocationsCents,
+}: {
+  accounting: MpgfContributionProofLedgerAccounting;
+  carryForwardCreditCents: number;
+  failedAllocationsCents: number;
+}): MpgfContributionSettlementSummary {
+  const technicalAccounting = {
+    ...accounting,
+    failedAllocationsCents: nonNegativeSafeInteger(failedAllocationsCents),
+    carryForwardCreditCents: nonNegativeSafeInteger(carryForwardCreditCents),
+  };
+  const groups: MpgfContributionSettlementSummary["groups"] = {
+    charged: {
+      key: "charged",
+      label: "Charged from you",
+      lines: [centsLine("Gross captured", "grossCapturedCents", accounting.grossCapturedCents)],
+    },
+    sent_to_projects: {
+      key: "sent_to_projects",
+      label: "Sent to projects",
+      lines: [
+        centsLine("Net recipient-disbursed", "netRecipientDisbursedCents", accounting.netRecipientDisbursedCents, {
+          includedInSentToProjects: true,
+        }),
+      ],
+    },
+    counted_for_matching: {
+      key: "counted_for_matching",
+      label: "Counted for matching",
+      lines: [
+        centsLine("Counted contribution", "countedContributionCents", accounting.countedContributionCents),
+        centsLine(
+          "Match-eligible contribution",
+          "matchEligibleContributionCents",
+          accounting.matchEligibleContributionCents,
+          { includedInMatchEligibleDollars: true },
+        ),
+      ],
+    },
+    sponsor_added: {
+      key: "sponsor_added",
+      label: "Sponsor added",
+      lines: [
+        centsLine("Sponsor base match", "sponsorBaseMatchCents", accounting.sponsorBaseMatchCents),
+        centsLine("Sponsor bonus match", "sponsorBonusMatchCents", accounting.sponsorBonusMatchCents),
+      ],
+    },
+    rewards_credits_certificates: {
+      key: "rewards_credits_certificates",
+      label: "Rewards, credits, and certificates",
+      lines: [
+        centsLine("Success rewards", "successRewardCents", accounting.successRewardCents),
+        countLine("Coordination credits", "coordinationCreditCount", accounting.coordinationCreditCount),
+        countLine("Impact certificates", "impactCertificateCount", accounting.impactCertificateCount),
+      ],
+    },
+    failed_carry_forward: {
+      key: "failed_carry_forward",
+      label: "Failed or carried forward",
+      lines: [
+        centsLine("Failed allocations", "failedAllocationsCents", failedAllocationsCents),
+        centsLine("Carry-forward credit", "carryForwardCreditCents", carryForwardCreditCents),
+        centsLine(
+          "Failure bonus or carry-forward credit",
+          "failureBonusOrCarryForwardCreditCents",
+          accounting.failureBonusOrCarryForwardCreditCents,
+        ),
+      ],
+    },
+  };
+
+  return {
+    groupOrder: MPGF_CONTRIBUTION_SETTLEMENT_SUMMARY_GROUP_ORDER,
+    groups,
+    detailsDrawerRequired: true,
+    finalReceiptRequired: true,
+    summaryNumbersMustNotCombineChannels: true,
+    sentToProjectsExcludesFeesRewardsCreditsCertificatesAndSponsorMatch: true,
+    countedForMatchingUsesCountedAndMatchEligibleOnly: true,
+    rewardsCreditsCertificatesExcludedFromPublicGoodDollars: true,
+    technicalAccounting,
+  };
+}
+
 function accountingForPledge({
   allocationLine,
   countedContributionCents,
@@ -774,12 +946,17 @@ export function buildMpgfContributionProofLedger({
       failureBonusOrCarryForwardCreditCents,
       paymentProof: paymentProofForPledge(pledge, paymentProofs),
     });
+    const settlementSummary = buildMpgfContributionSettlementSummary({
+      accounting,
+      carryForwardCreditCents: failureBonusOrCarryForwardCreditCents,
+      failedAllocationsCents,
+    });
 
     return {
       pledgeId: pledge.id,
       campaignId: pledge.campaignId,
       campaignTitle: campaign?.title ?? pledge.campaignId.replaceAll("-", " "),
-      authorizedBudgetCents: pledgeActive ? pledge.amountCents : 0,
+      maximumBudgetCents: pledgeActive ? pledge.amountCents : 0,
       currentlyRoutedAllocationsCents,
       pendingThresholdAllocationsCents,
       failedAllocationsCents,
@@ -791,11 +968,12 @@ export function buildMpgfContributionProofLedger({
       payoutMilestoneStatus,
       payoutMilestones: buildMilestones(pledge.campaignId, currentlyRoutedAllocationsCents, payoutMilestoneStatus),
       accounting,
+      settlementSummary,
     };
   });
 
-  const authorizedBudgetCents =
-    rows.reduce((sum, row) => sum + row.authorizedBudgetCents, 0) +
+  const maximumBudgetCents =
+    rows.reduce((sum, row) => sum + row.maximumBudgetCents, 0) +
     activeSubscriptionBudgetCents(participantState) +
     activeRealMoneyBudgetCents(realMoneyAccountState);
   const currentlyRoutedAllocationsCents = rows.reduce(
@@ -811,6 +989,11 @@ export function buildMpgfContributionProofLedger({
     rows.reduce((sum, row) => sum + row.failureBonusOrCarryForwardCreditCents, 0) +
     lateCarryForwardCreditCents(realMoneyAccountState);
   const accounting = sumAccounting(rows, lateCarryForwardCreditCents(realMoneyAccountState));
+  const settlementSummary = buildMpgfContributionSettlementSummary({
+    accounting,
+    carryForwardCreditCents,
+    failedAllocationsCents,
+  });
   const noRouteStatus = status(
     "no_saved_route",
     participantState?.status === "sign_in_required" ? "not_started" : "pending",
@@ -828,7 +1011,7 @@ export function buildMpgfContributionProofLedger({
   return {
     schemaVersion: MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION,
     participantLabel: participantState?.displayName ?? (participantState?.userId ? "Signed-in participant" : "Visitor"),
-    authorizedBudgetCents,
+    maximumBudgetCents,
     currentlyRoutedAllocationsCents,
     pendingThresholdAllocationsCents,
     failedAllocationsCents,
@@ -848,6 +1031,7 @@ export function buildMpgfContributionProofLedger({
     ),
     payoutMilestones: rows.flatMap((row) => row.payoutMilestones),
     accounting,
+    settlementSummary,
     rows,
     warnings: [...(participantState?.warnings ?? []), ...(realMoneyAccountState?.warnings ?? [])],
   };

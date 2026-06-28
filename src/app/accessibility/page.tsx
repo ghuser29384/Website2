@@ -4,6 +4,10 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
+import {
+  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 import { getViewer } from "@/lib/app-data";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -148,22 +152,51 @@ export default async function AccessibilityPage() {
 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">QA scope</p>
-            <h2>What accessibility review should cover first</h2>
-            <p>
-              The audit called for manual keyboard and screen-reader QA on navigation, forms,
-              filters, and evidence workflows. These are the first public checkpoints.
-            </p>
+          <div className="panel data-card data-card-wide">
+            <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.accessibility.eyebrow}</p>
+            <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.accessibility.heading}</h2>
+            <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.accessibility.summary}</p>
+            <ul className="compact-list">
+              {BACKGROUND_PUBLIC_PAGE_SUMMARIES.accessibility.cards.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <details className="details-panel">
+              <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.accessibility.technicalDetailsLabel}</summary>
+              <div className="details-content">
+                <div className="hero-actions">
+                  {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                    <Link className="button button-secondary" href={link.href} key={link.href}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </details>
           </div>
-          <div className="data-grid">
-            {qaScopes.map((scope) => (
-              <article className="panel data-card" key={scope.title}>
-                <h3>{scope.title}</h3>
-                <p className="route-text">{scope.detail}</p>
-              </article>
-            ))}
-          </div>
+        </section>
+        <section className="section section-white">
+          <details className="details-panel">
+            <summary>Accessibility QA scope</summary>
+            <div className="details-content">
+              <div className="section-head">
+                <p className="eyebrow">QA scope</p>
+                <h2>What accessibility review should cover first</h2>
+                <p>
+                  The audit called for manual keyboard and screen-reader QA on navigation, forms,
+                  filters, and evidence workflows. These are the first public checkpoints.
+                </p>
+              </div>
+              <div className="data-grid">
+                {qaScopes.map((scope) => (
+                  <article className="panel data-card" key={scope.title}>
+                    <h3>{scope.title}</h3>
+                    <p className="route-text">{scope.detail}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </details>
         </section>
 
         <section className="section section-subtle">

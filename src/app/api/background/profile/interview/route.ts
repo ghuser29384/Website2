@@ -5,6 +5,10 @@ import {
 } from "@/lib/background-field-encryption";
 import { buildProfileInterviewAnswerRow } from "@/lib/background-opportunity-briefs";
 import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import {
   buildBackgroundRefinementItems,
   buildGuidedWishProfileDraft,
 } from "@/lib/background-refinement";
@@ -56,6 +60,17 @@ export async function GET() {
     return privateJson({ error: "Authentication required." }, 401);
   }
 
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.structured_wish_interview.read",
+    actorRole: "participant",
+    laneKey: "structured_wish_interview",
+    outputSchemaVersion: "background-structured-wish-interview-response-v1",
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
+  }
+
   const { data: profile, error } = await supabase
     .from("wish_profiles")
     .select(
@@ -96,6 +111,7 @@ export async function GET() {
     }),
     privacyNotice:
       "Refinement questions are generated from missing explicit fields. Answers stay private until separately approved for preview or matching signals.",
+    policyDecisionId: policyDecision.policyDecisionId,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_wish_interview_enabled"),
   });
 }
@@ -132,6 +148,17 @@ export async function POST(request: Request) {
     questionText: stringField(body.questionText),
     uncertaintyFlags: stringList(body.uncertaintyFlags),
   });
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.structured_wish_interview.answer",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:${row.question_key}`,
+    laneKey: "structured_wish_interview",
+    outputSchemaVersion: "background-structured-wish-interview-response-v1",
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
+  }
 
   let encryptedFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
 
@@ -168,6 +195,7 @@ export async function POST(request: Request) {
 
   return privateJson({
     id: data.id,
+    policyDecisionId: policyDecision.policyDecisionId,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_wish_interview_enabled"),
     stateMutation: "profile_interview_answer_saved",
     updatedAt: data.updated_at,

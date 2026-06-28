@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   type BackgroundSourcePermissionField,
   normalizeBackgroundSourcePermissionFields,
@@ -9,6 +11,8 @@ export const BACKGROUND_SOURCE_ASSIST_VERSION = "background-source-assist-v1";
 export const BACKGROUND_SOURCE_ASSIST_MODEL_NAME = "deterministic-redaction-v1";
 export const BACKGROUND_SOURCE_ASSIST_ALLOWED_USE =
   "review_first_source_summary_no_raw_persistence";
+export const BACKGROUND_SOURCE_TAG_CONFIRMATION_VERSION =
+  "background-source-summary-tag-confirmation-v1";
 export const BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS = [
   "url",
   "public_url",
@@ -98,7 +102,10 @@ const REDACTION_PATTERNS: Array<{
   },
 ];
 
-const FIELD_SIGNAL_KEY: Record<BackgroundSourcePermissionField, string> = {
+export const BACKGROUND_SOURCE_ASSIST_FIELD_SIGNAL_KEYS: Record<
+  BackgroundSourcePermissionField,
+  string
+> = {
   availability_context: "availability_context",
   capability_tags: "capability_tag",
   cause_priorities: "cause_priority",
@@ -168,6 +175,48 @@ const FIELD_KEYWORDS: Record<BackgroundSourcePermissionField, string[]> = {
 
 function compactText(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+    .join(",")}}`;
+}
+
+function buildSourceSignalFingerprint({
+  allowedFieldKey,
+  signalKey,
+  sourceSummaryId,
+  sourceSummaryVersion,
+  value,
+}: {
+  allowedFieldKey: BackgroundSourcePermissionField;
+  signalKey: string;
+  sourceSummaryId?: string | null;
+  sourceSummaryVersion?: number | null;
+  value: string;
+}) {
+  return `sha256:${createHash("sha256")
+    .update(
+      stableJson({
+        allowedFieldKey,
+        signalKey,
+        sourceSummaryId: sourceSummaryId ?? null,
+        sourceSummaryVersion: sourceSummaryVersion ?? null,
+        value: value.toLowerCase(),
+        version: BACKGROUND_SOURCE_TAG_CONFIRMATION_VERSION,
+      }),
+    )
+    .digest("hex")}`;
 }
 
 function incrementReport(
@@ -279,7 +328,7 @@ function buildSignalsForField({
     allowedFieldKey,
     confidenceBand: hasDirectKeyword ? "medium" : "low",
     sensitivity: allowedFieldKey === "safety_constraints" ? "specific" : "broad",
-    signalKey: FIELD_SIGNAL_KEY[allowedFieldKey],
+    signalKey: BACKGROUND_SOURCE_ASSIST_FIELD_SIGNAL_KEYS[allowedFieldKey],
     value,
   }));
 }
@@ -314,29 +363,87 @@ export function buildReviewedSourceDraftSummary({
 }
 
 export function buildBackgroundProfileSignalRows({
+  confirmationActorProfileId,
   draft,
   expiresAt,
   profileId,
+  purposeCode,
+  purposePolicyVersion,
   sourceConnectionId,
   sourceSummaryId,
+  sourceSummaryVersion,
 }: {
+  confirmationActorProfileId?: string | null;
   draft: Pick<BackgroundSourceAssistDraftSummary, "extractedSignals">;
   expiresAt?: string | null;
   profileId: string;
+  purposeCode?: string | null;
+  purposePolicyVersion?: string | null;
   sourceConnectionId?: string | null;
   sourceSummaryId?: string | null;
+  sourceSummaryVersion?: number | null;
 }): BackgroundProfileSignalInsert[] {
   return draft.extractedSignals.map((signal) => ({
     allowed_field_key: signal.allowedFieldKey,
     confidence_band: signal.confidenceBand,
+    confirmation_actor_profile_id: confirmationActorProfileId ?? profileId,
+    confirmation_kind: "explicit_participant_confirmation",
+    confirmation_policy_version: BACKGROUND_SOURCE_TAG_CONFIRMATION_VERSION,
+    confirmed_at: new Date().toISOString(),
     expires_at: expiresAt ?? null,
+    lineage_status: "active",
     profile_id: profileId,
+    purpose_code: purposeCode ?? null,
+    purpose_policy_version: purposePolicyVersion ?? null,
     sensitivity: signal.sensitivity,
+    signal_fingerprint: buildSourceSignalFingerprint({
+      allowedFieldKey: signal.allowedFieldKey,
+      signalKey: signal.signalKey,
+      sourceSummaryId,
+      sourceSummaryVersion,
+      value: signal.value,
+    }),
     signal_key: signal.signalKey,
     signal_value: signal.value,
     source: "approved_source_summary",
     source_connection_id: sourceConnectionId ?? null,
     source_summary_id: sourceSummaryId ?? null,
+    source_summary_version: sourceSummaryVersion ?? null,
     status: "active",
   }));
+}
+
+export function parseBackgroundSourceAssistSignals(value: unknown): BackgroundSourceAssistSignal[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+    )
+    .map((entry) => {
+      const allowedFieldKey = normalizeBackgroundSourcePermissionFields([
+        typeof entry.allowedFieldKey === "string" ? entry.allowedFieldKey : "",
+      ])[0];
+      const signalKey = typeof entry.signalKey === "string" ? compactText(entry.signalKey) : "";
+      const signalValue = typeof entry.value === "string" ? compactText(entry.value) : "";
+      const sensitivity = typeof entry.sensitivity === "string" ? entry.sensitivity : "";
+      const confidenceBand =
+        typeof entry.confidenceBand === "string" ? entry.confidenceBand : "";
+
+      if (!allowedFieldKey || !signalKey || !signalValue) {
+        return null;
+      }
+
+      return {
+        allowedFieldKey,
+        confidenceBand:
+          confidenceBand === "high" || confidenceBand === "medium" ? confidenceBand : "low",
+        sensitivity: sensitivity === "specific" ? "specific" : "broad",
+        signalKey,
+        value: signalValue,
+      } satisfies BackgroundSourceAssistSignal;
+    })
+    .filter((entry): entry is BackgroundSourceAssistSignal => Boolean(entry));
 }

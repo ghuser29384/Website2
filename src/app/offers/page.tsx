@@ -109,7 +109,7 @@ const DIRECTORY_TABS = [
   { label: "Create from template", value: "templates" },
   { label: "Worked examples", value: "worked_examples" },
   { label: "Demo data", value: "demo" },
-  { label: "moral public goods", value: "public_goods" },
+  { label: "Public Goods Fund", value: "public_goods" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
@@ -183,7 +183,7 @@ const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
   all: "All listings",
   demo: "Demo data",
   live: "Live offers",
-  public_goods: "moral public goods",
+  public_goods: "Public Goods Fund",
   templates: "Create from template",
   worked_examples: "Worked examples",
 };
@@ -975,12 +975,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     },
     {
       value: "public_goods",
-      label: "moral public goods",
+      label: "Public Goods Fund",
       href: createTabHref("public_goods", filterHrefParams),
       count: String(seedRoundCount),
       status: "Public Goods Fund",
       description:
-        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to moral public goods.",
+        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the Public Goods Fund.",
     },
   ] satisfies Array<{
     value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
@@ -1088,12 +1088,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <h1>Browse offers</h1>
             <p className="hero-text">
               {publicGoodsSearchIntent
-                ? "Public-goods searches open the moral public goods result before ordinary offer listings."
-                : "Explore live offers, reviewed templates, worked examples, demo data, and the moral public goods module without mixing their counts."}
+                ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
+                : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund module without mixing their counts."}
             </p>
             {publicGoodsSearchIntent ? (
               <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                {publicGoodsEntry?.primaryCta.label ?? "Preview moral public goods"}
+                {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
               </Link>
             ) : null}
             {publicGoodsSearchIntent ? null : (
@@ -1106,7 +1106,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   {workedExampleCount === 1 ? "example" : "examples"}
                 </span>
                 <span>
-                  <strong>{seedRoundCount}</strong> moral public goods{" "}
+                  <strong>{seedRoundCount}</strong> Public Goods Fund{" "}
                   {seedRoundCount === 1 ? "module" : "modules"}
                 </span>
                 <span>
@@ -1126,14 +1126,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="collection-action-copy">
               <strong>
                 {publicGoodsSearchIntent
-                  ? "moral public goods result available."
+                  ? "Common Ground Budget result available."
                   : defaultView === "worked_examples"
                     ? "Examples are first today."
                     : "Live offers are ready."}
               </strong>
               <p>
                 {publicGoodsSearchIntent
-                  ? "Public-goods searches open the moral public goods entry before ordinary offer listings."
+                  ? "Public-goods searches open the Common Ground Budget entry before ordinary offer listings."
                   : defaultView === "worked_examples"
                     ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
                     : "Start with live offers, then inspect examples when you want to understand the evidence model."}
@@ -1143,7 +1143,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {publicGoodsSearchIntent ? (
                 <>
                   <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                    {publicGoodsEntry?.primaryCta.label ?? "Preview moral public goods"}
+                    {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
                   </Link>
                   {publicGoodsEntry?.secondaryCtas.map((action) => (
                     <Link className="button button-secondary" href={action.href} key={action.key}>
@@ -1208,13 +1208,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             aria-live="polite"
           >
             <p className="sr-only" id="public-goods-result-announcement" role="status" aria-live="polite">
-              moral public goods result available.
+              Common Ground Budget result available.
             </p>
             <div className="marketplace-bootstrap-head">
               <div>
                 <p className="eyebrow">{publicGoodsEntry?.eyebrow ?? "Public Goods Fund"}</p>
                 <h2 id="public-goods-intent-heading">
-                  {publicGoodsEntry?.label ?? "moral public goods"}
+                  {publicGoodsEntry?.label ?? "Common Ground Budget"}
                 </h2>
                 <p>No ordinary moral-trade offers match this search.</p>
                 <p>
@@ -1413,7 +1413,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="marketplace-bootstrap-head">
             <div>
               <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or moral public goods.</h2>
+              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the Public Goods Fund.</h2>
               <p>
                 Live, template, worked-example, demo, and public-goods module surfaces stay
                 separated so the marketplace can build liquidity without implying custody, escrow,
@@ -1421,7 +1421,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </p>
             </div>
             <Link className="button button-primary" href={PUBLIC_GOODS_MODULE.href}>
-              Open moral public goods
+              Open Public Goods Fund
             </Link>
           </div>
 
@@ -2073,7 +2073,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </dl>
                       <div className="marketplace-bootstrap-actions">
                         <Link className="button button-primary" href={seedRoundHref}>
-                          Preview moral public goods
+                          Preview Common Ground Budget
                         </Link>
                         <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
                           Open Public Goods Fund

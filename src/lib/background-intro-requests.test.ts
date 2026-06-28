@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -94,4 +95,27 @@ test("contact approval requires reviewer approval and fresh MFA step-up", () => 
       session: { ...activeMfaSummary.session, accessTokenAgeSeconds: 7200 },
     }).errors.some((error) => /MFA step-up/i.test(error)),
   );
+});
+
+test("intro-request route derives targets from opportunity briefs only", () => {
+  const routeSource = readFileSync("src/app/api/background/intro-requests/route.ts", "utf8");
+  const schemaSource = readFileSync("supabase/schema.sql", "utf8");
+  const migrationSource = readFileSync(
+    "supabase/migrations/20260614_background_intro_request_idempotency.sql",
+    "utf8",
+  );
+
+  assert.match(
+    routeSource,
+    /Intro requests must be derived from a requester-owned opportunity brief/,
+  );
+  assert.match(routeSource, /\.eq\("id", opportunityBriefId\)/);
+  assert.match(routeSource, /counterpartyProfileId = brief\.candidate_profile_id/);
+  assert.doesNotMatch(routeSource, /targetProfileId/);
+  assert.match(routeSource, /background\.intro_request\.create/);
+  assert.match(routeSource, /existing_intro_request_returned/);
+  assert.match(routeSource, /\.eq\("opportunity_brief_id", opportunityBriefId\)/);
+  assert.match(routeSource, /\.in\("review_state", \["requested", "under_review", "approved", "changes_requested", "sent"\]\)/);
+  assert.match(schemaSource, /background_intro_packets_active_brief_uidx/);
+  assert.match(migrationSource, /background_intro_packets_active_brief_uidx/);
 });

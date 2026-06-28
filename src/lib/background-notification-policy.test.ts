@@ -2,9 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BACKGROUND_OPPORTUNITY_NOTIFICATION,
   shouldSendBackgroundNotificationImmediately,
   shouldSendBriefNow,
 } from "@/lib/background-notification-policy";
+
+test("opportunity notification copy uses the bg76 generic safe contract", () => {
+  assert.deepEqual(BACKGROUND_OPPORTUNITY_NOTIFICATION, {
+    body:
+      "A privacy-safe opportunity brief is ready for your review. Exact wishes and contact details remain hidden until the appropriate consent stage.",
+    title: "New broad-overlap opportunity",
+  });
+  assert.doesNotMatch(BACKGROUND_OPPORTUNITY_NOTIFICATION.body, /private ask|source note|contact:\s/i);
+});
 
 test("discovery notifications default to digest unless explicitly immediate", () => {
   assert.equal(

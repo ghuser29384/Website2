@@ -8,6 +8,11 @@ import {
   normalizeBackgroundOpportunityFeedbackReason,
 } from "@/lib/background-opportunity-feedback";
 import { getOpportunityBriefDeliveryStateForFeedback } from "@/lib/background-opportunity-briefs";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -98,13 +103,36 @@ export async function POST(request: Request) {
 
   const { data: brief, error: briefError } = await supabase
     .from("background_opportunity_briefs")
-    .select("id, match_id")
+    .select("id, delivery_state, expires_at, match_id, purpose_code, purpose_policy_version, review_status, status")
     .eq("id", briefId)
     .eq("profile_id", user.id)
     .maybeSingle();
 
   if (briefError || !brief) {
     return privateJson({ error: briefError?.message ?? "Opportunity brief was not found." }, 404);
+  }
+
+  if (
+    brief.review_status === "blocked" ||
+    brief.delivery_state === "expired" ||
+    (brief.expires_at && Date.parse(brief.expires_at) <= Date.now()) ||
+    ["dismissed", "expired", "muted"].includes(brief.status ?? "")
+  ) {
+    return privateJson({ error: "This opportunity brief is stale or no longer actionable." }, 409);
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.opportunity_feedback.record",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:${brief.id}:${outcome}:${reason}`,
+    laneKey: "opportunity_briefs",
+    outputSchemaVersion: "background-opportunity-feedback-response-v1",
+    purposeCode: brief.purpose_code ?? "moral_trade_offer",
+    purposePolicyVersion: brief.purpose_policy_version ?? BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
   }
 
   const feedback = buildBackgroundOpportunityFeedbackRow({
@@ -141,6 +169,7 @@ export async function POST(request: Request) {
   return privateJson({
     ok: true,
     outreachSent: false,
+    policyDecisionId: policyDecision.policyDecisionId,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
     stateMutation: "opportunity_feedback_recorded",
   });

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  BACKGROUND_SOURCE_TAG_CONFIRMATION_VERSION,
   BACKGROUND_SOURCE_ASSIST_ALLOWED_USE,
   buildBackgroundProfileSignalRows,
   buildReviewedSourceDraftSummary,
@@ -42,7 +44,7 @@ test("source-assisted drafts produce only review-first allowed-field signals", (
   );
 });
 
-test("approved source draft signals become active profile signal rows", () => {
+test("explicitly confirmed source draft signals become active profile signal rows", () => {
   const draft = buildReviewedSourceDraftSummary({
     allowedFieldKeys: ["verification_preferences"],
     rawText: "Evidence, proof, receipts, and independent review would make this credible.",
@@ -51,8 +53,11 @@ test("approved source draft signals become active profile signal rows", () => {
     draft,
     expiresAt: "2099-01-01T00:00:00.000Z",
     profileId: "profile-1",
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: "background-purpose-policy-v1",
     sourceConnectionId: "connection-1",
     sourceSummaryId: "summary-1",
+    sourceSummaryVersion: 2,
   });
 
   assert.ok(rows.length > 0);
@@ -60,6 +65,12 @@ test("approved source draft signals become active profile signal rows", () => {
   assert.equal(rows[0]?.source, "approved_source_summary");
   assert.equal(rows[0]?.source_connection_id, "connection-1");
   assert.equal(rows[0]?.source_summary_id, "summary-1");
+  assert.equal(rows[0]?.source_summary_version, 2);
+  assert.equal(rows[0]?.confirmation_kind, "explicit_participant_confirmation");
+  assert.equal(rows[0]?.confirmation_actor_profile_id, "profile-1");
+  assert.equal(rows[0]?.confirmation_policy_version, BACKGROUND_SOURCE_TAG_CONFIRMATION_VERSION);
+  assert.equal(rows[0]?.lineage_status, "active");
+  assert.match(rows[0]?.signal_fingerprint ?? "", /^sha256:[a-f0-9]{64}$/);
   assert.equal(rows[0]?.status, "active");
 });
 
@@ -78,4 +89,22 @@ test("source-assisted lane forbids raw ingestion and continuous sync", () => {
   assert.deepEqual(validation.allowedFieldKeys, ["cause_priorities"]);
   assert.ok(validation.errors.some((error) => /raw source ingestion/i.test(error)));
   assert.ok(validation.errors.some((error) => /continuous/i.test(error)));
+});
+
+test("source-summary approval and tag confirmation stay separate", () => {
+  const approvalRoute = readFileSync(
+    "src/app/api/background/source-summaries/[id]/approve/route.ts",
+    "utf8",
+  );
+  const confirmRoute = readFileSync(
+    "src/app/api/background/source-summaries/[id]/confirm-tags/route.ts",
+    "utf8",
+  );
+
+  assert.doesNotMatch(approvalRoute, /\.from\("background_profile_signals"\)\.insert/);
+  assert.match(approvalRoute, /source_summary_approved_without_match_inputs/);
+  assert.match(confirmRoute, /background\.source_summary\.confirm_tags/);
+  assert.match(confirmRoute, /\.from\("background_profile_signals"\)[\s\S]{0,180}\.insert/);
+  assert.match(confirmRoute, /privateThirdPartyDataReviewed/);
+  assert.match(confirmRoute, /containsPrivateThirdPartyData/);
 });

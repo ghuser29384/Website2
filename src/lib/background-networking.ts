@@ -152,10 +152,29 @@ export function hasActiveProfileSourcePermission(
 }
 
 export function hasActiveBackgroundProfileSignal(
-  signal: Pick<BackgroundProfileSignalRow, "expires_at" | "status">,
+  signal: Pick<
+    BackgroundProfileSignalRow,
+    | "confirmed_at"
+    | "expires_at"
+    | "lineage_status"
+    | "signal_fingerprint"
+    | "source"
+    | "status"
+  >,
   now = new Date(),
 ) {
   if (signal.status !== "active") {
+    return false;
+  }
+
+  if (signal.lineage_status !== "active") {
+    return false;
+  }
+
+  if (
+    signal.source === "approved_source_summary" &&
+    (!signal.confirmed_at || !signal.signal_fingerprint)
+  ) {
     return false;
   }
 

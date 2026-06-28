@@ -248,6 +248,13 @@ import {
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
 import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
+import {
+  buildAuthPath,
+  buildSupabaseAuthCallbackUrl,
+  getAuthDefaultReturnTo,
+  normalizeAuthMode,
+  normalizeOAuthProvider,
+} from "@/lib/auth-routes";
 import type {
   MoralTradeEvidenceClaimScope,
   MoralTradeEvidenceClaimType,
@@ -2969,7 +2976,12 @@ async function generateWishMatchSuggestions({
 
 export async function signUpAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/onboarding");
-  const signupPath = returnTo === "/onboarding" ? "/signup" : `/signup?returnTo=${encodeURIComponent(returnTo)}`;
+  const signupPath = buildAuthPath({
+    method: "email",
+    mode: "signup",
+    returnTo,
+    route: "/signup",
+  });
 
   if (!hasSupabaseEnv()) {
     redirectWithMessage(signupPath, "error", "Supabase is not configured yet.");
@@ -2977,10 +2989,6 @@ export async function signUpAction(formData: FormData) {
 
   const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
-  const displayName = readRequired(formData, "display_name");
-  const city = readOptional(formData, "city");
-  const region = readOptional(formData, "region");
-  const country = readOptional(formData, "country");
 
   if (!email || !password) {
     redirectWithMessage(signupPath, "error", "Email and password are required.");
@@ -2997,7 +3005,7 @@ export async function signUpAction(formData: FormData) {
   const supabase = await createClient();
   const headerStore = await headers();
   const origin = headerStore.get("origin") ?? getSiteUrl();
-  const confirmUrl = `${origin}/auth/confirm`;
+  const confirmUrl = buildSupabaseAuthCallbackUrl(origin, returnTo);
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -3005,10 +3013,6 @@ export async function signUpAction(formData: FormData) {
     options: {
       emailRedirectTo: confirmUrl,
       data: {
-        display_name: displayName,
-        city,
-        region,
-        country,
         public_location_granularity: "hidden",
       },
     },
@@ -3053,7 +3057,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   redirectWithMessage(
-    `/login?returnTo=${encodeURIComponent(returnTo)}`,
+    buildAuthPath({ mode: "login", returnTo, route: "/login" }),
     "message",
     "Account created. Check your email to confirm your address, then sign in.",
   );
@@ -3235,23 +3239,33 @@ export async function createWebinarRsvpAction(formData: FormData) {
 }
 
 export async function signInAction(formData: FormData) {
+  const next = getSafeInternalPath(
+    readOptional(formData, "next") || readOptional(formData, "return_to"),
+    "/dashboard",
+  );
+  const loginPath = buildAuthPath({
+    method: "email",
+    mode: "login",
+    returnTo: next,
+    route: "/login",
+  });
+
   if (!hasSupabaseEnv()) {
-    redirectWithMessage("/login", "error", "Supabase is not configured yet.");
+    redirectWithMessage(loginPath, "error", "Supabase is not configured yet.");
   }
 
   const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
-  const next = getSafeInternalPath(readRequired(formData, "next"), "/dashboard");
 
   if (!email || !password) {
-    redirectWithMessage("/login", "error", "Email and password are required.");
+    redirectWithMessage(loginPath, "error", "Email and password are required.");
   }
 
   enforceActionRateLimit({
     key: `login:${email}`,
     limit: 8,
     message: "Too many login attempts. Wait a few minutes before trying again.",
-    returnTo: "/login",
+    returnTo: loginPath,
     windowMs: 10 * 60 * 1000,
   });
 
@@ -3262,7 +3276,7 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithMessage("/login", "error", error.message);
+    redirectWithMessage(loginPath, "error", error.message);
   }
 
   if (data.user) {
@@ -3270,6 +3284,49 @@ export async function signInAction(formData: FormData) {
   }
 
   redirect(next);
+}
+
+export async function oauthSignInAction(formData: FormData) {
+  const mode = normalizeAuthMode(readOptional(formData, "mode"));
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    getAuthDefaultReturnTo(mode),
+  );
+  const authPath = buildAuthPath({ mode, returnTo, route: mode === "signup" ? "/signup" : "/login" });
+  const provider = normalizeOAuthProvider(readOptional(formData, "provider"));
+
+  if (!provider) {
+    redirectWithMessage(authPath, "error", "Choose Google or Apple to continue.");
+  }
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(authPath, "error", "Supabase is not configured yet.");
+  }
+
+  const headerStore = await headers();
+  const origin = headerStore.get("origin") ?? getSiteUrl();
+  const redirectTo = buildSupabaseAuthCallbackUrl(origin, returnTo, mode);
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    redirectWithMessage(authPath, "error", error.message);
+  }
+
+  if (!data.url) {
+    redirectWithMessage(
+      authPath,
+      "error",
+      "That provider is not configured yet. Try email or contact support.",
+    );
+  }
+
+  redirect(data.url);
 }
 
 export async function requestPasswordResetAction(formData: FormData) {

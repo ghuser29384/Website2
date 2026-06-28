@@ -141,7 +141,7 @@ export interface PublicGoodsEntryCopyValidation {
 
 export interface PublicGoodsEntryCard {
   id: "common-ground-budget-public-goods-fund";
-  label: "moral public goods";
+  label: "Common Ground Budget";
   eyebrow: "Public Goods Fund";
   mechanismVersion: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion;
   href: typeof MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href;
@@ -651,7 +651,7 @@ export function buildPublicGoodsEntryCard({
   const previewHref = `${currentRoundHref}#common-ground-budget-preview`;
   const primaryCta: PublicGoodsEntryAction = {
     key: "preview-common-ground-budget",
-    label: "Preview moral public goods",
+    label: "Preview Common Ground Budget",
     href: previewHref,
     method: "GET",
     rank: 1,
@@ -695,7 +695,7 @@ export function buildPublicGoodsEntryCard({
 
   return {
     id: "common-ground-budget-public-goods-fund",
-    label: "moral public goods",
+    label: "Common Ground Budget",
     eyebrow: "Public Goods Fund",
     mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
@@ -722,7 +722,7 @@ export function buildPublicGoodsEntryCard({
     copyValidation: buildPublicGoodsEntryCopyValidation({
       copyGuards,
       eyebrow: "Public Goods Fund",
-      label: "moral public goods",
+      label: "Common Ground Budget",
       mechanismVersion: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion,
       primaryCta,
       secondaryCtas,
@@ -778,7 +778,7 @@ function buildPublicOffersTabSummaries({
     },
     {
       value: "public_goods",
-      label: "moral public goods",
+      label: "Public Goods Fund",
       count: getPublicMarketplaceRoundCount(),
       href: "/offers?tab=public_goods",
       source: "public_goods_module",

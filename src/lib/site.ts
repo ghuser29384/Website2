@@ -46,7 +46,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       label: "Moral Public Goods",
       summary: "Fund public-good routes, common budgets, and group-buying pools.",
       items: [
-        { href: "/mpgf", label: "moral public goods", section: "Funding routes", description: "Preview the Public Goods Fund path for cross-view moral public goods." },
+        { href: "/mpgf", label: "Common Ground Budget", section: "Funding routes", description: "Preview the Public Goods Fund path for cross-view moral public goods." },
         { href: "/moral-goods-group-buying", label: "Moral goods group buying", section: "Funding routes", description: "Pool small pledges into verified moral-action rounds, lots, baskets, and standing budgets." },
         { href: "/donate", label: "Donate through a route", section: "Funding routes", description: "Use a vetted external donation handoff." },
         { href: "/priority-correction-fund", label: "Priority Correction Fund", section: "Funding routes", description: "Inspect correction cycles, arbiters, and published reasoning." },
@@ -99,7 +99,7 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Moral Public Goods",
     links: [
-      { href: "/mpgf", label: "moral public goods" },
+      { href: "/mpgf", label: "Common Ground Budget" },
       { href: "/moral-goods-group-buying", label: "Moral goods group buying" },
       { href: "/donate", label: "Donate through a route" },
       { href: "/priority-correction-fund", label: "Priority Correction Fund" },

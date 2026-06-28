@@ -23,6 +23,16 @@ import {
   validateBackgroundCapabilityGateContract,
 } from "@/lib/background-capability-gates";
 import {
+  getBackgroundPhaseStatusForDocs,
+  validateBackgroundPhaseGateBundle,
+} from "@/lib/background-phase-gates";
+import {
+  buildBackgroundParticipantScreenState,
+  getBackgroundPlainLanguageTerm,
+  getBackgroundUiCopyBundle,
+  validateBackgroundUiLanguageContract,
+} from "@/lib/background-ui-language";
+import {
   getBackgroundNetworkingRolloutPlan,
   validateBackgroundNetworkingRolloutPlan,
 } from "@/lib/background-rollout";
@@ -30,6 +40,16 @@ import {
   getBackgroundRlsAuditContract,
   validateBackgroundRlsAuditContract,
 } from "@/lib/background-rls-audit";
+import {
+  BACKGROUND_PUBLIC_BACKGROUND_HERO,
+  BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS,
+  BACKGROUND_PUBLIC_NOT_THIS,
+  BACKGROUND_PUBLIC_PILOT_STATUS,
+  BACKGROUND_PUBLIC_PROMISE,
+  BACKGROUND_PUBLIC_SAFETY_CARDS,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+  validateBackgroundPublicPageSimplificationSpec,
+} from "@/lib/background-public-pages";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
@@ -43,14 +63,14 @@ import { getAbsoluteUrl } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Background networking",
   description:
-    "How Moral Trade surfaces possible counterparties without scraping private feeds, revealing exact wishes, or sending autonomous outreach.",
+    "Find possible trades by comparing broad previews first, with exact details shared only through consent.",
   alternates: {
     canonical: "/background-networking",
   },
   openGraph: {
     title: "Background networking",
     description:
-      "How Moral Trade surfaces possible counterparties without scraping private feeds, revealing exact wishes, or sending autonomous outreach.",
+      "Find possible trades by comparing broad previews first, with exact details shared only through consent.",
     url: getAbsoluteUrl("/background-networking"),
     type: "website",
   },
@@ -90,6 +110,27 @@ export default async function BackgroundNetworkingPage({
   const backgroundRolloutPlan = getBackgroundNetworkingRolloutPlan();
   const backgroundRolloutValidation =
     validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
+  const backgroundPhaseStatus = getBackgroundPhaseStatusForDocs();
+  const backgroundPhaseValidation = validateBackgroundPhaseGateBundle();
+  const uiCopyBundle = getBackgroundUiCopyBundle();
+  const uiLanguageValidation = validateBackgroundUiLanguageContract();
+  const publicPageSimplificationValidation =
+    validateBackgroundPublicPageSimplificationSpec();
+  const participantSetupState = buildBackgroundParticipantScreenState({
+    actionKey: "find_opportunities_for_me",
+    defaultExplanation:
+      "Use the simple path to choose inputs, search scope, preview audience, cadence, and expiry before any background helper can act.",
+    screenKey: "background-networking.public-setup-model",
+    statusInput: { enabled: true, queuedOrWaiting: true },
+    technicalDetails: {
+      broadSignalCategories: ["cause areas", "trade modes", "verification preferences"],
+      outputSchemaVersion: "background-participant-screen-state-bg84-v1",
+      purposeCode: "moral_trade_offer",
+      retentionWindow: "phase-bounded participant receipts",
+    },
+    whySeeingThis:
+      "This public explainer mirrors the participant control center copy without exposing any live account or match state.",
+  });
   const rlsAuditContract = getBackgroundRlsAuditContract();
   const rlsAuditValidation = validateBackgroundRlsAuditContract(rlsAuditContract);
 
@@ -106,46 +147,39 @@ export default async function BackgroundNetworkingPage({
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Background networking</p>
-            <h1>Find possible trades without turning people into targets.</h1>
-            <p className="hero-text">
-              Background networking is a conservative matching layer. It compares broad public
-              previews, saved preferences, and manual source notes so a participant can decide
-              whether an introduction is worth exploring.
-            </p>
+            <h1>{BACKGROUND_PUBLIC_BACKGROUND_HERO}</h1>
+            <p className="hero-text">{BACKGROUND_PUBLIC_PROMISE}</p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
                 {viewer ? "Open dashboard" : "Create account"}
               </Link>
               <Link className="button button-secondary" href="/wish-registry">
-                Search broad previews
+                Browse broad previews
+              </Link>
+              <Link className="button button-secondary" href="#background-technical-details">
+                Technical details
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Boundary</p>
+            <p className="eyebrow">Simple path</p>
             <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Broad previews first</strong>
-                  <p>Cause areas and high-level aims can be compared before exact wishes are shared.</p>
+              {BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS.slice(0, 3).map((step, index) => (
+                <div className="flow-step" key={step}>
+                  <span className="flow-number">{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{step}</strong>
+                    <p>
+                      {index === 0
+                        ? "Start with broad profile fields instead of exact asks."
+                        : index === 1
+                          ? "Choose the audience and review route before anyone sees more."
+                          : "Review a safe possible-opportunity card in your dashboard."}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Consent before detail</strong>
-                  <p>Contact details and private constraints remain gated until both sides opt in.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>No autonomous outreach</strong>
-                  <p>The platform records suggestions; it does not message strangers on a user&apos;s behalf.</p>
-                </div>
-              </div>
+              ))}
             </div>
           </aside>
         </div>
@@ -162,120 +196,189 @@ export default async function BackgroundNetworkingPage({
           </div>
         ) : null}
 
-        <section className="section section-white">
+        <section className="section section-white" aria-labelledby="background-simple-model-heading">
           <div className="section-head">
             <p className="eyebrow">How it works</p>
-            <h2>Match suggestions are staged, reviewable, and reversible</h2>
-            <p>
-              The dashboard stores private wish profiles, manual source notes, saved searches, and
-              broad registry previews. A deterministic scan can suggest possible counterparties,
-              but a suggestion is not an introduction and does not reveal private data by itself.
-            </p>
+            <h2 id="background-simple-model-heading">
+              One review path from broad profile to optional detail sharing
+            </h2>
+            <p>{BACKGROUND_PUBLIC_PROMISE}</p>
           </div>
 
           <div className="concept-grid">
-            <article className="panel concept-card">
-              <h3>Manual sources</h3>
-              <p>
-                Users can add notes about public pages or conversations they choose to record. The
-                current prototype does not ingest private feeds, scrape profiles at scale, or mine
-                email and chat histories.
-              </p>
+            {BACKGROUND_PUBLIC_SAFETY_CARDS.map((card) => (
+              <article className="panel concept-card" key={card.title}>
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card data-card-wide">
+              <h3>Five steps</h3>
+              <div className="mini-list">
+                {BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS.map((step, index) => (
+                  <div className="mini-list-item" key={step}>
+                    <strong>{String(index + 1).padStart(2, "0")}</strong>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
             </article>
-            <article className="panel concept-card">
-              <h3>Structured wish interview</h3>
-              <p>
-                A default-off interview lane asks deterministic clarification questions for
-                missing cause, offer, verification, availability, and safety fields. Answers stay
-                private and cannot change matching until the participant applies structured fields.
-              </p>
+            <article className="panel data-card data-card-wide">
+              <h3>What this is not</h3>
+              <ul className="compact-list">
+                {BACKGROUND_PUBLIC_NOT_THIS.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
             </article>
-            <article className="panel concept-card">
-              <h3>Fluent wish dialogue</h3>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="background-pilot-status-heading">
+          <div className="section-head">
+            <p className="eyebrow">Current pilot status</p>
+            <h2 id="background-pilot-status-heading">Conservative by default</h2>
+            <p>
+              The live pilot supports broad profiles, saved preferences, review queues, and
+              consent-gated next steps. Higher-power lanes stay staff-only, shadow-only, or off.
+            </p>
+          </div>
+          <div className="data-grid">
+            {BACKGROUND_PUBLIC_PILOT_STATUS.map((item) => (
+              <article className="panel data-card" key={item.label}>
+                <h3>{item.label}</h3>
+                <p className="route-text">{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <details
+          className="section section-white details-panel"
+          id="background-technical-details"
+        >
+          <summary>Technical details</summary>
+          <div className="details-content">
+            <p className="panel-note">
+              This section keeps contracts, route health, bundle hashes, factor-code samples,
+              validator results, table protections, and detailed policy mechanics inspectable
+              without making them the default public reading path.
+            </p>
+            <div className="hero-actions">
+              {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                <Link className="button button-secondary" href={link.href} key={link.href}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+
+        <section className="section section-white" aria-labelledby="plain-language-setup-heading">
+          <div className="section-head">
+            <p className="eyebrow">Participant setup model</p>
+            <h2 id="plain-language-setup-heading">Six questions cover the consent model.</h2>
+            <p>
+              The participant-facing copy uses plain action labels first, then keeps exact technical
+              terms in optional details. The simplified labels preserve the same privacy, expiry,
+              audience, and revocation boundaries as the governed background-networking system.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">UI copy bundle</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{uiLanguageValidation.status}</h3>
+                <StatusBadge
+                  tone={uiLanguageValidation.status === "pass" ? "default" : "warning"}
+                >
+                  {uiLanguageValidation.status}
+                </StatusBadge>
+              </div>
               <p>
-                A schema-bound dialogue lane accepts natural wish text, proposes broad fields and
-                uncertainty flags, and keeps those proposals draft-only until the participant
-                explicitly applies them.
+                {uiCopyBundle.termMap.length} term-map entries,{" "}
+                {uiCopyBundle.setupQuestions.length} setup questions, and{" "}
+                {uiCopyBundle.privacySummaries.length} privacy-summary templates are bound to the
+                current UI-copy bundle.
               </p>
+              <p className="panel-note">
+                Public-page simplification contract: {publicPageSimplificationValidation.status};
+                hash {publicPageSimplificationValidation.hash.slice(0, 12)}.
+              </p>
+            </div>
+            <div className="tag-row">
+              {[
+                "delegate authorization",
+                "candidate exposure",
+                "opportunity brief",
+                "intro request",
+                "disclosure grant",
+                "privacy freeze",
+              ].map((term) => {
+                const copy = getBackgroundPlainLanguageTerm(term);
+
+                return copy ? (
+                  <span className="source-pill" key={term}>
+                    {copy.participantLabel}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">{participantSetupState.statusLabel}</p>
+              <h3>{participantSetupState.actionLabel}</h3>
+              <p className="route-text">{participantSetupState.defaultExplanation}</p>
+              <div className="mini-list">
+                {participantSetupState.setupQuestions.map((question) => (
+                  <div className="mini-list-item" key={question.key}>
+                    <strong>{question.label}</strong>
+                    <span>{question.plainDescription}</span>
+                  </div>
+                ))}
+              </div>
             </article>
-            <article className="panel concept-card">
-              <h3>Reviewed source summaries</h3>
-              <p>
-                Manual or imported text can create a redacted summary draft for review. Raw
-                imported text is request-only, raw ingestion remains disabled, and approved
-                summaries may influence only the selected broad field permissions.
-              </p>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Privacy summary</p>
+              <h3>{participantSetupState.privacySummary.heading}</h3>
+              <dl className="values-summary compact-summary">
+                <div>
+                  <dt>What happens</dt>
+                  <dd>{participantSetupState.privacySummary.whatHappens}</dd>
+                </div>
+                <div>
+                  <dt>What stays hidden</dt>
+                  <dd>{participantSetupState.privacySummary.whatStaysHidden}</dd>
+                </div>
+                <div>
+                  <dt>How to stop or undo future access</dt>
+                  <dd>{participantSetupState.privacySummary.howToStopOrUndo}</dd>
+                </div>
+              </dl>
             </article>
-            <article className="panel concept-card">
-              <h3>Deterministic matching</h3>
-              <p>
-                Candidate matches are banded from declared cause areas, trade modes, constraints,
-                location sensitivity, and verification preferences. Compatibility bands are prompts
-                for human review, not automatic rankings of people.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Consent gates</h3>
-              <p>
-                A participant can request more detail, decline, or report a suggestion. Exact
-                wishes, contact information, and sensitive constraints should only move forward
-                after staged disclosure and mutual consent.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Opportunity briefs</h3>
-              <p>
-                A brief is a dashboard-owned broad preview with a headline, factor codes,
-                redacted-field notices, and next-step buttons. Marking interest creates a reviewed
-                intro packet draft; it does not contact the counterparty or disclose contact data.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Match explanations</h3>
-              <p>
-                Match cards show coarse reason codes, confidence bands, trust and risk badges,
-                scanned surfaces, and redacted surfaces. They explain why a suggestion exists
-                without exposing raw wish text, contact details, or source notes.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Purpose-bound grants</h3>
-              <p>
-                Private facts should be shared for a narrow decision and, by default, a time box.
-                Grants can expire or be revoked instead of becoming permanent background access.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Minimal telemetry</h3>
-              <p>
-                Operational metrics use buckets and counts, such as scan runs and request states.
-                Analytics should not store exact wishes, private constraints, report bodies, or
-                message text.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Anti-enumeration budgets</h3>
-              <p>
-                Manual scans, helper jobs, saved searches, and signed-in registry searches are
-                budgeted and logged with hashed query fingerprints. Highly specific sparse
-                registry searches are withheld until the user broadens the query.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Helper runs</h3>
-              <p>
-                Helper runs queue saved-search, summary, manual-scan, or digest work from a
-                fingerprint only. They can create opportunity briefs and generic notifications, not
-                autonomous messages.
-              </p>
-            </article>
-            <article className="panel concept-card">
-              <h3>Overlap receipts</h3>
-              <p>
-                The private-overlap pilot is governance-gated and exact-tag only. Attempts receive
-                tamper-evident redacted receipts while raw tags and counterparties&apos; tag lists stay
-                hidden.
-              </p>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Progressive detail</p>
+              <h3>Why am I seeing this?</h3>
+              <p className="route-text">{participantSetupState.whySeeingThis}</p>
+              <details className="details-panel">
+                <summary>{participantSetupState.technicalDetails.title}</summary>
+                <div className="details-content">
+                  <dl className="values-summary compact-summary">
+                    {participantSetupState.technicalDetails.rows.map((row) => (
+                      <div key={row.label}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </details>
             </article>
           </div>
         </section>
@@ -388,8 +491,9 @@ export default async function BackgroundNetworkingPage({
               public gate keeps source connectors, AI summarization, and private-overlap
               computation default-off, shadow-only, or design-only until DPIA, lawful-basis,
               privacy-design, external review, and human-control checks are satisfied.
-              Private-overlap checks are governance-gated; the pilot route accepts only curated
-              exact-tag namespaces, never free text or raw tag disclosure.
+              Private-overlap checks are currently a disabled design lane; the route returns a
+              generic unavailable response and does not accept live free text, raw tags, or tag
+              lookups.
             </p>
             <p>
               The current source-summary path is manual/import first: participants create a source
@@ -463,6 +567,51 @@ export default async function BackgroundNetworkingPage({
               {backgroundRolloutPlan.flags.map((flag) => (
                 <span className="source-pill" key={flag.key}>
                   {flag.key}: {flag.enabled ? "enabled" : "off"}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Current phase artifact</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{backgroundPhaseStatus.currentPhase.replaceAll("_", " ")}</h3>
+                <StatusBadge
+                  tone={backgroundPhaseValidation.status === "pass" ? "default" : "warning"}
+                >
+                  {backgroundPhaseValidation.status}
+                </StatusBadge>
+              </div>
+              <p>
+                The active release manifest binds this phase, the policy engine, action-kind
+                registry, schema bundle, signal taxonomy, claim-assurance taxonomy,
+                tool-capability bundle, retention bundle, composition bundle, transition bundle,
+                UI-copy bundle, and phase-gate hash before background routes can mutate state.
+                Phase 2 includes
+                privacy freeze and sanitized participant export controls; future partner,
+                federation, vault, exact-disclosure, high-sensitivity, and private-overlap lanes
+                remain unavailable.
+              </p>
+              <p className="panel-note">
+                Manifest {backgroundPhaseStatus.manifestId}; phase gate{" "}
+                {backgroundPhaseStatus.phaseGateBundleVersion}; output schema{" "}
+                {backgroundPhaseStatus.outputSchemaBundleVersion}; signal taxonomy{" "}
+                {backgroundPhaseStatus.signalTaxonomyVersion}; claim assurance{" "}
+                {backgroundPhaseStatus.claimAssuranceTaxonomyVersion}; tool capability{" "}
+                {backgroundPhaseStatus.toolCapabilityBundleVersion}; UI copy{" "}
+                {backgroundPhaseStatus.uiCopyBundleVersion}.
+              </p>
+              <p className="panel-note">
+                Background-networking data is not training, personalization, ad targeting,
+                engagement optimization, or product-analytics feature-learning data. Exports use a
+                sanitized participant-owned schema and fail closed while a privacy freeze is active.
+              </p>
+            </div>
+            <div className="tag-row">
+              {backgroundPhaseStatus.disabledLanes.slice(0, 8).map((lane) => (
+                <span className="source-pill" key={lane}>
+                  {lane.replaceAll("_", " ")}: unavailable
                 </span>
               ))}
             </div>
@@ -702,6 +851,8 @@ export default async function BackgroundNetworkingPage({
             </div>
           </div>
         </section>
+          </div>
+        </details>
 
         <section className="section section-subtle" id="concierge-intake">
           <div className="section-head">

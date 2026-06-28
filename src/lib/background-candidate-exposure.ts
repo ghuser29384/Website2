@@ -7,6 +7,7 @@ import {
 
 export const BACKGROUND_CANDIDATE_EXPOSURE_VERSION = "candidate-exposure-v1";
 export const BACKGROUND_CANDIDATE_BUDGET_VERSION = "candidate-budget-v1";
+export const BACKGROUND_CANDIDATE_EXPOSURE_CONFIRMATION_WINDOW_DAYS = 90;
 
 export const BACKGROUND_INBOUND_DELEGATE_SCOPES = [
   "off",
@@ -36,7 +37,9 @@ export interface BackgroundCandidateExposureProfile {
   candidate_exposure_version?: string | null;
   candidate_inbound_budget_version?: string | null;
   inbound_delegate_cooloff_until?: string | null;
+  inbound_delegate_confirmed_at?: string | null;
   inbound_delegate_discovery?: string | null;
+  inbound_delegate_expires_at?: string | null;
   inbound_delegate_pending_intro_limit?: number | null;
   inbound_delegate_purpose_bindings?: unknown;
   inbound_delegate_purpose_codes?: string[] | null;
@@ -134,6 +137,18 @@ export function buildBackgroundCandidateBudgetConfig({
   };
 }
 
+export function getBackgroundCandidateExposureExpiresAt({
+  now = new Date(),
+  windowDays = BACKGROUND_CANDIDATE_EXPOSURE_CONFIRMATION_WINDOW_DAYS,
+}: {
+  now?: Date;
+  windowDays?: number;
+}) {
+  const expiresAt = new Date(now.getTime());
+  expiresAt.setUTCDate(expiresAt.getUTCDate() + windowDays);
+  return expiresAt.toISOString();
+}
+
 export function buildBackgroundCandidateBudgetRecord({
   audienceScope,
   purposeCodes,
@@ -218,6 +233,21 @@ export function evaluateCandidateExposureForBackgroundRun({
 
   if (normalizedDiscovery === "off") {
     return blocked("candidate_inbound_delegate_off");
+  }
+
+  const confirmedAt = candidateProfile.inbound_delegate_confirmed_at
+    ? Date.parse(candidateProfile.inbound_delegate_confirmed_at)
+    : Number.NaN;
+  const expiresAt = candidateProfile.inbound_delegate_expires_at
+    ? Date.parse(candidateProfile.inbound_delegate_expires_at)
+    : Number.NaN;
+
+  if (!Number.isFinite(confirmedAt) || confirmedAt > now.getTime()) {
+    return blocked("candidate_exposure_confirmation_missing");
+  }
+
+  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) {
+    return blocked("candidate_exposure_expired");
   }
 
   if (

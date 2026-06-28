@@ -20,6 +20,7 @@ import {
   BACKGROUND_CANDIDATE_EXPOSURE_VERSION,
   buildBackgroundCandidateBudgetRecord,
   buildBackgroundPurposeBindingRecord,
+  getBackgroundCandidateExposureExpiresAt,
   normalizeBackgroundCandidateAudienceScope,
   normalizeBackgroundInboundDelegateScope,
   normalizeBackgroundPurposeCodeList,
@@ -46,6 +47,10 @@ import {
   getOpportunityBriefDeliveryStateForFeedback,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
+import {
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import {
   buildBackgroundNotificationPreferenceRows,
   getDataRightRequestDueAt,
@@ -922,6 +927,7 @@ export async function saveCandidateInboundDelegateExposureAction(formData: FormD
     readOptional(formData, "inbound_delegate_discovery"),
   );
   const now = Date.now();
+  const nowDate = new Date(now);
   const exposureVersion = `${BACKGROUND_CANDIDATE_EXPOSURE_VERSION}:${now}`;
   const budgetVersion = `${BACKGROUND_CANDIDATE_BUDGET_VERSION}:${now}`;
   const purposeCodes = normalizeBackgroundPurposeCodeList(
@@ -946,7 +952,9 @@ export async function saveCandidateInboundDelegateExposureAction(formData: FormD
     candidate_exposure_version: exposureVersion,
     candidate_inbound_budget_version: budgetVersion,
     inbound_delegate_cooloff_until: null,
+    inbound_delegate_confirmed_at: null,
     inbound_delegate_discovery: "off",
+    inbound_delegate_expires_at: null,
     inbound_delegate_pending_intro_limit: null,
     inbound_delegate_purpose_bindings: {},
     inbound_delegate_purpose_codes: [],
@@ -966,7 +974,11 @@ export async function saveCandidateInboundDelegateExposureAction(formData: FormD
 
     update.allowed_cohort_ids = allowedCohortIds;
     update.inbound_delegate_cooloff_until = cooloffUntil;
+    update.inbound_delegate_confirmed_at = nowDate.toISOString();
     update.inbound_delegate_discovery = discovery;
+    update.inbound_delegate_expires_at = getBackgroundCandidateExposureExpiresAt({
+      now: nowDate,
+    });
     update.inbound_delegate_pending_intro_limit = pendingIntroLimit;
     update.inbound_delegate_purpose_bindings = buildBackgroundPurposeBindingRecord(purposeCodes);
     update.inbound_delegate_purpose_codes = purposeCodes;
@@ -977,6 +989,20 @@ export async function saveCandidateInboundDelegateExposureAction(formData: FormD
       windowDays,
     });
     update.inbound_delegate_surfaces = ["broad_profile"];
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.candidate_exposure.update",
+    actorRole: "participant",
+    idempotencyKey: `${viewer.authUser.id}:${discovery}:${exposureVersion}`,
+    laneKey: "candidate_exposure",
+    outputSchemaVersion: "background-candidate-exposure-response-v1",
+    purposeCode: purposeCodes[0] ?? "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    redirectWithMessage(returnTo, "error", "Candidate exposure updates are unavailable in this release.");
   }
 
   const supabase = await createClient();
@@ -1034,6 +1060,164 @@ export async function createProfileDataRightRequestAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/admin");
   redirectWithMessage(returnTo, "message", "Data-right request recorded.");
+}
+
+export async function activateBackgroundPrivacyFreezeAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const profileId = viewer.authUser.id;
+  const decision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.privacy_freeze.activate",
+    actorRole: "participant",
+    idempotencyKey: `${profileId}:privacy-freeze:activate`,
+    laneKey: "privacy_freeze",
+    outputSchemaVersion: "background-privacy-freeze-response-v1",
+  });
+
+  if (decision.verdict !== "allow") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Privacy freeze is unavailable while background-networking policy gates are stale.",
+    );
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data: existing, error: existingError } = await supabase
+    .from("profile_data_right_requests")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("request_type", "restriction")
+    .eq("scope", "background_networking")
+    .in("status", ["open", "in_review"])
+    .limit(1);
+
+  if (existingError) {
+    redirectWithMessage(returnTo, "error", existingError.message);
+  }
+
+  if (!existing?.length) {
+    const { error } = await supabase.from("profile_data_right_requests").insert({
+      due_at: getDataRightRequestDueAt(),
+      operator_note:
+        "Participant activated a privacy freeze. Recompute from current inputs after release.",
+      profile_id: profileId,
+      request_details:
+        "Privacy freeze: pause background delegate runs, inbound surfacing, notifications, exports, intro advancement, and disclosure access.",
+      request_type: "restriction",
+      scope: "background_networking",
+      status: "open",
+    });
+
+    if (error) {
+      redirectWithMessage(returnTo, "error", error.message);
+    }
+  }
+
+  const failures: string[] = [];
+
+  await collectMutationResult(
+    failures,
+    "open opportunity briefs",
+    supabase
+      .from("background_opportunity_briefs")
+      .update({
+        delivery_state: "expired",
+        generic_dependency_label: "stale_or_unavailable",
+        review_status: "blocked",
+        status: "expired",
+        updated_at: now,
+      })
+      .eq("profile_id", profileId)
+      .in("status", ["open", "opened", "interested", "maybe_later", "packet_requested"]),
+  );
+  await collectMutationResult(
+    failures,
+    "queued background-networking emails",
+    supabase
+      .from("email_outbox")
+      .delete()
+      .eq("profile_id", profileId)
+      .eq("provider", "background-networking"),
+  );
+
+  if (failures.length) {
+    redirectWithMessage(returnTo, "error", failures.join(" "));
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Privacy freeze active. Background networking is paused until you release it and recompute.",
+  );
+}
+
+export async function releaseBackgroundPrivacyFreezeAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const profileId = viewer.authUser.id;
+  const confirmation = readOptional(formData, "release_confirmation");
+
+  if (confirmation !== "RELEASE FREEZE") {
+    redirectWithMessage(returnTo, "error", "Type RELEASE FREEZE to release the privacy freeze.");
+  }
+
+  const accountSecurity = await loadBackgroundAccountSecuritySummary();
+
+  if (accountSecurity.currentLevel !== "aal2") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Releasing a privacy freeze requires a current MFA step-up session.",
+    );
+  }
+
+  const decision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.privacy_freeze.release",
+    actorRole: "participant",
+    idempotencyKey: `${profileId}:privacy-freeze:release`,
+    laneKey: "privacy_freeze",
+    outputSchemaVersion: "background-privacy-freeze-response-v1",
+  });
+
+  if (decision.verdict !== "allow") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Privacy freeze release is unavailable while background-networking policy gates are stale.",
+    );
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("profile_data_right_requests")
+    .update({
+      operator_note:
+        "Participant released the privacy freeze after MFA step-up. Existing artifacts remain non-actionable until recomputed.",
+      resolved_at: now,
+      status: "fulfilled",
+      updated_at: now,
+    })
+    .eq("profile_id", profileId)
+    .eq("request_type", "restriction")
+    .eq("scope", "background_networking")
+    .in("status", ["open", "in_review"]);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Privacy freeze released. Run a fresh scan to recompute from current consent settings.",
+  );
 }
 
 export async function saveBackgroundSourceConnectionAction(formData: FormData) {

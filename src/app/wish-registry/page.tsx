@@ -21,22 +21,25 @@ import {
 import { createServiceClient } from "@/lib/supabase/server";
 import {
   filterWishRegistryExamplePreviews,
-  getWishRegistryCompatibilityBand,
   searchWishRegistryPreviews,
 } from "@/lib/wish-registry";
 import type { WishRegistrySearchResult } from "@/lib/wish-registry";
+import {
+  BACKGROUND_PUBLIC_REGISTRY_HERO,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 
 export const metadata: Metadata = {
-  title: "Experimental wish registry",
+  title: "Wish registry",
   description:
-    "Search broad Moral Trade wish-profile previews without exposing exact wishes, asks, contact details, or private source records.",
+    "Browse broad Moral Trade wish-profile previews while exact asks and contact details stay hidden.",
   alternates: {
     canonical: "/wish-registry",
   },
   openGraph: {
     title: "Wish registry",
     description:
-      "Search broad Moral Trade wish-profile previews without exposing exact wishes, asks, contact details, or private source records.",
+      "Browse broad Moral Trade wish-profile previews while exact asks and contact details stay hidden.",
     url: getAbsoluteUrl("/wish-registry"),
     type: "website",
   },
@@ -259,19 +262,21 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Experimental wish registry</p>
-            <h1>Search broad previews first.</h1>
+            <p className="eyebrow">Wish registry</p>
+            <h1>{BACKGROUND_PUBLIC_REGISTRY_HERO}</h1>
             <p className="hero-text">
-              You can browse broad previews now. Exact asks, exact wishes, and contact details
-              stay hidden unless both sides explicitly approve the next stage. This prototype
-              searches public preview fields only.
+              Browse cause tags, broad trade-mode tags, and safe location hints. Exact wishes,
+              private asks, and contact details stay hidden unless both sides approve more.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
-                {viewer ? "Open dashboard" : "Create account"}
+              <Link className="button button-primary" href="/wish-registry">
+                Browse broad previews
               </Link>
-              <Link className="button button-secondary" href="/people">
-                Browse people
+              <Link className="button button-secondary" href={viewer ? "/dashboard" : "/signup"}>
+                {viewer ? "Open dashboard" : "Create profile"}
+              </Link>
+              <Link className="button button-secondary" href="#registry-technical-details">
+                Technical details
               </Link>
             </div>
           </section>
@@ -282,14 +287,14 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Broad preview</strong>
+                  <strong>Broad preview only</strong>
                   <p>Cause areas, public summaries, and coarse location can be searched.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Consent before specifics</strong>
+                  <strong>Ask to explore</strong>
                   <p>Specific asks and contact details require explicit grants from participants.</p>
                 </div>
               </div>
@@ -302,10 +307,10 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Search</p>
-            <h2>Find possible counterparties without exposing private wishes</h2>
+            <h2>Browse broad previews without exposing private wishes</h2>
             <p>
-              Use a cause area, keyword query, or openness filter. Results are ordered by broad
-              compatibility signals, not by moral worth or hidden private wishes.
+              Start with a keyword or cause area. Trade-mode filters are optional and stay broad.
+              This page does not show contact information, exact asks, or approval claims.
             </p>
           </div>
 
@@ -342,30 +347,33 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
               </label>
             </div>
 
-            <div className="field-grid">
-              <label className="check-row">
-                <input
-                  defaultChecked={opennessToPayment}
-                  name="payment"
-                  type="checkbox"
-                  value="1"
-                />
-                <span>Only show previews open to payment-mediated trades</span>
-              </label>
-              <label className="check-row">
-                <input
-                  defaultChecked={opennessToPledges}
-                  name="pledges"
-                  type="checkbox"
-                  value="1"
-                />
-                <span>Only show previews open to pledge-based trades</span>
-              </label>
-            </div>
+            <details className="details-panel">
+              <summary>More filters</summary>
+              <div className="details-content field-grid">
+                <label className="check-row">
+                  <input
+                    defaultChecked={opennessToPayment}
+                    name="payment"
+                    type="checkbox"
+                    value="1"
+                  />
+                  <span>Open to payment-mediated trades</span>
+                </label>
+                <label className="check-row">
+                  <input
+                    defaultChecked={opennessToPledges}
+                    name="pledges"
+                    type="checkbox"
+                    value="1"
+                  />
+                  <span>Open to pledge-based trades</span>
+                </label>
+              </div>
+            </details>
 
             <div className="form-actions">
               <button className="button button-primary" type="submit">
-                Search registry
+                Browse previews
               </button>
               {hasFilters ? (
                 <Link className="button button-secondary" href="/wish-registry">
@@ -382,8 +390,8 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <h2>{hasFilters ? "Matching broad previews" : "Recent broad previews"}</h2>
             <p>
               {sparsePrivacyFloorApplied
-                ? "That search was too specific for the current registry size, so results are withheld until the query is broader."
-                : "Each card links to the public profile. Exact asks, exact wishes, and contact details stay hidden unless both sides explicitly approve the next stage."}
+                ? "That view is too narrow for the current registry size, so previews are withheld until the search is broader."
+                : "Each card is a broad preview only. Exact asks, exact wishes, and contact details stay hidden unless both sides explicitly approve the next stage."}
             </p>
           </div>
 
@@ -396,9 +404,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       <p className="detail-kicker">{result.participantKind}</p>
                       <h3>{result.collectiveName || "Individual participant"}</h3>
                     </div>
-                    <span className="badge">
-                      {getWishRegistryCompatibilityBand(result.score)} compatibility
-                    </span>
+                    <span className="badge">Broad preview only</span>
                   </div>
                   <p className="route-text">
                     {result.publicPreview || "This participant has shared broad causes only."}
@@ -422,15 +428,10 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       ))}
                     </div>
                   ) : null}
-                  {result.sharedTokens.length ? (
-                    <p className="panel-note">
-                      Broad language overlap count: {result.sharedTokens.length}
-                    </p>
-                  ) : null}
                   <div className="offer-footer">
                     <div className="offer-actions">
                       <Link className="text-button" href={`/people/${result.profileId}`}>
-                        View public profile
+                        View broad profile
                       </Link>
                       {viewer && viewer.authUser.id !== result.profileId ? (
                         <form action={createMatchConciergeRequestAction} className="compact-form">
@@ -450,12 +451,12 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                           <input
                             name="intent_summary"
                             type="hidden"
-                            value="I found this broad preview in the registry and want an operator to review whether a consent-gated introduction is appropriate."
+                            value="I found this broad preview in the registry and want an operator to review whether consent-gated exploration is appropriate."
                           />
                           <input
                             name="ask_summary"
                             type="hidden"
-                            value="Please check whether this possible counterparty is open to a bounded moral trade before any exact wishes or contact details are shared."
+                            value="Please check whether this broad-profile owner is open to a bounded moral trade before any exact wishes or contact details are shared."
                           />
                           <input
                             name="no_trade_baseline"
@@ -463,7 +464,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                             value="No trade occurs; both participants keep their current plans and no private details are disclosed."
                           />
                           <button className="button button-secondary button-mini" type="submit">
-                            Request concierge intro
+                            Ask to explore
                           </button>
                         </form>
                       ) : viewer ? null : (
@@ -471,7 +472,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                           className="button button-secondary button-mini"
                           href="/signup?returnTo=/wish-registry"
                         >
-                          Sign in for intro
+                          Sign in to ask
                         </Link>
                       )}
                     </div>
@@ -486,7 +487,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       <p className="detail-kicker">{preview.participantKind} example</p>
                       <h3>{preview.name}</h3>
                     </div>
-                    <span className="badge">Example preview</span>
+                    <span className="badge">Broad preview only</span>
                   </div>
                   <p className="route-text">{preview.preview}</p>
                   <div className="tag-row">
@@ -511,15 +512,34 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>No broad previews matched.</strong>
+                  <strong>No broad previews are available for that view.</strong>
                   <p>
-                    Try a wider cause term, clear an openness filter, or add your own wish
+                    Try a wider cause term, clear a trade-mode filter, or add your own broad
                     profile from the dashboard.
                   </p>
                 </div>
               </div>
             )}
           </div>
+        </section>
+        <section className="section section-white" id="registry-technical-details">
+          <details className="details-panel">
+            <summary>Technical details</summary>
+            <div className="details-content">
+              <p>
+                Registry searches use public preview fields and signed-in budget controls. Sparse
+                result sets can be withheld so highly specific searches do not become a way to
+                infer whether a single private profile exists.
+              </p>
+              <div className="hero-actions">
+                {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                  <Link className="button button-secondary" href={link.href} key={link.href}>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </details>
         </section>
       </main>
 

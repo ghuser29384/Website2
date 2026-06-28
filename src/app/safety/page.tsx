@@ -15,6 +15,10 @@ import {
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
 } from "@/lib/moral-trade/operations";
+import {
+  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -96,6 +100,28 @@ export default async function SafetyPage() {
           manipulation, or unsafe background networking.
         </p>
         <section className="panel data-card data-card-wide">
+          <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.safety.eyebrow}</p>
+          <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.safety.heading}</h2>
+          <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.safety.summary}</p>
+          <ul className="compact-list">
+            {BACKGROUND_PUBLIC_PAGE_SUMMARIES.safety.cards.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <details className="details-panel">
+            <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.safety.technicalDetailsLabel}</summary>
+            <div className="details-content">
+              <div className="hero-actions">
+                {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                  <Link className="button button-secondary" href={link.href} key={link.href}>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </details>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Anti-threat and baseline integrity</h2>
           <p>
             Safety review starts with the no-trade baseline: what would each participant do absent
@@ -114,30 +140,34 @@ export default async function SafetyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
-          <h2>Validator-backed safety evidence</h2>
-          <p>
-            Public health endpoints expose whether the security, disclosure, challenge-appeal,
-            incident-response, performance, and AI-governance contracts pass their current
-            validators. Safety claims should stay tied to these checks rather than implying hidden
-            automation, escrow, or unrestricted reviewer authority.
-          </p>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/api/moral-trade/security/health">
-              View security health
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
-              View disclosure contract
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
-              View appeal contract
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
-              View incident response
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/operations/health">
-              View operations health
-            </Link>
-          </div>
+          <details className="details-panel">
+            <summary>Safety contract evidence</summary>
+            <div className="details-content">
+              <p>
+                Public health endpoints expose whether the security, disclosure, challenge-appeal,
+                incident-response, performance, and AI-governance contracts pass their current
+                validators. Safety claims should stay tied to these checks rather than implying
+                hidden automation, escrow, or unrestricted reviewer authority.
+              </p>
+              <div className="hero-actions">
+                <Link className="button button-primary" href="/api/moral-trade/security/health">
+                  View security health
+                </Link>
+                <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
+                  View disclosure contract
+                </Link>
+                <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
+                  View appeal contract
+                </Link>
+                <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
+                  View incident response
+                </Link>
+                <Link className="button button-secondary" href="/api/moral-trade/operations/health">
+                  View operations health
+                </Link>
+              </div>
+            </div>
+          </details>
         </section>
         <section className="panel data-card data-card-wide">
           <div className="protocol-workflow-card-head">

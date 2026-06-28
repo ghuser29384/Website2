@@ -14,6 +14,10 @@ import {
   BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
 } from "@/lib/background-source-permissions";
+import {
+  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 import { getViewer } from "@/lib/app-data";
 import {
   getMoralTradeDisclosureContract,
@@ -102,6 +106,33 @@ export default async function PrivacyPage() {
           asks, constraints, and verification preferences should stay private unless a user chooses
           to share more.
         </p>
+        <section className="panel data-card data-card-wide">
+          <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.privacy.eyebrow}</p>
+          <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.privacy.heading}</h2>
+          <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.privacy.summary}</p>
+          <ul className="compact-list">
+            {BACKGROUND_PUBLIC_PAGE_SUMMARIES.privacy.cards.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <details className="details-panel">
+            <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.privacy.technicalDetailsLabel}</summary>
+            <div className="details-content">
+              <p>
+                The detailed inventory, source permission list, disclosure contract, and deletion
+                scope remain inspectable below. They use the same consent, expiry, and revocation
+                boundaries as the simplified summary.
+              </p>
+              <div className="hero-actions">
+                {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                  <Link className="button button-secondary" href={link.href} key={link.href}>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </details>
+        </section>
         <section className="privacy-transparency-section">
           <h2>Data, processors, and retention summary</h2>
           <p>
@@ -163,14 +194,19 @@ export default async function PrivacyPage() {
             the supported retention windows ({BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.join(", ")}
             days), and a field list chosen from broad matching categories.
           </p>
-          <p className="route-text">
-            Optional AI shadow-mode review is a separate source-level consent. It may use approved
-            summaries only and cannot change live matching, ranking, disclosure, or outreach.
-            Live source connectors, AI assist mode, and private-overlap computation require a DPIA,
-            lawful-basis record, privacy-design review, and external security/privacy review before
-            expansion. Private overlap checks are not live; any future pilot must not use free text
-            and must not reveal raw tags.
-          </p>
+          <details className="details-panel">
+            <summary>Technical expansion requirements</summary>
+            <div className="details-content">
+              <p className="route-text">
+                Optional AI shadow-mode review is a separate source-level consent. It may use
+                approved summaries only and cannot change live matching, ranking, disclosure, or
+                outreach. Live source connectors, AI assist mode, and private-overlap computation
+                require a DPIA, lawful-basis record, privacy-design review, and external
+                security/privacy review before expansion. Private overlap checks are not live; any
+                future pilot must not use free text and must not reveal raw tags.
+              </p>
+            </div>
+          </details>
           <ul className="compact-list">
             {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
               <li key={option.value}>{option.label}</li>
@@ -308,14 +344,18 @@ export default async function PrivacyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
-          <h2>Background networking data inventory</h2>
-          <ul className="clean-list">
-            {BACKGROUND_DATA_INVENTORY.map((item) => (
-              <li key={item.surface}>
-                <strong>{item.label}:</strong> {item.classification}; {item.retention}
-              </li>
-            ))}
-          </ul>
+          <details className="details-panel">
+            <summary>Background networking data inventory</summary>
+            <div className="details-content">
+              <ul className="clean-list">
+                {BACKGROUND_DATA_INVENTORY.map((item) => (
+                  <li key={item.surface}>
+                    <strong>{item.label}:</strong> {item.classification}; {item.retention}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Self-serve background-networking deletion</h2>

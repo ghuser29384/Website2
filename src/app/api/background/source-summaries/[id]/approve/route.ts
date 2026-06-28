@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 
 import {
-  buildBackgroundProfileSignalRows,
   type BackgroundSourceAssistDraftSummary,
-  type BackgroundSourceAssistSignal,
+  parseBackgroundSourceAssistSignals,
 } from "@/lib/background-source-assist";
 import { prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
 import {
@@ -11,6 +10,11 @@ import {
   validateBackgroundSourceSummaryRetentionScope,
 } from "@/lib/background-source-permissions";
 import { buildSourceSummaryRows } from "@/lib/background-opportunity-briefs";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -36,38 +40,6 @@ function stringField(value: unknown) {
 
 function sourceSummaryType(value: SourceConnectionRow["provider"]): SourceSummaryInsert["source_type"] {
   return value === "search_profile" ? "search_profile" : value;
-}
-
-function signalList(value: unknown): BackgroundSourceAssistSignal[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .filter(isRecord)
-    .map((entry) => {
-      const allowedFieldKey = normalizeBackgroundSourcePermissionFields([
-        stringField(entry.allowedFieldKey),
-      ])[0];
-      const signalKey = stringField(entry.signalKey);
-      const signalValue = stringField(entry.value);
-      const sensitivity = stringField(entry.sensitivity);
-      const confidenceBand = stringField(entry.confidenceBand);
-
-      if (!allowedFieldKey || !signalKey || !signalValue) {
-        return null;
-      }
-
-      return {
-        allowedFieldKey,
-        confidenceBand:
-          confidenceBand === "high" || confidenceBand === "medium" ? confidenceBand : "low",
-        sensitivity: sensitivity === "specific" ? "specific" : "broad",
-        signalKey,
-        value: signalValue,
-      } satisfies BackgroundSourceAssistSignal;
-    })
-    .filter((entry): entry is BackgroundSourceAssistSignal => Boolean(entry));
 }
 
 function privateJson(body: Record<string, unknown>, status = 200) {
@@ -160,7 +132,7 @@ export async function POST(
       : [],
   );
   const draft: Pick<BackgroundSourceAssistDraftSummary, "extractedSignals"> = {
-    extractedSignals: signalList(shadowRun.output_json.extractedSignals),
+    extractedSignals: parseBackgroundSourceAssistSignals(shadowRun.output_json.extractedSignals),
   };
   const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
     allowedFieldKeys,
@@ -191,6 +163,20 @@ export async function POST(
 
   if (validationErrors.length) {
     return privateJson({ error: validationErrors.join(" ") }, 400);
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.source_summary.approve",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:${shadowRun.id}:approve-source-summary`,
+    laneKey: "manual_source_summaries",
+    outputSchemaVersion: "background-source-summary-response-v1",
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
   }
 
   let encryptedSummaryFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
@@ -240,29 +226,6 @@ export async function POST(
     return privateJson({ error: summaryError?.message ?? "Unable to approve source summary." }, 500);
   }
 
-  const signalRows = buildBackgroundProfileSignalRows({
-    draft,
-    expiresAt: sourceSummary.retention_expires_at,
-    profileId: user.id,
-    sourceConnectionId: sourceConnection.id,
-    sourceSummaryId: summaryRow.id,
-  });
-
-  if (signalRows.length) {
-    const { error: signalError } = await supabase.from("background_profile_signals").insert(signalRows);
-
-    if (signalError) {
-      return privateJson(
-        {
-          error:
-            "Source summary was approved, but derived profile signals could not be recorded.",
-          sourceSummaryId: summaryRow.id,
-        },
-        500,
-      );
-    }
-  }
-
   await supabase
     .from("background_shadow_runs")
     .update({ source_summary_id: summaryRow.id, was_promoted: true })
@@ -270,10 +233,12 @@ export async function POST(
     .eq("profile_id", user.id);
 
   return privateJson({
-    profileSignalsCreated: signalRows.length,
+    policyDecisionId: policyDecision.policyDecisionId,
+    profileSignalsCreated: 0,
+    proposedTagCount: draft.extractedSignals.length,
     rawTextPersisted: false,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     sourceSummaryId: summaryRow.id,
-    stateMutation: "approved_source_summary_promoted",
+    stateMutation: "source_summary_approved_without_match_inputs",
   });
 }

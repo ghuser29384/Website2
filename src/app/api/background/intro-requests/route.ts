@@ -6,10 +6,15 @@ import {
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
 import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import {
   evaluateBackgroundIntroRequestCadence,
   getBackgroundIntroRequestWindowStart,
 } from "@/lib/background-intro-requests";
 import { recordBackgroundQueryRiskSignal } from "@/lib/background-operations";
+import { normalizeBackgroundPurposeBinding } from "@/lib/background-purpose-registry";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -124,11 +129,19 @@ export async function POST(request: Request) {
 
   const opportunityBriefId = stringField(body.opportunityBriefId ?? body.opportunity_brief_id);
   let matchId = stringField(body.matchId ?? body.match_id) || null;
-  let counterpartyProfileId =
-    stringField(body.targetProfileId ?? body.counterpartyProfileId ?? body.counterparty_profile_id) ||
-    null;
+  let counterpartyProfileId: string | null = null;
   let purposeCode: string | null = null;
   let purposePolicyVersion: string | null = null;
+
+  if (!opportunityBriefId) {
+    return privateJson(
+      {
+        error:
+          "Intro requests must be derived from a requester-owned opportunity brief.",
+      },
+      400,
+    );
+  }
 
   if (opportunityBriefId) {
     const { data: brief, error: briefError } = await supabase
@@ -158,6 +171,13 @@ export async function POST(request: Request) {
     purposePolicyVersion = brief.purpose_policy_version;
   }
 
+  if (!counterpartyProfileId) {
+    return privateJson(
+      { error: "This opportunity brief is not ready for an intro request." },
+      409,
+    );
+  }
+
   if (counterpartyProfileId === user.id) {
     return privateJson({ error: "Intro requests cannot target your own profile." }, 400);
   }
@@ -184,6 +204,55 @@ export async function POST(request: Request) {
 
   if (validation.errors.length) {
     return privateJson({ error: validation.errors.join(" ") }, 400);
+  }
+
+  const inheritedPurpose = normalizeBackgroundPurposeBinding({
+    purposeCode,
+    purposePolicyVersion,
+  });
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.intro_request.create",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:${opportunityBriefId}:${inheritedPurpose.purposeCode}:${inheritedPurpose.purposePolicyVersion}`,
+    laneKey: "intro_requests",
+    outputSchemaVersion: "background-intro-request-response-v1",
+    purposeCode: inheritedPurpose.purposeCode,
+    purposePolicyVersion: inheritedPurpose.purposePolicyVersion,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
+  }
+
+  const { data: existingIntroRequests, error: existingIntroError } = await supabase
+    .from("background_intro_packets")
+    .select("id, review_state, sla_due_at")
+    .eq("requester_profile_id", user.id)
+    .eq("opportunity_brief_id", opportunityBriefId)
+    .eq("purpose_code", inheritedPurpose.purposeCode)
+    .eq("purpose_policy_version", inheritedPurpose.purposePolicyVersion)
+    .in("review_state", ["requested", "under_review", "approved", "changes_requested", "sent"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (existingIntroError) {
+    return privateJson({ error: existingIntroError.message }, 500);
+  }
+
+  const existingIntroRequest = existingIntroRequests?.[0] ?? null;
+
+  if (existingIntroRequest) {
+    return privateJson({
+      introRequestId: existingIntroRequest.id,
+      outreachSent: false,
+      policyDecisionId: policyDecision.policyDecisionId,
+      privateDetailsReturned: false,
+      reviewState: "already_pending",
+      rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
+      slaDueAt: existingIntroRequest.sla_due_at,
+      stateMutation: "existing_intro_request_returned",
+    });
   }
 
   if (counterpartyProfileId) {
@@ -226,8 +295,8 @@ export async function POST(request: Request) {
     matchId,
     opportunityBriefId: opportunityBriefId || null,
     purpose,
-    purposeCode,
-    purposePolicyVersion,
+    purposeCode: inheritedPurpose.purposeCode,
+    purposePolicyVersion: inheritedPurpose.purposePolicyVersion,
     requestedFieldKeys: validation.requestedFieldKeys,
     requesterAnswers: validation.requesterAnswers,
     requesterProfileId: user.id,
@@ -249,8 +318,8 @@ export async function POST(request: Request) {
         factorCount: validation.requestedFieldKeys.length,
         profileId: user.id,
         publicSummary: "Reviewed introduction request submitted. No outreach or private detail was sent.",
-        purposeCode,
-        purposePolicyVersion,
+        purposeCode: inheritedPurpose.purposeCode,
+        purposePolicyVersion: inheritedPurpose.purposePolicyVersion,
         receiptKind: "intro_request",
         subjectId: data.id,
         subjectKind: "intro_packet",
@@ -295,6 +364,7 @@ export async function POST(request: Request) {
   return privateJson({
     introRequestId: data.id,
     outreachSent: false,
+    policyDecisionId: policyDecision.policyDecisionId,
     privateDetailsReturned: false,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
     slaDueAt: data.sla_due_at,

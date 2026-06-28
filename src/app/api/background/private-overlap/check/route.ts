@@ -6,6 +6,10 @@ import {
   evaluateBackgroundPrivateOverlapPilotGate,
   validateBackgroundPrivateOverlapCheckInput,
 } from "@/lib/background-private-overlap";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import { buildTransparencyReceiptEntry } from "@/lib/background-transparency-receipts";
 import {
@@ -127,6 +131,18 @@ export async function POST(request: Request) {
 
   if (!user) {
     return privateJson({ error: "Authentication required." }, 401);
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.private_overlap.check",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:private-overlap-check`,
+    laneKey: "private_overlap_crypto",
+    outputSchemaVersion: "background-disabled-lane-response-v1",
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
   }
 
   const validation = validateBackgroundPrivateOverlapCheckInput({

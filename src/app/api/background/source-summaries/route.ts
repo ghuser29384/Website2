@@ -5,6 +5,11 @@ import {
 } from "@/lib/background-field-encryption";
 import { getBackgroundTokens } from "@/lib/background-networking";
 import { buildSourceSummaryRows } from "@/lib/background-opportunity-briefs";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   resolveBackgroundSourceSummaryFieldScope,
@@ -165,6 +170,20 @@ export async function POST(request: Request) {
     return privateJson({ error: validationErrors.join(" ") }, 400);
   }
 
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.source_summary.create",
+    actorRole: "participant",
+    idempotencyKey: `${user.id}:${sourceConnectionId ?? "manual"}:${summaryText.length}:${sourceSummary.retention_expires_at}`,
+    laneKey: "manual_source_summaries",
+    outputSchemaVersion: "background-source-summary-response-v1",
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
+  }
+
   let encryptedSummaryFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
   let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
 
@@ -252,6 +271,7 @@ export async function POST(request: Request) {
 
   return privateJson({
     consentReceiptId: receiptRow.id,
+    policyDecisionId: policyDecision.policyDecisionId,
     rawIngestionAllowed: false,
     rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     sourceSummaryId: summaryRow.id,

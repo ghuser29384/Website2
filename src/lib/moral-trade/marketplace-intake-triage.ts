@@ -238,7 +238,7 @@ export const MARKETPLACE_INTAKE_TRIAGE_ROUTES: MarketplaceIntakeTriageRoute[] = 
     routeEligible: false,
     routeKind: "safe_external_path",
     safeReasonCategory: "moral public goods public goods",
-    nextAction: "Open moral public goods",
+    nextAction: "Open Public Goods Fund",
     correctionPath: "Return to this page only for non-public-goods donation offsets or pledge swaps.",
     summary: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   },

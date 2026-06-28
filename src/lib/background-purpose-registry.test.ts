@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -57,4 +58,14 @@ test("purpose registry labels stay broad and versioned", () => {
 
   assert.equal(validation.normalized.length, 1);
   assert.ok(validation.errors.some((error) => /Unsupported or overbroad/.test(error)));
+});
+
+test("purpose-code route uses the governed registry and a public-safe projection", () => {
+  const route = readFileSync("src/app/api/background/purpose-codes/route.ts", "utf8");
+
+  assert.match(route, /BACKGROUND_PURPOSE_REGISTRY/);
+  assert.match(route, /background\.purpose_codes\.list/);
+  assert.match(route, /background-purpose-codes-response-v1/);
+  assert.doesNotMatch(route, /prohibitedUses/);
+  assert.doesNotMatch(route, /private rollout|abuse heuristics|cohort membership/i);
 });

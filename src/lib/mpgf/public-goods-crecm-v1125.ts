@@ -335,6 +335,30 @@ type ArrayValue<T extends readonly unknown[]> = T[number];
 
 export type MpgfCrecSupportStance = "strong" | "weak" | "dissent" | "abstain";
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_LABELS = [
+  "Fund this",
+  "Fund if different-view support joins",
+  "Needs review",
+  "Skip",
+] as const;
+
+export type MpgfCrecPlainStanceLabel =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_LABELS>;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE = {
+  "Fund this": "strong",
+  "Fund if different-view support joins": "weak",
+  "Needs review": "dissent",
+  Skip: "abstain",
+} as const satisfies Record<MpgfCrecPlainStanceLabel, MpgfCrecSupportStance>;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_CANONICAL_STANCE_TO_PLAIN_LABEL = {
+  strong: "Fund this",
+  weak: "Fund if different-view support joins",
+  dissent: "Needs review",
+  abstain: "Skip",
+} as const satisfies Record<MpgfCrecSupportStance, MpgfCrecPlainStanceLabel>;
+
 export type MpgfCrecBudgetPeriod =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_BUDGET_PERIODS>;
 
@@ -1013,6 +1037,21 @@ export interface MpgfCrecSupportStanceAllocationResult {
   rankOrder: number | null;
   unrestrictedRoutingOptIn: boolean;
   defaultedToAbstain: boolean;
+  rowFailureCodes: string[];
+}
+
+export interface MpgfCrecPlainStanceLabelResolutionResult {
+  labelEligible: boolean;
+  plainLabel: MpgfCrecPlainStanceLabel | null;
+  canonicalStance: MpgfCrecSupportStance | null;
+  allocatableAfterExplicitSave: boolean;
+  counterpartyConditionRequired: boolean;
+  reviewPressureOnly: boolean;
+  zeroAllocationRequired: boolean;
+  defaultSkip: boolean;
+  finalReviewCanonicalDisclosureRequired: true;
+  explicitSaveRequiredBeforeAllocation: true;
+  canonicalEffectDescription: string | null;
   rowFailureCodes: string[];
 }
 
@@ -3809,6 +3848,86 @@ export function resolveMpgfCrecSupportStanceAllocationInputs(
   };
 }
 
+export function resolveMpgfCrecPlainStanceLabel(
+  plainLabel: unknown,
+): MpgfCrecPlainStanceLabelResolutionResult {
+  const rowFailureCodes: string[] = [];
+
+  if (typeof plainLabel !== "string") {
+    rowFailureCodes.push("plain_stance_label_not_string");
+
+    return {
+      labelEligible: false,
+      plainLabel: null,
+      canonicalStance: null,
+      allocatableAfterExplicitSave: false,
+      counterpartyConditionRequired: false,
+      reviewPressureOnly: false,
+      zeroAllocationRequired: true,
+      defaultSkip: false,
+      finalReviewCanonicalDisclosureRequired: true,
+      explicitSaveRequiredBeforeAllocation: true,
+      canonicalEffectDescription: null,
+      rowFailureCodes,
+    };
+  }
+
+  if (plainLabel.trim() !== plainLabel) {
+    rowFailureCodes.push("plain_stance_label_not_trim_stable");
+  }
+
+  const canonicalStance =
+    MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE[
+      plainLabel as MpgfCrecPlainStanceLabel
+    ] ?? null;
+
+  if (canonicalStance == null) {
+    rowFailureCodes.push("plain_stance_label_not_recognized");
+
+    return {
+      labelEligible: false,
+      plainLabel: null,
+      canonicalStance: null,
+      allocatableAfterExplicitSave: false,
+      counterpartyConditionRequired: false,
+      reviewPressureOnly: false,
+      zeroAllocationRequired: true,
+      defaultSkip: false,
+      finalReviewCanonicalDisclosureRequired: true,
+      explicitSaveRequiredBeforeAllocation: true,
+      canonicalEffectDescription: null,
+      rowFailureCodes,
+    };
+  }
+
+  const allocatableAfterExplicitSave = canonicalStance === "strong" || canonicalStance === "weak";
+  const counterpartyConditionRequired = canonicalStance === "weak";
+  const reviewPressureOnly = canonicalStance === "dissent";
+  const defaultSkip = canonicalStance === "abstain";
+
+  return {
+    labelEligible: rowFailureCodes.length === 0,
+    plainLabel: plainLabel as MpgfCrecPlainStanceLabel,
+    canonicalStance,
+    allocatableAfterExplicitSave,
+    counterpartyConditionRequired,
+    reviewPressureOnly,
+    zeroAllocationRequired: !allocatableAfterExplicitSave,
+    defaultSkip,
+    finalReviewCanonicalDisclosureRequired: true,
+    explicitSaveRequiredBeforeAllocation: true,
+    canonicalEffectDescription:
+      canonicalStance === "strong"
+        ? "ProjectSupportStance.stance = strong; allocatable only after explicit cap, condition acceptance, and final save."
+        : canonicalStance === "weak"
+          ? "ProjectSupportStance.stance = weak; allocatable only after explicit cap, cross-view counterparty condition acceptance, and final save."
+          : canonicalStance === "dissent"
+            ? "ProjectSupportStance.stance = dissent; allocates zero and can only increase review pressure under identity-clear non-duplicate rules."
+            : "ProjectSupportStance.stance = abstain; default skip state with zero allocation.",
+    rowFailureCodes,
+  };
+}
+
 export function resolveMpgfCrecConditionalIntentAllocationInputs(
   input: MpgfCrecConditionalIntentAllocationInput,
 ): MpgfCrecConditionalIntentAllocationResult {
@@ -6002,6 +6121,25 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       invalidCapsAllocateZero: true,
       minCounterpartyVolumeMirrorAuthoritative: false,
       exposesPaymentAuthority: false,
+    },
+    plainLanguageGuidedMode: {
+      presentationLayerOnly: true,
+      allowedPlainLabels: MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_LABELS,
+      canonicalStanceByPlainLabel: MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE,
+      plainLabelByCanonicalStance: MPGF_PUBLIC_GOODS_CRECM_V1125_CANONICAL_STANCE_TO_PLAIN_LABEL,
+      plainLabelsCannotIntroduceNewStates: true,
+      exactLabelsRequiredNoTrimOrAlias: true,
+      fundThisCanonicalStance: "strong" as const,
+      fundIfDifferentViewSupportJoinsCanonicalStance: "weak" as const,
+      needsReviewCanonicalStance: "dissent" as const,
+      skipCanonicalStance: "abstain" as const,
+      allocatableCanonicalStances: ["strong", "weak"] as const,
+      reviewPressureOnlyCanonicalStance: "dissent" as const,
+      zeroAllocationCanonicalStances: ["dissent", "abstain"] as const,
+      explicitSaveRequiredBeforeAllocation: true,
+      finalReviewMustExposeCanonicalMeaning: true,
+      advancedAndPlainModesShareCanonicalProjectSupportStanceRecords: true,
+      uiBrowsingCalculatorOrSuggestionCannotInferAllocatableStance: true,
     },
     conditionalIntentInputGating: {
       missingInactiveOrWrongRowsAllocateZero: true,

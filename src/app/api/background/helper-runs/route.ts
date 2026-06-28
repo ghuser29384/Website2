@@ -4,6 +4,11 @@ import {
   buildBackgroundHelperRunRow,
   normalizeBackgroundHelperRunTriggerKind,
 } from "@/lib/background-helper-runs";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -83,6 +88,24 @@ export async function POST(request: Request) {
     triggerKind,
     windowKey: stringField(body.windowKey ?? body.window_key) || new Date().toISOString().slice(0, 10),
   });
+  const purposeCode = stringField(body.purposeCode ?? body.purpose_code) || "moral_trade_offer";
+  const purposePolicyVersion =
+    stringField(body.purposePolicyVersion ?? body.purpose_policy_version) ||
+    BACKGROUND_PURPOSE_POLICY_VERSION;
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.helper_run.enqueue",
+    actorRole: "participant",
+    idempotencyKey: row.query_fingerprint,
+    laneKey: "helper_runs",
+    outputSchemaVersion: "background-helper-run-response-v1",
+    purposeCode,
+    purposePolicyVersion,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
+  }
+
   const { data, error } = await supabase
     .from("background_helper_runs")
     .upsert(row, { onConflict: "profile_id,trigger_kind,query_fingerprint,state" })
@@ -101,6 +124,7 @@ export async function POST(request: Request) {
       queryFingerprint: data.query_fingerprint,
       rawQueryPersisted: false,
       autonomousOutreach: false,
+      policyDecisionId: policyDecision.policyDecisionId,
       rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
       stateMutation: "helper_run_queued",
     },

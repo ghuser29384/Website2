@@ -77,7 +77,7 @@ export interface MpgfPublicGoodsEcmRulebookReport {
   mechanism: {
     abbreviation: "CRECM";
     technicalLabel: "CRECM v1.125";
-    userFacingLabel: "moral public goods";
+    userFacingLabel: "Common Ground Budget";
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125";
     sourceSpec: "moralpublicgoods131.md";
     deploymentFlag: "crecm_v1_125";
@@ -425,7 +425,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
   const mechanism = {
     abbreviation: "CRECM" as const,
     technicalLabel: "CRECM v1.125" as const,
-    userFacingLabel: "moral public goods" as const,
+    userFacingLabel: "Common Ground Budget" as const,
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125" as const,
     sourceSpec: "moralpublicgoods131.md" as const,
     deploymentFlag: "crecm_v1_125" as const,

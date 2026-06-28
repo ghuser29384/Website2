@@ -1,3 +1,5 @@
+import { getBackgroundPhaseStatusForDocs } from "@/lib/background-phase-gates";
+
 export const BACKGROUND_NETWORKING_BG14_ROLLOUT_VERSION =
   "background-networking-bg14-rollout-v1";
 export const BACKGROUND_NETWORKING_BG14_ROLLOUT_VALIDATOR_VERSION =
@@ -203,6 +205,7 @@ export function serializeBackgroundNetworkingRolloutSurface(
 ) {
   const plan = getBackgroundNetworkingRolloutPlan(env);
   const flag = getBackgroundNetworkingRolloutFlag(plan, key);
+  const phaseStatus = getBackgroundPhaseStatusForDocs();
 
   return {
     flag: flag
@@ -215,6 +218,13 @@ export function serializeBackgroundNetworkingRolloutSurface(
         }
       : null,
     hardInvariants: plan.hardInvariants,
+    phaseGate: {
+      bundleHash: phaseStatus.phaseGateBundleHash,
+      bundleVersion: phaseStatus.phaseGateBundleVersion,
+      currentPhase: phaseStatus.currentPhase,
+      manifestId: phaseStatus.manifestId,
+      policyEngineVersion: phaseStatus.policyEngineVersion,
+    },
     rawPrivateFeedIngestionEnabled: false,
     stage: plan.stage,
     version: plan.version,

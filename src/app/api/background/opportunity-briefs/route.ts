@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 
 import {
   buildOpportunityBriefListResponse,
+  BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION,
   serializeOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
+import {
+  buildBackgroundDisabledLaneResponse,
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -47,6 +52,17 @@ export async function GET(request: Request) {
 
   if (!user) {
     return privateJson({ error: "Authentication required." }, 401);
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.opportunity_brief.list",
+    actorRole: "participant",
+    laneKey: "opportunity_briefs",
+    outputSchemaVersion: BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    return privateJson(buildBackgroundDisabledLaneResponse(policyDecision), 403);
   }
 
   const { data, error } = await supabase

@@ -16,6 +16,12 @@ export const BACKGROUND_STATE_CHANGE_NOTIFICATION_EVENTS = new Set<BackgroundNot
   "safety_review",
 ]);
 
+export const BACKGROUND_OPPORTUNITY_NOTIFICATION = {
+  body:
+    "A privacy-safe opportunity brief is ready for your review. Exact wishes and contact details remain hidden until the appropriate consent stage.",
+  title: "New broad-overlap opportunity",
+} as const;
+
 export interface BackgroundNotificationPolicyInput {
   channel: BackgroundNotificationChannel;
   dailyCap?: number | null;
