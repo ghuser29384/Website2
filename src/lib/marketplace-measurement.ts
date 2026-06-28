@@ -212,6 +212,19 @@ export interface MarketplaceMeasurementValidation {
   validatorVersion: typeof MARKETPLACE_MEASUREMENT_VALIDATOR_VERSION;
 }
 
+const MARKETPLACE_MEASUREMENT_RECORD_TABLES = [
+  "funnel_events",
+  "moral_trade_route_simplification_audit_records",
+  "moral_trade_public_page_qa_artifacts",
+  "moral_trade_participant_ui_render_snapshots",
+  "moral_trade_participant_explanation_records",
+  "moral_trade_participant_task_cards",
+  "moral_trade_public_receipt_cards",
+  "moral_trade_public_receipt_publication_reviews",
+  "moral_trade_public_receipt_verification_events",
+  "claim_correction_records",
+] as const;
+
 const MARKETPLACE_MEASUREMENT_EVENT_SPECS: MarketplaceMeasurementEventSpec[] = [
   {
     allowedMetadata: [
@@ -628,9 +641,34 @@ const KpiSourceTablesByPrefix: Array<[RegExp, string[]]> = [
   [/backup|deployment|schema_migration|environment|demo_data|provider_event|user_facing_status/, ["release_gates", "environment_data_isolation_records"]],
   [/privacy/, ["privacy_grants", "privacy_access_logs"]],
   [/impact_claim|transfer_as_impact|claim_correction/, ["impact_claim_records", "claim_correction_records", "payout_milestones"]],
-  [/public_receipt/, ["public_receipt_cards", "claim_correction_records"]],
-  [/plain_language|internal_jargon|route_simplification|signed_out_offset|route_fallback|factor_code|impact_score|advanced_filter|worked_example_card|long_duration|task_card|safe_template|term_map|next_action/, ["public_route_audit_records", "participant_ui_render_snapshots"]],
-  [/recipient_association|causal_wording|personal_contribution|net_personal|reimbursement|direct_donation|sensitive_action|publication_pressure|moral_score|anti_gamification|publication_as_trade_term|verification_url/, ["public_receipt_cards", "reviewer_decisions", "claim_correction_records"]],
+  [
+    /public_receipt/,
+    [
+      "moral_trade_public_receipt_cards",
+      "moral_trade_public_receipt_publication_reviews",
+      "moral_trade_public_receipt_verification_events",
+      "claim_correction_records",
+    ],
+  ],
+  [
+    /plain_language|internal_jargon|route_simplification|signed_out_offset|route_fallback|factor_code|impact_score|advanced_filter|worked_example_card|long_duration|task_card|safe_template|term_map|next_action/,
+    [
+      "moral_trade_route_simplification_audit_records",
+      "moral_trade_participant_ui_render_snapshots",
+      "moral_trade_participant_explanation_records",
+      "moral_trade_participant_task_cards",
+    ],
+  ],
+  [
+    /recipient_association|causal_wording|personal_contribution|net_personal|reimbursement|direct_donation|sensitive_action|publication_pressure|moral_score|anti_gamification|publication_as_trade_term|verification_url/,
+    [
+      "moral_trade_public_receipt_cards",
+      "moral_trade_public_receipt_publication_reviews",
+      "moral_trade_public_receipt_verification_events",
+      "reviewer_decisions",
+      "claim_correction_records",
+    ],
+  ],
   [/marketplace_intake/, ["marketplace_intake_triage_events"]],
   [/blocked_project|anti_threat|false_match|challenge_window/, ["dispute_cases", "appeal_cases"]],
   [/status_|opaque_blocker/, ["marketplace_state_events"]],
@@ -781,6 +819,7 @@ export function getMarketplaceMeasurementContract() {
   return {
     contractTests: [...MARKETPLACE_CONTRACT_TESTS],
     eventSpecs: getMarketplaceMeasurementEventSpecs(),
+    firstClassRecordTables: [...MARKETPLACE_MEASUREMENT_RECORD_TABLES],
     kpiDefinitions: MARKETPLACE_KPI_DEFINITIONS.map((definition) => ({
       ...definition,
       sourceTables: [...definition.sourceTables],
@@ -874,6 +913,7 @@ export function validateMarketplaceMeasurementContract(): MarketplaceMeasurement
   const kpiKeys = contract.kpiDefinitions.map((definition) => definition.key);
   const eventTypes = contract.eventSpecs.map((spec) => spec.eventType);
   const metadataKeys = contract.eventSpecs.flatMap((spec) => spec.allowedMetadata);
+  const sourceTables = contract.kpiDefinitions.flatMap((definition) => definition.sourceTables);
   const blockers = [
     ...MARKETPLACE_KPI_KEYS.filter((key) => !kpiKeys.includes(key)).map(
       (key) => `missing_kpi:${key}`,
@@ -903,6 +943,27 @@ export function validateMarketplaceMeasurementContract(): MarketplaceMeasurement
 
   if (!contract.contractTests.includes("marketplace_live_metric_exclusion")) {
     blockers.push("live_metric_exclusion_test_missing");
+  }
+
+  for (const table of [
+    "funnel_events",
+    "moral_trade_route_simplification_audit_records",
+    "moral_trade_participant_ui_render_snapshots",
+    "moral_trade_public_receipt_publication_reviews",
+  ] as const) {
+    if (!contract.firstClassRecordTables.includes(table)) {
+      blockers.push(`missing_measurement_record_table:${table}`);
+    }
+  }
+
+  for (const legacyTable of [
+    "public_route_audit_records",
+    "participant_ui_render_snapshots",
+    "public_receipt_cards",
+  ]) {
+    if (sourceTables.includes(legacyTable)) {
+      blockers.push(`legacy_measurement_source_table:${legacyTable}`);
+    }
   }
 
   const requiredMoraltrade82Signals: Array<

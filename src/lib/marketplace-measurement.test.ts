@@ -30,6 +30,22 @@ test("marketplace measurement contract covers privacy-safe events and KPI keys",
   assert.ok(eventTypes.includes("marketplace_plain_language_copy_blocked"));
   assert.ok(eventTypes.includes("marketplace_publication_pressure_reported"));
   assert.ok(eventTypes.includes("marketplace_verification_status_checked"));
+  assert.ok(contract.firstClassRecordTables.includes("funnel_events"));
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_route_simplification_audit_records",
+    ),
+  );
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_participant_ui_render_snapshots",
+    ),
+  );
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_public_receipt_publication_reviews",
+    ),
+  );
   assert.ok(kpiKeys.includes("public_receipt_preview_count"));
   assert.ok(kpiKeys.includes("claim_correction_resolution_count"));
   assert.ok(kpiKeys.includes("route_simplification_audit_fail_count"));
@@ -90,6 +106,47 @@ test("marketplace measurement covers moraltrade82 route and receipt quality sign
   ] as const) {
     assert.equal(kpiKeys.has(kpiKey), true, kpiKey);
   }
+
+  const routeAuditKpi = contract.kpiDefinitions.find(
+    (kpi) => kpi.key === "route_simplification_audit_fail_count",
+  );
+  const taskCardKpi = contract.kpiDefinitions.find(
+    (kpi) => kpi.key === "task_card_single_primary_action_block_count",
+  );
+  const receiptPublicationKpi = contract.kpiDefinitions.find(
+    (kpi) => kpi.key === "publication_as_trade_term_block_count",
+  );
+
+  assert.ok(
+    routeAuditKpi?.sourceTables.includes(
+      "moral_trade_route_simplification_audit_records",
+    ),
+  );
+  assert.ok(
+    taskCardKpi?.sourceTables.includes(
+      "moral_trade_participant_ui_render_snapshots",
+    ),
+  );
+  assert.ok(
+    taskCardKpi?.sourceTables.includes("moral_trade_participant_task_cards"),
+  );
+  assert.ok(
+    receiptPublicationKpi?.sourceTables.includes(
+      "moral_trade_public_receipt_publication_reviews",
+    ),
+  );
+  assert.equal(
+    contract.kpiDefinitions.some((kpi) =>
+      kpi.sourceTables.includes("public_route_audit_records"),
+    ),
+    false,
+  );
+  assert.equal(
+    contract.kpiDefinitions.some((kpi) =>
+      kpi.sourceTables.includes("participant_ui_render_snapshots"),
+    ),
+    false,
+  );
 });
 
 test("marketplace KPI snapshot excludes seed templates, worked examples, Common Ground Budget module, and demo records from live metrics", () => {
