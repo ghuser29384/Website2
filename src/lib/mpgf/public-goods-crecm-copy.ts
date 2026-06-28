@@ -1,10 +1,71 @@
 import { createHash } from "node:crypto";
 
+import {
+  MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
+  MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
+  type MpgfCrecPlainLanguageCopyMapRow,
+} from "./public-goods-crecm-labels";
+
+export {
+  MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
+  MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
+  getMpgfCrecPlainLanguageLabelForStance,
+} from "./public-goods-crecm-labels";
+export type {
+  MpgfCrecGuidedStance,
+  MpgfCrecPlainLanguageCopyMapRow,
+} from "./public-goods-crecm-labels";
+
 export const MPGF_CRECM_COPY_VALIDATION_POLICY =
-  "crecm_v1_125_recorded_state_public_copy_validation";
+  "crecm_v1_125_recorded_state_public_copy_validation_v3";
+
+export const MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP = [
+  {
+    term: "authorized budget",
+    safeDefault: "Maximum this round",
+    requiredRecordedState: "post_clear_payment_authorization_recorded",
+  },
+  {
+    term: "funds held",
+    safeDefault: "saved payment method or post-clear authorization state",
+    requiredRecordedState: "escrow_or_custody_claim_allowed",
+  },
+  {
+    term: "escrow",
+    safeDefault: "no escrow unless legally approved",
+    requiredRecordedState: "escrow_or_custody_claim_allowed",
+  },
+  {
+    term: "custody",
+    safeDefault: "partner or fiscal-host custody state, if recorded",
+    requiredRecordedState: "escrow_or_custody_claim_allowed",
+  },
+  {
+    term: "guaranteed match",
+    safeDefault: "sponsor added, if backed",
+    requiredRecordedState: "base_and_bonus_match_pools_backed",
+  },
+  {
+    term: "guaranteed impact",
+    safeDefault: "recorded impact or receipt state",
+    requiredRecordedState: "impact_outcome_claim_allowed",
+  },
+  {
+    term: "matched impact",
+    safeDefault: "separate sponsor match and impact records",
+    requiredRecordedState: "base_bonus_match_and_impact_state_recorded",
+  },
+  {
+    term: "insured donation",
+    safeDefault: "fallback or failure-bonus terms, if recorded",
+    requiredRecordedState: "donation_insurance_claim_allowed",
+  },
+] as const;
 
 export interface MpgfCrecRecordedStateForCopy {
   paymentCaptureAllowed: boolean;
+  postClearPaymentAuthorizationRecorded: boolean;
   escrowClaimAllowed: boolean;
   custodyState: string;
   baseMatchPoolBacked: boolean;
@@ -13,6 +74,8 @@ export interface MpgfCrecRecordedStateForCopy {
   coordinationCreditsEnabledForCapturedRows: boolean;
   impactCertificatesEnabledForCapturedRows: boolean;
   capturedContributionRowsAvailable: boolean;
+  impactOutcomeClaimAllowed: boolean;
+  donationInsuranceClaimAllowed: boolean;
 }
 
 export interface MpgfCrecPublishedCopySnippet {
@@ -28,6 +91,15 @@ export interface MpgfCrecCopyValidationResult {
   blockers: string[];
 }
 
+export interface MpgfCrecPlainLanguageCopyMapValidation {
+  ok: boolean;
+  policy: typeof MPGF_CRECM_COPY_VALIDATION_POLICY;
+  requiredLabels: typeof MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS;
+  rowCount: number;
+  blockers: string[];
+  rows: readonly MpgfCrecPlainLanguageCopyMapRow[];
+}
+
 function hashValue(value: unknown) {
   return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
@@ -38,6 +110,54 @@ function hasPositiveClaim(text: string, patterns: RegExp[]) {
 
 function hasNegatedClaim(text: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function slug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+export function validateMpgfCrecPlainLanguageCopyMap(
+  rows: readonly MpgfCrecPlainLanguageCopyMapRow[] = MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
+): MpgfCrecPlainLanguageCopyMapValidation {
+  const blockers: string[] = [];
+  const seenLabels = new Set<string>();
+  const duplicateLabels = new Set<string>();
+
+  for (const row of rows) {
+    if (seenLabels.has(row.defaultUiText)) {
+      duplicateLabels.add(row.defaultUiText);
+    }
+    seenLabels.add(row.defaultUiText);
+
+    if (row.defaultUiText.trim() !== row.defaultUiText || row.defaultUiText.length === 0) {
+      blockers.push(`plain_copy_map_label_not_trim_stable_${slug(row.defaultUiText)}`);
+    }
+    if (!row.canonicalMeaning || !row.implementationRequirement || !row.canonicalRecord || !row.canonicalField) {
+      blockers.push(`plain_copy_map_row_under_specified_${slug(row.defaultUiText)}`);
+    }
+    if (row.createsAlternateSemantics !== false) {
+      blockers.push(`plain_copy_map_alternate_semantics_${slug(row.defaultUiText)}`);
+    }
+  }
+
+  for (const label of MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS) {
+    if (!seenLabels.has(label)) {
+      blockers.push(`plain_copy_map_missing_${slug(label)}`);
+    }
+  }
+
+  for (const label of duplicateLabels) {
+    blockers.push(`plain_copy_map_duplicate_${slug(label)}`);
+  }
+
+  return {
+    ok: blockers.length === 0,
+    policy: MPGF_CRECM_COPY_VALIDATION_POLICY,
+    requiredLabels: MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
+    rowCount: rows.length,
+    blockers,
+    rows,
+  };
 }
 
 export function validateMpgfCrecCopyAgainstRecordedState(
@@ -66,14 +186,33 @@ export function validateMpgfCrecCopyAgainstRecordedState(
 
   if (
     hasPositiveClaim(text, [
+      /\bauthorized budget\b/i,
+      /\bbudget (is )?authorized\b/i,
+    ]) &&
+    !hasNegatedClaim(text, [
+      /\bnot (an? )?authorized budget\b/i,
+      /\bbudget is not authorized\b/i,
+      /\bmaximum budget[^.]*not (an? )?authorization\b/i,
+    ])
+  ) {
+    claims.push("authorized_budget");
+    if (!state.postClearPaymentAuthorizationRecorded) {
+      blockers.push("copy_uses_authorized_budget_without_recorded_authorization_state");
+    }
+  }
+
+  if (
+    hasPositiveClaim(text, [
       /\b(escrow-backed|held in escrow|escrowed funds|custody-backed|payment protection)\b/i,
-      /\b(we hold|platform holds|funds are held)\b/i,
+      /\b(we hold|platform holds|funds are held|funds held|held funds)\b/i,
     ]) &&
     !hasNegatedClaim(text, [
       /\b(not|never) (held in escrow|escrow-backed|custody-backed|payment protection)\b/i,
       /\bnot representing that funds are held\b/i,
       /\bnot represented as [^.]*escrow/i,
       /\bnot escrow\b/i,
+      /\bwithout (claiming|guaranteeing|promising|representing) [^.]*\b(escrow|custody|payment protection)\b/i,
+      /\bwithout [^.]*\b(escrow|custody|payment protection)\b/i,
     ])
   ) {
     claims.push("escrow_custody_or_payment_protection");
@@ -86,7 +225,18 @@ export function validateMpgfCrecCopyAgainstRecordedState(
     hasPositiveClaim(text, [
       /\b(guaranteed|locked|fully backed) base match\b/i,
       /\b(guaranteed|locked|fully backed) bonus match\b/i,
+      /\bbase match (is )?(guaranteed|locked|fully backed)\b/i,
+      /\bbonus match (is )?(guaranteed|locked|fully backed)\b/i,
+      /\bguaranteed matching\b/i,
+      /\bmatched funds are guaranteed\b/i,
       /\bmatching is guaranteed\b/i,
+    ]) &&
+    !hasNegatedClaim(text, [
+      /\b(not|never) (a )?(guaranteed|locked|fully backed) (base match|bonus match|match|matching)\b/i,
+      /\b(not|never) (guarantee|guaranteed|guaranteeing) (matching|base match|bonus match|matched funds)\b/i,
+      /\bwithout (guaranteeing|guaranteed) (matching|base match|bonus match|matched funds)\b/i,
+      /\bdoes not (guarantee|lock) (matching|base match|bonus match|matched funds)\b/i,
+      /\bmatching is not guaranteed\b/i,
     ])
   ) {
     claims.push("guaranteed_or_backed_matching");
@@ -128,6 +278,62 @@ export function validateMpgfCrecCopyAgainstRecordedState(
     }
   }
 
+  if (
+    hasPositiveClaim(text, [
+      /\bguaranteed (impact|outcome|effectiveness)\b/i,
+      /\b(impact|outcome|effectiveness) (is )?guaranteed\b/i,
+      /\bguarantees? (impact|outcomes?|effectiveness)\b/i,
+      /\bcertified impact\b/i,
+    ]) &&
+    !hasNegatedClaim(text, [
+      /\b(not|never) (guaranteed|guarantee|guarantees) (impact|outcomes?|effectiveness)\b/i,
+      /\b(impact|outcome|effectiveness) is not guaranteed\b/i,
+      /\bwithout (guaranteeing|guaranteed) (impact|outcomes?|effectiveness)\b/i,
+      /\bwithout guaranteeing [^.]*\b(impact|outcomes?|effectiveness)\b/i,
+      /\bdoes not guarantee (impact|outcomes?|effectiveness)\b/i,
+      /\bdoes not guarantee [^.]*\b(impact|outcomes?|effectiveness)\b/i,
+      /\bnot guaranteed-effective\b/i,
+      /\bnot a guarantee of [^.]*impact\b/i,
+    ])
+  ) {
+    claims.push("impact_or_effectiveness_guarantee");
+    if (!state.impactOutcomeClaimAllowed) {
+      blockers.push("copy_claims_impact_or_effectiveness_without_recorded_proof_state");
+    }
+  }
+
+  if (
+    hasPositiveClaim(text, [
+      /\b(matched impact|impact matched|impact matching|matched-effectiveness)\b/i,
+    ]) &&
+    !hasNegatedClaim(text, [
+      /\b(not|never) (matched impact|impact matched|impact matching|matched-effectiveness)\b/i,
+      /\bdoes not (claim|promise|guarantee) [^.]*\b(matched impact|impact matched|impact matching)\b/i,
+      /\bwithout [^.]*\b(matched impact|impact matched|impact matching)\b/i,
+    ])
+  ) {
+    claims.push("matched_impact");
+    if (!state.baseMatchPoolBacked || !state.bonusMatchPoolBacked || !state.impactOutcomeClaimAllowed) {
+      blockers.push("copy_claims_matched_impact_without_recorded_matching_and_impact_state");
+    }
+  }
+
+  if (
+    hasPositiveClaim(text, [
+      /\b(insured donation|donation insurance|insured contribution|contribution insurance)\b/i,
+    ]) &&
+    !hasNegatedClaim(text, [
+      /\b(not|never) (an? )?(insured donation|insured contribution)\b/i,
+      /\b(no|without) (donation|contribution) insurance\b/i,
+      /\bdoes not (insure|guarantee) (your )?(donation|contribution)\b/i,
+    ])
+  ) {
+    claims.push("insured_donation");
+    if (!state.donationInsuranceClaimAllowed) {
+      blockers.push("copy_claims_insured_donation_without_recorded_insurance_state");
+    }
+  }
+
   return {
     ok: blockers.length === 0,
     policy: MPGF_CRECM_COPY_VALIDATION_POLICY,
@@ -149,6 +355,8 @@ export function validateMpgfCrecPublishedCopyBundle(
   return {
     ok: blockers.length === 0,
     policy: MPGF_CRECM_COPY_VALIDATION_POLICY,
+    terminologyMap: MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP,
+    plainLanguageCopyMap: validateMpgfCrecPlainLanguageCopyMap(),
     stateHash: hashValue(state),
     surfaceCount: snippets.length,
     blockedSurfaceCount: results.filter((result) => !result.ok).length,
