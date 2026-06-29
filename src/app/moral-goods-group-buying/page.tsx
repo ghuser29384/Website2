@@ -121,6 +121,7 @@ function DiscoveryDealRow({ card }: { card: DiscoveryCard }) {
           <span>{card.deadlineLabel}</span>
           <span>{card.limitLabel}</span>
         </div>
+        <p className="panel-note">{card.safeActionNote}</p>
       </div>
       <div className="moral-goods-price-block">
         <strong>{card.priceLabel}</strong>
