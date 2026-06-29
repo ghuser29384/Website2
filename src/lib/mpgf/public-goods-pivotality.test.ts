@@ -139,7 +139,7 @@ test("MPGF pivotality calculator is exposed only as an advanced educational surf
   const route = readFileSync("src/app/api/mpgf/pivotality/route.ts", "utf8");
 
   assert.match(hubPage, /Advanced: Pivotality Calculator/);
-  assert.match(hubPage, /action="\/api\/mpgf\/pivotality"/);
+  assert.match(hubPage, /action="\/api\/mpgf\/pivotality-calculator"/);
   assert.match(hubPage, /name="calculatorSurface"/);
   assert.match(hubPage, /Calculate from subjective inputs/);
   assert.match(hubPage, /up to unless the maximum liability is\s+fully backed/);

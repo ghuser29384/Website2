@@ -417,7 +417,7 @@ export default async function MpgfPage() {
             <p>{pivotalityExample.interpretation}</p>
           </article>
           <form
-            action="/api/mpgf/pivotality"
+            action="/api/mpgf/pivotality-calculator"
             aria-label="Advanced pivotality calculator"
             className="panel stacked-form"
             method="post"
