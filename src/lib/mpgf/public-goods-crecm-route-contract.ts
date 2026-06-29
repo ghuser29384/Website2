@@ -19,6 +19,8 @@ import {
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY =
   "crecm_v1_125_section_14_exact_route_surface_fail_closed";
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_USER_FACING_LABEL =
+  "Common Ground Budget";
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_SECTION_14_ROUTES = [
   "GET /api/mpgf/rounds",
@@ -63,7 +65,7 @@ export function buildMpgfCrecV1125RouteContractApi() {
     ok: true as const,
     policy: MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY,
     sourceSpec: "moralpublicgoods131.md",
-    userFacingLabel: "moral public goods",
+    userFacingLabel: MPGF_PUBLIC_GOODS_CRECM_V1125_USER_FACING_LABEL,
     technicalLabel: "CRECM v1.125",
     routes: [...MPGF_PUBLIC_GOODS_CRECM_V1125_SECTION_14_ROUTES],
     exactRouteSurface: true,
@@ -96,7 +98,7 @@ function routeBase({
     ok: true,
     policy: MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY,
     sourceSpec: "moralpublicgoods131.md",
-    userFacingLabel: "moral public goods",
+    userFacingLabel: MPGF_PUBLIC_GOODS_CRECM_V1125_USER_FACING_LABEL,
     technicalLabel: "CRECM v1.125",
     method,
     route,

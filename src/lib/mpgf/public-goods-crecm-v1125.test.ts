@@ -120,6 +120,7 @@ test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route con
   const routeContract = buildMpgfCrecV1125RouteContractApi();
 
   assert.equal(routeContract.policy, MPGF_PUBLIC_GOODS_CRECM_V1125_ROUTE_POLICY);
+  assert.equal(routeContract.userFacingLabel, "Common Ground Budget");
   assert.equal(routeContract.exactRouteSurface, true);
   assert.equal(routeContract.stateChangingRoutesFailClosedUntilPrerequisitesPass, true);
 
@@ -189,6 +190,15 @@ test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route con
   ] as const) {
     assert.match(readFileSync(path, "utf8"), expected);
   }
+
+  assert.equal(
+    buildMpgfCrecV1125NoSideEffectPostApi({
+      operation: "support_stance_intake",
+      route: "/api/mpgf/rounds/:roundId/support-stance",
+      roundId: "mpgf-assurance-round-demo-2026-05",
+    }).userFacingLabel,
+    "Common Ground Budget",
+  );
 
   const settlementPreview = getMpgfCrecV1125SettlementPreviewApi("mpgf-assurance-round-demo-2026-05");
   assert.ok(settlementPreview);
