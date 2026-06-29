@@ -5434,6 +5434,7 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(newOfferPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
   assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
   assert.match(marketplaceBoundary, /CRECM v1\.125/);
+  assert.match(marketplaceBoundary, /userFacingLabel: "Common Ground Budget"/);
   assert.match(marketplaceBoundary, /Public Goods Fund module/);
   assert.equal(marketplaceBoundary.includes("moralpublicgoods102.md"), false);
   assert.equal(marketplaceBoundary.includes("CRECM v1.96"), false);

@@ -57,6 +57,21 @@ test("marketplace intake triage covers all required safe route-away categories",
   ]);
 });
 
+test("marketplace intake triage routes public-goods intent to the current product label", () => {
+  const publicGoodsRoute = MARKETPLACE_INTAKE_TRIAGE_ROUTES.find(
+    (route) => route.key === "public_goods_module",
+  );
+
+  assert.ok(publicGoodsRoute);
+  assert.equal(publicGoodsRoute.label, "Common Ground Budget public-goods module");
+  assert.equal(publicGoodsRoute.href, "/mpgf");
+  assert.match(publicGoodsRoute.summary, /moralpublicgoods131\.md/);
+  assert.match(publicGoodsRoute.summary, /CRECM v1\.125/);
+  assert.match(publicGoodsRoute.summary, /Public Goods Fund module/);
+  assert.equal(publicGoodsRoute.summary.includes("Verified Assurance Matching"), false);
+  assert.equal(publicGoodsRoute.summary.includes("external CRECM module"), false);
+});
+
 test("marketplace intake triage blocks missing, eligible, and profile-inference regressions", () => {
   const invalid = validateMarketplaceIntakeTriageRoutes(
     MARKETPLACE_INTAKE_TRIAGE_ROUTES.map((route) =>
