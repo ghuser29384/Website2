@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { GET as getGroupBuying } from "@/app/api/moral-trade/group-buying/route";
 import { POST as enforceGroupBuying } from "@/app/api/moral-trade/group-buying/enforce/route";
 
 import {
@@ -12,6 +13,7 @@ import {
   MORAL_GOODS_SEED_FUNDING_SOURCES,
   MORAL_GOODS_SEED_OBLIGATIONS,
   buildDealCardModel,
+  buildMoralGoodsDiscoveryCardModel,
   buildSettlementPlan,
   calculateAdjustedImpactMilliUnits,
   calculateParticipantPayoutMinor,
@@ -19,6 +21,7 @@ import {
   evaluateFeatureCapabilities,
   flagParticipantProposalForThreats,
   getGuidedStandingBudgetSteps,
+  getMoralGoodsDiscoverySurface,
   getMoralGoodsGroupBuyingContract,
   getPrivateProposalIntakeFields,
   lintOrdinaryGroupBuyingCopy,
@@ -43,6 +46,8 @@ test("group-buying contract validates shared primitives, states, templates, and 
   assert.ok(contract.featureModules.includes("standing_microfund_pools"));
   assert.ok(contract.failureMessageTemplates.some((template) => template.key === "donation_failure_after_verification"));
   assert.ok(contract.sampleDealCards.every((card) => card.copyLint.status === "pass"));
+  assert.ok(contract.discoverySurface.categories.some((category) => category.key === "lots"));
+  assert.ok(contract.discoverySurface.commitmentPreview.noChargeLabel.includes("Due now $0.00"));
 });
 
 test("deal cards use action-first copy and keep internal architecture terms out of ordinary rows", () => {
@@ -59,6 +64,34 @@ test("deal cards use action-first copy and keep internal architecture terms out 
   assert.equal(card.rows.nextStep, "Fund this");
   assert.equal(card.copyLint.status, "pass");
   assert.match(card.details.methodology, /fixed donation consideration/i);
+});
+
+test("discovery surface filters reviewable routes without fabricating commitment state", () => {
+  const allSurface = getMoralGoodsDiscoverySurface();
+  const lotSurface = getMoralGoodsDiscoverySurface({ category: "lots" });
+  const searchSurface = getMoralGoodsDiscoverySurface({ query: "no-meat" });
+  const emptySurface = getMoralGoodsDiscoverySurface({ query: "nonexistent private counterparty" });
+  const lot = MORAL_GOODS_SEED_ENVELOPES.find(
+    (envelope) => envelope.envelopeType === "crowdfunded_pledge_swap_lot",
+  );
+  assert.ok(lot);
+  const lotCard = buildMoralGoodsDiscoveryCardModel(lot);
+
+  assert.equal(allSurface.categories.length, 6);
+  assert.ok(allSurface.cards.length >= 4);
+  assert.ok(allSurface.filterChips.includes("Private until reviewed"));
+  assert.ok(lotSurface.cards.length >= 1);
+  assert.ok(lotSurface.cards.every((card) => card.categoryKey === "lots"));
+  assert.ok(searchSurface.cards.some((card) => /No-Meat/i.test(card.title)));
+  assert.equal(emptySurface.cards.length, 0);
+  assert.equal(emptySurface.commitmentPreview.noChargeLabel.includes("Due now $0.00"), true);
+  assert.equal(lotCard.copyLint.status, "pass");
+  assert.equal(lotCard.safeActionNote.includes("No charge"), true);
+  assert.doesNotMatch(lotCard.progressLabel, /\d+%|authorized/i);
+  assert.ok([1_500, 3_500, 6_000, 8_500].includes(lotCard.progressBps));
+  assert.match(lotCard.progressLabel, /review-gated/i);
+  assert.equal(lotCard.statusLabel, "Open for funding");
+  assert.match(lotCard.limitLabel, /\$0\.50 USD/);
 });
 
 test("copy lint rejects internal terms, offset claims, and unsupported guarantee language", () => {
@@ -248,6 +281,26 @@ test("group-buying enforcement route previews proposal risk without mutating sta
   assert.equal(body.proposalSafety.status, "clear");
 });
 
+test("group-buying collection route exposes discovery surface and safe commitment preview", async () => {
+  const response = await getGroupBuying(new Request("http://localhost/api/moral-trade/group-buying"));
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.publicSurface.discoverySurface.activeCategory, "all");
+  assert.ok(body.publicSurface.discoverySurface.cards.length >= 4);
+  assert.ok(
+    body.publicSurface.discoverySurface.cards.every(
+      (card: { progressLabel: string }) => !/\d+%|authorized/i.test(card.progressLabel),
+    ),
+  );
+  assert.ok(
+    body.publicSurface.discoverySurface.categories.some(
+      (category: { key: string; label: string }) => category.key === "baskets" && category.label === "Baskets",
+    ),
+  );
+  assert.match(body.publicSurface.discoverySurface.commitmentPreview.noChargeLabel, /Due now \$0\.00/);
+});
+
 test("group-buying wiring covers API profile, route files, migration, docs, and nav", () => {
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
@@ -267,6 +320,11 @@ test("group-buying wiring covers API profile, route files, migration, docs, and 
   assert.match(migration, /create table if not exists public\.moral_goods_credited_action_units/);
   assert.match(migration, /raw_unit_key text not null unique/);
   assert.match(page, /Fund verified actions/);
+  assert.match(page, /DiscoverySection/);
+  assert.match(page, /Browse reviewed routes/);
+  assert.match(page, /CommitmentPreview/);
+  assert.match(page, /safeActionNote/);
+  assert.match(page, /Search action, proof, or consideration/);
   assert.match(docs, /Privacy And Retention/);
   assert.match(docs, /Public And Private Snapshots/);
   assert.match(docs, /Standing Microfund Pools/);

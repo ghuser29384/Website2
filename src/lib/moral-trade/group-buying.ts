@@ -1751,12 +1751,41 @@ function compactDateLabel(value: string | null) {
   return value ? `By ${value.slice(0, 10)}` : "No fixed deadline";
 }
 
-function fundingProgressBps(envelope: MoralGoodsPurchaseEnvelope) {
+function discoveryProgressBand(envelope: MoralGoodsPurchaseEnvelope) {
   if (envelope.funding.targetMinor <= 0) {
-    return 0;
+    return {
+      progressBps: 1_500,
+      progressLabel: "Review-gated status only",
+    };
   }
 
-  return Math.min(10_000, Math.round((envelope.funding.authorizedMinor / envelope.funding.targetMinor) * 10_000));
+  const ratioBps = Math.min(10_000, Math.round((envelope.funding.authorizedMinor / envelope.funding.targetMinor) * 10_000));
+
+  if (ratioBps >= 8_000) {
+    return {
+      progressBps: 8_500,
+      progressLabel: "High review-gated interest",
+    };
+  }
+
+  if (ratioBps >= 4_000) {
+    return {
+      progressBps: 6_000,
+      progressLabel: "Moderate review-gated interest",
+    };
+  }
+
+  if (ratioBps > 0) {
+    return {
+      progressBps: 3_500,
+      progressLabel: "Early review-gated interest",
+    };
+  }
+
+  return {
+    progressBps: 1_500,
+    progressLabel: "Review-gated status only",
+  };
 }
 
 function discoveryPriceLabel(envelope: MoralGoodsPurchaseEnvelope) {
@@ -1796,8 +1825,7 @@ export function buildMoralGoodsDiscoveryCardModel(
 ): MoralGoodsDiscoveryCardModel {
   const dealCard = buildDealCardModel(envelope, "public");
   const categoryKey = getDiscoveryCategoryKey(envelope);
-  const progressBps = fundingProgressBps(envelope);
-  const progressPercent = Math.round(progressBps / 100);
+  const progressBand = discoveryProgressBand(envelope);
   const defaultAmount = envelope.funding.microPledgeDefaultMinor ?? envelope.funding.providerMinimumMinor ?? 0;
   const proofTags = discoveryProofTags(envelope);
   const model = {
@@ -1812,8 +1840,8 @@ export function buildMoralGoodsDiscoveryCardModel(
         : "Review required before commitment",
     priceLabel: discoveryPriceLabel(envelope),
     primaryLabel: dealCard.primaryLabel,
-    progressBps,
-    progressLabel: `${progressPercent}% authorized`,
+    progressBps: progressBand.progressBps,
+    progressLabel: progressBand.progressLabel,
     proofTags,
     routeLabel: dealCard.secondaryLabel,
     safeActionNote: "No charge or participant action starts before frozen terms and review gates clear.",
