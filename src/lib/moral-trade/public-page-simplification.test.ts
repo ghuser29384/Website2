@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as publicPageSimplificationRoute } from "@/app/api/moral-trade/public-page-simplification/contract/route";
+import { DONATION_OFFSET_PLAIN_LABELS } from "@/lib/marketplace-seed-templates";
 
 import {
   getMoralTradePublicPageSimplificationContract,
@@ -68,9 +69,9 @@ test("moraltrade82 public-page simplification contract validates route audit cov
     "Create a donation offset",
     "Join an invitation-only pilot",
   ]);
-  assert.equal(
-    contract.donationOffsetPlainLabelMap.baseline_intention,
-    "What would each side donate without this trade?",
+  assert.deepEqual(
+    Object.values(contract.donationOffsetPlainLabelMap),
+    [...DONATION_OFFSET_PLAIN_LABELS],
   );
   assert.deepEqual(contract.fallbackCopy.actions, [
     "Retry",
@@ -300,7 +301,7 @@ test("moraltrade82 public-page simplification contract route exposes safe route 
   ]);
   assert.equal(
     body.publicContract.donationOffsetPlainLabelMap.destination,
-    "Where does the shared money go?",
+    DONATION_OFFSET_PLAIN_LABELS[2],
   );
   assert.deepEqual(body.publicContract.paidActionSafeAlternatives, [
     "Inspect a worked example",

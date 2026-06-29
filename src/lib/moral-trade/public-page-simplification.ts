@@ -1,3 +1,5 @@
+import { DONATION_OFFSET_PLAIN_LABELS } from "@/lib/marketplace-seed-templates";
+
 export const MORAL_TRADE_PUBLIC_PAGE_SIMPLIFICATION_VERSION =
   "moral-trade-public-page-simplification-v0.1-2026-06";
 export const MORAL_TRADE_PUBLIC_PAGE_SIMPLIFICATION_VALIDATOR_VERSION =
@@ -155,13 +157,13 @@ const SIGNED_OUT_OFFSET_PREVIEW_STEPS = [
 ];
 
 const DONATION_OFFSET_PLAIN_LABEL_MAP = {
-  baseline_intention: "What would each side donate without this trade?",
-  match_ratio: "How much does each side redirect?",
-  destination: "Where does the shared money go?",
-  surplus_rule: "Why does each side prefer this to no trade?",
-  evidence_method: "What proof reviewers check",
-  expiry: "When the offer expires",
-  anti_threat_certification: "What would make this unsafe or invalid?",
+  baseline_intention: DONATION_OFFSET_PLAIN_LABELS[0],
+  match_ratio: DONATION_OFFSET_PLAIN_LABELS[1],
+  destination: DONATION_OFFSET_PLAIN_LABELS[2],
+  surplus_rule: DONATION_OFFSET_PLAIN_LABELS[3],
+  evidence_method: DONATION_OFFSET_PLAIN_LABELS[4],
+  expiry: DONATION_OFFSET_PLAIN_LABELS[5],
+  anti_threat_certification: DONATION_OFFSET_PLAIN_LABELS[6],
 } as const;
 
 const VALIDATION_STATUS_LABELS = [
@@ -570,14 +572,9 @@ export function validateMoralTradePublicPageSimplificationContract(
     check(
       "donation-offset-label-map",
       "Donation-offset pages use approved plain labels for baseline, redirect, destination, proof, expiry, and safety",
-      contract.donationOffsetPlainLabelMap.baseline_intention ===
-        "What would each side donate without this trade?" &&
-        contract.donationOffsetPlainLabelMap.match_ratio ===
-          "How much does each side redirect?" &&
-        contract.donationOffsetPlainLabelMap.destination ===
-          "Where does the shared money go?" &&
-        contract.donationOffsetPlainLabelMap.anti_threat_certification ===
-          "What would make this unsafe or invalid?",
+      DONATION_OFFSET_PLAIN_LABELS.every(
+        (label, index) => Object.values(contract.donationOffsetPlainLabelMap)[index] === label,
+      ),
       Object.values(contract.donationOffsetPlainLabelMap).join(", "),
     ),
     check(
