@@ -1089,7 +1089,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="hero-text">
               {publicGoodsSearchIntent
                 ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
-                : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund module without mixing their counts."}
+                : "Explore live offers, reviewed templates, worked examples, demo data, and the external CRECM module without mixing their counts."}
             </p>
             {publicGoodsSearchIntent ? (
               <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>

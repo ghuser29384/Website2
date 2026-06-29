@@ -7,7 +7,7 @@ export type MoralTradeReleaseStage =
   | "demo"
   | "sandbox_calculation"
   | "reviewed_no_money_manual_evidence_pilot"
-  | "capped_real_money_public_goods_module"
+  | "capped_real_money_external_crecm_module"
   | "donation_offset_pilot"
   | "pledge_swap_preview_only"
   | "pledge_swap_manual_pilot"
@@ -211,14 +211,14 @@ export const MORALTRADE82_RELEASE_STAGES = [
   "demo",
   "sandbox_calculation",
   "reviewed_no_money_manual_evidence_pilot",
-  "capped_real_money_public_goods_module",
+  "capped_real_money_external_crecm_module",
   "donation_offset_pilot",
   "pledge_swap_preview_only",
   "pledge_swap_manual_pilot",
 ] as const satisfies readonly MoralTradeReleaseStage[];
 
 export const MORALTRADE82_FEATURE_FLAGS = [
-  "public_goods_module",
+  "external_crecm_module",
   "real_money_capture",
   "non_public_goods_subsidies",
   "donation_offsets",
@@ -905,16 +905,16 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "No-money manual-evidence pilots require triage, template, term-sheet, evidence, reviewer, capacity, participant UI, and plain-language checks before any participant can treat a preview as reviewed.",
   },
   {
-    key: "capped_real_money_public_goods_module",
-    label: "Capped real-money Public Goods Fund module handoff",
-    featureFlagKey: "moral_trade_public_goods_module",
+    key: "capped_real_money_external_crecm_module",
+    label: "Capped real-money external CRECM module handoff",
+    featureFlagKey: "moral_trade_external_crecm_module",
     payable: true,
     relianceBearing: true,
     publicMetricsMayPublish: false,
     requiredRequirementKeys: [...CRECM_HANDOFF_REQUIRED_REQUIREMENTS],
     inactiveRequirementKeys: inactiveDocumentRequirements(CRECM_HANDOFF_REQUIRED_REQUIREMENTS),
     hardBlockerSummary:
-      "Public Goods Fund handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
+      "External CRECM handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
   },
   {
     key: "donation_offset_pilot",
