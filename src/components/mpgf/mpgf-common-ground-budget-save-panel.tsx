@@ -349,7 +349,12 @@ export function MpgfCommonGroundBudgetSavePanel({
             </div>
             <div>
               <dt>Reward, credit, and certificate opt-ins</dt>
-              <dd>Contributor-only benefits stay separate and never count as public-good dollars or allocation power.</dd>
+              <dd>
+                Success-reward, coordination-credit, and impact-certificate opt-ins are off unless
+                explicitly selected, require captured successful contribution rows, cannot be
+                retroactively obtained by non-signers or late signers, and never count as
+                public-good dollars or allocation power.
+              </dd>
             </div>
             <div>
               <dt>Self-matching exclusions</dt>

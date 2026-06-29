@@ -3405,6 +3405,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Payment language/);
   assert.match(budgetSavePanel, /Fee treatment/);
   assert.match(budgetSavePanel, /Reward, credit, and certificate opt-ins/);
+  assert.match(budgetSavePanel, /Success-reward, coordination-credit, and impact-certificate opt-ins are off unless/);
+  assert.match(budgetSavePanel, /require captured successful contribution rows/);
+  assert.match(budgetSavePanel, /cannot be\s+retroactively obtained by non-signers or late signers/);
+  assert.match(budgetSavePanel, /never count as\s+public-good dollars or allocation power/);
   assert.match(budgetSavePanel, /Self-matching exclusions/);
   assert.match(budgetSavePanel, /Sealed-progress behavior/);
   assert.match(budgetSavePanel, /Failure-bonus denial categories/);
