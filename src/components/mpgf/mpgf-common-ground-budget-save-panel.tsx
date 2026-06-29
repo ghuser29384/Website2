@@ -81,6 +81,7 @@ interface CommonGroundBudgetReviewProject {
   maxAllocCents: number;
   minCounterpartyVolumeCents: number;
   rankOrder: number;
+  redactedNote?: string;
   stance: SupportStance;
   title: string;
 }
@@ -164,6 +165,7 @@ export function MpgfCommonGroundBudgetSavePanel({
           maxAllocCents: stance.maxAllocCents,
           minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
           rankOrder: stance.rankOrder,
+          redactedNote: stance.redactedNote,
           stance: stance.stance,
           title: stance.campaignId,
         }));
@@ -246,7 +248,7 @@ export function MpgfCommonGroundBudgetSavePanel({
           </div>
           <div>
             <dt>Privacy</dt>
-            <dd>aggregate only</dd>
+            <dd>Project stances and review notes stay participant/reviewer-only; public output is aggregate only.</dd>
           </div>
           <div>
             <dt>Sealed progress</dt>
@@ -264,7 +266,8 @@ export function MpgfCommonGroundBudgetSavePanel({
                   : `max ${formatCents(project.maxAllocCents)}, ${
                       project.conditionAccepted ? "condition accepted" : "condition still missing"
                     }`}, priority{" "}
-                {project.rankOrder}
+                {project.rankOrder}. Private review note:{" "}
+                {project.redactedNote ? `${project.redactedNote} (reviewer-only)` : "none"}
               </li>
             ))}
           </ul>

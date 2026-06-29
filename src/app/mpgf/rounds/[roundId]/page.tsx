@@ -1124,6 +1124,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   maxAllocCents: row.maxAllocCents,
                   minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
                   rankOrder: row.rankOrder,
+                  redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
                   stance: row.stance,
                   title: row.title,
                 }))}

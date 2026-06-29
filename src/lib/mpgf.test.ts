@@ -3331,6 +3331,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /rulebookHash=\{ecmRulebook\.calcHash\}/);
   assert.match(roundPage, /sourceSpec=\{ecmRulebook\.mechanism\.sourceSpec\}/);
   assert.match(roundPage, /technicalLabel=\{ecmRulebook\.mechanism\.technicalLabel\}/);
+  assert.match(roundPage, /redactedNote: searchParamValue\(resolvedSearchParams, `redactedNote_\$\{row\.campaignId\}`\)/);
   assert.match(roundPage, /redactedNote_/);
   assert.match(roundPage, /Review note/);
   assert.match(roundPage, /paymentCaptureAllowed/);
@@ -3367,13 +3368,16 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Saved method required for final clearing; no charge or hold now/);
   assert.match(budgetSavePanel, /If something does not clear/);
   assert.match(budgetSavePanel, /Privacy/);
-  assert.match(budgetSavePanel, /aggregate only/);
+  assert.match(budgetSavePanel, /Project stances and review notes stay participant\/reviewer-only/);
+  assert.match(budgetSavePanel, /public output is aggregate only/);
   assert.match(budgetSavePanel, /Sealed progress/);
   assert.match(budgetSavePanel, /Exact live threshold and counterparty gaps hidden until close/);
   assert.match(budgetSavePanel, /Projects/);
   assert.match(budgetSavePanel, /canonical \{project\.stance\}/);
   assert.match(budgetSavePanel, /condition accepted/);
   assert.match(budgetSavePanel, /condition still missing/);
+  assert.match(budgetSavePanel, /Private review note:/);
+  assert.match(budgetSavePanel, /reviewer-only/);
   assert.match(budgetSavePanel, /canonical ConditionalTradeIntent records/);
   assert.match(budgetSavePanel, /Minimum verified counterparty volume/);
   assert.match(budgetSavePanel, /explicit conditional-intent setup record/);
