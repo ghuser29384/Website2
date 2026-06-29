@@ -365,8 +365,10 @@ export function MpgfCommonGroundBudgetSavePanel({
             <div>
               <dt>Failure-bonus denial categories</dt>
               <dd>
-                Denied for rulebook, legal/custody, identity, sybil, collusion, authorization,
-                consent, conflict, and review failures.
+                Denied for review-not-approved, challenge-blocked, anti-threat, destination,
+                project-identity/destination-route, externality, conflict, sponsor, rulebook,
+                legal/custody, identity, sybil, collusion, authorization, and user-consent
+                failures.
               </dd>
             </div>
             <div>

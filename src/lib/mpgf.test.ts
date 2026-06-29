@@ -3378,6 +3378,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /condition still missing/);
   assert.match(budgetSavePanel, /Private review note:/);
   assert.match(budgetSavePanel, /reviewer-only/);
+  assert.match(budgetSavePanel, /Failure-bonus denial categories/);
+  assert.match(budgetSavePanel, /review-not-approved, challenge-blocked, anti-threat, destination/);
+  assert.match(budgetSavePanel, /project-identity\/destination-route, externality, conflict, sponsor/);
+  assert.match(budgetSavePanel, /legal\/custody, identity, sybil, collusion, authorization, and user-consent/);
   assert.match(budgetSavePanel, /canonical ConditionalTradeIntent records/);
   assert.match(budgetSavePanel, /Minimum verified counterparty volume/);
   assert.match(budgetSavePanel, /explicit conditional-intent setup record/);
