@@ -56,6 +56,10 @@ export type PublicReceiptPublicityAsTradeTermBlockState =
   | "possible"
   | "blocked"
   | "manual_review";
+export type PublicReceiptPublicationDefaultPlacement =
+  | "unlisted"
+  | "profile_opt_in"
+  | "search_indexed";
 export type PublicReceiptClaimReviewKey =
   | "verified"
   | "recipient_transfer"
@@ -82,6 +86,7 @@ export interface PublicReceiptContributionSummary {
 
 export interface PublicReceiptPublicationControls {
   currentStatus: "current" | "corrected" | "revoked" | "superseded";
+  defaultPlacement: PublicReceiptPublicationDefaultPlacement;
   issuedAt: string;
   publicationPressureReportingRequired: boolean;
   publicationPressureReportRefs: string[];
@@ -207,6 +212,7 @@ export interface PublicReceiptCardContract {
   netPersonalAttributionStates: PublicReceiptNetPersonalAttributionState[];
   sensitiveActionDisplayModes: PublicReceiptSensitiveActionDisplayMode[];
   publicityAsTradeTermBlockStates: PublicReceiptPublicityAsTradeTermBlockState[];
+  publicationDefaultPlacements: PublicReceiptPublicationDefaultPlacement[];
   claimHygieneRules: string[];
   defaultPublicationControls: PublicReceiptPublicationControls;
   defaultDirectDonationParityControls: PublicReceiptDirectDonationParityControls;
@@ -245,7 +251,7 @@ const PRIVATE_TOKEN_PATTERN =
 const ENDORSEMENT_PATTERN =
   /(objective moral value|morally superior|platform endorses|official endorsement|proves this cause is better)/i;
 const GAMIFICATION_PATTERN =
-  /(leaderboard|rank #?\d+|points|badge streak|achievement unlocked|scoreboard|like count|reaction count|share count|public streak|profile boost|search boost|matching priority|review priority|recommendation ranking)/i;
+  /\b(leaderboards?|receipt[- ]count leaderboards?|rank #?\d+|public ranks?|points|badge streaks?|percentile badges?|achievement unlocked|scoreboards?|likes?|like counts?|reactions?|reaction counts?|applause counts?|share counts?|external-share counts?|public streaks?|trending modules?|comparative rankings?|public-profile boosts?|public profile boosts?|profile boosts?|search-ranking boosts?|search ranking boosts?|search boosts?|match priority|matching priority|review priority|recommendation ranking|follower-growth loops?|follower growth loops?|engagement-feed optimization|engagement feed optimization)\b/i;
 const STRONG_CAUSAL_WORDING_PATTERN = /\b(trade-unlocked|unlocked|additional|additionality)\b/i;
 const EXACT_SENSITIVE_ACTION_PATTERN =
   /\b(no[- ]?meat|meat[- ]?free|vegetarian|vegan|diet|fasting|calorie|weight[- ]?loss|medical diet|religious|political|family|lifestyle)\b/i;
@@ -298,6 +304,12 @@ const PUBLICITY_AS_TRADE_TERM_BLOCK_STATES: PublicReceiptPublicityAsTradeTermBlo
   "possible",
   "blocked",
   "manual_review",
+];
+
+const PUBLIC_RECEIPT_PUBLICATION_DEFAULT_PLACEMENTS: PublicReceiptPublicationDefaultPlacement[] = [
+  "unlisted",
+  "profile_opt_in",
+  "search_indexed",
 ];
 
 const PUBLIC_RECEIPT_NET_PERSONAL_ATTRIBUTION_STATES: PublicReceiptNetPersonalAttributionState[] = [
@@ -451,6 +463,9 @@ export function validatePublicReceiptCardDraft(
       draft.publicationControls.publicationPressureReportRefs.length === 0
     ) {
       blockers.push("publication_pressure_report_ref_required");
+    }
+    if (draft.publicationControls.defaultPlacement === "search_indexed") {
+      blockers.push("public_receipt_default_search_indexing_blocked");
     }
   }
 
@@ -705,6 +720,7 @@ export function buildPublicReceiptCardPreview(
 const DEFAULT_PUBLICATION_CONTROLS: PublicReceiptPublicationControls = {
   affectsMatchingOrReview: false,
   currentStatus: "current",
+  defaultPlacement: "unlisted",
   issuedAt: "2026-06-25T00:00:00.000Z",
   profileOrSearchBoost: false,
   publicEngagementCounters: false,
@@ -899,6 +915,7 @@ const CLAIM_HYGIENE_RULES = [
   "publication_pressure_reporting_required",
   "publicity_as_trade_term_blocks_publication",
   "sensitive_action_redaction_required",
+  "default_unlisted_or_profile_opt_in_publication",
   "publication_sidecar_only",
   "publication_gates_non_blocking_required",
 ];
@@ -906,14 +923,23 @@ const CLAIM_HYGIENE_RULES = [
 const PROHIBITED_PUBLIC_SIGNALS = [
   "likes",
   "reactions",
+  "applause_counts",
   "share_counts",
+  "external_share_counts",
   "streaks",
+  "percentile_badges",
+  "trending_modules",
   "leaderboards",
+  "receipt_count_leaderboards",
+  "comparative_rankings",
   "moral_scores",
   "public_ranks",
   "profile_boosts",
+  "public_profile_boosts",
   "search_boosts",
+  "search_ranking_boosts",
   "receipt_prominence",
+  "match_priority",
   "matching_priority",
   "review_priority",
   "eligibility_advantage",
@@ -921,6 +947,8 @@ const PROHIBITED_PUBLIC_SIGNALS = [
   "publication_pressure",
   "publicity_as_trade_term",
   "recommendation_ranking",
+  "follower_growth_loops",
+  "engagement_feed_optimization",
 ];
 
 export function getPublicReceiptCardContract(): PublicReceiptCardContract {
@@ -957,6 +985,7 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
     netPersonalAttributionStates: PUBLIC_RECEIPT_NET_PERSONAL_ATTRIBUTION_STATES,
     sensitiveActionDisplayModes: PUBLIC_RECEIPT_SENSITIVE_ACTION_DISPLAY_MODES,
     publicityAsTradeTermBlockStates: PUBLICITY_AS_TRADE_TERM_BLOCK_STATES,
+    publicationDefaultPlacements: PUBLIC_RECEIPT_PUBLICATION_DEFAULT_PLACEMENTS,
     claimHygieneRules: CLAIM_HYGIENE_RULES,
     defaultPublicationControls: DEFAULT_PUBLICATION_CONTROLS,
     defaultDirectDonationParityControls: DEFAULT_DIRECT_DONATION_PARITY_CONTROLS,
@@ -979,6 +1008,7 @@ export function getPublicReceiptCardContract(): PublicReceiptCardContract {
       "directDonationParityControls.affectsPublicSearchOrdering",
       "directDonationParityControls.affectsProfileProminence",
       "directDonationParityControls.affectsFutureMarketplaceAccess",
+      "publicationControls.defaultPlacement",
       "publicationControls.issuedAt",
       "publicationControls.currentStatus",
       "publicationControls.publicationPressureReportingRequired",
@@ -1054,6 +1084,10 @@ export function validatePublicReceiptCardContract(
       "publication-controls",
       "Default publication controls cannot affect matching, review, engagement, ranking, or trade terms",
       contract.defaultPublicationControls.sidecarOnly &&
+        contract.publicationDefaultPlacements.includes(
+          contract.defaultPublicationControls.defaultPlacement,
+        ) &&
+        contract.defaultPublicationControls.defaultPlacement !== "search_indexed" &&
         !contract.defaultPublicationControls.affectsMatchingOrReview &&
         !contract.defaultPublicationControls.publicEngagementCounters &&
         !contract.defaultPublicationControls.profileOrSearchBoost &&
@@ -1078,10 +1112,21 @@ export function validatePublicReceiptCardContract(
       [
         "likes",
         "leaderboards",
+        "receipt_count_leaderboards",
+        "comparative_rankings",
+        "percentile_badges",
+        "trending_modules",
         "moral_scores",
+        "applause_counts",
+        "external_share_counts",
+        "public_profile_boosts",
+        "search_ranking_boosts",
+        "match_priority",
         "matching_priority",
         "review_priority",
         "recommendation_ranking",
+        "follower_growth_loops",
+        "engagement_feed_optimization",
       ].every((signal) => contract.prohibitedPublicSignals.includes(signal)),
       contract.prohibitedPublicSignals.join(", "),
     ),
@@ -1133,6 +1178,7 @@ export function validatePublicReceiptCardContract(
         contract.defaultPublicationControls.publicationPressureReportingRequired &&
         contract.defaultPublicationControls.publicityAsTradeTermBlockState === "not_required" &&
         contract.defaultPublicationControls.publicationPressureReportRefs.length === 0 &&
+        contract.defaultPublicationControls.defaultPlacement !== "search_indexed" &&
         contract.claimHygieneRules.includes("publication_pressure_reporting_required") &&
         contract.claimHygieneRules.includes(
           "publicity_as_trade_term_blocks_publication",

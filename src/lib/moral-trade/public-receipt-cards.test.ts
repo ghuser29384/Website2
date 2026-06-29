@@ -71,6 +71,7 @@ const validDraft: PublicReceiptCardDraft = {
   publicationControls: {
     affectsMatchingOrReview: false,
     currentStatus: "current",
+    defaultPlacement: "unlisted",
     issuedAt: "2026-06-25T04:00:00.000Z",
     profileOrSearchBoost: false,
     publicEngagementCounters: false,
@@ -340,10 +341,11 @@ test("public receipt card validator blocks engagement infrastructure and publica
   const validation = validatePublicReceiptCardDraft({
     ...validDraft,
     claimCopy:
-      "Show like count and matching priority after this receipt publishes. Participant must publish before payout.",
+      "Show applause counts, receipt-count leaderboard placement, percentile badges, trending modules, comparative rankings, follower-growth loops, engagement-feed optimization, and match priority after this receipt publishes. Participant must publish before payout.",
     publicationControls: {
       ...validDraft.publicationControls,
       affectsMatchingOrReview: true,
+      defaultPlacement: "search_indexed",
       profileOrSearchBoost: true,
       publicEngagementCounters: true,
       publicationPressureReportingRequired: false,
@@ -360,6 +362,7 @@ test("public receipt card validator blocks engagement infrastructure and publica
   assert.ok(validation.blockers.includes("publication_pressure_reporting_required"));
   assert.ok(validation.blockers.includes("publicity_as_trade_term_not_cleared:possible"));
   assert.ok(validation.blockers.includes("publication_pressure_report_ref_required"));
+  assert.ok(validation.blockers.includes("public_receipt_default_search_indexing_blocked"));
   assert.ok(validation.blockers.includes("publication_pressure_or_trade_term_claim"));
   assert.ok(validation.blockers.includes("receipt_publication_marketplace_priority_blocked"));
   assert.ok(validation.blockers.includes("public_engagement_counters_blocked"));
@@ -609,6 +612,11 @@ test("public receipt card contract validates first-class claim hygiene coverage"
       "publicity_as_trade_term_blocks_publication",
     ),
   );
+  assert.ok(
+    contract.claimHygieneRules.includes(
+      "default_unlisted_or_profile_opt_in_publication",
+    ),
+  );
   assert.ok(contract.claimHygieneRules.includes("publication_sidecar_only"));
   assert.ok(
     contract.claimHygieneRules.includes(
@@ -669,6 +677,7 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.ok(contract.requiredPublicFields.includes("correctionStatus"));
   assert.ok(contract.requiredPublicFields.includes("publicationControls.issuedAt"));
   assert.ok(contract.requiredPublicFields.includes("publicationControls.currentStatus"));
+  assert.ok(contract.requiredPublicFields.includes("publicationControls.defaultPlacement"));
   assert.ok(
     contract.requiredPublicFields.includes(
       "publicationControls.publicationPressureReportingRequired",
@@ -712,7 +721,13 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   assert.ok(contract.requiredPublicFields.includes("sensitiveActionDisclosure.displayMode"));
   assert.ok(contract.publicationGateStates.includes("under_review"));
   assert.ok(contract.publicationGateStates.includes("blocked"));
+  assert.deepEqual(contract.publicationDefaultPlacements, [
+    "unlisted",
+    "profile_opt_in",
+    "search_indexed",
+  ]);
   assert.equal(contract.defaultPublicationControls.sidecarOnly, true);
+  assert.equal(contract.defaultPublicationControls.defaultPlacement, "unlisted");
   assert.equal(contract.defaultPublicationControls.affectsMatchingOrReview, false);
   assert.equal(contract.defaultPublicationControls.publicEngagementCounters, false);
   assert.equal(
@@ -725,7 +740,16 @@ test("public receipt card contract validates first-class claim hygiene coverage"
     "not_required",
   );
   assert.ok(contract.prohibitedPublicSignals.includes("leaderboards"));
+  assert.ok(contract.prohibitedPublicSignals.includes("receipt_count_leaderboards"));
+  assert.ok(contract.prohibitedPublicSignals.includes("comparative_rankings"));
+  assert.ok(contract.prohibitedPublicSignals.includes("percentile_badges"));
+  assert.ok(contract.prohibitedPublicSignals.includes("trending_modules"));
+  assert.ok(contract.prohibitedPublicSignals.includes("applause_counts"));
+  assert.ok(contract.prohibitedPublicSignals.includes("external_share_counts"));
   assert.ok(contract.prohibitedPublicSignals.includes("moral_scores"));
+  assert.ok(contract.prohibitedPublicSignals.includes("public_profile_boosts"));
+  assert.ok(contract.prohibitedPublicSignals.includes("search_ranking_boosts"));
+  assert.ok(contract.prohibitedPublicSignals.includes("match_priority"));
   assert.ok(contract.prohibitedPublicSignals.includes("matching_priority"));
   assert.ok(contract.prohibitedPublicSignals.includes("eligibility_advantage"));
   assert.ok(
@@ -735,6 +759,8 @@ test("public receipt card contract validates first-class claim hygiene coverage"
   );
   assert.ok(contract.prohibitedPublicSignals.includes("publication_pressure"));
   assert.ok(contract.prohibitedPublicSignals.includes("publicity_as_trade_term"));
+  assert.ok(contract.prohibitedPublicSignals.includes("follower_growth_loops"));
+  assert.ok(contract.prohibitedPublicSignals.includes("engagement_feed_optimization"));
   assert.ok(contract.samplePreviews.every((preview) => preview.validation.status === "pass"));
 });
 
@@ -853,8 +879,15 @@ test("public receipt card source-of-truth tables are migration-backed", () => {
   );
   assert.match(
     publicationPressureMigration,
+    /publication_default_placement_state/,
+  );
+  assert.match(
+    publicationPressureMigration,
     /publicity_as_trade_term_block_state/,
   );
+  assert.match(publicationPressureMigration, /'unlisted'/);
+  assert.match(publicationPressureMigration, /'profile_opt_in'/);
+  assert.match(publicationPressureMigration, /'search_indexed'/);
   assert.match(publicationPressureMigration, /'not_required'/);
   assert.match(publicationPressureMigration, /'possible'/);
   assert.match(publicationPressureMigration, /'blocked'/);
@@ -862,6 +895,10 @@ test("public receipt card source-of-truth tables are migration-backed", () => {
   assert.match(
     publicationPressureMigration,
     /visibility_state <> 'opt_in_public'/,
+  );
+  assert.match(
+    publicationPressureMigration,
+    /publication_default_placement_state in \('unlisted', 'profile_opt_in'\)/,
   );
   assert.match(
     publicationPressureMigration,
@@ -890,6 +927,7 @@ test("public receipt card contract fails closed if publication can affect market
     defaultPublicationControls: {
       ...contract.defaultPublicationControls,
       affectsMatchingOrReview: true,
+      defaultPlacement: "search_indexed",
       publicationPressureReportingRequired: false,
       publicityAsTradeTermBlockState: "possible",
       publicEngagementCounters: true,

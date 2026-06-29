@@ -44,6 +44,7 @@ export async function GET(request: Request) {
       netPersonalAttributionStates: contract.netPersonalAttributionStates,
       sensitiveActionDisplayModes: contract.sensitiveActionDisplayModes,
       publicityAsTradeTermBlockStates: contract.publicityAsTradeTermBlockStates,
+      publicationDefaultPlacements: contract.publicationDefaultPlacements,
       claimHygieneRules: contract.claimHygieneRules,
       defaultPublicationControls: contract.defaultPublicationControls,
       defaultDirectDonationParityControls:
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
             claimReviewStates: preview.claimReviewStates,
             correctionStatus: preview.correctionStatus,
             currentStatus: preview.publicationControls.currentStatus,
+            defaultPlacement: preview.publicationControls.defaultPlacement,
             directDonationParityControls: preview.directDonationParityControls,
             issuedAt: preview.publicationControls.issuedAt,
             netAttributionState: preview.netAttributionControls.attributionState,

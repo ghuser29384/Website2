@@ -84,6 +84,7 @@ function buildContractOnlyReceiptDraft(receiptId: string): PublicReceiptCardDraf
     publicationControls: {
       affectsMatchingOrReview: false,
       currentStatus: "current",
+      defaultPlacement: "unlisted",
       issuedAt: new Date(0).toISOString(),
       profileOrSearchBoost: false,
       publicEngagementCounters: false,
@@ -182,6 +183,8 @@ export async function GET(
       netPersonalContributionExcludesThirdPartyFunds: true,
       objectiveMoralEndorsementAllowed: false,
       participantOptInRequired: true,
+      defaultPublicationPlacement: preview.publicationControls.defaultPlacement,
+      defaultSearchIndexingAllowed: false,
       publicationPressureReportingRequired: true,
       publicityAsTradeTermBlockStates: [
         "not_required",

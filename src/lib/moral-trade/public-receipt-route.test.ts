@@ -98,7 +98,24 @@ test("public receipt card contract route exposes safe claim-hygiene policy", asy
     body.publicContract.defaultPublicationControls.publicityAsTradeTermBlockState,
     "not_required",
   );
+  assert.equal(
+    body.publicContract.defaultPublicationControls.defaultPlacement,
+    "unlisted",
+  );
+  assert.ok(body.publicContract.publicationDefaultPlacements.includes("profile_opt_in"));
+  assert.ok(body.publicContract.publicationDefaultPlacements.includes("search_indexed"));
   assert.ok(body.publicContract.prohibitedPublicSignals.includes("leaderboards"));
+  assert.ok(
+    body.publicContract.prohibitedPublicSignals.includes(
+      "receipt_count_leaderboards",
+    ),
+  );
+  assert.ok(body.publicContract.prohibitedPublicSignals.includes("trending_modules"));
+  assert.ok(
+    body.publicContract.prohibitedPublicSignals.includes(
+      "engagement_feed_optimization",
+    ),
+  );
   assert.ok(body.publicContract.prohibitedPublicSignals.includes("moral_scores"));
   assert.equal(
     body.publicContract.sampleEvaluationStatuses[
@@ -189,6 +206,8 @@ test("public receipt verification route returns contract-only validation without
   assert.match(body.verification.issuedAt, /^1970-01-01T00:00:00\.000Z$/);
   assert.equal(body.publicContract.participantOptInRequired, true);
   assert.equal(body.publicContract.publicationPressureReportingRequired, true);
+  assert.equal(body.publicContract.defaultPublicationPlacement, "unlisted");
+  assert.equal(body.publicContract.defaultSearchIndexingAllowed, false);
   assert.equal(body.publicContract.publicityAsTradeTermBlocksPublication, true);
   assert.ok(body.publicContract.publicityAsTradeTermBlockStates.includes("blocked"));
   assert.equal(body.publicContract.publicationGatesMustBeNonBlocking, true);
