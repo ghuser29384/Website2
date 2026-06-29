@@ -175,7 +175,7 @@ export function MpgfCommonGroundBudgetSavePanel({
     }
 
     setPending(true);
-    setStatusMessage("Saving no-capture moral public goods.");
+    setStatusMessage("Saving no-capture Common Ground Budget.");
 
     try {
       const response = await fetch(apiPath, {
@@ -207,20 +207,20 @@ export function MpgfCommonGroundBudgetSavePanel({
   }
 
   return (
-    <div className="notice-card" aria-label="Save moral public goods preview">
+    <div className="notice-card" aria-label="Save Common Ground Budget preview">
       <strong>Save no-capture budget preview</strong>
       <p>
         This saves your frozen baseline, eligible-set hash, fallback rule, participant confirmation,
         and private project stances. It still does not authorize payment capture.
       </p>
       <section aria-label="Final review consent boundary">
-        <h3>Review your moral public goods</h3>
+        <h3>Review your Common Ground Budget</h3>
         <p>
           This review screen is the consent boundary. Hidden defaults, suggestions, project-card
           text, status chips, emails, or calculator outputs that are not shown here cannot become
           binding.
         </p>
-        <dl className="mpgf-summary-grid" aria-label="moral public goods final review summary">
+        <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review summary">
           <div>
             <dt>{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.maximumThisRound}</dt>
             <dd>{formatCents(maximumBudgetCents)}</dd>
@@ -253,7 +253,7 @@ export function MpgfCommonGroundBudgetSavePanel({
             <dd>Exact live threshold and counterparty gaps hidden until close.</dd>
           </div>
         </dl>
-        <div aria-label="moral public goods project review">
+        <div aria-label="Common Ground Budget project review">
           <h4>Projects</h4>
           <ul>
             {projectRows.map((project) => (
@@ -269,7 +269,7 @@ export function MpgfCommonGroundBudgetSavePanel({
             ))}
           </ul>
         </div>
-        <div aria-label="moral public goods settlement preview">
+        <div aria-label="Common Ground Budget settlement preview">
           <h4>What you may see after settlement</h4>
           <ul>
             <li>Charged from you: gross captured amount, if any.</li>
@@ -290,7 +290,7 @@ export function MpgfCommonGroundBudgetSavePanel({
             saved. This save records a no-capture preview only; later authorization, capture, reward,
             credit, certificate, reroute, or release requires the recorded CRECM state to pass.
           </p>
-          <dl className="mpgf-summary-grid" aria-label="moral public goods final review required details">
+          <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review required details">
             <div>
               <dt>Binding caps</dt>
               <dd>
@@ -403,7 +403,7 @@ export function MpgfCommonGroundBudgetSavePanel({
       </dl>
       <div className="mpgf-admin-action-grid">
         <button className="button button-primary" disabled={!canSave || pending} type="button" onClick={saveBudgetPreview}>
-          {pending ? "Saving moral public goods" : "Save moral public goods"}
+          {pending ? "Saving Common Ground Budget" : "Save Common Ground Budget"}
         </button>
       </div>
       <p className="mpgf-small" aria-live="polite">

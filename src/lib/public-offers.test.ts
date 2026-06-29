@@ -224,7 +224,7 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(templatesPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
   assert.equal(externalCrecPayload.publicGoodsEntry?.resultRank, 1);
-  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "moral public goods");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.label, "Common Ground Budget");
   assert.match(
     publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
     /Fund public goods only if enough different-view support joins/,
@@ -234,7 +234,7 @@ test("public offers collection separates template, moral public goods, and demo 
     publicGoodSearchPayload.publicGoodsEntry?.summary ?? "",
     /Exact live progress may be hidden until the round closes/,
   );
-  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview moral public goods");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview Common Ground Budget");
   assert.deepEqual(
     publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.label),
     ["View current round", "Learn how it works / View audit and rules"],
@@ -416,7 +416,7 @@ test("public offers API route returns moral public goods entry for moral-public-
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.items.length, 0);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
-  assert.equal(body.publicGoodsEntry.label, "moral public goods");
+  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
   assert.equal(body.publicGoodsEntry.primaryCta.key, "preview-common-ground-budget");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.countsAsOrdinaryListing, false);
@@ -505,7 +505,7 @@ test("public offer facets API route preserves moral public goods entry for publi
   assert.equal(body.meta.tab, "public_goods");
   assert.equal(body.meta.defaultedToPublicGoods, true);
   assert.equal(body.publicGoodsEntry.resultRank, 1);
-  assert.equal(body.publicGoodsEntry.label, "moral public goods");
+  assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
   assert.deepEqual(Object.values(body.availableFacets).flat(), []);

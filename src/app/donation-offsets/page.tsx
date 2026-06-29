@@ -19,6 +19,7 @@ import {
   type DonationOffsetDonorOfRecordGateStatus,
   type DonationOffsetVerificationMethod,
 } from "@/lib/donation-offsets";
+import { DONATION_OFFSET_PLAIN_LABELS } from "@/lib/marketplace-seed-templates";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -44,16 +45,6 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
-
-const offsetQuestions = [
-  "What would each side donate without this trade?",
-  "How much does each side redirect?",
-  "Where does the shared money go?",
-  "Why does each side prefer this to no trade?",
-  "What proof can reviewers inspect?",
-  "When does this offer stop being current?",
-  "What would make this unsafe or invalid?",
-] as const;
 
 function formatUsdFromCents(amountCents: number | null | undefined) {
   if (amountCents === null || amountCents === undefined) {
@@ -240,10 +231,10 @@ export default async function DonationOffsetsPage() {
             title="Answer ordinary questions before showing mechanism detail."
           />
           <div className="checklist-card-grid">
-            {offsetQuestions.map((question) => (
-              <article className="panel checklist-card" key={question}>
+            {DONATION_OFFSET_PLAIN_LABELS.map((label) => (
+              <article className="panel checklist-card" key={label}>
                 <span aria-hidden="true">OK</span>
-                <h3>{question}</h3>
+                <h3>{label}</h3>
               </article>
             ))}
           </div>
