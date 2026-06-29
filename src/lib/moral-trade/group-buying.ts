@@ -459,6 +459,8 @@ export interface MoralGoodsDiscoverySurface {
   resultCount: number;
 }
 
+export const MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL = "Review route";
+
 export interface MoralGoodsCommitmentCard {
   agreement: string;
   whenMoneyOrActionStarts: string;
@@ -1830,7 +1832,7 @@ export function buildMoralGoodsDiscoveryCardModel(
   const proofTags = discoveryProofTags(envelope);
   const model = {
     categoryKey,
-    ctaLabel: dealCard.rows.nextStep,
+    ctaLabel: MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL,
     deadlineLabel: compactDateLabel(envelope.deadlines.fundingAt ?? envelope.deadlines.acceptanceAt ?? envelope.deadlines.evidenceAt),
     envelopeId: envelope.id,
     href: `/moral-goods-group-buying#${envelope.slug}`,

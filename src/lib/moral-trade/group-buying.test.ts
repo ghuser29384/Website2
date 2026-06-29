@@ -8,6 +8,7 @@ import { POST as enforceGroupBuying } from "@/app/api/moral-trade/group-buying/e
 
 import {
   MORAL_GOODS_FEATURE_CAPABILITIES,
+  MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL,
   MORAL_GOODS_SEED_CREDITED_UNITS,
   MORAL_GOODS_SEED_ENVELOPES,
   MORAL_GOODS_SEED_FUNDING_SOURCES,
@@ -87,6 +88,8 @@ test("discovery surface filters reviewable routes without fabricating commitment
   assert.equal(emptySurface.commitmentPreview.noChargeLabel.includes("Due now $0.00"), true);
   assert.equal(lotCard.copyLint.status, "pass");
   assert.equal(lotCard.safeActionNote.includes("No charge"), true);
+  assert.equal(lotCard.ctaLabel, MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL);
+  assert.doesNotMatch(lotCard.ctaLabel, /fund|authorize|commit|pay|charge/i);
   assert.doesNotMatch(lotCard.progressLabel, /\d+%|authorized/i);
   assert.ok([1_500, 3_500, 6_000, 8_500].includes(lotCard.progressBps));
   assert.match(lotCard.progressLabel, /review-gated/i);
@@ -294,6 +297,13 @@ test("group-buying collection route exposes discovery surface and safe commitmen
     ),
   );
   assert.ok(
+    body.publicSurface.discoverySurface.cards.every(
+      (card: { ctaLabel: string }) =>
+        card.ctaLabel === MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL &&
+        !/fund|authorize|commit|pay|charge/i.test(card.ctaLabel),
+    ),
+  );
+  assert.ok(
     body.publicSurface.discoverySurface.categories.some(
       (category: { key: string; label: string }) => category.key === "baskets" && category.label === "Baskets",
     ),
@@ -323,6 +333,8 @@ test("group-buying wiring covers API profile, route files, migration, docs, and 
   assert.match(page, /DiscoverySection/);
   assert.match(page, /Browse reviewed routes/);
   assert.match(page, /CommitmentPreview/);
+  assert.match(page, /MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL/);
+  assert.doesNotMatch(page, /{card\.rows\.nextStep}/);
   assert.match(page, /safeActionNote/);
   assert.match(page, /Search action, proof, or consideration/);
   assert.match(docs, /Privacy And Retention/);

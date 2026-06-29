@@ -16,6 +16,7 @@ import {
   getMoralGoodsDiscoverySurface,
   getGuidedStandingBudgetSteps,
   getPrivateProposalIntakeFields,
+  MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL,
   MORAL_GOODS_SEED_CREDITED_UNITS,
   MORAL_GOODS_SEED_FUNDING_SOURCES,
   MORAL_GOODS_SEED_OBLIGATIONS,
@@ -266,7 +267,7 @@ function DealCard({
       <p>{card.rows.statusSentence}</p>
       <div className="hero-actions">
         <Link className="button-primary" href={`/moral-goods-group-buying#${envelope.slug}`}>
-          {card.rows.nextStep}
+          {MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL}
         </Link>
       </div>
       <p className="panel-note">{card.rows.failureBehavior}</p>
