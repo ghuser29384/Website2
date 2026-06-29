@@ -55,9 +55,15 @@ function termSheetRecord(
     participantTermHash: hashFor("participant-term-sheet"),
     counterpartyTermHash: hashFor("participant-term-sheet"),
     normalizedTermHash: hashFor("participant-term-sheet"),
+    participantFacingRenderHash: hashFor("participant-facing-render"),
+    participantTermSourceKind: "plain_language_render",
     participantConfirmationRef: "participant-confirmation:offset-offer-demo",
     counterpartyConfirmationRef: "participant-confirmation:counterparty-demo",
     mutualConfirmationHash: hashFor("mutual-confirmation"),
+    participantFacingPlainLanguage: true,
+    participantFacingPrivacySafe: true,
+    scopedToExactMatchedProposal: true,
+    internalHashHasParticipantFacingEquivalent: true,
     freeTextCreatesNewObligations: false,
     freeTextCreatesSidePayments: false,
     freeTextCreatesNewCounterparties: false,
@@ -120,10 +126,26 @@ test("participant-term-sheet contract validates first-class blinding and disclos
   assert.ok(contract.policySnapshotSubjects.includes("participant_term_sheet"));
   assert.ok(contract.policySnapshotSubjects.includes("counterparty_blinding"));
   assert.ok(contract.policySnapshotSubjects.includes("staged_counterparty_disclosure"));
+  assert.ok(contract.termSheetSourceKinds.includes("plain_language_render"));
+  assert.ok(contract.prohibitedTermSheetSourceKinds.includes("raw_json"));
+  assert.ok(contract.prohibitedTermSheetSourceKinds.includes("hidden_policy_state"));
+  assert.ok(contract.prohibitedTermSheetSourceKinds.includes("reviewer_shorthand"));
+  assert.ok(contract.prohibitedTermSheetSourceKinds.includes("internal_terms_hash_only"));
+  assert.ok(
+    contract.canonicalTermSheetRules.includes(
+      "plain_language_participant_facing_render_required",
+    ),
+  );
+  assert.ok(
+    contract.canonicalTermSheetRules.includes(
+      "final_confirmation_scoped_to_exact_matched_proposal",
+    ),
+  );
   assert.ok(contract.termSheetStates.includes("mismatch"));
   assert.ok(contract.disclosureStates.includes("over_disclosed"));
   assert.ok(contract.visibleDisclosureStatuses.includes("blocked_needs_review"));
   assert.match(contract.failClosedRule, /mismatches/i);
+  assert.match(contract.failClosedRule, /raw JSON, hidden policy state, reviewer shorthand/i);
   assert.match(contract.privacyBoundary, /raw counterparty identities/i);
 });
 
@@ -305,6 +327,62 @@ test("mutual confirmation and staged disclosure consent are required before lock
   );
 });
 
+test("raw or internal-only term sheet sources cannot bind final lock confirmation", () => {
+  const result = evaluateMoralTradeParticipantTermSheet({
+    transition: "matched_trade_lock",
+    checkedAt: "2026-06-11T12:00:00.000Z",
+    policies: [policyRecord()],
+    termSheets: [
+      termSheetRecord({
+        participantFacingRenderHash: null,
+        participantFacingPlainLanguage: false,
+        participantFacingPrivacySafe: false,
+        participantTermSourceKind: "internal_terms_hash_only",
+        internalHashHasParticipantFacingEquivalent: false,
+        scopedToExactMatchedProposal: false,
+      }),
+    ],
+    disclosures: [disclosureRecord()],
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.ok(
+    result.blockers.includes(
+      "participant_facing_render_hash_missing:participant-term-sheet:offset-offer-demo",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "participant_term_sheet_source_not_participant_facing:participant-term-sheet:offset-offer-demo:internal_terms_hash_only",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "participant_term_sheet_prohibited_source:participant-term-sheet:offset-offer-demo:internal_terms_hash_only",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "participant_facing_plain_language_missing:participant-term-sheet:offset-offer-demo",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "participant_facing_privacy_safe_render_missing:participant-term-sheet:offset-offer-demo",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "internal_hash_without_participant_facing_equivalent:participant-term-sheet:offset-offer-demo",
+    ),
+  );
+  assert.ok(
+    result.blockers.includes(
+      "final_confirmation_not_scoped_to_exact_matched_proposal:participant-term-sheet:offset-offer-demo",
+    ),
+  );
+});
+
 test("participant-term-sheet contract is wired through route, health, spec, API profile, and migrations", () => {
   const route = readRepoFile(
     "src/app/api/moral-trade/participant-term-sheet/contract/route.ts",
@@ -340,6 +418,9 @@ test("participant-term-sheet contract is wired through route, health, spec, API 
 
   assert.match(route, /getMoralTradeParticipantTermSheetContract/);
   assert.match(route, /participantTermSheetSampleEvaluationStatuses/);
+  assert.match(route, /canonicalTermSheetRules/);
+  assert.match(enforceRoute, /participantTermSourceKind/);
+  assert.match(enforceRoute, /participantFacingRenderHash/);
   assert.match(enforceRoute, /participant_term_sheet_enforce/);
   assert.match(
     enforceRoute,
@@ -370,6 +451,11 @@ test("participant-term-sheet contract is wired through route, health, spec, API 
   assert.match(apiProfile, /participant_term_sheet_enforce_response/);
   assert.match(apiProfile, /participant_term_sheet_enforce_route_contract/);
   assert.match(migration, /moral_trade_participant_term_sheet_records/);
+  assert.match(migration, /participant_term_source_kind/);
+  assert.match(migration, /participant_facing_render_hash/);
+  assert.match(migration, /participant_facing_plain_language_bool/);
+  assert.match(migration, /internal_hash_has_participant_facing_equivalent_bool/);
+  assert.match(migration, /scoped_to_exact_matched_proposal_bool/);
   assert.match(migration, /moral_trade_counterparty_blinding_policies/);
   assert.match(migration, /moral_trade_staged_counterparty_disclosure_records/);
   assert.match(

@@ -65,6 +65,13 @@ export type MoralTradeCounterpartyDisclosureStage =
   | "mutual_consent"
   | "post_lock_public_summary";
 
+export type MoralTradeParticipantTermSheetSourceKind =
+  | "plain_language_render"
+  | "raw_json"
+  | "hidden_policy_state"
+  | "reviewer_shorthand"
+  | "internal_terms_hash_only";
+
 export interface MoralTradeCounterpartyBlindingPolicyRecord {
   policyId: string;
   releaseStage: string;
@@ -91,9 +98,15 @@ export interface MoralTradeParticipantTermSheetRecord {
   participantTermHash: string;
   counterpartyTermHash: string | null;
   normalizedTermHash: string;
+  participantFacingRenderHash: string | null;
+  participantTermSourceKind: MoralTradeParticipantTermSheetSourceKind;
   participantConfirmationRef: string | null;
   counterpartyConfirmationRef: string | null;
   mutualConfirmationHash: string | null;
+  participantFacingPlainLanguage: boolean;
+  participantFacingPrivacySafe: boolean;
+  scopedToExactMatchedProposal: boolean;
+  internalHashHasParticipantFacingEquivalent: boolean;
   freeTextCreatesNewObligations: boolean;
   freeTextCreatesSidePayments: boolean;
   freeTextCreatesNewCounterparties: boolean;
@@ -187,6 +200,9 @@ export interface MoralTradeParticipantTermSheetContract {
   visibleDisclosureStatuses: MoralTradeVisibleCounterpartyDisclosureStatus[];
   disclosureStages: MoralTradeCounterpartyDisclosureStage[];
   policyStatuses: MoralTradeCounterpartyBlindingPolicyStatus[];
+  termSheetSourceKinds: MoralTradeParticipantTermSheetSourceKind[];
+  prohibitedTermSheetSourceKinds: MoralTradeParticipantTermSheetSourceKind[];
+  canonicalTermSheetRules: string[];
   failClosedStatuses: Array<
     | MoralTradeCounterpartyBlindingPolicyStatus
     | MoralTradeParticipantTermSheetState
@@ -262,6 +278,29 @@ const DISCLOSURE_STAGES: MoralTradeCounterpartyDisclosureStage[] = [
   "mutual_consent",
   "post_lock_public_summary",
 ];
+
+const TERM_SHEET_SOURCE_KINDS: MoralTradeParticipantTermSheetSourceKind[] = [
+  "plain_language_render",
+  "raw_json",
+  "hidden_policy_state",
+  "reviewer_shorthand",
+  "internal_terms_hash_only",
+];
+
+const PROHIBITED_TERM_SHEET_SOURCE_KINDS: MoralTradeParticipantTermSheetSourceKind[] = [
+  "raw_json",
+  "hidden_policy_state",
+  "reviewer_shorthand",
+  "internal_terms_hash_only",
+];
+
+const CANONICAL_TERM_SHEET_RULES = [
+  "plain_language_participant_facing_render_required",
+  "privacy_safe_render_hash_required",
+  "raw_json_hidden_policy_reviewer_shorthand_blocked",
+  "internal_terms_hash_requires_participant_facing_equivalent",
+  "final_confirmation_scoped_to_exact_matched_proposal",
+] as const;
 
 const PASSING_DISCLOSURE_STATES = new Set<MoralTradeStagedCounterpartyDisclosureState>([
   "stage_eligible",
@@ -503,9 +542,15 @@ function makeSampleTermSheet(
     participantTermHash: makeHash("participant-term-sheet"),
     counterpartyTermHash: makeHash("participant-term-sheet"),
     normalizedTermHash: makeHash("participant-term-sheet"),
+    participantFacingRenderHash: makeHash("participant-facing-render"),
+    participantTermSourceKind: "plain_language_render",
     participantConfirmationRef: "participant-confirmation:offset-offer-demo",
     counterpartyConfirmationRef: "participant-confirmation:counterparty-demo",
     mutualConfirmationHash: makeHash("mutual-confirmation"),
+    participantFacingPlainLanguage: true,
+    participantFacingPrivacySafe: true,
+    scopedToExactMatchedProposal: true,
+    internalHashHasParticipantFacingEquivalent: true,
     freeTextCreatesNewObligations: false,
     freeTextCreatesSidePayments: false,
     freeTextCreatesNewCounterparties: false,
@@ -634,6 +679,22 @@ function termSheetBlocks({
     blockers.push(`participant_term_sheet_normalized_hash_invalid:${termSheet.termSheetId}`);
   }
 
+  if (!isHash(termSheet.participantFacingRenderHash)) {
+    blockers.push(`participant_facing_render_hash_missing:${termSheet.termSheetId}`);
+  }
+
+  if (termSheet.participantTermSourceKind !== "plain_language_render") {
+    blockers.push(
+      `participant_term_sheet_source_not_participant_facing:${termSheet.termSheetId}:${termSheet.participantTermSourceKind}`,
+    );
+  }
+
+  if (PROHIBITED_TERM_SHEET_SOURCE_KINDS.includes(termSheet.participantTermSourceKind)) {
+    blockers.push(
+      `participant_term_sheet_prohibited_source:${termSheet.termSheetId}:${termSheet.participantTermSourceKind}`,
+    );
+  }
+
   if (
     termSheet.counterpartyTermHash !== null &&
     !isHash(termSheet.counterpartyTermHash)
@@ -676,6 +737,20 @@ function termSheetBlocks({
     blockers.push(`participant_confirmation_missing:${termSheet.termSheetId}`);
   }
 
+  if (!termSheet.participantFacingPlainLanguage) {
+    blockers.push(`participant_facing_plain_language_missing:${termSheet.termSheetId}`);
+  }
+
+  if (!termSheet.participantFacingPrivacySafe) {
+    blockers.push(`participant_facing_privacy_safe_render_missing:${termSheet.termSheetId}`);
+  }
+
+  if (!termSheet.internalHashHasParticipantFacingEquivalent) {
+    blockers.push(
+      `internal_hash_without_participant_facing_equivalent:${termSheet.termSheetId}`,
+    );
+  }
+
   if (
     definition.requiresMutualConfirmation &&
     (termSheet.termSheetState !== "mutually_confirmed" ||
@@ -683,6 +758,15 @@ function termSheetBlocks({
       !isHash(termSheet.mutualConfirmationHash))
   ) {
     blockers.push(`mutual_confirmation_missing:${termSheet.termSheetId}`);
+  }
+
+  if (
+    definition.requiresMutualConfirmation &&
+    !termSheet.scopedToExactMatchedProposal
+  ) {
+    blockers.push(
+      `final_confirmation_not_scoped_to_exact_matched_proposal:${termSheet.termSheetId}`,
+    );
   }
 
   if (termSheet.freeTextCreatesNewObligations) {
@@ -945,7 +1029,7 @@ export function getMoralTradeParticipantTermSheetContract(): MoralTradeParticipa
     purpose:
       "Fail-closed participant term sheet, counterparty blinding, and staged disclosure contract for donation-offset, pledge-swap, compensated-action, lock, payment, reliance, public metric, and release-gate transitions.",
     failClosedRule:
-      "Draft previews can run without records, but live, matchable, payable, reliance-bearing, public-metric, and release-gate transitions require immutable counterparty blinding policy, reviewed participant term sheet hashes, safe staged disclosure records, and mutual confirmation before lock, payment, reliance, or public metrics; mismatches, free-text side terms, stale records, over-disclosure, or public raw counterparty data block.",
+      "Draft previews can run without records, but live, matchable, payable, reliance-bearing, public-metric, and release-gate transitions require immutable counterparty blinding policy, reviewed participant-facing plain-language term sheet render hashes, safe staged disclosure records, and mutual confirmation before lock, payment, reliance, or public metrics; raw JSON, hidden policy state, reviewer shorthand, internal-only terms hashes, mismatches, free-text side terms, stale records, over-disclosure, or public raw counterparty data block.",
     privacyBoundary:
       "Public surfaces may expose table names, status categories, transition rules, counterparty volume buckets, and sample statuses only. They must not expose participant-specific term sheets, raw counterparty identities, contact details, private wishes, exact constraints, hidden match reasoning, source evidence, reviewer notes, payment details, or participant-specific disclosure records.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
@@ -956,6 +1040,9 @@ export function getMoralTradeParticipantTermSheetContract(): MoralTradeParticipa
     visibleDisclosureStatuses: VISIBLE_DISCLOSURE_STATUSES,
     disclosureStages: DISCLOSURE_STAGES,
     policyStatuses: POLICY_STATUSES,
+    termSheetSourceKinds: TERM_SHEET_SOURCE_KINDS,
+    prohibitedTermSheetSourceKinds: PROHIBITED_TERM_SHEET_SOURCE_KINDS,
+    canonicalTermSheetRules: [...CANONICAL_TERM_SHEET_RULES],
     failClosedStatuses: [...FAIL_CLOSED_STATUSES],
     transitionDefinitions: TRANSITION_DEFINITIONS,
     sampleEvaluations: [
@@ -1093,6 +1180,22 @@ export function validateMoralTradeParticipantTermSheetContract(
       contract.transitionDefinitions
         .map((transition) => `${transition.key}:${transition.requiresMutualConfirmation}`)
         .join(", "),
+    ),
+    check(
+      "canonical-participant-facing-term-sheet",
+      "Confirmed term sheets require a privacy-safe plain-language render and block raw/internal-only sources",
+      CANONICAL_TERM_SHEET_RULES.every((rule) =>
+        contract.canonicalTermSheetRules.includes(rule),
+      ) &&
+        PROHIBITED_TERM_SHEET_SOURCE_KINDS.every((sourceKind) =>
+          contract.prohibitedTermSheetSourceKinds.includes(sourceKind),
+        ) &&
+        contract.termSheetSourceKinds.includes("plain_language_render") &&
+        /plain-language term sheet render hashes/i.test(contract.failClosedRule) &&
+        /raw JSON, hidden policy state, reviewer shorthand, internal-only terms hashes/i.test(
+          contract.failClosedRule,
+        ),
+      `${contract.canonicalTermSheetRules.join(", ")} sources=${contract.termSheetSourceKinds.join(", ")}`,
     ),
     check(
       "sample-evaluations",

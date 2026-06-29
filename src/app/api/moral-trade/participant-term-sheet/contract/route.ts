@@ -52,6 +52,9 @@ export async function GET(request: Request) {
       visibleDisclosureStatuses: contract.visibleDisclosureStatuses,
       disclosureStages: contract.disclosureStages,
       policyStatuses: contract.policyStatuses,
+      termSheetSourceKinds: contract.termSheetSourceKinds,
+      prohibitedTermSheetSourceKinds: contract.prohibitedTermSheetSourceKinds,
+      canonicalTermSheetRules: contract.canonicalTermSheetRules,
       failClosedStatuses: contract.failClosedStatuses,
       transitions: contract.transitionDefinitions.map((transition) => ({
         key: transition.key,

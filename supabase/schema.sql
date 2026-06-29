@@ -15574,9 +15574,23 @@ create table if not exists public.moral_trade_participant_term_sheet_records (
   participant_term_hash text not null check (participant_term_hash ~ '^sha256:[a-f0-9]{64}$'),
   counterparty_term_hash text check (counterparty_term_hash is null or counterparty_term_hash ~ '^sha256:[a-f0-9]{64}$'),
   normalized_term_hash text not null check (normalized_term_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_facing_render_hash text check (participant_facing_render_hash is null or participant_facing_render_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_term_source_kind text not null default 'plain_language_render' check (
+    participant_term_source_kind in (
+      'plain_language_render',
+      'raw_json',
+      'hidden_policy_state',
+      'reviewer_shorthand',
+      'internal_terms_hash_only'
+    )
+  ),
   participant_confirmation_id uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
   counterparty_confirmation_id uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
   mutual_confirmation_hash text check (mutual_confirmation_hash is null or mutual_confirmation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_facing_plain_language_bool boolean not null default false,
+  participant_facing_privacy_safe_bool boolean not null default false,
+  scoped_to_exact_matched_proposal_bool boolean not null default false,
+  internal_hash_has_participant_facing_equivalent_bool boolean not null default false,
   free_text_creates_new_obligations_bool boolean not null default false,
   free_text_creates_side_payments_bool boolean not null default false,
   free_text_creates_new_counterparties_bool boolean not null default false,
@@ -15594,6 +15608,11 @@ create table if not exists public.moral_trade_participant_term_sheet_records (
     or (
       participant_confirmation_id is not null
       and participant_term_hash = normalized_term_hash
+      and participant_facing_render_hash is not null
+      and participant_term_source_kind = 'plain_language_render'
+      and participant_facing_plain_language_bool
+      and participant_facing_privacy_safe_bool
+      and internal_hash_has_participant_facing_equivalent_bool
       and reviewed_at is not null
       and free_text_creates_new_obligations_bool = false
       and free_text_creates_side_payments_bool = false
@@ -15610,6 +15629,12 @@ create table if not exists public.moral_trade_participant_term_sheet_records (
       and participant_term_hash = normalized_term_hash
       and counterparty_term_hash = normalized_term_hash
       and mutual_confirmation_hash is not null
+      and participant_facing_render_hash is not null
+      and participant_term_source_kind = 'plain_language_render'
+      and participant_facing_plain_language_bool
+      and participant_facing_privacy_safe_bool
+      and scoped_to_exact_matched_proposal_bool
+      and internal_hash_has_participant_facing_equivalent_bool
       and reviewed_at is not null
       and free_text_creates_new_obligations_bool = false
       and free_text_creates_side_payments_bool = false
@@ -15621,7 +15646,7 @@ create table if not exists public.moral_trade_participant_term_sheet_records (
 );
 
 comment on table public.moral_trade_participant_term_sheet_records is
-  'Hash-backed participant term sheet records. Live, matchable, payable, reliance-bearing, and public metric transitions fail closed on mismatched hashes, missing confirmations, new side obligations, side payments, new counterparties, stale records, or public private terms.';
+  'Hash-backed participant term sheet records. Confirmed records require a privacy-safe participant-facing plain-language render hash, not raw JSON, hidden policy state, reviewer shorthand, or an internal-only terms hash. Live, matchable, payable, reliance-bearing, and public metric transitions fail closed on mismatched hashes, missing confirmations, new side obligations, side payments, new counterparties, stale records, or public private terms.';
 
 create table if not exists public.moral_trade_staged_counterparty_disclosure_records (
   id uuid primary key default gen_random_uuid(),
