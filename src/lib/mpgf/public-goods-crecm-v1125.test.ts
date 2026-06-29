@@ -165,7 +165,7 @@ test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route con
     ["src/app/api/mpgf/rounds/[roundId]/support-stance/route.ts", /support_stance_intake/],
     ["src/app/api/mpgf/rounds/[roundId]/conditional-intent/route.ts", /conditional_intent_intake/],
     ["src/app/api/mpgf/rounds/[roundId]/settlement-preview/route.ts", /getMpgfCrecV1125SettlementPreviewApi/],
-    ["src/app/api/mpgf/pivotality-calculator/route.ts", /pivotality\/route/],
+    ["src/app/api/mpgf/pivotality-calculator/route.ts", /evaluateMpgfPivotalityCalculator/],
     ["src/app/api/mpgf/rounds/[roundId]/payment-commitment-snapshots/route.ts", /getMpgfCrecV1125PaymentCommitmentSnapshotsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/lock/route.ts", /round_lock/],
     ["src/app/api/mpgf/rounds/[roundId]/clear/route.ts", /round_clear/],

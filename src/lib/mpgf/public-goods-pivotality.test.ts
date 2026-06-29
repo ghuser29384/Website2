@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -136,7 +136,7 @@ test("MPGF pivotality calculator requires an allowed educational surface", () =>
 
 test("MPGF pivotality calculator is exposed only as an advanced educational surface", () => {
   const hubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
-  const route = readFileSync("src/app/api/mpgf/pivotality/route.ts", "utf8");
+  const route = readFileSync("src/app/api/mpgf/pivotality-calculator/route.ts", "utf8");
 
   assert.match(hubPage, /Advanced: Pivotality Calculator/);
   assert.match(hubPage, /action="\/api\/mpgf\/pivotality-calculator"/);
@@ -146,6 +146,7 @@ test("MPGF pivotality calculator is exposed only as an advanced educational surf
   assert.match(hubPage, /MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE/);
   assert.match(MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE, /does not use live sealed-round data/);
   assert.equal(hubPage.includes("objectively best"), false);
+  assert.equal(existsSync("src/app/api/mpgf/pivotality/route.ts"), false);
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS/);
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES/);
   assert.match(route, /evaluateMpgfPivotalityCalculator/);
