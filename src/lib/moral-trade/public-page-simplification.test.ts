@@ -225,16 +225,21 @@ test("moraltrade82 typology examples do not become draft-prefill defaults", () =
 
 test("moraltrade82 donation-offsets page uses plain questions and a concrete preview example", () => {
   const donationOffsetsPage = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const seedTemplatesSource = readFileSync("src/lib/marketplace-seed-templates.ts", "utf8");
 
-  assert.match(donationOffsetsPage, /const offsetQuestions/);
-  assert.match(donationOffsetsPage, /What would each side donate without this trade/);
-  assert.match(donationOffsetsPage, /How much does each side redirect/);
-  assert.match(donationOffsetsPage, /Where does the shared money go/);
-  assert.match(donationOffsetsPage, /What proof can reviewers inspect/);
-  assert.match(donationOffsetsPage, /What would make this unsafe or invalid/);
+  assert.match(donationOffsetsPage, /DONATION_OFFSET_PLAIN_LABELS/);
+  assert.match(donationOffsetsPage, /DONATION_OFFSET_PLAIN_LABELS\.map/);
+  assert.match(seedTemplatesSource, /what would each side donate without this trade/);
+  assert.match(seedTemplatesSource, /how much each side redirects/);
+  assert.match(seedTemplatesSource, /where the shared money goes/);
+  assert.match(seedTemplatesSource, /why each side prefers this/);
+  assert.match(seedTemplatesSource, /what proof reviewers check/);
+  assert.match(seedTemplatesSource, /when the offer expires/);
+  assert.match(seedTemplatesSource, /what would make this unsafe or invalid/);
   assert.match(donationOffsetsPage, /Without the trade, A would give \$50 to Cause X/);
   assert.match(donationOffsetsPage, /both redirect \$50 to GiveWell Top Charities Fund/);
   assert.match(donationOffsetsPage, /Draft an offset/);
+  assert.equal(donationOffsetsPage.includes("What would each side donate without this trade?"), false);
   assert.equal(donationOffsetsPage.includes("Baseline intention"), false);
   assert.equal(donationOffsetsPage.includes("Match ratio"), false);
   assert.equal(donationOffsetsPage.includes("Surplus rule"), false);
