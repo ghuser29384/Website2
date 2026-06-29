@@ -51,12 +51,13 @@ test("public navigation exposes professional marketplace routes", () => {
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
+  const authenticatedPrimaryAction = getTopbarActions(true).primaryAction;
 
   assert.deepEqual(labels, ["Trade", "Moral Public Goods"]);
-  assert.equal(getTopbarActions(false).primaryAction.href, "/moral-goods-group-buying");
-  assert.equal(getTopbarActions(false).primaryAction.label, "Group buying");
-  assert.equal(getTopbarActions(true).primaryAction.href, "/offers/new?mode=offset");
-  assert.equal(getTopbarActions(true).primaryAction.label, "Create trade");
+  assert.equal(getTopbarActions(false).primaryAction, undefined);
+  assert.ok(authenticatedPrimaryAction);
+  assert.equal(authenticatedPrimaryAction.href, "/offers/new?mode=offset");
+  assert.equal(authenticatedPrimaryAction.label, "Create trade");
   assert.equal(getTopbarActions(false).authLink.label, "Sign in");
   assert.match(tradeMenu?.summary ?? "", /bounded moral trade commitments/);
   assert.match(publicGoodsMenu?.summary ?? "", /common budgets, and group-buying pools/);
@@ -64,10 +65,13 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.section)));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Create donation offset" && item.section === "Participate"));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Group buying" && item.section === "Trade lanes"));
-  assert.ok(
-    publicGoodsMenu?.items?.some(
-      (item) => item.label === "Moral goods group buying" && item.section === "Funding routes",
-    ),
+  assert.equal(
+    tradeMenu?.items?.find((item) => item.label === "Group buying")?.href,
+    "/moral-goods-group-buying",
+  );
+  assert.equal(
+    publicGoodsMenu?.items?.some((item) => item.href === "/moral-goods-group-buying"),
+    false,
   );
   assert.ok(groupBuyingSearchResults.some((item) => item.href === "/moral-goods-group-buying"));
   assert.ok(hrefs.includes("/projects"));

@@ -10,6 +10,7 @@ import {
   evaluateFeatureCapabilities,
   evaluateEnvelopeReadiness,
   getGuidedStandingBudgetSteps,
+  getMoralGoodsDiscoverySurface,
   getPrivateProposalIntakeFields,
 } from "@/lib/moral-trade/group-buying";
 
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
         publicReason: capability.publicReason,
         status: capability.status,
       })),
+      discoverySurface: getMoralGoodsDiscoverySurface(),
       envelopes,
       navigationTabs: ["Fund", "Participate", "Results"],
       primaryEntryPoints: [

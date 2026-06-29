@@ -359,8 +359,8 @@ export function MpgfCommonGroundBudgetSavePanel({
             <div>
               <dt>Self-matching exclusions</dt>
               <dd>
-                Same participant, linked account, same payment method, and same-control support
-                cannot satisfy counterparty conditions.
+                Same participant, linked account, same payment method, same payment cluster, and
+                same-control entity support cannot satisfy counterparty conditions.
               </dd>
             </div>
             <div>

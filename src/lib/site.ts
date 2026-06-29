@@ -47,7 +47,6 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       summary: "Fund public-good routes, common budgets, and group-buying pools.",
       items: [
         { href: "/mpgf", label: "Common Ground Budget", section: "Funding routes", description: "Preview the Public Goods Fund path for cross-view moral public goods." },
-        { href: "/moral-goods-group-buying", label: "Moral goods group buying", section: "Funding routes", description: "Pool small pledges into verified moral-action rounds, lots, baskets, and standing budgets." },
         { href: "/donate", label: "Donate through a route", section: "Funding routes", description: "Use a vetted external donation handoff." },
         { href: "/priority-correction-fund", label: "Priority Correction Fund", section: "Funding routes", description: "Inspect correction cycles, arbiters, and published reasoning." },
         { href: "/projects", label: "Projects", section: "Funding routes", description: "What is live, illustrative, or upcoming." },
@@ -75,10 +74,12 @@ export function getTopbarActions(isAuthenticated = false) {
     authLink: isAuthenticated
       ? { href: "/dashboard", label: "Dashboard" }
       : { href: "/login", label: "Sign in" },
-    primaryAction: {
-      href: isAuthenticated ? "/offers/new?mode=offset" : "/moral-goods-group-buying",
-      label: isAuthenticated ? "Create trade" : "Group buying",
-    },
+    primaryAction: isAuthenticated
+      ? {
+          href: "/offers/new?mode=offset",
+          label: "Create trade",
+        }
+      : undefined,
   };
 }
 

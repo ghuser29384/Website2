@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, PageHero, StatusBadge } from "@/components/ui/page-primitives";
+import { Breadcrumbs, IconMark, PageHero, StatusBadge, type IconName } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
   MORAL_GOODS_FAILURE_MESSAGE_TEMPLATES,
@@ -13,6 +13,7 @@ import {
   buildDealCardModel,
   buildSettlementPlan,
   formatMinorMoney,
+  getMoralGoodsDiscoverySurface,
   getGuidedStandingBudgetSteps,
   getPrivateProposalIntakeFields,
   MORAL_GOODS_SEED_CREDITED_UNITS,
@@ -39,6 +40,195 @@ export const metadata: Metadata = {
 };
 
 const navigationTabs = ["Fund", "Participate", "Results"] as const;
+
+interface MoralGoodsGroupBuyingPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+type DiscoverySurface = ReturnType<typeof getMoralGoodsDiscoverySurface>;
+type DiscoveryCard = DiscoverySurface["cards"][number];
+type DiscoveryCategory = DiscoverySurface["categories"][number];
+
+const discoveryCategoryIcons: Record<DiscoveryCategory["key"], IconName> = {
+  all: "marketplace",
+  baskets: "fund",
+  budgets: "payment",
+  lots: "swap",
+  results: "evidence",
+  rounds: "review",
+};
+
+function readSearchParam(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = searchParams[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildChipHref(label: string) {
+  const params = new URLSearchParams({ q: label });
+  return `/moral-goods-group-buying?${params.toString()}#deals`;
+}
+
+function DiscoveryShortcut({
+  active,
+  category,
+}: {
+  active: boolean;
+  category: DiscoveryCategory;
+}) {
+  return (
+    <Link
+      className={["moral-goods-shortcut", active ? "is-active" : ""].filter(Boolean).join(" ")}
+      href={category.href}
+    >
+      <IconMark name={discoveryCategoryIcons[category.key]} />
+      <span>
+        <strong>{category.label}</strong>
+        <small>
+          {category.count} {category.count === 1 ? "route" : "routes"}
+        </small>
+      </span>
+      <em>{category.description}</em>
+    </Link>
+  );
+}
+
+function DiscoveryDealRow({ card }: { card: DiscoveryCard }) {
+  return (
+    <article className="moral-goods-deal-row">
+      <div className="moral-goods-deal-media">
+        <IconMark name={discoveryCategoryIcons[card.categoryKey]} />
+        <span>{card.primaryLabel}</span>
+      </div>
+      <div className="moral-goods-deal-main">
+        <p className="eyebrow">{card.routeLabel}</p>
+        <h3>
+          <Link href={card.href}>{card.title}</Link>
+        </h3>
+        <p>{card.statusSentence}</p>
+        <div className="moral-goods-proof-row" aria-label={`${card.title} review signals`}>
+          {card.proofTags.map((tag) => (
+            <span key={`${card.envelopeId}-${tag}`}>{tag}</span>
+          ))}
+        </div>
+        <div className="moral-goods-progress" aria-label={card.progressLabel}>
+          <span style={{ width: `${card.progressBps / 100}%` }} />
+        </div>
+        <div className="moral-goods-deal-meta">
+          <span>{card.progressLabel}</span>
+          <span>{card.deadlineLabel}</span>
+          <span>{card.limitLabel}</span>
+        </div>
+      </div>
+      <div className="moral-goods-price-block">
+        <strong>{card.priceLabel}</strong>
+        <span>{card.targetLabel}</span>
+        <Link className="button button-primary button-mini" href={card.href}>
+          {card.ctaLabel}
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function CommitmentPreview({ surface }: { surface: DiscoverySurface }) {
+  return (
+    <aside className="moral-goods-commitment-preview panel" aria-label="Safe commitment preview">
+      <p className="eyebrow">Commitment preview</p>
+      <h2>{surface.commitmentPreview.title}</h2>
+      <strong className="moral-goods-preview-amount">{surface.commitmentPreview.amountLabel}</strong>
+      <p>{surface.commitmentPreview.noChargeLabel}</p>
+      <dl className="moral-goods-preview-lines">
+        {surface.commitmentPreview.lines.map((line) => (
+          <div key={line.label}>
+            <dt>{line.label}</dt>
+            <dd>{line.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <Link className="button button-primary" href={surface.commitmentPreview.ctaHref}>
+        {surface.commitmentPreview.ctaLabel}
+      </Link>
+      <p className="panel-note">Review, reserve, payment, proof, dispute, and receipt gates stay visible before reliance.</p>
+    </aside>
+  );
+}
+
+function DiscoverySection({ surface }: { surface: DiscoverySurface }) {
+  return (
+    <section className="section section-white moral-goods-discovery" id="deals" aria-labelledby="deals-heading">
+      <div className="moral-goods-discovery-head">
+        <div>
+          <p className="eyebrow">Discovery</p>
+          <h2 id="deals-heading">Browse reviewed routes</h2>
+          <p>
+            Search moral-action routes, compare review signals, and open a safe commitment preview before
+            any authorization or participant instruction.
+          </p>
+        </div>
+        <form action="/moral-goods-group-buying#deals" className="moral-goods-search" method="get" role="search">
+          {surface.activeCategory !== "all" ? (
+            <input name="category" type="hidden" value={surface.activeCategory} />
+          ) : null}
+          <label className="sr-only" htmlFor="moral-goods-search-input">
+            Search group-buying routes
+          </label>
+          <input
+            defaultValue={surface.query}
+            id="moral-goods-search-input"
+            name="q"
+            placeholder="Search action, proof, or consideration"
+            type="search"
+          />
+          <button className="button button-primary" type="submit">
+            Search
+          </button>
+        </form>
+      </div>
+
+      <div className="moral-goods-shortcut-grid" aria-label="Group-buying discovery categories">
+        {surface.categories.map((category) => (
+          <DiscoveryShortcut
+            active={category.key === surface.activeCategory}
+            category={category}
+            key={category.key}
+          />
+        ))}
+      </div>
+
+      <div className="moral-goods-chip-row" aria-label="Quick filters">
+        {surface.filterChips.map((chip) => (
+          <Link href={buildChipHref(chip)} key={chip}>
+            {chip}
+          </Link>
+        ))}
+      </div>
+
+      <div className="moral-goods-discovery-layout">
+        <div className="moral-goods-deal-list">
+          <div className="moral-goods-result-count" role="status">
+            {surface.resultCount} {surface.resultCount === 1 ? "route" : "routes"} shown
+            {surface.query ? ` for "${surface.query}"` : ""}
+          </div>
+          {surface.cards.length ? (
+            surface.cards.map((card) => <DiscoveryDealRow card={card} key={card.envelopeId} />)
+          ) : (
+            <article className="panel detail-block">
+              <h3>No reviewed route matches this search</h3>
+              <p>Try a broader action, proof, consideration, or review-state term.</p>
+              <Link className="button button-secondary" href="/moral-goods-group-buying#deals">
+                Clear filters
+              </Link>
+            </article>
+          )}
+        </div>
+        <CommitmentPreview surface={surface} />
+      </div>
+    </section>
+  );
+}
 
 function DealCard({
   envelope,
@@ -118,8 +308,12 @@ function Timeline() {
   );
 }
 
-export default async function MoralGoodsGroupBuyingPage() {
-  const viewer = await getViewer();
+export default async function MoralGoodsGroupBuyingPage({ searchParams }: MoralGoodsGroupBuyingPageProps) {
+  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
+  const discoverySurface = getMoralGoodsDiscoverySurface({
+    category: readSearchParam(resolvedSearchParams, "category"),
+    query: readSearchParam(resolvedSearchParams, "q"),
+  });
   const topbarActions = getTopbarActions(Boolean(viewer));
   const lot = MORAL_GOODS_SEED_ENVELOPES.find(
     (envelope) => envelope.envelopeType === "crowdfunded_pledge_swap_lot",
@@ -184,6 +378,8 @@ export default async function MoralGoodsGroupBuyingPage() {
             </>
           }
         />
+
+        <DiscoverySection surface={discoverySurface} />
 
         <section className="section section-white" aria-labelledby="entry-heading">
           <div className="section-head" id="entry-heading">

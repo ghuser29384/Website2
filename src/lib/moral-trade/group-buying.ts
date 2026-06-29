@@ -401,6 +401,64 @@ export interface MoralGoodsDealCardModel {
   copyLint: MoralGoodsCopyLintResult;
 }
 
+export type MoralGoodsDiscoveryCategoryKey =
+  | "all"
+  | "rounds"
+  | "lots"
+  | "baskets"
+  | "budgets"
+  | "results";
+
+export interface MoralGoodsDiscoveryCategory {
+  count: number;
+  description: string;
+  href: string;
+  key: MoralGoodsDiscoveryCategoryKey;
+  label: string;
+}
+
+export interface MoralGoodsDiscoveryCardModel {
+  categoryKey: MoralGoodsDiscoveryCategoryKey;
+  copyLint: MoralGoodsCopyLintResult;
+  ctaLabel: string;
+  deadlineLabel: string;
+  envelopeId: string;
+  href: string;
+  limitLabel: string;
+  priceLabel: string;
+  primaryLabel: string;
+  progressBps: number;
+  progressLabel: string;
+  proofTags: string[];
+  routeLabel: string;
+  safeActionNote: string;
+  searchText: string;
+  statusLabel: string;
+  statusSentence: string;
+  targetLabel: string;
+  title: string;
+}
+
+export interface MoralGoodsDiscoveryCommitmentPreview {
+  amountLabel: string;
+  ctaHref: string;
+  ctaLabel: string;
+  envelopeId: string;
+  lines: Array<{ label: string; value: string }>;
+  noChargeLabel: string;
+  title: string;
+}
+
+export interface MoralGoodsDiscoverySurface {
+  activeCategory: MoralGoodsDiscoveryCategoryKey;
+  cards: MoralGoodsDiscoveryCardModel[];
+  categories: MoralGoodsDiscoveryCategory[];
+  commitmentPreview: MoralGoodsDiscoveryCommitmentPreview;
+  filterChips: string[];
+  query: string;
+  resultCount: number;
+}
+
 export interface MoralGoodsCommitmentCard {
   agreement: string;
   whenMoneyOrActionStarts: string;
@@ -439,6 +497,7 @@ export interface MoralGoodsContract {
   version: string;
   purpose: string;
   featureName: "Moral Goods Group Buying";
+  discoverySurface: MoralGoodsDiscoverySurface;
   firstClassRecordTables: string[];
   sharedPrimitiveTables: string[];
   envelopeTypes: MoralGoodsEnvelopeType[];
@@ -1645,6 +1704,241 @@ export function buildDealCardModel(
   };
 }
 
+function getDiscoveryCategoryKey(envelope: MoralGoodsPurchaseEnvelope): MoralGoodsDiscoveryCategoryKey {
+  if (envelope.stateGroup === "completed" || envelope.stateGroup === "evidence_due" || envelope.stateGroup === "under_review") {
+    return "results";
+  }
+
+  if (envelope.envelopeType === "group_buy_round") {
+    return "rounds";
+  }
+
+  if (envelope.envelopeType === "crowdfunded_pledge_swap_lot") {
+    return "lots";
+  }
+
+  if (
+    envelope.envelopeType === "crowdfunded_pledge_swap_basket" ||
+    envelope.envelopeType === "crowdfunded_pledge_swap_basket_item"
+  ) {
+    return "baskets";
+  }
+
+  if (envelope.envelopeType === "standing_microfund_pool") {
+    return "budgets";
+  }
+
+  return "all";
+}
+
+function normalizeDiscoveryQuery(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+}
+
+function categoryHref(key: MoralGoodsDiscoveryCategoryKey, query: string) {
+  const params = new URLSearchParams();
+  if (key !== "all") {
+    params.set("category", key);
+  }
+  if (query) {
+    params.set("q", query);
+  }
+  const suffix = params.toString();
+  return `/moral-goods-group-buying${suffix ? `?${suffix}` : ""}#deals`;
+}
+
+function compactDateLabel(value: string | null) {
+  return value ? `By ${value.slice(0, 10)}` : "No fixed deadline";
+}
+
+function fundingProgressBps(envelope: MoralGoodsPurchaseEnvelope) {
+  if (envelope.funding.targetMinor <= 0) {
+    return 0;
+  }
+
+  return Math.min(10_000, Math.round((envelope.funding.authorizedMinor / envelope.funding.targetMinor) * 10_000));
+}
+
+function discoveryPriceLabel(envelope: MoralGoodsPurchaseEnvelope) {
+  if (envelope.funding.microPledgeDefaultMinor) {
+    return `From ${formatMinorMoney({
+      amountMinor: envelope.funding.microPledgeDefaultMinor,
+      currency: envelope.currency,
+    })}`;
+  }
+
+  return `Target ${formatMinorMoney({
+    amountMinor: envelope.funding.targetMinor,
+    currency: envelope.currency,
+  })}`;
+}
+
+function discoveryProofTags(envelope: MoralGoodsPurchaseEnvelope) {
+  const tags = [
+    `${envelope.verificationStandard} verification`,
+    envelope.reviews.safety === "approved" ? "Safety approved" : "Safety review pending",
+    envelope.reserve.reserveStatus === "reserved" ? "Reserve ready" : "Reserve not required",
+  ];
+
+  if (envelope.enabledFeatureModules.includes("sponsor_gap_fill")) {
+    tags.push("Sponsor gap-fill");
+  }
+
+  if (envelope.enabledFeatureModules.includes("participant_donation_recipient_choice")) {
+    tags.push("Approved recipient choice");
+  }
+
+  return tags;
+}
+
+export function buildMoralGoodsDiscoveryCardModel(
+  envelope: MoralGoodsPurchaseEnvelope,
+): MoralGoodsDiscoveryCardModel {
+  const dealCard = buildDealCardModel(envelope, "public");
+  const categoryKey = getDiscoveryCategoryKey(envelope);
+  const progressBps = fundingProgressBps(envelope);
+  const progressPercent = Math.round(progressBps / 100);
+  const defaultAmount = envelope.funding.microPledgeDefaultMinor ?? envelope.funding.providerMinimumMinor ?? 0;
+  const proofTags = discoveryProofTags(envelope);
+  const model = {
+    categoryKey,
+    ctaLabel: dealCard.rows.nextStep,
+    deadlineLabel: compactDateLabel(envelope.deadlines.fundingAt ?? envelope.deadlines.acceptanceAt ?? envelope.deadlines.evidenceAt),
+    envelopeId: envelope.id,
+    href: `/moral-goods-group-buying#${envelope.slug}`,
+    limitLabel:
+      defaultAmount > 0
+        ? `Default review amount ${formatMinorMoney({ amountMinor: defaultAmount, currency: envelope.currency })}`
+        : "Review required before commitment",
+    priceLabel: discoveryPriceLabel(envelope),
+    primaryLabel: dealCard.primaryLabel,
+    progressBps,
+    progressLabel: `${progressPercent}% authorized`,
+    proofTags,
+    routeLabel: dealCard.secondaryLabel,
+    safeActionNote: "No charge or participant action starts before frozen terms and review gates clear.",
+    searchText: [
+      envelope.title,
+      envelope.actionSummary,
+      envelope.considerationSummary,
+      dealCard.primaryLabel,
+      dealCard.secondaryLabel,
+      dealCard.rows.status,
+      envelope.expectedImpactRange,
+      proofTags.join(" "),
+    ].join(" "),
+    statusLabel: dealCard.rows.status,
+    statusSentence: dealCard.rows.statusSentence,
+    targetLabel: `Target ${formatMinorMoney({
+      amountMinor: envelope.funding.targetMinor,
+      currency: envelope.currency,
+    })}`,
+    title: envelope.title,
+  } satisfies Omit<MoralGoodsDiscoveryCardModel, "copyLint">;
+
+  return {
+    ...model,
+    copyLint: lintOrdinaryGroupBuyingCopy(stableStringify(model)),
+  };
+}
+
+function buildCommitmentPreview(card: MoralGoodsDiscoveryCardModel): MoralGoodsDiscoveryCommitmentPreview {
+  return {
+    amountLabel: card.priceLabel,
+    ctaHref: card.href,
+    ctaLabel: card.ctaLabel,
+    envelopeId: card.envelopeId,
+    lines: [
+      { label: "Route", value: card.routeLabel },
+      { label: "Status", value: card.statusLabel },
+      { label: "Progress", value: card.progressLabel },
+      { label: "Deadline", value: card.deadlineLabel },
+    ],
+    noChargeLabel: "Due now $0.00. Authorization, capture, payout, donation, and reporting remain review-gated.",
+    title: card.title,
+  };
+}
+
+export function getMoralGoodsDiscoverySurface(input: {
+  category?: string | null;
+  query?: string | null;
+} = {}): MoralGoodsDiscoverySurface {
+  const query = normalizeDiscoveryQuery(input.query);
+  const allCards = MORAL_GOODS_SEED_ENVELOPES.map((envelope) => buildMoralGoodsDiscoveryCardModel(envelope));
+  const allowedCategories = new Set<MoralGoodsDiscoveryCategoryKey>([
+    "all",
+    "rounds",
+    "lots",
+    "baskets",
+    "budgets",
+    "results",
+  ]);
+  const activeCategory = allowedCategories.has(input.category as MoralGoodsDiscoveryCategoryKey)
+    ? (input.category as MoralGoodsDiscoveryCategoryKey)
+    : "all";
+  const normalizedNeedle = query.toLowerCase();
+  const cards = allCards.filter((card) => {
+    const matchesCategory = activeCategory === "all" || card.categoryKey === activeCategory;
+    const matchesQuery = !normalizedNeedle || card.searchText.toLowerCase().includes(normalizedNeedle);
+    return matchesCategory && matchesQuery;
+  });
+  const categoryCounts = allCards.reduce<Record<MoralGoodsDiscoveryCategoryKey, number>>(
+    (counts, card) => {
+      counts.all += 1;
+      counts[card.categoryKey] += 1;
+      return counts;
+    },
+    { all: 0, baskets: 0, budgets: 0, lots: 0, results: 0, rounds: 0 },
+  );
+  const categoryMetadata: Array<Omit<MoralGoodsDiscoveryCategory, "count" | "href">> = [
+    {
+      description: "Everything currently reviewable.",
+      key: "all",
+      label: "Recommended",
+    },
+    {
+      description: "Many people funding the same verified action pattern.",
+      key: "rounds",
+      label: "Rounds",
+    },
+    {
+      description: "One verified pledge-swap obligation.",
+      key: "lots",
+      label: "Pledge-swap lots",
+    },
+    {
+      description: "Multiple similar obligations funded together.",
+      key: "baskets",
+      label: "Baskets",
+    },
+    {
+      description: "Small recurring caps with allocation rules.",
+      key: "budgets",
+      label: "Standing budgets",
+    },
+    {
+      description: "Proof, review, and public-report states.",
+      key: "results",
+      label: "Results",
+    },
+  ];
+  const categories = categoryMetadata.map((category): MoralGoodsDiscoveryCategory => ({
+    ...category,
+    count: categoryCounts[category.key],
+    href: categoryHref(category.key, query),
+  }));
+
+  return {
+    activeCategory,
+    cards,
+    categories,
+    commitmentPreview: buildCommitmentPreview(cards[0] ?? allCards[0]),
+    filterChips: ["Nearby review", "Small minimum", "Reserve ready", "Proof reviewed", "Private until reviewed"],
+    query,
+    resultCount: cards.length,
+  };
+}
+
 export function buildCommitmentCard(input: {
   deadlineSummary: string;
   failureBehavior: string;
@@ -2215,6 +2509,7 @@ export function getMoralGoodsGroupBuyingContract(): MoralGoodsContract {
       "production_real_money_movement",
     ],
     featureName: "Moral Goods Group Buying",
+    discoverySurface: getMoralGoodsDiscoverySurface(),
     firstClassRecordTables: [...GROUP_BUYING_FIRST_CLASS_TABLES],
     ordinaryUiBannedTerms: ORDINARY_UI_BANNED_TERMS,
     purpose:
@@ -2269,6 +2564,11 @@ export function validateMoralGoodsGroupBuyingContract(
   const tableNames = contract.firstClassRecordTables;
   const statusGroups = Object.keys(contract.userFacingStateLabels) as MoralGoodsStateGroup[];
   const dealCardLintPasses = contract.sampleDealCards.every((card) => card.copyLint.status === "pass");
+  const discoveryCardsLintPass = contract.discoverySurface.cards.every((card) => card.copyLint.status === "pass");
+  const discoveryHasRequiredCategories = hasAll(
+    contract.discoverySurface.categories.map((category) => category.key),
+    ["all", "rounds", "lots", "baskets", "budgets", "results"],
+  );
   const readinessHasFailClosedSample = contract.readinessSamples.some(
     (sample) => sample.status === "blocked" && sample.blockers.length > 0,
   );
@@ -2334,6 +2634,14 @@ export function validateMoralGoodsGroupBuyingContract(
       contract.sampleDealCards
         .flatMap((card) => card.copyLint.blockers.map((blocker) => `${card.envelopeId}:${blocker}`))
         .join(",") || "all sample cards pass",
+    ),
+    validationCheck(
+      "discovery_surface",
+      "Meituan-inspired discovery surface exposes categories, deal rows, and a safe commitment preview.",
+      discoveryHasRequiredCategories &&
+        discoveryCardsLintPass &&
+        contract.discoverySurface.commitmentPreview.noChargeLabel.includes("Due now $0.00"),
+      `${contract.discoverySurface.categories.length} categories, ${contract.discoverySurface.cards.length} rows`,
     ),
     validationCheck(
       "failure_templates",
