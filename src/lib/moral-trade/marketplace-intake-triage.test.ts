@@ -63,15 +63,16 @@ test("marketplace intake triage routes public-goods intent to the current produc
   );
 
   assert.ok(publicGoodsRoute);
-  assert.equal(publicGoodsRoute.label, "Common Ground Budget external CRECM module");
+  assert.equal(publicGoodsRoute.label, "Common Ground Budget / Public Goods Fund");
   assert.equal(publicGoodsRoute.href, "/mpgf");
-  assert.equal(publicGoodsRoute.nextAction, "Open external CRECM module");
-  assert.match(publicGoodsRoute.summary, /moralpublicgoods102\.md/);
-  assert.match(publicGoodsRoute.summary, /CRECM v1\.96/);
-  assert.match(publicGoodsRoute.summary, /external CRECM module/);
+  assert.equal(publicGoodsRoute.nextAction, "Open Public Goods Fund");
+  assert.match(publicGoodsRoute.summary, /moralpublicgoods131\.md/);
+  assert.match(publicGoodsRoute.summary, /CRECM v1\.125/);
+  assert.match(publicGoodsRoute.summary, /Public Goods Fund/);
+  assert.match(publicGoodsRoute.summary, /Common Ground Budget route/);
   assert.equal(publicGoodsRoute.summary.includes("Verified Assurance Matching"), false);
-  assert.equal(publicGoodsRoute.summary.includes("moralpublicgoods131.md"), false);
-  assert.equal(publicGoodsRoute.summary.includes("CRECM v1.125"), false);
+  assert.equal(publicGoodsRoute.summary.includes("moralpublicgoods102.md"), false);
+  assert.equal(publicGoodsRoute.summary.includes("CRECM v1.96"), false);
 });
 
 test("marketplace intake triage blocks missing, eligible, and profile-inference regressions", () => {

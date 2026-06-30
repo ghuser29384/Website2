@@ -153,9 +153,10 @@ test("moraltrade82 offers route source keeps ranking internals out of default br
   assert.match(offersPage, /Reviewer detail thresholds/);
   assert.match(pagePrimitives, /defaultOpen = false/);
   assert.match(pagePrimitives, /<summary>Why this is reviewable<\/summary>/);
-  assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
-  assert.match(marketplaceBoundary, /CRECM v1\.96/);
-  assert.match(marketplaceBoundary, /external CRECM module/);
+  assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
+  assert.match(marketplaceBoundary, /CRECM v1\.125/);
+  assert.match(marketplaceBoundary, /Public Goods Fund/);
+  assert.match(marketplaceBoundary, /Common Ground Budget route/);
   assert.equal(offersPage.includes("Highest offered impact"), false);
   assert.equal(offersPage.includes("Highest example fit"), false);
   assert.equal(offersPage.includes("Impact scores"), false);
@@ -165,8 +166,9 @@ test("moraltrade82 offers route source keeps ranking internals out of default br
     pagePrimitives.includes("Counterparty minimum acceptable importance"),
     false,
   );
-  assert.equal(marketplaceBoundary.includes("moralpublicgoods131.md"), false);
-  assert.equal(marketplaceBoundary.includes("CRECM v1.125"), false);
+  assert.equal(marketplaceBoundary.includes("moralpublicgoods102.md"), false);
+  assert.equal(marketplaceBoundary.includes("CRECM v1.96"), false);
+  assert.equal(marketplaceBoundary.includes("external CRECM module"), false);
 });
 
 test("moraltrade82 signed-out offset creation route is a preview landing, not an account wall", () => {

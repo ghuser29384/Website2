@@ -350,7 +350,7 @@ test("financial settlement controls are wired through API, health, spec, migrati
   assert.match(apiRateLimit, /financial_settlement_controls_enforce/);
   assert.match(operations, /financial_settlement_controls_enforce/);
   assert.match(operationsProfile, /financial_settlement_controls_enforce/);
-  assert.match(apiProfile, /moral-trade-api-contract-v0\.72-2026-06/);
+  assert.match(apiProfile, /moral-trade-api-contract-v0\.73-2026-06/);
   assert.match(apiProfile, /financial_settlement_controls_contract_response/);
   assert.match(apiProfile, /financial_settlement_controls_enforce_request/);
   assert.match(apiProfile, /financial_settlement_controls_enforce_response/);

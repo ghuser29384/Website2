@@ -1489,7 +1489,7 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and the external CRECM module lane",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1660,7 +1660,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and the external CRECM module lane",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),

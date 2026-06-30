@@ -23,6 +23,7 @@ import {
   MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
   evaluateMpgfPivotalityCalculator,
 } from "@/lib/mpgf/public-goods-pivotality";
+import { buildMpgfPublicGoodsEcmRulebookReport } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -75,6 +76,7 @@ export default async function MpgfPage() {
   });
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
+  const rulebookReport = buildMpgfPublicGoodsEcmRulebookReport();
   const roundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
   const previewBudgetHref = `${roundHref}#common-ground-budget-preview`;
 
@@ -115,7 +117,7 @@ export default async function MpgfPage() {
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>
-        <a href="#technical-notes">Technical notes</a>
+        <a href="#audit-and-advanced-details">Audit details</a>
       </nav>
 
       <section className="mpgf-kpi-grid" aria-label="Common Ground Budget status strip">
@@ -645,21 +647,58 @@ export default async function MpgfPage() {
         </div>
       </section>
 
-      <section className="section section-white" id="technical-notes">
+      <section className="section section-white" id="audit-and-advanced-details">
         <div className="section-head section-head-compact">
-          <p className="eyebrow">Technical notes</p>
-          <h2>Detailed mechanism language lives behind the overview</h2>
+          <p className="eyebrow">Audit and advanced details</p>
+          <h2>Rulebook, sponsor pools, proof paths, and technical records stay below the default decision surface</h2>
           <p>
             Technical records remain available for auditors and mechanism reviewers without making
             them the first thing a new visitor has to parse.
           </p>
         </div>
+        <dl className="mpgf-summary-grid" aria-label="Public Goods Fund audit and advanced details">
+          <div>
+            <dt>Rulebook hash</dt>
+            <dd>{rulebookReport.calcHash}</dd>
+          </div>
+          <div>
+            <dt>Calculation version</dt>
+            <dd>{rulebookReport.clearingContract.policy}</dd>
+          </div>
+          <div>
+            <dt>Mechanism label</dt>
+            <dd>{rulebookReport.mechanism.technicalLabel}</dd>
+          </div>
+          <div>
+            <dt>Source rulebook</dt>
+            <dd>{rulebookReport.mechanism.sourceSpec}</dd>
+          </div>
+          <div>
+            <dt>Sponsor pools</dt>
+            <dd>{rulebookReport.sponsorPoolBacking.poolTypes.join(", ")}</dd>
+          </div>
+          <div>
+            <dt>Proof path</dt>
+            <dd>Review gates, payment snapshots, clearing bundle, and public audit bundle after close</dd>
+          </div>
+          <div>
+            <dt>Candidate pools</dt>
+            <dd>{demoMpgfPublicGoodsCampaigns.length} current demo candidates, kept separate from live offers</dd>
+          </div>
+          <div>
+            <dt>Technical spec</dt>
+            <dd>Detailed CRECM v1.125 predicates, hashes, failure handling, and accounting channels</dd>
+          </div>
+        </dl>
         <div className="hero-actions">
           <Link className="button button-secondary" href="/mpgf/technical-spec">
             Technical spec
           </Link>
           <Link className="button button-secondary" href="/mpgf/pools">
             Candidate pools
+          </Link>
+          <Link className="button button-secondary" href="/mpgf/pools">
+            Proof path
           </Link>
           <Link className="button button-secondary" href="/priority-correction-fund">
             Priority Correction Fund
