@@ -114,7 +114,7 @@ export interface PublicOffersTabSummary {
     | "reviewed_seed_templates"
     | "worked_example_directory"
     | "demo_records"
-    | "public_goods_module";
+    | "external_crecm_module";
   noLiveAgreementCount: boolean;
   description: string;
 }
@@ -781,7 +781,7 @@ function buildPublicOffersTabSummaries({
       label: "Public Goods Fund",
       count: getPublicMarketplaceRoundCount(),
       href: "/offers?tab=public_goods",
-      source: "public_goods_module",
+      source: "external_crecm_module",
       noLiveAgreementCount: true,
       description: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
     },
