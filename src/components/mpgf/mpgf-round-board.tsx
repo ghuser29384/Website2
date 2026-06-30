@@ -62,7 +62,7 @@ export function MpgfRoundBoard({
                 <dd>Shown after close in final reports</dd>
               </div>
               <div>
-                <dt>Projected bonus match</dt>
+                <dt>Possible bonus match if gates pass</dt>
                 <dd>Shown after close in final reports</dd>
               </div>
               <div>
@@ -70,7 +70,7 @@ export function MpgfRoundBoard({
                 <dd>{card.yourStanceLabel}</dd>
               </div>
               <div>
-                <dt>Your projected allocation</dt>
+                <dt>Your possible allocation if gates pass</dt>
                 <dd>{formatUsd(card.projectedAllocationCents)}</dd>
               </div>
             </dl>

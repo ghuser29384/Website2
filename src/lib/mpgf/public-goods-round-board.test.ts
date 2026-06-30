@@ -63,7 +63,10 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.match(component, /Qualitative progress/);
   assert.match(component, /card\.sealedProgressLabel/);
   assert.match(component, /Your stance/);
-  assert.match(component, /Your projected allocation/);
+  assert.match(component, /Your possible allocation if gates pass/);
+  assert.match(component, /Possible bonus match if gates pass/);
+  assert.equal(component.includes("Your projected allocation"), false);
+  assert.equal(component.includes("Projected bonus match"), false);
   assert.match(component, /Pivotal action:/);
   assert.equal(component.includes("{formatUsd(card.directCountedCents)}"), false);
   assert.equal(component.includes("{card.verifiedSupporterCount}/{card.thresholdSupporters}"), false);

@@ -21,6 +21,10 @@ import {
   type MpgfCommonGroundBudgetStance,
   type MpgfCommonGroundBudgetUnroutablePolicy,
 } from "@/lib/mpgf/public-goods-common-ground-budget";
+import {
+  MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  getMpgfCrecPlainLanguageLabelForStance,
+} from "@/lib/mpgf/public-goods-crecm-labels";
 import { getMpgfPublicGoodsCoalitionRoutingReportApi } from "@/lib/mpgf/public-goods-coalition-routing";
 import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { getMpgfPublicGoodsIdentityIntegrityReportApi } from "@/lib/mpgf/public-goods-identity-integrity";
@@ -118,19 +122,7 @@ function qualitativeSealedProgressLabel({
 }
 
 function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
-  if (stance === "strong") {
-    return "Fund this";
-  }
-
-  if (stance === "weak") {
-    return "Fund if different-view support joins";
-  }
-
-  if (stance === "dissent") {
-    return "Needs review";
-  }
-
-  return "Skip";
+  return getMpgfCrecPlainLanguageLabelForStance(stance);
 }
 
 function searchParamValue(
@@ -876,6 +868,16 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   only after you explicitly choose a non-skip stance, accept a maximum for this
                   project, and save the condition on the final review screen.
                 </p>
+                <p className="sr-only" id="common-ground-stance-copy-map">
+                  {MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.strong} maps to canonical
+                  ProjectSupportStance.stance strong and can allocate only after explicit caps,
+                  conditions, and final review. {MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.weak} maps
+                  to canonical ProjectSupportStance.stance weak and requires different-view support.
+                  {MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.dissent} maps to canonical
+                  ProjectSupportStance.stance dissent, allocates zero, and may increase review
+                  pressure. {MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.abstain} maps to canonical
+                  ProjectSupportStance.stance abstain and allocates zero by default.
+                </p>
                 <div className="notice-card" aria-label="Edit condition drawer">
                   <strong>Edit condition</strong>
                   <p>
@@ -964,11 +966,15 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                         <tr key={`budget-input-${row.campaignId}`}>
                           <th scope="row">{row.title}</th>
                           <td>
-                            <select name={`stance_${row.campaignId}`} defaultValue={row.stance}>
-                              <option value="strong">Fund this</option>
-                              <option value="weak">Fund if different-view support joins</option>
-                              <option value="dissent">Needs review</option>
-                              <option value="abstain">Skip</option>
+                            <select
+                              aria-describedby="common-ground-stance-copy-map"
+                              name={`stance_${row.campaignId}`}
+                              defaultValue={row.stance}
+                            >
+                              <option value="strong">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.strong}</option>
+                              <option value="weak">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.weak}</option>
+                              <option value="dissent">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.dissent}</option>
+                              <option value="abstain">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.abstain}</option>
                             </select>
                           </td>
                           <td>
@@ -1051,7 +1057,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dd>{formatUsd(commonGroundBudgetPreview.maximumBudgetCents)}</dd>
                 </div>
                 <div>
-                  <dt>Projected routed</dt>
+                  <dt>Possible routed if gates pass</dt>
                   <dd>{formatUsd(commonGroundBudgetPreview.routedAllocationCents)}</dd>
                 </div>
                 <div>
