@@ -595,6 +595,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
       baseMatchPoolBacked: sponsorPoolBacking.poolSpecificBackingRequired,
       bonusMatchPoolBacked: sponsorPoolBacking.poolSpecificBackingRequired,
       successRewardPoolFullyBacked: false,
+      successRewardMaximumLiabilityFullyBacked: false,
       coordinationCreditsEnabledForCapturedRows:
         participantIncentives.coordinationCreditsNonTransferableAndNoAllocationPower,
       impactCertificatesEnabledForCapturedRows:

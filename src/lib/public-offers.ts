@@ -327,6 +327,7 @@ const PUBLIC_GOODS_ENTRY_RECORDED_COPY_STATE = {
   baseMatchPoolBacked: false,
   bonusMatchPoolBacked: false,
   successRewardPoolFullyBacked: false,
+  successRewardMaximumLiabilityFullyBacked: false,
   coordinationCreditsEnabledForCapturedRows: false,
   impactCertificatesEnabledForCapturedRows: false,
   capturedContributionRowsAvailable: false,

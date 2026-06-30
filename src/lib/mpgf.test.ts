@@ -5323,6 +5323,294 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
           created_at: "2026-05-03T14:19:00.000Z",
         },
+        {
+          event_type: "success_reward_dominance_mode_disabled_by_underbacking",
+          campaign_id: null,
+          event_json: { roundId: "mpgf-assurance-round-demo-2026-05", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:20:00.000Z",
+        },
+        {
+          event_type: "sealed_pledge_exact_progress_exposure_incident",
+          campaign_id: null,
+          event_json: { surface: "public_round_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:21:00.000Z",
+        },
+        {
+          event_type: "pivotality_calculator_no_side_effect_invariant_violation",
+          campaign_id: null,
+          event_json: { surface: "advanced_calculator", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:22:00.000Z",
+        },
+        {
+          event_type: "success_reward_pool_backing_snapshot",
+          campaign_id: null,
+          event_json: {
+            advertisedCents: 1_000,
+            backedCents: 800,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T14:22:30.000Z",
+        },
+        {
+          event_type: "success_reward_claim_issued",
+          campaign_id: null,
+          event_json: {
+            rewardCents: 200,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T14:22:45.000Z",
+        },
+        {
+          event_type: "success_reward_claim_denied_by_reason",
+          campaign_id: null,
+          event_json: { reasonCategory: "authorization_failed", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:00.000Z",
+        },
+        {
+          event_type: "failure_bonus_pool_backing_snapshot",
+          campaign_id: null,
+          event_json: {
+            advertisedCents: 1_000,
+            backedCents: 900,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T14:23:15.000Z",
+        },
+        {
+          event_type: "failure_bonus_claim_proration_snapshot",
+          campaign_id: null,
+          event_json: {
+            provisionalCents: 700,
+            participantCappedCents: 500,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T14:23:30.000Z",
+        },
+        {
+          event_type: "failure_bonus_paid",
+          campaign_id: null,
+          event_json: {
+            bonusCents: 450,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T14:23:45.000Z",
+        },
+        {
+          event_type: "failure_bonus_claim_denied_by_reason",
+          campaign_id: null,
+          event_json: { reasonCategory: "review_not_approved", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:50.000Z",
+        },
+        {
+          event_type: "counterparty_self_linked_same_payment_or_control_excluded",
+          campaign_id: null,
+          event_json: { exclusionCategory: "same_payment_cluster", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:55.000Z",
+        },
+        {
+          event_type: "authorization_failure_reclearing_completed",
+          campaign_id: null,
+          event_json: { reclearingIterationCount: 1, publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:56.000Z",
+        },
+        {
+          event_type: "authorization_wrong_amount_or_short_expiry_removed",
+          campaign_id: null,
+          event_json: { removalCategory: "short_expiry", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:57.000Z",
+        },
+        {
+          event_type: "authorization_failed_dollars_removed_from_clearing",
+          campaign_id: null,
+          event_json: { removedCents: 1_234, publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:58.000Z",
+        },
+        {
+          event_type: "payment_commitment_snapshot_recorded",
+          campaign_id: null,
+          event_json: { snapshotKind: "round_close", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:59.000Z",
+        },
+        {
+          event_type: "payment_commitment_snapshot_invalidated",
+          campaign_id: null,
+          event_json: { invalidationCategory: "provider_evidence_stale", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:00.000Z",
+        },
+        {
+          event_type: "payment_commitment_provider_evidence_hash_invalid",
+          campaign_id: null,
+          event_json: { validationCategory: "malformed_hash", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:01.000Z",
+        },
+        {
+          event_type: "clearing_input_bundle_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "binding_hash_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:02.000Z",
+        },
+        {
+          event_type: "clearing_input_bundle_component_hash_mismatch",
+          campaign_id: null,
+          event_json: { componentKind: "payment_snapshot", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:03.000Z",
+        },
+        {
+          event_type: "clearing_input_bundle_uniqueness_violation",
+          campaign_id: null,
+          event_json: { rowKind: "common_ground_budget", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:04.000Z",
+        },
+        {
+          event_type: "project_eligibility_snapshot_uniqueness_violation",
+          campaign_id: null,
+          event_json: { snapshotKind: "round_open_project_eligibility", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:05.000Z",
+        },
+        {
+          event_type: "common_ground_budget_row_count_uniqueness_violation",
+          campaign_id: null,
+          event_json: { keyKind: "round_participant", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:06.000Z",
+        },
+        {
+          event_type: "identity_eligibility_row_count_uniqueness_violation",
+          campaign_id: null,
+          event_json: { keyKind: "round_participant", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:07.000Z",
+        },
+        {
+          event_type: "round_keyed_payment_snapshot_row_count_uniqueness_violation",
+          campaign_id: null,
+          event_json: { keyKind: "round_budget_snapshot_kind", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:08.000Z",
+        },
+        {
+          event_type: "stage7_claim_creation_denied_by_section10_qualified_predicate",
+          campaign_id: null,
+          event_json: { denialCategory: "section10_not_qualified", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:09.000Z",
+        },
+        {
+          event_type: "stage7_duplicate_failure_bonus_claim_noop_or_same_key_mismatch_rejected",
+          campaign_id: null,
+          event_json: { resolutionCategory: "same_key_mismatch_rejected", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:10.000Z",
+        },
+        {
+          event_type: "sponsor_frozen_vs_live_backing_mismatch",
+          campaign_id: null,
+          event_json: { poolType: "failure_bonus", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:11.000Z",
+        },
+        {
+          event_type: "sponsor_commitment_source_hash_or_integer_cent_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "source_hash_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:12.000Z",
+        },
+        {
+          event_type: "bonus_fixed_point_score_unit_quantization_mismatch",
+          campaign_id: null,
+          event_json: { calculationStage: "stage5_bonus_score", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:13.000Z",
+        },
+        {
+          event_type: "invalid_monetary_or_basis_point_cap_allocation_rejected",
+          campaign_id: null,
+          event_json: { capKind: "project_cap_bps", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:14.000Z",
+        },
+        {
+          event_type: "unsafe_integer_cent_count_or_basis_point_validation_failed",
+          campaign_id: null,
+          event_json: { fieldFamily: "cent", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:15.000Z",
+        },
+        {
+          event_type: "unverified_or_nonclear_identity_counted_dollar_excluded",
+          campaign_id: null,
+          event_json: { identityState: "sybil_review", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:16.000Z",
+        },
+        {
+          event_type: "project_eligibility_snapshot_hash_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "snapshot_hash_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:17.000Z",
+        },
+        {
+          event_type: "project_eligibility_snapshot_baseline_or_action_evidence_boolean_invalid",
+          campaign_id: null,
+          event_json: { validationCategory: "baseline_boolean_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:18.000Z",
+        },
+        {
+          event_type: "project_eligibility_snapshot_cutoff_or_kind_mismatch",
+          campaign_id: null,
+          event_json: { validationCategory: "cutoff_mismatch", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:19.000Z",
+        },
+        {
+          event_type: "conditional_intent_counterparty_volume_or_bucket_array_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "bucket_array_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:20.000Z",
+        },
+        {
+          event_type: "round_donor_counted_cap_or_identity_threshold_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "identity_threshold_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:21.000Z",
+        },
+        {
+          event_type: "project_match_bps_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "base_match_bps_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:22.000Z",
+        },
+        {
+          event_type: "round_sponsor_budget_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "failure_bonus_budget_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:23.000Z",
+        },
+        {
+          event_type: "identity_weight_bps_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "out_of_range_bps", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:24.000Z",
+        },
+        {
+          event_type: "payment_commitment_missing_payment_method_ref",
+          campaign_id: null,
+          event_json: { snapshotKind: "round_close", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:25.000Z",
+        },
+        {
+          event_type: "coordination_credit_unit_issued",
+          campaign_id: null,
+          event_json: { benefitKind: "coordination_credit", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:00.000Z",
+        },
+        {
+          event_type: "coordination_credit_no_allocation_power_invariant_violation",
+          campaign_id: null,
+          event_json: { surface: "credit_ledger_review", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:25:00.000Z",
+        },
+        {
+          event_type: "impact_certificate_unit_issued",
+          campaign_id: null,
+          event_json: { benefitKind: "impact_certificate", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:26:00.000Z",
+        },
+        {
+          event_type: "impact_certificate_late_access_rejected",
+          campaign_id: null,
+          event_json: { reasonCategory: "late_access", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:27:00.000Z",
+        },
       ],
       paymentProofs: [
         ...demoMpgfPublicGoodsPaymentProofs,
@@ -5400,19 +5688,66 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
         (metric) => metric.label === "fee dollars excluded from public-good credit" && metric.currentValue === 0,
       ),
     );
-    assert.ok(
-      snapshot.publicMetrics.metrics.some(
-        (metric) => metric.label === "failure-bonus denied-by-reason counts" && metric.instrumentationStatus === "instrumentation_pending",
-      ),
-    );
+    assert.equal(publicMetricValue("failure-bonus funded-vs-advertised ratio"), 9000);
+    assert.equal(publicMetricValue("failure-bonus utilization"), 5000);
+    assert.equal(publicMetricValue("failure-bonus denied-by-reason counts"), 1);
+    assert.equal(publicMetricValue("failure-bonus raw-vs-participant-capped ratio"), 7143);
+    assert.equal(publicMetricValue("failure-bonus provisional-vs-paid ratio"), 6429);
+    assert.equal(publicMetricValue("failure-bonus proration factor bps"), 9000);
+    assert.equal(publicMetricValue("failure-bonus backed-available-pool utilization"), 5000);
     assert.ok(
       snapshot.publicMetrics.metrics.every(
         (metric) => metric.privacyScope === "aggregate_only_no_user_or_reason_text",
       ),
     );
-    assert.equal(publicMetricValue("success-reward funded-vs-advertised ratio"), 0);
-    assert.equal(publicMetricValue("success-reward denied-by-reason counts"), 0);
-    assert.equal(publicMetricValue("success-reward dominance-mode disabled-by-underbacking count"), 0);
+    assert.equal(publicMetricValue("success-reward funded-vs-advertised ratio"), 8000);
+    assert.equal(publicMetricValue("success-reward utilization"), 2500);
+    assert.equal(publicMetricValue("success-reward denied-by-reason counts"), 1);
+    assert.equal(publicMetricValue("success-reward dominance-mode disabled-by-underbacking count"), 1);
+    assert.equal(publicMetricValue("coordination-credit units issued"), 1);
+    assert.equal(publicMetricValue("coordination-credit no-allocation-power invariant violation count"), 1);
+    assert.equal(publicMetricValue("impact-certificate units issued"), 1);
+    assert.equal(publicMetricValue("impact-certificate late-access rejection count"), 1);
+    assert.equal(publicMetricValue("sealed-pledge exact-progress exposure incident count"), 1);
+    assert.equal(publicMetricValue("self-match / linked-account / same-payment-method / same-control exclusions"), 1);
+    assert.equal(publicMetricValue("authorization failure reclearing count"), 1);
+    assert.equal(publicMetricValue("authorization wrong-amount / short-expiry removals"), 1);
+    assert.equal(publicMetricValue("authorization-failed dollars removed from clearing"), 1_234);
+    assert.equal(publicMetricValue("payment-commitment snapshot count and invalidation count"), 2);
+    assert.equal(publicMetricValue("payment-commitment provider-evidence-hash malformed/invalid count"), 1);
+    assert.equal(publicMetricValue("clearing input bundle validation failure count"), 1);
+    assert.equal(publicMetricValue("clearing input bundle component-hash mismatch count"), 1);
+    assert.equal(publicMetricValue("clearing input bundle uniqueness violation count"), 1);
+    assert.equal(publicMetricValue("snapshot / project-eligibility-snapshot uniqueness violation count"), 1);
+    assert.equal(publicMetricValue("Common Ground Budget row-count uniqueness violation count"), 1);
+    assert.equal(publicMetricValue("identity-eligibility row-count uniqueness violation count"), 1);
+    assert.equal(publicMetricValue("round-keyed payment-snapshot row-count uniqueness violation count"), 1);
+    assert.equal(publicMetricValue("Stage 7 claim-creation attempts denied by full Section 10 qualified predicate"), 1);
+    assert.equal(
+      publicMetricValue("Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count"),
+      1,
+    );
+    assert.equal(publicMetricValue("sponsor frozen-vs-live backing mismatch count"), 1);
+    assert.equal(publicMetricValue("sponsor commitment source-hash / integer-cent validation failure count"), 1);
+    assert.equal(publicMetricValue("bonus fixed-point score-unit quantization mismatch count"), 1);
+    assert.equal(publicMetricValue("invalid monetary-cap / basis-point-cap allocation rejection count"), 1);
+    assert.equal(publicMetricValue("unsafe integer cent/count/basis-point validation failure count"), 1);
+    assert.equal(publicMetricValue("unverified-or-nonclear-identity counted-dollar exclusion count"), 1);
+    assert.equal(publicMetricValue("project-eligibility-snapshot hash validation failure count"), 1);
+    assert.equal(
+      publicMetricValue("project-eligibility-snapshot baseline/action-evidence boolean validation failure count"),
+      1,
+    );
+    assert.equal(publicMetricValue("project-eligibility-snapshot cutoff/kind mismatch count"), 1);
+    assert.equal(
+      publicMetricValue("conditional-intent counterparty-volume / bucket-array validation failure count"),
+      1,
+    );
+    assert.equal(publicMetricValue("round donor-counted-cap / identity-threshold validation failure count"), 1);
+    assert.equal(publicMetricValue("project match-bps validation failure count"), 1);
+    assert.equal(publicMetricValue("round sponsor-budget validation failure count"), 1);
+    assert.equal(publicMetricValue("identity-weight bps validation failure count"), 1);
+    assert.equal(publicMetricValue("payment-commitment missing-payment-method-ref count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search-intent routed-to-CGB-card count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search zero-state suppression count"), 1);
     assert.equal(publicMetricValue("public-goods primary CTA click-through count"), 1);
@@ -5425,7 +5760,71 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricValue("public-goods search accessibility announcement failure count"), 1);
     assert.equal(publicMetricStatus("public-goods ordinary-offer drawer open count"), "computed");
     assert.equal(publicMetricStatus("stale-current-product-label exposure count"), "computed");
-    assert.equal(publicMetricStatus("Common Ground Budget row-count uniqueness violation count"), "instrumentation_pending");
+    assert.equal(publicMetricStatus("failure-bonus funded-vs-advertised ratio"), "computed");
+    assert.equal(publicMetricStatus("failure-bonus utilization"), "computed");
+    assert.equal(publicMetricStatus("failure-bonus denied-by-reason counts"), "computed");
+    assert.equal(publicMetricStatus("failure-bonus proration factor bps"), "computed");
+    assert.equal(publicMetricStatus("success-reward funded-vs-advertised ratio"), "computed");
+    assert.equal(publicMetricStatus("success-reward utilization"), "computed");
+    assert.equal(publicMetricStatus("success-reward denied-by-reason counts"), "computed");
+    assert.equal(publicMetricStatus("coordination-credit units issued"), "computed");
+    assert.equal(publicMetricStatus("impact-certificate units issued"), "computed");
+    assert.equal(
+      publicMetricStatus("self-match / linked-account / same-payment-method / same-control exclusions"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("authorization failure reclearing count"), "computed");
+    assert.equal(publicMetricStatus("authorization wrong-amount / short-expiry removals"), "computed");
+    assert.equal(publicMetricStatus("authorization-failed dollars removed from clearing"), "computed");
+    assert.equal(publicMetricStatus("payment-commitment snapshot count and invalidation count"), "computed");
+    assert.equal(
+      publicMetricStatus("payment-commitment provider-evidence-hash malformed/invalid count"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("clearing input bundle validation failure count"), "computed");
+    assert.equal(publicMetricStatus("clearing input bundle component-hash mismatch count"), "computed");
+    assert.equal(publicMetricStatus("clearing input bundle uniqueness violation count"), "computed");
+    assert.equal(publicMetricStatus("snapshot / project-eligibility-snapshot uniqueness violation count"), "computed");
+    assert.equal(publicMetricStatus("Common Ground Budget row-count uniqueness violation count"), "computed");
+    assert.equal(publicMetricStatus("identity-eligibility row-count uniqueness violation count"), "computed");
+    assert.equal(publicMetricStatus("round-keyed payment-snapshot row-count uniqueness violation count"), "computed");
+    assert.equal(
+      publicMetricStatus("Stage 7 claim-creation attempts denied by full Section 10 qualified predicate"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("sponsor frozen-vs-live backing mismatch count"), "computed");
+    assert.equal(
+      publicMetricStatus("sponsor commitment source-hash / integer-cent validation failure count"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("bonus fixed-point score-unit quantization mismatch count"), "computed");
+    assert.equal(publicMetricStatus("invalid monetary-cap / basis-point-cap allocation rejection count"), "computed");
+    assert.equal(publicMetricStatus("unsafe integer cent/count/basis-point validation failure count"), "computed");
+    assert.equal(publicMetricStatus("unverified-or-nonclear-identity counted-dollar exclusion count"), "computed");
+    assert.equal(publicMetricStatus("project-eligibility-snapshot hash validation failure count"), "computed");
+    assert.equal(
+      publicMetricStatus("project-eligibility-snapshot baseline/action-evidence boolean validation failure count"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("project-eligibility-snapshot cutoff/kind mismatch count"), "computed");
+    assert.equal(
+      publicMetricStatus("conditional-intent counterparty-volume / bucket-array validation failure count"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("round donor-counted-cap / identity-threshold validation failure count"),
+      "computed",
+    );
+    assert.equal(publicMetricStatus("project match-bps validation failure count"), "computed");
+    assert.equal(publicMetricStatus("round sponsor-budget validation failure count"), "computed");
+    assert.equal(publicMetricStatus("identity-weight bps validation failure count"), "computed");
+    assert.equal(publicMetricStatus("payment-commitment missing-payment-method-ref count"), "computed");
+    assert.equal(publicMetricValue("pivotality calculator no-side-effect invariant violation count"), 1);
+    assert.equal(publicMetricStatus("pivotality calculator no-side-effect invariant violation count"), "computed");
     assert.equal(
       snapshot.publicMetrics.metrics.some(
         (metric) => String(metric.label) === "moral public goods row-count uniqueness violation count",

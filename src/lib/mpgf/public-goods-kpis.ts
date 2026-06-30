@@ -645,6 +645,24 @@ function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+function readEventJsonNumber(event: MpgfPublicGoodsKpiAnalyticsEvent, key: string) {
+  return clampNonNegativeInteger(readNumber(event.event_json ?? {}, key));
+}
+
+function sumEventJsonNumbers(
+  events: readonly MpgfPublicGoodsKpiAnalyticsEvent[],
+  eventType: string,
+  key: string,
+) {
+  return events
+    .filter((event) => event.event_type === eventType)
+    .reduce((sum, event) => sum + readEventJsonNumber(event, key), 0);
+}
+
+function countAnalyticsEvents(events: readonly MpgfPublicGoodsKpiAnalyticsEvent[], eventType: string) {
+  return events.filter((event) => event.event_type === eventType).length;
+}
+
 function normalizeEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === "string" && allowed.includes(value as T) ? (value as T) : fallback;
 }
@@ -1109,6 +1127,46 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   const payableDirectEligibleCents = payableLines.reduce((sum, line) => sum + line.directEligibleCents, 0);
   const sponsorPoolCents = roundAllocation.baseMatchBudgetCents + roundAllocation.qfBonusBudgetCents;
   const matchAllocatedCents = roundAllocation.baseMatchAllocatedCents + roundAllocation.qfBonusAllocatedCents;
+  const failureBonusAdvertisedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_pool_backing_snapshot",
+    "advertisedCents",
+  );
+  const failureBonusBackedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_pool_backing_snapshot",
+    "backedCents",
+  );
+  const failureBonusPaidCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_paid",
+    "bonusCents",
+  );
+  const failureBonusProvisionalCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_claim_proration_snapshot",
+    "provisionalCents",
+  );
+  const failureBonusParticipantCappedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_claim_proration_snapshot",
+    "participantCappedCents",
+  );
+  const successRewardAdvertisedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_pool_backing_snapshot",
+    "advertisedCents",
+  );
+  const successRewardBackedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_pool_backing_snapshot",
+    "backedCents",
+  );
+  const successRewardIssuedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_claim_issued",
+    "rewardCents",
+  );
   const activeContributionAmounts = activePledges.map((pledge) => clampNonNegativeInteger(pledge.amountCents));
   const countedContributionAmounts = eligiblePledges.map((pledge) =>
     countMpgfQfContributionCents(pledge.amountCents, perDonorQfCapCents(matchPool)),
@@ -1202,22 +1260,167 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     "base-match utilization": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchBudgetCents),
     "base-match claim-vs-paid ratio": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchAllocatedCents),
     "bonus-match utilization": rateBps(roundAllocation.qfBonusAllocatedCents, roundAllocation.qfBonusBudgetCents),
+    "failure-bonus utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
+    "failure-bonus denied-by-reason counts": analyticsEvents.filter(
+      (event) => event.event_type === "failure_bonus_claim_denied_by_reason",
+    ).length,
+    "failure-bonus raw-vs-participant-capped ratio": rateBps(
+      failureBonusParticipantCappedCents,
+      failureBonusProvisionalCents,
+    ),
+    "failure-bonus provisional-vs-paid ratio": rateBps(failureBonusPaidCents, failureBonusProvisionalCents),
+    "failure-bonus proration factor bps": rateBps(failureBonusPaidCents, failureBonusParticipantCappedCents),
+    "failure-bonus backed-available-pool utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
     "non-binding settlement-preview dollars excluded from clearing": 0,
     "base-match funded-vs-advertised ratio": rateBps(roundAllocation.baseMatchBudgetCents, roundAllocation.baseMatchBudgetCents),
     "bonus-match funded-vs-advertised ratio": rateBps(roundAllocation.qfBonusBudgetCents, roundAllocation.qfBonusBudgetCents),
-    "success-reward funded-vs-advertised ratio": 0,
-    "success-reward utilization": 0,
-    "success-reward denied-by-reason counts": 0,
-    "success-reward dominance-mode disabled-by-underbacking count": 0,
-    "coordination-credit units issued": 0,
-    "coordination-credit no-allocation-power invariant violation count": 0,
-    "impact-certificate units issued": 0,
-    "impact-certificate late-access rejection count": 0,
-    "sealed-pledge exact-progress exposure incident count": 0,
+    "failure-bonus funded-vs-advertised ratio": rateBps(
+      failureBonusBackedCents,
+      failureBonusAdvertisedCents,
+    ),
+    "success-reward funded-vs-advertised ratio": rateBps(
+      successRewardBackedCents,
+      successRewardAdvertisedCents,
+    ),
+    "success-reward utilization": rateBps(successRewardIssuedCents, successRewardBackedCents),
+    "success-reward denied-by-reason counts": analyticsEvents.filter(
+      (event) => event.event_type === "success_reward_claim_denied_by_reason",
+    ).length,
+    "success-reward dominance-mode disabled-by-underbacking count": analyticsEvents.filter(
+      (event) => event.event_type === "success_reward_dominance_mode_disabled_by_underbacking",
+    ).length,
+    "coordination-credit units issued": analyticsEvents.filter(
+      (event) => event.event_type === "coordination_credit_unit_issued",
+    ).length,
+    "coordination-credit no-allocation-power invariant violation count": analyticsEvents.filter(
+      (event) => event.event_type === "coordination_credit_no_allocation_power_invariant_violation",
+    ).length,
+    "impact-certificate units issued": analyticsEvents.filter(
+      (event) => event.event_type === "impact_certificate_unit_issued",
+    ).length,
+    "impact-certificate late-access rejection count": analyticsEvents.filter(
+      (event) => event.event_type === "impact_certificate_late_access_rejected",
+    ).length,
+    "sealed-pledge exact-progress exposure incident count": analyticsEvents.filter(
+      (event) => event.event_type === "sealed_pledge_exact_progress_exposure_incident",
+    ).length,
+    "self-match / linked-account / same-payment-method / same-control exclusions": analyticsEvents.filter(
+      (event) => event.event_type === "counterparty_self_linked_same_payment_or_control_excluded",
+    ).length,
+    "authorization failure reclearing count": analyticsEvents.filter(
+      (event) => event.event_type === "authorization_failure_reclearing_completed",
+    ).length,
+    "authorization wrong-amount / short-expiry removals": analyticsEvents.filter(
+      (event) => event.event_type === "authorization_wrong_amount_or_short_expiry_removed",
+    ).length,
+    "authorization-failed dollars removed from clearing": sumEventJsonNumbers(
+      analyticsEvents,
+      "authorization_failed_dollars_removed_from_clearing",
+      "removedCents",
+    ),
+    "payment-commitment snapshot count and invalidation count": analyticsEvents.filter(
+      (event) =>
+        event.event_type === "payment_commitment_snapshot_recorded" ||
+        event.event_type === "payment_commitment_snapshot_invalidated",
+    ).length,
+    "payment-commitment provider-evidence-hash malformed/invalid count": analyticsEvents.filter(
+      (event) => event.event_type === "payment_commitment_provider_evidence_hash_invalid",
+    ).length,
+    "clearing input bundle validation failure count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_validation_failed",
+    ).length,
+    "clearing input bundle component-hash mismatch count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_component_hash_mismatch",
+    ).length,
+    "clearing input bundle uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_uniqueness_violation",
+    ).length,
+    "snapshot / project-eligibility-snapshot uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "project_eligibility_snapshot_uniqueness_violation",
+    ).length,
+    "Common Ground Budget row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "common_ground_budget_row_count_uniqueness_violation",
+    ).length,
+    "identity-eligibility row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "identity_eligibility_row_count_uniqueness_violation",
+    ).length,
+    "round-keyed payment-snapshot row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "round_keyed_payment_snapshot_row_count_uniqueness_violation",
+    ).length,
+    "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_claim_creation_denied_by_section10_qualified_predicate",
+    ),
+    "Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_duplicate_failure_bonus_claim_noop_or_same_key_mismatch_rejected",
+    ),
+    "sponsor frozen-vs-live backing mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_frozen_vs_live_backing_mismatch",
+    ),
+    "sponsor commitment source-hash / integer-cent validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_commitment_source_hash_or_integer_cent_validation_failed",
+    ),
+    "bonus fixed-point score-unit quantization mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "bonus_fixed_point_score_unit_quantization_mismatch",
+    ),
+    "invalid monetary-cap / basis-point-cap allocation rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "invalid_monetary_or_basis_point_cap_allocation_rejected",
+    ),
+    "unsafe integer cent/count/basis-point validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "unsafe_integer_cent_count_or_basis_point_validation_failed",
+    ),
+    "unverified-or-nonclear-identity counted-dollar exclusion count": countAnalyticsEvents(
+      analyticsEvents,
+      "unverified_or_nonclear_identity_counted_dollar_excluded",
+    ),
+    "project-eligibility-snapshot hash validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_hash_validation_failed",
+    ),
+    "project-eligibility-snapshot baseline/action-evidence boolean validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_baseline_or_action_evidence_boolean_invalid",
+    ),
+    "project-eligibility-snapshot cutoff/kind mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_cutoff_or_kind_mismatch",
+    ),
+    "conditional-intent counterparty-volume / bucket-array validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "conditional_intent_counterparty_volume_or_bucket_array_validation_failed",
+    ),
+    "round donor-counted-cap / identity-threshold validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "round_donor_counted_cap_or_identity_threshold_validation_failed",
+    ),
+    "project match-bps validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_match_bps_validation_failed",
+    ),
+    "round sponsor-budget validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "round_sponsor_budget_validation_failed",
+    ),
+    "identity-weight bps validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "identity_weight_bps_validation_failed",
+    ),
+    "payment-commitment missing-payment-method-ref count": countAnalyticsEvents(
+      analyticsEvents,
+      "payment_commitment_missing_payment_method_ref",
+    ),
     "donor retention into next round": retainedRecurringDonors3MonthBps,
     "appeal rate": rateBps(appealCaseCount, Math.max(1, reviewCases.length)),
     "privacy incident count": 0,
-    "pivotality calculator no-side-effect invariant violation count": 0,
+    "pivotality calculator no-side-effect invariant violation count": analyticsEvents.filter(
+      (event) => event.event_type === "pivotality_calculator_no_side_effect_invariant_violation",
+    ).length,
     "moral-public-goods search-intent routed-to-CGB-card count": analyticsEvents.filter(
       (event) => event.event_type === "moral_public_goods_search_routed_to_cgb_card",
     ).length,

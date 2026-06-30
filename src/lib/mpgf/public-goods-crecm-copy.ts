@@ -86,6 +86,7 @@ export interface MpgfCrecRecordedStateForCopy {
   baseMatchPoolBacked: boolean;
   bonusMatchPoolBacked: boolean;
   successRewardPoolFullyBacked: boolean;
+  successRewardMaximumLiabilityFullyBacked: boolean;
   coordinationCreditsEnabledForCapturedRows: boolean;
   impactCertificatesEnabledForCapturedRows: boolean;
   capturedContributionRowsAvailable: boolean;
@@ -291,6 +292,19 @@ export function validateMpgfCrecCopyAgainstRecordedState(
     claims.push("success_reward");
     if (!state.successRewardPoolFullyBacked && !/\b(up to|only from fully backed|if fully backed)\b/i.test(text)) {
       blockers.push("copy_claims_reward_without_fully_backed_success_reward_pool");
+    }
+  }
+
+  if (
+    hasPositiveClaim(text, [
+      /\b(dominance target|dominant strategy|dominance-mode|dominance mode)\b/i,
+      /\breward offsets (your )?(contribution|pledge|gift)\b/i,
+      /\b(contribution|pledge|gift) (is )?offset by (the )?(success |contributor )?reward\b/i,
+    ])
+  ) {
+    claims.push("success_reward_dominance_or_offset");
+    if (!state.successRewardMaximumLiabilityFullyBacked) {
+      blockers.push("copy_claims_success_reward_dominance_without_maximum_liability_backing");
     }
   }
 

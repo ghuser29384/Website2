@@ -26,6 +26,7 @@ function recordedState(
     baseMatchPoolBacked: false,
     bonusMatchPoolBacked: false,
     successRewardPoolFullyBacked: false,
+    successRewardMaximumLiabilityFullyBacked: false,
     coordinationCreditsEnabledForCapturedRows: true,
     impactCertificatesEnabledForCapturedRows: true,
     capturedContributionRowsAvailable: false,
@@ -71,6 +72,47 @@ test("CRECM copy validation blocks positive claims without recorded state", () =
     "copy_claims_impact_certificate_without_captured_contribution_row",
     "copy_claims_impact_or_effectiveness_without_recorded_proof_state",
   ]);
+});
+
+test("CRECM copy validation blocks success-reward dominance copy without maximum-liability backing", () => {
+  const result = validateMpgfCrecCopyAgainstRecordedState(
+    {
+      surface: "public-round-page",
+      text:
+        "You may receive up to a sponsor-backed success reward, and your reward offsets your contribution.",
+    },
+    recordedState({
+      successRewardPoolFullyBacked: true,
+      successRewardMaximumLiabilityFullyBacked: false,
+    }),
+  );
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.claims, [
+    "success_reward",
+    "success_reward_dominance_or_offset",
+  ]);
+  assert.deepEqual(result.blockers, [
+    "copy_claims_success_reward_dominance_without_maximum_liability_backing",
+  ]);
+});
+
+test("CRECM copy validation allows capped success-reward estimates without dominance framing", () => {
+  const result = validateMpgfCrecCopyAgainstRecordedState(
+    {
+      surface: "public-round-page",
+      text:
+        "You may receive up to a sponsor-backed success reward if the success-reward pool is fully backed.",
+    },
+    recordedState({
+      successRewardPoolFullyBacked: false,
+      successRewardMaximumLiabilityFullyBacked: false,
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.claims, ["success_reward"]);
+  assert.deepEqual(result.blockers, []);
 });
 
 test("CRECM copy bundle validation reports blocked surfaces and state hash", () => {
