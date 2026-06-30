@@ -5367,6 +5367,30 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           created_at: "2026-05-03T14:23:00.000Z",
         },
         {
+          event_type: "fee_quote_zero_allocation_due_to_binding_failure",
+          campaign_id: null,
+          event_json: { validationCategory: "duplicate_allocation_key", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:05.000Z",
+        },
+        {
+          event_type: "selected_sponsor_paid_fee_support_aggregate_rejected",
+          campaign_id: null,
+          event_json: { rejectionCategory: "duplicate_allocation_key", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:06.000Z",
+        },
+        {
+          event_type: "sponsor_paid_fee_quote_backing_hash_mismatch",
+          campaign_id: null,
+          event_json: { validationCategory: "wrong_sponsor_pool_source_hash", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:07.000Z",
+        },
+        {
+          event_type: "sponsor_paid_fee_support_aggregate_overcommit_rejected",
+          campaign_id: null,
+          event_json: { rejectionCategory: "fee_support_pool_underbacked", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:08.000Z",
+        },
+        {
           event_type: "failure_bonus_pool_backing_snapshot",
           campaign_id: null,
           event_json: {
@@ -5731,6 +5755,12 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       ),
     );
     assert.equal(publicMetricValue("failure-bonus funded-vs-advertised ratio"), 9000);
+    assert.equal(
+      publicMetricValue(
+        "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count",
+      ),
+      1,
+    );
     assert.equal(publicMetricValue("failure-bonus utilization"), 5000);
     assert.equal(publicMetricValue("failure-bonus denied-by-reason counts"), 1);
     assert.equal(publicMetricValue("failure-bonus raw-vs-participant-capped ratio"), 7143);
@@ -5800,6 +5830,9 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       1,
     );
     assert.equal(publicMetricValue("Stage 4 base-match default-ratio local-definition validation failure count"), 1);
+    assert.equal(publicMetricValue("selected sponsor-paid fee-support aggregate rejection count"), 1);
+    assert.equal(publicMetricValue("sponsor-paid fee quote backing-hash mismatch count"), 1);
+    assert.equal(publicMetricValue("sponsor-paid fee support aggregate overcommit rejection count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search-intent routed-to-CGB-card count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search zero-state suppression count"), 1);
     assert.equal(publicMetricValue("public-goods primary CTA click-through count"), 1);
@@ -5813,6 +5846,12 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricStatus("public-goods ordinary-offer drawer open count"), "computed");
     assert.equal(publicMetricStatus("stale-current-product-label exposure count"), "computed");
     assert.equal(publicMetricStatus("failure-bonus funded-vs-advertised ratio"), "computed");
+    assert.equal(
+      publicMetricStatus(
+        "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count",
+      ),
+      "computed",
+    );
     assert.equal(publicMetricStatus("failure-bonus utilization"), "computed");
     assert.equal(publicMetricStatus("failure-bonus denied-by-reason counts"), "computed");
     assert.equal(
@@ -5900,6 +5939,9 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       publicMetricStatus("Stage 4 base-match default-ratio local-definition validation failure count"),
       "computed",
     );
+    assert.equal(publicMetricStatus("selected sponsor-paid fee-support aggregate rejection count"), "computed");
+    assert.equal(publicMetricStatus("sponsor-paid fee quote backing-hash mismatch count"), "computed");
+    assert.equal(publicMetricStatus("sponsor-paid fee support aggregate overcommit rejection count"), "computed");
     assert.equal(publicMetricValue("pivotality calculator no-side-effect invariant violation count"), 1);
     assert.equal(publicMetricStatus("pivotality calculator no-side-effect invariant violation count"), "computed");
     assert.equal(

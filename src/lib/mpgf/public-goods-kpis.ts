@@ -1260,6 +1260,10 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     "base-match utilization": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchBudgetCents),
     "base-match claim-vs-paid ratio": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchAllocatedCents),
     "bonus-match utilization": rateBps(roundAllocation.qfBonusAllocatedCents, roundAllocation.qfBonusBudgetCents),
+    "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count": countAnalyticsEvents(
+      analyticsEvents,
+      "fee_quote_zero_allocation_due_to_binding_failure",
+    ),
     "failure-bonus utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
     "failure-bonus denied-by-reason counts": analyticsEvents.filter(
       (event) => event.event_type === "failure_bonus_claim_denied_by_reason",
@@ -1442,6 +1446,18 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     "Stage 4 base-match default-ratio local-definition validation failure count": countAnalyticsEvents(
       analyticsEvents,
       "stage4_base_match_default_ratio_local_definition_validation_failed",
+    ),
+    "selected sponsor-paid fee-support aggregate rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "selected_sponsor_paid_fee_support_aggregate_rejected",
+    ),
+    "sponsor-paid fee quote backing-hash mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_paid_fee_quote_backing_hash_mismatch",
+    ),
+    "sponsor-paid fee support aggregate overcommit rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_paid_fee_support_aggregate_overcommit_rejected",
     ),
     "donor retention into next round": retainedRecurringDonors3MonthBps,
     "appeal rate": rateBps(appealCaseCount, Math.max(1, reviewCases.length)),

@@ -3075,6 +3075,24 @@ export function validateMpgfCrecFeeQuote(
   return validationResult(blockers);
 }
 
+function buildMpgfCrecFeeQuoteAllocationKey(quote: MpgfCrecFeeQuote) {
+  if (
+    !isMpgfCrecNonEmptyTrimStableString(quote.roundId) ||
+    !isMpgfCrecNonEmptyTrimStableString(quote.commonGroundBudgetId) ||
+    !isMpgfCrecNonEmptyTrimStableString(quote.projectId) ||
+    !isMpgfCrecNonEmptyTrimStableString(quote.conditionalTradeIntentId)
+  ) {
+    return null;
+  }
+
+  return [
+    quote.roundId,
+    quote.commonGroundBudgetId,
+    quote.projectId,
+    quote.conditionalTradeIntentId,
+  ].join(":");
+}
+
 export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
   feeQuotes: unknown,
   selectedFeeQuoteIds: unknown,
@@ -3112,6 +3130,7 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
   }
 
   let demandCents = BigInt(0);
+  const selectedQuotesForAggregate: MpgfCrecFeeQuote[] = [];
   const quotesById = new Map<string, MpgfCrecFeeQuote[]>();
   for (const rawQuote of feeQuotes) {
     if (rawQuote != null && typeof rawQuote === "object") {
@@ -3130,6 +3149,7 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
     }
 
     const quote = matches[0];
+    selectedQuotesForAggregate.push(quote);
     const validation = validateMpgfCrecFeeQuote(quote, {
       ...expected,
       commonGroundBudgetId: quote.commonGroundBudgetId,
@@ -3147,6 +3167,20 @@ export function sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
       demandCents += BigInt(quote.feeCents);
     }
   });
+
+  const selectedAllocationKeys = selectedQuotesForAggregate.map(buildMpgfCrecFeeQuoteAllocationKey);
+  selectedAllocationKeys.forEach((allocationKey, index) => {
+    addBlocker(
+      blockers,
+      `selected_fee_quote_${selectedQuotesForAggregate[index]?.id ?? index}_allocation_key_invalid`,
+      allocationKey != null,
+    );
+  });
+  addBlocker(
+    blockers,
+    "selected_fee_quote_allocation_keys_duplicate",
+    !hasDuplicate(selectedAllocationKeys.filter((allocationKey): allocationKey is string => allocationKey != null)),
+  );
 
   if (demandCents > BigInt(Number.MAX_SAFE_INTEGER)) {
     blockers.push("selected_fee_quote_demand_sum_unsafe");

@@ -2946,7 +2946,10 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
     netRecipientDisbursedCents: 1_000,
     sponsorFeeBackingHash: sourceHash,
   });
-  const donorDeducted = feeQuote({ id: "fee-quote-donor-deducted" });
+  const donorDeducted = feeQuote({
+    id: "fee-quote-donor-deducted",
+    conditionalTradeIntentId: "intent-alix-clean-air-donor-fee",
+  });
   const result = sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
     [selectedSponsorPaid, donorDeducted],
     [selectedSponsorPaid.id, donorDeducted.id],
@@ -2979,6 +2982,32 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
 
   assert.equal(duplicateResult.eligible, false);
   assert.ok(duplicateResult.blockers.some((blocker) => blocker.includes("not_unique")));
+
+  const duplicateAllocationKey = feeQuote({
+    id: "fee-quote-sponsor-paid-copy",
+    feePayer: "sponsor_paid",
+    grossCapturedCents: 1_000,
+    feeCents: 45,
+    netRecipientDisbursedCents: 1_000,
+    sponsorFeeBackingHash: sourceHash,
+  });
+  const duplicateAllocationKeyResult = sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
+    [selectedSponsorPaid, duplicateAllocationKey],
+    [selectedSponsorPaid.id, duplicateAllocationKey.id],
+    {
+      roundId,
+      feePolicyVersion: bundle.feePolicyVersion,
+      feePolicyHash: bundle.feePolicyHash,
+      sponsorPoolSourceHash: sourceHash,
+      backedFeeSupportPoolCents: 90,
+      roundCloseBundleEligible: true,
+    },
+  );
+
+  assert.equal(duplicateAllocationKeyResult.eligible, false);
+  assert.ok(
+    duplicateAllocationKeyResult.blockers.includes("selected_fee_quote_allocation_keys_duplicate"),
+  );
 
   const underBacked = sumSelectedMpgfCrecSponsorPaidFeeSupportDemand(
     [selectedSponsorPaid],
