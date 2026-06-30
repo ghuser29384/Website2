@@ -5387,6 +5387,30 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           created_at: "2026-05-03T14:23:30.000Z",
         },
         {
+          event_type: "failure_bonus_participant_proration_stable_order_key_validation_failed",
+          campaign_id: null,
+          event_json: { validationCategory: "stable_order_key_invalid", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:31.000Z",
+        },
+        {
+          event_type: "failure_bonus_participant_proration_undefined_helper_prevented",
+          campaign_id: null,
+          event_json: { helperFamily: "participant_round_proration", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:32.000Z",
+        },
+        {
+          event_type: "failure_bonus_round_level_proration_undefined_helper_prevented",
+          campaign_id: null,
+          event_json: { helperFamily: "round_level_proration", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:33.000Z",
+        },
+        {
+          event_type: "failure_bonus_exact_target_proration_underallocation_prevented",
+          campaign_id: null,
+          event_json: { arithmetic: "target_denominator_remainder", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:23:34.000Z",
+        },
+        {
           event_type: "failure_bonus_paid",
           campaign_id: null,
           event_json: {
@@ -5710,7 +5734,11 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricValue("failure-bonus utilization"), 5000);
     assert.equal(publicMetricValue("failure-bonus denied-by-reason counts"), 1);
     assert.equal(publicMetricValue("failure-bonus raw-vs-participant-capped ratio"), 7143);
+    assert.equal(publicMetricValue("failure-bonus participant-proration stable-order-key validation failure count"), 1);
+    assert.equal(publicMetricValue("failure-bonus participant-proration undefined-helper prevention count"), 1);
+    assert.equal(publicMetricValue("failure-bonus round-level proration undefined-helper prevention count"), 1);
     assert.equal(publicMetricValue("failure-bonus provisional-vs-paid ratio"), 6429);
+    assert.equal(publicMetricValue("failure-bonus exact target-proration underallocation prevention count"), 1);
     assert.equal(publicMetricValue("failure-bonus proration factor bps"), 9000);
     assert.equal(publicMetricValue("failure-bonus backed-available-pool utilization"), 5000);
     assert.ok(
@@ -5787,6 +5815,22 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricStatus("failure-bonus funded-vs-advertised ratio"), "computed");
     assert.equal(publicMetricStatus("failure-bonus utilization"), "computed");
     assert.equal(publicMetricStatus("failure-bonus denied-by-reason counts"), "computed");
+    assert.equal(
+      publicMetricStatus("failure-bonus participant-proration stable-order-key validation failure count"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("failure-bonus participant-proration undefined-helper prevention count"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("failure-bonus round-level proration undefined-helper prevention count"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("failure-bonus exact target-proration underallocation prevention count"),
+      "computed",
+    );
     assert.equal(publicMetricStatus("failure-bonus proration factor bps"), "computed");
     assert.equal(publicMetricStatus("success-reward funded-vs-advertised ratio"), "computed");
     assert.equal(publicMetricStatus("success-reward utilization"), "computed");

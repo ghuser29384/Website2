@@ -1268,7 +1268,23 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       failureBonusParticipantCappedCents,
       failureBonusProvisionalCents,
     ),
+    "failure-bonus participant-proration stable-order-key validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_participant_proration_stable_order_key_validation_failed",
+    ),
+    "failure-bonus participant-proration undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_participant_proration_undefined_helper_prevented",
+    ),
+    "failure-bonus round-level proration undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_round_level_proration_undefined_helper_prevented",
+    ),
     "failure-bonus provisional-vs-paid ratio": rateBps(failureBonusPaidCents, failureBonusProvisionalCents),
+    "failure-bonus exact target-proration underallocation prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_exact_target_proration_underallocation_prevented",
+    ),
     "failure-bonus proration factor bps": rateBps(failureBonusPaidCents, failureBonusParticipantCappedCents),
     "failure-bonus backed-available-pool utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
     "non-binding settlement-preview dollars excluded from clearing": 0,

@@ -40,6 +40,7 @@ import {
   hashMpgfCrecV1125Value,
   intersectMpgfCrecTrimStableStringArrays,
   minMpgfCrecNonNegativeSafeInteger,
+  prorateMpgfCrecFailureBonusClaims,
   resolveMpgfCrecAllocatorStateInputs,
   resolveMpgfCrecCommonGroundBudgetAllocationInputs,
   resolveMpgfCrecConditionalIntentAllocationInputs,
@@ -3763,6 +3764,120 @@ test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, 
   });
   assert.equal(unbacked.eligible, false);
   assert.ok(unbacked.blockers.includes("failure_bonus_backed_pool_not_positive_for_mutation"));
+});
+
+test("CRECM v1.125 failure-bonus proration is participant-capped, exact, and stable-keyed", () => {
+  const context = {
+    roundId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    roundStatus: "payable",
+    backedFailureBonusPoolCents: 200,
+    earlyFailureBonusCutoff,
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+  };
+  const firstClaim = failureBonusClaim({
+    id: "failure-claim-a1",
+    conditionalTradeIntentId: "intent-alix-clean-air-a1",
+    rawBonusCents: 100,
+    participantRoundCapCents: 120,
+    participantCappedProvisionalBonusCents: 0,
+    bonusCents: 0,
+    finalFailureBonusCents: 0,
+  });
+  const secondClaim = failureBonusClaim({
+    id: "failure-claim-a2",
+    conditionalTradeIntentId: "intent-alix-clean-air-a2",
+    rawBonusCents: 50,
+    participantRoundCapCents: 120,
+    participantCappedProvisionalBonusCents: 0,
+    bonusCents: 0,
+    finalFailureBonusCents: 0,
+  });
+  const thirdClaim = failureBonusClaim({
+    id: "failure-claim-b1",
+    participantId: "participant-blair",
+    commonGroundBudgetId: "budget-blair",
+    conditionalTradeIntentId: "intent-blair-clean-air-b1",
+    rawBonusCents: 100,
+    participantRoundCapCents: 100,
+    participantCappedProvisionalBonusCents: 0,
+    bonusCents: 0,
+    finalFailureBonusCents: 0,
+  });
+
+  const result = prorateMpgfCrecFailureBonusClaims([firstClaim, secondClaim, thirdClaim], context);
+
+  assert.equal(result.eligible, true);
+  assert.deepEqual(result.claimIds, ["failure-claim-a1", "failure-claim-a2", "failure-claim-b1"]);
+  assert.deepEqual(result.participantRawBonusTotalCentsByParticipantId, {
+    "participant-alix": "150",
+    "participant-blair": "100",
+  });
+  assert.equal(result.participantProrationFactorBpsByParticipantId["participant-alix"], 8000);
+  assert.equal(result.participantProrationFactorBpsByParticipantId["participant-blair"], 10_000);
+  assert.equal(result.aggregateParticipantCappedProvisionalCents, "220");
+  assert.equal(result.targetPayoutCents, 200);
+  assert.equal(result.roundProrationFactorBps, 9090);
+
+  const claimsById = Object.fromEntries(result.claims.map((claim) => [claim.id, claim]));
+  assert.equal(claimsById["failure-claim-a1"]?.participantCappedProvisionalBonusCents, 80);
+  assert.equal(claimsById["failure-claim-a2"]?.participantCappedProvisionalBonusCents, 40);
+  assert.equal(claimsById["failure-claim-b1"]?.participantCappedProvisionalBonusCents, 100);
+  assert.equal(
+    result.claims.reduce((sum, claim) => sum + claim.finalFailureBonusCents, 0),
+    200,
+  );
+  assert.equal(claimsById["failure-claim-a1"]?.finalFailureBonusCents, 73);
+  assert.equal(claimsById["failure-claim-a2"]?.finalFailureBonusCents, 36);
+  assert.equal(claimsById["failure-claim-b1"]?.finalFailureBonusCents, 91);
+  assert.match(claimsById["failure-claim-a1"]?.participantProrationStableOrderKey ?? "", /^sha256:/);
+  assert.match(claimsById["failure-claim-a1"]?.roundProrationStableOrderKey ?? "", /^sha256:/);
+});
+
+test("CRECM v1.125 failure-bonus proration fails closed on ambiguous claim lists", () => {
+  const context = {
+    roundId,
+    failureBonusPolicyVersion: "failure-bonus-v1",
+    roundStatus: "payable",
+    backedFailureBonusPoolCents: 200,
+    earlyFailureBonusCutoff,
+    claimantConflictSourceCutoff: roundCloseSourceCutoff,
+  };
+  const firstClaim = failureBonusClaim({
+    id: "failure-claim-a1",
+    conditionalTradeIntentId: "intent-alix-clean-air-a1",
+    participantRoundCapCents: 120,
+  });
+  const duplicateIdentityKey = failureBonusClaim({
+    id: "failure-claim-a1-duplicate-row",
+    conditionalTradeIntentId: "intent-alix-clean-air-a1",
+    participantRoundCapCents: 120,
+  });
+
+  const duplicateKeyResult = prorateMpgfCrecFailureBonusClaims(
+    [firstClaim, duplicateIdentityKey],
+    context,
+  );
+  assert.equal(duplicateKeyResult.eligible, false);
+  assert.ok(duplicateKeyResult.blockers.includes("failure_bonus_claim_identity_keys_duplicate"));
+
+  const participantCapMismatch = prorateMpgfCrecFailureBonusClaims(
+    [
+      firstClaim,
+      failureBonusClaim({
+        id: "failure-claim-a2",
+        conditionalTradeIntentId: "intent-alix-clean-air-a2",
+        participantRoundCapCents: 80,
+      }),
+    ],
+    context,
+  );
+  assert.equal(participantCapMismatch.eligible, false);
+  assert.ok(
+    participantCapMismatch.blockers.includes(
+      "failure_bonus_participant_participant-alix_cap_not_single_value",
+    ),
+  );
 });
 
 test("CRECM v1.125 failure-bonus claim creation initializes defaults and is idempotent by claim key", () => {

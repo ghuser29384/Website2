@@ -1548,6 +1548,23 @@ export interface MpgfCrecFailureBonusClaimListResult {
   claimIds: string[];
 }
 
+export interface MpgfCrecFailureBonusProratedClaim extends MpgfCrecFailureBonusClaimRecord {
+  participantProrationStableOrderKey: string;
+  roundProrationStableOrderKey: string;
+}
+
+export interface MpgfCrecFailureBonusProrationResult {
+  eligible: boolean;
+  blockers: string[];
+  claims: MpgfCrecFailureBonusProratedClaim[];
+  claimIds: string[];
+  participantRawBonusTotalCentsByParticipantId: Record<string, string>;
+  participantProrationFactorBpsByParticipantId: Record<string, number>;
+  aggregateParticipantCappedProvisionalCents: string;
+  targetPayoutCents: number;
+  roundProrationFactorBps: number;
+}
+
 export type MpgfCrecFailureBonusClaimCreationMode =
   | "qualified_payout_path"
   | "intake_only_review";
@@ -5765,9 +5782,19 @@ function selectMpgfCrecFailureBonusClaimsForMutation(
   });
   const blockers = [...gate.blockers];
   const claimIds = claims.map((claim) => claim.id);
+  const claimIdentityKeys = claims.map((claim) => buildMpgfCrecFailureBonusClaimKey(claim));
+  const validClaimIdentityKeys = claimIdentityKeys.filter((key): key is string => key != null);
 
   validateMpgfCrecFailureBonusClaimListContext(context, blockers);
   addBlocker(blockers, "failure_bonus_claim_ids_duplicate", !hasDuplicate(claimIds));
+  claimIdentityKeys.forEach((key, index) => {
+    addBlocker(blockers, `failure_bonus_claim_${index}_identity_key_invalid`, key != null);
+  });
+  addBlocker(
+    blockers,
+    "failure_bonus_claim_identity_keys_duplicate",
+    !hasDuplicate(validClaimIdentityKeys),
+  );
 
   claims.forEach((claim, index) => {
     validateMpgfCrecFailureBonusClaimRecord(claim, context, blockers, index, mode);
@@ -5795,6 +5822,263 @@ export function selectMpgfCrecFinalFailureBonusPayoutClaims(
   context: MpgfCrecFailureBonusClaimListContext,
 ) {
   return selectMpgfCrecFailureBonusClaimsForMutation(claims, context, "final_payout");
+}
+
+type MpgfCrecProrationAmountRow = {
+  id: string;
+  amountCents: number;
+  stableOrderKey: string;
+};
+
+type MpgfCrecProrationAmountResult = {
+  eligible: boolean;
+  blockers: string[];
+  allocationsById: Record<string, number>;
+  totalInputCents: bigint;
+  targetPayoutCents: number;
+  prorationFactorBps: number;
+};
+
+function prorateMpgfCrecNonNegativeCentsByStableOrder(
+  rows: readonly MpgfCrecProrationAmountRow[],
+  targetPayoutCents: unknown,
+  blockerPrefix: string,
+): MpgfCrecProrationAmountResult {
+  const blockers: string[] = [];
+  const ids = rows.map((row) => row.id);
+
+  addBlocker(blockers, `${blockerPrefix}_target_invalid`, isNonNegativeSafeIntegerCents(targetPayoutCents));
+  addBlocker(blockers, `${blockerPrefix}_ids_duplicate`, !hasDuplicate(ids));
+
+  rows.forEach((row, index) => {
+    addBlocker(blockers, `${blockerPrefix}_${index}_id_invalid`, isMpgfCrecNonEmptyTrimStableString(row.id));
+    addBlocker(blockers, `${blockerPrefix}_${index}_amount_invalid`, isNonNegativeSafeIntegerCents(row.amountCents));
+    addBlocker(blockers, `${blockerPrefix}_${index}_stable_order_key_invalid`, isMpgfCrecCanonicalHash(row.stableOrderKey));
+  });
+
+  const eligible = blockers.length === 0;
+  const safeTargetPayoutCents = eligible ? Number(targetPayoutCents) : 0;
+  const totalInputCents = eligible ? sumMpgfCrecNonNegativeBigInt(rows.map((row) => row.amountCents)) : BigInt(0);
+  const totalInputPositive = totalInputCents > BigInt(0);
+
+  if (!eligible || !totalInputPositive || safeTargetPayoutCents === 0) {
+    return {
+      eligible,
+      blockers,
+      allocationsById: Object.fromEntries(ids.map((id) => [id, 0])),
+      totalInputCents,
+      targetPayoutCents: safeTargetPayoutCents,
+      prorationFactorBps: totalInputPositive ? 0 : 10_000,
+    };
+  }
+
+  if (BigInt(safeTargetPayoutCents) >= totalInputCents) {
+    return {
+      eligible: true,
+      blockers: [],
+      allocationsById: Object.fromEntries(rows.map((row) => [row.id, row.amountCents])),
+      totalInputCents,
+      targetPayoutCents: Number(totalInputCents),
+      prorationFactorBps: 10_000,
+    };
+  }
+
+  const targetExact = BigInt(safeTargetPayoutCents);
+  const allocatedBaseRows = rows.map((row) => {
+    const rawNumerator = BigInt(row.amountCents) * targetExact;
+    const baseCents = rawNumerator / totalInputCents;
+    const remainder = rawNumerator % totalInputCents;
+
+    return {
+      ...row,
+      baseCents,
+      remainder,
+    };
+  });
+  const baseTotalCents = sumMpgfCrecNonNegativeBigInt(allocatedBaseRows.map((row) => row.baseCents));
+  const leftoverCents = Number(targetExact - baseTotalCents);
+  const allocationEntries = allocatedBaseRows.map((row) => [row.id, Number(row.baseCents)] as const);
+  const allocationsById: Record<string, number> = Object.fromEntries(allocationEntries);
+
+  [...allocatedBaseRows]
+    .sort((left, right) => {
+      if (left.remainder > right.remainder) {
+        return -1;
+      }
+      if (left.remainder < right.remainder) {
+        return 1;
+      }
+      return left.stableOrderKey.localeCompare(right.stableOrderKey);
+    })
+    .slice(0, leftoverCents)
+    .forEach((row) => {
+      allocationsById[row.id] += 1;
+    });
+
+  return {
+    eligible: true,
+    blockers: [],
+    allocationsById,
+    totalInputCents,
+    targetPayoutCents: safeTargetPayoutCents,
+    prorationFactorBps: Number((targetExact * BigInt(10_000)) / totalInputCents),
+  };
+}
+
+function buildMpgfCrecFailureBonusProrationStableOrderKey(
+  scope: "participant_round_cap" | "round_level_final_payout",
+  claim: MpgfCrecFailureBonusClaimRecord,
+) {
+  return hashMpgfCrecV1125Value({
+    scope,
+    roundId: claim.roundId,
+    participantId: claim.participantId,
+    claimId: claim.id,
+    failureBonusPolicyVersion: claim.failureBonusPolicyVersion,
+  });
+}
+
+export function prorateMpgfCrecFailureBonusClaims(
+  claims: readonly MpgfCrecFailureBonusClaimRecord[],
+  context: MpgfCrecFailureBonusClaimListContext,
+): MpgfCrecFailureBonusProrationResult {
+  const selection = selectMpgfCrecFinalFailureBonusPayoutClaims(claims, context);
+  const blockers = [...selection.blockers];
+
+  if (!selection.eligible) {
+    return {
+      eligible: false,
+      blockers,
+      claims: [],
+      claimIds: [],
+      participantRawBonusTotalCentsByParticipantId: {},
+      participantProrationFactorBpsByParticipantId: {},
+      aggregateParticipantCappedProvisionalCents: "0",
+      targetPayoutCents: 0,
+      roundProrationFactorBps: 0,
+    };
+  }
+
+  const participantIds = stableStringArray([...new Set(selection.claims.map((claim) => claim.participantId))]);
+  const participantRawBonusTotalCentsByParticipantId: Record<string, string> = {};
+  const participantProrationFactorBpsByParticipantId: Record<string, number> = {};
+  const provisionalClaims: MpgfCrecFailureBonusProratedClaim[] = [];
+
+  for (const participantId of participantIds) {
+    const participantClaims = selection.claims.filter((claim) => claim.participantId === participantId);
+    const participantCapValues = stableStringArray([
+      ...new Set(participantClaims.map((claim) => String(claim.participantRoundCapCents))),
+    ]);
+
+    addBlocker(
+      blockers,
+      `failure_bonus_participant_${participantId}_cap_not_single_value`,
+      participantCapValues.length === 1,
+    );
+
+    const participantCapCents =
+      participantClaims.length > 0 ? participantClaims[0].participantRoundCapCents : 0;
+
+    const participantRows = participantClaims.map((claim) => ({
+      id: claim.id,
+      amountCents: claim.rawBonusCents,
+      stableOrderKey: buildMpgfCrecFailureBonusProrationStableOrderKey("participant_round_cap", claim),
+    }));
+    const participantProration = prorateMpgfCrecNonNegativeCentsByStableOrder(
+      participantRows,
+      participantCapCents,
+      `failure_bonus_participant_${participantId}_proration`,
+    );
+
+    blockers.push(...participantProration.blockers);
+    participantRawBonusTotalCentsByParticipantId[participantId] =
+      participantProration.totalInputCents.toString();
+    participantProrationFactorBpsByParticipantId[participantId] =
+      participantProration.prorationFactorBps;
+
+    for (const claim of participantClaims) {
+      const participantCappedProvisionalBonusCents =
+        participantProration.allocationsById[claim.id] ?? 0;
+      provisionalClaims.push({
+        ...claim,
+        participantCappedProvisionalBonusCents,
+        bonusCents: participantCappedProvisionalBonusCents,
+        finalFailureBonusCents: 0,
+        prorationFactorBps: participantProration.prorationFactorBps,
+        participantProrationStableOrderKey: buildMpgfCrecFailureBonusProrationStableOrderKey(
+          "participant_round_cap",
+          claim,
+        ),
+        roundProrationStableOrderKey: buildMpgfCrecFailureBonusProrationStableOrderKey(
+          "round_level_final_payout",
+          claim,
+        ),
+      });
+    }
+  }
+
+  if (blockers.length > 0) {
+    return {
+      eligible: false,
+      blockers,
+      claims: [],
+      claimIds: [],
+      participantRawBonusTotalCentsByParticipantId,
+      participantProrationFactorBpsByParticipantId,
+      aggregateParticipantCappedProvisionalCents: "0",
+      targetPayoutCents: 0,
+      roundProrationFactorBps: 0,
+    };
+  }
+
+  const aggregateParticipantCappedProvisionalCents = sumMpgfCrecNonNegativeBigInt(
+    provisionalClaims.map((claim) => claim.participantCappedProvisionalBonusCents),
+  );
+  const targetPayoutCents =
+    aggregateParticipantCappedProvisionalCents <= BigInt(context.backedFailureBonusPoolCents)
+      ? Number(aggregateParticipantCappedProvisionalCents)
+      : context.backedFailureBonusPoolCents;
+  const roundProration = prorateMpgfCrecNonNegativeCentsByStableOrder(
+    provisionalClaims.map((claim) => ({
+      id: claim.id,
+      amountCents: claim.participantCappedProvisionalBonusCents,
+      stableOrderKey: claim.roundProrationStableOrderKey,
+    })),
+    targetPayoutCents,
+    "failure_bonus_round_proration",
+  );
+
+  if (!roundProration.eligible) {
+    return {
+      eligible: false,
+      blockers: roundProration.blockers,
+      claims: [],
+      claimIds: [],
+      participantRawBonusTotalCentsByParticipantId,
+      participantProrationFactorBpsByParticipantId,
+      aggregateParticipantCappedProvisionalCents: aggregateParticipantCappedProvisionalCents.toString(),
+      targetPayoutCents: 0,
+      roundProrationFactorBps: 0,
+    };
+  }
+
+  const proratedClaims = provisionalClaims.map((claim) => ({
+    ...claim,
+    finalFailureBonusCents: roundProration.allocationsById[claim.id] ?? 0,
+    prorationFactorBps: roundProration.prorationFactorBps,
+  }));
+
+  return {
+    eligible: true,
+    blockers: [],
+    claims: proratedClaims,
+    claimIds: proratedClaims.map((claim) => claim.id),
+    participantRawBonusTotalCentsByParticipantId,
+    participantProrationFactorBpsByParticipantId,
+    aggregateParticipantCappedProvisionalCents: aggregateParticipantCappedProvisionalCents.toString(),
+    targetPayoutCents: roundProration.targetPayoutCents,
+    roundProrationFactorBps: roundProration.prorationFactorBps,
+  };
 }
 
 function buildMpgfCrecFailureBonusClaimFromCreationInput(
