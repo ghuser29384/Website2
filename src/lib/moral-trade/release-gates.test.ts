@@ -82,11 +82,11 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
     contract.stages.some(
       (stage) =>
         stage.key === "capped_real_money_external_crecm_module" &&
-        stage.label === "Capped real-money external CRECM module handoff" &&
-        /External CRECM handoff/.test(stage.hardBlockerSummary),
+        stage.label === "Capped real-money Public Goods Fund handoff" &&
+        /Public Goods Fund handoff/.test(stage.hardBlockerSummary),
     ),
   );
-  assert.equal(contract.stages.some((stage) => /Public Goods Fund module/i.test(stage.label)), false);
+  assert.equal(contract.stages.some((stage) => /external CRECM module/i.test(stage.label)), false);
   assert.ok(contract.stages.some((stage) => stage.key === "demo" && !stage.payable));
   assert.ok(
     contract.stages.some(

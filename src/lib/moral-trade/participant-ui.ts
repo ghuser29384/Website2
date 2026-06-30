@@ -643,7 +643,7 @@ export const PARTICIPANT_UI_SAMPLE_SCREENS: MoralTradeParticipantUiSurfaceRecord
     taskCardStatusLabel: "Create from template",
     oneSentenceSummary: "Start from reviewed donation-offset or micro-pledge templates, or view examples.",
     keyFacts: [
-      "Live, preview-only, worked-example, demo, and external CRECM module cards are separated.",
+      "Live, preview-only, worked-example, demo, and Public Goods Fund cards are separated.",
       "Food-abstention defaults are one meal, a few meals, one day, or a few days.",
       "Templates show evidence ladder, per-unit band, money movement, recipient review, and manual-review state.",
     ],

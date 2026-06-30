@@ -906,7 +906,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
   },
   {
     key: "capped_real_money_external_crecm_module",
-    label: "Capped real-money external CRECM module handoff",
+    label: "Capped real-money Public Goods Fund handoff",
     featureFlagKey: "moral_trade_external_crecm_module",
     payable: true,
     relianceBearing: true,
@@ -914,7 +914,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     requiredRequirementKeys: [...CRECM_HANDOFF_REQUIRED_REQUIREMENTS],
     inactiveRequirementKeys: inactiveDocumentRequirements(CRECM_HANDOFF_REQUIRED_REQUIREMENTS),
     hardBlockerSummary:
-      "External CRECM handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
+      "Public Goods Fund handoff stays boundary-only here and requires payment, evidence, reviewer, emergency, deployment, migration, rollback, and environment gates before any capped real-money module handoff.",
   },
   {
     key: "donation_offset_pilot",

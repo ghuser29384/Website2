@@ -10,6 +10,7 @@ import {
   buildMpgfContributionSettlementSummary,
   MPGF_CONTRIBUTION_PROOF_LEDGER_SCHEMA_VERSION,
 } from "@/lib/mpgf/public-goods-contribution-ledger";
+import { MPGF_CRECM_PLAIN_LANGUAGE_LABELS } from "@/lib/mpgf/public-goods-crecm-labels";
 import type { MpgfRealMoneyAccountState } from "@/lib/mpgf/real-money-types";
 
 function participantStateWithPledge(): MpgfParticipantState {
@@ -68,11 +69,24 @@ test("MPGF contribution proof ledger exposes the moraltrade60 participant fields
   assert.equal(ledger.settlementSummary.summaryNumbersMustNotCombineChannels, true);
   assert.equal(ledger.settlementSummary.groups.charged.lines[0].technicalField, "grossCapturedCents");
   assert.equal(ledger.settlementSummary.groups.charged.lines[0].cents, demoMpgfAssurancePledges[0].amountCents);
+  assert.equal(
+    ledger.settlementSummary.groups.sent_to_projects.label,
+    MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sentToProject,
+  );
   assert.equal(ledger.settlementSummary.groups.sent_to_projects.lines[0].technicalField, "netRecipientDisbursedCents");
   assert.equal(ledger.settlementSummary.groups.sent_to_projects.lines[0].includedInSentToProjects, true);
+  assert.equal(
+    ledger.settlementSummary.groups.counted_for_matching.label,
+    MPGF_CRECM_PLAIN_LANGUAGE_LABELS.countsForMatching,
+  );
   assert.equal(ledger.settlementSummary.groups.counted_for_matching.lines[1].technicalField, "matchEligibleContributionCents");
   assert.equal(ledger.settlementSummary.groups.counted_for_matching.lines[1].includedInMatchEligibleDollars, true);
+  assert.equal(ledger.settlementSummary.groups.sponsor_added.label, MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sponsorAdded);
   assert.equal(ledger.settlementSummary.groups.sponsor_added.lines[0].technicalField, "sponsorBaseMatchCents");
+  assert.equal(
+    ledger.settlementSummary.groups.rewards_credits_certificates.label,
+    MPGF_CRECM_PLAIN_LANGUAGE_LABELS.contributorBenefit,
+  );
   assert.equal(ledger.settlementSummary.groups.rewards_credits_certificates.lines[1].technicalField, "coordinationCreditCount");
   assert.equal(ledger.settlementSummary.groups.failed_carry_forward.lines[1].technicalField, "carryForwardCreditCents");
   assert.equal(ledger.rows[0].settlementSummary.groups.charged.lines[0].technicalField, "grossCapturedCents");
@@ -111,15 +125,22 @@ test("MPGF contribution settlement summary keeps plain groups separate from tech
     "rewards_credits_certificates",
     "failed_carry_forward",
   ]);
+  assert.equal(summary.groups.sent_to_projects.label, MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sentToProject);
   assert.equal(summary.groups.charged.lines[0].cents, 1_200);
   assert.equal(summary.groups.sent_to_projects.lines[0].cents, 1_100);
   assert.equal(summary.groups.sent_to_projects.lines[0].includedInSentToProjects, true);
+  assert.equal(summary.groups.counted_for_matching.label, MPGF_CRECM_PLAIN_LANGUAGE_LABELS.countsForMatching);
   assert.equal(summary.groups.counted_for_matching.lines[0].cents, 1_000);
   assert.equal(summary.groups.counted_for_matching.lines[1].cents, 900);
   assert.equal(summary.groups.counted_for_matching.lines[1].includedInMatchEligibleDollars, true);
+  assert.equal(summary.groups.sponsor_added.label, MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sponsorAdded);
   assert.deepEqual(
     summary.groups.sponsor_added.lines.map((line) => line.technicalField),
     ["sponsorBaseMatchCents", "sponsorBonusMatchCents"],
+  );
+  assert.equal(
+    summary.groups.rewards_credits_certificates.label,
+    MPGF_CRECM_PLAIN_LANGUAGE_LABELS.contributorBenefit,
   );
   assert.deepEqual(
     summary.groups.rewards_credits_certificates.lines.map((line) => line.technicalField),
@@ -154,11 +175,12 @@ test("MPGF contribution page renders the moraltrade60 contribution state surface
   assert.match(component, /Plain summary/);
   assert.match(component, /ledger\.settlementSummary\.groupOrder/);
   assert.match(component, /settlementGroupText/);
+  assert.match(helper, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS/);
   assert.match(helper, /Charged from you/);
-  assert.match(helper, /Sent to projects/);
-  assert.match(helper, /Counted for matching/);
-  assert.match(helper, /Sponsor added/);
-  assert.match(helper, /Rewards, credits, and certificates/);
+  assert.match(helper, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS\.sentToProject/);
+  assert.match(helper, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS\.countsForMatching/);
+  assert.match(helper, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS\.sponsorAdded/);
+  assert.match(helper, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS\.contributorBenefit/);
   assert.match(helper, /Failed or carried forward/);
   assert.match(component, /Summary numbers keep accounting channels separate/);
   assert.match(component, /sent-to-project dollars exclude fees/);

@@ -6,6 +6,7 @@ import {
 } from "./data";
 import { allocateMpgfAssuranceRound, getMpgfCampaignAssuranceStatus } from "./mechanism";
 import type { MpgfParticipantState } from "./participant-types";
+import { MPGF_CRECM_PLAIN_LANGUAGE_LABELS } from "./public-goods-crecm-labels";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import type { MpgfRealMoneyAccountState } from "./real-money-types";
 import type {
@@ -666,7 +667,7 @@ export function buildMpgfContributionSettlementSummary({
     },
     sent_to_projects: {
       key: "sent_to_projects",
-      label: "Sent to projects",
+      label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sentToProject,
       lines: [
         centsLine("Net recipient-disbursed", "netRecipientDisbursedCents", accounting.netRecipientDisbursedCents, {
           includedInSentToProjects: true,
@@ -675,7 +676,7 @@ export function buildMpgfContributionSettlementSummary({
     },
     counted_for_matching: {
       key: "counted_for_matching",
-      label: "Counted for matching",
+      label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.countsForMatching,
       lines: [
         centsLine("Counted contribution", "countedContributionCents", accounting.countedContributionCents),
         centsLine(
@@ -688,7 +689,7 @@ export function buildMpgfContributionSettlementSummary({
     },
     sponsor_added: {
       key: "sponsor_added",
-      label: "Sponsor added",
+      label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.sponsorAdded,
       lines: [
         centsLine("Sponsor base match", "sponsorBaseMatchCents", accounting.sponsorBaseMatchCents),
         centsLine("Sponsor bonus match", "sponsorBonusMatchCents", accounting.sponsorBonusMatchCents),
@@ -696,7 +697,7 @@ export function buildMpgfContributionSettlementSummary({
     },
     rewards_credits_certificates: {
       key: "rewards_credits_certificates",
-      label: "Rewards, credits, and certificates",
+      label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.contributorBenefit,
       lines: [
         centsLine("Success rewards", "successRewardCents", accounting.successRewardCents),
         countLine("Coordination credits", "coordinationCreditCount", accounting.coordinationCreditCount),
