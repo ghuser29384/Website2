@@ -57,6 +57,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_user_facing_status_contract" &&
+        route.path === "/api/moral-trade/user-facing-status/contract" &&
+        route.responseSchema === "user_facing_status_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_participant_confirmation_contract" &&
         route.path === "/api/moral-trade/participant-confirmations/contract" &&
         route.responseSchema === "participant_confirmation_contract_response",

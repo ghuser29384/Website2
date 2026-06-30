@@ -112,8 +112,11 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_policy_snapshots"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_release_gate_requirement_results"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_privileged_action_records"));
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_user_facing_status_policies"));
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_user_facing_status_records"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("state_interpretation"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("refund_cancellation"));
+  assert.ok(contract.immutablePolicySnapshotSubjects.includes("user_facing_status"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("noncompensable_blocker"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("batch_clearing_objective"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("sensitive_evidence_attestation"));

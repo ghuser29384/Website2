@@ -162,6 +162,8 @@ const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_privileged_action_records",
   "moral_trade_participant_confirmation_records",
   "moral_trade_consent_quality_records",
+  "moral_trade_user_facing_status_policies",
+  "moral_trade_user_facing_status_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = [
@@ -171,6 +173,7 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "payout_release",
   "refund_cancellation",
   "provider_source_authentication",
+  "user_facing_status",
   "time_authority",
   "notification",
   "fx",

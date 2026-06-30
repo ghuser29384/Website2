@@ -4175,8 +4175,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.74-2026-06/);
-  assert.match(apiContractProfile, /user-facing blocker explanation governance/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.75-2026-06/);
+  assert.match(apiContractProfile, /user-facing status\/blocker explanation governance/);
+  assert.match(apiContractProfile, /user_facing_status_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_user_facing_status_contract/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
   assert.match(apiContractProfile, /review_workflow_evaluate_request/);

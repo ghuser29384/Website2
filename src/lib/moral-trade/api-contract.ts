@@ -162,6 +162,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_behavioral_micro_pledge_contract",
   "moral_trade_payment_event_contract",
   "moral_trade_provider_source_authentication_contract",
+  "moral_trade_user_facing_status_contract",
   "moral_trade_marketplace_state_event_contract",
   "moral_trade_payment_authorization_contract",
   "moral_trade_negative_commitment_scope_contract",
