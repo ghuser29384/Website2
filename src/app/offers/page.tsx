@@ -118,7 +118,7 @@ const DIRECTORY_TABS = [
   { label: "Create from template", value: "templates" },
   { label: "Worked examples", value: "worked_examples" },
   { label: "Demo data", value: "demo" },
-  { label: "Public Goods Fund", value: "public_goods" },
+  { label: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneLabel, value: "public_goods" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
@@ -192,7 +192,7 @@ const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
   all: "All listings",
   demo: "Demo data",
   live: "Live offers",
-  public_goods: "Public Goods Fund",
+  public_goods: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneLabel,
   templates: "Create from template",
   worked_examples: "Worked examples",
 };
@@ -200,6 +200,9 @@ const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
 const PUBLIC_GOODS_MODULE = {
   href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
   label: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel,
+  laneLabel: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneLabel,
+  laneStatus: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneStatus,
+  laneCtaLabel: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneCtaLabel,
   sourceNote: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   summary:
     "Public-goods rounds are linked from this marketplace but are not specified, counted, or promoted as live non-public-goods offers.",
@@ -993,12 +996,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     },
     {
       value: "public_goods",
-      label: "Public Goods Fund",
+      label: PUBLIC_GOODS_MODULE.laneLabel,
       href: createTabHref("public_goods", filterHrefParams),
       count: String(seedRoundCount),
-      status: "Public Goods Fund",
+      status: PUBLIC_GOODS_MODULE.laneStatus,
       description:
-        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the Public Goods Fund.",
+        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the separate CRECM module.",
     },
   ] satisfies Array<{
     value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
@@ -1107,7 +1110,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="hero-text">
               {publicGoodsSearchIntent
                 ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
-                : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund without mixing their counts."}
+                : "Explore live offers, reviewed templates, worked examples, demo data, and the external CRECM module without mixing their counts."}
             </p>
             {publicGoodsSearchIntent ? null : (
               <div className="collection-stats" aria-label="Marketplace counts">
@@ -1119,7 +1122,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   {workedExampleCount === 1 ? "example" : "examples"}
                 </span>
                 <span>
-                  <strong>{seedRoundCount}</strong> Public Goods Fund{" "}
+                  <strong>{seedRoundCount}</strong> external CRECM{" "}
                   {seedRoundCount === 1 ? "module" : "modules"}
                 </span>
                 <span>
@@ -1437,7 +1440,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="marketplace-bootstrap-head">
             <div>
               <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the Public Goods Fund.</h2>
+              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the external CRECM module.</h2>
               <p>
                 Live, template, worked-example, demo, and public-goods module surfaces stay
                 separated so the marketplace can build liquidity without implying custody, escrow,
@@ -1445,7 +1448,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </p>
             </div>
             <Link className="button button-primary" href={PUBLIC_GOODS_MODULE.href}>
-              Open Public Goods Fund
+              {PUBLIC_GOODS_MODULE.laneCtaLabel}
             </Link>
           </div>
 
@@ -1460,7 +1463,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <div className="marketplace-bootstrap-grid">
             <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-              <p className="eyebrow">Public Goods Fund</p>
+              <p className="eyebrow">{PUBLIC_GOODS_MODULE.laneLabel}</p>
               <h3>{demoMpgfAssuranceRound.name}</h3>
               <p>
                 {PUBLIC_GOODS_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
@@ -1494,7 +1497,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   Preview budget
                 </Link>
                 <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
-                  View Public Goods Fund
+                  {PUBLIC_GOODS_MODULE.laneCtaLabel}
                 </Link>
               </div>
             </article>
@@ -2064,7 +2067,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       <span>{seedRoundCount} linked moral public goods module</span>
                     </div>
                     <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-                      <p className="eyebrow">Public Goods Fund scope</p>
+                      <p className="eyebrow">{PUBLIC_GOODS_MODULE.laneLabel} scope</p>
                       <h4>{demoMpgfAssuranceRound.name}</h4>
                       <p>
                         {PUBLIC_GOODS_MODULE.summary} {PUBLIC_GOODS_MODULE.sourceNote}
@@ -2100,7 +2103,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           Preview a Common Ground Budget
                         </Link>
                         <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
-                          Open Public Goods Fund
+                          {PUBLIC_GOODS_MODULE.laneCtaLabel}
                         </Link>
                       </div>
                     </article>

@@ -778,7 +778,7 @@ function buildPublicOffersTabSummaries({
     },
     {
       value: "public_goods",
-      label: "Public Goods Fund",
+      label: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.marketplaceLaneLabel,
       count: getPublicMarketplaceRoundCount(),
       href: "/offers?tab=public_goods",
       source: "external_crecm_module",
@@ -1489,7 +1489,7 @@ export function validatePublicOffersCollectionPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and Public Goods Fund lanes",
+      "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and the external CRECM module lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
@@ -1660,7 +1660,7 @@ export function validatePublicOffersFacetsPayload(
     ),
     validationCheck(
       "marketplace-tab-separation",
-      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and Public Goods Fund lanes",
+      "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and the external CRECM module lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),

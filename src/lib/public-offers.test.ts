@@ -265,7 +265,7 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count, 1);
   assert.equal(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.label,
-    "Public Goods Fund",
+    "External CRECM module",
   );
   assert.match(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")

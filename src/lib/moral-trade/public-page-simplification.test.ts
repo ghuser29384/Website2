@@ -155,6 +155,7 @@ test("moraltrade82 offers route source keeps ranking internals out of default br
   assert.match(pagePrimitives, /<summary>Why this is reviewable<\/summary>/);
   assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
   assert.match(marketplaceBoundary, /CRECM v1\.96/);
+  assert.match(marketplaceBoundary, /external CRECM module/);
   assert.equal(offersPage.includes("Highest offered impact"), false);
   assert.equal(offersPage.includes("Highest example fit"), false);
   assert.equal(offersPage.includes("Impact scores"), false);

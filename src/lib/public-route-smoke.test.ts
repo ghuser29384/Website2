@@ -5439,6 +5439,8 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
   assert.match(marketplaceBoundary, /CRECM v1\.96/);
   assert.match(marketplaceBoundary, /userFacingLabel: "Common Ground Budget"/);
+  assert.match(marketplaceBoundary, /marketplaceLaneLabel: "External CRECM module"/);
+  assert.match(marketplaceBoundary, /marketplaceLaneCtaLabel: "Open external CRECM module"/);
   assert.match(marketplaceBoundary, /external CRECM module/);
   assert.equal(marketplaceBoundary.includes("moralpublicgoods131.md"), false);
   assert.equal(marketplaceBoundary.includes("CRECM v1.125"), false);
@@ -5480,7 +5482,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Start template/);
   assert.match(offersPage, /Demo records/);
   assert.match(offersPage, /Common Ground Marketplace/);
-  assert.match(offersPage, /Open Public Goods Fund/);
+  assert.match(offersPage, /laneCtaLabel: MARKETPLACE_PUBLIC_GOODS_BOUNDARY\.marketplaceLaneCtaLabel/);
   assert.match(offersPage, /Common Ground Budget result available/);
   assert.match(offersPage, /id="public-goods-result-card"/);
   assert.match(offersPage, /data-primary-result="common-ground-budget"/);
@@ -5579,7 +5581,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);
   assert.match(offersPage, /<h1>Browse offers<\/h1>/);
-  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund/);
+  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the external CRECM module/);
   assert.match(offersPage, /Create an offer/);
   assert.match(offersPage, /Save search/);
   assert.match(offersPage, /Worked example, not live liquidity/);
