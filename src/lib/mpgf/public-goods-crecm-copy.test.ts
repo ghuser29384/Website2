@@ -3,7 +3,10 @@ import test from "node:test";
 
 import {
   MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP,
+  MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
+  MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS,
+  MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
   MPGF_CRECM_COPY_VALIDATION_POLICY,
   validateMpgfCrecCopyAgainstRecordedState,
@@ -37,7 +40,7 @@ test("CRECM copy validation allows payment and custody disclaimers", () => {
     {
       surface: "common-ground-budget-review",
       text:
-        "No charge now; saved payment methods or JIT authorizations are not escrow, custody, funds held, or payment protection.",
+        "No charge now; saved payment methods or JIT authorizations are not legal escrow, are not custody-backed, and are not payment protection.",
     },
     recordedState(),
   );
@@ -89,14 +92,80 @@ test("CRECM copy bundle validation reports blocked surfaces and state hash", () 
   assert.equal(bundle.policy, MPGF_CRECM_COPY_VALIDATION_POLICY);
   assert.deepEqual(bundle.terminologyMap, MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP);
   assert.equal(bundle.plainLanguageCopyMap.ok, true);
+  assert.deepEqual(bundle.requiredSurfaceKinds, MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS);
+  assert.deepEqual(bundle.surfaceKinds, ["primary_ui"]);
+  assert.deepEqual(bundle.missingRequiredSurfaceKinds, [
+    "email",
+    "receipt",
+    "public_page",
+    "audit_adjacent_summary",
+  ]);
   assert.match(bundle.stateHash, /^sha256:/);
   assert.equal(bundle.surfaceCount, 2);
   assert.equal(bundle.blockedSurfaceCount, 1);
-  assert.deepEqual(bundle.blockers, [
-    "unsafe-benefits-copy:copy_claims_reward_without_fully_backed_success_reward_pool",
-    "unsafe-benefits-copy:copy_claims_coordination_credit_without_captured_contribution_row",
-    "unsafe-benefits-copy:copy_claims_impact_certificate_without_captured_contribution_row",
+  assert.ok(
+    bundle.blockers.includes(
+      "unsafe-benefits-copy:copy_claims_reward_without_fully_backed_success_reward_pool",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes(
+      "unsafe-benefits-copy:copy_claims_coordination_credit_without_captured_contribution_row",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes(
+      "unsafe-benefits-copy:copy_claims_impact_certificate_without_captured_contribution_row",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes("copy_validation_missing_required_publication_surface_email"),
+  );
+});
+
+test("CRECM copy bundle validation requires all publication surface kinds", () => {
+  const bundle = validateMpgfCrecPublishedCopyBundle(
+    [
+      {
+        surface: "primary-review",
+        surfaceKind: "primary_ui",
+        text: "No charge now; this page is not legal escrow and is not custody-backed.",
+      },
+      {
+        surface: "participant-email",
+        surfaceKind: "email",
+        text: "Your Common Ground Budget preview was saved; no money was charged or held.",
+      },
+      {
+        surface: "contribution-receipt",
+        surfaceKind: "receipt",
+        text: "Receipt fields keep gross, fee, net recipient, match, reward, credit, and certificate records separate.",
+      },
+      {
+        surface: "public-goods-entry-page",
+        surfaceKind: "public_page",
+        text: "Public Goods Fund pages explain matching without guaranteeing matching, impact, outcomes, escrow, custody, or payment protection.",
+      },
+      {
+        surface: "final-audit-summary",
+        surfaceKind: "audit_adjacent_summary",
+        text: "Audit summaries report recorded payment and matching fields without guaranteeing outcomes.",
+      },
+    ],
+    recordedState(),
+  );
+
+  assert.equal(bundle.ok, true);
+  assert.deepEqual(bundle.requiredSurfaceKinds, MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS);
+  assert.deepEqual(bundle.surfaceKinds, [
+    "primary_ui",
+    "email",
+    "receipt",
+    "public_page",
+    "audit_adjacent_summary",
   ]);
+  assert.deepEqual(bundle.missingRequiredSurfaceKinds, []);
+  assert.deepEqual(bundle.blockers, []);
 });
 
 test("CRECM plain-language copy map exposes every required canonical label", () => {
@@ -131,6 +200,62 @@ test("CRECM plain-language copy map exposes every required canonical label", () 
     "matchEligibleContributionCents",
   );
   assert.equal(validation.rows.every((row) => row.createsAlternateSemantics === false), true);
+});
+
+test("CRECM final review disclosure contract covers every simplified-UX required item", () => {
+  assert.deepEqual(MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS, [
+    "binding_project_caps",
+    "cross_view_conditions",
+    "counterpart_buckets",
+    "fallback_rule",
+    "payment_language",
+    "fee_treatment",
+    "reward_credit_certificate_opt_ins",
+    "self_matching_exclusions",
+    "sealed_progress_disclosure",
+    "failure_bonus_denial_categories",
+  ]);
+  assert.deepEqual(
+    MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((entry) => entry.label),
+    [
+      "Binding caps",
+      "Cross-view conditions",
+      "Counterpart buckets",
+      "Fallback rule",
+      "Payment language",
+      "Fee treatment",
+      "Reward, credit, and certificate opt-ins",
+      "Self-matching exclusions",
+      "Sealed-progress behavior",
+      "Failure-bonus denial categories",
+    ],
+  );
+  assert.equal(MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.length, 10);
+  assert.equal(
+    MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.every(
+      (entry) =>
+        entry.finalReviewRequired === true &&
+        entry.createsAlternateSemantics === false &&
+        entry.canonicalRecords.length > 0 &&
+        entry.canonicalFields.length > 0,
+    ),
+    true,
+  );
+  assert.deepEqual(
+    MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((entry) => entry.specRequirement),
+    [
+      "binding project caps",
+      "explicit cross-view conditional pledge constraints",
+      "counterparty buckets",
+      "fallback rules",
+      "payment language",
+      "fee treatment",
+      "reward/credit/certificate opt-ins",
+      "self-matching exclusions",
+      "sealed-progress disclosure",
+      "failure-bonus denial categories",
+    ],
+  );
 });
 
 test("CRECM plain-language copy map rejects missing, duplicate, or alternate-semantics rows", () => {

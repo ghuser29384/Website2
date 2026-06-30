@@ -150,4 +150,45 @@ test("MPGF pivotality calculator is exposed only as an advanced educational surf
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS/);
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES/);
   assert.match(route, /evaluateMpgfPivotalityCalculator/);
+  assert.match(route, /for \(const key of MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS\)/);
+  assert.match(route, /formData\.has\(key\)/);
+  assert.match(route, /input\[key\] = String\(formData\.get\(key\) \?\? ""\)/);
+  assert.equal(route.includes(".from("), false);
+  assert.equal(route.includes("insert("), false);
+  assert.equal(route.includes("update("), false);
+  assert.equal(route.includes("upsert("), false);
+});
+
+test("MPGF pivotality calculator route rejects forbidden live keys submitted by form", async () => {
+  const routeModule = (await import(
+    "../../app/api/mpgf/pivotality-calculator/route"
+  )) as unknown as {
+    POST?: (request: Request) => Promise<Response>;
+    default?: { POST: (request: Request) => Promise<Response> };
+  };
+  const post = routeModule.POST ?? routeModule.default?.POST;
+  assert.ok(post);
+
+  const formData = new FormData();
+  formData.set("calculatorSurface", "advanced_explainer");
+  formData.set("contributionCents", "5000");
+  formData.set("thresholdCents", "50000");
+  formData.set("valueRatio", "0.20");
+  formData.set("pSuccessWithoutMe", "0.30");
+  formData.set("userEstimatedPDecisive", "0.25");
+  formData.set("liveThresholdGapCents", "100");
+
+  const response = await post(
+    new Request("https://moraltrade.test/api/mpgf/pivotality-calculator", {
+      method: "POST",
+      body: formData,
+    }),
+  );
+  const result = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(result.ok, false);
+  assert.ok(result.blockers.includes("pivotality_forbidden_live_key_liveThresholdGapCents"));
+  assert.equal(result.usesLiveRoundData, false);
+  assert.equal(result.writesFundingRecords, false);
 });

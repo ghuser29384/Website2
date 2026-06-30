@@ -10,6 +10,16 @@ export interface MpgfCrecPlainLanguageCopyMapRow {
   createsAlternateSemantics: boolean;
 }
 
+export interface MpgfCrecFinalReviewRequiredDisclosure {
+  key: string;
+  label: string;
+  specRequirement: string;
+  canonicalRecords: readonly string[];
+  canonicalFields: readonly string[];
+  finalReviewRequired: true;
+  createsAlternateSemantics: false;
+}
+
 export const MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP = [
   {
     defaultUiText: "Maximum this round",
@@ -168,3 +178,102 @@ export const MPGF_CRECM_PLAIN_LANGUAGE_LABELS = {
     abstain: getMpgfCrecPlainLanguageLabelForStance("abstain"),
   },
 } as const;
+
+export const MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES = [
+  {
+    key: "binding_project_caps",
+    label: "Binding caps",
+    specRequirement: "binding project caps",
+    canonicalRecords: ["CommonGroundBudget", "ProjectSupportStance", "ConditionalTradeIntent"],
+    canonicalFields: ["totalBudgetCents", "perProjectCapCents", "maxAllocCents", "maxAllocBps"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "cross_view_conditions",
+    label: "Cross-view conditions",
+    specRequirement: "explicit cross-view conditional pledge constraints",
+    canonicalRecords: ["ConditionalTradeIntent", "ProjectSupportStance"],
+    canonicalFields: ["conditionAccepted", "minCounterpartyVolumeCents", "acceptableCounterBucketIds"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "counterpart_buckets",
+    label: "Counterpart buckets",
+    specRequirement: "counterparty buckets",
+    canonicalRecords: ["ConditionalTradeIntent", "MpgfRoundMoralBucketSnapshot"],
+    canonicalFields: ["acceptableCounterBucketIds", "minCounterpartyVolumeCents"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "fallback_rule",
+    label: "Fallback rule",
+    specRequirement: "fallback rules",
+    canonicalRecords: ["CommonGroundBudget", "ConditionalTradeIntent"],
+    canonicalFields: ["fallbackRule", "unroutableBudgetPolicy"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "payment_language",
+    label: "Payment language",
+    specRequirement: "payment language",
+    canonicalRecords: ["PaymentCommitmentSnapshot", "AuthorizationReconciliationEvent"],
+    canonicalFields: ["paymentCaptureAllowed", "providerConfirmed", "authorizationState"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "fee_treatment",
+    label: "Fee treatment",
+    specRequirement: "fee treatment",
+    canonicalRecords: ["FeeQuote", "MpgfContributionProofLedgerAccounting"],
+    canonicalFields: ["grossCapturedCents", "feeCents", "netRecipientDisbursedCents", "matchEligibleCents"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "reward_credit_certificate_opt_ins",
+    label: "Reward, credit, and certificate opt-ins",
+    specRequirement: "reward/credit/certificate opt-ins",
+    canonicalRecords: ["SuccessRewardClaim", "CoordinationCreditLedgerEntry", "ImpactCertificateClaim"],
+    canonicalFields: ["successRewardOptIn", "coordinationCreditOptIn", "impactCertificateOptIn"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "self_matching_exclusions",
+    label: "Self-matching exclusions",
+    specRequirement: "self-matching exclusions",
+    canonicalRecords: ["ConditionalTradeIntent", "IdentityEligibility", "CounterpartyVolumeSatisfaction"],
+    canonicalFields: ["participantId", "paymentMethodClusterId", "sameControlEntityId"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "sealed_progress_disclosure",
+    label: "Sealed-progress behavior",
+    specRequirement: "sealed-progress disclosure",
+    canonicalRecords: ["MpgfPublicGoodsRound", "RoundClearingInputBundle"],
+    canonicalFields: ["sealedPledgeMode", "exactProgressPublicBeforeClose"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+  {
+    key: "failure_bonus_denial_categories",
+    label: "Failure-bonus denial categories",
+    specRequirement: "failure-bonus denial categories",
+    canonicalRecords: ["FailureBonusClaim", "ProjectHardGate", "PaymentCommitmentSnapshot"],
+    canonicalFields: ["denialReason", "failureReason", "claimState"],
+    finalReviewRequired: true,
+    createsAlternateSemantics: false,
+  },
+] as const satisfies readonly MpgfCrecFinalReviewRequiredDisclosure[];
+
+export type MpgfCrecFinalReviewDisclosureKey =
+  (typeof MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES)[number]["key"];
+
+export const MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS =
+  MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((entry) => entry.key);

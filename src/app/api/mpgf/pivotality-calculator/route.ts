@@ -24,7 +24,7 @@ const SAMPLE_INPUT = {
 };
 
 function formDataToInput(formData: FormData) {
-  return {
+  const input: Record<string, unknown> = {
     calculatorSurface: String(formData.get("calculatorSurface") ?? ""),
     contributionCents: Number(formData.get("contributionCents")),
     thresholdCents: Number(formData.get("thresholdCents")),
@@ -36,6 +36,14 @@ function formDataToInput(formData: FormData) {
       formData.get("nonDecisiveExtraFundingValueFraction") || "0",
     ),
   };
+
+  for (const key of MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS) {
+    if (formData.has(key)) {
+      input[key] = String(formData.get(key) ?? "");
+    }
+  }
+
+  return input;
 }
 
 async function requestInput(request: Request) {

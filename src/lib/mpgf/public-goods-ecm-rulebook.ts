@@ -553,22 +553,38 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     [
       {
         surface: "mpgf-real-money-terms",
+        surfaceKind: "primary_ui",
         text: `${MPGF_COPY.realMoneyContribution} ${MPGF_COPY.not_escrow} ${MPGF_COPY.not_guaranteed_effectiveness}`,
       },
       {
         surface: "mpgf-common-ground-budget-review",
+        surfaceKind: "primary_ui",
         text:
-          "No charge now; saved payment methods or JIT authorizations are not escrow, custody, funds held, or payment protection.",
+          "No charge now; saved payment methods or JIT authorizations are not legal escrow, are not custody-backed, and are not payment protection.",
       },
       {
         surface: "mpgf-contributor-benefits",
+        surfaceKind: "receipt",
         text:
           "Contributor-only benefits require captured successful rows and never affect allocation power.",
       },
       {
         surface: "public-goods-entry-page",
+        surfaceKind: "public_page",
         text:
           "Public Goods Fund pages explain matching and impact records without guaranteeing matching, impact, outcomes, effectiveness, escrow, custody, or payment protection.",
+      },
+      {
+        surface: "mpgf-participant-email",
+        surfaceKind: "email",
+        text:
+          "Email summaries can say a budget preview was saved, but not that money was charged, held, escrowed, protected, guaranteed, rewarded, credited, or certified.",
+      },
+      {
+        surface: "final-audit-summary",
+        surfaceKind: "audit_adjacent_summary",
+        text:
+          "Audit-adjacent summaries report recorded payment, matching, reward, credit, certificate, and impact fields without guaranteeing outcomes or merging accounting channels.",
       },
     ],
     {

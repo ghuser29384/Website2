@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
+  MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
   getMpgfCrecPlainLanguageLabelForStance,
+  type MpgfCrecFinalReviewDisclosureKey,
   type MpgfCrecGuidedStance,
 } from "@/lib/mpgf/public-goods-crecm-labels";
 
@@ -86,6 +88,12 @@ interface CommonGroundBudgetReviewProject {
   title: string;
 }
 
+interface FinalReviewDisclosureContext {
+  maximumBudgetCents: number;
+  payload: CommonGroundBudgetSavePayload;
+  projectRows: CommonGroundBudgetReviewProject[];
+}
+
 function statusLabel(value: string) {
   return value.replaceAll("_", " ");
 }
@@ -124,6 +132,77 @@ function nextCaptureRuleLabel(value: NextCaptureRule) {
       return "manual review required";
     case "none_before_final_review":
       return "none before final review";
+  }
+}
+
+function finalReviewDisclosureDescription(
+  key: MpgfCrecFinalReviewDisclosureKey,
+  { maximumBudgetCents, payload, projectRows }: FinalReviewDisclosureContext,
+): ReactNode {
+  switch (key) {
+    case "binding_project_caps":
+      return (
+        <>
+          {budgetPeriodLabel(payload.budgetPeriod)} cap {formatCents(maximumBudgetCents)};
+          per-project cap {formatCents(payload.perProjectCapCents)}; per-project caps are
+          recorded in cents and basis points.
+        </>
+      );
+    case "cross_view_conditions":
+      return (
+        <>
+          Strong and weak stances map to canonical ConditionalTradeIntent records only after
+          condition acceptance. Minimum verified counterparty volume is shown for each selected
+          project.
+        </>
+      );
+    case "counterpart_buckets":
+      return (
+        projectRows
+          .filter((project) => project.stance === "strong" || project.stance === "weak")
+          .map((project) =>
+            `${project.title}: ${formatCents(project.minCounterpartyVolumeCents)} from ${project.acceptableCounterBucketIds.join(", ")}`,
+          )
+          .join("; ") || "No allocatable project condition selected."
+      );
+    case "fallback_rule":
+      return (
+        <>
+          {payload.fallbackRule.replaceAll("_", " ")}; unroutable budget policy{" "}
+          {payload.unroutableBudgetPolicy.replaceAll("_", " ")}.
+        </>
+      );
+    case "payment_language":
+      return "No charge now; saved payment methods or JIT authorizations are not legal escrow, are not custody-backed, and are not payment protection.";
+    case "fee_treatment":
+      return "Gross, fee, net recipient, actual, counted, and match-eligible cents remain separate.";
+    case "reward_credit_certificate_opt_ins":
+      return (
+        <>
+          Success-reward, coordination-credit, and impact-certificate opt-ins are off unless
+          explicitly selected, require captured successful contribution rows, cannot be
+          retroactively obtained by non-signers or late signers, and never count as
+          public-good dollars or allocation power.
+        </>
+      );
+    case "self_matching_exclusions":
+      return (
+        <>
+          Same participant, linked account, same payment method, same payment cluster, and
+          same-control entity support cannot satisfy counterparty conditions.
+        </>
+      );
+    case "sealed_progress_disclosure":
+      return "Exact live threshold, counterparty-volume, and success-without-me progress stays sealed before close.";
+    case "failure_bonus_denial_categories":
+      return (
+        <>
+          Denied for review-not-approved, challenge-blocked, anti-threat, destination,
+          project-identity/destination-route, externality, conflict, sponsor, rulebook,
+          legal/custody, identity, sybil, collusion, authorization, and user-consent
+          failures.
+        </>
+      );
   }
 }
 
@@ -294,86 +373,24 @@ export function MpgfCommonGroundBudgetSavePanel({
             credit, certificate, reroute, or release requires the recorded CRECM state to pass.
           </p>
           <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review required details">
-            <div>
-              <dt>Binding caps</dt>
-              <dd>
-                {budgetPeriodLabel(payload.budgetPeriod)} cap {formatCents(maximumBudgetCents)};
-                per-project cap {formatCents(payload.perProjectCapCents)}; per-project caps are
-                recorded in cents and basis points.
-              </dd>
-            </div>
+            {MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((disclosure) => (
+              <div key={disclosure.key}>
+                <dt>{disclosure.label}</dt>
+                <dd>
+                  {finalReviewDisclosureDescription(disclosure.key, {
+                    maximumBudgetCents,
+                    payload,
+                    projectRows,
+                  })}
+                </dd>
+              </div>
+            ))}
             <div>
               <dt>Next capture</dt>
               <dd>
                 {nextCaptureRuleLabel(payload.nextCaptureRule)}
                 {payload.nextCaptureAt ? ` at ${payload.nextCaptureAt}` : ""}; no capture happens
                 before final review and the recorded rule passes.
-              </dd>
-            </div>
-            <div>
-              <dt>Cross-view conditions</dt>
-              <dd>
-                Strong and weak stances map to canonical ConditionalTradeIntent records only after
-                condition acceptance. Minimum verified counterparty volume is shown for each selected
-                project.
-              </dd>
-            </div>
-            <div>
-              <dt>Counterpart buckets</dt>
-              <dd>
-                {projectRows
-                  .filter((project) => project.stance === "strong" || project.stance === "weak")
-                  .map((project) =>
-                    `${project.title}: ${formatCents(project.minCounterpartyVolumeCents)} from ${project.acceptableCounterBucketIds.join(", ")}`,
-                  )
-                  .join("; ") || "No allocatable project condition selected."}
-              </dd>
-            </div>
-            <div>
-              <dt>Fallback rule</dt>
-              <dd>
-                {payload.fallbackRule.replaceAll("_", " ")}; unroutable budget policy{" "}
-                {payload.unroutableBudgetPolicy.replaceAll("_", " ")}.
-              </dd>
-            </div>
-            <div>
-              <dt>Payment language</dt>
-              <dd>
-                No charge now; saved payment methods or JIT authorizations are not escrow, custody,
-                funds held, or payment protection.
-              </dd>
-            </div>
-            <div>
-              <dt>Fee treatment</dt>
-              <dd>Gross, fee, net recipient, actual, counted, and match-eligible cents remain separate.</dd>
-            </div>
-            <div>
-              <dt>Reward, credit, and certificate opt-ins</dt>
-              <dd>
-                Success-reward, coordination-credit, and impact-certificate opt-ins are off unless
-                explicitly selected, require captured successful contribution rows, cannot be
-                retroactively obtained by non-signers or late signers, and never count as
-                public-good dollars or allocation power.
-              </dd>
-            </div>
-            <div>
-              <dt>Self-matching exclusions</dt>
-              <dd>
-                Same participant, linked account, same payment method, same payment cluster, and
-                same-control entity support cannot satisfy counterparty conditions.
-              </dd>
-            </div>
-            <div>
-              <dt>Sealed-progress behavior</dt>
-              <dd>Exact live threshold, counterparty-volume, and success-without-me progress stays sealed before close.</dd>
-            </div>
-            <div>
-              <dt>Failure-bonus denial categories</dt>
-              <dd>
-                Denied for review-not-approved, challenge-blocked, anti-threat, destination,
-                project-identity/destination-route, externality, conflict, sponsor, rulebook,
-                legal/custody, identity, sybil, collusion, authorization, and user-consent
-                failures.
               </dd>
             </div>
             <div>

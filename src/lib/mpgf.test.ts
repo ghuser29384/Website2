@@ -229,7 +229,10 @@ import {
   getMpgfMechanismVersionFeatureFlag,
   getMpgfPublicGoodsEcmRulebookReportApi,
 } from "./mpgf/public-goods-ecm-rulebook";
-import { MPGF_CRECM_COPY_VALIDATION_POLICY } from "./mpgf/public-goods-crecm-copy";
+import {
+  MPGF_CRECM_COPY_VALIDATION_POLICY,
+  MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS,
+} from "./mpgf/public-goods-crecm-copy";
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
   MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
@@ -2079,7 +2082,19 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.participantIncentives.impactCertificatesForCapturedSuccessfulContributionRowsOnly, true);
   assert.equal(report.publicCopyValidation.ok, true);
   assert.equal(report.publicCopyValidation.policy, MPGF_CRECM_COPY_VALIDATION_POLICY);
-  assert.ok(report.publicCopyValidation.surfaceCount >= 3);
+  assert.deepEqual(
+    report.publicCopyValidation.requiredSurfaceKinds,
+    MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS,
+  );
+  assert.deepEqual(report.publicCopyValidation.missingRequiredSurfaceKinds, []);
+  assert.deepEqual(report.publicCopyValidation.surfaceKinds, [
+    "primary_ui",
+    "receipt",
+    "public_page",
+    "email",
+    "audit_adjacent_summary",
+  ]);
+  assert.ok(report.publicCopyValidation.surfaceCount >= 6);
   assert.ok(report.failureBonusControls.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
   assert.equal(report.failureBonusControls.participantRoundCapRequired, true);
   assert.equal(report.failureBonusControls.claimantConflictSnapshotMustBeNoConflict, true);
@@ -3372,6 +3387,8 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Hidden defaults, suggestions, project-card/);
   assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
   assert.match(budgetSavePanel, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS/);
+  assert.match(budgetSavePanel, /MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES/);
+  assert.match(budgetSavePanel, /finalReviewDisclosureDescription/);
   assert.match(budgetSavePanel, /getMpgfCrecPlainLanguageLabelForStance/);
   assert.match(budgetSavePanel, /MpgfCrecGuidedStance/);
   assert.match(budgetSavePanel, /@\/lib\/mpgf\/public-goods-crecm-labels/);
@@ -3406,7 +3423,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /condition still missing/);
   assert.match(budgetSavePanel, /Private review note:/);
   assert.match(budgetSavePanel, /reviewer-only/);
-  assert.match(budgetSavePanel, /Failure-bonus denial categories/);
+  assert.match(plainLanguageLabels, /label: "Failure-bonus denial categories"/);
   assert.match(budgetSavePanel, /review-not-approved, challenge-blocked, anti-threat, destination/);
   assert.match(budgetSavePanel, /project-identity\/destination-route, externality, conflict, sponsor/);
   assert.match(budgetSavePanel, /legal\/custody, identity, sybil, collusion, authorization, and user-consent/);
@@ -3426,24 +3443,24 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback/);
   assert.match(budgetSavePanel, /Required details/);
   assert.match(budgetSavePanel, /Suggested defaults are not binding unless shown on this review screen and explicitly/);
-  assert.match(budgetSavePanel, /Binding caps/);
-  assert.match(budgetSavePanel, /Cross-view conditions/);
-  assert.match(budgetSavePanel, /Counterpart buckets/);
-  assert.match(budgetSavePanel, /Fallback rule/);
-  assert.match(budgetSavePanel, /Payment language/);
-  assert.match(budgetSavePanel, /Fee treatment/);
-  assert.match(budgetSavePanel, /Reward, credit, and certificate opt-ins/);
+  assert.match(plainLanguageLabels, /label: "Binding caps"/);
+  assert.match(plainLanguageLabels, /label: "Cross-view conditions"/);
+  assert.match(plainLanguageLabels, /label: "Counterpart buckets"/);
+  assert.match(plainLanguageLabels, /label: "Fallback rule"/);
+  assert.match(plainLanguageLabels, /label: "Payment language"/);
+  assert.match(plainLanguageLabels, /label: "Fee treatment"/);
+  assert.match(plainLanguageLabels, /label: "Reward, credit, and certificate opt-ins"/);
   assert.match(budgetSavePanel, /Success-reward, coordination-credit, and impact-certificate opt-ins are off unless/);
   assert.match(budgetSavePanel, /require captured successful contribution rows/);
   assert.match(budgetSavePanel, /cannot be\s+retroactively obtained by non-signers or late signers/);
   assert.match(budgetSavePanel, /never count as\s+public-good dollars or allocation power/);
-  assert.match(budgetSavePanel, /Self-matching exclusions/);
+  assert.match(plainLanguageLabels, /label: "Self-matching exclusions"/);
   assert.match(budgetSavePanel, /same payment cluster/);
   assert.match(budgetSavePanel, /same-control entity support/);
-  assert.match(budgetSavePanel, /Sealed-progress behavior/);
-  assert.match(budgetSavePanel, /Failure-bonus denial categories/);
+  assert.match(plainLanguageLabels, /label: "Sealed-progress behavior"/);
+  assert.match(plainLanguageLabels, /label: "Failure-bonus denial categories"/);
   assert.match(budgetSavePanel, /Rulebook hash/);
-  assert.match(budgetSavePanel, /not escrow, custody,\s+funds held, or payment protection/);
+  assert.match(budgetSavePanel, /not legal escrow, are not custody-backed, and are not payment protection/);
   assert.match(budgetSavePanel, /Gross, fee, net recipient, actual, counted, and match-eligible/);
   assert.match(budgetSavePanel, /fetch\(apiPath/);
   assert.match(budgetSavePanel, /JSON\.stringify\(payload\)/);

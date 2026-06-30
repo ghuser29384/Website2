@@ -7,12 +7,16 @@ import {
 } from "./public-goods-crecm-labels";
 
 export {
+  MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
   getMpgfCrecPlainLanguageLabelForStance,
 } from "./public-goods-crecm-labels";
 export type {
+  MpgfCrecFinalReviewDisclosureKey,
+  MpgfCrecFinalReviewRequiredDisclosure,
   MpgfCrecGuidedStance,
   MpgfCrecPlainLanguageCopyMapRow,
 } from "./public-goods-crecm-labels";
@@ -63,6 +67,17 @@ export const MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP = [
   },
 ] as const;
 
+export const MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS = [
+  "primary_ui",
+  "email",
+  "receipt",
+  "public_page",
+  "audit_adjacent_summary",
+] as const;
+
+export type MpgfCrecCopyValidationSurfaceKind =
+  (typeof MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS)[number];
+
 export interface MpgfCrecRecordedStateForCopy {
   paymentCaptureAllowed: boolean;
   postClearPaymentAuthorizationRecorded: boolean;
@@ -80,6 +95,7 @@ export interface MpgfCrecRecordedStateForCopy {
 
 export interface MpgfCrecPublishedCopySnippet {
   surface: string;
+  surfaceKind?: MpgfCrecCopyValidationSurfaceKind;
   text: string;
 }
 
@@ -114,6 +130,28 @@ function hasNegatedClaim(text: string, patterns: RegExp[]) {
 
 function slug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function inferSurfaceKind(surface: string): MpgfCrecCopyValidationSurfaceKind | null {
+  const normalized = slug(surface);
+
+  if (normalized.includes("email")) {
+    return "email";
+  }
+  if (normalized.includes("receipt") || normalized.includes("contribution_state")) {
+    return "receipt";
+  }
+  if (normalized.includes("public") || normalized.includes("entry_page")) {
+    return "public_page";
+  }
+  if (normalized.includes("audit") || normalized.includes("summary")) {
+    return "audit_adjacent_summary";
+  }
+  if (normalized.includes("review") || normalized.includes("terms") || normalized.includes("primary")) {
+    return "primary_ui";
+  }
+
+  return null;
 }
 
 export function validateMpgfCrecPlainLanguageCopyMap(
@@ -348,8 +386,18 @@ export function validateMpgfCrecPublishedCopyBundle(
   state: MpgfCrecRecordedStateForCopy,
 ) {
   const results = snippets.map((snippet) => validateMpgfCrecCopyAgainstRecordedState(snippet, state));
+  const surfaceKinds = [
+    ...new Set(snippets.flatMap((snippet) => snippet.surfaceKind ?? inferSurfaceKind(snippet.surface) ?? [])),
+  ];
+  const missingRequiredSurfaceKinds = MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS.filter(
+    (surfaceKind) => !surfaceKinds.includes(surfaceKind),
+  );
   const blockers = results.flatMap((result) =>
     result.blockers.map((blocker) => `${result.surface}:${blocker}`),
+  ).concat(
+    missingRequiredSurfaceKinds.map(
+      (surfaceKind) => `copy_validation_missing_required_publication_surface_${surfaceKind}`,
+    ),
   );
 
   return {
@@ -357,6 +405,9 @@ export function validateMpgfCrecPublishedCopyBundle(
     policy: MPGF_CRECM_COPY_VALIDATION_POLICY,
     terminologyMap: MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP,
     plainLanguageCopyMap: validateMpgfCrecPlainLanguageCopyMap(),
+    requiredSurfaceKinds: MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS,
+    surfaceKinds,
+    missingRequiredSurfaceKinds,
     stateHash: hashValue(state),
     surfaceCount: snippets.length,
     blockedSurfaceCount: results.filter((result) => !result.ok).length,
