@@ -25,6 +25,7 @@ import {
   buildMpgfCrecRoundClearingInputBundleHash,
   buildMpgfCrecRoundCloseBundleRowUniquenessHash,
   buildMpgfCrecRoundMoralBucketSnapshotHash,
+  buildMpgfCrecStage7FailureHandlingNonSideEffectOutput,
   buildMpgfCrecSuccessRewardClaimHash,
   buildMpgfCrecV1125ClearingContractSummary,
   capMpgfCrecDeploymentGrossExposure,
@@ -2657,6 +2658,8 @@ test("CRECM v1.125 valid economic inputs expose sanitized sponsor availability a
   assert.equal(resolved.safeThresholdAmountCents, 1_000);
   assert.equal(resolved.safeThresholdSupporterMin, 0);
   assert.equal(resolved.safeThresholdClusterMin, 0);
+  assert.equal(resolved.defaultBaseMatchRatioBps, 10_000);
+  assert.equal(resolved.defaultBonusCapMultipleBps, 10_000);
   assert.equal(resolved.safeBaseMatchRatioBps, 10_000);
   assert.equal(resolved.safeBonusCapMultipleBps, 25_000);
   assert.equal(resolved.baseMatchRatioDefaulted, true);
@@ -3630,6 +3633,51 @@ test("CRECM v1.125 round status gate separates replay, authorization, payable si
   });
   assert.equal(malformed.allowed, false);
   assert.ok(malformed.blockers.includes("round_status_malformed"));
+});
+
+test("CRECM v1.125 Stage 7 non-payable failure handling returns explicit no-mutation output", () => {
+  const closedReplay = buildMpgfCrecStage7FailureHandlingNonSideEffectOutput({
+    roundStatus: "closed",
+  });
+
+  assert.equal(closedReplay?.outputMode, "replay_report_audit_only");
+  assert.equal(closedReplay?.replayOnly, true);
+  assert.equal(closedReplay?.nonBindingReviewOnly, false);
+  assert.equal(closedReplay?.sideEffectsAllowed, false);
+  assert.deepEqual(closedReplay?.forbiddenMutationKinds, [
+    "fallback",
+    "authorization",
+    "failure_bonus",
+    "payout",
+    "credit",
+    "proration",
+    "settlement",
+    "claim",
+  ]);
+
+  const reviewingOutput = buildMpgfCrecStage7FailureHandlingNonSideEffectOutput({
+    roundStatus: "reviewing",
+  });
+
+  assert.equal(reviewingOutput?.outputMode, "non_binding_review_only");
+  assert.equal(reviewingOutput?.replayOnly, false);
+  assert.equal(reviewingOutput?.nonBindingReviewOnly, true);
+  assert.equal(reviewingOutput?.sideEffectsAllowed, false);
+
+  const payableOutput = buildMpgfCrecStage7FailureHandlingNonSideEffectOutput({
+    roundStatus: "payable",
+  });
+  assert.equal(payableOutput, null);
+
+  const malformedOutput = buildMpgfCrecStage7FailureHandlingNonSideEffectOutput({
+    roundStatus: " payment-ready ",
+  });
+  assert.equal(malformedOutput?.roundStatus, null);
+  assert.equal(malformedOutput?.sideEffectsAllowed, false);
+  assert.ok(malformedOutput?.blockers.includes("round_status_malformed"));
+
+  const source = readFileSync("src/lib/mpgf/public-goods-crecm-v1125.ts", "utf8");
+  assert.doesNotMatch(source, /emitFailureHandlingReplayOnly/);
 });
 
 test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, and payable-only", () => {

@@ -1415,6 +1415,18 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       analyticsEvents,
       "payment_commitment_missing_payment_method_ref",
     ),
+    "Stage 7 local helper-definition validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_local_helper_definition_validation_failed",
+    ),
+    "Stage 7 replay/review non-side-effect output undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_replay_review_non_side_effect_output_undefined_helper_prevented",
+    ),
+    "Stage 4 base-match default-ratio local-definition validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage4_base_match_default_ratio_local_definition_validation_failed",
+    ),
     "donor retention into next round": retainedRecurringDonors3MonthBps,
     "appeal rate": rateBps(appealCaseCount, Math.max(1, reviewCases.length)),
     "privacy incident count": 0,

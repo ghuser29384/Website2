@@ -5588,6 +5588,24 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           created_at: "2026-05-03T14:24:25.000Z",
         },
         {
+          event_type: "stage7_local_helper_definition_validation_failed",
+          campaign_id: null,
+          event_json: { helperFamily: "stage7_failure_handling", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:26.000Z",
+        },
+        {
+          event_type: "stage7_replay_review_non_side_effect_output_undefined_helper_prevented",
+          campaign_id: null,
+          event_json: { outputMode: "replay_report_audit_only", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:27.000Z",
+        },
+        {
+          event_type: "stage4_base_match_default_ratio_local_definition_validation_failed",
+          campaign_id: null,
+          event_json: { stage: "stage4_base_match", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:24:28.000Z",
+        },
+        {
           event_type: "coordination_credit_unit_issued",
           campaign_id: null,
           event_json: { benefitKind: "coordination_credit", publicAggregationOnly: true },
@@ -5748,6 +5766,12 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricValue("round sponsor-budget validation failure count"), 1);
     assert.equal(publicMetricValue("identity-weight bps validation failure count"), 1);
     assert.equal(publicMetricValue("payment-commitment missing-payment-method-ref count"), 1);
+    assert.equal(publicMetricValue("Stage 7 local helper-definition validation failure count"), 1);
+    assert.equal(
+      publicMetricValue("Stage 7 replay/review non-side-effect output undefined-helper prevention count"),
+      1,
+    );
+    assert.equal(publicMetricValue("Stage 4 base-match default-ratio local-definition validation failure count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search-intent routed-to-CGB-card count"), 1);
     assert.equal(publicMetricValue("moral-public-goods search zero-state suppression count"), 1);
     assert.equal(publicMetricValue("public-goods primary CTA click-through count"), 1);
@@ -5823,6 +5847,15 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(publicMetricStatus("round sponsor-budget validation failure count"), "computed");
     assert.equal(publicMetricStatus("identity-weight bps validation failure count"), "computed");
     assert.equal(publicMetricStatus("payment-commitment missing-payment-method-ref count"), "computed");
+    assert.equal(publicMetricStatus("Stage 7 local helper-definition validation failure count"), "computed");
+    assert.equal(
+      publicMetricStatus("Stage 7 replay/review non-side-effect output undefined-helper prevention count"),
+      "computed",
+    );
+    assert.equal(
+      publicMetricStatus("Stage 4 base-match default-ratio local-definition validation failure count"),
+      "computed",
+    );
     assert.equal(publicMetricValue("pivotality calculator no-side-effect invariant violation count"), 1);
     assert.equal(publicMetricStatus("pivotality calculator no-side-effect invariant violation count"), "computed");
     assert.equal(

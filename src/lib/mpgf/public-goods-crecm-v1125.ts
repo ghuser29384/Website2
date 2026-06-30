@@ -521,6 +521,25 @@ export interface MpgfCrecRoundStatusGateResult {
   nonBindingPreviewOnly: boolean;
 }
 
+export interface MpgfCrecStage7FailureHandlingNonSideEffectOutput {
+  roundStatus: MpgfCrecRoundStatus | null;
+  outputMode: "replay_report_audit_only" | "non_binding_review_only";
+  replayOnly: boolean;
+  nonBindingReviewOnly: boolean;
+  sideEffectsAllowed: false;
+  forbiddenMutationKinds: readonly [
+    "fallback",
+    "authorization",
+    "failure_bonus",
+    "payout",
+    "credit",
+    "proration",
+    "settlement",
+    "claim",
+  ];
+  blockers: string[];
+}
+
 export interface MpgfCrecRoundMetadataGateInput {
   roundId: unknown;
   rulebookHash: unknown;
@@ -1216,6 +1235,8 @@ export interface MpgfCrecEconomicInputSanitizationResult {
   safeThresholdAmountCents: number;
   safeThresholdSupporterMin: number;
   safeThresholdClusterMin: number;
+  defaultBaseMatchRatioBps: number;
+  defaultBonusCapMultipleBps: number;
   safeBaseMatchRatioBps: number;
   safeBonusCapMultipleBps: number;
   baseMatchRatioDefaulted: boolean;
@@ -1961,6 +1982,45 @@ export function evaluateMpgfCrecRoundStatusGate(
     finalBindingOutputAllowed: allowed && input.operation === "final_binding_result" && roundStatus !== "released" && roundStatus !== "closed",
     replayOnly: allowed && resultReplayOperation && (roundStatus === "released" || roundStatus === "closed"),
     nonBindingPreviewOnly: allowed && previewOnlyOperation,
+  };
+}
+
+export function buildMpgfCrecStage7FailureHandlingNonSideEffectOutput(
+  input: Pick<MpgfCrecRoundStatusGateInput, "roundStatus" | "publicSafetyFreezeActive" | "cancellationActive">,
+): MpgfCrecStage7FailureHandlingNonSideEffectOutput | null {
+  const roundStatus = isMpgfCrecRoundStatus(input.roundStatus) ? input.roundStatus : null;
+  if (roundStatus === "payable") {
+    return null;
+  }
+
+  const replayGate = evaluateMpgfCrecRoundStatusGate({
+    ...input,
+    operation: "audit_output",
+  });
+  const reviewGate = evaluateMpgfCrecRoundStatusGate({
+    ...input,
+    operation: "internal_review_calculation",
+  });
+  const replayOnly = replayGate.allowed && replayGate.replayOnly;
+  const nonBindingReviewOnly = !replayOnly;
+
+  return {
+    roundStatus,
+    outputMode: replayOnly ? "replay_report_audit_only" : "non_binding_review_only",
+    replayOnly,
+    nonBindingReviewOnly,
+    sideEffectsAllowed: false,
+    forbiddenMutationKinds: [
+      "fallback",
+      "authorization",
+      "failure_bonus",
+      "payout",
+      "credit",
+      "proration",
+      "settlement",
+      "claim",
+    ] as const,
+    blockers: replayOnly ? replayGate.blockers : [...new Set([...replayGate.blockers, ...reviewGate.blockers])],
   };
 }
 
@@ -4588,12 +4648,14 @@ export function resolveMpgfCrecEconomicInputSanitization(
     rowFailureCodes.push("project_threshold_cluster_min_invalid_blocks_clearing");
   }
 
+  const defaultBaseMatchRatioBps = 10_000;
+  const defaultBonusCapMultipleBps = 10_000;
   const rawBaseMatchRatioBps = rowBound ? row.baseMatchRatioBps ?? null : null;
   const baseMatchRatioDefaulted = rawBaseMatchRatioBps == null;
   const baseMatchRatioBpsValid = baseMatchRatioDefaulted || isValidProjectMatchBps(rawBaseMatchRatioBps);
   const safeBaseMatchRatioBps = baseMatchRatioBpsValid
     ? baseMatchRatioDefaulted
-      ? 10_000
+      ? defaultBaseMatchRatioBps
       : Number(rawBaseMatchRatioBps)
     : 0;
 
@@ -4607,7 +4669,7 @@ export function resolveMpgfCrecEconomicInputSanitization(
     bonusCapMultipleDefaulted || isValidProjectMatchBps(rawBonusCapMultipleBps);
   const safeBonusCapMultipleBps = bonusCapMultipleBpsValid
     ? bonusCapMultipleDefaulted
-      ? 10_000
+      ? defaultBonusCapMultipleBps
       : Number(rawBonusCapMultipleBps)
     : 0;
 
@@ -4650,6 +4712,8 @@ export function resolveMpgfCrecEconomicInputSanitization(
     safeThresholdClusterMin: thresholdClusterMinValid
       ? Number(row.thresholdClusterMin)
       : Number.MAX_SAFE_INTEGER,
+    defaultBaseMatchRatioBps,
+    defaultBonusCapMultipleBps,
     safeBaseMatchRatioBps,
     safeBonusCapMultipleBps,
     baseMatchRatioDefaulted,
