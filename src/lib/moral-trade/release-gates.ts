@@ -233,6 +233,7 @@ export const MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS = [
   "privacy_review",
   "anti_threat_review",
   "payment_replay_tests",
+  "marketplace_state_event_append_only_test",
   "evidence_challenge_tests",
   "reviewer_conflict_tests",
   "emergency_pause_test",
@@ -410,6 +411,8 @@ function descriptionForMoraltrade82Requirement(key: Moraltrade82ReleaseGateRequi
       return "Route health, public contract metadata, and baseline response shape are current for the requested release stage.";
     case "payment_replay_tests":
       return "Payment/provider replay, stale snapshot, wrong-account, idempotency, and server-time tests pass before money can move.";
+    case "marketplace_state_event_append_only_test":
+      return "Agreement, payment, evidence, dispute, and blocker state changes use append-only marketplace_state_event records; terminal states cannot be silently reopened.";
     case "emergency_pause_test":
       return "Emergency pause blocks new authorizations and captures without deleting audit records or blocking required refunds.";
     case "neutral_reviewer_approval":
@@ -747,6 +750,7 @@ const REVIEWED_NO_MONEY_REQUIRED_REQUIREMENTS = [
   "privacy_review",
   "anti_threat_review",
   "evidence_challenge_tests",
+  "marketplace_state_event_append_only_test",
   "reviewer_conflict_tests",
   "neutral_reviewer_approval",
   "non_public_goods_term_sheet_test",
@@ -767,6 +771,7 @@ const CRECM_HANDOFF_REQUIRED_REQUIREMENTS = [
   "privacy_review",
   "anti_threat_review",
   "payment_replay_tests",
+  "marketplace_state_event_append_only_test",
   "evidence_challenge_tests",
   "reviewer_conflict_tests",
   "emergency_pause_test",
