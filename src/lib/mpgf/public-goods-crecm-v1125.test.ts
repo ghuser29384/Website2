@@ -735,6 +735,7 @@ function projectHardGateInput(
   return {
     deploymentMode: "capped_pilot",
     projectScopeState: "valid_moral_public_good",
+    excludedTradeType: null,
     destinationRouteState: "valid",
     externalityState: "clear",
     reviewState: "approved",
@@ -943,6 +944,7 @@ function contributorBenefitInput(
     sameControlExcluded: true,
     claimantConflictState: "no_conflict",
     projectScopeState: "valid_moral_public_good",
+    excludedTradeType: null,
     externalityState: "clear",
     reviewState: "approved",
     challengeState: "clear",
@@ -1574,6 +1576,15 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
 
   assert.equal(openChallenge.eligible, false);
   assert.ok(openChallenge.blockers.includes("project_hard_gate_challenge_not_clear_or_non_blocking"));
+
+  const excludedTradeType = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ excludedTradeType: "political_campaign" }),
+  );
+
+  assert.equal(excludedTradeType.eligible, false);
+  assert.equal(excludedTradeType.bindingOutputAllowed, false);
+  assert.equal(excludedTradeType.hardGateHash, null);
+  assert.ok(excludedTradeType.blockers.includes("project_hard_gate_excluded_trade_type_present"));
 
   const shadowLearning = evaluateMpgfCrecProjectHardGate(
     projectHardGateInput({
@@ -3276,6 +3287,14 @@ test("CRECM v1.125 contributor benefits require captured successful no-late-acce
   assert.ok(unpaid.blockers.includes("contributor_benefit_not_captured"));
   assert.ok(unpaid.blockers.includes("contributor_benefit_late_or_unsigned_participant"));
   assert.ok(unpaid.blockers.includes("contributor_benefit_payment_snapshot_ineligible"));
+
+  const excludedProject = evaluateMpgfCrecContributorBenefitEligibility(
+    contributorBenefitInput({ excludedTradeType: "behavior_change_promise" }),
+  );
+
+  assert.equal(excludedProject.eligible, false);
+  assert.equal(excludedProject.benefitContextHash, null);
+  assert.ok(excludedProject.blockers.includes("contributor_benefit_excluded_trade_type_present"));
 });
 
 test("CRECM v1.125 success rewards use only fully backed success reward pools", () => {
@@ -4240,6 +4259,8 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.contributorBenefits.successRewardsUseOnlyBackedSuccessRewardPool, true);
   assert.equal(summary.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(summary.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
+  assert.equal(summary.projectHardGates.excludedTradeTypeRequired, null);
+  assert.equal(summary.projectHardGates.hardGateHashBindsExcludedTradeType, true);
   assert.ok(summary.failureBonus.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
   assert.equal(summary.failureBonus.claimantConflictSnapshotBindsExactPayoutContext, true);
   assert.equal(summary.failureBonus.claimantConflictSnapshotIdStoredOnClaims, true);

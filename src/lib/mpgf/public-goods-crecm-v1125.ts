@@ -60,11 +60,21 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_ELIGIBILITY_FIELDS = [
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES = [
   "valid_moral_public_good",
+  "review",
   "private_benefit",
   "political_campaign",
-  "lifestyle",
-  "threat_like",
-  "unknown",
+  "lifestyle_trade",
+  "behavior_change_promise",
+  "threat_like_trade",
+  "blocked",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_EXCLUDED_TRADE_TYPES = [
+  "private_benefit",
+  "political_campaign",
+  "lifestyle_trade",
+  "behavior_change_promise",
+  "threat_like_trade",
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES = [
@@ -397,6 +407,9 @@ export type MpgfCrecProjectEligibilityField =
 
 export type MpgfCrecProjectScopeState =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_SCOPE_STATES>;
+
+export type MpgfCrecExcludedTradeType =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_EXCLUDED_TRADE_TYPES>;
 
 export type MpgfCrecProjectGoodType =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_PROJECT_GOOD_TYPES>;
@@ -741,6 +754,7 @@ export interface MpgfCrecDeploymentExposureCapResult {
 export interface MpgfCrecProjectHardGateInput {
   deploymentMode: MpgfCrecRoundClearingInputBundle["deploymentMode"];
   projectScopeState: MpgfCrecProjectScopeState;
+  excludedTradeType: MpgfCrecExcludedTradeType | null;
   destinationRouteState: MpgfCrecDestinationRouteState;
   externalityState: MpgfCrecExternalityState;
   reviewState: MpgfCrecReviewState;
@@ -1328,7 +1342,8 @@ export interface MpgfCrecContributorBenefitEligibilityInput {
   samePaymentMethodExcluded: boolean;
   sameControlExcluded: boolean;
   claimantConflictState: "no_conflict" | "conflict_review" | "conflict_blocked" | "unknown";
-  projectScopeState: "valid_moral_public_good" | "private_benefit" | "political_campaign" | "lifestyle" | "threat_like" | "unknown";
+  projectScopeState: MpgfCrecProjectScopeState;
+  excludedTradeType: MpgfCrecExcludedTradeType | null;
   externalityState: "clear" | "review" | "blocked" | "unknown";
   reviewState: "approved" | "review" | "blocked" | "unknown";
   challengeState: "clear" | "non_blocking" | "open" | "blocking" | "unknown";
@@ -2565,6 +2580,7 @@ function projectHardGateHashPayload(input: MpgfCrecProjectHardGateInput) {
   return {
     deploymentMode: input.deploymentMode,
     projectScopeState: input.projectScopeState,
+    excludedTradeType: input.excludedTradeType,
     destinationRouteState: input.destinationRouteState,
     externalityState: input.externalityState,
     reviewState: input.reviewState,
@@ -2608,6 +2624,11 @@ export function evaluateMpgfCrecProjectHardGate(
     blockers,
     "project_hard_gate_scope_not_valid_moral_public_good",
     input.projectScopeState === "valid_moral_public_good",
+  );
+  addBlocker(
+    blockers,
+    "project_hard_gate_excluded_trade_type_present",
+    input.excludedTradeType === null,
   );
   addBlocker(
     blockers,
@@ -5050,6 +5071,8 @@ function contributorBenefitContextHashPayload(input: MpgfCrecContributorBenefitE
     paymentCommitmentSnapshotHash: input.paymentCommitmentSnapshotHash,
     feeQuoteHash: input.feeQuoteHash,
     contributionRowHash: input.contributionRowHash,
+    projectScopeState: input.projectScopeState,
+    excludedTradeType: input.excludedTradeType,
     grossCapturedCents: input.grossCapturedCents,
     feeCents: input.feeCents,
     netRecipientDisbursedCents: input.netRecipientDisbursedCents,
@@ -5095,6 +5118,7 @@ export function evaluateMpgfCrecContributorBenefitEligibility(
   addBlocker(blockers, "contributor_benefit_same_control_not_excluded", input.sameControlExcluded === true);
   addBlocker(blockers, "contributor_benefit_claimant_conflict_not_clear", input.claimantConflictState === "no_conflict");
   addBlocker(blockers, "contributor_benefit_project_scope_invalid", input.projectScopeState === "valid_moral_public_good");
+  addBlocker(blockers, "contributor_benefit_excluded_trade_type_present", input.excludedTradeType === null);
   addBlocker(blockers, "contributor_benefit_externality_not_clear", input.externalityState === "clear");
   addBlocker(blockers, "contributor_benefit_review_not_approved", input.reviewState === "approved");
   addBlocker(blockers, "contributor_benefit_challenge_not_clear", input.challengeState === "clear" || input.challengeState === "non_blocking");
@@ -6388,6 +6412,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       shadowModeAllowsProvisionalBaselineAndActionEvidenceOnlyAsNonBindingLearning: true,
       openChallengesBlockedUnlessRecordedNonBlocking: true,
       projectScopeStateRequired: "valid_moral_public_good" as const,
+      excludedTradeTypeRequired: null,
       destinationRouteStateRequired: "valid" as const,
       externalityStateRequired: "clear" as const,
       reviewStateRequired: "approved" as const,
@@ -6395,6 +6420,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       conflictReviewStateRequired: "clear" as const,
       sponsorCompatibilityStateRequired: "compatible" as const,
       legalCustodyStateRequired: "clear" as const,
+      hardGateHashBindsExcludedTradeType: true,
       hardGateHashBindsBaselineActionAndReviewStates: true,
       failureBonusEligibilityRequiresProjectHardGateHash: true,
     },

@@ -2034,6 +2034,7 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.failureBonus.claimantConflictSnapshotBindsExactPayoutContext, true);
   assert.equal(report.clearingContract.failureBonus.claimantConflictSnapshotIdStoredOnClaims, true);
   assert.equal(report.hardGatesV1125.projectScopeState, "valid_moral_public_good");
+  assert.equal(report.hardGatesV1125.excludedTradeTypeRequired, null);
   assert.equal(report.hardGatesV1125.externalityStateRequired, "clear");
   assert.equal(report.hardGatesV1125.baselineIntegrityStateRequired, "approved");
   assert.equal(report.hardGatesV1125.actionEvidenceStateRequired, "approved");

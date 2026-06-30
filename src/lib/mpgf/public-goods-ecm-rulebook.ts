@@ -167,6 +167,7 @@ export interface MpgfPublicGoodsEcmRulebookReport {
   clearingContract: ReturnType<typeof buildMpgfCrecV1125ClearingContractSummary>;
   hardGatesV1125: {
     projectScopeState: "valid_moral_public_good";
+    excludedTradeTypeRequired: null;
     externalityStateRequired: "clear";
     baselineIntegrityStateRequired: "approved";
     baselineConfidenceStateRequired: "approved";
@@ -496,6 +497,7 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
   const clearingContract = buildMpgfCrecV1125ClearingContractSummary();
   const hardGatesV1125 = {
     projectScopeState: "valid_moral_public_good" as const,
+    excludedTradeTypeRequired: null,
     externalityStateRequired: "clear" as const,
     baselineIntegrityStateRequired: "approved" as const,
     baselineConfidenceStateRequired: "approved" as const,
