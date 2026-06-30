@@ -233,6 +233,7 @@ export const MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS = [
   "privacy_review",
   "anti_threat_review",
   "payment_replay_tests",
+  "provider_source_authentication_test",
   "marketplace_state_event_append_only_test",
   "evidence_challenge_tests",
   "reviewer_conflict_tests",
@@ -411,6 +412,8 @@ function descriptionForMoraltrade82Requirement(key: Moraltrade82ReleaseGateRequi
       return "Route health, public contract metadata, and baseline response shape are current for the requested release stage.";
     case "payment_replay_tests":
       return "Payment/provider replay, stale snapshot, wrong-account, idempotency, and server-time tests pass before money can move.";
+    case "provider_source_authentication_test":
+      return "Provider webhooks, third-party evidence feeds, identity checks, payment-rail checks, and destination-verification feeds are source-authenticated before they can change marketplace state.";
     case "marketplace_state_event_append_only_test":
       return "Agreement, payment, evidence, dispute, and blocker state changes use append-only marketplace_state_event records; terminal states cannot be silently reopened.";
     case "emergency_pause_test":
@@ -771,6 +774,7 @@ const CRECM_HANDOFF_REQUIRED_REQUIREMENTS = [
   "privacy_review",
   "anti_threat_review",
   "payment_replay_tests",
+  "provider_source_authentication_test",
   "marketplace_state_event_append_only_test",
   "evidence_challenge_tests",
   "reviewer_conflict_tests",
@@ -795,6 +799,7 @@ const DONATION_OFFSET_PILOT_REQUIRED_REQUIREMENTS = [
   "public_receipt_anti_gamification_test",
   "public_receipt_authenticity_revocation_test",
   "public_receipt_social_pressure_sensitive_action_test",
+  "provider_source_authentication_test",
   "non_public_goods_subsidy_schedule_test",
   "direct_pair_clearing_test",
   "cause_bucket_taxonomy_review_test",
@@ -838,6 +843,7 @@ const PLEDGE_SWAP_MANUAL_PILOT_REQUIRED_REQUIREMENTS = [
   "public_receipt_anti_gamification_test",
   "public_receipt_authenticity_revocation_test",
   "public_receipt_social_pressure_sensitive_action_test",
+  "provider_source_authentication_test",
   "commitment_inventory_double_count_test",
   "atomic_settlement_group_test",
   "pledge_swap_synchronized_performance_test",

@@ -73,7 +73,7 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.blockers.length, 0);
-  assert.equal(MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.length, 94);
+  assert.equal(MORALTRADE82_RELEASE_GATE_REQUIREMENT_KEYS.length, 95);
   assert.deepEqual(contract.documentedReleaseStages, [...MORALTRADE82_RELEASE_STAGES]);
   assert.deepEqual(contract.documentedFeatureFlags, [...MORALTRADE82_FEATURE_FLAGS]);
   assert.ok(contract.documentedReleaseStages.includes("capped_real_money_external_crecm_module"));
@@ -222,6 +222,16 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
         /terminal states cannot be silently reopened/i.test(requirement.description),
     ),
   );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "provider_source_authentication_test" &&
+        /third-party evidence feeds/i.test(requirement.description) &&
+        /source-authenticated before they can change marketplace state/i.test(
+          requirement.description,
+        ),
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -233,8 +243,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
   assert.equal(evaluation.requiredRequirementCount, 5);
-  assert.equal(evaluation.inactiveRequirementCount, 89);
-  assert.equal(evaluation.notRequiredRequirementCount, 89);
+  assert.equal(evaluation.inactiveRequirementCount, 90);
+  assert.equal(evaluation.notRequiredRequirementCount, 90);
 });
 
 test("moraltrade82 documented preview stages use the same fail-closed evaluator", () => {
@@ -313,6 +323,10 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
         return result(entry.key, "unknown");
       }
 
+      if (entry.key === "provider_source_authentication_test") {
+        return result(entry.key, "failed");
+      }
+
       if (entry.key === "marketplace_state_event_append_only_test") {
         return result(entry.key, "failed");
       }
@@ -339,6 +353,11 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
   assert.ok(
     payable.blockers.includes(
       "required_result_not_passed:payment_replay_tests:unknown",
+    ),
+  );
+  assert.ok(
+    payable.blockers.includes(
+      "required_result_not_passed:provider_source_authentication_test:failed",
     ),
   );
   assert.ok(
