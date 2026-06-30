@@ -11414,10 +11414,322 @@ pre,
   padding: 1.1rem;
 }
 
+.moral-goods-discovery {
+  display: grid;
+  gap: 1.15rem;
+  scroll-margin-top: 1rem;
+}
+
+.moral-goods-discovery-head {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(300px, 0.58fr);
+  gap: 1rem;
+  align-items: end;
+}
+
+.moral-goods-discovery-head h2,
+.moral-goods-discovery-head p {
+  margin: 0;
+}
+
+.moral-goods-discovery-head h2 {
+  max-width: 16ch;
+}
+
+.moral-goods-discovery-head p:not(.eyebrow) {
+  margin-top: 0.55rem;
+  color: var(--ink-soft);
+}
+
+.moral-goods-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.moral-goods-search input {
+  margin: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.moral-goods-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.moral-goods-shortcut {
+  display: grid;
+  gap: 0.55rem;
+  min-height: 10.2rem;
+  padding: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.moral-goods-shortcut:hover,
+.moral-goods-shortcut:focus-visible,
+.moral-goods-shortcut.is-active {
+  border-color: rgba(79, 117, 159, 0.42);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.moral-goods-shortcut .icon-mark {
+  width: 2.7rem;
+  height: 2.7rem;
+}
+
+.moral-goods-shortcut span {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.moral-goods-shortcut strong {
+  color: inherit;
+  font-size: 0.96rem;
+  line-height: 1.18;
+}
+
+.moral-goods-shortcut small,
+.moral-goods-shortcut em {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.moral-goods-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.moral-goods-chip-row a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.moral-goods-chip-row a:hover,
+.moral-goods-chip-row a:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.moral-goods-discovery-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.36fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.moral-goods-deal-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.moral-goods-result-count {
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+}
+
+.moral-goods-deal-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr) minmax(160px, 0.24fr);
+  gap: 1rem;
+  align-items: stretch;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.moral-goods-deal-media {
+  display: grid;
+  align-content: space-between;
+  min-height: 10rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, var(--surface-muted), var(--surface));
+}
+
+.moral-goods-deal-media .icon-mark {
+  width: 3rem;
+  height: 3rem;
+}
+
+.moral-goods-deal-media span {
+  color: var(--accent-deep);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.moral-goods-deal-main {
+  display: grid;
+  gap: 0.62rem;
+  align-content: start;
+}
+
+.moral-goods-deal-main h3,
+.moral-goods-deal-main p {
+  margin: 0;
+}
+
+.moral-goods-deal-main h3 {
+  max-width: 34ch;
+  font-size: clamp(1.18rem, 2vw, 1.55rem);
+  line-height: 1.08;
+}
+
+.moral-goods-deal-main h3 a {
+  color: var(--ink);
+}
+
+.moral-goods-deal-main p:not(.eyebrow) {
+  color: var(--ink-soft);
+  line-height: 1.48;
+}
+
+.moral-goods-proof-row,
+.moral-goods-deal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  align-items: center;
+}
+
+.moral-goods-proof-row span,
+.moral-goods-deal-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0.28rem 0.52rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
+.moral-goods-proof-row span:first-child {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.moral-goods-progress {
+  overflow: hidden;
+  height: 0.46rem;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.moral-goods-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.moral-goods-price-block {
+  display: grid;
+  gap: 0.45rem;
+  align-content: center;
+  justify-items: end;
+  text-align: right;
+}
+
+.moral-goods-price-block strong,
+.moral-goods-preview-amount {
+  color: var(--accent-deep);
+  font-family: var(--font-heading);
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+  line-height: 1;
+}
+
+.moral-goods-price-block span {
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+}
+
+.moral-goods-commitment-preview {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.moral-goods-commitment-preview h2,
+.moral-goods-commitment-preview p {
+  margin: 0;
+}
+
+.moral-goods-commitment-preview p:not(.eyebrow) {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.moral-goods-preview-lines {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.moral-goods-preview-lines div {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 0.48fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+}
+
+.moral-goods-preview-lines dt {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
+
+.moral-goods-preview-lines dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 1023px) {
   .offer-create-shell .offer-wizard-steps,
   .offer-create-shell .offer-template-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .moral-goods-shortcut-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .moral-goods-discovery-head,
+  .moral-goods-discovery-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .moral-goods-commitment-preview {
+    position: static;
   }
 }
 
@@ -11430,6 +11742,628 @@ pre,
 
   .offer-create-shell .offer-wizard-steps a {
     min-height: auto;
+  }
+
+  .moral-goods-search,
+  .moral-goods-deal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .moral-goods-shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .moral-goods-shortcut {
+    min-height: 8.8rem;
+  }
+
+  .moral-goods-deal-media {
+    min-height: 7rem;
+  }
+
+  .moral-goods-price-block {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+.moral-marketplace-home {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, var(--content-width));
+  margin: 0 auto 2rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface-soft);
+}
+
+.moral-marketplace-hero,
+.moral-marketplace-layout,
+.marketplace-detail-grid,
+.commitment-terms-columns {
+  display: grid;
+  gap: 1rem;
+}
+
+.moral-marketplace-hero {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.moral-marketplace-hero h2,
+.moral-marketplace-hero p,
+.moral-marketplace-feed-head h3,
+.deal-panel-head h2,
+.deal-panel-head h3,
+.deal-panel-head p,
+.moral-deal-title-row h3,
+.moral-deal-title-row p,
+.moral-deal-foot p,
+.deal-rule-list p,
+.commitment-sheet-header h3,
+.commitment-sheet-header p,
+.compatible-addition p,
+.deal-scout p,
+.commitment-row h3,
+.commitment-row p {
+  margin: 0;
+}
+
+.moral-marketplace-hero h2 {
+  max-width: 18ch;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.moral-marketplace-hero p:not(.detail-kicker),
+.moral-deal-title-row p,
+.moral-deal-foot p,
+.deal-rule-list p,
+.commitment-sheet-header p,
+.compatible-addition p,
+.deal-scout p,
+.commitment-row p {
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.moral-marketplace-context-row,
+.moral-deal-chip-row,
+.commitment-privacy-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.moral-marketplace-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.moral-marketplace-search input {
+  width: 100%;
+  min-height: 2.75rem;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.moral-marketplace-search input:focus {
+  outline: 0;
+}
+
+.moral-marketplace-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.moral-marketplace-category-tile {
+  display: grid;
+  align-content: space-between;
+  gap: 0.5rem;
+  min-height: 8.2rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.moral-marketplace-category-tile:hover,
+.moral-marketplace-category-tile:focus-visible,
+.moral-marketplace-category-tile.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.moral-marketplace-category-tile span {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.moral-marketplace-category-tile strong {
+  line-height: 1.12;
+}
+
+.moral-marketplace-category-tile small,
+.moral-marketplace-category-tile em {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  line-height: 1.25;
+}
+
+.moral-marketplace-filter-chips {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.1rem 0 0.35rem;
+  scrollbar-width: thin;
+}
+
+.moral-marketplace-filter-chips .source-pill {
+  flex: 0 0 auto;
+}
+
+.moral-marketplace-layout {
+  align-items: start;
+}
+
+.moral-marketplace-feed,
+.deal-scout,
+.deal-scout-form,
+.deal-scout-results,
+.compatible-addition-list,
+.commitment-list,
+.commitment-sheet-body,
+.moral-deal-card,
+.deal-economics-panel,
+.commitment-terms-panel,
+.compatible-additions {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.moral-marketplace-feed-head,
+.moral-deal-card-head,
+.moral-deal-title-row,
+.compatible-addition,
+.commitment-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.moral-deal-card {
+  padding: 0.9rem;
+  border-radius: var(--radius-md);
+}
+
+.moral-deal-card-detail {
+  border-color: rgba(107, 151, 200, 0.5);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+}
+
+.moral-deal-card-head {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.moral-deal-card-head > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.moral-deal-title-row {
+  align-items: start;
+}
+
+.moral-deal-title-row h3 {
+  font-size: clamp(1.05rem, 2vw, 1.4rem);
+  line-height: 1.12;
+}
+
+.moral-deal-title-row h3 a {
+  color: var(--ink);
+}
+
+.moral-deal-scan-grid,
+.deal-economics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.moral-deal-scan-grid div,
+.deal-economics-grid div {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.moral-deal-scan-grid dt,
+.deal-economics-grid dt {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.moral-deal-scan-grid dd,
+.deal-economics-grid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.moral-deal-progress {
+  overflow: hidden;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.moral-deal-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-deep);
+}
+
+.moral-deal-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.marketplace-empty-state {
+  min-height: 13rem;
+}
+
+.marketplace-detail-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.marketplace-detail-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  align-items: start;
+}
+
+.marketplace-detail-sidebar,
+.marketplace-detail-side {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.deal-economics-panel,
+.commitment-terms-panel,
+.compatible-additions,
+.deal-scout,
+.commitment-row {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.deal-rule-list,
+.trust-check-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.trust-check-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.commitment-terms-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.commitment-privacy-notes {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.commitment-sheet {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.commitment-sheet summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  color: var(--accent-deep);
+  font-weight: 700;
+  list-style: none;
+}
+
+.commitment-sheet summary::-webkit-details-marker {
+  display: none;
+}
+
+.commitment-sheet summary::after {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.commitment-sheet[open] summary::after {
+  content: "-";
+}
+
+.commitment-sheet-body {
+  padding: 0 1rem 1rem;
+}
+
+.commitment-sheet .button {
+  width: 100%;
+  justify-content: center;
+}
+
+.compatible-addition {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.deal-scout-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deal-scout-form .check-row,
+.deal-scout-form button {
+  grid-column: 1 / -1;
+}
+
+.deal-scout-result {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.commitments-center {
+  display: grid;
+  gap: 1rem;
+}
+
+.commitment-row-main {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.commitment-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.commitment-status-active,
+.commitment-status-authorized,
+.commitment-status-completed,
+.commitment-status-released {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.commitment-status-disputed,
+.commitment-status-refunded_or_released {
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+.commitment-status-evidence_due,
+.commitment-status-under_review,
+.commitment-status-challenge_window,
+.commitment-status-threshold_close {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.marketplace-bottom-nav {
+  display: none;
+}
+
+.marketplace-bottom-nav-item {
+  display: grid;
+  justify-items: center;
+  gap: 0.18rem;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.marketplace-bottom-nav-item .icon-mark {
+  width: 2rem;
+  height: 2rem;
+}
+
+.marketplace-bottom-nav-item.is-active {
+  color: var(--accent-deep);
+}
+
+.marketplace-bottom-nav-item.is-create .icon-mark {
+  transform: translateY(-0.42rem);
+  border-color: rgba(107, 151, 200, 0.5);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+@media (min-width: 760px) {
+  .moral-marketplace-hero {
+    grid-template-columns: minmax(0, 0.95fr) minmax(260px, 0.8fr);
+    align-items: end;
+  }
+
+  .moral-marketplace-category-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .moral-marketplace-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  }
+}
+
+@media (min-width: 1120px) {
+  .moral-marketplace-category-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .marketplace-detail-grid,
+  .commitment-terms-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-detail-sidebar,
+  .marketplace-detail-side {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .page-shell:has(.marketplace-bottom-nav) {
+    padding-bottom: 5.75rem;
+  }
+
+  .moral-marketplace-home {
+    width: calc(100% - 1rem);
+    padding: 0.65rem;
+    border-radius: var(--radius-md);
+  }
+
+  .moral-marketplace-search {
+    grid-template-columns: minmax(0, 1fr) minmax(5rem, auto);
+  }
+
+  .moral-marketplace-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.42rem;
+  }
+
+  .moral-marketplace-category-tile {
+    min-height: 7rem;
+    padding: 0.62rem;
+  }
+
+  .moral-marketplace-category-tile em {
+    display: none;
+  }
+
+  .moral-deal-title-row,
+  .moral-deal-foot,
+  .compatible-addition,
+  .moral-marketplace-feed-head {
+    grid-template-columns: 1fr;
+  }
+
+  .moral-deal-title-row .button,
+  .moral-marketplace-feed-head .button,
+  .compatible-addition .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .moral-deal-scan-grid,
+  .deal-economics-grid,
+  .deal-scout-form {
+    grid-template-columns: 1fr;
+  }
+
+  .commitment-sheet[open]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 69;
+    background: rgba(29, 37, 48, 0.48);
+  }
+
+  .commitment-sheet[open] .commitment-sheet-body {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 70;
+    max-height: min(82vh, 42rem);
+    overflow: auto;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    background: var(--surface);
+    box-shadow: 0 -10px 30px rgba(29, 37, 48, 0.18);
+  }
+
+  .marketplace-bottom-nav {
+    position: fixed;
+    right: 0.75rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    left: 0.75rem;
+    z-index: 60;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.25rem;
+    min-height: 4rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 12px 28px rgba(29, 37, 48, 0.16);
+    backdrop-filter: blur(14px);
   }
 }
 

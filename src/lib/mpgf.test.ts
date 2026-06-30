@@ -1640,7 +1640,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
   assert.match(mpgfHubPage, /title="Common Ground Budget"/);
-  assert.match(mpgfHubPage, /Preview Common Ground Budget/);
+  assert.match(mpgfHubPage, /Preview a Common Ground Budget/);
   assert.match(mpgfHubPage, /Common Ground Budget status strip/);
   assert.match(mpgfHubPage, /Public Goods Fund sealed summary/);
   assert.match(mpgfHubPage, /No charge now/);

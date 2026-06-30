@@ -14,7 +14,7 @@ export type MarketplaceIntakeRouteKey =
   | "ordinary_matching_or_cofunding"
   | "ordinary_procurement_or_service"
   | "self_offset_bookkeeping"
-  | "external_crecm_module"
+  | "public_goods_module"
   | "background_networking_request"
   | "prohibited_or_unsupported";
 
@@ -140,7 +140,7 @@ export const MARKETPLACE_INTAKE_ROUTE_AWAY_KEYS: MarketplaceIntakeRouteKey[] = [
   "ordinary_matching_or_cofunding",
   "ordinary_procurement_or_service",
   "self_offset_bookkeeping",
-  "external_crecm_module",
+  "public_goods_module",
   "background_networking_request",
   "prohibited_or_unsupported",
 ];
@@ -231,13 +231,13 @@ export const MARKETPLACE_INTAKE_TRIAGE_ROUTES: MarketplaceIntakeTriageRoute[] = 
       "Personal self-offsets can be useful records, but they do not count as interpersonal moral-trade agreements.",
   },
   {
-    key: "external_crecm_module",
-    label: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel} external CRECM module`,
+    key: "public_goods_module",
+    label: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel} public-goods module`,
     href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
     status: "Separate module",
     routeEligible: false,
     routeKind: "safe_external_path",
-    safeReasonCategory: "external CRECM public-goods module",
+    safeReasonCategory: "moral public-goods module",
     nextAction: "Open Public Goods Fund",
     correctionPath: "Return to this page only for non-public-goods donation offsets or pledge swaps.",
     summary: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
@@ -333,7 +333,7 @@ const INITIAL_ROUTE_TO_ROUTE_KEY: Record<
   ordinary_donation_or_matching: "ordinary_donation",
   ordinary_procurement_or_service: "ordinary_procurement_or_service",
   self_offset_or_personal_bookkeeping: "self_offset_bookkeeping",
-  public_goods_candidate: "external_crecm_module",
+  public_goods_candidate: "public_goods_module",
   background_networking_request: "background_networking_request",
   prohibited_or_unsupported: "prohibited_or_unsupported",
   unclear_manual_review: null,
@@ -370,7 +370,7 @@ const SAMPLE_TRIAGE_RECORDS: MarketplaceIntakeTriageRecord[] = [
     userStatedGoalHash:
       "sha256:4444444444444444444444444444444444444444444444444444444444444444",
     initialRoute: "public_goods_candidate",
-    routeReasonCodes: ["external_crecm_module", "public_goods_boundary"],
+    routeReasonCodes: ["public_goods_module", "public_goods_boundary"],
     moralTradeCandidate: false,
     publicGoodsOrCrecMBoundary: true,
     backgroundNetworkingBoundary: false,

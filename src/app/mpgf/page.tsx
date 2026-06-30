@@ -83,7 +83,7 @@ export default async function MpgfPage() {
       actions={
         <>
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview Common Ground Budget
+            Preview a Common Ground Budget
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
@@ -207,7 +207,7 @@ export default async function MpgfPage() {
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href={previewBudgetHref}>
-            Preview Common Ground Budget
+            Preview a Common Ground Budget
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round

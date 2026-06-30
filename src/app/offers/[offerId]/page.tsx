@@ -18,6 +18,14 @@ import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-butto
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  CommitmentSheet,
+  CommitmentTermsPanel,
+  CompatibleAdditions,
+  DealEconomicsPanel,
+  MarketplaceBottomNav,
+  MoralDealCard,
+} from "@/components/marketplace/marketplace-components";
+import {
   getInterestForOffer,
   getOfferById,
   getOfferCartState,
@@ -36,6 +44,10 @@ import {
 } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
+import {
+  buildCompatibleAdditions,
+  marketplaceDealFromOfferRecord,
+} from "@/lib/marketplace-deals";
 import {
   PERFORMANCE_BOND_COUNTERPARTY_WARNING,
   PERFORMANCE_BOND_EVIDENCE_TEMPLATES,
@@ -63,6 +75,7 @@ import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
+import { hasStripeEnv } from "@/lib/stripe";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
@@ -382,6 +395,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     offerImpact: offer.offer_impact,
     minCounterpartyImpact: offer.min_counterparty_impact,
   });
+  const marketplaceDeal = marketplaceDealFromOfferRecord(offer);
+  const recommendedMarketplaceDeals = recommendations
+    .map((recommendation) => recommendation.recommendedOffer)
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .map(marketplaceDealFromOfferRecord);
+  const compatibleAdditions = buildCompatibleAdditions(marketplaceDeal, recommendedMarketplaceDeals);
+  const commitmentHref = !viewer
+    ? signInToRespondHref
+    : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool"
+      ? poolJoinHref ?? respondReturnTo
+      : respondReturnTo;
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -542,6 +566,41 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             {formMessage.text}
           </div>
         ) : null}
+
+        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Marketplace terms</p>
+            <h2 id="marketplace-detail-heading">Commitment preview</h2>
+            <p>
+              The marketplace view puts exposure, timing, verification, and failure rules before
+              the full review dossier. It does not bypass the existing response, payment, or review
+              gates.
+            </p>
+          </div>
+          <div className="marketplace-detail-grid">
+            <MoralDealCard
+              deal={marketplaceDeal}
+              secondaryAction={
+                <Link className="button button-secondary button-mini" href="#commitment-sheet">
+                  Open commitment sheet
+                </Link>
+              }
+              variant="detail"
+            />
+            <div className="marketplace-detail-side">
+              <DealEconomicsPanel deal={marketplaceDeal} />
+              <CommitmentSheet
+                commitHref={commitmentHref}
+                deal={marketplaceDeal}
+                paymentSupportAvailable={hasStripeEnv()}
+              />
+            </div>
+          </div>
+          <div className="marketplace-detail-grid marketplace-detail-grid-secondary">
+            <CommitmentTermsPanel deal={marketplaceDeal} />
+            <CompatibleAdditions additions={compatibleAdditions} />
+          </div>
+        </section>
 
         {offer.mode === "offset" && offer.donationOffset?.moderation_status === "flagged" ? (
           <div className="status-banner status-banner-error">
@@ -1559,6 +1618,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         </section>
       </main>
 
+      <MarketplaceBottomNav active="recommended" />
       <SiteFooter />
     </div>
   );

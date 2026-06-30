@@ -4,6 +4,10 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  MarketplaceBottomNav,
+  MarketplaceHome,
+} from "@/components/marketplace/marketplace-components";
+import {
   Breadcrumbs,
   EmptyState,
   IconMark,
@@ -23,6 +27,11 @@ import {
   REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
 } from "@/lib/marketplace-seed-templates";
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
+import {
+  buildMarketplaceDeals,
+  buildMarketplaceSurface,
+  parseMarketplaceQuery,
+} from "@/lib/marketplace-deals";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { getMpgfCrecV1125AuditBundleApi } from "@/lib/mpgf/public-goods-crecm-route-contract";
 import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
@@ -768,6 +777,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const createPledgeSwapTemplateHref = viewer
     ? "/offers/new?mode=pledge"
     : "/signup?returnTo=/offers/new%3Fmode%3Dpledge";
+  const marketplaceQuery = parseMarketplaceQuery(resolvedSearchParams);
+  const marketplaceDeals = buildMarketplaceDeals({
+    liveOffers: offersPage.items,
+    publicGoodsCampaigns: seedRoundProjects,
+    publicGoodsMatchPool: demoMpgfMatchPool,
+    publicGoodsRound: demoMpgfAssuranceRound,
+    workedOffers: CANONICAL_WORKED_CASE_OFFERS,
+  });
+  const marketplaceSurface = buildMarketplaceSurface(marketplaceDeals, marketplaceQuery);
   const publicGoodsSearchIntent = isPublicGoodsDirectoryIntent({ formats, searchQuery });
   const explicitViewParam = readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view");
   const defaultView: DirectoryView = publicGoodsSearchIntent
@@ -1091,11 +1109,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
                 : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund without mixing their counts."}
             </p>
-            {publicGoodsSearchIntent ? (
-              <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
-              </Link>
-            ) : null}
             {publicGoodsSearchIntent ? null : (
               <div className="collection-stats" aria-label="Marketplace counts">
                 <span>
@@ -1143,7 +1156,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {publicGoodsSearchIntent ? (
                 <>
                   <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                    {publicGoodsEntry?.primaryCta.label ?? "Preview Common Ground Budget"}
+                    {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
                   </Link>
                   {publicGoodsEntry?.secondaryCtas.map((action) => (
                     <Link className="button button-secondary" href={action.href} key={action.key}>
@@ -1197,6 +1210,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {formMessage.text}
           </div>
         ) : null}
+
+        {showPublicGoodsEntryCard ? null : (
+          <MarketplaceHome
+            createHref={createTemplateHref}
+            query={marketplaceQuery}
+            surface={marketplaceSurface}
+          />
+        )}
 
         {showPublicGoodsEntryCard ? (
           <section
@@ -1310,6 +1331,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </div>
             </dl>
             <div className="marketplace-bootstrap-actions">
+              <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
+                {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
+              </Link>
               {publicGoodsEntry?.secondaryCtas.map((action) => (
                 <Link className="button button-secondary" href={action.href} key={action.key}>
                   {action.label}
@@ -2073,7 +2097,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       </dl>
                       <div className="marketplace-bootstrap-actions">
                         <Link className="button button-primary" href={seedRoundHref}>
-                          Preview Common Ground Budget
+                          Preview a Common Ground Budget
                         </Link>
                         <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
                           Open Public Goods Fund
@@ -2384,6 +2408,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         </section>
       </main>
 
+      <MarketplaceBottomNav active="recommended" />
       <SiteFooter />
     </div>
   );
