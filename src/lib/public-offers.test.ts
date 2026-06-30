@@ -247,6 +247,23 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.exactLiveProgressExposed, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.publicGoodsModuleCount, 1);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.liveOfferCount, 0);
+  assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.accountingSnapshot, {
+    grossCapturedCents: 0,
+    feeExcludedCents: 0,
+    netRecipientDisbursedCents: 0,
+    actualClearedCents: 0,
+    countedCents: 0,
+    matchEligibleCents: 0,
+    sponsorPoolCents: 150_000,
+    successRewardCents: 0,
+    coordinationCreditCount: 0,
+    impactCertificateCount: 0,
+    ordinaryOfferCount: 0,
+    workedExampleCount: publicGoodSearchPayload.meta.workedExampleCount,
+    demoRecordCount: publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.demoRecordCount ?? -1,
+    publicGoodsModuleCount: 1,
+    exactLiveProgressExposed: false,
+  });
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.copyValidation.ok, true);
   assert.equal(
     publicGoodSearchPayload.publicGoodsEntry?.copyValidation.policy,

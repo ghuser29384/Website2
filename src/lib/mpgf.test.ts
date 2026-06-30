@@ -226,6 +226,7 @@ import {
   MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY,
   MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY,
   buildMpgfPublicGoodsEcmRulebookReport,
+  getMpgfMechanismVersionFeatureFlag,
   getMpgfPublicGoodsEcmRulebookReportApi,
 } from "./mpgf/public-goods-ecm-rulebook";
 import { MPGF_CRECM_COPY_VALIDATION_POLICY } from "./mpgf/public-goods-crecm-copy";
@@ -1894,10 +1895,27 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
 
   assert.equal(report.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
   assert.equal(report.mechanism.abbreviation, "CRECM");
+  assert.equal(report.mechanism.fullTechnicalLabel, "Coalition-Routed Escrowed Conditional Matching v1.125");
   assert.equal(report.mechanism.technicalLabel, "CRECM v1.125");
+  assert.equal(report.mechanism.legacyMechanismLabel, "Verified Assurance Matching pilot");
   assert.equal(report.mechanism.userFacingLabel, "Common Ground Budget");
   assert.equal(report.mechanism.sourceSpec, "moralpublicgoods131.md");
   assert.equal(report.mechanism.deploymentFlag, "crecm_v1_125");
+  assert.equal(report.mechanism.featureFlag.envName, "MPGF_MECHANISM_VERSION");
+  assert.equal(report.mechanism.featureFlag.enabledValue, "crecm_v1_125");
+  assert.equal(report.mechanism.featureFlag.legacyPagesRemainReadable, true);
+  assert.equal(report.mechanism.featureFlag.currentMpgfPagesDeleted, false);
+  assert.deepEqual(getMpgfMechanismVersionFeatureFlag("crecm_v1_125"), {
+    envName: "MPGF_MECHANISM_VERSION",
+    enabledValue: "crecm_v1_125",
+    configuredValue: "crecm_v1_125",
+    crecmV1125Active: true,
+    legacyPagesRemainReadable: true,
+    currentMpgfPagesDeleted: false,
+  });
+  assert.equal(getMpgfMechanismVersionFeatureFlag("verified_assurance_matching_pilot").crecmV1125Active, false);
+  assert.equal(getMpgfMechanismVersionFeatureFlag(undefined).configuredValue, "unset");
+  assert.equal(getMpgfMechanismVersionFeatureFlag("crecm_v1_96").configuredValue, "unsupported");
   assert.ok(report.mechanism.notPureMechanism.includes("not_pure_ecm_without_common_ground_budget"));
   assert.equal(report.ecmPlusHybridPolicy, MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY);
   assert.equal(report.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
@@ -5039,6 +5057,14 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
       netNewFundingProxy: "uncertain",
     },
   });
+  const publicExperienceEvent = buildMpgfPublicGoodsAnalyticsEvent({
+    eventType: "public_goods_ordinary_offer_drawer_opened",
+    eventJson: {
+      surface: "public_campaign_page",
+      privateByDefault: true,
+      publicAggregationOnly: true,
+    },
+  });
   const route = readFileSync("src/app/api/mpgf/public-goods/analytics/route.ts", "utf8");
   const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
 
@@ -5055,6 +5081,9 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
   assert.equal(contributionRouteEvent.event_json.contributionFunnelStep, "provider_link_created");
   assert.equal(contributionRouteEvent.event_json.amountBucket, "10_to_49");
   assert.equal(contributionRouteEvent.user_ref_hash?.includes("private-route-user"), false);
+  assert.equal(publicExperienceEvent.event_type, "public_goods_ordinary_offer_drawer_opened");
+  assert.equal(publicExperienceEvent.user_ref_hash, null);
+  assert.equal(publicExperienceEvent.event_json.publicAggregationOnly, true);
   assert.throws(
     () =>
       buildMpgfPublicGoodsAnalyticsEvent({
@@ -5217,6 +5246,66 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           },
           created_at: "2026-05-03T14:05:00.000Z",
         },
+        {
+          event_type: "moral_public_goods_search_routed_to_cgb_card",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:10:00.000Z",
+        },
+        {
+          event_type: "moral_public_goods_zero_state_suppressed",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:11:00.000Z",
+        },
+        {
+          event_type: "public_goods_primary_cta_clicked",
+          campaign_id: "campaign-global-health-basic-needs",
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:12:00.000Z",
+        },
+        {
+          event_type: "public_goods_ordinary_offer_drawer_opened",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:13:00.000Z",
+        },
+        {
+          event_type: "public_goods_empty_filter_default_prevented",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:14:00.000Z",
+        },
+        {
+          event_type: "stale_current_product_label_exposed",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:15:00.000Z",
+        },
+        {
+          event_type: "legacy_demo_label_correctness_recorded",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:16:00.000Z",
+        },
+        {
+          event_type: "public_goods_lane_count_separation_mismatch",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:17:00.000Z",
+        },
+        {
+          event_type: "public_goods_mobile_primary_cta_visibility_failed",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:18:00.000Z",
+        },
+        {
+          event_type: "public_goods_search_accessibility_announcement_failed",
+          campaign_id: null,
+          event_json: { surface: "public_campaign_page", publicAggregationOnly: true },
+          created_at: "2026-05-03T14:19:00.000Z",
+        },
       ],
       paymentProofs: [
         ...demoMpgfPublicGoodsPaymentProofs,
@@ -5264,6 +5353,10 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     const kpis = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
     const serialized = JSON.stringify(snapshot);
     const publicMetricValidation = validateMpgfPublicGoodsPublicMetricCatalog(snapshot.publicMetrics);
+    const publicMetricValue = (label: (typeof MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS)[number]) =>
+      snapshot.publicMetrics.metrics.find((metric) => metric.label === label)?.currentValue;
+    const publicMetricStatus = (label: (typeof MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS)[number]) =>
+      snapshot.publicMetrics.metrics.find((metric) => metric.label === label)?.instrumentationStatus;
 
     assert.equal(snapshot.privacyPolicy, "aggregate_only_no_user_or_reason_text");
     assert.equal(publicMetricValidation.passed, true);
@@ -5299,6 +5392,28 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       snapshot.publicMetrics.metrics.every(
         (metric) => metric.privacyScope === "aggregate_only_no_user_or_reason_text",
       ),
+    );
+    assert.equal(publicMetricValue("success-reward funded-vs-advertised ratio"), 0);
+    assert.equal(publicMetricValue("success-reward denied-by-reason counts"), 0);
+    assert.equal(publicMetricValue("success-reward dominance-mode disabled-by-underbacking count"), 0);
+    assert.equal(publicMetricValue("moral-public-goods search-intent routed-to-CGB-card count"), 1);
+    assert.equal(publicMetricValue("moral-public-goods search zero-state suppression count"), 1);
+    assert.equal(publicMetricValue("public-goods primary CTA click-through count"), 1);
+    assert.equal(publicMetricValue("public-goods ordinary-offer drawer open count"), 1);
+    assert.equal(publicMetricValue("empty-filter default-render prevention count"), 1);
+    assert.equal(publicMetricValue("stale-current-product-label exposure count"), 1);
+    assert.equal(publicMetricValue("legacy-demo-label correctness count"), 1);
+    assert.equal(publicMetricValue("public-goods lane-count separation mismatch count"), 1);
+    assert.equal(publicMetricValue("public-goods mobile primary-CTA visibility failure count"), 1);
+    assert.equal(publicMetricValue("public-goods search accessibility announcement failure count"), 1);
+    assert.equal(publicMetricStatus("public-goods ordinary-offer drawer open count"), "computed");
+    assert.equal(publicMetricStatus("stale-current-product-label exposure count"), "computed");
+    assert.equal(publicMetricStatus("Common Ground Budget row-count uniqueness violation count"), "instrumentation_pending");
+    assert.equal(
+      snapshot.publicMetrics.metrics.some(
+        (metric) => String(metric.label) === "moral public goods row-count uniqueness violation count",
+      ),
+      false,
     );
     assert.equal(snapshot.coordination.supportSignalEventCount, 2);
     assert.equal(snapshot.coordination.commonGroundSupportSignalEventCount, 1);

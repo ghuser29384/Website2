@@ -38,6 +38,35 @@ export const MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY =
 export const MPGF_PUBLIC_GOODS_CROSS_VIEW_SUBSIDY_POLICY =
   "base_1_to_1_then_capped_qf_plus_simple_cross_view_premium_schedule";
 
+export const MPGF_MECHANISM_VERSION_ENV_KEY = "MPGF_MECHANISM_VERSION";
+
+export type MpgfMechanismVersionFlagValue =
+  | "crecm_v1_125"
+  | "verified_assurance_matching_pilot"
+  | "unset"
+  | "unsupported";
+
+export function getMpgfMechanismVersionFeatureFlag(
+  rawValue = process.env.MPGF_MECHANISM_VERSION,
+) {
+  const normalized = rawValue?.trim();
+  const configuredValue: MpgfMechanismVersionFlagValue =
+    normalized === "crecm_v1_125" || normalized === "verified_assurance_matching_pilot"
+      ? normalized
+      : normalized
+        ? "unsupported"
+        : "unset";
+
+  return {
+    envName: MPGF_MECHANISM_VERSION_ENV_KEY,
+    enabledValue: "crecm_v1_125" as const,
+    configuredValue,
+    crecmV1125Active: configuredValue === "crecm_v1_125",
+    legacyPagesRemainReadable: true as const,
+    currentMpgfPagesDeleted: false as const,
+  };
+}
+
 export interface MpgfPublicGoodsRecipientRegistryRow {
   campaignId: string;
   title: string;
@@ -76,11 +105,14 @@ export interface MpgfPublicGoodsEcmRulebookReport {
   policy: typeof MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY;
   mechanism: {
     abbreviation: "CRECM";
+    fullTechnicalLabel: "Coalition-Routed Escrowed Conditional Matching v1.125";
     technicalLabel: "CRECM v1.125";
+    legacyMechanismLabel: "Verified Assurance Matching pilot";
     userFacingLabel: "Common Ground Budget";
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125";
     sourceSpec: "moralpublicgoods131.md";
     deploymentFlag: "crecm_v1_125";
+    featureFlag: ReturnType<typeof getMpgfMechanismVersionFeatureFlag>;
     notPureMechanism: [
       "not_pure_assurance",
       "not_pure_quadratic_funding",
@@ -424,11 +456,14 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
   };
   const mechanism = {
     abbreviation: "CRECM" as const,
+    fullTechnicalLabel: "Coalition-Routed Escrowed Conditional Matching v1.125" as const,
     technicalLabel: "CRECM v1.125" as const,
+    legacyMechanismLabel: "Verified Assurance Matching pilot" as const,
     userFacingLabel: "Common Ground Budget" as const,
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125" as const,
     sourceSpec: "moralpublicgoods131.md" as const,
     deploymentFlag: "crecm_v1_125" as const,
+    featureFlag: getMpgfMechanismVersionFeatureFlag(),
     notPureMechanism: [
       "not_pure_assurance",
       "not_pure_quadratic_funding",

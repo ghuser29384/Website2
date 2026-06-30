@@ -12,7 +12,7 @@ import {
   type PublicReviewedSeedTemplateSummary,
 } from "@/lib/marketplace-seed-templates";
 import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
-import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import {
   MPGF_CRECM_COPY_VALIDATION_POLICY,
   validateMpgfCrecPublishedCopyBundle,
@@ -139,6 +139,24 @@ export interface PublicGoodsEntryCopyValidation {
   blockers: string[];
 }
 
+export interface PublicGoodsEntryAccountingSnapshot {
+  grossCapturedCents: number;
+  feeExcludedCents: number;
+  netRecipientDisbursedCents: number;
+  actualClearedCents: number;
+  countedCents: number;
+  matchEligibleCents: number;
+  sponsorPoolCents: number;
+  successRewardCents: number;
+  coordinationCreditCount: number;
+  impactCertificateCount: number;
+  ordinaryOfferCount: number;
+  workedExampleCount: number;
+  demoRecordCount: number;
+  publicGoodsModuleCount: number;
+  exactLiveProgressExposed: false;
+}
+
 export interface PublicGoodsEntryCard {
   id: "common-ground-budget-public-goods-fund";
   label: "Common Ground Budget";
@@ -163,6 +181,7 @@ export interface PublicGoodsEntryCard {
     demoRecordCount: number;
     publicGoodsModuleCount: number;
   };
+  accountingSnapshot: PublicGoodsEntryAccountingSnapshot;
   statusChips: string[];
   copyGuards: string[];
   copyValidation: PublicGoodsEntryCopyValidation;
@@ -716,6 +735,23 @@ export function buildPublicGoodsEntryCard({
       workedExampleCount,
       demoRecordCount: getPublicMarketplaceDemoCount(),
       publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
+    },
+    accountingSnapshot: {
+      grossCapturedCents: 0,
+      feeExcludedCents: 0,
+      netRecipientDisbursedCents: 0,
+      actualClearedCents: 0,
+      countedCents: 0,
+      matchEligibleCents: 0,
+      sponsorPoolCents: demoMpgfMatchPool.budgetCents,
+      successRewardCents: 0,
+      coordinationCreditCount: 0,
+      impactCertificateCount: 0,
+      ordinaryOfferCount: liveOfferCount,
+      workedExampleCount,
+      demoRecordCount: getPublicMarketplaceDemoCount(),
+      publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
+      exactLiveProgressExposed: false,
     },
     statusChips,
     copyGuards,
@@ -1408,6 +1444,34 @@ function reviewedSeedTemplatesSatisfyBootstrapPath(
   );
 }
 
+function publicGoodsAccountingSnapshotPreservesBoundaries(
+  entry: PublicGoodsEntryCard,
+  payload:
+    | Pick<PublicOffersCollectionPayload, "meta">
+    | Pick<PublicOffersFacetsPayload, "meta">,
+) {
+  const snapshot = entry.accountingSnapshot;
+
+  return (
+    snapshot.grossCapturedCents === 0 &&
+    snapshot.feeExcludedCents === 0 &&
+    snapshot.netRecipientDisbursedCents === 0 &&
+    snapshot.actualClearedCents === 0 &&
+    snapshot.countedCents === 0 &&
+    snapshot.matchEligibleCents === 0 &&
+    snapshot.sponsorPoolCents >= 0 &&
+    snapshot.successRewardCents === 0 &&
+    snapshot.coordinationCreditCount === 0 &&
+    snapshot.impactCertificateCount === 0 &&
+    snapshot.ordinaryOfferCount === payload.meta.liveOfferCount &&
+    snapshot.workedExampleCount === payload.meta.workedExampleCount &&
+    snapshot.demoRecordCount >= 0 &&
+    snapshot.publicGoodsModuleCount ===
+      (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
+    snapshot.exactLiveProgressExposed === false
+  );
+}
+
 function publicGoodsEntryPreservesBoundaries(
   payload:
     | Pick<PublicOffersCollectionPayload, "items" | "meta" | "publicGoodsEntry">
@@ -1447,6 +1511,7 @@ function publicGoodsEntryPreservesBoundaries(
       entry.laneSeparation.workedExampleCount === payload.meta.workedExampleCount &&
       entry.laneSeparation.publicGoodsModuleCount ===
         (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
+      publicGoodsAccountingSnapshotPreservesBoundaries(entry, payload) &&
       entry.copyGuards.some((claim) => /does not count as a live offer/i.test(claim)) &&
       entry.copyGuards.some((claim) => /does not expose exact live threshold/i.test(claim)) &&
       entry.copyValidation.ok &&

@@ -670,6 +670,14 @@ export default async function MpgfPage() {
             <dd>{rulebookReport.mechanism.technicalLabel}</dd>
           </div>
           <div>
+            <dt>New mechanism</dt>
+            <dd>{rulebookReport.mechanism.fullTechnicalLabel}</dd>
+          </div>
+          <div>
+            <dt>Legacy mechanism</dt>
+            <dd>{rulebookReport.mechanism.legacyMechanismLabel}</dd>
+          </div>
+          <div>
             <dt>Source rulebook</dt>
             <dd>{rulebookReport.mechanism.sourceSpec}</dd>
           </div>

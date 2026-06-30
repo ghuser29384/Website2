@@ -17,7 +17,17 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 export type MpgfPublicGoodsAnalyticsEventType =
   | "campaign_viewed"
   | "contribution_route_selected"
+  | "legacy_demo_label_correctness_recorded"
+  | "moral_public_goods_search_routed_to_cgb_card"
+  | "moral_public_goods_zero_state_suppressed"
+  | "public_goods_empty_filter_default_prevented"
+  | "public_goods_lane_count_separation_mismatch"
+  | "public_goods_mobile_primary_cta_visibility_failed"
+  | "public_goods_ordinary_offer_drawer_opened"
+  | "public_goods_primary_cta_clicked"
+  | "public_goods_search_accessibility_announcement_failed"
   | "support_signal_recorded"
+  | "stale_current_product_label_exposed"
   | "pledge_intent_recorded"
   | "threshold_status_evaluated"
   | "external_handoff_reconciled"
@@ -81,7 +91,17 @@ export interface RecordMpgfPublicGoodsAnalyticsEventResult {
 const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
   "campaign_viewed",
   "contribution_route_selected",
+  "legacy_demo_label_correctness_recorded",
+  "moral_public_goods_search_routed_to_cgb_card",
+  "moral_public_goods_zero_state_suppressed",
+  "public_goods_empty_filter_default_prevented",
+  "public_goods_lane_count_separation_mismatch",
+  "public_goods_mobile_primary_cta_visibility_failed",
+  "public_goods_ordinary_offer_drawer_opened",
+  "public_goods_primary_cta_clicked",
+  "public_goods_search_accessibility_announcement_failed",
   "support_signal_recorded",
+  "stale_current_product_label_exposed",
   "pledge_intent_recorded",
   "threshold_status_evaluated",
   "external_handoff_reconciled",

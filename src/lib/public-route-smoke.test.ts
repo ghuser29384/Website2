@@ -2184,6 +2184,10 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(mpfgPage, /Rulebook hash/);
   assert.match(mpfgPage, /Calculation version/);
   assert.match(mpfgPage, /Mechanism label/);
+  assert.match(mpfgPage, /New mechanism/);
+  assert.match(mpfgPage, /rulebookReport\.mechanism\.fullTechnicalLabel/);
+  assert.match(mpfgPage, /Legacy mechanism/);
+  assert.match(mpfgPage, /rulebookReport\.mechanism\.legacyMechanismLabel/);
   assert.match(mpfgPage, /Source rulebook/);
   assert.match(mpfgPage, /Sponsor pools/);
   assert.match(mpfgPage, /Proof path/);
@@ -5609,6 +5613,14 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /buildPublicGoodsEntryCard/);
   assert.match(offersPage, /publicGoodsEntry\?\.primaryCta/);
   assert.match(offersPage, /publicGoodsEntry\?\.secondaryCtas/);
+  assert.match(offersPage, /Gross captured/);
+  assert.match(offersPage, /Fees excluded/);
+  assert.match(offersPage, /Net recipient/);
+  assert.match(offersPage, /Counted \/ match-eligible/);
+  assert.match(offersPage, /Reward \/ credit \/ certificate/);
+  assert.match(offersPage, /Ordinary \/ worked \/ demo \/ module/);
+  assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.grossCapturedCents/);
+  assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.successRewardCents/);
   assert.match(offersPage, /showPublicGoodsEntryCard \? null : \(\s*<MarketplaceHome/);
   const mainContentIndex = offersPage.indexOf('<main id="main-content"');
   const publicGoodsResultIndex = offersPage.indexOf('id="public-goods-result-card"');

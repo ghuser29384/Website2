@@ -1110,7 +1110,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="hero-text">
               {publicGoodsSearchIntent
                 ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
-                : "Explore live offers, reviewed templates, worked examples, demo data, and the external CRECM module without mixing their counts."}
+                : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund without mixing their counts."}
             </p>
             {publicGoodsSearchIntent ? null : (
               <div className="collection-stats" aria-label="Marketplace counts">
@@ -1329,6 +1329,42 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <dd>gross, fee, net-recipient, actual, counted, and match-eligible kept separate</dd>
               </div>
               <div>
+                <dt>Gross captured</dt>
+                <dd>{formatUsd(publicGoodsEntry?.accountingSnapshot.grossCapturedCents ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Fees excluded</dt>
+                <dd>{formatUsd(publicGoodsEntry?.accountingSnapshot.feeExcludedCents ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Net recipient</dt>
+                <dd>{formatUsd(publicGoodsEntry?.accountingSnapshot.netRecipientDisbursedCents ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Counted / match-eligible</dt>
+                <dd>
+                  {formatUsd(publicGoodsEntry?.accountingSnapshot.countedCents ?? 0)} /{" "}
+                  {formatUsd(publicGoodsEntry?.accountingSnapshot.matchEligibleCents ?? 0)}
+                </dd>
+              </div>
+              <div>
+                <dt>Reward / credit / certificate</dt>
+                <dd>
+                  {formatUsd(publicGoodsEntry?.accountingSnapshot.successRewardCents ?? 0)} /{" "}
+                  {publicGoodsEntry?.accountingSnapshot.coordinationCreditCount ?? 0} /{" "}
+                  {publicGoodsEntry?.accountingSnapshot.impactCertificateCount ?? 0}
+                </dd>
+              </div>
+              <div>
+                <dt>Ordinary / worked / demo / module</dt>
+                <dd>
+                  {publicGoodsEntry?.accountingSnapshot.ordinaryOfferCount ?? liveOfferCount} /{" "}
+                  {publicGoodsEntry?.accountingSnapshot.workedExampleCount ?? workedExampleCount} /{" "}
+                  {publicGoodsEntry?.accountingSnapshot.demoRecordCount ?? seedRoundProjects.length} /{" "}
+                  {publicGoodsEntry?.accountingSnapshot.publicGoodsModuleCount ?? seedRoundCount}
+                </dd>
+              </div>
+              <div>
                 <dt>Consent boundary</dt>
                 <dd>Budget to Projects to Review; no binding save before final review</dd>
               </div>
@@ -1440,7 +1476,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="marketplace-bootstrap-head">
             <div>
               <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the external CRECM module.</h2>
+              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the Public Goods Fund.</h2>
               <p>
                 Live, template, worked-example, demo, and public-goods module surfaces stay
                 separated so the marketplace can build liquidity without implying custody, escrow,

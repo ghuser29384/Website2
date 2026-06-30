@@ -331,7 +331,7 @@ export const MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS = [
   "clearing input bundle component-hash mismatch count",
   "clearing input bundle uniqueness violation count",
   "snapshot / project-eligibility-snapshot uniqueness violation count",
-  "moral public goods row-count uniqueness violation count",
+  "Common Ground Budget row-count uniqueness violation count",
   "identity-eligibility row-count uniqueness violation count",
   "round-keyed payment-snapshot row-count uniqueness violation count",
   "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate",
@@ -1205,7 +1205,10 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     "non-binding settlement-preview dollars excluded from clearing": 0,
     "base-match funded-vs-advertised ratio": rateBps(roundAllocation.baseMatchBudgetCents, roundAllocation.baseMatchBudgetCents),
     "bonus-match funded-vs-advertised ratio": rateBps(roundAllocation.qfBonusBudgetCents, roundAllocation.qfBonusBudgetCents),
+    "success-reward funded-vs-advertised ratio": 0,
     "success-reward utilization": 0,
+    "success-reward denied-by-reason counts": 0,
+    "success-reward dominance-mode disabled-by-underbacking count": 0,
     "coordination-credit units issued": 0,
     "coordination-credit no-allocation-power invariant violation count": 0,
     "impact-certificate units issued": 0,
@@ -1230,8 +1233,21 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     "empty-filter default-render prevention count": analyticsEvents.filter(
       (event) => event.event_type === "public_goods_empty_filter_default_prevented",
     ).length,
-    "public-goods mobile primary-CTA visibility failure count": 0,
-    "public-goods search accessibility announcement failure count": 0,
+    "stale-current-product-label exposure count": analyticsEvents.filter(
+      (event) => event.event_type === "stale_current_product_label_exposed",
+    ).length,
+    "legacy-demo-label correctness count": analyticsEvents.filter(
+      (event) => event.event_type === "legacy_demo_label_correctness_recorded",
+    ).length,
+    "public-goods lane-count separation mismatch count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_lane_count_separation_mismatch",
+    ).length,
+    "public-goods mobile primary-CTA visibility failure count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_mobile_primary_cta_visibility_failed",
+    ).length,
+    "public-goods search accessibility announcement failure count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_search_accessibility_announcement_failed",
+    ).length,
   };
 
   return {

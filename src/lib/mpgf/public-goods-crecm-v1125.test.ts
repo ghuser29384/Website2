@@ -250,6 +250,40 @@ test("CRECM v1.125 exposes the Section 14 route surface as fail-closed route con
   assert.equal(intake.finalReviewRequiredBeforeBindingSave, true);
 });
 
+test("CRECM v1.125 migration persists rewards, credits, certificates, and sealed pledge defaults", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260630_mpgf_crecm_v1125_success_rewards_credits_certificates.sql",
+    "utf8",
+  );
+
+  assert.match(migration, /alter table public\.mpgf_public_goods_rounds/);
+  assert.match(migration, /mechanism_version text not null default 'verified_assurance_matching_pilot'/);
+  assert.match(migration, /'crecm_v1_125'/);
+  assert.match(migration, /success_reward_policy_version text not null default 'success_reward_v1'/);
+  assert.match(migration, /success_reward_budget_cents bigint not null default 0/);
+  assert.match(migration, /success_reward_rate_bps integer not null default 0/);
+  assert.match(migration, /success_reward_max_rate_bps integer not null default 0/);
+  assert.match(migration, /success_reward_dominance_mode text not null default 'off'/);
+  assert.match(migration, /sealed_pledge_mode text not null default 'blind_until_close'/);
+  assert.match(migration, /sealed_pledge_mode in \('blind_until_close', 'delayed_rounded_public', 'public_exact'\)/);
+  assert.match(migration, /impact_certificate_policy_hash text not null default 'sha256:pending-impact-certificate-policy'/);
+  assert.match(migration, /MPGF_MECHANISM_VERSION feature flag/);
+  assert.match(migration, /alter table public\.mpgf_public_goods_sponsor_commitments/);
+  assert.match(
+    migration,
+    /sponsor_pool_type in \('base_match', 'bonus_match', 'failure_bonus', 'fee_support', 'success_reward'\)/,
+  );
+  assert.match(migration, /create table if not exists public\.mpgf_public_goods_success_reward_claims/);
+  assert.match(migration, /create table if not exists public\.mpgf_public_goods_coordination_credit_ledger_entries/);
+  assert.match(migration, /create table if not exists public\.mpgf_public_goods_impact_certificate_claims/);
+  assert.match(migration, /non_transferable boolean not null default true check \(non_transferable = true\)/);
+  assert.match(migration, /affects_allocation_power boolean not null default false check \(affects_allocation_power = false\)/);
+  assert.match(migration, /retroactive_access_allowed boolean not null default false check \(retroactive_access_allowed = false\)/);
+  assert.match(migration, /alter table public\.mpgf_public_goods_success_reward_claims enable row level security/);
+  assert.match(migration, /grant all on public\.mpgf_public_goods_success_reward_claims to service_role/);
+  assert.doesNotMatch(migration, /grant select on public\.mpgf_public_goods_success_reward_claims to authenticated/);
+});
+
 function h(label: string) {
   return hashMpgfCrecV1125Value({ label });
 }
