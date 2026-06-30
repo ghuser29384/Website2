@@ -15,7 +15,7 @@ import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const paidActionOffersDescription =
-  "Paid action offers are not open to the public yet. Moral Trade keeps them deferred until identity, dispute, legal, and evidence workflows are mature enough for higher-trust paid moral action pilots.";
+  "Moral Trade keeps general paid action offers deferred until identity, dispute, legal, and evidence workflows are mature enough for higher-trust paid moral action pilots.";
 
 const paidActionAlternatives = [
   {
@@ -36,20 +36,20 @@ const paidActionAlternatives = [
 ] as const;
 
 export const metadata: Metadata = {
-  title: "Deferred paid action offers",
+  title: "Paid action offers are not open to the public yet",
   description: paidActionOffersDescription,
   alternates: {
     canonical: "/paid-action-offers",
   },
   openGraph: {
-    title: "Deferred paid action offers | Moral Trade",
+    title: "Paid action offers are not open to the public yet | Moral Trade",
     description: paidActionOffersDescription,
     url: getAbsoluteUrl("/paid-action-offers"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Deferred paid action offers | Moral Trade",
+    title: "Paid action offers are not open to the public yet | Moral Trade",
     description: paidActionOffersDescription,
   },
 };
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
 export default async function PaidActionOffersPage() {
   const viewer = await getViewer();
   const paidActionStructuredData = buildWebPageJsonLd({
-    name: "Deferred paid action offers | Moral Trade",
+    name: "Paid action offers are not open to the public yet | Moral Trade",
     description: paidActionOffersDescription,
     path: "/paid-action-offers",
   });

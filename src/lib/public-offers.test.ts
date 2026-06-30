@@ -270,16 +270,16 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.match(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")
       ?.description ?? "",
-    /moralpublicgoods131\.md \/ CRECM v1\.125/,
+    /moralpublicgoods102\.md \/ CRECM v1\.96/,
   );
   assert.ok(
     externalCrecPayload.publicContract.nonClaims.some((claim) =>
-      /moralpublicgoods131\.md \/ CRECM v1\.125/.test(claim),
+      /moralpublicgoods102\.md \/ CRECM v1\.96/.test(claim),
     ),
   );
   assert.equal(
     externalCrecPayload.publicContract.nonClaims.some((claim) =>
-      /moralpublicgoods102\.md|CRECM v1\.96|Verified Assurance Matching/.test(claim),
+      /moralpublicgoods131\.md|CRECM v1\.125|Verified Assurance Matching/.test(claim),
     ),
     false,
   );
