@@ -4,6 +4,12 @@ export type AuthMode = "login" | "signup";
 export type AuthMethod = "providers" | "email";
 export type OAuthProvider = "google" | "apple";
 
+const oauthProviders: OAuthProvider[] = ["google", "apple"];
+
+function envFlagEnabled(value: string | null | undefined) {
+  return /^(1|true|yes|on)$/i.test(value ?? "");
+}
+
 export function normalizeAuthMode(
   value: string | null | undefined,
   fallback: AuthMode = "login",
@@ -21,6 +27,23 @@ export function normalizeOAuthProvider(
   value: string | null | undefined,
 ): OAuthProvider | null {
   return value === "google" || value === "apple" ? value : null;
+}
+
+export function isOAuthProviderEnabled(provider: OAuthProvider) {
+  switch (provider) {
+    case "google":
+      return envFlagEnabled(process.env.AUTH_GOOGLE_ENABLED);
+    case "apple":
+      return envFlagEnabled(process.env.AUTH_APPLE_ENABLED);
+  }
+}
+
+export function getEnabledOAuthProviders() {
+  return oauthProviders.filter(isOAuthProviderEnabled);
+}
+
+export function getOAuthProviderLabel(provider: OAuthProvider) {
+  return provider === "google" ? "Google" : "Apple";
 }
 
 export function getAuthDefaultReturnTo(mode: AuthMode) {

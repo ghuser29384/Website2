@@ -6,7 +6,7 @@ import { getViewer } from "@/lib/app-data";
 export const metadata: Metadata = {
   title: "Create your Moral Trade account",
   description:
-    "Create a Moral Trade account with Google, Apple, or email, then add profile details later.",
+    "Create a Moral Trade account with email and enabled sign-in providers, then add profile details later.",
   robots: {
     index: false,
     follow: false,

@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 
+function envFlagEnabled(value: string | undefined) {
+  return /^(1|true|yes|on)$/i.test(value ?? "");
+}
+
 const publicRoutes = [
   "/",
   "/offers",
@@ -140,18 +144,31 @@ test("/offers/new offset creation layout stays broad without mobile overflow", a
 test("/login renders unified auth options and preserves returnTo", async ({ page }) => {
   await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
 
+  const googleEnabled = envFlagEnabled(process.env.AUTH_GOOGLE_ENABLED);
+  const appleEnabled = envFlagEnabled(process.env.AUTH_APPLE_ENABLED);
+
   await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
-  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Continue with Apple" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Continue with Email" })).toHaveAttribute(
     "href",
     "/login?mode=login&method=email&returnTo=%2Foffers%2Fnew",
   );
 
-  const googleProvider = page.locator('form:has(button:has-text("Continue with Google")) input[name="provider"]');
-  const appleProvider = page.locator('form:has(button:has-text("Continue with Apple")) input[name="provider"]');
-  await expect(googleProvider).toHaveValue("google");
-  await expect(appleProvider).toHaveValue("apple");
+  if (googleEnabled) {
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    const googleProvider = page.locator('form:has(button:has-text("Continue with Google")) input[name="provider"]');
+    await expect(googleProvider).toHaveValue("google");
+  } else {
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+  }
+
+  if (appleEnabled) {
+    await expect(page.getByRole("button", { name: "Continue with Apple" })).toBeVisible();
+    const appleProvider = page.locator('form:has(button:has-text("Continue with Apple")) input[name="provider"]');
+    await expect(appleProvider).toHaveValue("apple");
+  } else {
+    await expect(page.getByRole("button", { name: "Continue with Apple" })).toHaveCount(0);
+  }
+
   await expect(page.getByRole("link", { name: "Create an account" })).toHaveAttribute(
     "href",
     "/signup?mode=signup&returnTo=%2Foffers%2Fnew",

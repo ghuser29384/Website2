@@ -6,6 +6,8 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   buildAuthPath,
+  getEnabledOAuthProviders,
+  getOAuthProviderLabel,
   getAuthReturnTo,
   normalizeAuthMethod,
   normalizeAuthMode,
@@ -110,6 +112,9 @@ export function AuthPage({
   const returnTo = getAuthReturnTo(searchParams, mode);
   const formMessage = getFormMessage(searchParams);
   const supabaseReady = hasSupabaseEnv();
+  const enabledOAuthProviders = getEnabledOAuthProviders();
+  const hasSocialProviders = enabledOAuthProviders.length > 0;
+  const providerOptionLabel = enabledOAuthProviders.map(getOAuthProviderLabel).join(", ");
   const isSignup = mode === "signup";
   const authPath = buildAuthPath({ mode, returnTo, route: isSignup ? "/signup" : "/login" });
   const loginHref = buildAuthPath({ mode: "login", returnTo, route: "/login" });
@@ -191,9 +196,15 @@ export function AuthPage({
               </div>
             ) : null}
 
-            <div className="auth-provider-stack" aria-label="Social sign in options">
-              <ProviderButton mode={mode} provider="google" returnTo={returnTo} />
-              <ProviderButton mode={mode} provider="apple" returnTo={returnTo} />
+            <div className="auth-provider-stack" aria-label="Sign in options">
+              {enabledOAuthProviders.map((provider) => (
+                <ProviderButton
+                  key={provider}
+                  mode={mode}
+                  provider={provider}
+                  returnTo={returnTo}
+                />
+              ))}
               <Link className="auth-provider-button auth-email-reveal" href={emailHref}>
                 <span className="auth-provider-icon auth-provider-icon-mail" aria-hidden="true">
                   @
@@ -249,7 +260,9 @@ export function AuthPage({
               </div>
             ) : (
               <p className="auth-email-note">
-                Prefer email and password? Use Continue with Email.
+                {hasSocialProviders
+                  ? "Prefer email and password? Use Continue with Email."
+                  : "Email and password sign-in is available for this deployment."}
               </p>
             )}
 
@@ -270,7 +283,11 @@ export function AuthPage({
 
             {method === "email" ? (
               <p className="auth-provider-back">
-                <Link href={providersHref}>Back to Google, Apple, and email options</Link>
+                <Link href={providersHref}>
+                  {hasSocialProviders
+                    ? `Back to ${providerOptionLabel} and email options`
+                    : "Back to sign-in options"}
+                </Link>
               </p>
             ) : null}
 

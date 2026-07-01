@@ -251,9 +251,11 @@ import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-
 import {
   buildAuthPath,
   buildSupabaseAuthCallbackUrl,
+  getOAuthProviderLabel,
   getAuthDefaultReturnTo,
   normalizeAuthMode,
   normalizeOAuthProvider,
+  isOAuthProviderEnabled,
 } from "@/lib/auth-routes";
 import type {
   MoralTradeEvidenceClaimScope,
@@ -3299,6 +3301,14 @@ export async function oauthSignInAction(formData: FormData) {
     redirectWithMessage(authPath, "error", "Choose Google or Apple to continue.");
   }
 
+  if (!isOAuthProviderEnabled(provider)) {
+    redirectWithMessage(
+      authPath,
+      "error",
+      `${getOAuthProviderLabel(provider)} sign-in is not enabled for this deployment. Use email instead.`,
+    );
+  }
+
   if (!hasSupabaseEnv()) {
     redirectWithMessage(authPath, "error", "Supabase is not configured yet.");
   }
@@ -3315,7 +3325,12 @@ export async function oauthSignInAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithMessage(authPath, "error", error.message);
+    const message =
+      error.message.toLowerCase().includes("provider is not enabled") ||
+      error.message.toLowerCase().includes("unsupported provider")
+        ? `${getOAuthProviderLabel(provider)} sign-in is not enabled in Supabase yet. Use email instead.`
+        : error.message;
+    redirectWithMessage(authPath, "error", message);
   }
 
   if (!data.url) {
