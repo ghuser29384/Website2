@@ -62,6 +62,21 @@ export type PublicOffersApiRoute =
   | "/api/offers"
   | "/api/offers/:slug"
   | "/api/offers/facets";
+export type PublicGoodsDeploymentMode = "shadow" | "capped_pilot" | "full";
+export type PublicGoodsCtaSafety = "safe_preview" | "binding_intent";
+export const PUBLIC_GOODS_BINDING_CTA_PREREQUISITES = [
+  "sign_in",
+  "identity_verified",
+  "payment_prerequisite",
+  "explicit_project_stance",
+  "explicit_project_cap",
+  "explicit_condition",
+  "explicit_fallback_consent",
+  "final_review",
+  "normal_crecm_gates",
+] as const;
+export type PublicGoodsBindingCtaPrerequisite =
+  (typeof PUBLIC_GOODS_BINDING_CTA_PREREQUISITES)[number];
 
 export interface PublicOfferDuration {
   value: number | null;
@@ -154,7 +169,11 @@ export interface PublicGoodsEntryAction {
   method: "GET";
   rank: number;
   authRequired: boolean;
-  createsBindingIntent: false;
+  createsBindingIntent: boolean;
+  safety: PublicGoodsCtaSafety;
+  safeForDeploymentModes: PublicGoodsDeploymentMode[];
+  requiresFinalReviewBeforeBinding: boolean;
+  bindingIntentPrerequisites: PublicGoodsBindingCtaPrerequisite[];
 }
 
 export interface PublicGoodsEntryCopyValidation {
@@ -206,6 +225,14 @@ export interface PublicGoodsEntryCard {
   exactLiveProgressExposed: false;
   primaryCta: PublicGoodsEntryAction;
   secondaryCtas: PublicGoodsEntryAction[];
+  ctaHierarchy: {
+    deploymentMode: "capped_pilot";
+    safestNextActionKey: "preview-common-ground-budget";
+    firstCtaRank: 1;
+    bindingIntentCtaCount: number;
+    bindingIntentPrerequisites: PublicGoodsBindingCtaPrerequisite[];
+    finalReviewConsentBoundary: "Budget to Projects to Review";
+  };
   laneSeparation: {
     liveOfferCount: number;
     reviewedSeedTemplateCount: number;
@@ -833,6 +860,10 @@ export function buildPublicGoodsEntryCard({
     rank: 1,
     authRequired: false,
     createsBindingIntent: false,
+    safety: "safe_preview",
+    safeForDeploymentModes: ["shadow", "capped_pilot", "full"],
+    requiresFinalReviewBeforeBinding: false,
+    bindingIntentPrerequisites: [],
   };
   const secondaryCtas: PublicGoodsEntryAction[] = [
     {
@@ -843,6 +874,10 @@ export function buildPublicGoodsEntryCard({
       rank: 2,
       authRequired: false,
       createsBindingIntent: false,
+      safety: "safe_preview",
+      safeForDeploymentModes: ["shadow", "capped_pilot", "full"],
+      requiresFinalReviewBeforeBinding: false,
+      bindingIntentPrerequisites: [],
     },
     {
       key: "learn-how-it-works",
@@ -852,6 +887,10 @@ export function buildPublicGoodsEntryCard({
       rank: 3,
       authRequired: false,
       createsBindingIntent: false,
+      safety: "safe_preview",
+      safeForDeploymentModes: ["shadow", "capped_pilot", "full"],
+      requiresFinalReviewBeforeBinding: false,
+      bindingIntentPrerequisites: [],
     },
   ];
   const summary =
@@ -888,6 +927,16 @@ export function buildPublicGoodsEntryCard({
     exactLiveProgressExposed: false,
     primaryCta,
     secondaryCtas,
+    ctaHierarchy: {
+      deploymentMode: "capped_pilot",
+      safestNextActionKey: "preview-common-ground-budget",
+      firstCtaRank: 1,
+      bindingIntentCtaCount: [primaryCta, ...secondaryCtas].filter(
+        (action) => action.createsBindingIntent,
+      ).length,
+      bindingIntentPrerequisites: [...PUBLIC_GOODS_BINDING_CTA_PREREQUISITES],
+      finalReviewConsentBoundary: "Budget to Projects to Review",
+    },
     laneSeparation: {
       liveOfferCount,
       reviewedSeedTemplateCount,
@@ -1593,6 +1642,48 @@ function publicGoodsSearchHidesZeroFacetPanels(
   );
 }
 
+function publicGoodsActionPreservesCtaBoundary(action: PublicGoodsEntryAction) {
+  if (!action.createsBindingIntent) {
+    return (
+      action.safety === "safe_preview" &&
+      action.requiresFinalReviewBeforeBinding === false &&
+      action.bindingIntentPrerequisites.length === 0
+    );
+  }
+
+  return (
+    action.safety === "binding_intent" &&
+    action.authRequired === true &&
+    action.requiresFinalReviewBeforeBinding === true &&
+    PUBLIC_GOODS_BINDING_CTA_PREREQUISITES.every((prerequisite) =>
+      action.bindingIntentPrerequisites.includes(prerequisite),
+    )
+  );
+}
+
+function publicGoodsCtaHierarchyPreservesConsent(entry: PublicGoodsEntryCard) {
+  const actions = [entry.primaryCta, ...entry.secondaryCtas];
+  const bindingActions = actions.filter((action) => action.createsBindingIntent);
+  const ranks = actions.map((action) => action.rank);
+
+  return (
+    entry.ctaHierarchy.deploymentMode === "capped_pilot" &&
+    entry.ctaHierarchy.safestNextActionKey === entry.primaryCta.key &&
+    entry.ctaHierarchy.firstCtaRank === entry.primaryCta.rank &&
+    entry.ctaHierarchy.bindingIntentCtaCount === bindingActions.length &&
+    entry.ctaHierarchy.finalReviewConsentBoundary === "Budget to Projects to Review" &&
+    PUBLIC_GOODS_BINDING_CTA_PREREQUISITES.every((prerequisite) =>
+      entry.ctaHierarchy.bindingIntentPrerequisites.includes(prerequisite),
+    ) &&
+    entry.primaryCta.rank === 1 &&
+    entry.primaryCta.createsBindingIntent === false &&
+    entry.primaryCta.safety === "safe_preview" &&
+    entry.primaryCta.safeForDeploymentModes.includes(entry.ctaHierarchy.deploymentMode) &&
+    ranks.join(",") === [...ranks].sort((a, b) => a - b).join(",") &&
+    actions.every(publicGoodsActionPreservesCtaBoundary)
+  );
+}
+
 function marketplaceTabsAreSeparated(tabs: readonly PublicOffersTabSummary[]) {
   return (
     tabs.length === PUBLIC_MARKETPLACE_TAB_ORDER.length &&
@@ -1729,6 +1820,7 @@ function publicGoodsEntryPreservesBoundaries(
       entry.createsBindingIntent === false &&
       entry.primaryCta.createsBindingIntent === false &&
       entry.secondaryCtas.every((action) => action.createsBindingIntent === false) &&
+      publicGoodsCtaHierarchyPreservesConsent(entry) &&
       entry.noPrimaryZeroState &&
       entry.ordinaryOfferFiltersCollapsed &&
       entry.ordinaryOfferZeroStateSecondary &&
@@ -1811,6 +1903,14 @@ export function validatePublicOffersCollectionPayload(
       publicGoodsSearchHidesZeroFacetPanels(payload),
       payload.publicGoodsEntry
         ? `${Object.values(payload.meta.availableFacets).flat().length} ordinary facet(s); secondary=${payload.publicGoodsEntry.ordinaryOfferZeroStateSecondary}`
+        : "No public-goods entry.",
+    ),
+    validationCheck(
+      "public-goods-cta-hierarchy",
+      "Public-goods CTA hierarchy keeps the first action safe and gates any binding-intent path",
+      payload.publicGoodsEntry ? publicGoodsCtaHierarchyPreservesConsent(payload.publicGoodsEntry) : true,
+      payload.publicGoodsEntry
+        ? `${payload.publicGoodsEntry.primaryCta.label}; binding=${payload.publicGoodsEntry.ctaHierarchy.bindingIntentCtaCount}; boundary=${payload.publicGoodsEntry.ctaHierarchy.finalReviewConsentBoundary}`
         : "No public-goods entry.",
     ),
     validationCheck(
@@ -2015,6 +2115,14 @@ export function validatePublicOffersFacetsPayload(
       publicGoodsSearchHidesZeroFacetPanels(payload),
       payload.publicGoodsEntry
         ? `${Object.values(payload.availableFacets).flat().length} ordinary facet(s); secondary=${payload.publicGoodsEntry.ordinaryOfferZeroStateSecondary}`
+        : "No public-goods entry.",
+    ),
+    validationCheck(
+      "public-goods-cta-hierarchy",
+      "Public-goods facet responses keep the first CTA safe and gate any binding-intent path",
+      payload.publicGoodsEntry ? publicGoodsCtaHierarchyPreservesConsent(payload.publicGoodsEntry) : true,
+      payload.publicGoodsEntry
+        ? `${payload.publicGoodsEntry.primaryCta.label}; binding=${payload.publicGoodsEntry.ctaHierarchy.bindingIntentCtaCount}; boundary=${payload.publicGoodsEntry.ctaHierarchy.finalReviewConsentBoundary}`
         : "No public-goods entry.",
     ),
   ];

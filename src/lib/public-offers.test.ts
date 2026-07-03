@@ -6,6 +6,7 @@ import { GET as publicOffersFacetsRoute } from "../app/api/offers/facets/route";
 import { GET as publicOffersRoute } from "../app/api/offers/route";
 
 import {
+  PUBLIC_GOODS_BINDING_CTA_PREREQUISITES,
   buildPublicOfferDetailPayload,
   buildPublicOffersCollectionPayload,
   buildPublicOffersFacetsPayload,
@@ -253,10 +254,33 @@ test("public offers collection separates template, moral public goods, and demo 
     /Exact live progress may be hidden until the round closes/,
   );
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.rank, 1);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.safety, "safe_preview");
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.createsBindingIntent, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.authRequired, false);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.requiresFinalReviewBeforeBinding, false);
+  assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.bindingIntentPrerequisites, []);
+  assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.primaryCta.safeForDeploymentModes, [
+    "shadow",
+    "capped_pilot",
+    "full",
+  ]);
   assert.deepEqual(
     publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.label),
     ["View current round", "Learn how it works / View audit and rules"],
   );
+  assert.deepEqual(
+    publicGoodSearchPayload.publicGoodsEntry?.secondaryCtas.map((action) => action.safety),
+    ["safe_preview", "safe_preview"],
+  );
+  assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.ctaHierarchy, {
+    deploymentMode: "capped_pilot",
+    safestNextActionKey: "preview-common-ground-budget",
+    firstCtaRank: 1,
+    bindingIntentCtaCount: 0,
+    bindingIntentPrerequisites: [...PUBLIC_GOODS_BINDING_CTA_PREREQUISITES],
+    finalReviewConsentBoundary: "Budget to Projects to Review",
+  });
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.countsAsLiveOffer, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.countsAsOrdinaryListing, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.createsBindingIntent, false);
@@ -393,6 +417,13 @@ test("public offers route explicit moral-public-goods query, route, and filter a
     assert.equal(payload.publicGoodsEntry?.zeroFacetPanelsHidden, true, label);
     assert.deepEqual(Object.values(payload.meta.availableFacets).flat(), [], label);
     assert.equal(payload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget", label);
+    assert.equal(payload.publicGoodsEntry?.primaryCta.safety, "safe_preview", label);
+    assert.equal(payload.publicGoodsEntry?.ctaHierarchy.deploymentMode, "capped_pilot", label);
+    assert.deepEqual(
+      payload.publicGoodsEntry?.ctaHierarchy.bindingIntentPrerequisites,
+      [...PUBLIC_GOODS_BINDING_CTA_PREREQUISITES],
+      label,
+    );
   }
 });
 
@@ -517,6 +548,14 @@ test("public offers API route returns moral public goods entry for moral-public-
   assert.equal(body.publicGoodsEntry.resultRank, 1);
   assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
   assert.equal(body.publicGoodsEntry.primaryCta.key, "preview-common-ground-budget");
+  assert.equal(body.publicGoodsEntry.primaryCta.safety, "safe_preview");
+  assert.equal(body.publicGoodsEntry.primaryCta.requiresFinalReviewBeforeBinding, false);
+  assert.deepEqual(body.publicGoodsEntry.primaryCta.bindingIntentPrerequisites, []);
+  assert.equal(body.publicGoodsEntry.ctaHierarchy.safestNextActionKey, "preview-common-ground-budget");
+  assert.equal(body.publicGoodsEntry.ctaHierarchy.bindingIntentCtaCount, 0);
+  assert.deepEqual(body.publicGoodsEntry.ctaHierarchy.bindingIntentPrerequisites, [
+    ...PUBLIC_GOODS_BINDING_CTA_PREREQUISITES,
+  ]);
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.countsAsOrdinaryListing, false);
   assert.equal(body.publicGoodsEntry.createsBindingIntent, false);
@@ -610,6 +649,8 @@ test("public offer facets API route preserves moral public goods entry for publi
   assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
+  assert.equal(body.publicGoodsEntry.primaryCta.safety, "safe_preview");
+  assert.equal(body.publicGoodsEntry.ctaHierarchy.finalReviewConsentBoundary, "Budget to Projects to Review");
   assert.equal(body.publicGoodsEntry.ordinaryOfferZeroStateSecondary, true);
   assert.equal(body.publicGoodsEntry.zeroFacetPanelsHidden, true);
   assert.deepEqual(Object.values(body.availableFacets).flat(), []);
