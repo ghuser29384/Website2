@@ -534,7 +534,7 @@ function optimizationRunTrace(
     clearingInputBundleId: bundle.id,
     clearingInputBundleHash: bundle.bundleHash,
     calculationVersion: bundle.calculationVersion,
-    optimizationStage: "stage_3_binding_allocation",
+    optimizationStage: "stage_3_coalition_clearing",
     traceSchemaVersion: "optimization-trace-v1",
     optimizationPolicyHash: bundle.optimizationPolicyHash,
     solverMode: "ilp",
@@ -3061,7 +3061,7 @@ test("CRECM v1.125 selected sponsor-paid fee support uses unique binding fee quo
   assert.ok(bundleBlocked.blockers.includes("fee_support_round_close_bundle_not_eligible"));
 });
 
-test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => {
+test("CRECM v1.125 optimization traces bind Stage 3 coalition-clearing evidence", () => {
   const bundle = clearingBundle();
   const trace = optimizationRunTrace();
   const result = validateMpgfCrecOptimizationRunTrace(trace, {
@@ -3093,6 +3093,24 @@ test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => 
 
   assert.equal(timeoutResult.eligible, false);
   assert.ok(timeoutResult.blockers.includes("optimization_trace_optimality_status_invalid"));
+
+  const legacyStage = {
+    ...trace,
+    optimizationStage: "stage_3_binding_allocation" as MpgfCrecOptimizationRunTrace["optimizationStage"],
+  };
+  const legacyStageResult = validateMpgfCrecOptimizationRunTrace(legacyStage, {
+    roundId,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    calculationVersion: bundle.calculationVersion,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
+  });
+
+  assert.equal(legacyStageResult.eligible, false);
+  assert.ok(legacyStageResult.blockers.includes("optimization_trace_stage_invalid"));
 
   const staleAllocationRows = { ...trace, selectedAllocationRowsHash: h("changed-allocation-rows") };
   const staleAllocationResult = validateMpgfCrecOptimizationRunTrace(staleAllocationRows, {
@@ -4162,6 +4180,7 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
+  assert.equal(summary.optimizationRunTrace.bindingStage, "stage_3_coalition_clearing");
   assert.equal(summary.optimizationRunTrace.rewardCreditCertificateInputHashesRequired, true);
   assert.equal(summary.optimizationRunTrace.selectedAllocationRowsHashRequired, true);
   assert.equal(summary.roundAuditBundles.auditBundleHashBindsComponentHashesAndTrace, true);

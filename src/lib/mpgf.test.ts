@@ -1991,6 +1991,7 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(report.clearingContract.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(report.clearingContract.authorizationReconciliation.shortExpiringAuthorizationRowsRemovedBeforeCapture, true);
+  assert.equal(report.clearingContract.optimizationRunTrace.bindingStage, "stage_3_coalition_clearing");
   assert.equal(report.clearingContract.optimizationRunTrace.selectedAllocationRowsHashRequired, true);
   assert.equal(report.clearingContract.optimizationRunTrace.rewardCreditCertificateInputHashesRequired, true);
   assert.equal(report.clearingContract.roundAuditBundles.auditBundleHashBindsComponentHashesAndTrace, true);

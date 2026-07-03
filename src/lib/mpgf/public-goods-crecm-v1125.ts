@@ -168,7 +168,7 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_FEE_PAYERS = [
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_OPTIMIZATION_STAGES = [
-  "stage_3_binding_allocation",
+  "stage_3_coalition_clearing",
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_SOLVER_MODES = [
@@ -6472,7 +6472,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
     },
     optimizationRunTrace: {
       traceHashBindsBundlePolicyAllocationAndConstraints: true,
-      bindingStage: "stage_3_binding_allocation" as const,
+      bindingStage: "stage_3_coalition_clearing" as const,
       rewardCreditCertificateInputHashesRequired: true,
       selectedAllocationRowsHashRequired: true,
       constraintSatisfactionHashRequired: true,
