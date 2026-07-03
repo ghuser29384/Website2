@@ -885,6 +885,7 @@ export interface MpgfCrecOptimizationRunTrace {
   optimizationStage: MpgfCrecOptimizationStage;
   traceSchemaVersion: string;
   optimizationPolicyHash: string;
+  selectedForBinding: boolean;
   solverMode: MpgfCrecSolverMode;
   solverVersion: string;
   optimalityStatus: MpgfCrecOptimalityStatus | "timeout" | "infeasible" | "unknown" | "failed";
@@ -910,6 +911,12 @@ export interface MpgfCrecOptimizationRunTraceExpectedContext {
   successRewardInputHash: string;
   coordinationCreditInputHash: string;
   impactCertificateInputHash: string;
+}
+
+export interface MpgfCrecOptimizationRunTraceSelectionResult extends MpgfCrecValidationResult {
+  selectedTraceCount: number;
+  selectedTraceId: string | null;
+  selectedTraceHash: string | null;
 }
 
 export interface MpgfCrecRoundAuditBundle {
@@ -3243,6 +3250,7 @@ function optimizationRunTraceHashPayload(trace: Omit<MpgfCrecOptimizationRunTrac
     optimizationStage: trace.optimizationStage,
     traceSchemaVersion: trace.traceSchemaVersion,
     optimizationPolicyHash: trace.optimizationPolicyHash,
+    selectedForBinding: trace.selectedForBinding,
     solverMode: trace.solverMode,
     solverVersion: trace.solverVersion,
     optimalityStatus: trace.optimalityStatus,
@@ -3298,6 +3306,7 @@ export function validateMpgfCrecOptimizationRunTrace(
   addBlocker(blockers, "optimization_trace_schema_version_invalid", isMpgfCrecNonEmptyTrimStableString(trace.traceSchemaVersion));
   addBlocker(blockers, "optimization_trace_policy_hash_invalid", isMpgfCrecCanonicalHash(trace.optimizationPolicyHash));
   addBlocker(blockers, "optimization_trace_wrong_policy_hash", trace.optimizationPolicyHash === expected.optimizationPolicyHash);
+  addBlocker(blockers, "optimization_trace_not_selected_for_binding", trace.selectedForBinding === true);
   addBlocker(blockers, "optimization_trace_solver_mode_invalid", MPGF_PUBLIC_GOODS_CRECM_V1125_SOLVER_MODES.includes(trace.solverMode));
   addBlocker(blockers, "optimization_trace_solver_version_invalid", isMpgfCrecNonEmptyTrimStableString(trace.solverVersion));
   addBlocker(blockers, "optimization_trace_optimality_status_invalid", MPGF_PUBLIC_GOODS_CRECM_V1125_OPTIMALITY_STATUSES.includes(trace.optimalityStatus as MpgfCrecOptimalityStatus));
@@ -3323,6 +3332,38 @@ export function validateMpgfCrecOptimizationRunTrace(
   );
 
   return validationResult(blockers);
+}
+
+export function validateMpgfCrecOptimizationRunTraceSelection(
+  rows: unknown,
+  expected: MpgfCrecOptimizationRunTraceExpectedContext,
+): MpgfCrecOptimizationRunTraceSelectionResult {
+  const blockers: string[] = [];
+
+  addBlocker(blockers, "optimization_trace_rows_not_array", Array.isArray(rows));
+
+  const rowArray = Array.isArray(rows) ? rows : [];
+  const selectedRows = rowArray.filter(
+    (row) => asObjectRow(row)?.selectedForBinding === true,
+  );
+  const selectedTrace = selectedRows.length === 1
+    ? selectedRows[0] as MpgfCrecOptimizationRunTrace
+    : null;
+
+  addBlocker(blockers, "optimization_trace_selected_row_count_not_one", selectedRows.length === 1);
+
+  if (selectedTrace != null) {
+    const traceResult = validateMpgfCrecOptimizationRunTrace(selectedTrace, expected);
+    blockers.push(...traceResult.blockers);
+  }
+
+  return {
+    eligible: blockers.length === 0,
+    blockers,
+    selectedTraceCount: selectedRows.length,
+    selectedTraceId: selectedTrace?.id ?? null,
+    selectedTraceHash: selectedTrace?.optimizationTraceHash ?? null,
+  };
 }
 
 function roundAuditBundleHashPayload(bundle: Omit<MpgfCrecRoundAuditBundle, "auditBundleHash">) {
@@ -6473,6 +6514,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
     optimizationRunTrace: {
       traceHashBindsBundlePolicyAllocationAndConstraints: true,
       bindingStage: "stage_3_coalition_clearing" as const,
+      singleSelectedTracePerBundleVersionStageRequired: true,
       rewardCreditCertificateInputHashesRequired: true,
       selectedAllocationRowsHashRequired: true,
       constraintSatisfactionHashRequired: true,

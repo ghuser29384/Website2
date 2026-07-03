@@ -61,6 +61,7 @@ import {
   validateMpgfCrecFailureBonusClaimantConflictSnapshot,
   validateMpgfCrecImpactCertificateClaim,
   validateMpgfCrecOptimizationRunTrace,
+  validateMpgfCrecOptimizationRunTraceSelection,
   validateMpgfCrecPaymentCommitmentSnapshot,
   validateMpgfCrecProjectIdentityRouteGate,
   validateMpgfCrecProjectRoundEligibilitySnapshot,
@@ -537,6 +538,7 @@ function optimizationRunTrace(
     optimizationStage: "stage_3_coalition_clearing",
     traceSchemaVersion: "optimization-trace-v1",
     optimizationPolicyHash: bundle.optimizationPolicyHash,
+    selectedForBinding: true,
     solverMode: "ilp",
     solverVersion: "glpk-5.0-fixed",
     optimalityStatus: "optimal",
@@ -3077,6 +3079,22 @@ test("CRECM v1.125 optimization traces bind Stage 3 coalition-clearing evidence"
 
   assert.equal(result.eligible, true);
 
+  const selection = validateMpgfCrecOptimizationRunTraceSelection([trace], {
+    roundId,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    calculationVersion: bundle.calculationVersion,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
+  });
+
+  assert.equal(selection.eligible, true);
+  assert.equal(selection.selectedTraceCount, 1);
+  assert.equal(selection.selectedTraceId, trace.id);
+  assert.equal(selection.selectedTraceHash, trace.optimizationTraceHash);
+
   const timeout = optimizationRunTrace({
     optimalityStatus: "timeout",
   });
@@ -3111,6 +3129,39 @@ test("CRECM v1.125 optimization traces bind Stage 3 coalition-clearing evidence"
 
   assert.equal(legacyStageResult.eligible, false);
   assert.ok(legacyStageResult.blockers.includes("optimization_trace_stage_invalid"));
+
+  const unselectedTrace = optimizationRunTrace({ selectedForBinding: false });
+  const unselectedTraceResult = validateMpgfCrecOptimizationRunTrace(unselectedTrace, {
+    roundId,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    calculationVersion: bundle.calculationVersion,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
+  });
+
+  assert.equal(unselectedTraceResult.eligible, false);
+  assert.ok(unselectedTraceResult.blockers.includes("optimization_trace_not_selected_for_binding"));
+
+  const duplicateSelection = validateMpgfCrecOptimizationRunTraceSelection(
+    [trace, optimizationRunTrace({ id: "optimization-trace-2" })],
+    {
+      roundId,
+      clearingInputBundleId: bundle.id,
+      clearingInputBundleHash: bundle.bundleHash,
+      calculationVersion: bundle.calculationVersion,
+      optimizationPolicyHash: bundle.optimizationPolicyHash,
+      successRewardInputHash: bundle.successRewardInputHash,
+      coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+      impactCertificateInputHash: bundle.impactCertificateInputHash,
+    },
+  );
+
+  assert.equal(duplicateSelection.eligible, false);
+  assert.equal(duplicateSelection.selectedTraceCount, 2);
+  assert.ok(duplicateSelection.blockers.includes("optimization_trace_selected_row_count_not_one"));
 
   const staleAllocationRows = { ...trace, selectedAllocationRowsHash: h("changed-allocation-rows") };
   const staleAllocationResult = validateMpgfCrecOptimizationRunTrace(staleAllocationRows, {
@@ -4181,6 +4232,7 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
   assert.equal(summary.optimizationRunTrace.bindingStage, "stage_3_coalition_clearing");
+  assert.equal(summary.optimizationRunTrace.singleSelectedTracePerBundleVersionStageRequired, true);
   assert.equal(summary.optimizationRunTrace.rewardCreditCertificateInputHashesRequired, true);
   assert.equal(summary.optimizationRunTrace.selectedAllocationRowsHashRequired, true);
   assert.equal(summary.roundAuditBundles.auditBundleHashBindsComponentHashesAndTrace, true);
