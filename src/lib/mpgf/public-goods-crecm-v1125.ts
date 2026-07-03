@@ -253,6 +253,23 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_CONTRIBUTOR_BENEFIT_KINDS = [
   "impact_certificate",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_SETTLEMENT_TYPES = [
+  "cash",
+  "cash_equivalent",
+  "platform_credit",
+] as const;
+
+export const MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_FUNDING_SOURCES = [
+  "success_reward_pool",
+  "recipient_project_funds",
+  "donor_captured_project_contributions",
+  "base_match_pool",
+  "bonus_match_pool",
+  "failure_bonus_pool",
+  "fee_support_pool",
+  "unknown",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_COUNTERPARTY_VOLUME_SOURCES = [
   "net_recipient_public_good_credit",
   "sponsor_funds",
@@ -457,6 +474,12 @@ export type MpgfCrecOptimalityStatus =
 
 export type MpgfCrecContributorBenefitKind =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_CONTRIBUTOR_BENEFIT_KINDS>;
+
+export type MpgfCrecSuccessRewardSettlementType =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_SETTLEMENT_TYPES>;
+
+export type MpgfCrecSuccessRewardFundingSource =
+  ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_FUNDING_SOURCES>;
 
 export type MpgfCrecCoordinationCreditKind =
   ArrayValue<typeof MPGF_PUBLIC_GOODS_CRECM_V1125_COORDINATION_CREDIT_KINDS>;
@@ -1395,11 +1418,18 @@ export interface MpgfCrecContributorBenefitEligibilityResult extends MpgfCrecVal
 export interface MpgfCrecSuccessRewardClaimInput {
   eligibility: MpgfCrecContributorBenefitEligibilityInput;
   successRewardPolicyVersion: string;
+  successRewardPolicyHash: string;
+  rewardSettlementType: MpgfCrecSuccessRewardSettlementType;
+  rewardFundingSource: MpgfCrecSuccessRewardFundingSource;
   rewardCents: number;
   roundSuccessRewardBudgetCents: number;
   backedSuccessRewardPoolCents: number;
   dominanceClaimShown: boolean;
   maximumPromisedRewardLiabilityCents: number;
+  platformCreditLiabilityCents: number | null;
+  platformCreditExpiresAt: string | null;
+  platformCreditRedemptionLimitsHash: string | null;
+  platformCreditSponsorBackingHash: string | null;
 }
 
 export interface MpgfCrecSuccessRewardClaimResult extends MpgfCrecValidationResult {
@@ -5274,11 +5304,18 @@ function successRewardClaimHashPayload(input: MpgfCrecSuccessRewardClaimInput) {
   return {
     eligibilityHash: buildMpgfCrecContributorBenefitContextHash(input.eligibility),
     successRewardPolicyVersion: input.successRewardPolicyVersion,
+    successRewardPolicyHash: input.successRewardPolicyHash,
+    rewardSettlementType: input.rewardSettlementType,
+    rewardFundingSource: input.rewardFundingSource,
     rewardCents: input.rewardCents,
     roundSuccessRewardBudgetCents: input.roundSuccessRewardBudgetCents,
     backedSuccessRewardPoolCents: input.backedSuccessRewardPoolCents,
     dominanceClaimShown: input.dominanceClaimShown,
     maximumPromisedRewardLiabilityCents: input.maximumPromisedRewardLiabilityCents,
+    platformCreditLiabilityCents: input.platformCreditLiabilityCents,
+    platformCreditExpiresAt: input.platformCreditExpiresAt,
+    platformCreditRedemptionLimitsHash: input.platformCreditRedemptionLimitsHash,
+    platformCreditSponsorBackingHash: input.platformCreditSponsorBackingHash,
   };
 }
 
@@ -5295,11 +5332,60 @@ export function evaluateMpgfCrecSuccessRewardClaim(
   }).blockers;
 
   addBlocker(blockers, "success_reward_policy_version_invalid", isMpgfCrecNonEmptyTrimStableString(input.successRewardPolicyVersion));
+  addBlocker(blockers, "success_reward_policy_hash_invalid", isMpgfCrecCanonicalHash(input.successRewardPolicyHash));
+  addBlocker(
+    blockers,
+    "success_reward_settlement_type_invalid",
+    (MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_SETTLEMENT_TYPES as readonly unknown[]).includes(input.rewardSettlementType),
+  );
+  addBlocker(
+    blockers,
+    "success_reward_funding_source_invalid",
+    (MPGF_PUBLIC_GOODS_CRECM_V1125_SUCCESS_REWARD_FUNDING_SOURCES as readonly unknown[]).includes(input.rewardFundingSource),
+  );
+  addBlocker(
+    blockers,
+    "success_reward_funding_source_not_success_reward_pool",
+    input.rewardFundingSource === "success_reward_pool",
+  );
   addBlocker(blockers, "success_reward_reward_cents_invalid", isPositiveSafeIntegerCents(input.rewardCents));
   addBlocker(blockers, "success_reward_round_budget_invalid", isPositiveSafeIntegerCents(input.roundSuccessRewardBudgetCents));
   addBlocker(blockers, "success_reward_backed_pool_invalid", isPositiveSafeIntegerCents(input.backedSuccessRewardPoolCents));
   addBlocker(blockers, "success_reward_pool_not_fully_backed", isPositiveSafeIntegerCents(input.roundSuccessRewardBudgetCents) && isPositiveSafeIntegerCents(input.backedSuccessRewardPoolCents) && input.backedSuccessRewardPoolCents >= input.roundSuccessRewardBudgetCents);
   addBlocker(blockers, "success_reward_exceeds_round_budget", isPositiveSafeIntegerCents(input.rewardCents) && isPositiveSafeIntegerCents(input.roundSuccessRewardBudgetCents) && input.rewardCents <= input.roundSuccessRewardBudgetCents);
+  if (input.rewardSettlementType === "platform_credit") {
+    addBlocker(
+      blockers,
+      "success_reward_platform_credit_liability_invalid",
+      isPositiveSafeIntegerCents(input.platformCreditLiabilityCents) &&
+        isPositiveSafeIntegerCents(input.rewardCents) &&
+        input.platformCreditLiabilityCents >= input.rewardCents,
+    );
+    addBlocker(
+      blockers,
+      "success_reward_platform_credit_expiry_invalid",
+      isMpgfCrecCanonicalUtcTimestamp(input.platformCreditExpiresAt),
+    );
+    addBlocker(
+      blockers,
+      "success_reward_platform_credit_redemption_limits_hash_invalid",
+      isMpgfCrecCanonicalHash(input.platformCreditRedemptionLimitsHash),
+    );
+    addBlocker(
+      blockers,
+      "success_reward_platform_credit_sponsor_backing_hash_invalid",
+      isMpgfCrecCanonicalHash(input.platformCreditSponsorBackingHash),
+    );
+  } else {
+    addBlocker(
+      blockers,
+      "success_reward_non_credit_terms_present",
+      input.platformCreditLiabilityCents === null &&
+        input.platformCreditExpiresAt === null &&
+        input.platformCreditRedemptionLimitsHash === null &&
+        input.platformCreditSponsorBackingHash === null,
+    );
+  }
   if (input.dominanceClaimShown) {
     addBlocker(
       blockers,
@@ -6769,6 +6855,9 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       requireVerifiedClearIdentityAndConflictState: true,
       neverCountAsPublicGoodDollarsOrAllocationPower: true,
       successRewardsUseOnlyBackedSuccessRewardPool: true,
+      successRewardsRejectRecipientOrDonorCapturedFundingSources: true,
+      platformCreditRewardTermsHashBound: true,
+      platformCreditRewardsRequireLiabilityExpiryRedemptionLimitsAndSponsorBacking: true,
       coordinationCreditsNonTransferable: true,
       impactCertificatesBindContributionBundlePaymentAndFeeContext: true,
     },

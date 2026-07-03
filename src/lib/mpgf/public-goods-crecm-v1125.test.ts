@@ -968,11 +968,18 @@ function successRewardClaimInput(
   return {
     eligibility: contributorBenefitInput({ benefitKind: "success_reward" }),
     successRewardPolicyVersion: "success-reward-v1",
+    successRewardPolicyHash: h("success-reward-policy"),
+    rewardSettlementType: "cash",
+    rewardFundingSource: "success_reward_pool",
     rewardCents: 25,
     roundSuccessRewardBudgetCents: 500,
     backedSuccessRewardPoolCents: 500,
     dominanceClaimShown: false,
     maximumPromisedRewardLiabilityCents: 0,
+    platformCreditLiabilityCents: null,
+    platformCreditExpiresAt: null,
+    platformCreditRedemptionLimitsHash: null,
+    platformCreditSponsorBackingHash: null,
     ...overrides,
   };
 }
@@ -3410,12 +3417,54 @@ test("CRECM v1.125 success rewards use only fully backed success reward pools", 
   assert.equal(result.rewardCents, 25);
   assert.equal(result.claimHash, buildMpgfCrecSuccessRewardClaimHash(input));
 
+  const recipientFunded = evaluateMpgfCrecSuccessRewardClaim(
+    successRewardClaimInput({ rewardFundingSource: "recipient_project_funds" }),
+  );
+
+  assert.equal(recipientFunded.eligible, false);
+  assert.equal(recipientFunded.claimHash, null);
+  assert.ok(recipientFunded.blockers.includes("success_reward_funding_source_not_success_reward_pool"));
+
   const underBacked = evaluateMpgfCrecSuccessRewardClaim(
     successRewardClaimInput({ backedSuccessRewardPoolCents: 499 }),
   );
 
   assert.equal(underBacked.eligible, false);
   assert.ok(underBacked.blockers.includes("success_reward_pool_not_fully_backed"));
+
+  const platformCredit = successRewardClaimInput({
+    rewardSettlementType: "platform_credit",
+    platformCreditLiabilityCents: 25,
+    platformCreditExpiresAt: challengeDeadline,
+    platformCreditRedemptionLimitsHash: h("platform-credit-redemption-limits"),
+    platformCreditSponsorBackingHash: h("platform-credit-sponsor-backing"),
+  });
+  const credited = evaluateMpgfCrecSuccessRewardClaim(platformCredit);
+
+  assert.equal(credited.eligible, true);
+  assert.equal(credited.claimHash, buildMpgfCrecSuccessRewardClaimHash(platformCredit));
+
+  const unboundPlatformCredit = evaluateMpgfCrecSuccessRewardClaim(
+    successRewardClaimInput({
+      rewardSettlementType: "platform_credit",
+      platformCreditLiabilityCents: 24,
+      platformCreditExpiresAt: "not-a-canonical-timestamp",
+      platformCreditRedemptionLimitsHash: h("platform-credit-redemption-limits"),
+      platformCreditSponsorBackingHash: "not-a-canonical-hash",
+    }),
+  );
+
+  assert.equal(unboundPlatformCredit.eligible, false);
+  assert.equal(unboundPlatformCredit.claimHash, null);
+  assert.ok(
+    unboundPlatformCredit.blockers.includes("success_reward_platform_credit_liability_invalid"),
+  );
+  assert.ok(unboundPlatformCredit.blockers.includes("success_reward_platform_credit_expiry_invalid"));
+  assert.ok(
+    unboundPlatformCredit.blockers.includes(
+      "success_reward_platform_credit_sponsor_backing_hash_invalid",
+    ),
+  );
 
   const dominanceUnderBacked = evaluateMpgfCrecSuccessRewardClaim(
     successRewardClaimInput({
@@ -4453,6 +4502,15 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.contributorBenefits.requireCapturedSuccessfulContributionRow, true);
   assert.equal(summary.contributorBenefits.neverCountAsPublicGoodDollarsOrAllocationPower, true);
   assert.equal(summary.contributorBenefits.successRewardsUseOnlyBackedSuccessRewardPool, true);
+  assert.equal(
+    summary.contributorBenefits.successRewardsRejectRecipientOrDonorCapturedFundingSources,
+    true,
+  );
+  assert.equal(summary.contributorBenefits.platformCreditRewardTermsHashBound, true);
+  assert.equal(
+    summary.contributorBenefits.platformCreditRewardsRequireLiabilityExpiryRedemptionLimitsAndSponsorBacking,
+    true,
+  );
   assert.equal(summary.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(summary.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
   assert.equal(summary.projectHardGates.excludedTradeTypeRequired, null);

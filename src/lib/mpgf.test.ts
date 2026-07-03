@@ -2036,6 +2036,15 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.contributorBenefits.requireCapturedSuccessfulContributionRow, true);
   assert.equal(report.clearingContract.contributorBenefits.neverCountAsPublicGoodDollarsOrAllocationPower, true);
   assert.equal(report.clearingContract.contributorBenefits.successRewardsUseOnlyBackedSuccessRewardPool, true);
+  assert.equal(
+    report.clearingContract.contributorBenefits.successRewardsRejectRecipientOrDonorCapturedFundingSources,
+    true,
+  );
+  assert.equal(report.clearingContract.contributorBenefits.platformCreditRewardTermsHashBound, true);
+  assert.equal(
+    report.clearingContract.contributorBenefits.platformCreditRewardsRequireLiabilityExpiryRedemptionLimitsAndSponsorBacking,
+    true,
+  );
   assert.equal(report.clearingContract.contributorBenefits.coordinationCreditsNonTransferable, true);
   assert.equal(report.clearingContract.contributorBenefits.impactCertificatesBindContributionBundlePaymentAndFeeContext, true);
   assert.ok(report.clearingContract.failureBonus.thresholdFamilyFailureReasonsOnly.includes("counterparty_volume_shortfall"));
