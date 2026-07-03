@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import {
+  MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES,
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
   buildMpgfCrecFinalReviewAcknowledgements,
@@ -396,6 +397,21 @@ export function MpgfCommonGroundBudgetSavePanel({
             saved. This save records a no-capture preview only; later authorization, capture, reward,
             credit, certificate, reroute, or release requires the recorded CRECM state to pass.
           </p>
+          <div aria-label="Detailed accounting channel disclosure">
+            <h4>Detailed accounting channels</h4>
+            <ul>
+              {MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES.map((channel) => (
+                <li key={channel.key}>
+                  <strong>{channel.label}</strong>: {channel.summary} Canonical field:{" "}
+                  {channel.canonicalField}.
+                </li>
+              ))}
+            </ul>
+            <p className="mpgf-small">
+              These channels stay separated before consent and on receipts; they must not be
+              combined into one impact or matched total.
+            </p>
+          </div>
           <dl className="mpgf-summary-grid" aria-label="Common Ground Budget final review required details">
             {MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((disclosure) => (
               <div key={disclosure.key}>

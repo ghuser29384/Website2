@@ -7,9 +7,11 @@ import {
 } from "./public-goods-crecm-labels";
 
 export {
+  MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES,
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  MPGF_CRECM_REQUIRED_ACCOUNTING_CHANNEL_KEYS,
   MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
   allMpgfCrecFinalReviewDisclosuresAcknowledged,
@@ -18,6 +20,7 @@ export {
   missingMpgfCrecFinalReviewAcknowledgementKeys,
 } from "./public-goods-crecm-labels";
 export type {
+  MpgfCrecAccountingChannelDisclosure,
   MpgfCrecFinalReviewAcknowledgements,
   MpgfCrecFinalReviewDisclosureKey,
   MpgfCrecFinalReviewRequiredDisclosure,

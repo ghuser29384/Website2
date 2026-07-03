@@ -20,6 +20,16 @@ export interface MpgfCrecFinalReviewRequiredDisclosure {
   createsAlternateSemantics: false;
 }
 
+export interface MpgfCrecAccountingChannelDisclosure {
+  key: string;
+  label: string;
+  canonicalField: string;
+  summary: string;
+  accessibleBeforeConsent: true;
+  receiptRequired: true;
+  mayBeCombinedIntoImpactTotal: false;
+}
+
 export const MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP = [
   {
     defaultUiText: "Maximum this round",
@@ -277,6 +287,120 @@ export type MpgfCrecFinalReviewDisclosureKey =
 
 export const MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS =
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((entry) => entry.key);
+
+export const MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES = [
+  {
+    key: "maximum_budget",
+    label: "Maximum budget",
+    canonicalField: "CommonGroundBudget.totalBudgetCents",
+    summary: "The most this Common Ground Budget can spend this round or month.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "possible_captured_amount",
+    label: "Possible captured amount",
+    canonicalField: "ConditionalTradeIntent.maxExposureCents",
+    summary: "The maximum amount that could be captured after all gates, consent, and authorization checks pass.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "gross_captured_exposure",
+    label: "Gross captured exposure",
+    canonicalField: "FeeQuote.grossCapturedCents",
+    summary: "The full captured amount before any fee treatment.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "fees",
+    label: "Fees",
+    canonicalField: "FeeQuote.feeCents",
+    summary: "Fees are displayed separately from project funding and sponsor support.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "net_recipient_disbursed",
+    label: "Net recipient-disbursed public-good dollars",
+    canonicalField: "FeeQuote.netRecipientDisbursedCents",
+    summary: "The amount sent to the eligible recipient or fiscal-host route after fee treatment.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "counted_dollars",
+    label: "Counted dollars",
+    canonicalField: "ContributionProofLedger.countedContributionCents",
+    summary: "Dollars counted by the CRECM accounting rules, distinct from gross captured exposure.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "match_eligible_dollars",
+    label: "Match-eligible dollars",
+    canonicalField: "ContributionProofLedger.matchEligibleContributionCents",
+    summary: "The counted amount eligible for sponsor base match or bonus calculations.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "sponsor_base_match",
+    label: "Sponsor base match",
+    canonicalField: "ContributionProofLedger.sponsorBaseMatchCents",
+    summary: "Pool-backed base-match dollars, separate from participant-captured funds.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "sponsor_bonus_match",
+    label: "Sponsor bonus match",
+    canonicalField: "ContributionProofLedger.sponsorBonusMatchCents",
+    summary: "Capped diversity-aware bonus-match dollars, separate from base match and participant funds.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "success_rewards",
+    label: "Success rewards",
+    canonicalField: "SuccessRewardClaim.rewardCents",
+    summary: "Contributor-only sponsor-backed rewards that never count as public-good dollars.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "coordination_credits",
+    label: "Coordination credits",
+    canonicalField: "CoordinationCreditLedgerEntry.creditKind",
+    summary: "Non-transferable coordination benefits with no allocation, vote, or matching power.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+  {
+    key: "impact_certificates",
+    label: "Impact certificates",
+    canonicalField: "ImpactCertificateClaim.certificateHash",
+    summary: "Captured-contribution receipts that must not double-count impact or alter final clearing.",
+    accessibleBeforeConsent: true,
+    receiptRequired: true,
+    mayBeCombinedIntoImpactTotal: false,
+  },
+] as const satisfies readonly MpgfCrecAccountingChannelDisclosure[];
+
+export const MPGF_CRECM_REQUIRED_ACCOUNTING_CHANNEL_KEYS =
+  MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES.map((entry) => entry.key);
 
 export type MpgfCrecFinalReviewAcknowledgements =
   Record<MpgfCrecFinalReviewDisclosureKey, boolean>;

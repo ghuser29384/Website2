@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES,
   MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP,
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP,
+  MPGF_CRECM_REQUIRED_ACCOUNTING_CHANNEL_KEYS,
   MPGF_CRECM_REQUIRED_COPY_VALIDATION_SURFACE_KINDS,
   MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
@@ -299,6 +301,51 @@ test("CRECM final review disclosure contract covers every simplified-UX required
       "self-matching exclusions",
       "sealed-progress disclosure",
       "failure-bonus denial categories",
+    ],
+  );
+});
+
+test("CRECM accounting channel disclosure separates every user-facing amount before consent and receipts", () => {
+  assert.deepEqual(MPGF_CRECM_REQUIRED_ACCOUNTING_CHANNEL_KEYS, [
+    "maximum_budget",
+    "possible_captured_amount",
+    "gross_captured_exposure",
+    "fees",
+    "net_recipient_disbursed",
+    "counted_dollars",
+    "match_eligible_dollars",
+    "sponsor_base_match",
+    "sponsor_bonus_match",
+    "success_rewards",
+    "coordination_credits",
+    "impact_certificates",
+  ]);
+  assert.equal(MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES.length, 12);
+  assert.equal(
+    MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES.every(
+      (entry) =>
+        entry.accessibleBeforeConsent === true &&
+        entry.receiptRequired === true &&
+        entry.mayBeCombinedIntoImpactTotal === false &&
+        entry.canonicalField.length > 0,
+    ),
+    true,
+  );
+  assert.deepEqual(
+    MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES.map((entry) => entry.label),
+    [
+      "Maximum budget",
+      "Possible captured amount",
+      "Gross captured exposure",
+      "Fees",
+      "Net recipient-disbursed public-good dollars",
+      "Counted dollars",
+      "Match-eligible dollars",
+      "Sponsor base match",
+      "Sponsor bonus match",
+      "Success rewards",
+      "Coordination credits",
+      "Impact certificates",
     ],
   );
 });

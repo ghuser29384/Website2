@@ -3412,6 +3412,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Hidden defaults, suggestions, project-card/);
   assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
   assert.match(budgetSavePanel, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS/);
+  assert.match(budgetSavePanel, /MPGF_CRECM_ACCOUNTING_CHANNEL_DISCLOSURES/);
   assert.match(budgetSavePanel, /MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES/);
   assert.match(budgetSavePanel, /buildMpgfCrecFinalReviewAcknowledgements/);
   assert.match(budgetSavePanel, /missingMpgfCrecFinalReviewAcknowledgementKeys/);
@@ -3470,6 +3471,11 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /success reward \/ coordination credit \/ impact/);
   assert.match(budgetSavePanel, /Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback/);
   assert.match(budgetSavePanel, /Required details/);
+  assert.match(budgetSavePanel, /Detailed accounting channels/);
+  assert.match(budgetSavePanel, /Detailed accounting channel disclosure/);
+  assert.match(budgetSavePanel, /channel\.canonicalField/);
+  assert.match(budgetSavePanel, /These channels stay separated before consent and on receipts/);
+  assert.match(budgetSavePanel, /combined into one impact or matched total/);
   assert.match(budgetSavePanel, /Suggested defaults are not binding unless shown on this review screen and explicitly/);
   assert.match(budgetSavePanel, /I reviewed this detail before save/);
   assert.match(budgetSavePanel, /Required acknowledgements remaining/);
@@ -3493,6 +3499,15 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Rulebook hash/);
   assert.match(budgetSavePanel, /not legal escrow, are not custody-backed, and are not payment protection/);
   assert.match(budgetSavePanel, /Gross, fee, net recipient, actual, counted, and match-eligible/);
+  assert.match(plainLanguageLabels, /key: "possible_captured_amount"/);
+  assert.match(plainLanguageLabels, /label: "Possible captured amount"/);
+  assert.match(plainLanguageLabels, /label: "Gross captured exposure"/);
+  assert.match(plainLanguageLabels, /label: "Sponsor base match"/);
+  assert.match(plainLanguageLabels, /label: "Sponsor bonus match"/);
+  assert.match(plainLanguageLabels, /label: "Success rewards"/);
+  assert.match(plainLanguageLabels, /label: "Coordination credits"/);
+  assert.match(plainLanguageLabels, /label: "Impact certificates"/);
+  assert.match(plainLanguageLabels, /mayBeCombinedIntoImpactTotal: false/);
   assert.match(budgetSavePanel, /fetch\(apiPath/);
   assert.match(budgetSavePanel, /JSON\.stringify\(\{/);
   assert.match(budgetSavePanel, /\.\.\.payload/);
