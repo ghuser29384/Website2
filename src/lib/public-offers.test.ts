@@ -314,6 +314,43 @@ test("public offers collection separates template, moral public goods, and demo 
   );
 });
 
+test("public offers route explicit moral-public-goods query, route, and filter aliases to the primary entry", () => {
+  const cases = [
+    ["query:moral public goods", "q=moral%20public%20goods"],
+    ["query:public goods fund", "q=public%20goods%20fund"],
+    ["query:Common Ground Budget", "search=Common%20Ground%20Budget"],
+    ["query:CRECM", "search=CRECM"],
+    ["query:MPGF", "search=MPGF"],
+    ["query:assurance matching", "search=assurance%20matching"],
+    ["tab:CRECM", "tab=CRECM"],
+    ["tab:MPGF", "view=mpgf"],
+    ["tab:Common Ground Budget", "tab=common-ground-budget"],
+    ["format:public goods fund", "format=public-goods-fund"],
+    ["format:Common Ground Budget", "format=Common%20Ground%20Budget"],
+    ["mode:assurance matching", "mode=assurance-matching"],
+  ] as const;
+
+  for (const [label, query] of cases) {
+    const payload = buildPublicOffersCollectionPayload({
+      liveOffers: [],
+      searchParams: new URLSearchParams(query),
+    });
+    const validation = validatePublicOffersCollectionPayload(payload);
+
+    assert.equal(validation.status, "pass", label);
+    assert.equal(payload.meta.tab, "public_goods", label);
+    assert.equal(payload.items.length, 0, label);
+    assert.equal(payload.publicGoodsEntry?.resultRank, 1, label);
+    assert.equal(payload.publicGoodsEntry?.label, "Common Ground Budget", label);
+    assert.equal(payload.publicGoodsEntry?.eyebrow, "Public Goods Fund", label);
+    assert.equal(payload.publicGoodsEntry?.countsAsLiveOffer, false, label);
+    assert.equal(payload.publicGoodsEntry?.countsAsOrdinaryListing, false, label);
+    assert.equal(payload.publicGoodsEntry?.noPrimaryZeroState, true, label);
+    assert.equal(payload.publicGoodsEntry?.ordinaryOfferFiltersCollapsed, true, label);
+    assert.equal(payload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget", label);
+  }
+});
+
 test("public offers validation fails unsafe public-goods entry copy against CRECM state", () => {
   const payload = buildPublicOffersCollectionPayload({
     liveOffers: [],

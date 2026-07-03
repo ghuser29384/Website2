@@ -341,6 +341,19 @@ const PUBLIC_MARKETPLACE_TAB_ORDER = [
   "demo",
   "public_goods",
 ] as const satisfies readonly PublicMarketplaceTab[];
+const PUBLIC_GOODS_INTENT_LABELS = [
+  "moral public goods",
+  "public goods",
+  "public good",
+  "Common Ground Budget",
+  "public goods fund",
+  "CRECM",
+  "MPGF",
+  "assurance matching",
+  "conditional public-good pledge",
+  "cross-view funding",
+] as const;
+const PUBLIC_GOODS_INTENT_TOKENS = PUBLIC_GOODS_INTENT_LABELS.map(normalizeToken);
 const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
   ...PUBLIC_OFFER_NON_CLAIMS,
   "The detail response is a public display record only; it does not grant contact access, create a saved search, or form an agreement.",
@@ -416,31 +429,30 @@ function clampPageSize(value: string) {
 
 function parseTab(searchParams: URLSearchParams, defaultTab: PublicOffersTab) {
   const value = readFirst(searchParams, "tab", "view");
+  const normalized = normalizeToken(value);
 
   if (
-    value === "live" ||
-    value === "templates" ||
-    value === "demo" ||
-    value === "public_goods" ||
-    value === "all"
+    normalized === "live" ||
+    normalized === "templates" ||
+    normalized === "demo" ||
+    normalized === "all"
   ) {
-    return value;
+    return normalized;
   }
 
-  if (value === "examples" || value === "worked-examples" || value === "worked_examples") {
+  if (normalized === "examples" || normalized === "worked-examples") {
     return "worked_examples";
   }
 
-  if (value === "create" || value === "create-from-template" || value === "create_from_template") {
+  if (normalized === "create" || normalized === "create-from-template") {
     return "templates";
   }
 
   if (
-    value === "external_crecm" ||
-    value === "rounds" ||
-    value === "crecm" ||
-    value === "mpgf" ||
-    value === "public-goods"
+    normalized === "external-crecm" ||
+    normalized === "rounds" ||
+    normalized === "public-goods" ||
+    PUBLIC_GOODS_INTENT_TOKENS.includes(normalized)
   ) {
     return "public_goods";
   }
@@ -481,7 +493,10 @@ function parseFormat(value: string): PublicOfferFormat | null {
   if (normalized === "pledge" || normalized === "pledge-swap") return "pledge-swap";
   if (normalized === "offset" || normalized === "donation-offset") return "donation-offset";
   if (normalized === "payment" || normalized === "paid-action") return "paid-action";
-  if (normalized === "public-good" || normalized === "public-good-contribution") {
+  if (
+    normalized === "public-good-contribution" ||
+    PUBLIC_GOODS_INTENT_TOKENS.includes(normalized)
+  ) {
     return "public-good";
   }
 
@@ -514,20 +529,9 @@ function isPublicGoodsCollectionIntent(params: {
     return true;
   }
 
-  const normalizedQuery = params.query.toLowerCase();
+  const normalizedQuery = normalizeToken(params.query);
 
-  return [
-    "moral public goods",
-    "public goods",
-    "public good",
-    "common ground budget",
-    "public goods fund",
-    "crecm",
-    "mpgf",
-    "assurance matching",
-    "conditional public-good pledge",
-    "cross-view funding",
-  ].some((token) => normalizedQuery.includes(token));
+  return PUBLIC_GOODS_INTENT_TOKENS.some((token) => normalizedQuery.includes(token));
 }
 
 function parseDuration(label: string): PublicOfferDuration {
