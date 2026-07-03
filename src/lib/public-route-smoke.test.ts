@@ -171,12 +171,13 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   ].join("\n");
 
   assert.match(savedOffersPage, /title: "Saved offers"/);
-  assert.match(savedOffersPage, /<p className="eyebrow">Saved offers<\/p>/);
-  assert.match(savedOffersPage, /Your saved offers/);
+  assert.match(savedOffersPage, /<h1 id="plan-heading">Plan<\/h1>/);
+  assert.match(savedOffersPage, /Plan — private selected items\. No commitment created\./);
+  assert.match(savedOffersPage, /Preview only · Private planning only · No commitment created\./);
   assert.match(savedOffersPage, /requireViewer\("\/saved-offers"\)/);
   assert.match(savedOffersPage, /value="\/saved-offers"/);
   assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
-  assert.match(dashboardPage, /Open saved offers/);
+  assert.match(dashboardPage, /Account — saved settings and records\./);
   assert.match(dashboardPage, /href="\/saved-offers"/);
   assert.match(robotsSource, /OAI-SearchBot/);
   assert.match(robotsSource, /Claude-SearchBot/);
@@ -5487,6 +5488,7 @@ test("create trade route family has stable signed-out entry points", () => {
 test("marketplace pilot copy separates live offers from worked examples", () => {
   const adminPage = readRepoFile("src/app/admin/page.tsx");
   const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const mpgfPage = readRepoFile("src/app/mpgf/page.tsx");
@@ -5602,11 +5604,13 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /final-lock confirmation/);
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);
-  assert.match(offersPage, /<h1>Browse offers<\/h1>/);
-  assert.match(offersPage, /Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund/);
-  assert.match(offersPage, /Start from live offers, reviewed templates, worked examples, demo data, or the Public Goods Fund/);
-  assert.match(offersPage, /Create an offer/);
-  assert.match(offersPage, /Save search/);
+  assert.match(marketplaceComponents, /<h1 id="moral-marketplace-heading">Browse offers<\/h1>/);
+  assert.match(marketplaceComponents, /Search causes, templates, rounds/);
+  assert.match(marketplaceComponents, /No live offers yet · Showing examples and templates/);
+  assert.match(marketplaceComponents, /Templates/);
+  assert.match(marketplaceComponents, /Examples/);
+  assert.match(marketplaceComponents, /Public goods/);
+  assert.match(marketplaceComponents, /Guides/);
   assert.match(offersPage, /Worked example, not live liquidity/);
   assert.match(offersPage, /Manual review before reliance/);
   assert.match(offersPage, /isPublicGoodsDirectoryIntent/);
@@ -5624,6 +5628,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.grossCapturedCents/);
   assert.match(offersPage, /publicGoodsEntry\?\.accountingSnapshot\.successRewardCents/);
   assert.match(offersPage, /showPublicGoodsEntryCard \? null : \(\s*<MarketplaceHome/);
+  assert.match(offersPage, /liveOfferCount=\{liveOfferCount\}/);
   const mainContentIndex = offersPage.indexOf('<main id="main-content"');
   const publicGoodsResultIndex = offersPage.indexOf('id="public-goods-result-card"');
   const publicGoodsPrimaryCtaIndex = offersPage.indexOf('public-goods-primary-action');
@@ -5673,6 +5678,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
 test("worked examples have canonical detail pages and sitemap coverage", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const exampleDetailPage = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
+  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
   assert.match(offersPage, /\/offers\/examples\/\$\{offer\.id\}/);
@@ -5684,7 +5690,8 @@ test("worked examples have canonical detail pages and sitemap coverage", () => {
   assert.match(exampleDetailPage, /Action evidence/);
   assert.match(exampleDetailPage, /Baseline confidence/);
   assert.match(exampleDetailPage, /Third-party externality review/);
-  assert.match(exampleDetailPage, /Read primer/);
+  assert.match(exampleDetailPage, /Example · Preview only · No commitment/);
+  assert.match(marketplaceComponents, /No commitment was created\./);
   assert.match(sitemapSource, /\/offers\/examples\/\$\{offer\.id\}/);
 });
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
 import { OfferCreateForm, type OfferTemplate } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { isPaymentBondsEnabled } from "@/lib/baseline-bonds";
@@ -209,6 +210,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
   const requestedTemplateId = getSingleSearchParam(resolvedSearchParams.template);
   const requestedExampleId = getSingleSearchParam(resolvedSearchParams.example);
   const requestedSourceOfferId = getSingleSearchParam(resolvedSearchParams.source_offer);
+  const createEntryStep = getSingleSearchParam(resolvedSearchParams.entry);
   const initialMoralTradeTypeTemplate = getMoralTradeTypeTemplate(requestedTemplateId);
   const unsupportedWorkedExampleTemplate = requestedTemplateId && !initialMoralTradeTypeTemplate
     ? CANONICAL_WORKED_CASE_OFFERS.find((offer) => offer.id === requestedTemplateId) ?? null
@@ -262,6 +264,85 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       matchedCompromiseCents: pool.matchedCompromiseCents,
       status: pool.status,
     })) ?? [];
+
+  if (createEntryStep !== "draft") {
+    const draftHref = viewer
+      ? `/offers/new?entry=draft&mode=${initialMode}`
+      : `/login?returnTo=${encodeURIComponent(`/offers/new?entry=draft&mode=${initialMode}`)}`;
+    const templateHref = viewer
+      ? "/offers/new?entry=draft&template=pure-opposed-cause"
+      : "/offers?tab=templates";
+    const createRows = [
+      {
+        badge: viewer ? "Draft" : "Unavailable",
+        cta: viewer ? "Save draft" : "Sign in to continue",
+        href: draftHref,
+        outcome: "Draft saved. No commitment created.",
+        title: "Create offer draft",
+      },
+      {
+        badge: "Template",
+        cta: viewer ? "Create from template" : "View templates",
+        href: templateHref,
+        outcome: "Start from a reviewed template. No live commitment created.",
+        title: "Create from template",
+      },
+      {
+        badge: "Preview",
+        cta: "Preview budget",
+        href: "/mpgf#common-ground-budget-preview",
+        outcome: "Preview only. No commitment will be created.",
+        title: "Preview public-goods round",
+      },
+      {
+        badge: "Unavailable",
+        cta: "Back to offers",
+        href: "/offers",
+        outcome: "Create or select a draft before review can be submitted.",
+        title: "Request review",
+      },
+    ] as const;
+
+    return (
+      <div className="page-shell offer-create-shell">
+        <header className="v72-route-header">
+          <SiteTopbar
+            brandHref="/"
+            links={getPrimaryNavLinks(Boolean(viewer))}
+            {...getTopbarActions(Boolean(viewer))}
+            showLogout={Boolean(viewer)}
+          />
+        </header>
+
+        <main id="main-content" tabIndex={-1}>
+          <section className="v72-create-entry" aria-labelledby="create-entry-heading">
+            <div className="v72-owner-strip">
+              <h1 id="create-entry-heading">Create</h1>
+              <p>Create — choose a safe starting point before any form.</p>
+            </div>
+            <div className="v72-create-sheet panel" role="dialog" aria-label="Create entry sheet">
+              <div className="commitment-sheet-handle" aria-hidden="true" />
+              {createRows.map((row) => (
+                <article className="v72-create-row" key={row.title}>
+                  <div>
+                    <span className="badge">{row.badge}</span>
+                    <h2>{row.title}</h2>
+                    <p>{row.outcome}</p>
+                  </div>
+                  <Link className="button button-primary button-mini" href={row.href}>
+                    {row.cta}
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </section>
+        </main>
+
+        <MarketplaceBottomNav active="create" />
+        <SiteFooter />
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell offer-create-shell">
@@ -615,6 +696,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         </section>
       </main>
 
+      <MarketplaceBottomNav active="create" />
       <SiteFooter />
     </div>
   );

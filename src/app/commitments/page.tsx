@@ -62,70 +62,23 @@ export default async function CommitmentsPage() {
     agreement,
     summary: summarizeAgreement(agreement),
   }));
-  const statusCounts = summaries.reduce<Record<string, number>>((counts, entry) => {
-    counts[entry.summary.status] = (counts[entry.summary.status] ?? 0) + 1;
-    return counts;
-  }, {});
 
   return (
     <div className="page-shell">
-      <header className="hero">
+      <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Commitments</p>
-            <h1>Your conditional pledges and trades.</h1>
-            <p className="hero-text">
-              Track draft, authorized, active, review, charged, released, completed, refunded, and
-              disputed states without turning saved offers or examples into fake commitments.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/offers">
-                Browse marketplace
-              </Link>
-              <Link className="button button-secondary" href="/saved-offers">
-                Saved offers
-              </Link>
-            </div>
-          </section>
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Status center</p>
-            <div className="flow-card">
-              {[
-                "Draft",
-                "Authorized",
-                "Pending match",
-                "Evidence due",
-                "Under review",
-                "Completed",
-              ].map((label, index) => (
-                <div className="flow-step" key={label}>
-                  <span className="flow-number">{String(index + 1).padStart(2, "0")}</span>
-                  <div>
-                    <strong>{label}</strong>
-                    <p>{statusCounts[label.toLowerCase().replaceAll(" ", "_")] ?? 0} current</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white commitments-center" aria-labelledby="commitments-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Order center</p>
-            <h2 id="commitments-heading">Commitment tracking</h2>
-            <p>
-              Rows are backed by existing agreements, payments, evidence items, review cases, and
-              performance bonds. If there is no backend row, no commitment is shown.
-            </p>
+        <section className="v72-private-surface commitments-center" aria-labelledby="commitments-heading">
+          <div className="v72-owner-strip">
+            <h1 id="commitments-heading">Track</h1>
+            <p>Track — commitments, drafts, and issues.</p>
           </div>
 
           {supabaseReady ? (
@@ -152,11 +105,11 @@ export default async function CommitmentsPage() {
                     </div>
                     <dl className="deal-economics-grid">
                       <div>
-                        <dt>Charge state</dt>
+                        <dt>Exposure</dt>
                         <dd>{summary.chargeState}</dd>
                       </div>
                       <div>
-                        <dt>Evidence</dt>
+                        <dt>Latest step</dt>
                         <dd>{summary.evidenceState}</dd>
                       </div>
                       <div>
@@ -170,7 +123,7 @@ export default async function CommitmentsPage() {
                     </dl>
                     <div className="offer-actions">
                       <Link className="button button-secondary button-mini" href={summary.href}>
-                        View agreement
+                        View commitment
                       </Link>
                     </div>
                   </article>
@@ -204,7 +157,7 @@ export default async function CommitmentsPage() {
         </section>
       </main>
 
-      <MarketplaceBottomNav active="pledges" />
+      <MarketplaceBottomNav active="track" />
       <SiteFooter />
     </div>
   );

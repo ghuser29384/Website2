@@ -4,13 +4,17 @@ import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  MarketplaceBottomNav,
+  MarketplaceHome,
+} from "@/components/marketplace/marketplace-components";
+import {
   IconMark,
   OfferCard,
-  SearchBar,
   TrustChip,
 } from "@/components/ui/page-primitives";
 import type { IconName } from "@/components/ui/page-primitives";
 import type { MarketplaceOverview } from "@/lib/app-data";
+import type { MarketplaceQuery, MarketplaceSurface } from "@/lib/marketplace-deals";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -25,24 +29,11 @@ import {
 
 interface HomePageProps {
   isAuthenticated: boolean;
+  liveOfferCount: number;
   marketplaceOverview: MarketplaceOverview;
+  marketplaceQuery: MarketplaceQuery;
+  marketplaceSurface: MarketplaceSurface;
 }
-
-const categoryPills = [
-  { label: "Global health", href: "/offers?search=Global%20health" },
-  { label: "Animal welfare", href: "/offers?search=Animal%20welfare" },
-  { label: "Climate", href: "/offers?search=Climate" },
-  { label: "Long-run future", href: "/offers?search=Future" },
-  { label: "Public health", href: "/offers?search=Public%20health" },
-  { label: "Financial support", href: "/offers?search=Financial%20support" },
-] as const;
-
-const formatPills = [
-  { label: "Pledge swaps", href: "/pledge-swaps" },
-  { label: "Donation offsets", href: "/donation-offsets" },
-  { label: "Public-good contributions", href: "/mpgf" },
-  { label: "Private matching", href: "/background-networking" },
-] as const;
 
 const activationCards: ReadonlyArray<{
   actionLabel: string;
@@ -87,100 +78,97 @@ function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["m
   return "fund";
 }
 
-export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
+export function HomePage({
+  isAuthenticated,
+  liveOfferCount,
+  marketplaceOverview,
+  marketplaceQuery,
+  marketplaceSurface,
+}: HomePageProps) {
   const cohortHref = isAuthenticated ? "/dashboard" : "/cohort";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
-  const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
+  const liveOfferLabel = formatOptionalCount(marketplaceOverview.openOfferCount);
   const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
+  const createHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
 
   return (
     <div className="page-shell page-shell-focused growth-shell">
-      <header className="growth-hero">
+      <header className="home-marketplace-topbar">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
           {...getTopbarActions(isAuthenticated)}
           showLogout={isAuthenticated}
         />
-
-        <div className="growth-hero-inner">
-          <section className="growth-hero-copy">
-            <h1>Moral trade could enable a mostly-great future.</h1>
-            <p className="hero-text">
-              Start with one pledge swap, donation offset, or public-good commitment. Moral Trade
-              keeps the terms, baselines, evidence rules, and manual review explicit before
-              anyone relies on the result.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/worked-examples">
-                See a worked example
-              </Link>
-              <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/cohort"}>
-                {isAuthenticated ? "Open dashboard" : "Join the pilot"}
-              </Link>
-            </div>
-          </section>
-
-          <aside className="growth-progress-card panel" aria-label="Founding progress">
-            <div className="growth-progress-stat">
-              <IconMark name="marketplace" />
-              <span>Live offers</span>
-              <strong>{liveOfferCount}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="example" />
-              <span>Worked examples</span>
-              <strong>{CANONICAL_WORKED_CASE_COUNT}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="profile" />
-              <span>Public profiles</span>
-              <strong>{publicProfileCount}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="review" />
-              <span>Completed agreements</span>
-              <strong>{formatOptionalCount(marketplaceOverview.completedAgreementCount)}</strong>
-            </div>
-          </aside>
-        </div>
-
-        <div className="growth-trust-row" aria-label="Trust standards">
-          <TrustChip>Pilot stage</TrustChip>
-          <TrustChip>No custody or escrow</TrustChip>
-          <TrustChip>Manual review before reliance</TrustChip>
-          <TrustChip>Privacy-first matching</TrustChip>
-          <TrustChip>{formatOptionalCount(marketplaceOverview.completedAgreementCount)} completed agreements - transparency first</TrustChip>
-        </div>
-        <div className="growth-no-automation-strip" aria-label="Non-automation posture">
-          <strong>No surprise exposure. No autonomous outreach. No private-feed mining.</strong>
-          <span>Matching uses broad previews and consent-gated disclosure.</span>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" aria-labelledby="marketplace-search-heading">
-          <div className="section-head section-head-compact">
-            <h2 id="marketplace-search-heading">Find a worked example or live offer</h2>
-            <p>
-              Start with broad categories and inspect examples first. Live offers only count once
-              they have public terms, baselines, and review states.
-            </p>
+        <MarketplaceHome
+          createHref={createHref}
+          liveOfferCount={liveOfferCount}
+          query={marketplaceQuery}
+          surface={marketplaceSurface}
+        />
+
+        <section
+          className="section section-subtle growth-marketplace-context"
+          aria-labelledby="home-context-heading"
+        >
+          <div className="growth-marketplace-context-grid">
+            <div className="section-head section-head-compact">
+              <h2 id="home-context-heading">Moral trade could enable a mostly-great future.</h2>
+              <p className="hero-text">
+                Start with one pledge swap, donation offset, or public-good commitment. Moral Trade
+                keeps the terms, baselines, evidence rules, and manual review explicit before
+                anyone relies on the result.
+              </p>
+              <div className="hero-actions">
+                <Link className="button button-primary" href="/worked-examples">
+                  See a worked example
+                </Link>
+                <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/cohort"}>
+                  {isAuthenticated ? "Open dashboard" : "Join the pilot"}
+                </Link>
+              </div>
+            </div>
+
+            <aside className="growth-progress-card panel" aria-label="Founding progress">
+              <div className="growth-progress-stat">
+                <IconMark name="marketplace" />
+                <span>Live offers</span>
+                <strong>{liveOfferLabel}</strong>
+              </div>
+              <div className="growth-progress-stat">
+                <IconMark name="example" />
+                <span>Worked examples</span>
+                <strong>{CANONICAL_WORKED_CASE_COUNT}</strong>
+              </div>
+              <div className="growth-progress-stat">
+                <IconMark name="profile" />
+                <span>Public profiles</span>
+                <strong>{publicProfileCount}</strong>
+              </div>
+              <div className="growth-progress-stat">
+                <IconMark name="review" />
+                <span>Completed agreements</span>
+                <strong>{formatOptionalCount(marketplaceOverview.completedAgreementCount)}</strong>
+              </div>
+            </aside>
           </div>
-          <SearchBar placeholder="Search by cause, action, or trade type" />
-          <div className="pill-group" aria-label="Cause categories">
-            {categoryPills.map((pill) => (
-              <Link className="source-pill source-pill-link" href={pill.href} key={pill.label}>
-                {pill.label}
-              </Link>
-            ))}
+
+          <div className="growth-trust-row" aria-label="Trust standards">
+            <TrustChip>Pilot stage</TrustChip>
+            <TrustChip>No custody or escrow</TrustChip>
+            <TrustChip>Manual review before reliance</TrustChip>
+            <TrustChip>Privacy-first matching</TrustChip>
+            <TrustChip>
+              {formatOptionalCount(marketplaceOverview.completedAgreementCount)} completed
+              agreements - transparency first
+            </TrustChip>
           </div>
-          <div className="pill-group" aria-label="Trade formats">
-            {formatPills.map((pill) => (
-              <Link className="badge badge-secondary" href={pill.href} key={pill.label}>
-                {pill.label}
-              </Link>
-            ))}
+          <div className="growth-no-automation-strip" aria-label="Non-automation posture">
+            <strong>No surprise exposure. No autonomous outreach. No private-feed mining.</strong>
+            <span>Matching uses broad previews and consent-gated disclosure.</span>
           </div>
         </section>
 
@@ -317,6 +305,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
       </main>
 
+      <MarketplaceBottomNav active="browse" />
       <SiteFooter />
     </div>
   );

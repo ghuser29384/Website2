@@ -241,12 +241,12 @@ test("deal card and commitment sheet render missing optional fields as unavailab
   );
 
   assert.match(cardMarkup, /Incomplete public preview/);
-  assert.match(cardMarkup, /Review unavailable/);
-  assert.match(cardMarkup, /Unavailable/);
+  assert.match(cardMarkup, /Reviewing/);
+  assert.match(cardMarkup, /Exposure unknown/);
   assert.match(cardMarkup, /View details/);
   assert.match(sheetMarkup, /<details/);
-  assert.match(sheetMarkup, /Preview this round/);
   assert.match(sheetMarkup, /Preview budget/);
-  assert.match(sheetMarkup, /No charge from this preview/);
-  assert.match(sheetMarkup, /does not create a completed commitment/);
+  assert.match(sheetMarkup, /No charge now/);
+  assert.match(sheetMarkup, /No commitment was created\./);
+  assert.match(sheetMarkup, /No commitment will be created/);
 });

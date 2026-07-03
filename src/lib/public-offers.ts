@@ -616,23 +616,33 @@ function buildPublicGoodsEntryCopySnippets({
   return [
     {
       surface: "public-goods-entry-card-title",
+      surfaceKind: "primary_ui",
       text: `${eyebrow}. ${label}. ${mechanismVersion}.`,
     },
     {
       surface: "public-goods-entry-card-summary",
+      surfaceKind: "public_page",
       text: summary,
     },
     {
       surface: "public-goods-entry-card-status-chips",
+      surfaceKind: "receipt",
       text: statusChips.join(". "),
     },
     {
       surface: "public-goods-entry-card-actions",
+      surfaceKind: "primary_ui",
       text: [primaryCta.label, ...secondaryCtas.map((action) => action.label)].join(". "),
     },
     {
       surface: "public-goods-entry-card-copy-guards",
+      surfaceKind: "audit_adjacent_summary",
       text: copyGuards.join(" "),
+    },
+    {
+      surface: "public-goods-entry-card-email-safety",
+      surfaceKind: "email",
+      text: "Common Ground Budget preview only. No money was charged or captured, and the platform does not hold funds.",
     },
   ];
 }

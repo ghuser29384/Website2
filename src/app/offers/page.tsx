@@ -1103,104 +1103,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           showLogout={Boolean(viewer)}
         />
         <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
-
-        <div className="collection-header-body">
-          <section className="collection-header-copy">
-            <h1>Browse offers</h1>
-            <p className="hero-text">
-              {publicGoodsSearchIntent
-                ? "Public-goods searches open the Common Ground Budget result before ordinary offer listings."
-                : "Explore live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund without mixing their counts."}
-            </p>
-            {publicGoodsSearchIntent ? null : (
-              <div className="collection-stats" aria-label="Marketplace counts">
-                <span>
-                  <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
-                </span>
-                <span>
-                  <strong>{workedExampleCount}</strong> worked{" "}
-                  {workedExampleCount === 1 ? "example" : "examples"}
-                </span>
-                <span>
-                  <strong>{seedRoundCount}</strong> external CRECM{" "}
-                  {seedRoundCount === 1 ? "module" : "modules"}
-                </span>
-                <span>
-                  <strong>{seedRoundProjects.length}</strong> demo{" "}
-                  {seedRoundProjects.length === 1 ? "record" : "records"}
-                </span>
-                <span>
-                  <strong>{seedTemplateCount}</strong> reviewed{" "}
-                  {seedTemplateCount === 1 ? "template" : "templates"}
-                </span>
-              </div>
-            )}
-          </section>
-
-          {publicGoodsSearchIntent ? null : (
-          <aside className="collection-action-panel panel" aria-label="Collection actions">
-            <div className="collection-action-copy">
-              <strong>
-                {publicGoodsSearchIntent
-                  ? "Common Ground Budget result available."
-                  : defaultView === "worked_examples"
-                    ? "Examples are first today."
-                    : "Live offers are ready."}
-              </strong>
-              <p>
-                {publicGoodsSearchIntent
-                  ? "Public-goods searches open the Common Ground Budget entry before ordinary offer listings."
-                  : defaultView === "worked_examples"
-                    ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
-                    : "Start with live offers, then inspect examples when you want to understand the evidence model."}
-              </p>
-            </div>
-            <div className="hero-actions">
-              {publicGoodsSearchIntent ? (
-                <>
-                  <Link className="button button-primary" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                    {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
-                  </Link>
-                  {publicGoodsEntry?.secondaryCtas.map((action) => (
-                    <Link className="button button-secondary" href={action.href} key={action.key}>
-                      {action.label}
-                    </Link>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
-                    Create an offer
-                  </Link>
-                  <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
-                    Save search
-                  </Link>
-                </>
-              )}
-            </div>
-          </aside>
-          )}
-        </div>
-
-        {publicGoodsSearchIntent ? null : (
-        <details className="pilot-note panel">
-          <summary>About this pilot</summary>
-          <p>
-            Moral Trade currently prioritizes donation offsets and bounded non-public-goods pledge
-            swaps on this page because they have clearer baselines, evidence, and review states.
-            {" "}
-            {MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote}
-          </p>
-          <div className="pilot-note-links">
-            <Link className="text-button" href="/donation-offsets">
-              Offset guide
-            </Link>
-            <Link className="text-button" href="/validation">
-              Validation rules
-            </Link>
-          </div>
-        </details>
-        )}
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -1217,6 +1119,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         {showPublicGoodsEntryCard ? null : (
           <MarketplaceHome
             createHref={createTemplateHref}
+            liveOfferCount={liveOfferCount}
             query={marketplaceQuery}
             surface={marketplaceSurface}
           />
@@ -1592,7 +1495,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         </section>
         )}
 
-        <section className="marketplace-shell" aria-label="Offer marketplace">
+        <section
+          className={`marketplace-shell ${showPublicGoodsEntryCard ? "" : "marketplace-shell-demoted"}`}
+          aria-label="Offer marketplace"
+          hidden={!showPublicGoodsEntryCard}
+        >
           <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
             {DIRECTORY_TABS.map((tab) => (
               <Link
@@ -2447,7 +2354,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         </section>
       </main>
 
-      <MarketplaceBottomNav active="recommended" />
+      <MarketplaceBottomNav active="browse" />
       <SiteFooter />
     </div>
   );

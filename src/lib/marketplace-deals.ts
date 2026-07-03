@@ -357,20 +357,7 @@ function mapOfferStatus(value: string): MarketplaceDealStatus {
 }
 
 function getOfferCtaLabel(offer: { mode: string; donationOffset?: { participation_mode?: string } | null }) {
-  if (offer.mode === "offset") {
-    return offer.donationOffset?.participation_mode === "pool"
-      ? "Join pool"
-      : "Commit conditionally";
-  }
-
-  if (offer.mode === "payment") {
-    return "Join trade";
-  }
-
-  if (offer.mode === "pledge") {
-    return "Commit conditionally";
-  }
-
+  void offer;
   return "View details";
 }
 

@@ -578,15 +578,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             </p>
           </div>
           <div className="marketplace-detail-grid">
-            <MoralDealCard
-              deal={marketplaceDeal}
-              secondaryAction={
-                <Link className="button button-secondary button-mini" href="#commitment-sheet">
-                  Open commitment sheet
-                </Link>
-              }
-              variant="detail"
-            />
+            <MoralDealCard deal={marketplaceDeal} variant="detail" />
             <div className="marketplace-detail-side">
               <DealEconomicsPanel deal={marketplaceDeal} />
               <CommitmentSheet
@@ -1618,7 +1610,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         </section>
       </main>
 
-      <MarketplaceBottomNav active="recommended" />
+      <MarketplaceBottomNav active="browse" />
       <SiteFooter />
     </div>
   );

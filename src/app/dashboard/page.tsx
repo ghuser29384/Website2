@@ -55,6 +55,7 @@ import { BackgroundLocalTransparencyPanel } from "@/components/dashboard/backgro
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
 import {
   buildMatchInboxBadges,
   buildMatchExplanation,
@@ -564,62 +565,44 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="page-shell dashboard-page">
-      <header className="hero">
+      <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Member dashboard</p>
-            <h1>Dashboard</h1>
-            <p className="hero-text">
-              {viewer ? (
-                <>
-                  Signed in as <strong>{viewer.displayName}</strong>. Review matching, privacy,
-                  offers, responses, agreements, payments, and saved work here.
-                </>
-              ) : (
-                <>Configure Supabase to enable the live dashboard and authenticated activity.</>
-              )}
-            </p>
-            {viewer ? (
-              <div className="hero-actions">
-                <Link className="button button-primary" href={`/people/${viewer.authUser.id}`}>
-                  View public profile
-                </Link>
-                <Link className="button button-secondary" href="/saved-offers">
-                  Open saved offers
-                </Link>
-              </div>
-            ) : null}
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Account summary</p>
-            <div className="dashboard-identity">
-              <strong>{viewer?.displayName ?? "Live account unavailable"}</strong>
-              <span>
-                {[viewer?.profile.city, viewer?.profile.region].filter(Boolean).join(", ") ||
-                  "Location not listed"}
-              </span>
-            </div>
-            <div className="dashboard-hero-metrics">
-              {dashboardSnapshot.map((item) => (
-                <div key={item.label}>
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="v72-private-surface v72-account-surface" aria-labelledby="account-heading">
+          <div className="v72-owner-strip">
+            <h1 id="account-heading">Account</h1>
+            <p>Account — saved settings and records.</p>
+          </div>
+          <div className="v72-account-header panel">
+            <strong>{viewer?.displayName ?? "Sign in required"}</strong>
+            <span>
+              {viewer
+                ? "Saved settings and private records stay account-owned."
+                : "Configure Supabase or sign in before private account records can load."}
+            </span>
+          </div>
+          <nav className="v72-shortcut-grid" aria-label="Account shortcuts">
+            {[
+              { href: "/saved-offers", label: "Plan", destination: "Saved offers" },
+              { href: "/commitments", label: "Track", destination: "Commitments" },
+              { href: "/offers", label: "Browse", destination: "Offers" },
+              { href: "/contact", label: "Support", destination: "Contact" },
+            ].map((item) => (
+              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>
+                <strong>{item.label}</strong>
+                <span>{item.destination}</span>
+              </Link>
+            ))}
+          </nav>
+        </section>
+
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
             Supabase is not configured yet. Add environment variables and apply the SQL schema
@@ -4394,6 +4377,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
       </main>
 
+      <MarketplaceBottomNav active="account" />
       <SiteFooter />
     </div>
   );
