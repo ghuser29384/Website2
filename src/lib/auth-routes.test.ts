@@ -4,49 +4,12 @@ import test from "node:test";
 import {
   buildAuthPath,
   buildSupabaseAuthCallbackUrl,
-  getEnabledOAuthProviders,
+  getEnabledOAuthProvidersFromSettings,
   getAuthReturnTo,
-  isOAuthProviderEnabled,
   normalizeAuthMethod,
   normalizeAuthMode,
   normalizeOAuthProvider,
 } from "@/lib/auth-routes";
-
-function withAuthProviderEnv<T>(
-  env: { AUTH_GOOGLE_ENABLED?: string; AUTH_APPLE_ENABLED?: string },
-  callback: () => T,
-) {
-  const previousGoogle = process.env.AUTH_GOOGLE_ENABLED;
-  const previousApple = process.env.AUTH_APPLE_ENABLED;
-
-  if (env.AUTH_GOOGLE_ENABLED === undefined) {
-    delete process.env.AUTH_GOOGLE_ENABLED;
-  } else {
-    process.env.AUTH_GOOGLE_ENABLED = env.AUTH_GOOGLE_ENABLED;
-  }
-
-  if (env.AUTH_APPLE_ENABLED === undefined) {
-    delete process.env.AUTH_APPLE_ENABLED;
-  } else {
-    process.env.AUTH_APPLE_ENABLED = env.AUTH_APPLE_ENABLED;
-  }
-
-  try {
-    return callback();
-  } finally {
-    if (previousGoogle === undefined) {
-      delete process.env.AUTH_GOOGLE_ENABLED;
-    } else {
-      process.env.AUTH_GOOGLE_ENABLED = previousGoogle;
-    }
-
-    if (previousApple === undefined) {
-      delete process.env.AUTH_APPLE_ENABLED;
-    } else {
-      process.env.AUTH_APPLE_ENABLED = previousApple;
-    }
-  }
-}
 
 test("auth route helpers render login and signup modes", () => {
   assert.equal(normalizeAuthMode("login"), "login");
@@ -91,24 +54,15 @@ test("oauth provider normalization only permits configured provider names", () =
   assert.equal(normalizeOAuthProvider(undefined), null);
 });
 
-test("oauth providers fail closed unless explicitly enabled by deployment env", () => {
-  withAuthProviderEnv({}, () => {
-    assert.equal(isOAuthProviderEnabled("google"), false);
-    assert.equal(isOAuthProviderEnabled("apple"), false);
-    assert.deepEqual(getEnabledOAuthProviders(), []);
-  });
-
-  withAuthProviderEnv({ AUTH_GOOGLE_ENABLED: "true", AUTH_APPLE_ENABLED: "1" }, () => {
-    assert.equal(isOAuthProviderEnabled("google"), true);
-    assert.equal(isOAuthProviderEnabled("apple"), true);
-    assert.deepEqual(getEnabledOAuthProviders(), ["google", "apple"]);
-  });
-
-  withAuthProviderEnv({ AUTH_GOOGLE_ENABLED: "false", AUTH_APPLE_ENABLED: "yes" }, () => {
-    assert.equal(isOAuthProviderEnabled("google"), false);
-    assert.equal(isOAuthProviderEnabled("apple"), true);
-    assert.deepEqual(getEnabledOAuthProviders(), ["apple"]);
-  });
+test("oauth providers are derived from Supabase Auth external settings", () => {
+  assert.deepEqual(getEnabledOAuthProvidersFromSettings(null), []);
+  assert.deepEqual(getEnabledOAuthProvidersFromSettings({ google: true, apple: true }), [
+    "google",
+    "apple",
+  ]);
+  assert.deepEqual(getEnabledOAuthProvidersFromSettings({ google: false, apple: true }), [
+    "apple",
+  ]);
 });
 
 test("oauth callback URL preserves safe return target", () => {

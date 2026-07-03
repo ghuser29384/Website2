@@ -255,8 +255,8 @@ import {
   getAuthDefaultReturnTo,
   normalizeAuthMode,
   normalizeOAuthProvider,
-  isOAuthProviderEnabled,
 } from "@/lib/auth-routes";
+import { isOAuthProviderEnabled } from "@/lib/auth-provider-settings";
 import type {
   MoralTradeEvidenceClaimScope,
   MoralTradeEvidenceClaimType,
@@ -3301,7 +3301,7 @@ export async function oauthSignInAction(formData: FormData) {
     redirectWithMessage(authPath, "error", "Choose Google or Apple to continue.");
   }
 
-  if (!isOAuthProviderEnabled(provider)) {
+  if (!(await isOAuthProviderEnabled(provider))) {
     redirectWithMessage(
       authPath,
       "error",

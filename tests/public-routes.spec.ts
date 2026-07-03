@@ -1,7 +1,33 @@
 import { expect, test } from "@playwright/test";
 
-function envFlagEnabled(value: string | undefined) {
-  return /^(1|true|yes|on)$/i.test(value ?? "");
+async function getEnabledOAuthProvidersForTest() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return [];
+  }
+
+  const response = await fetch(`${url}/auth/v1/settings`, {
+    headers: {
+      apikey: key,
+      authorization: `Bearer ${key}`,
+    },
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const settings = (await response.json()) as {
+    external?: Partial<Record<"google" | "apple", boolean>>;
+  };
+
+  return (["google", "apple"] as const).filter(
+    (provider) => settings.external?.[provider] === true,
+  );
 }
 
 const publicRoutes = [
@@ -142,10 +168,11 @@ test("/offers/new offset creation layout stays broad without mobile overflow", a
 });
 
 test("/login renders unified auth options and preserves returnTo", async ({ page }) => {
+  const enabledOAuthProviders = await getEnabledOAuthProvidersForTest();
   await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
 
-  const googleEnabled = envFlagEnabled(process.env.AUTH_GOOGLE_ENABLED);
-  const appleEnabled = envFlagEnabled(process.env.AUTH_APPLE_ENABLED);
+  const googleEnabled = enabledOAuthProviders.includes("google");
+  const appleEnabled = enabledOAuthProviders.includes("apple");
 
   await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
   await expect(page.getByRole("link", { name: "Continue with Email" })).toHaveAttribute(

@@ -6,7 +6,6 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   buildAuthPath,
-  getEnabledOAuthProviders,
   getOAuthProviderLabel,
   getAuthReturnTo,
   normalizeAuthMethod,
@@ -14,6 +13,7 @@ import {
   type AuthMode,
   type OAuthProvider,
 } from "@/lib/auth-routes";
+import { getEnabledOAuthProviders } from "@/lib/auth-provider-settings";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -93,7 +93,7 @@ function ProviderButton({
   );
 }
 
-export function AuthPage({
+export async function AuthPage({
   initialMode,
   isAuthenticated,
   searchParams,
@@ -112,7 +112,7 @@ export function AuthPage({
   const returnTo = getAuthReturnTo(searchParams, mode);
   const formMessage = getFormMessage(searchParams);
   const supabaseReady = hasSupabaseEnv();
-  const enabledOAuthProviders = getEnabledOAuthProviders();
+  const enabledOAuthProviders = await getEnabledOAuthProviders();
   const hasSocialProviders = enabledOAuthProviders.length > 0;
   const providerOptionLabel = enabledOAuthProviders.map(getOAuthProviderLabel).join(", ");
   const isSignup = mode === "signup";
