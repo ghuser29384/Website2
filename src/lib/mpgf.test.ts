@@ -3264,6 +3264,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreviewRoute, /persistCommonGroundBudgetPreview/);
   assert.match(budgetPreviewRoute, /preview\.activationState !== "ready_for_confirmation"/);
   assert.match(budgetPreviewRoute, /not_saved_confirmation_required/);
+  assert.match(budgetPreviewRoute, /missingMpgfCrecFinalReviewAcknowledgementKeys/);
+  assert.match(budgetPreviewRoute, /not_saved_final_review_required/);
+  assert.match(budgetPreviewRoute, /rulebook_hash_at_consent: rulebookHashAtConsent/);
+  assert.match(budgetPreviewRoute, /finalReviewAcknowledgementHash/);
   assert.match(budgetPreviewRoute, /\.from\("mpgf_user_budgets"\)/);
   assert.match(budgetPreviewRoute, /\.from\("mpgf_support_stances"\)/);
   assert.match(budgetPreviewRoute, /\.from\("mpgf_conditional_trade_intents"\)/);
@@ -3389,6 +3393,8 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
   assert.match(roundPage, /MpgfCommonGroundBudgetSavePanel/);
   assert.match(roundPage, /commonGroundBudgetSavePayload/);
+  assert.match(roundPage, /buildMpgfCrecFinalReviewAcknowledgements/);
+  assert.match(roundPage, /rulebookHashAtConsent: ecmRulebook\.calcHash/);
   assert.match(roundPage, /projectReviewRows=\{commonGroundBudgetPreview\.rows\.map/);
   assert.match(roundPage, /rulebookHash=\{ecmRulebook\.calcHash\}/);
   assert.match(roundPage, /sourceSpec=\{ecmRulebook\.mechanism\.sourceSpec\}/);
@@ -3407,6 +3413,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /status chips, emails, or calculator outputs/);
   assert.match(budgetSavePanel, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS/);
   assert.match(budgetSavePanel, /MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES/);
+  assert.match(budgetSavePanel, /buildMpgfCrecFinalReviewAcknowledgements/);
+  assert.match(budgetSavePanel, /missingMpgfCrecFinalReviewAcknowledgementKeys/);
+  assert.match(budgetSavePanel, /finalReviewAcknowledgementsComplete/);
   assert.match(budgetSavePanel, /finalReviewDisclosureDescription/);
   assert.match(budgetSavePanel, /getMpgfCrecPlainLanguageLabelForStance/);
   assert.match(budgetSavePanel, /MpgfCrecGuidedStance/);
@@ -3462,6 +3471,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /Failed projects: refund, reroute, carry-forward, or cancellation according to your fallback/);
   assert.match(budgetSavePanel, /Required details/);
   assert.match(budgetSavePanel, /Suggested defaults are not binding unless shown on this review screen and explicitly/);
+  assert.match(budgetSavePanel, /I reviewed this detail before save/);
+  assert.match(budgetSavePanel, /Required acknowledgements remaining/);
+  assert.match(budgetSavePanel, /rulebookHashAtConsent: rulebookHash/);
   assert.match(plainLanguageLabels, /label: "Binding caps"/);
   assert.match(plainLanguageLabels, /label: "Cross-view conditions"/);
   assert.match(plainLanguageLabels, /label: "Counterpart buckets"/);
@@ -3482,7 +3494,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /not legal escrow, are not custody-backed, and are not payment protection/);
   assert.match(budgetSavePanel, /Gross, fee, net recipient, actual, counted, and match-eligible/);
   assert.match(budgetSavePanel, /fetch\(apiPath/);
-  assert.match(budgetSavePanel, /JSON\.stringify\(payload\)/);
+  assert.match(budgetSavePanel, /JSON\.stringify\(\{/);
+  assert.match(budgetSavePanel, /\.\.\.payload/);
+  assert.match(budgetSavePanel, /finalReviewAcknowledgements,/);
+  assert.match(budgetSavePanel, /rulebookHashAtConsent: rulebookHash/);
   assert.match(budgetSavePanel, /activationState === "ready_for_confirmation"/);
   assert.match(budgetSavePanel, /blockedReasonCount === 0/);
   assert.match(budgetSavePanel, /participantConfirmationHash/);

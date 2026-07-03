@@ -9,6 +9,9 @@ import {
   MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
   MPGF_CRECM_COPY_VALIDATION_POLICY,
+  allMpgfCrecFinalReviewDisclosuresAcknowledged,
+  buildMpgfCrecFinalReviewAcknowledgements,
+  missingMpgfCrecFinalReviewAcknowledgementKeys,
   validateMpgfCrecCopyAgainstRecordedState,
   validateMpgfCrecPlainLanguageCopyMap,
   validateMpgfCrecPublishedCopyBundle,
@@ -298,6 +301,23 @@ test("CRECM final review disclosure contract covers every simplified-UX required
       "failure-bonus denial categories",
     ],
   );
+});
+
+test("CRECM final review acknowledgements fail closed until every required disclosure is acknowledged", () => {
+  const emptyAcknowledgements = buildMpgfCrecFinalReviewAcknowledgements();
+
+  assert.equal(allMpgfCrecFinalReviewDisclosuresAcknowledged(emptyAcknowledgements), false);
+  assert.deepEqual(
+    missingMpgfCrecFinalReviewAcknowledgementKeys(emptyAcknowledgements),
+    MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
+  );
+
+  const completeAcknowledgements = buildMpgfCrecFinalReviewAcknowledgements(
+    Object.fromEntries(MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS.map((key) => [key, true])),
+  );
+
+  assert.equal(allMpgfCrecFinalReviewDisclosuresAcknowledged(completeAcknowledgements), true);
+  assert.deepEqual(missingMpgfCrecFinalReviewAcknowledgementKeys(completeAcknowledgements), []);
 });
 
 test("CRECM plain-language copy map rejects missing, duplicate, or alternate-semantics rows", () => {

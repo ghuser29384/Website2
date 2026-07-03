@@ -14,6 +14,11 @@ import {
   type MpgfCommonGroundBudgetUnroutablePolicy,
 } from "@/lib/mpgf/public-goods-common-ground-budget";
 import {
+  buildMpgfCrecFinalReviewAcknowledgements,
+  missingMpgfCrecFinalReviewAcknowledgementKeys,
+  type MpgfCrecFinalReviewAcknowledgements,
+} from "@/lib/mpgf/public-goods-crecm-labels";
+import {
   buildMpgfPublicGoodsCoalitionRoutingReport,
   getMpgfPublicGoodsCoalitionRoutingReportApi,
 } from "@/lib/mpgf/public-goods-coalition-routing";
@@ -80,6 +85,10 @@ function isMissingRelationError(error: DbErrorLike) {
   return error.code === "42P01" || /relation .* does not exist/i.test(error.message ?? "");
 }
 
+function isCanonicalHash(value: string) {
+  return /^sha256:[0-9a-f]{64}$/.test(value);
+}
+
 function budgetPeriodField(record: Record<string, unknown>): MpgfCommonGroundBudgetPeriod {
   return stringField(record, "budgetPeriod") === "round_limited" ? "round_limited" : "monthly";
 }
@@ -138,6 +147,20 @@ function stancesField(value: unknown) {
   }));
 }
 
+function finalReviewAcknowledgementsField(record: Record<string, unknown>) {
+  const nested = isRecord(record.finalReviewAcknowledgements)
+    ? record.finalReviewAcknowledgements
+    : {};
+  const acknowledgements = buildMpgfCrecFinalReviewAcknowledgements();
+
+  for (const key of Object.keys(acknowledgements) as Array<keyof MpgfCrecFinalReviewAcknowledgements>) {
+    acknowledgements[key] =
+      booleanField(nested, key) || booleanField(record, `finalReviewAcknowledgement_${key}`);
+  }
+
+  return acknowledgements;
+}
+
 function stanceIdFor(budgetId: string, campaignId: string) {
   return `mpgf-cg-stance-${hashValue([budgetId, campaignId]).slice(7, 19)}`;
 }
@@ -158,14 +181,18 @@ function redactedNoteHashesByCampaign(stances: ReturnType<typeof stancesField>) 
 }
 
 async function persistCommonGroundBudgetPreview({
+  finalReviewAcknowledgements,
   preview,
   profileId,
   roundId,
+  rulebookHashAtConsent,
   stances,
 }: {
+  finalReviewAcknowledgements: MpgfCrecFinalReviewAcknowledgements;
   preview: CommonGroundBudgetPreview;
   profileId: string;
   roundId: string;
+  rulebookHashAtConsent: string;
   stances: ReturnType<typeof stancesField>;
 }) {
   if (!preview.participantConfirmationHash || preview.activationState !== "ready_for_confirmation") {
@@ -176,6 +203,23 @@ async function persistCommonGroundBudgetPreview({
         "Budget preview was not saved because participant surplus confirmation or a non-blocking eligible project set is still required.",
       savedBudgetId: null,
       savedStanceCount: 0,
+      paymentCaptureAllowed: false as const,
+    };
+  }
+
+  const missingFinalReviewAcknowledgementKeys =
+    missingMpgfCrecFinalReviewAcknowledgementKeys(finalReviewAcknowledgements);
+  if (missingFinalReviewAcknowledgementKeys.length > 0 || !isCanonicalHash(rulebookHashAtConsent)) {
+    return {
+      status: "not_saved_final_review_required" as const,
+      stateMutation: "none_preview_only" as const,
+      message:
+        "Budget preview was not saved because final review acknowledgements and a current rulebook hash are required before save.",
+      savedBudgetId: null,
+      savedStanceCount: 0,
+      savedConditionalIntentCount: 0,
+      missingFinalReviewAcknowledgementKeys,
+      rulebookHashAtConsent: isCanonicalHash(rulebookHashAtConsent) ? rulebookHashAtConsent : null,
       paymentCaptureAllowed: false as const,
     };
   }
@@ -196,6 +240,13 @@ async function persistCommonGroundBudgetPreview({
   const budgetId = `mpgf-cg-budget-${hashValue(["mpgf-common-ground-budget", roundId, userRefHash]).slice(7, 19)}`;
   const redactedNoteHashes = redactedNoteHashesByCampaign(stances);
   const now = new Date().toISOString();
+  const finalReviewAcknowledgementHash = hashValue([
+    "mpgf-final-review-acknowledgement",
+    roundId,
+    preview.termsSnapshotHash,
+    rulebookHashAtConsent,
+    finalReviewAcknowledgements,
+  ]);
   const fallbackRule = {
     onProjectFailure: preview.fallbackRule,
     onAuthorizationExpiry: "reauthorize_near_capture",
@@ -239,7 +290,11 @@ async function persistCommonGroundBudgetPreview({
         round_lock_confirmation_required: true,
         cancel_until: preview.cancelUntil,
         terms_snapshot_hash: preview.termsSnapshotHash,
-        participant_confirmation_hash: preview.participantConfirmationHash,
+        participant_confirmation_hash: hashValue([
+          "participant-confirmation",
+          preview.participantConfirmationHash,
+          finalReviewAcknowledgementHash,
+        ]),
         status: "active",
         no_global_moral_ranking: true,
         updated_at: now,
@@ -312,7 +367,7 @@ async function persistCommonGroundBudgetPreview({
       acceptable_counter_bucket_ids: row.conditionalTradeIntent.acceptableCounterBucketIds,
       condition_accepted: row.conditionalTradeIntent.conditionAccepted,
       fallback_rule: row.conditionalTradeIntent.fallbackRule,
-      rulebook_hash_at_consent: null,
+      rulebook_hash_at_consent: rulebookHashAtConsent,
       terms_snapshot_hash: preview.termsSnapshotHash,
       conditional_intent_policy: row.conditionalTradeIntent.policy,
       payment_capture_allowed: row.conditionalTradeIntent.paymentCaptureAllowed,
@@ -348,6 +403,8 @@ async function persistCommonGroundBudgetPreview({
     savedBudgetId: String(budgetWrite.data.id),
     savedStanceCount: stanceRows.length,
     savedConditionalIntentCount: conditionalIntentRows.length,
+    finalReviewAcknowledgementHash,
+    rulebookHashAtConsent,
     paymentCaptureAllowed: false as const,
   };
 }
@@ -384,6 +441,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
   const fallbackReport = getMpgfPublicGoodsCoalitionRoutingReportApi(roundId);
   const stances = stancesField(body.stances);
   const savePreview = booleanField(body, "savePreview");
+  const finalReviewAcknowledgements = finalReviewAcknowledgementsField(body);
+  const rulebookHashAtConsent = stringField(body, "rulebookHashAtConsent");
 
   try {
     const contextLoad = await loadMpgfPublicGoodsAllocationContext({ roundId });
@@ -451,9 +510,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
     try {
       persistence = savePreview
         ? await persistCommonGroundBudgetPreview({
+            finalReviewAcknowledgements,
             preview,
             profileId: viewer.authUser.id,
             roundId,
+            rulebookHashAtConsent,
             stances,
           })
         : {

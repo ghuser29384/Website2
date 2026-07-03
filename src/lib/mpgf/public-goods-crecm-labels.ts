@@ -277,3 +277,31 @@ export type MpgfCrecFinalReviewDisclosureKey =
 
 export const MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS =
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES.map((entry) => entry.key);
+
+export type MpgfCrecFinalReviewAcknowledgements =
+  Record<MpgfCrecFinalReviewDisclosureKey, boolean>;
+
+export function buildMpgfCrecFinalReviewAcknowledgements(
+  acknowledgements: Partial<Record<MpgfCrecFinalReviewDisclosureKey, boolean>> = {},
+): MpgfCrecFinalReviewAcknowledgements {
+  return Object.fromEntries(
+    MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS.map((key) => [
+      key,
+      acknowledgements[key] === true,
+    ]),
+  ) as MpgfCrecFinalReviewAcknowledgements;
+}
+
+export function missingMpgfCrecFinalReviewAcknowledgementKeys(
+  acknowledgements: Partial<Record<MpgfCrecFinalReviewDisclosureKey, boolean>> = {},
+) {
+  return MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS.filter(
+    (key) => acknowledgements[key] !== true,
+  );
+}
+
+export function allMpgfCrecFinalReviewDisclosuresAcknowledged(
+  acknowledgements: Partial<Record<MpgfCrecFinalReviewDisclosureKey, boolean>> = {},
+) {
+  return missingMpgfCrecFinalReviewAcknowledgementKeys(acknowledgements).length === 0;
+}

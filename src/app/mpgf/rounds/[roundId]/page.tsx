@@ -23,6 +23,7 @@ import {
 } from "@/lib/mpgf/public-goods-common-ground-budget";
 import {
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  buildMpgfCrecFinalReviewAcknowledgements,
   getMpgfCrecPlainLanguageLabelForStance,
 } from "@/lib/mpgf/public-goods-crecm-labels";
 import { getMpgfPublicGoodsCoalitionRoutingReportApi } from "@/lib/mpgf/public-goods-coalition-routing";
@@ -366,11 +367,13 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
     budgetPeriod: commonGroundBudgetPreview.budgetPeriod,
     defaultAllocationBaseline: commonGroundBudgetPreview.defaultAllocationBaseline,
     fallbackRule: commonGroundBudgetPreview.fallbackRule,
+    finalReviewAcknowledgements: buildMpgfCrecFinalReviewAcknowledgements(),
     monthlyBudgetCents,
     nextCaptureAt: commonGroundBudgetPreview.nextCaptureAt,
     nextCaptureRule: commonGroundBudgetPreview.nextCaptureRule,
     participantSurplusConfirmed: commonGroundBudgetPreview.participantSurplusConfirmed,
     perProjectCapCents: commonGroundBudgetPreview.perProjectCapCents,
+    rulebookHashAtConsent: ecmRulebook.calcHash,
     roundBudgetCents,
     savePreview: true,
     settlementCurrency: commonGroundBudgetPreview.settlementCurrency,

@@ -12,9 +12,13 @@ export {
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
   MPGF_CRECM_REQUIRED_FINAL_REVIEW_DISCLOSURE_KEYS,
   MPGF_CRECM_REQUIRED_PLAIN_LANGUAGE_COPY_LABELS,
+  allMpgfCrecFinalReviewDisclosuresAcknowledged,
+  buildMpgfCrecFinalReviewAcknowledgements,
   getMpgfCrecPlainLanguageLabelForStance,
+  missingMpgfCrecFinalReviewAcknowledgementKeys,
 } from "./public-goods-crecm-labels";
 export type {
+  MpgfCrecFinalReviewAcknowledgements,
   MpgfCrecFinalReviewDisclosureKey,
   MpgfCrecFinalReviewRequiredDisclosure,
   MpgfCrecGuidedStance,

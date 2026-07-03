@@ -5,7 +5,10 @@ import { useState, type ReactNode } from "react";
 import {
   MPGF_CRECM_FINAL_REVIEW_REQUIRED_DISCLOSURES,
   MPGF_CRECM_PLAIN_LANGUAGE_LABELS,
+  buildMpgfCrecFinalReviewAcknowledgements,
+  missingMpgfCrecFinalReviewAcknowledgementKeys,
   getMpgfCrecPlainLanguageLabelForStance,
+  type MpgfCrecFinalReviewAcknowledgements,
   type MpgfCrecFinalReviewDisclosureKey,
   type MpgfCrecGuidedStance,
 } from "@/lib/mpgf/public-goods-crecm-labels";
@@ -35,11 +38,13 @@ export interface CommonGroundBudgetSavePayload {
   budgetPeriod: BudgetPeriod;
   defaultAllocationBaseline: string;
   fallbackRule: FallbackRule;
+  finalReviewAcknowledgements: MpgfCrecFinalReviewAcknowledgements;
   monthlyBudgetCents: number;
   nextCaptureAt: string | null;
   nextCaptureRule: NextCaptureRule;
   participantSurplusConfirmed: boolean;
   perProjectCapCents: number;
+  rulebookHashAtConsent: string;
   roundBudgetCents: number;
   savePreview: true;
   settlementCurrency: "usd";
@@ -220,15 +225,26 @@ export function MpgfCommonGroundBudgetSavePanel({
   technicalLabel,
   termsSnapshotHash,
 }: CommonGroundBudgetSavePanelProps) {
+  const [finalReviewAcknowledgements, setFinalReviewAcknowledgements] =
+    useState<MpgfCrecFinalReviewAcknowledgements>(() =>
+      buildMpgfCrecFinalReviewAcknowledgements(payload.finalReviewAcknowledgements),
+    );
+  const missingFinalReviewAcknowledgements =
+    missingMpgfCrecFinalReviewAcknowledgementKeys(finalReviewAcknowledgements);
+  const finalReviewAcknowledgementsComplete = missingFinalReviewAcknowledgements.length === 0;
   const canSave =
     activationState === "ready_for_confirmation" &&
     blockedReasonCount === 0 &&
     Boolean(participantConfirmationHash) &&
-    !paymentCaptureAllowed;
+    !paymentCaptureAllowed &&
+    finalReviewAcknowledgementsComplete;
   const [pending, setPending] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
-    canSave
-      ? "Ready to save this no-capture budget preview."
+    activationState === "ready_for_confirmation" &&
+      blockedReasonCount === 0 &&
+      Boolean(participantConfirmationHash) &&
+      !paymentCaptureAllowed
+      ? "Review and acknowledge every required detail before saving this no-capture budget preview."
       : "Preview must be confirmed and non-blocking before it can be saved.",
   );
   const [savedBudgetId, setSavedBudgetId] = useState<string | null>(null);
@@ -248,6 +264,10 @@ export function MpgfCommonGroundBudgetSavePanel({
           stance: stance.stance,
           title: stance.campaignId,
         }));
+  const visibleStatusMessage =
+    canSave && statusMessage === "Review and acknowledge every required detail before saving this no-capture budget preview."
+      ? "Ready to save this no-capture budget preview."
+      : statusMessage;
 
   async function saveBudgetPreview() {
     if (!canSave) {
@@ -264,7 +284,11 @@ export function MpgfCommonGroundBudgetSavePanel({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          finalReviewAcknowledgements,
+          rulebookHashAtConsent: rulebookHash,
+        }),
       });
       const result = (await response.json().catch(() => ({}))) as CommonGroundBudgetSaveResponse;
 
@@ -382,6 +406,20 @@ export function MpgfCommonGroundBudgetSavePanel({
                     payload,
                     projectRows,
                   })}
+                  <label className="checkbox-row">
+                    <input
+                      aria-label={`Acknowledge ${disclosure.label}`}
+                      checked={finalReviewAcknowledgements[disclosure.key]}
+                      onChange={(event) =>
+                        setFinalReviewAcknowledgements((current) => ({
+                          ...current,
+                          [disclosure.key]: event.currentTarget.checked,
+                        }))
+                      }
+                      type="checkbox"
+                    />
+                    <span>I reviewed this detail before save.</span>
+                  </label>
                 </dd>
               </div>
             ))}
@@ -410,6 +448,11 @@ export function MpgfCommonGroundBudgetSavePanel({
           Source: {sourceSpec}; mechanism: {technicalLabel}.
         </p>
       </section>
+      {!finalReviewAcknowledgementsComplete ? (
+        <p className="mpgf-small">
+          Required acknowledgements remaining: {missingFinalReviewAcknowledgements.length}.
+        </p>
+      ) : null}
       <dl className="mpgf-summary-grid">
         <div>
           <dt>Terms snapshot</dt>
@@ -434,7 +477,7 @@ export function MpgfCommonGroundBudgetSavePanel({
         </button>
       </div>
       <p className="mpgf-small" aria-live="polite">
-        {statusMessage}
+        {visibleStatusMessage}
       </p>
     </div>
   );
