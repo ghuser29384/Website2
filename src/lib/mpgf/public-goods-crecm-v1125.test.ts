@@ -36,6 +36,7 @@ import {
   evaluateMpgfCrecNetPublicGoodSupporterBreadth,
   evaluateMpgfCrecProjectHardGate,
   evaluateMpgfCrecRoundStatusGate,
+  evaluateMpgfCrecStage7FallbackExecutionGate,
   evaluateMpgfCrecSuccessRewardClaim,
   hashMpgfCrecV1125Value,
   intersectMpgfCrecTrimStableStringArrays,
@@ -3833,6 +3834,90 @@ test("CRECM v1.125 Stage 7 non-payable failure handling returns explicit no-muta
   assert.doesNotMatch(source, /emitFailureHandlingReplayOnly/);
 });
 
+test("CRECM v1.125 Stage 7 fallback execution requires bound user-consented rows", () => {
+  const validReleaseHold = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "release_hold",
+    budgetFallbackRule: "release_hold",
+    conditionalIntentFallbackRule: "release_hold",
+    fallbackRuleUserConsented: true,
+  });
+
+  assert.equal(validReleaseHold.eligible, true);
+  assert.equal(validReleaseHold.executableFallbackAllowed, true);
+  assert.equal(validReleaseHold.selectedFallbackRule, "release_hold");
+  assert.deepEqual(validReleaseHold.allowedExecutableFallbackRules, ["release_hold"]);
+  assert.equal(validReleaseHold.releaseCancelNoCaptureOnly, false);
+  assert.equal(validReleaseHold.freshConsentRequired, false);
+
+  const missingRows = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 0,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 0,
+    projectRowEligible: false,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: false,
+    requestedFallbackRule: "release_hold",
+    budgetFallbackRule: "release_hold",
+    conditionalIntentFallbackRule: null,
+    fallbackRuleUserConsented: false,
+  });
+
+  assert.equal(missingRows.eligible, false);
+  assert.equal(missingRows.executableFallbackAllowed, false);
+  assert.equal(missingRows.selectedFallbackRule, null);
+  assert.deepEqual(missingRows.allowedExecutableFallbackRules, []);
+  assert.equal(missingRows.releaseCancelNoCaptureOnly, true);
+  assert.equal(missingRows.freshConsentRequired, true);
+  assert.ok(missingRows.blockers.includes("stage7_fallback_project_row_count_not_unique"));
+  assert.ok(missingRows.blockers.includes("stage7_fallback_intent_row_count_not_unique"));
+  assert.ok(missingRows.blockers.includes("stage7_fallback_rule_not_user_consented"));
+
+  const mismatchedRules = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "reroute",
+    budgetFallbackRule: "refund",
+    conditionalIntentFallbackRule: "reroute",
+    fallbackRuleUserConsented: true,
+  });
+
+  assert.equal(mismatchedRules.eligible, false);
+  assert.equal(mismatchedRules.selectedFallbackRule, null);
+  assert.equal(mismatchedRules.releaseCancelNoCaptureOnly, true);
+  assert.ok(mismatchedRules.blockers.includes("stage7_fallback_budget_rule_not_bound_to_request"));
+
+  const nonPayable = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "closed",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "refund",
+    budgetFallbackRule: "refund",
+    conditionalIntentFallbackRule: "refund",
+    fallbackRuleUserConsented: true,
+  });
+
+  assert.equal(nonPayable.eligible, false);
+  assert.equal(nonPayable.releaseCancelNoCaptureOnly, true);
+  assert.ok(nonPayable.blockers.includes("round_status_not_payable_for_side_effect"));
+});
+
 test("CRECM v1.125 failure-bonus mutation lists are unsettled, backed, audited, and payable-only", () => {
   const context = {
     roundId,
@@ -4304,6 +4389,10 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     true,
   );
   assert.equal(summary.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(summary.stage7FallbackExecution.projectBudgetAndIntentRowsMustBeUniqueAndEligible, true);
+  assert.equal(summary.stage7FallbackExecution.executableFallbackRequiresRequestedBudgetAndIntentRuleMatch, true);
+  assert.equal(summary.stage7FallbackExecution.ineligibleFallbackFallsBackToReleaseCancelNoCaptureAndFreshConsent, true);
+  assert.equal(summary.stage7FallbackExecution.syntheticReleaseHoldForbidden, true);
   assert.equal(
     summary.counterpartyVolumeSatisfaction.thresholdSource,
     "ConditionalTradeIntent.minCounterpartyVolumeCents",

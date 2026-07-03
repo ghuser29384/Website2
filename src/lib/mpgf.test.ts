@@ -2007,6 +2007,9 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.clearingContract.supportStanceInputGating.wrongRowsExposeZeroCapsAndNoCounterpartyBuckets, true);
   assert.equal(report.clearingContract.conditionalIntentInputGating.missingInactiveOrWrongRowsAllocateZero, true);
   assert.equal(report.clearingContract.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
+  assert.equal(report.clearingContract.stage7FallbackExecution.projectBudgetAndIntentRowsMustBeUniqueAndEligible, true);
+  assert.equal(report.clearingContract.stage7FallbackExecution.executableFallbackRequiresRequestedBudgetAndIntentRuleMatch, true);
+  assert.equal(report.clearingContract.stage7FallbackExecution.ineligibleFallbackFallsBackToReleaseCancelNoCaptureAndFreshConsent, true);
   assert.equal(
     report.clearingContract.counterpartyVolumeSatisfaction.thresholdSource,
     "ConditionalTradeIntent.minCounterpartyVolumeCents",

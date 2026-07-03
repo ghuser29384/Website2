@@ -549,6 +549,32 @@ export interface MpgfCrecStage7FailureHandlingNonSideEffectOutput {
   blockers: string[];
 }
 
+export interface MpgfCrecStage7FallbackExecutionGateInput {
+  roundStatus: unknown;
+  publicSafetyFreezeActive?: boolean;
+  cancellationActive?: boolean;
+  selectedPublicGoodProjectRowCount: unknown;
+  selectedCommonGroundBudgetRowCount: unknown;
+  selectedConditionalTradeIntentRowCount: unknown;
+  projectRowEligible: boolean;
+  commonGroundBudgetRowEligible: boolean;
+  conditionalIntentRowEligible: boolean;
+  requestedFallbackRule: unknown;
+  budgetFallbackRule: MpgfCrecFallbackRule | null;
+  conditionalIntentFallbackRule: MpgfCrecFallbackRule | null;
+  fallbackRuleUserConsented: boolean;
+}
+
+export interface MpgfCrecStage7FallbackExecutionGateResult {
+  eligible: boolean;
+  blockers: string[];
+  selectedFallbackRule: MpgfCrecFallbackRule | null;
+  executableFallbackAllowed: boolean;
+  allowedExecutableFallbackRules: MpgfCrecFallbackRule[];
+  releaseCancelNoCaptureOnly: boolean;
+  freshConsentRequired: boolean;
+}
+
 export interface MpgfCrecRoundMetadataGateInput {
   roundId: unknown;
   rulebookHash: unknown;
@@ -2062,6 +2088,58 @@ export function buildMpgfCrecStage7FailureHandlingNonSideEffectOutput(
       "claim",
     ] as const,
     blockers: replayOnly ? replayGate.blockers : [...new Set([...replayGate.blockers, ...reviewGate.blockers])],
+  };
+}
+
+export function evaluateMpgfCrecStage7FallbackExecutionGate(
+  input: MpgfCrecStage7FallbackExecutionGateInput,
+): MpgfCrecStage7FallbackExecutionGateResult {
+  const blockers: string[] = [];
+  const statusGate = evaluateMpgfCrecRoundStatusGate({
+    roundStatus: input.roundStatus,
+    operation: "stage7_fallback_execution",
+    publicSafetyFreezeActive: input.publicSafetyFreezeActive,
+    cancellationActive: input.cancellationActive,
+  });
+  const requestedFallbackRuleEligible = MPGF_PUBLIC_GOODS_CRECM_V1125_FALLBACK_RULES.includes(
+    input.requestedFallbackRule as MpgfCrecFallbackRule,
+  );
+  const requestedFallbackRule = requestedFallbackRuleEligible
+    ? input.requestedFallbackRule as MpgfCrecFallbackRule
+    : null;
+
+  blockers.push(...statusGate.blockers);
+  addBlocker(blockers, "stage7_fallback_project_row_count_not_unique", input.selectedPublicGoodProjectRowCount === 1);
+  addBlocker(blockers, "stage7_fallback_budget_row_count_not_unique", input.selectedCommonGroundBudgetRowCount === 1);
+  addBlocker(blockers, "stage7_fallback_intent_row_count_not_unique", input.selectedConditionalTradeIntentRowCount === 1);
+  addBlocker(blockers, "stage7_fallback_project_row_ineligible", input.projectRowEligible === true);
+  addBlocker(blockers, "stage7_fallback_budget_row_ineligible", input.commonGroundBudgetRowEligible === true);
+  addBlocker(blockers, "stage7_fallback_intent_row_ineligible", input.conditionalIntentRowEligible === true);
+  addBlocker(blockers, "stage7_fallback_requested_rule_invalid", requestedFallbackRuleEligible);
+  addBlocker(
+    blockers,
+    "stage7_fallback_budget_rule_not_bound_to_request",
+    requestedFallbackRule != null && input.budgetFallbackRule === requestedFallbackRule,
+  );
+  addBlocker(
+    blockers,
+    "stage7_fallback_intent_rule_not_bound_to_request",
+    requestedFallbackRule != null && input.conditionalIntentFallbackRule === requestedFallbackRule,
+  );
+  addBlocker(blockers, "stage7_fallback_rule_not_user_consented", input.fallbackRuleUserConsented === true);
+
+  const executableFallbackAllowed = blockers.length === 0 && statusGate.stateMutationAllowed;
+
+  return {
+    eligible: executableFallbackAllowed,
+    blockers,
+    selectedFallbackRule: executableFallbackAllowed ? requestedFallbackRule : null,
+    executableFallbackAllowed,
+    allowedExecutableFallbackRules: executableFallbackAllowed && requestedFallbackRule != null
+      ? [requestedFallbackRule]
+      : [],
+    releaseCancelNoCaptureOnly: !executableFallbackAllowed,
+    freshConsentRequired: !executableFallbackAllowed,
   };
 }
 
@@ -6617,6 +6695,14 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       projectSupportStanceMinCounterpartyVolumeAuthoritative: false,
       exposesFallbackAuthorityOnlyWhenEligible: true,
       exposesAuthorizationAuthorityOnlyWhenEligible: true,
+    },
+    stage7FallbackExecution: {
+      payableStatusRequired: true,
+      projectBudgetAndIntentRowsMustBeUniqueAndEligible: true,
+      executableFallbackRequiresRequestedBudgetAndIntentRuleMatch: true,
+      executableFallbackRequiresExplicitUserConsent: true,
+      ineligibleFallbackFallsBackToReleaseCancelNoCaptureAndFreshConsent: true,
+      syntheticReleaseHoldForbidden: true,
     },
     counterpartyVolumeSatisfaction: {
       thresholdSource: "ConditionalTradeIntent.minCounterpartyVolumeCents" as const,
