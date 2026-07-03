@@ -1115,7 +1115,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <h2 id="public-goods-intent-heading">
                   {publicGoodsEntry?.label ?? "Common Ground Budget"}
                 </h2>
-                <p>No ordinary moral-trade offers match this search.</p>
+                <p>Common Ground Budget / Public Goods Fund result available.</p>
                 <p>
                   The moral-public-goods route is separate: moral public goods / Public Goods
                   Fund.

@@ -262,7 +262,10 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.createsBindingIntent, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.noPrimaryZeroState, true);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.ordinaryOfferFiltersCollapsed, true);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.ordinaryOfferZeroStateSecondary, true);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.zeroFacetPanelsHidden, true);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.exactLiveProgressExposed, false);
+  assert.deepEqual(Object.values(publicGoodSearchPayload.meta.availableFacets).flat(), []);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.publicGoodsModuleCount, 1);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.liveOfferCount, 0);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.shadowPreviewCount, 1);
@@ -386,6 +389,9 @@ test("public offers route explicit moral-public-goods query, route, and filter a
     assert.equal(payload.publicGoodsEntry?.countsAsOrdinaryListing, false, label);
     assert.equal(payload.publicGoodsEntry?.noPrimaryZeroState, true, label);
     assert.equal(payload.publicGoodsEntry?.ordinaryOfferFiltersCollapsed, true, label);
+    assert.equal(payload.publicGoodsEntry?.ordinaryOfferZeroStateSecondary, true, label);
+    assert.equal(payload.publicGoodsEntry?.zeroFacetPanelsHidden, true, label);
+    assert.deepEqual(Object.values(payload.meta.availableFacets).flat(), [], label);
     assert.equal(payload.publicGoodsEntry?.primaryCta.label, "Preview a Common Ground Budget", label);
   }
 });
@@ -516,7 +522,10 @@ test("public offers API route returns moral public goods entry for moral-public-
   assert.equal(body.publicGoodsEntry.createsBindingIntent, false);
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
   assert.equal(body.publicGoodsEntry.ordinaryOfferFiltersCollapsed, true);
+  assert.equal(body.publicGoodsEntry.ordinaryOfferZeroStateSecondary, true);
+  assert.equal(body.publicGoodsEntry.zeroFacetPanelsHidden, true);
   assert.equal(body.publicGoodsEntry.exactLiveProgressExposed, false);
+  assert.deepEqual(Object.values(body.meta.availableFacets).flat(), []);
   assert.equal(body.publicGoodsEntry.copyValidation.ok, true);
   assert.equal(
     body.publicGoodsEntry.copyValidation.policy,
@@ -601,6 +610,8 @@ test("public offer facets API route preserves moral public goods entry for publi
   assert.equal(body.publicGoodsEntry.label, "Common Ground Budget");
   assert.equal(body.publicGoodsEntry.countsAsLiveOffer, false);
   assert.equal(body.publicGoodsEntry.noPrimaryZeroState, true);
+  assert.equal(body.publicGoodsEntry.ordinaryOfferZeroStateSecondary, true);
+  assert.equal(body.publicGoodsEntry.zeroFacetPanelsHidden, true);
   assert.deepEqual(Object.values(body.availableFacets).flat(), []);
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);

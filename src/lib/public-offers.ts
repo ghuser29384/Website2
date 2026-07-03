@@ -201,6 +201,8 @@ export interface PublicGoodsEntryCard {
   createsBindingIntent: false;
   noPrimaryZeroState: true;
   ordinaryOfferFiltersCollapsed: true;
+  ordinaryOfferZeroStateSecondary: true;
+  zeroFacetPanelsHidden: true;
   exactLiveProgressExposed: false;
   primaryCta: PublicGoodsEntryAction;
   secondaryCtas: PublicGoodsEntryAction[];
@@ -881,6 +883,8 @@ export function buildPublicGoodsEntryCard({
     createsBindingIntent: false,
     noPrimaryZeroState: true,
     ordinaryOfferFiltersCollapsed: true,
+    ordinaryOfferZeroStateSecondary: true,
+    zeroFacetPanelsHidden: true,
     exactLiveProgressExposed: false,
     primaryCta,
     secondaryCtas,
@@ -1569,6 +1573,26 @@ function visibleFacetsHavePositiveCounts(
     .every((facet) => facet.count > 0);
 }
 
+function publicGoodsSearchHidesZeroFacetPanels(
+  payload:
+    | Pick<PublicOffersCollectionPayload, "meta" | "publicGoodsEntry">
+    | Pick<PublicOffersFacetsPayload, "meta" | "publicGoodsEntry" | "availableFacets">,
+) {
+  if (!payload.publicGoodsEntry || !payload.meta.defaultedToPublicGoods) {
+    return true;
+  }
+
+  const facets =
+    "availableFacets" in payload
+      ? payload.availableFacets
+      : payload.meta.availableFacets;
+
+  return (
+    payload.publicGoodsEntry.zeroFacetPanelsHidden === true &&
+    Object.values(facets).flat().length === 0
+  );
+}
+
 function marketplaceTabsAreSeparated(tabs: readonly PublicOffersTabSummary[]) {
   return (
     tabs.length === PUBLIC_MARKETPLACE_TAB_ORDER.length &&
@@ -1707,6 +1731,8 @@ function publicGoodsEntryPreservesBoundaries(
       entry.secondaryCtas.every((action) => action.createsBindingIntent === false) &&
       entry.noPrimaryZeroState &&
       entry.ordinaryOfferFiltersCollapsed &&
+      entry.ordinaryOfferZeroStateSecondary &&
+      entry.zeroFacetPanelsHidden &&
       entry.exactLiveProgressExposed === false &&
       entry.laneSeparation.liveOfferCount === payload.meta.liveOfferCount &&
       entry.laneSeparation.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplateCount &&
@@ -1777,6 +1803,14 @@ export function validatePublicOffersCollectionPayload(
       publicGoodsEntryPreservesBoundaries(payload),
       payload.publicGoodsEntry
         ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; items=${payload.items.length}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`
+        : "No public-goods entry.",
+    ),
+    validationCheck(
+      "public-goods-zero-state-suppression",
+      "Public-goods search hides zero-facet panels and keeps ordinary-offer zero states secondary",
+      publicGoodsSearchHidesZeroFacetPanels(payload),
+      payload.publicGoodsEntry
+        ? `${Object.values(payload.meta.availableFacets).flat().length} ordinary facet(s); secondary=${payload.publicGoodsEntry.ordinaryOfferZeroStateSecondary}`
         : "No public-goods entry.",
     ),
     validationCheck(
@@ -1973,6 +2007,14 @@ export function validatePublicOffersFacetsPayload(
       publicGoodsEntryPreservesBoundaries({ ...payload, items: [] }),
       payload.publicGoodsEntry
         ? `${payload.publicGoodsEntry.resultRank}:${payload.publicGoodsEntry.label}; live=${payload.publicGoodsEntry.countsAsLiveOffer}`
+        : "No public-goods entry.",
+    ),
+    validationCheck(
+      "public-goods-zero-state-suppression",
+      "Public-goods facet responses hide zero-facet panels and keep ordinary-offer zero states secondary",
+      publicGoodsSearchHidesZeroFacetPanels(payload),
+      payload.publicGoodsEntry
+        ? `${Object.values(payload.availableFacets).flat().length} ordinary facet(s); secondary=${payload.publicGoodsEntry.ordinaryOfferZeroStateSecondary}`
         : "No public-goods entry.",
     ),
   ];

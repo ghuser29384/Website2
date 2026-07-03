@@ -5515,7 +5515,8 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /aria-describedby="public-goods-result-announcement public-goods-result-summary"/);
   assert.match(offersPage, /Preview a Common Ground Budget/);
   assert.match(offersPage, /public-goods-primary-action/);
-  assert.match(offersPage, /No ordinary moral-trade offers match this search/);
+  assert.match(offersPage, /Common Ground Budget \/ Public Goods Fund result available/);
+  assert.equal(offersPage.includes("No ordinary moral-trade offers match this search"), false);
   assert.match(offersPage, /The moral-public-goods route is separate/);
   assert.match(offersPage, /Current mode/);
   assert.match(offersPage, /capped pilot/);
@@ -5654,6 +5655,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(publicOffersSource, /public-offers-api-v0\.4-2026-06/);
   assert.match(publicOffersSource, /public-offers-api-validator-v0\.4/);
   assert.match(publicOffersSource, /noPrimaryZeroState/);
+  assert.match(publicOffersSource, /ordinaryOfferZeroStateSecondary/);
+  assert.match(publicOffersSource, /zeroFacetPanelsHidden/);
+  assert.match(publicOffersSource, /public-goods-zero-state-suppression/);
   assert.match(publicOffersSource, /ordinaryOfferFiltersCollapsed/);
   assert.match(publicOffersSource, /exactLiveProgressExposed/);
   assert.match(offersPage, /query\.set\("tab", params\.view\)/);
