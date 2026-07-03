@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
+  MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS,
   MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES,
   MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS,
   MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
@@ -36,6 +37,17 @@ function formDataToInput(formData: FormData) {
       formData.get("nonDecisiveExtraFundingValueFraction") || "0",
     ),
   };
+
+  const knownKeys = new Set<string>([
+    ...MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS,
+    ...MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS,
+  ]);
+
+  for (const key of formData.keys()) {
+    if (!knownKeys.has(key)) {
+      input[key] = String(formData.get(key) ?? "");
+    }
+  }
 
   for (const key of MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS) {
     if (formData.has(key)) {

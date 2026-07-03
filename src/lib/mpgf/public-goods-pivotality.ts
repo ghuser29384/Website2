@@ -11,14 +11,34 @@ export const MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES = [
   "project_card_educational_drawer",
 ] as const;
 
+export const MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS = [
+  "calculatorSurface",
+  "contributionCents",
+  "thresholdCents",
+  "valueRatio",
+  "pSuccessWithoutMe",
+  "userEstimatedPDecisive",
+  "signerOnlyRewardValue",
+  "nonDecisiveExtraFundingValueFraction",
+] as const;
+
 export const MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS = [
   "roundId",
   "projectId",
   "participantId",
   "commonGroundBudgetId",
   "conditionalTradeIntentId",
+  "paymentSnapshotId",
+  "sponsorCommitmentId",
+  "allocationRowId",
+  "failureBonusClaimId",
+  "successRewardClaimId",
+  "coordinationCreditEntryId",
+  "impactCertificateClaimId",
   "liveThresholdCents",
+  "liveThresholdSatisfaction",
   "liveThresholdGapCents",
+  "liveCounterpartyVolumeCents",
   "liveCounterpartyGapCents",
   "liveCounterpartyVolumeGapCents",
   "liveSupporterCount",
@@ -67,6 +87,10 @@ export interface MpgfPivotalityCalculatorResult {
   isolationNotice: typeof MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE;
   usesLiveRoundData: false;
   writesFundingRecords: false;
+  ranksFundingRecords: false;
+  authorizesOrClearsFundingRecords: false;
+  privateBenefitInputsCountAsPublicGoodDollars: false;
+  privateBenefitInputsAffectOnlySubjectiveUtility: true;
 }
 
 type ParsedDecimal = {
@@ -130,6 +154,10 @@ function invalidResult(blockers: string[]): MpgfPivotalityCalculatorResult {
     isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
     usesLiveRoundData: false,
     writesFundingRecords: false,
+    ranksFundingRecords: false,
+    authorizesOrClearsFundingRecords: false,
+    privateBenefitInputsCountAsPublicGoodDollars: false,
+    privateBenefitInputsAffectOnlySubjectiveUtility: true,
   };
 }
 
@@ -140,6 +168,15 @@ export function evaluateMpgfPivotalityCalculator(
 
   if (!isRecord(input)) {
     return invalidResult(["pivotality_input_not_object"]);
+  }
+
+  const allowedInputKeys = new Set<string>(MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS);
+  const forbiddenLiveKeys = new Set<string>(MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS);
+
+  for (const key of Object.keys(input)) {
+    if (!allowedInputKeys.has(key) && !forbiddenLiveKeys.has(key)) {
+      blockers.push(`pivotality_unrecognized_input_key_${key}`);
+    }
   }
 
   for (const key of MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS) {
@@ -247,6 +284,10 @@ export function evaluateMpgfPivotalityCalculator(
       isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
       usesLiveRoundData: false,
       writesFundingRecords: false,
+      ranksFundingRecords: false,
+      authorizesOrClearsFundingRecords: false,
+      privateBenefitInputsCountAsPublicGoodDollars: false,
+      privateBenefitInputsAffectOnlySubjectiveUtility: true,
     };
   } else {
     requiredPDecisive = (numerator * DECIMAL_SCALE) / denominator;
@@ -278,5 +319,9 @@ export function evaluateMpgfPivotalityCalculator(
     isolationNotice: MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
     usesLiveRoundData: false,
     writesFundingRecords: false,
+    ranksFundingRecords: false,
+    authorizesOrClearsFundingRecords: false,
+    privateBenefitInputsCountAsPublicGoodDollars: false,
+    privateBenefitInputsAffectOnlySubjectiveUtility: true,
   };
 }

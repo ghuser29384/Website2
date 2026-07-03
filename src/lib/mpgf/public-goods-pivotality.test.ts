@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS,
   MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES,
   MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
   evaluateMpgfPivotalityCalculator,
@@ -30,6 +31,10 @@ test("MPGF pivotality calculator computes the strict assurance example without l
   assert.equal(result.interpretation.includes("objectively best"), false);
   assert.equal(result.usesLiveRoundData, false);
   assert.equal(result.writesFundingRecords, false);
+  assert.equal(result.ranksFundingRecords, false);
+  assert.equal(result.authorizesOrClearsFundingRecords, false);
+  assert.equal(result.privateBenefitInputsCountAsPublicGoodDollars, false);
+  assert.equal(result.privateBenefitInputsAffectOnlySubjectiveUtility, true);
 });
 
 test("MPGF pivotality calculator handles general reward-aware cases deterministically", () => {
@@ -90,6 +95,7 @@ test("MPGF pivotality calculator rejects malformed decimals, probability mass, a
     liveCounterpartyVolumeGapCents: 2000,
     liveSuccessWithoutMeProbability: "0.8",
     platformGeneratedDecisiveProbability: "0.2",
+    exactLiveSupporterCount: 12,
   });
 
   assert.equal(result.ok, false);
@@ -103,8 +109,12 @@ test("MPGF pivotality calculator rejects malformed decimals, probability mass, a
   assert.ok(result.blockers.includes("pivotality_forbidden_live_key_liveCounterpartyVolumeGapCents"));
   assert.ok(result.blockers.includes("pivotality_forbidden_live_key_liveSuccessWithoutMeProbability"));
   assert.ok(result.blockers.includes("pivotality_forbidden_live_key_platformGeneratedDecisiveProbability"));
+  assert.ok(result.blockers.includes("pivotality_unrecognized_input_key_exactLiveSupporterCount"));
   assert.equal(result.usesLiveRoundData, false);
   assert.equal(result.writesFundingRecords, false);
+  assert.equal(result.ranksFundingRecords, false);
+  assert.equal(result.authorizesOrClearsFundingRecords, false);
+  assert.equal(result.privateBenefitInputsCountAsPublicGoodDollars, false);
 });
 
 test("MPGF pivotality calculator requires an allowed educational surface", () => {
@@ -145,11 +155,19 @@ test("MPGF pivotality calculator is exposed only as an advanced educational surf
   assert.match(hubPage, /up to unless the maximum liability is\s+fully backed/);
   assert.match(hubPage, /MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE/);
   assert.match(MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE, /does not use live sealed-round data/);
+  assert.ok(MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS.includes("signerOnlyRewardValue"));
+  assert.ok(
+    MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS.includes(
+      "nonDecisiveExtraFundingValueFraction",
+    ),
+  );
   assert.equal(hubPage.includes("objectively best"), false);
   assert.equal(existsSync("src/app/api/mpgf/pivotality/route.ts"), false);
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS/);
   assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_SURFACES/);
+  assert.match(route, /MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS/);
   assert.match(route, /evaluateMpgfPivotalityCalculator/);
+  assert.match(route, /for \(const key of formData\.keys\(\)\)/);
   assert.match(route, /for \(const key of MPGF_PUBLIC_GOODS_PIVOTALITY_FORBIDDEN_LIVE_KEYS\)/);
   assert.match(route, /formData\.has\(key\)/);
   assert.match(route, /input\[key\] = String\(formData\.get\(key\) \?\? ""\)/);
@@ -177,6 +195,7 @@ test("MPGF pivotality calculator route rejects forbidden live keys submitted by 
   formData.set("pSuccessWithoutMe", "0.30");
   formData.set("userEstimatedPDecisive", "0.25");
   formData.set("liveThresholdGapCents", "100");
+  formData.set("exactLiveSupporterCount", "12");
 
   const response = await post(
     new Request("https://moraltrade.test/api/mpgf/pivotality-calculator", {
@@ -189,6 +208,9 @@ test("MPGF pivotality calculator route rejects forbidden live keys submitted by 
   assert.equal(response.status, 400);
   assert.equal(result.ok, false);
   assert.ok(result.blockers.includes("pivotality_forbidden_live_key_liveThresholdGapCents"));
+  assert.ok(result.blockers.includes("pivotality_unrecognized_input_key_exactLiveSupporterCount"));
   assert.equal(result.usesLiveRoundData, false);
   assert.equal(result.writesFundingRecords, false);
+  assert.equal(result.ranksFundingRecords, false);
+  assert.equal(result.privateBenefitInputsCountAsPublicGoodDollars, false);
 });
