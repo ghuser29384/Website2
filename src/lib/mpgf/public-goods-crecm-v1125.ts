@@ -892,6 +892,9 @@ export interface MpgfCrecOptimizationRunTrace {
   objectiveVectorHash: string;
   stableTieBreakTupleHash: string;
   selectedCoalitionHash: string;
+  successRewardInputHash: string;
+  coordinationCreditInputHash: string;
+  impactCertificateInputHash: string;
   selectedAllocationRowsHash: string;
   constraintSatisfactionHash: string;
   createdAt: string;
@@ -904,6 +907,9 @@ export interface MpgfCrecOptimizationRunTraceExpectedContext {
   clearingInputBundleHash: string;
   calculationVersion: string;
   optimizationPolicyHash: string;
+  successRewardInputHash: string;
+  coordinationCreditInputHash: string;
+  impactCertificateInputHash: string;
 }
 
 export interface MpgfCrecRoundAuditBundle {
@@ -3244,6 +3250,9 @@ function optimizationRunTraceHashPayload(trace: Omit<MpgfCrecOptimizationRunTrac
     objectiveVectorHash: trace.objectiveVectorHash,
     stableTieBreakTupleHash: trace.stableTieBreakTupleHash,
     selectedCoalitionHash: trace.selectedCoalitionHash,
+    successRewardInputHash: trace.successRewardInputHash,
+    coordinationCreditInputHash: trace.coordinationCreditInputHash,
+    impactCertificateInputHash: trace.impactCertificateInputHash,
     selectedAllocationRowsHash: trace.selectedAllocationRowsHash,
     constraintSatisfactionHash: trace.constraintSatisfactionHash,
     createdAt: trace.createdAt,
@@ -3297,6 +3306,12 @@ export function validateMpgfCrecOptimizationRunTrace(
   addBlocker(blockers, "optimization_trace_objective_vector_hash_invalid", isMpgfCrecCanonicalHash(trace.objectiveVectorHash));
   addBlocker(blockers, "optimization_trace_tie_break_hash_invalid", isMpgfCrecCanonicalHash(trace.stableTieBreakTupleHash));
   addBlocker(blockers, "optimization_trace_selected_coalition_hash_invalid", isMpgfCrecCanonicalHash(trace.selectedCoalitionHash));
+  addBlocker(blockers, "optimization_trace_success_reward_input_hash_invalid", isMpgfCrecCanonicalHash(trace.successRewardInputHash));
+  addBlocker(blockers, "optimization_trace_wrong_success_reward_input_hash", trace.successRewardInputHash === expected.successRewardInputHash);
+  addBlocker(blockers, "optimization_trace_coordination_credit_input_hash_invalid", isMpgfCrecCanonicalHash(trace.coordinationCreditInputHash));
+  addBlocker(blockers, "optimization_trace_wrong_coordination_credit_input_hash", trace.coordinationCreditInputHash === expected.coordinationCreditInputHash);
+  addBlocker(blockers, "optimization_trace_impact_certificate_input_hash_invalid", isMpgfCrecCanonicalHash(trace.impactCertificateInputHash));
+  addBlocker(blockers, "optimization_trace_wrong_impact_certificate_input_hash", trace.impactCertificateInputHash === expected.impactCertificateInputHash);
   addBlocker(blockers, "optimization_trace_selected_allocation_rows_hash_invalid", isMpgfCrecCanonicalHash(trace.selectedAllocationRowsHash));
   addBlocker(blockers, "optimization_trace_constraint_satisfaction_hash_invalid", isMpgfCrecCanonicalHash(trace.constraintSatisfactionHash));
   addBlocker(blockers, "optimization_trace_created_at_invalid", isMpgfCrecCanonicalUtcTimestamp(trace.createdAt));
@@ -6458,6 +6473,7 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
     optimizationRunTrace: {
       traceHashBindsBundlePolicyAllocationAndConstraints: true,
       bindingStage: "stage_3_binding_allocation" as const,
+      rewardCreditCertificateInputHashesRequired: true,
       selectedAllocationRowsHashRequired: true,
       constraintSatisfactionHashRequired: true,
       allowedSolverModes: MPGF_PUBLIC_GOODS_CRECM_V1125_SOLVER_MODES,

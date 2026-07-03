@@ -544,6 +544,9 @@ function optimizationRunTrace(
     objectiveVectorHash: h("objective-vector"),
     stableTieBreakTupleHash: h("stable-tie-break-tuple"),
     selectedCoalitionHash: h("selected-coalition"),
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
     selectedAllocationRowsHash: h("selected-allocation-rows"),
     constraintSatisfactionHash: h("constraint-satisfaction"),
     createdAt: closesAt,
@@ -3067,6 +3070,9 @@ test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => 
     clearingInputBundleHash: bundle.bundleHash,
     calculationVersion: bundle.calculationVersion,
     optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
   });
 
   assert.equal(result.eligible, true);
@@ -3080,6 +3086,9 @@ test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => 
     clearingInputBundleHash: bundle.bundleHash,
     calculationVersion: bundle.calculationVersion,
     optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
   });
 
   assert.equal(timeoutResult.eligible, false);
@@ -3092,10 +3101,32 @@ test("CRECM v1.125 optimization traces bind Stage 3 allocation evidence", () => 
     clearingInputBundleHash: bundle.bundleHash,
     calculationVersion: bundle.calculationVersion,
     optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
   });
 
   assert.equal(staleAllocationResult.eligible, false);
   assert.ok(staleAllocationResult.blockers.includes("optimization_trace_hash_mismatch"));
+
+  const staleRewardInput = optimizationRunTrace({
+    successRewardInputHash: h("changed-success-reward-input"),
+  });
+  const staleRewardInputResult = validateMpgfCrecOptimizationRunTrace(staleRewardInput, {
+    roundId,
+    clearingInputBundleId: bundle.id,
+    clearingInputBundleHash: bundle.bundleHash,
+    calculationVersion: bundle.calculationVersion,
+    optimizationPolicyHash: bundle.optimizationPolicyHash,
+    successRewardInputHash: bundle.successRewardInputHash,
+    coordinationCreditInputHash: bundle.coordinationCreditInputHash,
+    impactCertificateInputHash: bundle.impactCertificateInputHash,
+  });
+
+  assert.equal(staleRewardInputResult.eligible, false);
+  assert.ok(
+    staleRewardInputResult.blockers.includes("optimization_trace_wrong_success_reward_input_hash"),
+  );
 });
 
 test("CRECM v1.125 bonus match allocates from canonical integer score units with exact caps", () => {
@@ -4131,6 +4162,7 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
+  assert.equal(summary.optimizationRunTrace.rewardCreditCertificateInputHashesRequired, true);
   assert.equal(summary.optimizationRunTrace.selectedAllocationRowsHashRequired, true);
   assert.equal(summary.roundAuditBundles.auditBundleHashBindsComponentHashesAndTrace, true);
   assert.equal(summary.roundAuditBundles.optimizationTraceIdRequired, true);
