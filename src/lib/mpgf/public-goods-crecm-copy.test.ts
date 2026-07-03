@@ -215,6 +215,68 @@ test("CRECM copy bundle validation requires all publication surface kinds", () =
   assert.deepEqual(bundle.blockers, []);
 });
 
+test("CRECM copy validation enforces state-bound terms across publication surfaces", () => {
+  const bundle = validateMpgfCrecPublishedCopyBundle(
+    [
+      {
+        surface: "primary-review",
+        surfaceKind: "primary_ui",
+        text: "Your contribution is authorized and payment is held.",
+      },
+      {
+        surface: "participant-email",
+        surfaceKind: "email",
+        text: "Guaranteed match and matched impact are ready.",
+      },
+      {
+        surface: "contribution-receipt",
+        surfaceKind: "receipt",
+        text: "You can claim an impact certificate.",
+      },
+      {
+        surface: "public-goods-entry-page",
+        surfaceKind: "public_page",
+        text: "This round uses escrow custody.",
+      },
+      {
+        surface: "final-audit-summary",
+        surfaceKind: "audit_adjacent_summary",
+        text: "Audit summaries keep payment, matching, and certificate records separate.",
+      },
+    ],
+    recordedState(),
+  );
+
+  assert.equal(bundle.ok, false);
+  assert.deepEqual(bundle.missingRequiredSurfaceKinds, []);
+  assert.ok(
+    bundle.blockers.includes(
+      "primary-review:copy_uses_authorized_budget_without_recorded_authorization_state",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes("primary-review:copy_claims_escrow_or_custody_without_recorded_approval"),
+  );
+  assert.ok(
+    bundle.blockers.includes("participant-email:copy_claims_matching_without_recorded_pool_backing"),
+  );
+  assert.ok(
+    bundle.blockers.includes(
+      "participant-email:copy_claims_matched_impact_without_recorded_matching_and_impact_state",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes(
+      "contribution-receipt:copy_claims_impact_certificate_without_captured_contribution_row",
+    ),
+  );
+  assert.ok(
+    bundle.blockers.includes(
+      "public-goods-entry-page:copy_claims_escrow_or_custody_without_recorded_approval",
+    ),
+  );
+});
+
 test("CRECM plain-language copy map exposes every required canonical label", () => {
   const validation = validateMpgfCrecPlainLanguageCopyMap();
   const labels = MPGF_CRECM_PLAIN_LANGUAGE_COPY_MAP.map((entry) => entry.defaultUiText);
@@ -454,19 +516,38 @@ test("CRECM copy validation blocks the full default-copy forbidden terminology m
     {
       surface: "default-copy-style-guide",
       text:
-        "Funds held, matched impact, and insured donation language are available on this public page.",
+        "Held funds, authorized contribution, guaranteed match, matched impact, impact certificate available, and insured donation language are available on this public page.",
     },
     recordedState(),
   );
 
   assert.equal(result.ok, false);
   assert.deepEqual(result.blockers, [
+    "copy_uses_authorized_budget_without_recorded_authorization_state",
     "copy_claims_escrow_or_custody_without_recorded_approval",
+    "copy_claims_matching_without_recorded_pool_backing",
+    "copy_claims_impact_certificate_without_captured_contribution_row",
     "copy_claims_matched_impact_without_recorded_matching_and_impact_state",
     "copy_claims_insured_donation_without_recorded_insurance_state",
   ]);
   assert.equal(
+    MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP.some((entry) => entry.term === "held"),
+    true,
+  );
+  assert.equal(
+    MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP.some((entry) => entry.term === "authorized"),
+    true,
+  );
+  assert.equal(
+    MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP.some((entry) => entry.term === "guaranteed match"),
+    true,
+  );
+  assert.equal(
     MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP.some((entry) => entry.term === "matched impact"),
+    true,
+  );
+  assert.equal(
+    MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP.some((entry) => entry.term === "impact certificate"),
     true,
   );
   assert.equal(

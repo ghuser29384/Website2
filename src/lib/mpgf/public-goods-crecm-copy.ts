@@ -33,6 +33,16 @@ export const MPGF_CRECM_COPY_VALIDATION_POLICY =
 
 export const MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP = [
   {
+    term: "held",
+    safeDefault: "no held-funds claim unless the recorded custody state supports it",
+    requiredRecordedState: "escrow_or_custody_claim_allowed",
+  },
+  {
+    term: "authorized",
+    safeDefault: "provider-confirmed authorization, if recorded",
+    requiredRecordedState: "post_clear_payment_authorization_recorded",
+  },
+  {
     term: "authorized budget",
     safeDefault: "Maximum this round",
     requiredRecordedState: "post_clear_payment_authorization_recorded",
@@ -66,6 +76,11 @@ export const MPGF_CRECM_DEFAULT_COPY_TERMINOLOGY_MAP = [
     term: "matched impact",
     safeDefault: "separate sponsor match and impact records",
     requiredRecordedState: "base_bonus_match_and_impact_state_recorded",
+  },
+  {
+    term: "impact certificate",
+    safeDefault: "optional certificate only after captured successful contribution rows",
+    requiredRecordedState: "captured_successful_contribution_row",
   },
   {
     term: "insured donation",
@@ -233,10 +248,15 @@ export function validateMpgfCrecCopyAgainstRecordedState(
   if (
     hasPositiveClaim(text, [
       /\bauthorized budget\b/i,
+      /\bauthorized (contribution|pledge|payment|card|funds|amount)\b/i,
       /\bbudget (is )?authorized\b/i,
+      /\b(contribution|pledge|payment|card|funds|amount) (is |are |was |were )?authorized\b/i,
+      /\bauthorization (is |was )?(complete|ready|confirmed|secured|recorded)\b/i,
     ]) &&
     !hasNegatedClaim(text, [
       /\bnot (an? )?authorized budget\b/i,
+      /\bnot (an? )?(authorization|authorized contribution|authorized pledge|authorized payment)\b/i,
+      /\b(no|not|never) [^.]*\b(authorized|authorization)\b/i,
       /\bbudget is not authorized\b/i,
       /\bmaximum budget[^.]*not (an? )?authorization\b/i,
     ])
@@ -251,14 +271,24 @@ export function validateMpgfCrecCopyAgainstRecordedState(
     hasPositiveClaim(text, [
       /\b(escrow-backed|held in escrow|escrowed funds|custody-backed|payment protection)\b/i,
       /\b(we hold|platform holds|funds are held|funds held|held funds)\b/i,
+      /\b(funds|money|payment|payments|card|contribution|contributions|pledge|pledges|donation|donations|amount|amounts|cash) (is |are |was |were |will be |has been |have been )?held\b/i,
+      /\bheld (funds|money|payment|payments|contributions|pledges|donations|amounts|cash)\b/i,
+      /\b(we|platform|moraltrade|moral trade) (hold|holds|held|will hold) (funds|money|payment|payments|contributions|pledges|donations|amounts|cash)\b/i,
+      /\b(legal )?escrow\b/i,
+      /\bescrowed\b/i,
+      /\b(custody|custodial)\b/i,
     ]) &&
     !hasNegatedClaim(text, [
       /\b(not|never) (held in escrow|escrow-backed|custody-backed|payment protection)\b/i,
+      /\b(no|not|never) [^.]*\b(hold|held|escrow|escrowed|custody|custodial|payment protection)\b/i,
+      /\bnot that [^.]*\b(held|escrowed|protected|custody|payment protection)\b/i,
       /\bnot representing that funds are held\b/i,
       /\bnot represented as [^.]*escrow/i,
       /\bnot escrow\b/i,
+      /\bno[- ](?:legal )?escrow\b/i,
       /\bwithout (claiming|guaranteeing|promising|representing) [^.]*\b(escrow|custody|payment protection)\b/i,
       /\bwithout [^.]*\b(escrow|custody|payment protection)\b/i,
+      /\bwithout [^.]*\b(hold|held)\b/i,
     ])
   ) {
     claims.push("escrow_custody_or_payment_protection");
@@ -273,6 +303,7 @@ export function validateMpgfCrecCopyAgainstRecordedState(
       /\b(guaranteed|locked|fully backed) bonus match\b/i,
       /\bbase match (is )?(guaranteed|locked|fully backed)\b/i,
       /\bbonus match (is )?(guaranteed|locked|fully backed)\b/i,
+      /\bguaranteed match\b/i,
       /\bguaranteed matching\b/i,
       /\bmatched funds are guaranteed\b/i,
       /\bmatching is guaranteed\b/i,
@@ -328,7 +359,8 @@ export function validateMpgfCrecCopyAgainstRecordedState(
 
   if (
     hasPositiveClaim(text, [
-      /\b(impact certificate issued|certified impact|certificate earned|guaranteed certificate)\b/i,
+      /\b(impact certificate issued|impact certificate minted|impact certificate granted|impact certificate available|impact certificate ready|certified impact|certificate earned|guaranteed certificate)\b/i,
+      /\b(receive|get|claim|earn|mint|have) (an? )?impact certificate\b/i,
     ])
   ) {
     claims.push("impact_certificate");
