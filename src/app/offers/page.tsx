@@ -931,7 +931,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     (option) => option.value === "all" || option.count > 0 || reviewStatus === option.value,
   );
   const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
-  const popularFilterLinks = [
+  const commonFilterLinks = [
     {
       active: causes.includes("Animal welfare"),
       href: buildOffersHref({ ...filterHrefParams, causes: toggleValue(causes, "Animal welfare") }),
@@ -1054,7 +1054,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   };
 
   return (
-    <div className="page-shell page-shell-focused">
+    <div className="page-shell page-shell-focused marketplace-app-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offersStructuredData),
@@ -1072,6 +1072,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
         <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
@@ -1650,10 +1651,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </div>
           </div>
 
-          <div className="popular-filter-row" aria-label="Popular marketplace filters">
-            <span>Popular filters</span>
+          <div className="popular-filter-row" aria-label="Common marketplace filters">
+            <span>Common filters</span>
             <div>
-              {popularFilterLinks.map((filterLink) => (
+              {commonFilterLinks.map((filterLink) => (
                 <Link
                   aria-current={filterLink.active ? "true" : undefined}
                   className={`source-pill source-pill-link ${filterLink.active ? "is-active" : ""}`}

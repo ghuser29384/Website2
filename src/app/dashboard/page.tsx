@@ -564,12 +564,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   ];
 
   return (
-    <div className="page-shell dashboard-page">
+    <div className="page-shell dashboard-page marketplace-app-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
       </header>

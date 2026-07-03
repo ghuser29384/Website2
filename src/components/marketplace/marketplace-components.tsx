@@ -10,9 +10,17 @@ import {
   type MarketplaceCategory,
   type MarketplaceDeal,
   type MarketplaceFilterChip,
+  type MarketplaceFilterKey,
   type MarketplaceQuery,
   type MarketplaceSurface,
 } from "@/lib/marketplace-deals";
+import {
+  getPledgeFundingMechanismState,
+  getPledgeFundingReceiptAtom,
+  getPreferredCharityBonusCopy,
+  shouldShowPreferredCharityBonus,
+  type PledgeFundingRound,
+} from "@/lib/moral-trade/pledge-funding-rounds";
 
 function mechanismLabel(value: MarketplaceDeal["mechanismType"]) {
   const labels: Record<MarketplaceDeal["mechanismType"], string> = {
@@ -20,6 +28,7 @@ function mechanismLabel(value: MarketplaceDeal["mechanismType"]) {
     cross_view_donation_swap: "Cross-view swap",
     local_pledge: "Pledge swap",
     offset_trade: "Offset trade",
+    pledge_funding_round: "Pledge funding",
     public_goods_round: "Public-goods round",
     unknown: "Unknown mechanism",
   };
@@ -29,6 +38,7 @@ function mechanismLabel(value: MarketplaceDeal["mechanismType"]) {
 
 function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
   if (value === "public_goods_round") return "fund";
+  if (value === "pledge_funding_round") return "fund";
   if (value === "cross_view_donation_swap") return "swap";
   if (value === "offset_trade") return "offset";
   if (value === "action_for_donation") return "payment";
@@ -38,6 +48,114 @@ function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
 
 function joinClassName(values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function receiptStateClass(value: string) {
+  return `is-${value.toLowerCase().replaceAll(" ", "-")}`;
+}
+
+function dealVisualClassName(deal: MarketplaceDeal, state: string) {
+  return joinClassName([
+    "moral-deal-visual",
+    `moral-deal-visual-${deal.mechanismType.replaceAll("_", "-")}`,
+    receiptStateClass(state),
+  ]);
+}
+
+function badgeClassName(value: string, role: "state" | "source" = "source") {
+  return joinClassName([
+    "badge",
+    role === "source" && "badge-secondary",
+    role === "state" && `badge-${value.toLowerCase().replaceAll(" ", "-")}`,
+  ]);
+}
+
+const FILTER_GROUPS = [
+  {
+    id: "source",
+    label: "Source",
+    keys: ["source_live", "source_worked_example", "source_public_goods", "source_pledge_funding"],
+  },
+  {
+    id: "mechanism",
+    label: "Mechanism",
+    keys: [
+      "pledge_swap",
+      "pledge_funding",
+      "donation_cancellation",
+      "public_goods_round",
+      "action_for_donation",
+      "recurring_pledge",
+    ],
+  },
+  {
+    id: "exposure",
+    label: "Exposure",
+    keys: ["preview_only", "no_personal_exposure", "max_exposure_known", "exposure_unknown"],
+  },
+  {
+    id: "burden",
+    label: "Commitment burden",
+    keys: ["lowest_effort", "beginner_friendly", "requires_evidence"],
+  },
+  {
+    id: "verification",
+    label: "Verification",
+    keys: ["most_verified", "reviewer_approved_only"],
+  },
+  {
+    id: "availability",
+    label: "Availability",
+    keys: ["clears_soon", "highest_match", "cross_cluster_trade"],
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  keys: readonly MarketplaceFilterKey[];
+}>;
+
+const FEATURED_CATEGORY_KEYS = [
+  "recommended",
+  "public_goods_rounds",
+  "pledge_funding_rounds",
+  "cross_view_swaps",
+  "offset_trades",
+  "pledge_swaps",
+] as const satisfies readonly MarketplaceCategory["key"][];
+
+function getVisibleFilterGroups({
+  activeFilters,
+  availableFilters,
+  filterChips,
+}: {
+  activeFilters: readonly MarketplaceFilterKey[];
+  availableFilters: ReadonlySet<MarketplaceFilterKey>;
+  filterChips: readonly MarketplaceFilterChip[];
+}) {
+  const chipByKey = new Map(filterChips.map((chip) => [chip.key, chip]));
+
+  return FILTER_GROUPS.map((group) => ({
+    ...group,
+    options: group.keys
+      .map((key) => chipByKey.get(key))
+      .filter((chip): chip is MarketplaceFilterChip => {
+        if (!chip) return false;
+
+        return availableFilters.has(chip.key) || activeFilters.includes(chip.key);
+      }),
+  })).filter((group) => group.options.length > 0);
+}
+
+function summarizeActiveFilters(activeChips: readonly MarketplaceFilterChip[]) {
+  if (activeChips.length <= 2) {
+    return activeChips.map((chip) => `Filter: ${chip.label}`);
+  }
+
+  return [`${activeChips.length} filters`];
+}
+
+function openBrowseFilterSheetHref(href: string) {
+  return `${href}${href.includes("?") ? "&" : "?"}browse_filters=1`;
 }
 
 function centsToV72Exposure(value: number | undefined) {
@@ -53,6 +171,19 @@ function centsToV72Exposure(value: number | undefined) {
 }
 
 export function getDealReceiptAtom(deal: MarketplaceDeal) {
+  if (deal.fundingRound) {
+    const receipt = getPledgeFundingReceiptAtom(deal.fundingRound);
+
+    return {
+      conditionOrProtection: receipt.conditionOrProtection,
+      exposure: receipt.exposure,
+      primaryCta: receipt.primaryCta,
+      protection: receipt.protection,
+      source: "Pledge funding",
+      state: receipt.state,
+    };
+  }
+
   const isExample = deal.sourceLabel === "Worked example";
   const isPublicGoods = deal.mechanismType === "public_goods_round";
   const isLive = deal.sourceLabel === "Live offer";
@@ -84,6 +215,133 @@ export function getDealReceiptAtom(deal: MarketplaceDeal) {
   };
 }
 
+export function PledgeFundingPanel({ round }: { round: PledgeFundingRound }) {
+  const mechanism = getPledgeFundingMechanismState(round);
+  const receipt = getPledgeFundingReceiptAtom(round);
+  const showCharityBonus = shouldShowPreferredCharityBonus(round);
+
+  return (
+    <section className="pledge-funding-panel panel" aria-labelledby="pledge-funding-panel-heading">
+      <div className="deal-panel-head">
+        <p className="detail-kicker">{mechanism.modeLabel}</p>
+        <h3 id="pledge-funding-panel-heading">Funding terms</h3>
+      </div>
+      <dl className="deal-economics-grid">
+        <div>
+          <dt>State</dt>
+          <dd>{receipt.state}</dd>
+        </div>
+        <div>
+          <dt>Exposure</dt>
+          <dd>{receipt.exposure}</dd>
+        </div>
+        <div>
+          <dt>Round status</dt>
+          <dd>{mechanism.progressLabel}</dd>
+        </div>
+        <div>
+          <dt>Target</dt>
+          <dd>{mechanism.remainingLabel}</dd>
+        </div>
+        <div>
+          <dt>Deadline</dt>
+          <dd>{round.deadlineAt ? new Date(round.deadlineAt).toLocaleDateString() : "Not connected"}</dd>
+        </div>
+        <div>
+          <dt>Refund / release</dt>
+          <dd>{receipt.protection}</dd>
+        </div>
+      </dl>
+      <div className="deal-rule-list">
+        <p>
+          <strong>If the round clears:</strong>{" "}
+          {round.mode === "capped_pivotal_cohort"
+            ? "The capped cohort would fund the pledge after backend gates pass."
+            : "The target would fund the pledge after backend gates pass."}
+        </p>
+        <p>
+          <strong>If it does not clear:</strong> {round.refundPolicy}
+        </p>
+        <p>
+          <strong>Baseline/review:</strong> {round.baselineStatement} {round.evidenceReviewStatus}
+        </p>
+        <p>
+          <strong>Preferred charity:</strong>{" "}
+          {showCharityBonus
+            ? getPreferredCharityBonusCopy(round)
+            : "Preferred-charity bonus not connected yet"}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+export function PledgeFundingSheet({ round }: { round: PledgeFundingRound }) {
+  const mechanism = getPledgeFundingMechanismState(round);
+  const receipt = getPledgeFundingReceiptAtom(round);
+  const sheetTitle = round.mode === "capped_pivotal_cohort" ? "Review your slot" : "Review your funding";
+
+  return (
+    <details className="commitment-sheet pledge-funding-sheet" id="funding-sheet">
+      <summary>{receipt.primaryCta}</summary>
+      <div className="commitment-sheet-body" role="group" aria-label={sheetTitle}>
+        <div className="commitment-sheet-handle" aria-hidden="true" />
+        <div className="commitment-sheet-header">
+          <p className="detail-kicker">
+            Pledge funding · {receipt.state}
+          </p>
+          <p>{sheetTitle}</p>
+        </div>
+        <dl className="v72-receipt-facts pledge-funding-sheet-facts">
+          <div>
+            <dt>Pledge</dt>
+            <dd>{round.title}</dd>
+          </div>
+          <div>
+            <dt>{round.mode === "capped_pivotal_cohort" ? "Slot amount" : "Contribution"}</dt>
+            <dd>{mechanism.contributionLabel}</dd>
+          </div>
+          <div>
+            <dt>Round state</dt>
+            <dd>{mechanism.progressLabel}</dd>
+          </div>
+          <div>
+            <dt>If cleared</dt>
+            <dd>
+              {round.mode === "capped_pivotal_cohort"
+                ? "Cohort funds the pledge after live gates pass"
+                : "Target funds the pledge after live gates pass"}
+            </dd>
+          </div>
+          <div>
+            <dt>If not cleared</dt>
+            <dd>{round.refundPolicy}</dd>
+          </div>
+          <div>
+            <dt>Preferred charity</dt>
+            <dd>{getPreferredCharityBonusCopy(round)}</dd>
+          </div>
+          <div>
+            <dt>Payment method</dt>
+            <dd>Not connected</dd>
+          </div>
+        </dl>
+        <p className="v72-sheet-result" role="status">
+          {receipt.resultCopy}
+        </p>
+        <div className="v72-sheet-footer">
+          <span>
+            {receipt.state} · {receipt.exposure} · {receipt.conditionOrProtection}
+          </span>
+          <Link className="button button-primary" href={`/funding-rounds/${round.id}#funding-sheet`}>
+            {receipt.primaryCta}
+          </Link>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function MarketplaceSearch({ query }: { query: string }) {
   return (
     <form action="/offers" className="moral-marketplace-search" role="search">
@@ -97,7 +355,7 @@ export function MarketplaceSearch({ query }: { query: string }) {
         placeholder="Search causes, templates, rounds"
         type="search"
       />
-      <button className="button button-primary" type="submit">
+      <button className="button button-primary moral-marketplace-search-button" type="submit">
         Search
       </button>
     </form>
@@ -256,15 +514,25 @@ export function MoralDealCard({
   const receipt = getDealReceiptAtom(deal);
 
   return (
-    <article className={joinClassName(["moral-deal-card panel", `moral-deal-card-${variant}`])}>
+    <article
+      className={joinClassName([
+        "moral-deal-card panel",
+        `moral-deal-card-${variant}`,
+        receiptStateClass(receipt.state),
+      ])}
+    >
       <Link className="moral-deal-card-main" href={deal.href}>
-        <span className="moral-deal-visual" aria-hidden="true">
+        <span
+          aria-label={`${mechanismLabel(deal.mechanismType)} visual for ${receipt.state.toLowerCase()} listing`}
+          className={dealVisualClassName(deal, receipt.state)}
+          role="img"
+        >
           <IconMark name={mechanismIcon(deal.mechanismType)} />
         </span>
         <div className="moral-deal-card-copy">
           <div className="moral-deal-card-head">
-            <span className="badge">{receipt.state}</span>
-            <span className="badge badge-secondary">{receipt.source}</span>
+            <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
+            <span className={badgeClassName(receipt.source)}>{receipt.source}</span>
           </div>
           <h3>{deal.title}</h3>
           {deal.subtitle ? <p className="moral-deal-summary">{deal.subtitle}</p> : null}
@@ -488,8 +756,6 @@ export function MarketplaceHome({
   query: MarketplaceQuery;
   surface: MarketplaceSurface;
 }) {
-  void createHref;
-  void query;
   const verifiedLiveCount =
     typeof liveOfferCount === "number"
       ? liveOfferCount
@@ -501,14 +767,55 @@ export function MarketplaceHome({
   const railLinks = [
     { href: "/offers?tab=templates", label: "Reviewed templates" },
     { href: "/offers?tab=worked_examples", label: "Worked examples" },
-    { href: "/offers?mode=offset&tab=worked_examples", label: "Donation offsets" },
-    { href: "/offers?mode=pledge&tab=worked_examples", label: "Pledge swaps" },
     { href: "/mpgf", label: "Public goods" },
   ];
+  const availableFilters = new Set<MarketplaceFilterKey>(
+    surface.deals.flatMap((deal) => deal.filterTags ?? []),
+  );
+  const activeFilterChips = surface.filterChips.filter((chip) => chip.active);
+  const filterGroups = getVisibleFilterGroups({
+    activeFilters: query.filters,
+    availableFilters,
+    filterChips: surface.filterChips,
+  });
+  const activeCategory = surface.categories.find((category) => category.key === surface.activeCategory);
+  const activeRailLabels = [
+    activeCategory && activeCategory.key !== "recommended" ? `Lane: ${activeCategory.label}` : null,
+    ...summarizeActiveFilters(activeFilterChips),
+  ].filter((label): label is string => Boolean(label));
+  const compactRailLabels =
+    activeRailLabels.length > 2 ? [`${activeRailLabels.length} filters`] : activeRailLabels;
+  const clearFilterHref = buildMarketplaceHref({ query: surface.query });
+  const currentFilterHref = buildMarketplaceHref({
+    category: surface.activeCategory,
+    filters: query.filters,
+    query: surface.query,
+  });
+  const openFilterHref = openBrowseFilterSheetHref(currentFilterHref);
+  const featuredCategories = FEATURED_CATEGORY_KEYS.map((key) =>
+    surface.categories.find((category) => category.key === key),
+  ).filter((category): category is MarketplaceCategory => {
+    if (!category) return false;
+
+    return category.availabilityLabel !== "Unavailable" || category.key === surface.activeCategory;
+  });
 
   return (
     <section className="moral-marketplace-home" aria-labelledby="moral-marketplace-heading">
-      <h1 id="moral-marketplace-heading">Browse offers</h1>
+      <div className="moral-marketplace-app-header">
+        <div className="moral-marketplace-title-block">
+          <span className="moral-marketplace-brand">Moral Trade</span>
+          <h1 id="moral-marketplace-heading">Browse offers</h1>
+        </div>
+        <div className="moral-marketplace-header-actions" aria-label="Marketplace shortcuts">
+          <Link className="moral-marketplace-icon-action" href="/dashboard" aria-label="Account">
+            <IconMark name="profile" />
+          </Link>
+          <Link className="button button-primary button-mini" href={createHref}>
+            Create
+          </Link>
+        </div>
+      </div>
       <MarketplaceSearch query={surface.query} />
       <nav className="v72-marketplace-tabs" aria-label="Marketplace tabs">
         {(zeroLive
@@ -536,11 +843,20 @@ export function MarketplaceHome({
           ? "No live offers yet · Showing examples and templates"
           : "Live offers available · Review current terms before continuing"}
       </p>
+      <span id="browse-controls" className="v72-filter-anchor" aria-hidden="true" />
       <div className="moral-marketplace-filter-chips v72-control-rail" aria-label="Marketplace controls">
         {railLinks.map((link) => (
           <Link className="source-pill source-pill-link" href={link.href} key={link.label}>
             {link.label}
           </Link>
+        ))}
+        <Link className="source-pill source-pill-link v72-filter-trigger" href={openFilterHref}>
+          Filter
+        </Link>
+        {compactRailLabels.map((label) => (
+          <span className="source-pill v72-active-filter-chip" key={label}>
+            {label}
+          </span>
         ))}
       </div>
 
@@ -559,6 +875,94 @@ export function MarketplaceHome({
           </div>
         )}
         </div>
+      <section
+        aria-labelledby="browse-filter-title"
+        className={joinClassName(["v72-filter-sheet-root", query.filterSheetOpen && "is-open"])}
+        id="browse-filter-sheet"
+      >
+        <Link
+          aria-label="Close filters"
+          className="v72-filter-scrim"
+          href={currentFilterHref}
+        />
+        <form action="/offers" className="v72-filter-sheet" method="get" role="dialog" aria-modal="true">
+          <div className="v72-filter-sheet-header">
+            <h2 id="browse-filter-title">All filters</h2>
+            <Link aria-label="Close filters" className="v72-filter-close" href={currentFilterHref}>
+              X
+            </Link>
+          </div>
+          <p className="v72-filter-context">
+            {zeroLive ? "Showing examples and templates" : "Review current terms before continuing"}
+          </p>
+          {surface.query ? <input name="search" type="hidden" value={surface.query} /> : null}
+          <div className="v72-filter-sheet-body">
+            <nav className="v72-filter-category-rail" aria-label="Filter categories">
+              {featuredCategories.length ? <a href="#filter-lane">Lane</a> : null}
+              {filterGroups.map((group) => (
+                <a href={`#filter-${group.id}`} key={group.id}>
+                  {group.label}
+                </a>
+              ))}
+            </nav>
+            <div className="v72-filter-options">
+              {featuredCategories.length ? (
+                <fieldset className="v72-filter-section" id="filter-lane">
+                  <legend>Lane</legend>
+                  <div className="v72-filter-option-grid">
+                    {featuredCategories.map((category) => (
+                      <label className="v72-filter-option-chip" key={category.key}>
+                        <input
+                          defaultChecked={category.key === surface.activeCategory}
+                          name="marketplace_category"
+                          type="radio"
+                          value={category.key}
+                        />
+                        <span>
+                          <strong>{category.label}</strong>
+                          <small>{category.availabilityLabel}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+              {filterGroups.length ? (
+                filterGroups.map((group) => (
+                  <fieldset className="v72-filter-section" id={`filter-${group.id}`} key={group.id}>
+                    <legend>{group.label}</legend>
+                    <div className="v72-filter-option-grid">
+                      {group.options.map((chip) => (
+                        <label className="v72-filter-option-chip" key={chip.key}>
+                          <input
+                            defaultChecked={chip.active}
+                            name="marketplace_filter"
+                            type="checkbox"
+                            value={chip.key}
+                          />
+                          <span>
+                            <strong>{chip.label}</strong>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ))
+              ) : (
+                <p className="v72-filter-empty">No backed filters are available for this view.</p>
+              )}
+            </div>
+          </div>
+          <div className="v72-filter-sheet-footer">
+            <Link className="button button-secondary" href={clearFilterHref}>
+              Clear all
+            </Link>
+            <button className="button button-primary" type="submit">
+              Apply filters
+            </button>
+          </div>
+        </form>
+      </section>
     </section>
   );
 }

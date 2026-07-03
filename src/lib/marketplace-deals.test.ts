@@ -6,11 +6,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   CommitmentSheet,
+  MarketplaceHome,
   MoralDealCard,
 } from "@/components/marketplace/marketplace-components";
 import {
   MIN_PUBLIC_GROUP_COUNT,
   buildDealEconomics,
+  buildMarketplaceHref,
   buildMarketplaceSurface,
   getCommitmentStatusLabel,
   mapAgreementToCommitmentStatus,
@@ -140,6 +142,73 @@ test("marketplace filtering, search, and privacy threshold labels use public dea
 
   assert.ok(noExposureSurface.deals.length >= MIN_PUBLIC_GROUP_COUNT);
   assert.ok(noExposureSurface.deals.every((deal) => deal.filterTags?.includes("no_personal_exposure")));
+});
+
+test("marketplace source filters are derived from display-model owners", () => {
+  const workedOffer = SEED_OFFERS.find((offer) => offer.mode === "offset");
+  assert.ok(workedOffer);
+  const workedDeal = marketplaceDealFromWorkedOffer(workedOffer);
+  const [publicGoodsDeal] = marketplaceDealsFromPublicGoodsCampaigns({
+    campaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    matchPool: demoMpgfMatchPool,
+    round: demoMpgfAssuranceRound,
+  });
+  assert.ok(publicGoodsDeal);
+
+  assert.ok(workedDeal.filterTags?.includes("source_worked_example"));
+  assert.ok(workedDeal.filterTags?.includes("preview_only"));
+  assert.ok(publicGoodsDeal.filterTags?.includes("source_public_goods"));
+  assert.ok(publicGoodsDeal.filterTags?.includes("preview_only"));
+
+  const publicGoodsSurface = buildMarketplaceSurface(
+    [workedDeal, publicGoodsDeal],
+    parseMarketplaceQuery({ marketplace_filter: "source_public_goods" }),
+  );
+  assert.equal(publicGoodsSurface.deals.length, 1);
+  assert.equal(publicGoodsSurface.deals[0].sourceLabel, "Public Goods Fund");
+
+  const emptySurface = buildMarketplaceSurface(
+    [workedDeal, publicGoodsDeal],
+    parseMarketplaceQuery({
+      marketplace_filter: ["source_public_goods", "donation_cancellation"],
+    }),
+  );
+  assert.equal(emptySurface.deals.length, 0);
+  assert.match(emptySurface.emptyState ?? "", /No reliable public deal data matches these filters/);
+});
+
+test("marketplace home renders one-rail filter sheet with URL apply controls", () => {
+  const workedOffer = SEED_OFFERS.find((offer) => offer.mode === "offset");
+  assert.ok(workedOffer);
+  const workedDeal = marketplaceDealFromWorkedOffer(workedOffer);
+  const [publicGoodsDeal] = marketplaceDealsFromPublicGoodsCampaigns({
+    campaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    matchPool: demoMpgfMatchPool,
+    round: demoMpgfAssuranceRound,
+  });
+  assert.ok(publicGoodsDeal);
+  const query = parseMarketplaceQuery({ marketplace_filter: "source_worked_example", search: "gun" });
+  const surface = buildMarketplaceSurface([workedDeal, publicGoodsDeal], query);
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query,
+      surface,
+    }),
+  );
+
+  assert.match(markup, /browse_filters=1/);
+  assert.match(markup, /id="browse-filter-sheet"/);
+  assert.match(markup, /All filters/);
+  assert.match(markup, /href="\/offers\?search=gun&amp;marketplace_filter=source_worked_example"/);
+  assert.match(markup, /name="marketplace_filter"/);
+  assert.match(markup, /value="source_worked_example"/);
+  assert.match(markup, /Clear all/);
+  assert.match(markup, /Apply filters/);
+  assert.match(markup, /checked/);
+  assert.equal(markup.includes("popular-filter-row"), false);
+  assert.equal(buildMarketplaceHref({ query: surface.query }), "/offers?search=gun");
 });
 
 test("commitment status mapper exposes user-facing center states", () => {

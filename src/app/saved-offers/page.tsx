@@ -30,12 +30,13 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
   const cartItems = viewer ? await listCartItems(viewer.authUser.id) : [];
 
   return (
-    <div className="page-shell">
+    <div className="page-shell marketplace-app-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
       </header>
@@ -103,7 +104,10 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
               <div className="empty-state">
                 <div>
                   <strong>You have no saved offers yet.</strong>
-                  <p>Browse examples and templates. Nothing here creates a commitment.</p>
+                  <p>
+                    Browse examples, templates, and pledge-funding previews. Nothing here creates a
+                    commitment. Pledge-funding contribution rows are not connected yet.
+                  </p>
                   <Link className="button button-primary" href="/offers">
                     Browse offers
                   </Link>

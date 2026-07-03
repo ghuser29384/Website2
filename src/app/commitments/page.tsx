@@ -64,12 +64,13 @@ export default async function CommitmentsPage() {
   }));
 
   return (
-    <div className="page-shell">
+    <div className="page-shell marketplace-app-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
       </header>
@@ -135,7 +136,8 @@ export default async function CommitmentsPage() {
                   <strong>No commitments yet.</strong>
                   <p>
                     Saved offers, examples, searches, and marketplace previews are not commitments.
-                    Agreements will appear here only after the existing acceptance flow creates one.
+                    Pledge-funding contribution rows are not connected yet. Agreements will appear
+                    here only after the existing acceptance flow creates one.
                   </p>
                   <Link className="button button-primary" href="/offers">
                     Browse marketplace
@@ -149,7 +151,7 @@ export default async function CommitmentsPage() {
                 <strong>Commitment data unavailable.</strong>
                 <p>
                   Supabase is not configured in this environment, so the page cannot load real
-                  agreements. No demo commitments are shown.
+                  agreements. No demo commitments or pledge-funding contribution rows are shown.
                 </p>
               </div>
             </div>

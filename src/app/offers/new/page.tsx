@@ -304,12 +304,13 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
     ] as const;
 
     return (
-      <div className="page-shell offer-create-shell">
+      <div className="page-shell offer-create-shell marketplace-app-shell">
         <header className="v72-route-header">
           <SiteTopbar
             brandHref="/"
             links={getPrimaryNavLinks(Boolean(viewer))}
             {...getTopbarActions(Boolean(viewer))}
+            showSearch={false}
             showLogout={Boolean(viewer)}
           />
         </header>
@@ -345,12 +346,13 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
   }
 
   return (
-    <div className="page-shell offer-create-shell">
+    <div className="page-shell offer-create-shell marketplace-app-shell">
       <header className="hero">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
 

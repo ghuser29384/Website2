@@ -423,7 +423,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   };
 
   return (
-    <div className="page-shell">
+    <div className="page-shell marketplace-app-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offerStructuredData),
@@ -435,6 +435,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
 

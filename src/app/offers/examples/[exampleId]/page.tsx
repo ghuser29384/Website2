@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -77,7 +76,43 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   const viewer = await getViewer();
 
   if (!offer) {
-    notFound();
+    return (
+      <div className="page-shell page-shell-focused marketplace-app-shell">
+        <header className="v72-route-header">
+          <SiteTopbar
+            brandHref="/"
+            links={getPrimaryNavLinks(Boolean(viewer))}
+            {...getTopbarActions(Boolean(viewer))}
+            showSearch={false}
+            showLogout={Boolean(viewer)}
+          />
+        </header>
+
+        <main id="main-content" tabIndex={-1}>
+          <section className="v72-safe-state" aria-labelledby="worked-example-unavailable-heading">
+            <div>
+              <p className="detail-kicker">Direct route safety</p>
+              <h1 id="worked-example-unavailable-heading">Unavailable</h1>
+              <p>
+                This worked example is not available as a backed Moral Trade record.
+              </p>
+              <p className="v72-receipt-fragment">Unavailable · Preview only · No commitment</p>
+              <div className="offer-actions">
+                <Link className="button button-primary" href="/offers">
+                  Browse offers
+                </Link>
+                <Link className="button button-secondary" href="/worked-examples">
+                  View examples
+                </Link>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <MarketplaceBottomNav active="browse" />
+        <SiteFooter />
+      </div>
+    );
   }
 
   const canonicalPath = `/offers/examples/${offer.id}`;
@@ -132,7 +167,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   };
 
   return (
-    <div className="page-shell page-shell-focused">
+    <div className="page-shell page-shell-focused marketplace-app-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(structuredData),
@@ -150,6 +185,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
         <Breadcrumbs
@@ -170,7 +206,11 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           </div>
           <article className="v72-decision-block panel">
             <div className="v72-decision-main">
-              <span className="moral-deal-visual" aria-hidden="true">
+              <span
+                aria-label={`${formatMode(offer.mode)} semantic visual for worked example`}
+                className={`moral-deal-visual moral-deal-visual-${offer.mode === "offset" ? "offset-trade" : offer.mode === "payment" ? "action-for-donation" : "cross-view-donation-swap"} is-example`}
+                role="img"
+              >
                 <IconMark name={offer.mode === "offset" ? "offset" : offer.mode === "payment" ? "payment" : "swap"} />
               </span>
               <div>

@@ -92,12 +92,13 @@ export function HomePage({
   const createHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
 
   return (
-    <div className="page-shell page-shell-focused growth-shell">
+    <div className="page-shell page-shell-focused growth-shell marketplace-app-shell">
       <header className="home-marketplace-topbar">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
           {...getTopbarActions(isAuthenticated)}
+          showSearch={false}
           showLogout={isAuthenticated}
         />
       </header>

@@ -10,11 +10,18 @@ import type {
   MpgfPublicGoodsMatchPool,
   MpgfPublicGoodsRound,
 } from "@/lib/mpgf/types";
+import {
+  getPledgeFundingMechanismState,
+  getPledgeFundingReceiptAtom,
+  getPledgeFundingRounds,
+  type PledgeFundingRound,
+} from "@/lib/moral-trade/pledge-funding-rounds";
 
 export const MIN_PUBLIC_GROUP_COUNT = 5;
 
 export type MarketplaceDealMechanismType =
   | "public_goods_round"
+  | "pledge_funding_round"
   | "cross_view_donation_swap"
   | "action_for_donation"
   | "offset_trade"
@@ -43,6 +50,7 @@ export type MarketplaceReviewStatus =
 export type MarketplaceCategoryKey =
   | "recommended"
   | "public_goods_rounds"
+  | "pledge_funding_rounds"
   | "cross_view_swaps"
   | "offset_trades"
   | "pledge_swaps"
@@ -56,6 +64,15 @@ export type MarketplaceCategoryKey =
   | "repeat_contributors";
 
 export type MarketplaceFilterKey =
+  | "source_live"
+  | "source_worked_example"
+  | "source_public_goods"
+  | "source_pledge_funding"
+  | "preview_only"
+  | "max_exposure_known"
+  | "exposure_unknown"
+  | "pledge_swap"
+  | "pledge_funding"
   | "clears_soon"
   | "highest_match"
   | "lowest_effort"
@@ -109,6 +126,7 @@ export interface MarketplaceDeal {
   reviewStatus?: MarketplaceReviewStatus;
   proximityLabels?: string[];
   privacyNotes?: string[];
+  fundingRound?: PledgeFundingRound;
   ctaLabel: string;
   actionDescription?: string;
   chargeTiming?: string;
@@ -138,6 +156,7 @@ export interface MarketplaceFilterChip {
 
 export interface MarketplaceQuery {
   category: MarketplaceCategoryKey;
+  filterSheetOpen: boolean;
   filters: MarketplaceFilterKey[];
   query: string;
   scoutCause?: string;
@@ -197,6 +216,11 @@ const CATEGORY_DEFINITIONS = [
     description: "Bounded reciprocal action commitments.",
   },
   {
+    key: "pledge_funding_rounds",
+    label: "Pledge funding",
+    description: "Preview funding routes for behavior-change pledges.",
+  },
+  {
     key: "local_community_trades",
     label: "Local community trades",
     description: "Community-context offers when safely available.",
@@ -243,6 +267,15 @@ const CATEGORY_DEFINITIONS = [
 }>;
 
 const FILTER_DEFINITIONS = [
+  ["source_live", "Live"],
+  ["source_worked_example", "Examples"],
+  ["source_public_goods", "Public goods"],
+  ["source_pledge_funding", "Pledge funding"],
+  ["preview_only", "Preview only"],
+  ["max_exposure_known", "Max exposure known"],
+  ["exposure_unknown", "Exposure unknown"],
+  ["pledge_swap", "Pledge swap"],
+  ["pledge_funding", "Pledge funding"],
   ["clears_soon", "Clears soon"],
   ["highest_match", "Highest match"],
   ["lowest_effort", "Lowest effort"],
@@ -373,6 +406,9 @@ function buildOfferCategoryKeys(deal: MarketplaceDeal): MarketplaceCategoryKey[]
   if (deal.mechanismType === "local_pledge") {
     categories.push("pledge_swaps");
   }
+  if (deal.mechanismType === "pledge_funding_round") {
+    categories.push("pledge_funding_rounds", "pledge_swaps");
+  }
   if (deal.mechanismType === "action_for_donation") {
     categories.push("pledge_swaps");
   }
@@ -405,6 +441,26 @@ function buildFilterTags(deal: MarketplaceDeal): MarketplaceFilterKey[] {
       .join(" "),
   );
 
+  if (deal.sourceLabel === "Live offer") {
+    filters.push("source_live");
+  }
+  if (deal.sourceLabel === "Worked example") {
+    filters.push("source_worked_example", "preview_only");
+  }
+  if (deal.sourceLabel === "Public Goods Fund") {
+    filters.push("source_public_goods", "preview_only");
+  }
+  if (deal.sourceLabel === "Pledge funding") {
+    filters.push("source_pledge_funding", "pledge_funding", "preview_only");
+  }
+  if (typeof deal.userMaxExposureCents === "number") {
+    filters.push("max_exposure_known");
+  } else {
+    filters.push("exposure_unknown");
+  }
+  if (deal.mechanismType === "local_pledge") {
+    filters.push("pledge_swap");
+  }
   if (deal.deadline && Date.parse(deal.deadline) > Date.now() && Date.parse(deal.deadline) - Date.now() <= 1000 * 60 * 60 * 24 * 30) {
     filters.push("clears_soon");
   }
@@ -428,6 +484,9 @@ function buildFilterTags(deal: MarketplaceDeal): MarketplaceFilterKey[] {
   }
   if (deal.mechanismType === "public_goods_round") {
     filters.push("public_goods_round", "requires_evidence");
+  }
+  if (deal.mechanismType === "pledge_funding_round") {
+    filters.push("lowest_effort", "beginner_friendly", "requires_evidence");
   }
   if (deal.mechanismType === "action_for_donation") {
     filters.push("action_for_donation");
@@ -686,6 +745,60 @@ export function marketplaceDealsFromPublicGoodsCampaigns({
   );
 }
 
+export function marketplaceDealFromPledgeFundingRound(round: PledgeFundingRound): MarketplaceDeal {
+  const receipt = getPledgeFundingReceiptAtom(round);
+  const mechanism = getPledgeFundingMechanismState(round);
+
+  return withDerivedDealFields({
+    actionDescription: round.pledgeSummary,
+    baselineConfidence: "unavailable",
+    categoryKeys: ["recommended", "pledge_funding_rounds", "pledge_swaps", "low_friction_pledges"],
+    causeTags: ["Animal welfare", "Vegetarian pledge"],
+    chargeTiming:
+      round.chargePolicy === "preview_only"
+        ? "Payment authorization, capture, refund, release, and ledger rows are not connected for this preview."
+        : receipt.conditionOrProtection,
+    ctaLabel: receipt.primaryCta,
+    deadline: round.deadlineAt ?? undefined,
+    executionCondition:
+      round.mode === "micro_assurance"
+        ? "Round clears only if the configured target is reached before the deadline."
+        : "Cohort clears only when every configured slot is filled before the deadline.",
+    failureRule:
+      round.chargePolicy === "preview_only"
+        ? "No durable state changed."
+        : receipt.protection,
+    fundingRound: round,
+    href: `/funding-rounds/${round.id}`,
+    id: round.id,
+    mechanismType: "pledge_funding_round",
+    pledgeAmountCents:
+      round.mode === "capped_pivotal_cohort"
+        ? round.slotAmountCents ?? undefined
+        : round.defaultContributionCents,
+    privacyNotes: [
+      "No contributor identities are public.",
+      "No payment or preferred-charity bonus is claimed until backing is connected.",
+      round.baselineStatement,
+    ],
+    reviewStatus: "review_pending",
+    sourceLabel: "Pledge funding",
+    status: round.state === "preview" ? "draft" : round.state === "cleared" ? "completed" : "pending_match",
+    subtitle:
+      round.mode === "micro_assurance"
+        ? `${mechanism.contributionLabel} · ${mechanism.progressLabel}`
+        : `${mechanism.contributionLabel} · ${mechanism.remainingLabel}`,
+    thresholdCurrentCents: round.backing.publicProgressCounts ? round.raisedAmountCents : undefined,
+    thresholdTargetCents: round.targetAmountCents,
+    title: round.title,
+    userMaxExposureCents:
+      round.mode === "capped_pivotal_cohort"
+        ? round.slotAmountCents ?? undefined
+        : round.defaultContributionCents,
+    verificationSummary: round.evidenceReviewStatus,
+  });
+}
+
 export function buildMarketplaceDeals({
   liveOffers,
   publicGoodsCampaigns,
@@ -701,6 +814,7 @@ export function buildMarketplaceDeals({
 }) {
   return [
     ...liveOffers.map(marketplaceDealFromOfferRecord),
+    ...getPledgeFundingRounds().map(marketplaceDealFromPledgeFundingRound),
     ...marketplaceDealsFromPublicGoodsCampaigns({
       campaigns: publicGoodsCampaigns,
       matchPool: publicGoodsMatchPool,
@@ -725,6 +839,7 @@ export function parseMarketplaceQuery(
 
   return {
     category,
+    filterSheetOpen: parseSearchValue(searchParams, "browse_filters") === "1",
     filters,
     query: parseSearchValue(searchParams, "search").trim().slice(0, 120),
     reviewerApprovedOnly: parseSearchValue(searchParams, "scout_reviewer_approved") === "1",
