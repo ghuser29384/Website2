@@ -38,6 +38,24 @@ test("public offers collection defaults to worked examples when live inventory i
     ["live", "templates", "worked_examples", "demo", "public_goods"],
   );
   assert.deepEqual(
+    payload.meta.browseLanes.map((lane) => lane.value),
+    [
+      "live_offers",
+      "reviewed_templates",
+      "worked_examples",
+      "demo_records",
+      "shadow_previews",
+      "capped_pilot_rounds",
+      "public_goods_modules",
+    ],
+  );
+  assert.ok(
+    payload.meta.browseLanes
+      .filter((lane) => lane.value !== "live_offers")
+      .every((lane) => !lane.countsAsLiveLiquidity && !lane.countsAsOrdinaryOffer),
+  );
+  assert.ok(payload.meta.browseLanes.every((lane) => lane.nonGuaranteeState.length > 0));
+  assert.deepEqual(
     payload.meta.reviewedSeedTemplates.map((template) => template.id),
     ["pure-opposed-cause", "market-mediated", "reciprocal-mixed", "bargained-coordination"],
   );
@@ -247,6 +265,8 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.exactLiveProgressExposed, false);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.publicGoodsModuleCount, 1);
   assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.liveOfferCount, 0);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.shadowPreviewCount, 1);
+  assert.equal(publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.cappedPilotRoundCount, 1);
   assert.deepEqual(publicGoodSearchPayload.publicGoodsEntry?.accountingSnapshot, {
     grossCapturedCents: 0,
     feeExcludedCents: 0,
@@ -261,6 +281,8 @@ test("public offers collection separates template, moral public goods, and demo 
     ordinaryOfferCount: 0,
     workedExampleCount: publicGoodSearchPayload.meta.workedExampleCount,
     demoRecordCount: publicGoodSearchPayload.publicGoodsEntry?.laneSeparation.demoRecordCount ?? -1,
+    shadowPreviewCount: 1,
+    cappedPilotRoundCount: 1,
     publicGoodsModuleCount: 1,
     exactLiveProgressExposed: false,
   });
@@ -307,6 +329,23 @@ test("public offers collection separates template, moral public goods, and demo 
   assert.equal(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.noLiveAgreementCount,
     true,
+  );
+  assert.deepEqual(
+    externalCrecPayload.meta.browseLanes.map((lane) => `${lane.value}:${lane.count}`),
+    [
+      "live_offers:0",
+      "reviewed_templates:4",
+      `worked_examples:${externalCrecPayload.meta.workedExampleCount}`,
+      `demo_records:${externalCrecPayload.publicGoodsEntry?.laneSeparation.demoRecordCount}`,
+      "shadow_previews:1",
+      "capped_pilot_rounds:1",
+      "public_goods_modules:1",
+    ],
+  );
+  assert.ok(
+    externalCrecPayload.meta.browseLanes
+      .filter((lane) => lane.value !== "live_offers")
+      .every((lane) => /not|Non-binding|Separate|Sandbox|Examples|Draft|Capped/.test(lane.nonGuaranteeState)),
   );
   assert.equal(
     templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.noLiveAgreementCount,

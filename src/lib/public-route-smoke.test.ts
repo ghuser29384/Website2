@@ -5580,8 +5580,11 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /showPublicGoodsEntryCard \? \(/);
   assert.match(offersPage, /Collapsed ordinary-offer filters for public-goods search/);
   assert.match(offersPage, /Ordinary-offer filters remain separated/);
-  assert.match(offersPage, /Collapsed separated-lane drawer for public-goods search/);
-  assert.match(offersPage, /Browse separated lanes/);
+  assert.match(offersPage, /Other ways to browse separated marketplace lanes/);
+  assert.match(offersPage, /Other ways to browse/);
+  assert.match(offersPage, /marketplaceBrowseLanes/);
+  assert.match(offersPage, /Shadow previews lane/);
+  assert.match(offersPage, /Capped-pilot rounds lane/);
   assert.match(offersPage, /Collapsed advanced moral public goods audit details/);
   assert.match(offersPage, /filter-drawer-content/);
   assert.match(offersPage, /assurance matching/);
@@ -5600,7 +5603,10 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
   assert.match(offersPage, /Reviewed seed templates/);
   assert.match(offersPage, /admin-reviewed donation-offset/);
-  assert.match(offersPage, /Demo rounds and seed projects stay clearly labeled/);
+  assert.match(publicOffersSource, /shadow_previews/);
+  assert.match(publicOffersSource, /capped_pilot_rounds/);
+  assert.match(publicOffersSource, /public_goods_modules/);
+  assert.match(publicOffersSource, /marketplace-browse-lane-separation/);
   assert.match(offersPage, /final-lock confirmation/);
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);

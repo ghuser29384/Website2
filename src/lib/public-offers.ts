@@ -119,6 +119,34 @@ export interface PublicOffersTabSummary {
   description: string;
 }
 
+export type PublicMarketplaceBrowseLaneValue =
+  | "live_offers"
+  | "reviewed_templates"
+  | "worked_examples"
+  | "demo_records"
+  | "shadow_previews"
+  | "capped_pilot_rounds"
+  | "public_goods_modules";
+
+export interface PublicMarketplaceBrowseLaneSummary {
+  value: PublicMarketplaceBrowseLaneValue;
+  label: string;
+  count: number;
+  href: string;
+  source:
+    | "live_offer_directory"
+    | "reviewed_seed_templates"
+    | "worked_example_directory"
+    | "demo_records"
+    | "shadow_preview_records"
+    | "capped_pilot_round_records"
+    | "public_goods_module";
+  countsAsLiveLiquidity: boolean;
+  countsAsOrdinaryOffer: boolean;
+  nonGuaranteeState: string;
+  description: string;
+}
+
 export interface PublicGoodsEntryAction {
   key: "preview-common-ground-budget" | "view-current-round" | "learn-how-it-works";
   label: string;
@@ -153,6 +181,8 @@ export interface PublicGoodsEntryAccountingSnapshot {
   ordinaryOfferCount: number;
   workedExampleCount: number;
   demoRecordCount: number;
+  shadowPreviewCount: number;
+  cappedPilotRoundCount: number;
   publicGoodsModuleCount: number;
   exactLiveProgressExposed: false;
 }
@@ -179,6 +209,8 @@ export interface PublicGoodsEntryCard {
     reviewedSeedTemplateCount: number;
     workedExampleCount: number;
     demoRecordCount: number;
+    shadowPreviewCount: number;
+    cappedPilotRoundCount: number;
     publicGoodsModuleCount: number;
   };
   accountingSnapshot: PublicGoodsEntryAccountingSnapshot;
@@ -204,6 +236,7 @@ export interface PublicOffersMeta {
   defaultedToWorkedExamples: boolean;
   hiddenZeroCountFacets: boolean;
   availableTabs: PublicOffersTabSummary[];
+  browseLanes: PublicMarketplaceBrowseLaneSummary[];
   reviewedSeedTemplates: PublicReviewedSeedTemplateSummary[];
   availableFacets: {
     cause: PublicOfferFacet[];
@@ -266,6 +299,7 @@ export interface PublicOffersFacetsPayload {
     | "defaultedToWorkedExamples"
     | "hiddenZeroCountFacets"
     | "availableTabs"
+    | "browseLanes"
     | "reviewedSeedTemplates"
   >;
   publicContract: PublicOffersContract;
@@ -594,8 +628,114 @@ function getPublicMarketplaceRoundCount() {
   return demoMpgfAssuranceRound.id ? 1 : 0;
 }
 
+function getPublicMarketplaceShadowPreviewCount() {
+  return demoMpgfAssuranceRound.id ? 1 : 0;
+}
+
+function getPublicMarketplaceCappedPilotRoundCount() {
+  return demoMpgfAssuranceRound.id ? 1 : 0;
+}
+
 function getPublicMarketplaceDemoCount() {
   return demoMpgfPublicGoodsCampaigns.filter((campaign) => campaign.reviewStatus === "approved").length;
+}
+
+export function buildPublicMarketplaceBrowseLanes({
+  cappedPilotRoundCount = getPublicMarketplaceCappedPilotRoundCount(),
+  demoRecordCount = getPublicMarketplaceDemoCount(),
+  liveOfferCount,
+  publicGoodsModuleCount = getPublicMarketplaceRoundCount(),
+  reviewedSeedTemplateCount = REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+  shadowPreviewCount = getPublicMarketplaceShadowPreviewCount(),
+  workedExampleCount,
+}: {
+  cappedPilotRoundCount?: number;
+  demoRecordCount?: number;
+  liveOfferCount: number;
+  publicGoodsModuleCount?: number;
+  reviewedSeedTemplateCount?: number;
+  shadowPreviewCount?: number;
+  workedExampleCount: number;
+}): PublicMarketplaceBrowseLaneSummary[] {
+  return [
+    {
+      value: "live_offers",
+      label: "Live offers",
+      count: liveOfferCount,
+      href: "/offers?tab=live",
+      source: "live_offer_directory",
+      countsAsLiveLiquidity: liveOfferCount > 0,
+      countsAsOrdinaryOffer: true,
+      nonGuaranteeState: "Review-gated; not a guarantee of agreement, payment, custody, or outcome.",
+      description: "Public offers remain separated from examples and still require review before reliance.",
+    },
+    {
+      value: "reviewed_templates",
+      label: "Reviewed templates",
+      count: reviewedSeedTemplateCount,
+      href: "/offers?tab=templates",
+      source: "reviewed_seed_templates",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Draft scaffolds only; not live liquidity or completed offers.",
+      description: "Reviewed templates start bounded drafts without implying current counterparties.",
+    },
+    {
+      value: "worked_examples",
+      label: "Worked examples",
+      count: workedExampleCount,
+      href: "/offers?tab=worked_examples",
+      source: "worked_example_directory",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Examples only; not active offers, agreements, or payment volume.",
+      description: "Worked examples show structures without counting as live marketplace demand.",
+    },
+    {
+      value: "demo_records",
+      label: "Demo records",
+      count: demoRecordCount,
+      href: "/offers?tab=demo",
+      source: "demo_records",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Sandbox records only; no live liquidity, custody, or completed agreement claim.",
+      description: "Demo records support inspection and cannot inflate marketplace metrics.",
+    },
+    {
+      value: "shadow_previews",
+      label: "Shadow previews",
+      count: shadowPreviewCount,
+      href: `${MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href}#shadow-previews`,
+      source: "shadow_preview_records",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Non-binding learning preview; zero binding gross exposure or payout.",
+      description: "Shadow previews can simulate routing without satisfying thresholds or authorizing capture.",
+    },
+    {
+      value: "capped_pilot_rounds",
+      label: "Capped-pilot rounds",
+      count: cappedPilotRoundCount,
+      href: `/mpgf/rounds/${demoMpgfAssuranceRound.id}`,
+      source: "capped_pilot_round_records",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Capped CRECM pilot; not ordinary-offer liquidity or guaranteed matching.",
+      description: "Capped-pilot rounds keep exposure caps, review gates, and public-goods accounting separate.",
+    },
+    {
+      value: "public_goods_modules",
+      label: "Public-goods modules",
+      count: publicGoodsModuleCount,
+      href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
+      source: "public_goods_module",
+      countsAsLiveLiquidity: false,
+      countsAsOrdinaryOffer: false,
+      nonGuaranteeState: "Separate Public Goods Fund module; not an ordinary offer listing.",
+      description: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
+    },
+  ];
 }
 
 function buildPublicGoodsEntryCopySnippets({
@@ -749,6 +889,8 @@ export function buildPublicGoodsEntryCard({
       reviewedSeedTemplateCount,
       workedExampleCount,
       demoRecordCount: getPublicMarketplaceDemoCount(),
+      shadowPreviewCount: getPublicMarketplaceShadowPreviewCount(),
+      cappedPilotRoundCount: getPublicMarketplaceCappedPilotRoundCount(),
       publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
     },
     accountingSnapshot: {
@@ -765,6 +907,8 @@ export function buildPublicGoodsEntryCard({
       ordinaryOfferCount: liveOfferCount,
       workedExampleCount,
       demoRecordCount: getPublicMarketplaceDemoCount(),
+      shadowPreviewCount: getPublicMarketplaceShadowPreviewCount(),
+      cappedPilotRoundCount: getPublicMarketplaceCappedPilotRoundCount(),
       publicGoodsModuleCount: getPublicMarketplaceRoundCount(),
       exactLiveProgressExposed: false,
     },
@@ -1292,6 +1436,11 @@ export function buildPublicOffersCollectionPayload({
         liveOfferCount,
         workedExampleCount,
       }),
+      browseLanes: buildPublicMarketplaceBrowseLanes({
+        liveOfferCount,
+        reviewedSeedTemplateCount: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+        workedExampleCount,
+      }),
       reviewedSeedTemplates: getPublicReviewedSeedTemplateSummaries(),
       availableFacets: {
         cause: buildFacet(facetScope, (listing) => [
@@ -1342,6 +1491,7 @@ export function buildPublicOffersFacetsPayload({
       defaultedToWorkedExamples: collection.meta.defaultedToWorkedExamples,
       hiddenZeroCountFacets: collection.meta.hiddenZeroCountFacets,
       availableTabs: collection.meta.availableTabs,
+      browseLanes: collection.meta.browseLanes,
       reviewedSeedTemplates: collection.meta.reviewedSeedTemplates,
     },
     publicContract: buildPublicOffersContract({
@@ -1429,6 +1579,41 @@ function marketplaceTabsAreSeparated(tabs: readonly PublicOffersTabSummary[]) {
   );
 }
 
+function marketplaceBrowseLanesAreSeparated(
+  lanes: readonly PublicMarketplaceBrowseLaneSummary[],
+  meta: Pick<
+    PublicOffersMeta,
+    "liveOfferCount" | "reviewedSeedTemplateCount" | "workedExampleCount"
+  >,
+) {
+  const expectedCounts: Record<PublicMarketplaceBrowseLaneValue, number> = {
+    live_offers: meta.liveOfferCount,
+    reviewed_templates: meta.reviewedSeedTemplateCount,
+    worked_examples: meta.workedExampleCount,
+    demo_records: getPublicMarketplaceDemoCount(),
+    shadow_previews: getPublicMarketplaceShadowPreviewCount(),
+    capped_pilot_rounds: getPublicMarketplaceCappedPilotRoundCount(),
+    public_goods_modules: getPublicMarketplaceRoundCount(),
+  };
+  const requiredOrder = Object.keys(expectedCounts) as PublicMarketplaceBrowseLaneValue[];
+
+  return (
+    lanes.length === requiredOrder.length &&
+    requiredOrder.every((lane, index) => lanes[index]?.value === lane) &&
+    lanes.every(
+      (lane) =>
+        lane.count === expectedCounts[lane.value] &&
+        lane.label.length > 0 &&
+        lane.description.length > 0 &&
+        lane.nonGuaranteeState.length > 0 &&
+        lane.href.startsWith("/"),
+    ) &&
+    lanes
+      .filter((lane) => lane.value !== "live_offers")
+      .every((lane) => !lane.countsAsLiveLiquidity && !lane.countsAsOrdinaryOffer)
+  );
+}
+
 function reviewedSeedTemplatesSatisfyBootstrapPath(
   templates: readonly PublicReviewedSeedTemplateSummary[],
 ) {
@@ -1481,6 +1666,8 @@ function publicGoodsAccountingSnapshotPreservesBoundaries(
     snapshot.ordinaryOfferCount === payload.meta.liveOfferCount &&
     snapshot.workedExampleCount === payload.meta.workedExampleCount &&
     snapshot.demoRecordCount >= 0 &&
+    snapshot.shadowPreviewCount === getPublicMarketplaceShadowPreviewCount() &&
+    snapshot.cappedPilotRoundCount === getPublicMarketplaceCappedPilotRoundCount() &&
     snapshot.publicGoodsModuleCount ===
       (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
     snapshot.exactLiveProgressExposed === false
@@ -1524,6 +1711,9 @@ function publicGoodsEntryPreservesBoundaries(
       entry.laneSeparation.liveOfferCount === payload.meta.liveOfferCount &&
       entry.laneSeparation.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplateCount &&
       entry.laneSeparation.workedExampleCount === payload.meta.workedExampleCount &&
+      entry.laneSeparation.demoRecordCount === getPublicMarketplaceDemoCount() &&
+      entry.laneSeparation.shadowPreviewCount === getPublicMarketplaceShadowPreviewCount() &&
+      entry.laneSeparation.cappedPilotRoundCount === getPublicMarketplaceCappedPilotRoundCount() &&
       entry.laneSeparation.publicGoodsModuleCount ===
         (payload.meta.availableTabs.find((tab) => tab.value === "public_goods")?.count ?? -1) &&
       publicGoodsAccountingSnapshotPreservesBoundaries(entry, payload) &&
@@ -1572,6 +1762,14 @@ export function validatePublicOffersCollectionPayload(
       "Public marketplace separates live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
+    ),
+    validationCheck(
+      "marketplace-browse-lane-separation",
+      "Other ways to browse keeps live offers, templates, examples, demo records, shadow previews, capped-pilot rounds, and public-goods modules separate",
+      marketplaceBrowseLanesAreSeparated(payload.meta.browseLanes, payload.meta),
+      payload.meta.browseLanes
+        .map((lane) => `${lane.value}:${lane.count}:${lane.countsAsLiveLiquidity}`)
+        .join(" | "),
     ),
     validationCheck(
       "public-goods-entry-card",
@@ -1743,6 +1941,14 @@ export function validatePublicOffersFacetsPayload(
       "Facet metadata separates live offers, reviewed templates, worked examples, demo data, and the Public Goods Fund lane",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
+    ),
+    validationCheck(
+      "marketplace-browse-lane-separation",
+      "Facet metadata keeps live offers, templates, examples, demo records, shadow previews, capped-pilot rounds, and public-goods modules separate",
+      marketplaceBrowseLanesAreSeparated(payload.meta.browseLanes, payload.meta),
+      payload.meta.browseLanes
+        .map((lane) => `${lane.value}:${lane.count}:${lane.countsAsLiveLiquidity}`)
+        .join(" | "),
     ),
     validationCheck(
       "reviewed-seed-templates",

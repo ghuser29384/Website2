@@ -37,7 +37,7 @@ import { getMpgfCrecV1125AuditBundleApi } from "@/lib/mpgf/public-goods-crecm-ro
 import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
-import { buildPublicGoodsEntryCard } from "@/lib/public-offers";
+import { buildPublicGoodsEntryCard, buildPublicMarketplaceBrowseLanes } from "@/lib/public-offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import {
   getActionEvidenceSummary,
@@ -806,6 +806,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         workedExampleCount,
       })
     : null;
+  const marketplaceBrowseLanes = buildPublicMarketplaceBrowseLanes({
+    cappedPilotRoundCount: seedRoundCount,
+    demoRecordCount: seedRoundProjects.length,
+    liveOfferCount,
+    publicGoodsModuleCount: seedRoundCount,
+    reviewedSeedTemplateCount: seedTemplateCount,
+    shadowPreviewCount: seedRoundCount,
+    workedExampleCount,
+  });
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
     live: liveOfferCount,
@@ -957,60 +966,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       label: "Manual review required",
     },
   ];
-  const bootstrapLanes = [
-    {
-      value: "live",
-      label: "Live offers",
-      href: createTabHref("live", filterHrefParams),
-      count: String(liveOfferCount),
-      status: liveOfferCount ? "Review-gated directory" : "None public yet",
-      description:
-        "Live offers remain separated from worked examples and still require review before reliance.",
-    },
-    {
-      value: "templates",
-      label: "Create from template",
-      href: createTabHref("templates", filterHrefParams),
-      count: String(seedTemplateCount),
-      status: "Draft scaffolds only",
-      description:
-        "Reviewed donation-offset and micro-pledge templates create bounded drafts, not live offers.",
-    },
-    {
-      value: "worked_examples",
-      label: "Worked examples",
-      href: createTabHref("worked_examples", filterHrefParams),
-      count: String(workedExampleCount),
-      status: "Examples only",
-      description:
-        "Inspect complete example structures without treating them as live liquidity or completed trades.",
-    },
-    {
-      value: "demo",
-      label: "Demo data",
-      href: createTabHref("demo", filterHrefParams),
-      count: String(seedRoundProjects.length),
-      status: "Labeled sandbox records",
-      description:
-        "Demo rounds and seed projects stay clearly labeled and cannot inflate live offer or agreement counts.",
-    },
-    {
-      value: "public_goods",
-      label: PUBLIC_GOODS_MODULE.laneLabel,
-      href: createTabHref("public_goods", filterHrefParams),
-      count: String(seedRoundCount),
-      status: PUBLIC_GOODS_MODULE.laneStatus,
-      description:
-        "Public-goods rounds stay outside this non-public-goods marketplace brief and route to the separate CRECM module.",
-    },
-  ] satisfies Array<{
-    value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
-    label: string;
-    href: string;
-    count: string;
-    status: string;
-    description: string;
-  }>;
+  const bootstrapLanes = marketplaceBrowseLanes.map((lane) => ({
+    ...lane,
+    count: String(lane.count),
+    href:
+      lane.value === "live_offers"
+        ? createTabHref("live", filterHrefParams)
+        : lane.value === "reviewed_templates"
+          ? createTabHref("templates", filterHrefParams)
+          : lane.value === "worked_examples"
+            ? createTabHref("worked_examples", filterHrefParams)
+            : lane.value === "demo_records"
+              ? createTabHref("demo", filterHrefParams)
+              : lane.value === "public_goods_modules"
+                ? createTabHref("public_goods", filterHrefParams)
+                : lane.href,
+    status: lane.nonGuaranteeState,
+  }));
   const groupedListings = filteredListings.reduce<
     Array<{ id: string; label: string; listings: MarketplaceListing[] }>
   >((groups, listing) => {
@@ -1285,29 +1257,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 Browse ordinary offers instead
               </Link>
             </div>
-            <details className="pilot-note" aria-label="Collapsed separated-lane drawer for public-goods search">
-              <summary>Browse separated lanes</summary>
+            <details className="pilot-note" aria-label="Other ways to browse separated marketplace lanes">
+              <summary>Other ways to browse</summary>
               <dl className="mpgf-summary-grid">
-                <div>
-                  <dt>Live offers</dt>
-                  <dd>{liveOfferCount}</dd>
-                </div>
-                <div>
-                  <dt>Reviewed templates</dt>
-                  <dd>{seedTemplateCount}</dd>
-                </div>
-                <div>
-                  <dt>Worked examples</dt>
-                  <dd>{workedExampleCount}</dd>
-                </div>
-                <div>
-                  <dt>Demo records</dt>
-                  <dd>{seedRoundProjects.length}</dd>
-                </div>
-                <div>
-                  <dt>Public-goods module</dt>
-                  <dd>{seedRoundCount}</dd>
-                </div>
+                {marketplaceBrowseLanes.map((lane) => (
+                  <div key={`public-goods-drawer-${lane.value}`}>
+                    <dt>{lane.label}</dt>
+                    <dd>
+                      {lane.count} · {lane.nonGuaranteeState}
+                    </dd>
+                  </div>
+                ))}
               </dl>
             </details>
             <details className="pilot-note" aria-label="Collapsed advanced moral public goods audit details">
@@ -1332,6 +1292,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <div>
                   <dt>Demo records lane</dt>
                   <dd>{seedRoundProjects.length}</dd>
+                </div>
+                <div>
+                  <dt>Shadow previews lane</dt>
+                  <dd>{seedRoundCount}</dd>
+                </div>
+                <div>
+                  <dt>Capped-pilot rounds lane</dt>
+                  <dd>{seedRoundCount}</dd>
                 </div>
                 <div>
                   <dt>Public-goods module lane</dt>
