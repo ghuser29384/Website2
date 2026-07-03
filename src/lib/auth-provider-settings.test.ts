@@ -56,15 +56,16 @@ test("Supabase OAuth provider settings mirror enabled external providers", async
     assert.equal(input, "https://example.supabase.co/auth/v1/settings");
     assert.equal((init?.headers as Record<string, string>).apikey, "publishable-test-key");
     return new Response(
-      JSON.stringify({ external: { google: true, apple: false } }),
+      JSON.stringify({ external: { google: true, apple: false, facebook: true } }),
       { status: 200 },
     );
   };
 
   try {
-    assert.deepEqual(await getEnabledOAuthProviders(), ["google"]);
+    assert.deepEqual(await getEnabledOAuthProviders(), ["google", "facebook"]);
     assert.equal(await isOAuthProviderEnabled("google"), true);
     assert.equal(await isOAuthProviderEnabled("apple"), false);
+    assert.equal(await isOAuthProviderEnabled("facebook"), true);
   } finally {
     globalThis.fetch = ORIGINAL_FETCH;
     restoreEnv(previousUrl, previousKey);

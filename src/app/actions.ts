@@ -3298,7 +3298,7 @@ export async function oauthSignInAction(formData: FormData) {
   const provider = normalizeOAuthProvider(readOptional(formData, "provider"));
 
   if (!provider) {
-    redirectWithMessage(authPath, "error", "Choose Google or Apple to continue.");
+    redirectWithMessage(authPath, "error", "Choose a sign-in provider to continue.");
   }
 
   if (!(await isOAuthProviderEnabled(provider))) {

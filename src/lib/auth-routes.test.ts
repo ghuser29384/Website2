@@ -50,19 +50,26 @@ test("auth paths preserve mode, method, and return target", () => {
 test("oauth provider normalization only permits configured provider names", () => {
   assert.equal(normalizeOAuthProvider("google"), "google");
   assert.equal(normalizeOAuthProvider("apple"), "apple");
-  assert.equal(normalizeOAuthProvider("github"), null);
+  assert.equal(normalizeOAuthProvider("github"), "github");
+  assert.equal(normalizeOAuthProvider("facebook"), "facebook");
+  assert.equal(normalizeOAuthProvider("x"), "x");
   assert.equal(normalizeOAuthProvider(undefined), null);
 });
 
 test("oauth providers are derived from Supabase Auth external settings", () => {
   assert.deepEqual(getEnabledOAuthProvidersFromSettings(null), []);
-  assert.deepEqual(getEnabledOAuthProvidersFromSettings({ google: true, apple: true }), [
-    "google",
-    "apple",
-  ]);
-  assert.deepEqual(getEnabledOAuthProvidersFromSettings({ google: false, apple: true }), [
-    "apple",
-  ]);
+  assert.deepEqual(
+    getEnabledOAuthProvidersFromSettings({
+      apple: true,
+      discord: true,
+      facebook: true,
+      github: true,
+      google: true,
+      x: true,
+    }),
+    ["google", "apple", "facebook", "github", "discord", "x"],
+  );
+  assert.deepEqual(getEnabledOAuthProvidersFromSettings({ google: false, apple: true }), ["apple"]);
 });
 
 test("oauth callback URL preserves safe return target", () => {

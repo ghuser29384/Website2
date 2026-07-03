@@ -2,9 +2,82 @@ import { getSafeInternalPath } from "@/lib/paths";
 
 export type AuthMode = "login" | "signup";
 export type AuthMethod = "providers" | "email";
-export type OAuthProvider = "google" | "apple";
+export type OAuthProvider =
+  | "google"
+  | "apple"
+  | "facebook"
+  | "github"
+  | "discord"
+  | "x"
+  | "twitter"
+  | "linkedin"
+  | "linkedin_oidc"
+  | "azure"
+  | "gitlab"
+  | "bitbucket"
+  | "figma"
+  | "kakao"
+  | "keycloak"
+  | "notion"
+  | "slack"
+  | "slack_oidc"
+  | "spotify"
+  | "twitch"
+  | "workos"
+  | "zoom"
+  | "fly";
 
-export const OAUTH_PROVIDERS: OAuthProvider[] = ["google", "apple"];
+export const OAUTH_PROVIDERS: OAuthProvider[] = [
+  "google",
+  "apple",
+  "facebook",
+  "github",
+  "discord",
+  "x",
+  "twitter",
+  "linkedin_oidc",
+  "linkedin",
+  "azure",
+  "gitlab",
+  "bitbucket",
+  "figma",
+  "kakao",
+  "keycloak",
+  "notion",
+  "slack_oidc",
+  "slack",
+  "spotify",
+  "twitch",
+  "workos",
+  "zoom",
+  "fly",
+];
+
+const oauthProviderLabels: Record<OAuthProvider, string> = {
+  apple: "Apple",
+  azure: "Microsoft",
+  bitbucket: "Bitbucket",
+  discord: "Discord",
+  facebook: "Facebook",
+  figma: "Figma",
+  fly: "Fly.io",
+  github: "GitHub",
+  gitlab: "GitLab",
+  google: "Google",
+  kakao: "Kakao",
+  keycloak: "Keycloak",
+  linkedin: "LinkedIn",
+  linkedin_oidc: "LinkedIn OIDC",
+  notion: "Notion",
+  slack: "Slack",
+  slack_oidc: "Slack OIDC",
+  spotify: "Spotify",
+  twitch: "Twitch",
+  twitter: "Twitter",
+  workos: "WorkOS",
+  x: "X",
+  zoom: "Zoom",
+};
 
 export function normalizeAuthMode(
   value: string | null | undefined,
@@ -22,11 +95,11 @@ export function normalizeAuthMethod(
 export function normalizeOAuthProvider(
   value: string | null | undefined,
 ): OAuthProvider | null {
-  return value === "google" || value === "apple" ? value : null;
+  return OAUTH_PROVIDERS.find((provider) => provider === value) ?? null;
 }
 
 export function getOAuthProviderLabel(provider: OAuthProvider) {
-  return provider === "google" ? "Google" : "Apple";
+  return oauthProviderLabels[provider];
 }
 
 export function getEnabledOAuthProvidersFromSettings(

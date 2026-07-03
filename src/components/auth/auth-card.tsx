@@ -20,16 +20,39 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const providerCopy: Record<OAuthProvider, { label: string; pending: string }> = {
-  apple: {
-    label: "Continue with Apple",
-    pending: "Opening Apple...",
-  },
-  google: {
-    label: "Continue with Google",
-    pending: "Opening Google...",
-  },
+const providerMonograms: Record<OAuthProvider, string> = {
+  apple: "A",
+  azure: "M",
+  bitbucket: "B",
+  discord: "D",
+  facebook: "f",
+  figma: "F",
+  fly: "F",
+  github: "GH",
+  gitlab: "GL",
+  google: "G",
+  kakao: "K",
+  keycloak: "K",
+  linkedin: "in",
+  linkedin_oidc: "in",
+  notion: "N",
+  slack: "S",
+  slack_oidc: "S",
+  spotify: "S",
+  twitch: "T",
+  twitter: "T",
+  workos: "W",
+  x: "X",
+  zoom: "Z",
 };
+
+function getProviderCopy(provider: OAuthProvider) {
+  const providerLabel = getOAuthProviderLabel(provider);
+  return {
+    label: `Continue with ${providerLabel}`,
+    pending: `Opening ${providerLabel}...`,
+  };
+}
 
 function GoogleIcon() {
   return (
@@ -66,7 +89,19 @@ function AppleIcon() {
 }
 
 function ProviderIcon({ provider }: { provider: OAuthProvider }) {
-  return provider === "google" ? <GoogleIcon /> : <AppleIcon />;
+  if (provider === "google") {
+    return <GoogleIcon />;
+  }
+
+  if (provider === "apple") {
+    return <AppleIcon />;
+  }
+
+  return (
+    <span className="auth-provider-icon auth-provider-icon-mail" aria-hidden="true">
+      {providerMonograms[provider]}
+    </span>
+  );
 }
 
 function ProviderButton({
@@ -78,7 +113,7 @@ function ProviderButton({
   provider: OAuthProvider;
   returnTo: string;
 }) {
-  const copy = providerCopy[provider];
+  const copy = getProviderCopy(provider);
 
   return (
     <form action={oauthSignInAction}>
