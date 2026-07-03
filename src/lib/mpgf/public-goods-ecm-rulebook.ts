@@ -169,9 +169,9 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     projectScopeState: "valid_moral_public_good";
     excludedTradeTypeRequired: null;
     externalityStateRequired: "clear";
-    baselineIntegrityStateRequired: "approved";
-    baselineConfidenceStateRequired: "approved";
-    actionEvidenceStateRequired: "approved";
+    baselineIntegrityStateRequired: "clear";
+    baselineConfidenceStatesAllowed: ["high", "medium"];
+    actionEvidenceStateRequired: "adequate";
     challengeStateAllowed: ["clear", "non_blocking"];
     fiscalHostConflictReviewRequired: true;
     finalSponsorBackingGatedByBundle: true;
@@ -499,9 +499,9 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     projectScopeState: "valid_moral_public_good" as const,
     excludedTradeTypeRequired: null,
     externalityStateRequired: "clear" as const,
-    baselineIntegrityStateRequired: "approved" as const,
-    baselineConfidenceStateRequired: "approved" as const,
-    actionEvidenceStateRequired: "approved" as const,
+    baselineIntegrityStateRequired: "clear" as const,
+    baselineConfidenceStatesAllowed: ["high", "medium"] as MpgfPublicGoodsEcmRulebookReport["hardGatesV1125"]["baselineConfidenceStatesAllowed"],
+    actionEvidenceStateRequired: "adequate" as const,
     challengeStateAllowed: ["clear", "non_blocking"] as MpgfPublicGoodsEcmRulebookReport["hardGatesV1125"]["challengeStateAllowed"],
     fiscalHostConflictReviewRequired: true as const,
     finalSponsorBackingGatedByBundle: true as const,

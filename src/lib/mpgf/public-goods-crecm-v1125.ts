@@ -132,28 +132,24 @@ export const MPGF_PUBLIC_GOODS_CRECM_V1125_SPONSOR_COMPATIBILITY_STATES = [
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_INTEGRITY_STATES = [
-  "approved",
-  "provisional",
+  "clear",
   "review",
   "blocked",
-  "unknown",
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_CONFIDENCE_STATES = [
-  "approved",
-  "provisional",
-  "review",
+  "high",
+  "medium",
   "low",
-  "blocked",
   "unknown",
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_ACTION_EVIDENCE_STATES = [
-  "approved",
-  "provisional",
+  "adequate",
+  "provisional_nonblocking",
   "review",
   "blocked",
-  "unknown",
+  "missing",
 ] as const;
 
 export const MPGF_PUBLIC_GOODS_CRECM_V1125_RECONCILIATION_STATES = [
@@ -2605,19 +2601,22 @@ export function evaluateMpgfCrecProjectHardGate(
   const bindingDeploymentMode = input.deploymentMode === "capped_pilot" || input.deploymentMode === "full";
   const shadowDeploymentMode = input.deploymentMode === "shadow";
   const deploymentModeValid = bindingDeploymentMode || shadowDeploymentMode;
-  const shadowBaselineStatesAllowed =
-    input.baselineIntegrityState === "approved" ||
-    input.baselineIntegrityState === "provisional";
+  const baselineIntegrityClear = input.baselineIntegrityState === "clear";
+  const bindingBaselineConfidenceAllowed =
+    input.baselineConfidenceState === "high" ||
+    input.baselineConfidenceState === "medium";
+  const bindingActionEvidenceAllowed = input.actionEvidenceState === "adequate";
   const shadowBaselineConfidenceAllowed =
-    input.baselineConfidenceState === "approved" ||
-    input.baselineConfidenceState === "provisional";
+    MPGF_PUBLIC_GOODS_CRECM_V1125_BASELINE_CONFIDENCE_STATES.includes(input.baselineConfidenceState);
   const shadowActionEvidenceAllowed =
-    input.actionEvidenceState === "approved" ||
-    input.actionEvidenceState === "provisional";
-  const hasProvisionalLearningSignal =
-    input.baselineIntegrityState === "provisional" ||
-    input.baselineConfidenceState === "provisional" ||
-    input.actionEvidenceState === "provisional";
+    input.actionEvidenceState === "adequate" ||
+    input.actionEvidenceState === "provisional_nonblocking" ||
+    input.actionEvidenceState === "review";
+  const hasShadowOnlyLearningSignal =
+    input.baselineConfidenceState === "low" ||
+    input.baselineConfidenceState === "unknown" ||
+    input.actionEvidenceState === "provisional_nonblocking" ||
+    input.actionEvidenceState === "review";
 
   addBlocker(blockers, "project_hard_gate_deployment_mode_invalid", deploymentModeValid);
   addBlocker(
@@ -2657,35 +2656,35 @@ export function evaluateMpgfCrecProjectHardGate(
   if (bindingDeploymentMode) {
     addBlocker(
       blockers,
-      "project_hard_gate_baseline_integrity_not_approved",
-      input.baselineIntegrityState === "approved",
+      "project_hard_gate_baseline_integrity_not_clear",
+      baselineIntegrityClear,
     );
     addBlocker(
       blockers,
-      "project_hard_gate_baseline_confidence_not_approved",
-      input.baselineConfidenceState === "approved",
+      "project_hard_gate_baseline_confidence_not_high_or_medium",
+      bindingBaselineConfidenceAllowed,
     );
     addBlocker(
       blockers,
-      "project_hard_gate_action_evidence_not_approved",
-      input.actionEvidenceState === "approved",
+      "project_hard_gate_action_evidence_not_adequate",
+      bindingActionEvidenceAllowed,
     );
   }
 
   if (shadowDeploymentMode) {
     addBlocker(
       blockers,
-      "project_hard_gate_shadow_baseline_integrity_not_approved_or_provisional",
-      shadowBaselineStatesAllowed,
+      "project_hard_gate_shadow_baseline_integrity_not_clear",
+      baselineIntegrityClear,
     );
     addBlocker(
       blockers,
-      "project_hard_gate_shadow_baseline_confidence_not_approved_or_provisional",
+      "project_hard_gate_shadow_baseline_confidence_invalid",
       shadowBaselineConfidenceAllowed,
     );
     addBlocker(
       blockers,
-      "project_hard_gate_shadow_action_evidence_not_approved_or_provisional",
+      "project_hard_gate_shadow_action_evidence_not_preview_allowed",
       shadowActionEvidenceAllowed,
     );
   }
@@ -2696,7 +2695,7 @@ export function evaluateMpgfCrecProjectHardGate(
     eligible,
     blockers,
     bindingOutputAllowed: eligible && bindingDeploymentMode,
-    shadowOnlyProvisionalLearningAllowed: eligible && shadowDeploymentMode && hasProvisionalLearningSignal,
+    shadowOnlyProvisionalLearningAllowed: eligible && shadowDeploymentMode && hasShadowOnlyLearningSignal,
     hardGateHash: eligible ? buildMpgfCrecProjectHardGateHash(input) : null,
   };
 }
@@ -6406,10 +6405,10 @@ export function buildMpgfCrecV1125ClearingContractSummary() {
       bindingHashIncludesEligibilityFields: true,
     },
     projectHardGates: {
-      bindingModesRequireApprovedBaselineIntegrity: true,
-      bindingModesRequireApprovedBaselineConfidence: true,
-      bindingModesRequireApprovedActionEvidence: true,
-      shadowModeAllowsProvisionalBaselineAndActionEvidenceOnlyAsNonBindingLearning: true,
+      bindingModesRequireClearBaselineIntegrity: true,
+      bindingModesRequireHighOrMediumBaselineConfidence: true,
+      bindingModesRequireAdequateActionEvidence: true,
+      shadowModeAllowsReviewOrProvisionalActionEvidenceOnlyAsNonBindingLearning: true,
       openChallengesBlockedUnlessRecordedNonBlocking: true,
       projectScopeStateRequired: "valid_moral_public_good" as const,
       excludedTradeTypeRequired: null,

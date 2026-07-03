@@ -743,9 +743,9 @@ function projectHardGateInput(
     conflictReviewState: "clear",
     sponsorCompatibilityState: "compatible",
     legalCustodyState: "clear",
-    baselineIntegrityState: "approved",
-    baselineConfidenceState: "approved",
-    actionEvidenceState: "approved",
+    baselineIntegrityState: "clear",
+    baselineConfidenceState: "high",
+    actionEvidenceState: "adequate",
     ...overrides,
   };
 }
@@ -1545,7 +1545,7 @@ test("CRECM v1.125 project eligibility snapshots bind exact round-open booleans"
   assert.ok(staleResult.blockers.includes("project_eligibility_snapshot_hash_mismatch"));
 });
 
-test("CRECM v1.125 project hard gates separate binding baseline approval from shadow learning", () => {
+test("CRECM v1.125 project hard gates separate binding evidence clearance from shadow learning", () => {
   const bindingGate = evaluateMpgfCrecProjectHardGate(projectHardGateInput());
 
   assert.equal(bindingGate.eligible, true);
@@ -1553,22 +1553,29 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
   assert.equal(bindingGate.shadowOnlyProvisionalLearningAllowed, false);
   assert.equal(bindingGate.hardGateHash, buildMpgfCrecProjectHardGateHash(projectHardGateInput()));
 
-  const provisionalBaseline = evaluateMpgfCrecProjectHardGate(
-    projectHardGateInput({ baselineIntegrityState: "provisional" }),
+  const reviewBaseline = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ baselineIntegrityState: "review" }),
   );
 
-  assert.equal(provisionalBaseline.eligible, false);
-  assert.equal(provisionalBaseline.bindingOutputAllowed, false);
+  assert.equal(reviewBaseline.eligible, false);
+  assert.equal(reviewBaseline.bindingOutputAllowed, false);
   assert.ok(
-    provisionalBaseline.blockers.includes("project_hard_gate_baseline_integrity_not_approved"),
+    reviewBaseline.blockers.includes("project_hard_gate_baseline_integrity_not_clear"),
   );
 
-  const actionEvidenceReview = evaluateMpgfCrecProjectHardGate(
-    projectHardGateInput({ actionEvidenceState: "review" }),
+  const lowConfidence = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ baselineConfidenceState: "low" }),
   );
 
-  assert.equal(actionEvidenceReview.eligible, false);
-  assert.ok(actionEvidenceReview.blockers.includes("project_hard_gate_action_evidence_not_approved"));
+  assert.equal(lowConfidence.eligible, false);
+  assert.ok(lowConfidence.blockers.includes("project_hard_gate_baseline_confidence_not_high_or_medium"));
+
+  const provisionalActionEvidence = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ actionEvidenceState: "provisional_nonblocking" }),
+  );
+
+  assert.equal(provisionalActionEvidence.eligible, false);
+  assert.ok(provisionalActionEvidence.blockers.includes("project_hard_gate_action_evidence_not_adequate"));
 
   const openChallenge = evaluateMpgfCrecProjectHardGate(
     projectHardGateInput({ challengeState: "open" }),
@@ -1589,9 +1596,8 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
   const shadowLearning = evaluateMpgfCrecProjectHardGate(
     projectHardGateInput({
       deploymentMode: "shadow",
-      baselineIntegrityState: "provisional",
-      baselineConfidenceState: "provisional",
-      actionEvidenceState: "provisional",
+      baselineConfidenceState: "low",
+      actionEvidenceState: "provisional_nonblocking",
     }),
   );
 
@@ -1603,9 +1609,8 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
     buildMpgfCrecProjectHardGateHash(
       projectHardGateInput({
         deploymentMode: "shadow",
-        baselineIntegrityState: "provisional",
-        baselineConfidenceState: "provisional",
-        actionEvidenceState: "provisional",
+        baselineConfidenceState: "low",
+        actionEvidenceState: "provisional_nonblocking",
       }),
     ),
   );
@@ -1614,9 +1619,8 @@ test("CRECM v1.125 project hard gates separate binding baseline approval from sh
     projectHardGateInput({
       deploymentMode: "shadow",
       externalityState: "blocked",
-      baselineIntegrityState: "provisional",
-      baselineConfidenceState: "provisional",
-      actionEvidenceState: "provisional",
+      baselineConfidenceState: "medium",
+      actionEvidenceState: "review",
     }),
   );
 
@@ -4101,11 +4105,11 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.feeQuotes.feePolicyHashBoundQuoteHashRequired, true);
   assert.equal(summary.feeQuotes.sponsorPaidFeeSupportRequiresEligibleRoundCloseBundle, true);
   assert.equal(summary.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
-  assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
-  assert.equal(summary.projectHardGates.bindingModesRequireApprovedBaselineConfidence, true);
-  assert.equal(summary.projectHardGates.bindingModesRequireApprovedActionEvidence, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireClearBaselineIntegrity, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireHighOrMediumBaselineConfidence, true);
+  assert.equal(summary.projectHardGates.bindingModesRequireAdequateActionEvidence, true);
   assert.equal(
-    summary.projectHardGates.shadowModeAllowsProvisionalBaselineAndActionEvidenceOnlyAsNonBindingLearning,
+    summary.projectHardGates.shadowModeAllowsReviewOrProvisionalActionEvidenceOnlyAsNonBindingLearning,
     true,
   );
   assert.equal(summary.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);

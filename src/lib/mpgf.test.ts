@@ -1977,7 +1977,9 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   );
   assert.equal(report.clearingContract.plainLanguageGuidedMode.uiBrowsingCalculatorOrSuggestionCannotInferAllocatableStance, true);
   assert.equal(report.clearingContract.projectRoundEligibilitySnapshots.sourceCutoffEqualsRoundOpen, true);
-  assert.equal(report.clearingContract.projectHardGates.bindingModesRequireApprovedBaselineIntegrity, true);
+  assert.equal(report.clearingContract.projectHardGates.bindingModesRequireClearBaselineIntegrity, true);
+  assert.equal(report.clearingContract.projectHardGates.bindingModesRequireHighOrMediumBaselineConfidence, true);
+  assert.equal(report.clearingContract.projectHardGates.bindingModesRequireAdequateActionEvidence, true);
   assert.equal(report.clearingContract.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
   assert.deepEqual(report.clearingContract.projectIdentityRouteGate.validGoodTypes, ["consensus", "hybrid"]);
   assert.equal(report.clearingContract.projectIdentityRouteGate.usesFullMoralBucketSnapshotPredicate, true);
@@ -2036,8 +2038,9 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.hardGatesV1125.projectScopeState, "valid_moral_public_good");
   assert.equal(report.hardGatesV1125.excludedTradeTypeRequired, null);
   assert.equal(report.hardGatesV1125.externalityStateRequired, "clear");
-  assert.equal(report.hardGatesV1125.baselineIntegrityStateRequired, "approved");
-  assert.equal(report.hardGatesV1125.actionEvidenceStateRequired, "approved");
+  assert.equal(report.hardGatesV1125.baselineIntegrityStateRequired, "clear");
+  assert.deepEqual(report.hardGatesV1125.baselineConfidenceStatesAllowed, ["high", "medium"]);
+  assert.equal(report.hardGatesV1125.actionEvidenceStateRequired, "adequate");
   assert.deepEqual(report.hardGatesV1125.challengeStateAllowed, ["clear", "non_blocking"]);
   assert.equal(report.hardGatesV1125.fiscalHostConflictReviewRequired, true);
   assert.equal(report.sponsorPoolBacking.poolSpecificBackingRequired, true);
