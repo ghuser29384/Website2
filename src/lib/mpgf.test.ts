@@ -1901,7 +1901,20 @@ test("MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, 
   assert.equal(report.mechanism.fullTechnicalLabel, "Coalition-Routed Escrowed Conditional Matching v1.125");
   assert.equal(report.mechanism.technicalLabel, "CRECM v1.125");
   assert.equal(report.mechanism.legacyMechanismLabel, "Verified Assurance Matching pilot");
+  assert.equal(report.mechanism.legacyMechanismLabelContext, "legacy_demo_details_only");
+  assert.equal(report.mechanism.legacyMechanismLabelBadge, "Legacy/demo label");
   assert.equal(report.mechanism.userFacingLabel, "Common Ground Budget");
+  assert.equal(report.mechanism.publicFacingProductLabel, "Public Goods Fund");
+  assert.deepEqual(report.mechanism.currentUserFacingHeaders, [
+    "Common Ground Budget",
+    "Public Goods Fund",
+  ]);
+  assert.deepEqual(report.mechanism.forbiddenCurrentProductLabels, [
+    "external CRECM module",
+    "Verified Assurance Matching",
+    "moralpublicgoods102.md",
+    "CRECM v1.96",
+  ]);
   assert.equal(report.mechanism.sourceSpec, "moralpublicgoods131.md");
   assert.equal(report.mechanism.deploymentFlag, "crecm_v1_125");
   assert.equal(report.mechanism.featureFlag.envName, "MPGF_MECHANISM_VERSION");

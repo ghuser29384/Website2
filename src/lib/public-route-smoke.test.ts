@@ -2187,7 +2187,8 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(mpfgPage, /Mechanism label/);
   assert.match(mpfgPage, /New mechanism/);
   assert.match(mpfgPage, /rulebookReport\.mechanism\.fullTechnicalLabel/);
-  assert.match(mpfgPage, /Legacy mechanism/);
+  assert.match(mpfgPage, /Legacy\/demo label/);
+  assert.match(mpfgPage, /legacyMechanismLabelBadge/);
   assert.match(mpfgPage, /rulebookReport\.mechanism\.legacyMechanismLabel/);
   assert.match(mpfgPage, /Source rulebook/);
   assert.match(mpfgPage, /Sponsor pools/);

@@ -108,8 +108,18 @@ export interface MpgfPublicGoodsEcmRulebookReport {
     fullTechnicalLabel: "Coalition-Routed Escrowed Conditional Matching v1.125";
     technicalLabel: "CRECM v1.125";
     legacyMechanismLabel: "Verified Assurance Matching pilot";
+    legacyMechanismLabelContext: "legacy_demo_details_only";
+    legacyMechanismLabelBadge: "Legacy/demo label";
     userFacingLabel: "Common Ground Budget";
+    publicFacingProductLabel: "Public Goods Fund";
+    currentUserFacingHeaders: readonly ["Common Ground Budget", "Public Goods Fund"];
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125";
+    forbiddenCurrentProductLabels: readonly [
+      "external CRECM module",
+      "Verified Assurance Matching",
+      "moralpublicgoods102.md",
+      "CRECM v1.96",
+    ];
     sourceSpec: "moralpublicgoods131.md";
     deploymentFlag: "crecm_v1_125";
     featureFlag: ReturnType<typeof getMpgfMechanismVersionFeatureFlag>;
@@ -460,8 +470,18 @@ export function buildMpgfPublicGoodsEcmRulebookReport({
     fullTechnicalLabel: "Coalition-Routed Escrowed Conditional Matching v1.125" as const,
     technicalLabel: "CRECM v1.125" as const,
     legacyMechanismLabel: "Verified Assurance Matching pilot" as const,
+    legacyMechanismLabelContext: "legacy_demo_details_only" as const,
+    legacyMechanismLabelBadge: "Legacy/demo label" as const,
     userFacingLabel: "Common Ground Budget" as const,
+    publicFacingProductLabel: "Public Goods Fund" as const,
+    currentUserFacingHeaders: ["Common Ground Budget", "Public Goods Fund"] as const,
     currentProductLabelPolicy: "common_ground_budget_public_goods_fund_crecm_v1_125" as const,
+    forbiddenCurrentProductLabels: [
+      "external CRECM module",
+      "Verified Assurance Matching",
+      "moralpublicgoods102.md",
+      "CRECM v1.96",
+    ] as const,
     sourceSpec: "moralpublicgoods131.md" as const,
     deploymentFlag: "crecm_v1_125" as const,
     featureFlag: getMpgfMechanismVersionFeatureFlag(),
