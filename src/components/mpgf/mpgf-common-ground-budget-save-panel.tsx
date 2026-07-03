@@ -27,7 +27,7 @@ interface CommonGroundBudgetStancePayload {
   conditionAccepted: boolean;
   stance: SupportStance;
   maxAllocCents: number;
-  maxAllocPctBps: number;
+  maxAllocBps: number;
   minCounterpartyVolumeCents: number;
   rankOrder: number;
   redactedNote?: string;

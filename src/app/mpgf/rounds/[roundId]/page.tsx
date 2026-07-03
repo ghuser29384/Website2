@@ -337,7 +337,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       campaignId: campaign.campaignId,
       stance: stanceFromParams(resolvedSearchParams, campaign.campaignId),
       maxAllocCents: searchParamNumber(resolvedSearchParams, `maxAllocCents_${campaign.campaignId}`, 0),
-      maxAllocPctBps: searchParamNumber(resolvedSearchParams, `maxAllocPctBps_${campaign.campaignId}`, 0),
+      maxAllocBps: searchParamNumber(resolvedSearchParams, `maxAllocBps_${campaign.campaignId}`, 0),
       conditionAccepted: searchParamValue(resolvedSearchParams, `conditionAccepted_${campaign.campaignId}`) === "on",
       acceptableCounterBucketIds: searchParamValue(
         resolvedSearchParams,
@@ -383,7 +383,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       conditionAccepted: row.conditionAccepted,
       stance: row.stance,
       maxAllocCents: row.maxAllocCents,
-      maxAllocPctBps: row.maxAllocPctBps,
+      maxAllocBps: row.maxAllocBps,
       minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
       rankOrder: row.rankOrder,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
@@ -992,9 +992,9 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                             <input
                               max="10000"
                               min="0"
-                              name={`maxAllocPctBps_${row.campaignId}`}
+                              name={`maxAllocBps_${row.campaignId}`}
                               type="number"
-                              defaultValue={row.maxAllocPctBps}
+                              defaultValue={row.maxAllocBps}
                             />
                           </td>
                           <td>

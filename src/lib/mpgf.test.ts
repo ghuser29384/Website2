@@ -3057,7 +3057,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
       campaignId: persistedCampaign.id,
       stance: "weak",
       maxAllocCents: 7_500,
-      maxAllocPctBps: 10_000,
+      maxAllocBps: 10_000,
       conditionAccepted: true,
       acceptableCounterBucketIds: [
         "bucket-animal-welfare",
@@ -3086,7 +3086,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
       campaignId: persistedCampaign.id,
       stance: "weak",
       maxAllocCents: 3_000,
-      maxAllocPctBps: 10_000,
+      maxAllocBps: 10_000,
       rankOrder: 1,
     }],
   });
@@ -3237,6 +3237,8 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreview.participantConfirmationHash ?? "", /^sha256:/);
   assert.equal(budgetPreview.rows[0]?.stance, "weak");
   assert.equal(budgetPreview.rows[0]?.maxAllocCents, 3_000);
+  assert.equal(budgetPreview.rows[0]?.maxAllocBps, 10_000);
+  assert.equal("maxAllocPctBps" in (budgetPreview.rows[0] ?? {}), false);
   assert.equal(budgetPreview.rows[0]?.projectedAllocationCents, 3_000);
   assert.equal(budgetPreview.rows[0]?.allocationState, "currently_routed");
   assert.equal(defaultSkipPreview.perProjectCapCents, 7_500);

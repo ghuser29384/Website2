@@ -155,7 +155,7 @@ export interface MpgfCommonGroundBudgetStanceInput {
   campaignId: string;
   stance: MpgfCommonGroundBudgetStance;
   maxAllocCents?: number | null;
-  maxAllocPctBps?: number | null;
+  maxAllocBps?: number | null;
   conditionAccepted?: boolean;
   acceptableCounterBucketIds?: string[] | string | null;
   minCounterpartyVolumeCents?: number | null;
@@ -193,7 +193,7 @@ export interface MpgfCommonGroundBudgetPreviewRow {
   canonicalStance: MpgfCommonGroundBudgetStance;
   rankOrder: number;
   maxAllocCents: number;
-  maxAllocPctBps: number;
+  maxAllocBps: number;
   conditionAccepted: boolean;
   acceptableCounterBucketIds: string[];
   minCounterpartyVolumeCents: number;
@@ -685,7 +685,7 @@ function defaultStances(projects: MpgfCommonGroundBudgetProject[]) {
     campaignId: project.id,
     stance: "abstain",
     conditionAccepted: false,
-    maxAllocPctBps: 0,
+    maxAllocBps: 0,
     rankOrder: index + 1,
   }));
 }
@@ -718,7 +718,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       campaignId: stance.campaignId,
       stance: stance.stance,
       maxAllocCents: normalizeCapCents(stance.maxAllocCents ?? null, perProjectCapCents),
-      maxAllocPctBps: normalizeBps(stance.maxAllocPctBps ?? null, stance.stance === "abstain" ? 0 : 10_000),
+      maxAllocBps: normalizeBps(stance.maxAllocBps ?? null, stance.stance === "abstain" ? 0 : 10_000),
       conditionAccepted: stance.conditionAccepted === true,
       acceptableCounterBucketIds: normalizeCounterBucketIds(stance.acceptableCounterBucketIds),
       minCounterpartyVolumeCents: normalizePositiveCents(stance.minCounterpartyVolumeCents ?? null, 20_000),
@@ -733,7 +733,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       isAllocatableStance(stance.stance) &&
       stance.conditionAccepted &&
       stance.maxAllocCents > 0 &&
-      stance.maxAllocPctBps > 0 &&
+      stance.maxAllocBps > 0 &&
       stance.minCounterpartyVolumeCents > 0 &&
       stance.acceptableCounterBucketIds.length > 0,
     )
@@ -757,7 +757,7 @@ export function buildMpgfCommonGroundBudgetPreview(
     stanceWeight(stance.stance) > 0 &&
     stance.conditionAccepted &&
     stance.maxAllocCents > 0 &&
-    stance.maxAllocPctBps > 0 &&
+    stance.maxAllocBps > 0 &&
     stance.minCounterpartyVolumeCents > 0 &&
     stance.acceptableCounterBucketIds.length > 0,
   );
@@ -766,8 +766,8 @@ export function buildMpgfCommonGroundBudgetPreview(
   let initiallyAllocatedCents = 0;
 
   for (const stance of budgetableStances) {
-    const pctCapCents = Math.floor((maximumBudgetCents * stance.maxAllocPctBps) / 10_000);
-    const capCents = Math.min(stance.maxAllocCents, pctCapCents);
+    const bpsCapCents = Math.floor((maximumBudgetCents * stance.maxAllocBps) / 10_000);
+    const capCents = Math.min(stance.maxAllocCents, bpsCapCents);
     const weightedShare = totalWeight > 0
       ? Math.floor((maximumBudgetCents * stanceWeight(stance.stance)) / totalWeight)
       : 0;
@@ -784,8 +784,8 @@ export function buildMpgfCommonGroundBudgetPreview(
       break;
     }
 
-    const pctCapCents = Math.floor((maximumBudgetCents * stance.maxAllocPctBps) / 10_000);
-    const capCents = Math.min(stance.maxAllocCents, pctCapCents);
+    const bpsCapCents = Math.floor((maximumBudgetCents * stance.maxAllocBps) / 10_000);
+    const capCents = Math.min(stance.maxAllocCents, bpsCapCents);
     const current = projectedAllocations.get(stance.campaignId) ?? 0;
     const extra = Math.min(remainderCents, Math.max(0, capCents - current));
 
@@ -800,7 +800,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       isAllocatableStance(stance.stance) &&
       stance.conditionAccepted &&
       stance.maxAllocCents > 0 &&
-      stance.maxAllocPctBps > 0 &&
+      stance.maxAllocBps > 0 &&
       stance.minCounterpartyVolumeCents > 0 &&
       stance.acceptableCounterBucketIds.length > 0
         ? {
@@ -827,7 +827,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       canonicalStance: stance.stance,
       rankOrder: stance.rankOrder,
       maxAllocCents: stance.maxAllocCents,
-      maxAllocPctBps: stance.maxAllocPctBps,
+      maxAllocBps: stance.maxAllocBps,
       conditionAccepted: stance.conditionAccepted,
       acceptableCounterBucketIds: stance.acceptableCounterBucketIds,
       minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
@@ -892,7 +892,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       isAllocatableStance(stance.stance) &&
       (!stance.conditionAccepted ||
         stance.maxAllocCents <= 0 ||
-        stance.maxAllocPctBps <= 0 ||
+        stance.maxAllocBps <= 0 ||
         stance.minCounterpartyVolumeCents <= 0 ||
         stance.acceptableCounterBucketIds.length === 0),
     )
