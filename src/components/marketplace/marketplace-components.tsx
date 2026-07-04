@@ -38,11 +38,11 @@ function mechanismLabel(value: MarketplaceDeal["mechanismType"]) {
 }
 
 function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
-  if (value === "public_goods_round") return "progress";
-  if (value === "pledge_funding_round") return "hands";
+  if (value === "public_goods_round") return "fund";
+  if (value === "pledge_funding_round") return "fund";
   if (value === "cross_view_donation_swap") return "swap";
   if (value === "offset_trade") return "offset";
-  if (value === "action_for_donation") return "checklist";
+  if (value === "action_for_donation") return "evidence";
   if (value === "local_pledge") return "swap";
   return "marketplace";
 }
