@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { createElement } from "react";
@@ -209,6 +210,51 @@ test("marketplace home renders one-rail filter sheet with URL apply controls", (
   assert.match(markup, /checked/);
   assert.equal(markup.includes("popular-filter-row"), false);
   assert.equal(buildMarketplaceHref({ query: surface.query }), "/offers?search=gun");
+});
+
+test("marketplace app shell keeps desktop browse cards in mobile-app proportions", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+
+  assert.match(
+    css,
+    /\.marketplace-app-shell\s*{[^}]*max-width:\s*500px;/s,
+    "desktop Browse shell should be capped to a mobile-app canvas",
+  );
+  assert.equal(
+    css.includes("0 0 0 100vmax"),
+    false,
+    "app-shell background should not create horizontal scroll on desktop",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.marketplace-directory-layout,\s*\.marketplace-app-shell \.collection-trust-panel,\s*\.marketplace-app-shell \.footer\s*{[^}]*display:\s*none;/s,
+    "legacy desktop browse rails should be hidden inside the v72 app shell",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.moral-marketplace-search\s*{[^}]*position:\s*sticky;[^}]*top:/s,
+    "search should remain a real sticky top control",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.moral-marketplace-search-button\s*{[^}]*clip-path:\s*inset\(50%\);/s,
+    "app-shell search should not render a separate oversized submit button",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.moral-deal-card\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+    "desktop cards should no longer stretch into a two-column desktop ad row",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.moral-deal-card-main\s*{[^}]*grid-template-columns:\s*5\.85rem minmax\(0,\s*1fr\);/s,
+    "card visual and copy should use compact marketplace proportions",
+  );
+  assert.match(
+    css,
+    /\.marketplace-app-shell \.marketplace-bottom-nav\s*{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/s,
+    "bottom navigation should stay app-like with v76 Browse, Planner, Track, Messages, and Profile destinations",
+  );
 });
 
 test("commitment status mapper exposes user-facing center states", () => {

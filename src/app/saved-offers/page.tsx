@@ -4,9 +4,12 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
+import {
+  MarketplaceBottomNav,
+  MarketplaceRouteShell,
+} from "@/components/marketplace/marketplace-components";
 import { getFormMessage } from "@/lib/form-state";
-import { listCartItems, requireViewer } from "@/lib/app-data";
+import { getViewer, listCartItems } from "@/lib/app-data";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -26,7 +29,7 @@ interface SavedOffersPageProps {
 export default async function SavedOffersPage({ searchParams }: SavedOffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const viewer = hasSupabaseEnv() ? await requireViewer("/saved-offers") : null;
+  const viewer = hasSupabaseEnv() ? await getViewer() : null;
   const cartItems = viewer ? await listCartItems(viewer.authUser.id) : [];
 
   return (
@@ -52,17 +55,18 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
           </div>
         ) : null}
 
-        <section className="v72-private-surface" aria-labelledby="plan-heading">
-          <div className="v72-owner-strip">
-            <h1 id="plan-heading">Plan</h1>
-            <p>Plan — private selected items. No commitment created.</p>
-          </div>
+        <MarketplaceRouteShell active="plan">
+          <section className="v72-private-surface mt-v75-route-card" aria-labelledby="plan-heading">
+            <div className="v72-owner-strip">
+              <h1 id="plan-heading">Planner</h1>
+              <p>Plan — private selected items. No commitment created.</p>
+            </div>
 
-          <div className="cart-grid">
-            {cartItems.length ? (
-              cartItems.map((item) =>
-                item.offer ? (
-                  <article key={item.offer.id} className="panel cart-card">
+            <div className="cart-grid">
+              {cartItems.length ? (
+                cartItems.map((item) =>
+                  item.offer ? (
+                    <article key={item.offer.id} className="panel cart-card">
                     <div className="profile-card-head">
                       <div>
                         <p className="detail-kicker">Planner · {formatMode(item.offer.mode)}</p>
@@ -97,25 +101,27 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
                         </form>
                       </div>
                     </div>
-                  </article>
-                ) : null,
-              )
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>You have no saved offers yet.</strong>
-                  <p>
-                    Browse examples, templates, and pledge-funding previews. Nothing here creates a
-                    commitment. Pledge-funding contribution rows are not connected yet.
-                  </p>
-                  <Link className="button button-primary" href="/offers">
-                    Browse offers
-                  </Link>
+                    </article>
+                  ) : null,
+                )
+              ) : (
+                <div className="empty-state">
+                  <div>
+                    <strong>{viewer ? "You have no saved offers yet." : "Sign in to view your planner."}</strong>
+                    <p>
+                      {viewer
+                        ? "Browse examples, templates, and pledge-funding previews. Nothing here creates a commitment. Pledge-funding contribution rows are not connected yet."
+                        : "Saved offers are private. This preview shell does not create demo planner rows, commitments, or pledge-funding contribution state."}
+                    </p>
+                    <Link className="button button-primary" href={viewer ? "/offers" : "/login?returnTo=/saved-offers"}>
+                      {viewer ? "Browse offers" : "Sign in to continue"}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        </MarketplaceRouteShell>
       </main>
 
       <MarketplaceBottomNav active="plan" />

@@ -6,8 +6,9 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   CommitmentStatusBadge,
   MarketplaceBottomNav,
+  MarketplaceRouteShell,
 } from "@/components/marketplace/marketplace-components";
-import { listAgreementsForUser, requireViewer } from "@/lib/app-data";
+import { getViewer, listAgreementsForUser } from "@/lib/app-data";
 import {
   getCommitmentStatusLabel,
   mapAgreementToCommitmentStatus,
@@ -56,7 +57,7 @@ function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsF
 
 export default async function CommitmentsPage() {
   const supabaseReady = hasSupabaseEnv();
-  const viewer = supabaseReady ? await requireViewer("/commitments") : null;
+  const viewer = supabaseReady ? await getViewer() : null;
   const agreements = viewer ? await listAgreementsForUser(viewer.authUser.id) : [];
   const summaries = agreements.map((agreement) => ({
     agreement,
@@ -76,17 +77,18 @@ export default async function CommitmentsPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="v72-private-surface commitments-center" aria-labelledby="commitments-heading">
-          <div className="v72-owner-strip">
-            <h1 id="commitments-heading">Track</h1>
-            <p>Track — commitments, drafts, and issues.</p>
-          </div>
+        <MarketplaceRouteShell active="track">
+          <section className="v72-private-surface commitments-center mt-v75-route-card" aria-labelledby="commitments-heading">
+            <div className="v72-owner-strip">
+              <h1 id="commitments-heading">Track</h1>
+              <p>Track — commitments, drafts, and issues.</p>
+            </div>
 
-          {supabaseReady ? (
-            summaries.length ? (
-              <div className="commitment-list">
-                {summaries.map(({ agreement, summary }) => (
-                  <article className="commitment-row panel" key={agreement.id}>
+            {supabaseReady ? (
+              summaries.length ? (
+                <div className="commitment-list">
+                  {summaries.map(({ agreement, summary }) => (
+                    <article className="commitment-row panel" key={agreement.id}>
                     <div className="commitment-row-main">
                       <CommitmentStatusBadge status={summary.status} />
                       <div>
@@ -127,36 +129,37 @@ export default async function CommitmentsPage() {
                         View commitment
                       </Link>
                     </div>
-                  </article>
-                ))}
-              </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state marketplace-empty-state">
+                  <div>
+                    <strong>{viewer ? "No commitments yet." : "Sign in to view track rows."}</strong>
+                    <p>
+                      {viewer
+                        ? "Saved offers, examples, searches, and marketplace previews are not commitments. Pledge-funding contribution rows are not connected yet. Agreements will appear here only after the existing acceptance flow creates one."
+                        : "Commitments are private. This preview shell does not create demo agreements, fake evidence rows, or pledge-funding contribution state."}
+                    </p>
+                    <Link className="button button-primary" href={viewer ? "/offers" : "/login?returnTo=/commitments"}>
+                      {viewer ? "Browse marketplace" : "Sign in to continue"}
+                    </Link>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="empty-state marketplace-empty-state">
                 <div>
-                  <strong>No commitments yet.</strong>
+                  <strong>Commitment data unavailable.</strong>
                   <p>
-                    Saved offers, examples, searches, and marketplace previews are not commitments.
-                    Pledge-funding contribution rows are not connected yet. Agreements will appear
-                    here only after the existing acceptance flow creates one.
+                    Supabase is not configured in this environment, so the page cannot load real
+                    agreements. No demo commitments or pledge-funding contribution rows are shown.
                   </p>
-                  <Link className="button button-primary" href="/offers">
-                    Browse marketplace
-                  </Link>
                 </div>
               </div>
-            )
-          ) : (
-            <div className="empty-state marketplace-empty-state">
-              <div>
-                <strong>Commitment data unavailable.</strong>
-                <p>
-                  Supabase is not configured in this environment, so the page cannot load real
-                  agreements. No demo commitments or pledge-funding contribution rows are shown.
-                </p>
-              </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        </MarketplaceRouteShell>
       </main>
 
       <MarketplaceBottomNav active="track" />

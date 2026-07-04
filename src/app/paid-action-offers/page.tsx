@@ -36,20 +36,20 @@ const paidActionAlternatives = [
 ] as const;
 
 export const metadata: Metadata = {
-  title: "Paid action offers are not open to the public yet",
+  title: "Paid action offers are deferred",
   description: paidActionOffersDescription,
   alternates: {
     canonical: "/paid-action-offers",
   },
   openGraph: {
-    title: "Paid action offers are not open to the public yet | Moral Trade",
+    title: "Paid action offers are deferred | Moral Trade",
     description: paidActionOffersDescription,
     url: getAbsoluteUrl("/paid-action-offers"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Paid action offers are not open to the public yet | Moral Trade",
+    title: "Paid action offers are deferred | Moral Trade",
     description: paidActionOffersDescription,
   },
 };
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
 export default async function PaidActionOffersPage() {
   const viewer = await getViewer();
   const paidActionStructuredData = buildWebPageJsonLd({
-    name: "Paid action offers are not open to the public yet | Moral Trade",
+    name: "Paid action offers are deferred | Moral Trade",
     description: paidActionOffersDescription,
     path: "/paid-action-offers",
   });
@@ -90,7 +90,7 @@ export default async function PaidActionOffersPage() {
 
         <PageHero
           eyebrow="Trade format"
-          title="Paid action offers are not open to the public yet."
+          title="Paid action offers are deferred."
           description="Use one of the safe alternatives below; public paid-action creation stays closed until review, payment, dispute, and legal controls are ready."
           actions={
             <>

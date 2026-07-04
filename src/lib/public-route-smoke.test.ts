@@ -171,10 +171,13 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   ].join("\n");
 
   assert.match(savedOffersPage, /title: "Saved offers"/);
-  assert.match(savedOffersPage, /<h1 id="plan-heading">Plan<\/h1>/);
+  assert.match(savedOffersPage, /<h1 id="plan-heading">Planner<\/h1>/);
   assert.match(savedOffersPage, /Plan — private selected items\. No commitment created\./);
   assert.match(savedOffersPage, /Preview only · Private planning only · No commitment created\./);
-  assert.match(savedOffersPage, /requireViewer\("\/saved-offers"\)/);
+  assert.match(savedOffersPage, /await getViewer\(\)/);
+  assert.match(savedOffersPage, /Sign in to view your planner\./);
+  assert.match(savedOffersPage, /does not create demo planner rows, commitments, or pledge-funding contribution state/);
+  assert.equal(savedOffersPage.includes("requireViewer"), false);
   assert.match(savedOffersPage, /value="\/saved-offers"/);
   assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
   assert.match(dashboardPage, /Account — saved settings and records\./);
@@ -410,8 +413,10 @@ test("public offer and registry pages include seeded examples instead of empty-o
   );
 
   const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const marketplaceComponents = readRepoFile("src/components/marketplace/marketplace-components.tsx");
   assert.match(offersPage, /Worked examples/);
-  assert.match(offersPage, /Illustrative fit ranking/);
+  assert.match(offersPage, /MarketplaceHome/);
+  assert.match(marketplaceComponents, /Preview only until you confirm/);
   assert.match(offersPage, /CANONICAL_WORKED_CASE_OFFERS/);
   assert.equal(offersPage.includes(["Six", "seeded", "offers"].join(" ")), false);
   assert.equal(offersPage.includes(".slice(0, 6)"), false);
@@ -492,7 +497,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /Jump to cause group/);
   assert.match(offersPage, /highlightedWorkedExamples/);
   assert.match(offersPage, /Study the structure before live offers arrive/);
-  assert.match(offersPage, /pilot-info-box/);
+  assert.match(offersPage, /MarketplaceHome/);
   assert.match(offersPage, /formatCounts/);
   assert.match(offersPage, /causeCounts/);
   assert.match(offersPage, /getListingModeIcon/);
@@ -5419,14 +5424,14 @@ test("offer exit condition field exposes accessible template suggestions", () =>
 test("offers page keeps content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const mainIndex = offersPage.indexOf("<main");
-  const directoryIndex = offersPage.indexOf("Offer marketplace");
-  const exampleIndex = offersPage.indexOf("Illustrative fit ranking");
+  const browseIndex = offersPage.indexOf("<MarketplaceHome");
+  const bottomNavIndex = offersPage.indexOf("<MarketplaceBottomNav");
   const footerIndex = offersPage.indexOf("<SiteFooter />");
 
   assert.ok(mainIndex > -1);
-  assert.ok(directoryIndex > mainIndex);
-  assert.ok(exampleIndex > directoryIndex);
-  assert.ok(footerIndex > exampleIndex);
+  assert.ok(browseIndex > mainIndex);
+  assert.ok(bottomNavIndex > browseIndex);
+  assert.ok(footerIndex > bottomNavIndex);
 });
 
 test("create trade route family has stable signed-out entry points", () => {
@@ -5493,6 +5498,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const mpgfPage = readRepoFile("src/app/mpgf/page.tsx");
+  const mpgfRoundBoard = readRepoFile("src/components/mpgf/mpgf-round-board.tsx");
   const mpgfContributePage = readRepoFile("src/app/mpgf/contribute/page.tsx");
   const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
@@ -5505,9 +5511,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /value: "worked_examples"/);
   assert.match(offersPage, /value: "demo"/);
   assert.match(offersPage, /value: "public_goods"/);
-  assert.match(offersPage, /Start template/);
+  assert.match(offersPage, /Start reviewed template/);
   assert.match(offersPage, /Demo records/);
-  assert.match(offersPage, /Common Ground Marketplace/);
+  assert.match(offersPage, /Public Goods Fund/);
   assert.match(offersPage, /laneCtaLabel: MARKETPLACE_PUBLIC_GOODS_BOUNDARY\.marketplaceLaneCtaLabel/);
   assert.match(offersPage, /Common Ground Budget result available/);
   assert.match(offersPage, /id="public-goods-result-card"/);
@@ -5516,6 +5522,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /aria-describedby="public-goods-result-announcement public-goods-result-summary"/);
   assert.match(offersPage, /Preview a Common Ground Budget/);
   assert.match(offersPage, /public-goods-primary-action/);
+  assert.equal((offersPage.match(/public-goods-primary-action/g) ?? []).length, 1);
   assert.match(offersPage, /Common Ground Budget \/ Public Goods Fund result available/);
   assert.equal(offersPage.includes("No ordinary moral-trade offers match this search"), false);
   assert.match(offersPage, /The moral-public-goods route is separate/);
@@ -5570,6 +5577,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(mpgfPage, /roundBoardCardByCampaignId/);
   assert.match(mpgfPage, /Qualitative progress/);
   assert.match(mpgfPage, /sealedProgressLabel/);
+  assert.match(mpgfRoundBoard, /Your choice/);
+  assert.match(mpgfRoundBoard, /Your maximum/);
+  assert.match(mpgfRoundBoard, /Deployment mode: capped pilot/);
   assert.match(mpgfPage, /Review contribution controls/);
   assert.equal(mpgfPage.includes("Start conditional contribution"), false);
   assert.match(mpgfContributePage, /\/login\?returnTo=\/mpgf\/contribute/);
@@ -5618,8 +5628,8 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /createDonationOffsetTemplateHref/);
   assert.match(offersPage, /createPledgeSwapTemplateHref/);
   assert.match(offersPage, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
-  assert.match(offersPage, /Reviewed seed templates/);
-  assert.match(offersPage, /admin-reviewed donation-offset/);
+  assert.match(offersPage, /Reviewed non-public-goods templates/);
+  assert.match(offersPage, /reviewed donation-offset/);
   assert.match(publicOffersSource, /shadow_previews/);
   assert.match(publicOffersSource, /capped_pilot_rounds/);
   assert.match(publicOffersSource, /public_goods_modules/);
@@ -5655,12 +5665,12 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   const mainContentIndex = offersPage.indexOf('<main id="main-content"');
   const publicGoodsResultIndex = offersPage.indexOf('id="public-goods-result-card"');
   const publicGoodsPrimaryCtaIndex = offersPage.indexOf('public-goods-primary-action');
-  const bootstrapIndex = offersPage.indexOf('id="marketplace-bootstrap-heading"');
+  const publicGoodsSummaryGridIndex = offersPage.indexOf('aria-label="moral public goods search-result summary"');
   const marketplaceShellIndex = offersPage.indexOf('aria-label="Offer marketplace"');
   assert.ok(mainContentIndex > -1);
   assert.ok(publicGoodsResultIndex > mainContentIndex);
   assert.ok(publicGoodsPrimaryCtaIndex > publicGoodsResultIndex);
-  assert.ok(publicGoodsResultIndex < bootstrapIndex);
+  assert.ok(publicGoodsPrimaryCtaIndex < publicGoodsSummaryGridIndex);
   assert.ok(publicGoodsResultIndex < marketplaceShellIndex);
   assert.match(publicOffersSource, /publicGoodsEntry/);
   assert.match(publicOffersSource, /buildPublicGoodsEntryCard/);

@@ -931,7 +931,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     (option) => option.value === "all" || option.count > 0 || reviewStatus === option.value,
   );
   const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
-  const commonFilterLinks = [
+  const popularFilterLinks = [
     {
       active: causes.includes("Animal welfare"),
       href: buildOffersHref({ ...filterHrefParams, causes: toggleValue(causes, "Animal welfare") }),
@@ -1008,14 +1008,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     ? relevantWorkedExamples
     : workedExampleListings
   ).slice(0, 3);
-  const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
-    cause: causeLabel,
-    listing: workedExampleListings.find((listing) =>
-      [listing.offeredCause, listing.requestedCause].some((candidate) =>
-        candidate.toLowerCase().includes(causeLabel.toLowerCase()),
-      ),
-    ),
-  })).filter((entry) => entry.listing);
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -1125,6 +1117,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   {publicGoodsEntry?.summary ??
                     "Fund public goods only if enough different-view support joins. No charge now. Exact live progress may be hidden until the round closes."}
                 </p>
+                <div className="marketplace-bootstrap-actions">
+                  <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
+                    {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
+                  </Link>
+                  {publicGoodsEntry?.secondaryCtas.map((action) => (
+                    <Link className="button button-secondary" href={action.href} key={action.key}>
+                      {action.label}
+                    </Link>
+                  ))}
+                  <Link className="button button-secondary" href="/offers?tab=live">
+                    Browse ordinary offers instead
+                  </Link>
+                </div>
                 <p>
                   Projects must pass threshold, review, challenge, payment, and authorization
                   gates. This search card only chooses presentation and CTA order; it does not
@@ -1245,19 +1250,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <dd>Budget to Projects to Review; no binding save before final review</dd>
               </div>
             </dl>
-            <div className="marketplace-bootstrap-actions">
-              <Link className="button button-primary public-goods-primary-action" href={publicGoodsEntry?.primaryCta.href ?? seedRoundHref}>
-                {publicGoodsEntry?.primaryCta.label ?? "Preview a Common Ground Budget"}
-              </Link>
-              {publicGoodsEntry?.secondaryCtas.map((action) => (
-                <Link className="button button-secondary" href={action.href} key={action.key}>
-                  {action.label}
-                </Link>
-              ))}
-              <Link className="button button-secondary" href="/offers?tab=live">
-                Browse ordinary offers instead
-              </Link>
-            </div>
             <details className="pilot-note" aria-label="Other ways to browse separated marketplace lanes">
               <summary>Other ways to browse</summary>
               <dl className="mpgf-summary-grid">
@@ -1342,127 +1334,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </details>
           </section>
         ) : null}
-
-        {showPublicGoodsEntryCard ? null : (
-        <section className="marketplace-bootstrap panel" aria-labelledby="marketplace-bootstrap-heading">
-          <div className="marketplace-bootstrap-head">
-            <div>
-              <p className="eyebrow">Common Ground Marketplace</p>
-              <h2 id="marketplace-bootstrap-heading">Start from live offers, reviewed templates, worked examples, demo data, or the Public Goods Fund.</h2>
-              <p>
-                Live, template, worked-example, demo, and public-goods module surfaces stay
-                separated so the marketplace can build liquidity without implying custody, escrow,
-                completed trades, or automated clearing.
-              </p>
-            </div>
-            <Link className="button button-primary" href={PUBLIC_GOODS_MODULE.href}>
-              {PUBLIC_GOODS_MODULE.laneCtaLabel}
-            </Link>
-          </div>
-
-          <nav className="marketplace-tabs marketplace-bootstrap-tabs" aria-label="Marketplace lanes" role="tablist">
-            {bootstrapLanes.map((lane) => (
-              <Link className="marketplace-tab" href={lane.href} key={lane.label}>
-                <span>{lane.label}</span>
-                <strong>{lane.count}</strong>
-              </Link>
-            ))}
-          </nav>
-
-          <div className="marketplace-bootstrap-grid">
-            <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
-              <p className="eyebrow">{PUBLIC_GOODS_MODULE.laneLabel}</p>
-              <h3>{demoMpgfAssuranceRound.name}</h3>
-              <p>
-                {PUBLIC_GOODS_MODULE.sourceNote} {seedRoundProjects.length} admin-reviewed
-                public-good projects are available for no-capture budget preview in that separate
-                module. Settlement remains sandboxed until later release gates pass.
-              </p>
-              <dl className="mpgf-summary-grid" aria-label="Seed round snapshot">
-                <div>
-                  <dt>Round closes</dt>
-                  <dd>{new Date(demoMpgfAssuranceRound.endsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</dd>
-                </div>
-                <div>
-                  <dt>Small starter budget</dt>
-                  <dd>{formatUsd(2_500)}</dd>
-                </div>
-                <div>
-                  <dt>No charge in this preview</dt>
-                  <dd>disabled</dd>
-                </div>
-              </dl>
-              <ul className="marketplace-bootstrap-projects" aria-label="Seed round projects">
-                {seedRoundProjects.slice(0, 3).map((campaign) => (
-                  <li key={campaign.id}>
-                    <span>{campaign.title}</span>
-                    <strong>{formatUsd(campaign.thresholdAmountCents)} threshold</strong>
-                  </li>
-                ))}
-              </ul>
-              <div className="marketplace-bootstrap-actions">
-                <Link className="button button-primary" href={seedRoundHref}>
-                  Preview budget
-                </Link>
-                <Link className="button button-secondary" href={PUBLIC_GOODS_MODULE.href}>
-                  {PUBLIC_GOODS_MODULE.laneCtaLabel}
-                </Link>
-              </div>
-            </article>
-
-            <article className="marketplace-bootstrap-card">
-              <p className="eyebrow">Template lane</p>
-              <h3>Create from template</h3>
-              <p>
-                {REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT} admin-reviewed donation-offset
-                templates and {REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT} micro-pledge swap
-                templates are visible, but remain draft or preview-only until review and later
-                release gates approve reliance.
-              </p>
-              <ul className="marketplace-bootstrap-projects" aria-label="Reviewed seed templates">
-                {seedTemplates.map((template) => (
-                  <li key={template.id}>
-                    <span>
-                      <Link href={getSeedTemplateHref(template.id, Boolean(viewer))}>
-                        {template.prefill.title}
-                      </Link>
-                    </span>
-                    <strong>{template.formatLabel}</strong>
-                  </li>
-                ))}
-              </ul>
-              <div className="marketplace-bootstrap-actions">
-                <Link className="button button-primary button-mini" href={createTemplateHref}>
-                  Start template
-                </Link>
-                <Link className="button button-secondary button-mini" href={createDonationOffsetTemplateHref}>
-                  Donation offset
-                </Link>
-                <Link className="button button-secondary button-mini" href={createPledgeSwapTemplateHref}>
-                  Pledge swap
-                </Link>
-              </div>
-            </article>
-
-            <article className="marketplace-bootstrap-card">
-              <p className="eyebrow">Directory state</p>
-              <h3>Live offers are separate from examples</h3>
-              <p>
-                The live directory currently has {liveOfferCount} public {liveOfferCount === 1 ? "offer" : "offers"}.
-                Worked examples stay in their own lane and do not count as agreements.
-              </p>
-              <div className="marketplace-bootstrap-actions">
-                <Link className="button button-secondary button-mini" href={createTabHref("live", filterHrefParams)}>
-                  Live offers
-                </Link>
-                <Link className="button button-secondary button-mini" href={createTabHref("worked_examples", filterHrefParams)}>
-                  Worked examples
-                </Link>
-              </div>
-            </article>
-          </div>
-        </section>
-        )}
 
         <section
           className={`marketplace-shell ${showPublicGoodsEntryCard ? "" : "marketplace-shell-demoted"}`}
@@ -1651,10 +1522,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </div>
           </div>
 
-          <div className="popular-filter-row" aria-label="Common marketplace filters">
-            <span>Common filters</span>
+          <div className="popular-filter-row" aria-label="Popular marketplace filters">
+            <span>Popular filters</span>
             <div>
-              {commonFilterLinks.map((filterLink) => (
+              {popularFilterLinks.map((filterLink) => (
                 <Link
                   aria-current={filterLink.active ? "true" : undefined}
                   className={`source-pill source-pill-link ${filterLink.active ? "is-active" : ""}`}
@@ -2233,94 +2104,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         </section>
 
-        {!viewer ? (
-          <section className="section section-subtle marketplace-participation-callout" aria-labelledby="participate-heading">
-            <div>
-              <p className="eyebrow">Account workspace</p>
-              <h2 id="participate-heading">Sign in to save interest and create offers.</h2>
-              <p>
-                Accounts keep draft terms, saved offers, and evidence workflows separate from public
-                worked examples.
-              </p>
-            </div>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/signup?returnTo=/offers">
-                Create account
-              </Link>
-              <Link className="button button-secondary" href="/login?returnTo=/offers">
-                Sign in
-              </Link>
-            </div>
-          </section>
-        ) : null}
-
-        <section className="section section-white" aria-labelledby="example-matches-heading">
-          <details className="pilot-info-box panel">
-            <summary>
-              <span>
-                <span className="eyebrow">Pilot mode</span>
-                <strong id="example-matches-heading">Illustrative fit ranking</strong>
-              </span>
-              <span className="pilot-info-box-control">Show examples</span>
-            </summary>
-            <div className="pilot-info-box-body">
-              <p>
-                During the seeded pilot, these examples help visitors inspect structure without
-                implying real marketplace rankings or live cost-efficiency results.
-              </p>
-              <div className="data-grid">
-                {exampleMatchesByCause.map((entry) => (
-                  <article className="panel data-card" key={entry.cause}>
-                    <p className="detail-kicker">{entry.cause}</p>
-                    <h3>{entry.listing?.title}</h3>
-                    <p className="route-text">{entry.listing?.offering}</p>
-                    <Link className="text-button" href={`/worked-examples&cause=${encodeURIComponent(entry.cause)}`}>
-                      Inspect example
-                    </Link>
-                  </article>
-                ))}
-              </div>
-            </div>
-          </details>
-        </section>
-
-        <section className="section section-subtle process-link-section" aria-labelledby="process-links-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Due diligence</p>
-            <h2 id="process-links-heading">Learn more about evidence and process.</h2>
-            <p>
-              Marketplace cards summarize terms for scanning. The full methodology and evidence
-              standards explain how review works before anyone relies on an offer.
-            </p>
-          </div>
-          <div className="teaser-grid">
-            <Link className="panel teaser-card" href="/methodology">
-              <IconMark name="source" />
-              <h3>Methodology</h3>
-              <p>How Moral Trade distinguishes voluntary exchange from threats, fraud, and pressure.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/reasoning-standards">
-              <IconMark name="evidence" />
-              <h3>Evidence standards</h3>
-              <p>How action records, receipts, witnesses, and manual review are presented.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/validation">
-              <IconMark name="review" />
-              <h3>Validation rulebook</h3>
-              <p>Reviewer scope, evidence states, challenge windows, and proof uniqueness checks.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/anti-threat-rules">
-              <IconMark name="safety" />
-              <h3>Anti-threat baseline rules</h3>
-              <p>No threat creation, no compensation for newly escalated harmful behavior, and third-party externality review.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/safety">
-              <IconMark name="safety" />
-              <h3>Safety policy</h3>
-              <p>Boundaries for coercion, harassment, political contribution offsets, and risky asks.</p>
-            </Link>
-          </div>
-        </section>
       </main>
 
       <MarketplaceBottomNav active="browse" />

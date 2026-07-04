@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import {
@@ -37,12 +38,12 @@ function mechanismLabel(value: MarketplaceDeal["mechanismType"]) {
 }
 
 function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
-  if (value === "public_goods_round") return "fund";
-  if (value === "pledge_funding_round") return "fund";
+  if (value === "public_goods_round") return "progress";
+  if (value === "pledge_funding_round") return "hands";
   if (value === "cross_view_donation_swap") return "swap";
   if (value === "offset_trade") return "offset";
-  if (value === "action_for_donation") return "payment";
-  if (value === "local_pledge") return "evidence";
+  if (value === "action_for_donation") return "checklist";
+  if (value === "local_pledge") return "swap";
   return "marketplace";
 }
 
@@ -68,6 +69,499 @@ function badgeClassName(value: string, role: "state" | "source" = "source") {
     role === "source" && "badge-secondary",
     role === "state" && `badge-${value.toLowerCase().replaceAll(" ", "-")}`,
   ]);
+}
+
+function reviewStatusLabel(value: MarketplaceDeal["reviewStatus"]) {
+  if (value === "verified_recipient") return "Verified recipient";
+  if (value === "reviewer_approved") return "Reviewer approved";
+  if (value === "review_pending") return "Review required";
+  if (value === "unreviewed") return "Needs review";
+  return "Review state unavailable";
+}
+
+function statusChipTone(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("verified") || normalized.includes("no charge")) return "is-good";
+  if (normalized.includes("review") || normalized.includes("preview")) return "is-warn";
+  if (normalized.includes("evidence")) return "is-info";
+  return "";
+}
+
+function getDealStatusChips(deal: MarketplaceDeal) {
+  const receipt = getDealReceiptAtom(deal);
+  const chips = [
+    receipt.exposure,
+    deal.verificationSummary ? "Evidence later" : null,
+    reviewStatusLabel(deal.reviewStatus),
+    deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
+  ];
+
+  return uniqueVisibleStrings(chips).slice(0, 4);
+}
+
+function uniqueVisibleStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value && value.trim())))];
+}
+
+function getDealAmountLabel(deal: MarketplaceDeal) {
+  const receipt = getDealReceiptAtom(deal);
+  if (receipt.exposure.startsWith("Max ")) return receipt.exposure.replace("Max ", "");
+  if (typeof deal.pledgeAmountCents === "number") {
+    return centsToV72Exposure(deal.pledgeAmountCents).replace("Max ", "");
+  }
+
+  return receipt.exposure;
+}
+
+function getDealSubline(deal: MarketplaceDeal) {
+  if (deal.mechanismType === "public_goods_round") return "Public good";
+  if (deal.mechanismType === "pledge_funding_round") return "Threshold round";
+  if (deal.mechanismType === "cross_view_donation_swap") return "Conditional swap";
+  if (deal.mechanismType === "action_for_donation") return "Action pledge";
+  if (deal.mechanismType === "offset_trade") return "Offset trade";
+  if (deal.mechanismType === "local_pledge") return "Pledge swap";
+  return mechanismLabel(deal.mechanismType);
+}
+
+function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" | "track" | "messages" | "profile" }) {
+  const items = [
+    { key: "browse", href: "/offers", label: "Browse", icon: "marketplace" },
+    { key: "plan", href: "/saved-offers", label: "Planner", icon: "example" },
+    { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
+    { key: "messages", href: "/messages", label: "Messages", icon: "review" },
+    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
+  ] as const;
+
+  return (
+    <aside className="mt-v75-side-nav" aria-label="Marketplace sections">
+      <Link className="mt-v75-side-brand" href="/offers">
+        <IconMark name="marketplace" />
+        <span>Moral Trade</span>
+      </Link>
+      <nav>
+        {items.map((item) => (
+          <Link
+            aria-current={active === item.key ? "page" : undefined}
+            className={joinClassName(["mt-v75-side-link", active === item.key && "is-active"])}
+            href={item.href}
+            key={item.key}
+          >
+            <IconMark name={item.icon} />
+            <span>{item.label}</span>
+          </Link>
+        ))}
+      </nav>
+      <div className="mt-v75-side-plan">
+        <strong>Planner preview</strong>
+        <span>Private planning only</span>
+        <span>No charge now</span>
+        <Link className="button button-primary button-mini" href="/saved-offers">
+          Review & plan
+        </Link>
+      </div>
+    </aside>
+  );
+}
+
+export function MarketplaceRouteShell({
+  active,
+  children,
+}: {
+  active: "browse" | "plan" | "track" | "messages" | "profile";
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-v75-route-board">
+      <MarketplaceSideNav active={active} />
+      <div className="mt-v75-route-workspace">{children}</div>
+    </div>
+  );
+}
+
+function DealSemanticVisual({
+  deal,
+  label,
+}: {
+  deal: MarketplaceDeal;
+  label?: string;
+}) {
+  const receipt = getDealReceiptAtom(deal);
+
+  return (
+    <span
+      aria-label={label ?? `${mechanismLabel(deal.mechanismType)} visual`}
+      className={dealVisualClassName(deal, receipt.state)}
+      role="img"
+    >
+      <IconMark name={mechanismIcon(deal.mechanismType)} />
+    </span>
+  );
+}
+
+function StatusChip({ label }: { label: string }) {
+  return <span className={joinClassName(["mt-v75-status-chip", statusChipTone(label)])}>{label}</span>;
+}
+
+function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
+  const receipt = getDealReceiptAtom(deal);
+  const statusChips = getDealStatusChips(deal);
+
+  return (
+    <article className="mt-v75-featured-deal">
+      <div className="mt-v75-featured-visuals">
+        <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
+        <DealSemanticVisual deal={deal} />
+        <span className="mt-v75-pair-arrow" aria-hidden="true">
+          <IconMark name="swap" />
+        </span>
+        <span
+          aria-label="Counterparty side visual"
+          className="moral-deal-visual mt-v75-counter-visual"
+          role="img"
+        >
+          <IconMark name={deal.mechanismType === "public_goods_round" ? "fund" : "evidence"} />
+        </span>
+      </div>
+      <div className="mt-v75-featured-copy">
+        <div className="moral-deal-chip-row">
+          {deal.causeTags.slice(0, 2).map((tag) => (
+            <span className="source-pill" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
+        <h2>{deal.title}</h2>
+        <p>{deal.subtitle ?? "Review terms, exposure, and evidence before any commitment."}</p>
+        <div className="mt-v75-status-row">
+          {statusChips.map((chip) => (
+            <StatusChip label={chip} key={chip} />
+          ))}
+        </div>
+      </div>
+      <dl className="mt-v75-featured-receipt" aria-label="Adjacent receipt facts">
+        <div>
+          <dt>State</dt>
+          <dd>{receipt.source}</dd>
+        </div>
+        <div>
+          <dt>Exposure</dt>
+          <dd>{receipt.exposure}</dd>
+        </div>
+        <div>
+          <dt>Condition</dt>
+          <dd>{receipt.conditionOrProtection}</dd>
+        </div>
+        <div>
+          <dt>CTA</dt>
+          <dd>{receipt.primaryCta}</dd>
+        </div>
+      </dl>
+      <div className="mt-v75-featured-actions">
+        <Link className="button button-primary" href={deal.href}>
+          {receipt.primaryCta}
+        </Link>
+        <Link className="button button-secondary" href={`${deal.href}#commitment-sheet`}>
+          Compare
+        </Link>
+        <span className="mt-v75-save-hint">Save</span>
+      </div>
+    </article>
+  );
+}
+
+function MiniDealTile({ deal }: { deal: MarketplaceDeal }) {
+  const receipt = getDealReceiptAtom(deal);
+
+  return (
+    <Link className="mt-v75-mini-tile" href={deal.href}>
+      <div className="mt-v75-mini-head">
+        <DealSemanticVisual deal={deal} />
+        <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
+      </div>
+      <strong>{deal.title}</strong>
+      <span>{getDealSubline(deal)}</span>
+      <div className="mt-v75-status-row">
+        <StatusChip label={receipt.conditionOrProtection} />
+        {deal.reviewStatus ? <StatusChip label={reviewStatusLabel(deal.reviewStatus)} /> : null}
+      </div>
+    </Link>
+  );
+}
+
+export function DealDetailObject({
+  deal,
+  headingId = "marketplace-detail-object-heading",
+}: {
+  deal: MarketplaceDeal;
+  headingId?: string;
+}) {
+  const receipt = getDealReceiptAtom(deal);
+  const statusChips = getDealStatusChips(deal);
+
+  return (
+    <article className="mt-v75-detail-object" aria-labelledby={headingId}>
+      <div className="mt-v75-detail-breadcrumb">
+        <Link href="/offers">Browse</Link>
+        <span aria-hidden="true">/</span>
+        <span>{getDealSubline(deal)}</span>
+      </div>
+      <div className="mt-v75-detail-visuals">
+        <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
+        <DealSemanticVisual deal={deal} />
+        <span className="mt-v75-pair-arrow" aria-hidden="true">
+          <IconMark name="swap" />
+        </span>
+        <span
+          aria-label="Counterparty side visual"
+          className="moral-deal-visual mt-v75-counter-visual"
+          role="img"
+        >
+          <IconMark name={deal.mechanismType === "public_goods_round" ? "fund" : "evidence"} />
+        </span>
+      </div>
+      <div className="mt-v75-detail-copy">
+        <div className="moral-deal-chip-row">
+          {deal.causeTags.slice(0, 2).map((tag) => (
+            <span className="source-pill" key={tag}>
+              {tag}
+            </span>
+          ))}
+        </div>
+        <h1 id={headingId}>{deal.title}</h1>
+        <p>{deal.subtitle ?? "Review exposure, terms, and evidence before any commitment."}</p>
+        <div className="mt-v75-status-row">
+          {statusChips.map((chip) => (
+            <StatusChip label={chip} key={chip} />
+          ))}
+        </div>
+        <dl className="mt-v75-detail-receipt" aria-label="Detail receipt facts">
+          <div>
+            <dt>State</dt>
+            <dd>{receipt.source}</dd>
+          </div>
+          <div>
+            <dt>Exposure</dt>
+            <dd>{receipt.exposure}</dd>
+          </div>
+          <div>
+            <dt>Condition</dt>
+            <dd>{receipt.conditionOrProtection}</dd>
+          </div>
+          <div>
+            <dt>Protection</dt>
+            <dd>{receipt.protection}</dd>
+          </div>
+        </dl>
+        <div className="mt-v75-detail-actions">
+          <Link className="button button-primary" href={`${deal.href}#commitment-sheet`}>
+            Add to planner
+          </Link>
+          <Link className="button button-secondary" href={`${deal.href}#commitment-sheet`}>
+            Compare
+          </Link>
+          <Link className="button button-secondary" href="/saved-offers">
+            Save
+          </Link>
+        </div>
+      </div>
+      <div className="mt-v75-detail-info">
+        <section>
+          <h2>Overview</h2>
+          <p>{deal.actionDescription ?? "This route is reviewable only after current terms are checked."}</p>
+        </section>
+        <section>
+          <h2>Key details</h2>
+          <dl>
+            <div>
+              <dt>Your action</dt>
+              <dd>{deal.executionCondition ?? receipt.conditionOrProtection}</dd>
+            </div>
+            <div>
+              <dt>Charge timing</dt>
+              <dd>{deal.chargeTiming ?? "Not connected"}</dd>
+            </div>
+            <div>
+              <dt>Verification</dt>
+              <dd>{deal.verificationSummary ?? "Evidence required where backed"}</dd>
+            </div>
+            <div>
+              <dt>Recipient</dt>
+              <dd>{receipt.source}</dd>
+            </div>
+          </dl>
+        </section>
+        <details className="v72-explain-row mt-v75-unified-explain">
+          <summary>Requirements & rules</summary>
+          <p>
+            Effect on this action: Requires adapter recheck. This is context, not a verdict.
+          </p>
+        </details>
+      </div>
+    </article>
+  );
+}
+
+function QuickFilterRail({ deals }: { deals: readonly MarketplaceDeal[] }) {
+  const backedFilters = [
+    ["No charge now", deals.some((deal) => getDealReceiptAtom(deal).exposure === "No charge now")],
+    ["Review required", deals.some((deal) => reviewStatusLabel(deal.reviewStatus).includes("Review"))],
+    ["Verified recipient", deals.some((deal) => deal.reviewStatus === "verified_recipient")],
+    ["Evidence later", deals.some((deal) => Boolean(deal.verificationSummary))],
+    ["Low exposure", deals.some((deal) => (deal.userMaxExposureCents ?? 0) <= 2_500)],
+  ] as const;
+
+  return (
+    <aside className="mt-v75-quick-rail" aria-label="Quick filters">
+      <div className="mt-v75-rail-head">
+        <strong>Quick filters</strong>
+        <Link href="/offers">Clear all</Link>
+      </div>
+      {backedFilters.map(([label, available]) => (
+        <Link
+          className={joinClassName(["mt-v75-quick-link", !available && "is-muted"])}
+          href="/offers"
+          key={label}
+        >
+          <IconMark name={label.includes("Evidence") ? "evidence" : label.includes("Verified") ? "safety" : "source"} />
+          <span>{label}</span>
+          <small>{available ? "Backed" : "Unavailable"}</small>
+        </Link>
+      ))}
+      <div className="mt-v75-rail-sort">
+        <span>Sort by</span>
+        <strong>Relevance</strong>
+      </div>
+    </aside>
+  );
+}
+
+function PlannerTray({ deals }: { deals: readonly MarketplaceDeal[] }) {
+  const selectedDeals = deals.slice(0, 3);
+  const exposureTotal = selectedDeals.reduce((sum, deal) => sum + (deal.userMaxExposureCents ?? 0), 0);
+
+  return (
+    <section className="mt-v75-planner-tray" aria-labelledby="mt-v75-planner-heading">
+      <div className="mt-v75-tray-head">
+        <div>
+          <h2 id="mt-v75-planner-heading">
+            {selectedDeals.length ? `${selectedDeals.length} in planner preview` : "Planner preview"}
+          </h2>
+          <p>Compare exposure, timing, and terms before confirming.</p>
+        </div>
+        <Link href="/saved-offers">View planner</Link>
+      </div>
+      <div className="mt-v75-planner-list">
+        {selectedDeals.length ? (
+          selectedDeals.map((deal) => {
+            const receipt = getDealReceiptAtom(deal);
+
+            return (
+              <div className="mt-v75-planner-row" key={deal.id}>
+                <DealSemanticVisual deal={deal} />
+                <div>
+                  <strong>{deal.title}</strong>
+                  <span>{receipt.state} · {receipt.conditionOrProtection}</span>
+                </div>
+                <em>{getDealAmountLabel(deal)}</em>
+              </div>
+            );
+          })
+        ) : (
+          <p>No planner rows. Browse offers to select reviewable items.</p>
+        )}
+      </div>
+      <dl className="mt-v75-planner-summary">
+        <div>
+          <dt>Total exposure</dt>
+          <dd>{exposureTotal ? centsToV72Exposure(exposureTotal).replace("Max ", "") : "$0.00"}</dd>
+        </div>
+        <div>
+          <dt>Charged now</dt>
+          <dd>$0.00</dd>
+        </div>
+        <div>
+          <dt>Next step</dt>
+          <dd>Review details, add evidence preferences, then confirm.</dd>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
+export function ReviewPlanPanel({ deal }: { deal: MarketplaceDeal }) {
+  const receipt = getDealReceiptAtom(deal);
+  const amountLabel = getDealAmountLabel(deal);
+
+  return (
+    <aside className="mt-v75-review-panel" aria-labelledby="mt-v75-review-heading">
+      <div className="mt-v75-review-head">
+        <h2 id="mt-v75-review-heading">Review your plan</h2>
+        <Link aria-label="Back to offers" href="/offers">x</Link>
+      </div>
+      <div className="mt-v75-review-summary">
+        <DealSemanticVisual deal={deal} />
+        <div>
+          <strong>{deal.title}</strong>
+          <span>{receipt.exposure} · No charge now</span>
+        </div>
+      </div>
+      <section className="mt-v75-amount-stepper" aria-label="Amount preview">
+        <span>Amount (preview)</span>
+        <div>
+          <button aria-label="Decrease preview amount" type="button">-</button>
+          <strong>{amountLabel}</strong>
+          <button aria-label="Increase preview amount" type="button">+</button>
+        </div>
+      </section>
+      <section className="mt-v75-review-card">
+        <h3>What happens</h3>
+        <ul>
+          <li>Review current terms</li>
+          <li>Upload evidence only if required</li>
+          <li>Human review runs where backed</li>
+          <li>No commitment was created in this preview</li>
+        </ul>
+      </section>
+      <section className="mt-v75-review-card">
+        <h3>Price & exposure</h3>
+        <dl>
+          <div>
+            <dt>You commit</dt>
+            <dd>{amountLabel}</dd>
+          </div>
+          <div>
+            <dt>Potential max exposure</dt>
+            <dd>{receipt.exposure}</dd>
+          </div>
+          <div>
+            <dt>Charged now</dt>
+            <dd>$0.00</dd>
+          </div>
+          <div>
+            <dt>Moves if cleared</dt>
+            <dd>{receipt.state === "Live" ? "Review required" : "No"}</dd>
+          </div>
+        </dl>
+      </section>
+      <section className="mt-v75-review-card">
+        <h3>Your methods</h3>
+        <dl>
+          <div>
+            <dt>Pay-in authorization</dt>
+            <dd>Not connected</dd>
+          </div>
+          <div>
+            <dt>Payout (if any)</dt>
+            <dd>Not needed for this preview</dd>
+          </div>
+        </dl>
+      </section>
+      <Link className="button button-primary" href={deal.href}>
+        {receipt.primaryCta}
+        <span>No commitment created yet</span>
+      </Link>
+    </aside>
+  );
 }
 
 const FILTER_GROUPS = [
@@ -342,15 +836,21 @@ export function PledgeFundingSheet({ round }: { round: PledgeFundingRound }) {
   );
 }
 
-export function MarketplaceSearch({ query }: { query: string }) {
+export function MarketplaceSearch({
+  inputId = "marketplace-search-input",
+  query,
+}: {
+  inputId?: string;
+  query: string;
+}) {
   return (
-    <form action="/offers" className="moral-marketplace-search" role="search">
-      <label className="sr-only" htmlFor="marketplace-search-input">
+    <form action="/offers" className="moral-marketplace-search" method="get" role="search">
+      <label className="sr-only" htmlFor={inputId}>
         Search marketplace
       </label>
       <input
         defaultValue={query}
-        id="marketplace-search-input"
+        id={inputId}
         name="search"
         placeholder="Search causes, templates, rounds"
         type="search"
@@ -799,9 +1299,84 @@ export function MarketplaceHome({
 
     return category.availabilityLabel !== "Unavailable" || category.key === surface.activeCategory;
   });
+  const primaryDeal = visibleDeals[0] ?? null;
+  const secondaryDeals = visibleDeals.slice(1, 5);
+  const tabLinks = [
+    ["For you", buildMarketplaceHref({ query: surface.query })],
+    ["Offers", "/offers?tab=live"],
+    ["Templates", "/offers?tab=templates"],
+    ["Public goods", "/mpgf"],
+    ["Swaps", buildMarketplaceHref({ category: "cross_view_swaps", query: surface.query })],
+    ["Offsets", buildMarketplaceHref({ category: "offset_trades", query: surface.query })],
+  ] as const;
 
   return (
     <section className="moral-marketplace-home" aria-labelledby="moral-marketplace-heading">
+      <div className="mt-v75-desktop-board" aria-label="Moral Trade marketplace desktop">
+        <MarketplaceSideNav active="browse" />
+        <div className="mt-v75-workspace">
+          <div className="mt-v75-toolbar">
+            <MarketplaceSearch inputId="marketplace-desktop-search-input" query={surface.query} />
+            <Link className="mt-v75-bell" href="/messages" aria-label="Lifecycle updates">
+              <IconMark name="review" />
+            </Link>
+          </div>
+          <nav className="mt-v75-tabs" aria-label="Marketplace tabs">
+            {tabLinks.map(([label, href], index) => (
+              <Link aria-current={index === 0 ? "page" : undefined} href={href} key={label}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-v75-browse-grid">
+            <main className="mt-v75-browse-main">
+              <div className="mt-v75-safety-strip">
+                <IconMark name="safety" />
+                <div>
+                  <strong>Preview only until you confirm</strong>
+                  <span>No commitment · No charge · You review every detail</span>
+                </div>
+                <Link href="/what-is-moral-trade">Learn how</Link>
+              </div>
+              <div className="mt-v75-filter-row" aria-label="Compact filters">
+                {[
+                  ["All", buildMarketplaceHref({ query: surface.query })],
+                  ["Health", buildMarketplaceHref({ filters: ["requires_evidence"], query: surface.query })],
+                  ["Animals", buildMarketplaceHref({ category: "pledge_funding_rounds", query: surface.query })],
+                  ["Environment", buildMarketplaceHref({ category: "offset_trades", query: surface.query })],
+                  ["AI Safety", buildMarketplaceHref({ category: "public_goods_rounds", query: surface.query })],
+                ].map(([label, href], index) => (
+                  <Link aria-current={index === 0 ? "true" : undefined} href={href} key={label}>
+                    {label}
+                  </Link>
+                ))}
+                <Link className="mt-v75-filter-more" href={openFilterHref}>
+                  More <IconMark name="source" />
+                </Link>
+              </div>
+              {primaryDeal ? (
+                <FeaturedDealCard deal={primaryDeal} />
+              ) : (
+                <div className="empty-state marketplace-empty-state">
+                  <div>
+                    <strong>No reliable public listings match.</strong>
+                    <p>{surface.emptyState ?? "No live offers yet. Reviewed templates and examples remain available."}</p>
+                    <Link className="button button-primary" href={buildMarketplaceHref({})}>
+                      Browse offers
+                    </Link>
+                  </div>
+                </div>
+              )}
+              <div className="mt-v75-secondary-grid">
+                {secondaryDeals.map((deal) => (
+                  <MiniDealTile deal={deal} key={deal.id} />
+                ))}
+              </div>
+            </main>
+            <QuickFilterRail deals={visibleDeals} />
+          </div>
+        </div>
+      </div>
       <div className="moral-marketplace-app-header">
         <div className="moral-marketplace-title-block">
           <span className="moral-marketplace-brand">Moral Trade</span>
@@ -967,13 +1542,18 @@ export function MarketplaceHome({
   );
 }
 
-export function MarketplaceBottomNav({ active = "browse" }: { active?: "browse" | "plan" | "create" | "track" | "account" }) {
+export function MarketplaceBottomNav({
+  active = "browse",
+}: {
+  active?: "browse" | "plan" | "create" | "track" | "messages" | "profile" | "account";
+}) {
+  const normalizedActive = active === "account" ? "profile" : active;
   const items = [
     { key: "browse", href: "/offers", label: "Browse", icon: "marketplace" },
     { key: "plan", href: "/saved-offers", label: "Plan", icon: "example" },
-    { key: "create", href: "/create", label: "Create", icon: "payment" },
     { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
-    { key: "account", href: "/dashboard", label: "Account", icon: "profile" },
+    { key: "messages", href: "/messages", label: "Messages", icon: "review" },
+    { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
@@ -983,8 +1563,7 @@ export function MarketplaceBottomNav({ active = "browse" }: { active?: "browse" 
           aria-current={active === item.key ? "page" : undefined}
           className={joinClassName([
             "marketplace-bottom-nav-item",
-            active === item.key && "is-active",
-            item.key === "create" && "is-create",
+            normalizedActive === item.key && "is-active",
           ])}
           href={item.href}
           key={item.key}

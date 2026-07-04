@@ -21,9 +21,9 @@ import {
   CommitmentSheet,
   CommitmentTermsPanel,
   CompatibleAdditions,
-  DealEconomicsPanel,
+  DealDetailObject,
   MarketplaceBottomNav,
-  MoralDealCard,
+  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
 import {
   getInterestForOffer,
@@ -568,10 +568,10 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         ) : null}
 
-        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-heading">
+        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-section-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Marketplace terms</p>
-            <h2 id="marketplace-detail-heading">Commitment preview</h2>
+            <h2 id="marketplace-detail-section-heading">Commitment preview</h2>
             <p>
               The marketplace view puts exposure, timing, verification, and failure rules before
               the full review dossier. It does not bypass the existing response, payment, or review
@@ -579,9 +579,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             </p>
           </div>
           <div className="marketplace-detail-grid">
-            <MoralDealCard deal={marketplaceDeal} variant="detail" />
+            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" />
             <div className="marketplace-detail-side">
-              <DealEconomicsPanel deal={marketplaceDeal} />
+              <ReviewPlanPanel deal={marketplaceDeal} />
               <CommitmentSheet
                 commitHref={commitmentHref}
                 deal={marketplaceDeal}

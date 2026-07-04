@@ -5,9 +5,11 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   CommitmentSheet,
+  DealDetailObject,
   MarketplaceBottomNav,
+  ReviewPlanPanel,
 } from "@/components/marketplace/marketplace-components";
-import { Breadcrumbs, IconMark } from "@/components/ui/page-primitives";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import { marketplaceDealFromWorkedOffer } from "@/lib/marketplace-deals";
 import { formatMode } from "@/lib/offers";
@@ -204,47 +206,12 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               Back to offers
             </Link>
           </div>
-          <article className="v72-decision-block panel">
-            <div className="v72-decision-main">
-              <span
-                aria-label={`${formatMode(offer.mode)} semantic visual for worked example`}
-                className={`moral-deal-visual moral-deal-visual-${offer.mode === "offset" ? "offset-trade" : offer.mode === "payment" ? "action-for-donation" : "cross-view-donation-swap"} is-example`}
-                role="img"
-              >
-                <IconMark name={offer.mode === "offset" ? "offset" : offer.mode === "payment" ? "payment" : "swap"} />
-              </span>
-              <div>
-                <p className="detail-kicker">Worked example · Example</p>
-                <h1 id="worked-example-decision-heading">{title}</h1>
-                <p>
-                  Non-live example with term structure, evidence rule, and review state visible
-                  before any draft is created.
-                </p>
-              </div>
+          <div className="marketplace-detail-grid">
+            <DealDetailObject deal={marketplaceDeal} headingId="worked-example-decision-heading" />
+            <div className="marketplace-detail-side">
+              <ReviewPlanPanel deal={marketplaceDeal} />
             </div>
-            <dl className="v72-receipt-facts v72-economics-band">
-              <div>
-                <dt>State</dt>
-                <dd>Example</dd>
-              </div>
-              <div>
-                <dt>Exposure</dt>
-                <dd>Preview only</dd>
-              </div>
-              <div>
-                <dt>Condition</dt>
-                <dd>No commitment</dd>
-              </div>
-            </dl>
-            <div className="v72-trust-strip" aria-label="Trust facts">
-              <span>No commitment will be created</span>
-              <span>Manual review before reliance</span>
-            </div>
-            <div className="moral-deal-chip-row" aria-label="Real option chips">
-              <span className="source-pill">{formatMode(offer.mode)}</span>
-              <span className="source-pill">{offer.verification}</span>
-            </div>
-          </article>
+          </div>
           <div className="v72-sticky-footer panel">
             <span>Example · Preview only · No commitment</span>
             <CommitmentSheet
