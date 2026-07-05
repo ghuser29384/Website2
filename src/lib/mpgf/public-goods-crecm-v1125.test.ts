@@ -8,6 +8,7 @@ import {
   MPGF_PUBLIC_GOODS_CRECM_V1125_PLAIN_STANCE_TO_CANONICAL_STANCE,
   allocateMpgfCrecBonusMatchByScoreUnits,
   buildMpgfCrecBonusScoreHash,
+  buildMpgfCrecConflictReviewHash,
   buildMpgfCrecContributorBenefitContextHash,
   buildMpgfCrecCoordinationCreditLedgerEntryHash,
   buildMpgfCrecDeploymentAuditHash,
@@ -25,19 +26,27 @@ import {
   buildMpgfCrecRoundClearingInputBundleHash,
   buildMpgfCrecRoundCloseBundleRowUniquenessHash,
   buildMpgfCrecRoundMoralBucketSnapshotHash,
+  buildMpgfCrecRoundSponsorPoolStateHash,
   buildMpgfCrecStage7FailureHandlingNonSideEffectOutput,
   buildMpgfCrecSuccessRewardClaimHash,
   buildMpgfCrecV1125ClearingContractSummary,
   capMpgfCrecDeploymentGrossExposure,
+  computeMpgfCrecBonusScoreUnits,
   createMpgfCrecFailureBonusClaim,
+  evaluateMpgfCrecConflictReviewGate,
   evaluateMpgfCrecContributorBenefitEligibility,
   evaluateMpgfCrecCounterpartyVolumeSatisfaction,
   evaluateMpgfCrecFailureBonusEligibility,
   evaluateMpgfCrecNetPublicGoodSupporterBreadth,
   evaluateMpgfCrecProjectHardGate,
+  evaluateMpgfCrecRoundSponsorPoolStateGate,
   evaluateMpgfCrecRoundStatusGate,
   evaluateMpgfCrecStage7FallbackExecutionGate,
   evaluateMpgfCrecSuccessRewardClaim,
+  fixedSqrtMpgfCrecBonusScore,
+  fixedSquareMpgfCrecBonusScore,
+  fixedSubtractMpgfCrecBonusScore,
+  fixedSumMpgfCrecBonusScore,
   hashMpgfCrecV1125Value,
   intersectMpgfCrecTrimStableStringArrays,
   minMpgfCrecNonNegativeSafeInteger,
@@ -57,6 +66,7 @@ import {
   sumSelectedMpgfCrecSponsorPaidFeeSupportDemand,
   validateMpgfCrecAuthorizationReconciliationEvent,
   validateMpgfCrecCoordinationCreditLedgerEntry,
+  validateMpgfCrecCustodyAuthorizationForPayableRow,
   validateMpgfCrecDeploymentAudit,
   validateMpgfCrecFeeQuote,
   validateMpgfCrecFailureBonusClaimantConflictSnapshot,
@@ -73,8 +83,10 @@ import {
   validateMpgfCrecRoundMoralBucketSnapshot,
   normalizeMpgfCrecSupporterCountMinNetPublicGoodCents,
   type MpgfCrecAuthorizationReconciliationEvent,
+  type MpgfCrecConflictReview,
   type MpgfCrecContributorBenefitEligibilityInput,
   type MpgfCrecCoordinationCreditLedgerEntry,
+  type MpgfCrecCustodyAuthorization,
   type MpgfCrecDeploymentAudit,
   type MpgfCrecFailureBonusClaimRecord,
   type MpgfCrecFailureBonusClaimantConflictSnapshot,
@@ -88,6 +100,7 @@ import {
   type MpgfCrecRoundAuditBundle,
   type MpgfCrecRoundClearingInputBundle,
   type MpgfCrecRoundMoralBucketSnapshot,
+  type MpgfCrecRoundSponsorPoolRequirement,
   type MpgfCrecSponsorCommitment,
   type MpgfCrecSuccessRewardClaimInput,
 } from "./public-goods-crecm-v1125";
@@ -441,6 +454,16 @@ function sponsorCommitment(
   };
 }
 
+function requiredSponsorPools(
+  overrides: Partial<Record<MpgfCrecRoundSponsorPoolRequirement["poolType"], number>> = {},
+): MpgfCrecRoundSponsorPoolRequirement[] {
+  return [
+    { poolType: "base_match", requiredCents: overrides.base_match ?? 10_000 },
+    { poolType: "bonus_match", requiredCents: overrides.bonus_match ?? 8_000 },
+    { poolType: "failure_bonus", requiredCents: overrides.failure_bonus ?? 6_000 },
+  ];
+}
+
 function projectEligibilitySnapshot(
   overrides: Partial<MpgfCrecProjectRoundEligibilitySnapshot> = {},
 ): MpgfCrecProjectRoundEligibilitySnapshot {
@@ -498,6 +521,29 @@ function authorizationReconciliationEvent(
   return {
     ...base,
     eventHash: overrides.eventHash ?? buildMpgfCrecAuthorizationReconciliationEventHash(base),
+  };
+}
+
+function custodyAuthorization(
+  overrides: Partial<MpgfCrecCustodyAuthorization> = {},
+): MpgfCrecCustodyAuthorization {
+  return {
+    id: "auth-row-1",
+    roundId,
+    participantId,
+    projectId,
+    provider: "stripe",
+    providerRef: "pi_authorized_123",
+    requiredAmountCents: 1_000,
+    authorizedAmountCents: 1_000,
+    capturedAmountCents: 0,
+    expectedCaptureBy: "2026-05-19T00:00:00.000Z",
+    authExpiresAt: "2026-05-20T00:00:00.000Z",
+    authorizationAttemptedAt: "2026-05-14T00:05:00.000Z",
+    authorizationFailureReason: null,
+    clearingIteration: 1,
+    custodyState: "authorized",
+    ...overrides,
   };
 }
 
@@ -754,6 +800,52 @@ function projectHardGateInput(
     actionEvidenceState: "adequate",
     ...overrides,
   };
+}
+
+const requiredConflictReviewObjectRefs = [
+  { objectType: "recipient" as const, objectId: "recipient-clean-air-fund" },
+  { objectType: "sponsor" as const, objectId: "sponsor-pluralist-match-pool" },
+  { objectType: "reviewer" as const, objectId: "reviewer-neutral-panel-1" },
+  { objectType: "proposer" as const, objectId: "proposer-clean-air-team" },
+  { objectType: "fiscal_host" as const, objectId: "fiscal-host-clean-air-fund" },
+];
+
+function conflictReview(
+  overrides: Partial<MpgfCrecConflictReview> = {},
+): MpgfCrecConflictReview {
+  const base: Omit<MpgfCrecConflictReview, "reviewHash"> = {
+    id: `conflict-review-${overrides.objectType ?? "recipient"}`,
+    objectType: overrides.objectType ?? "recipient",
+    objectId: overrides.objectId ?? "recipient-clean-air-fund",
+    roundId,
+    conflictState: overrides.conflictState ?? "clear",
+    reviewerId: "reviewer-neutral-panel-1",
+    publicSummary: "No disqualifying conflict found.",
+    reviewedAt: parametersFrozenAt,
+  };
+  const reviewWithoutHash = {
+    ...base,
+    ...overrides,
+  };
+
+  return {
+    ...reviewWithoutHash,
+    reviewHash: overrides.reviewHash ?? buildMpgfCrecConflictReviewHash(reviewWithoutHash),
+  };
+}
+
+function requiredConflictReviews(
+  overridesByObjectType: Partial<Record<MpgfCrecConflictReview["objectType"], Partial<MpgfCrecConflictReview>>> = {},
+) {
+  return requiredConflictReviewObjectRefs.map((ref) =>
+    conflictReview({
+      objectType: ref.objectType,
+      objectId: ref.objectId,
+      conflictState: ref.objectType === "sponsor" ? "disclosed_nonblocking" : "clear",
+      publicSummary: ref.objectType === "sponsor" ? "Sponsor connection disclosed and nonblocking." : "No disqualifying conflict found.",
+      ...overridesByObjectType[ref.objectType],
+    }),
+  );
 }
 
 function failureBonusInput(
@@ -1640,6 +1732,68 @@ test("CRECM v1.125 project hard gates separate binding evidence clearance from s
   assert.equal(blockedShadow.eligible, false);
   assert.equal(blockedShadow.shadowOnlyProvisionalLearningAllowed, false);
   assert.ok(blockedShadow.blockers.includes("project_hard_gate_externality_not_clear"));
+});
+
+test("CRECM v1.125 conflict reviews cover fiscal hosts before payable state", () => {
+  const reviews = requiredConflictReviews();
+  const gate = evaluateMpgfCrecConflictReviewGate({
+    roundId,
+    requiredObjectRefs: requiredConflictReviewObjectRefs,
+    conflictReviews: reviews,
+  });
+
+  assert.equal(gate.eligible, true);
+  assert.equal(gate.payableAllowed, true);
+  assert.deepEqual(gate.checkedObjectTypes, [
+    "recipient",
+    "sponsor",
+    "reviewer",
+    "proposer",
+    "fiscal_host",
+  ]);
+  assert.deepEqual(gate.missingObjectTypes, []);
+  assert.deepEqual(gate.blockingObjectTypes, []);
+
+  const missingFiscalHost = evaluateMpgfCrecConflictReviewGate({
+    roundId,
+    requiredObjectRefs: requiredConflictReviewObjectRefs,
+    conflictReviews: reviews.filter((review) => review.objectType !== "fiscal_host"),
+  });
+
+  assert.equal(missingFiscalHost.eligible, false);
+  assert.equal(missingFiscalHost.payableAllowed, false);
+  assert.deepEqual(missingFiscalHost.missingObjectTypes, ["fiscal_host"]);
+  assert.ok(missingFiscalHost.blockers.includes("conflict_review_fiscal_host_missing"));
+
+  const blockedFiscalHost = evaluateMpgfCrecConflictReviewGate({
+    roundId,
+    requiredObjectRefs: requiredConflictReviewObjectRefs,
+    conflictReviews: requiredConflictReviews({ fiscal_host: { conflictState: "blocked" } }),
+  });
+
+  assert.equal(blockedFiscalHost.eligible, false);
+  assert.deepEqual(blockedFiscalHost.blockingObjectTypes, ["fiscal_host"]);
+  assert.ok(blockedFiscalHost.blockers.includes("conflict_review_fiscal_host_blocked"));
+
+  const staleHash = evaluateMpgfCrecConflictReviewGate({
+    roundId,
+    requiredObjectRefs: requiredConflictReviewObjectRefs,
+    conflictReviews: requiredConflictReviews({ fiscal_host: { reviewHash: h("stale-conflict-review") } }),
+  });
+
+  assert.equal(staleHash.eligible, false);
+  assert.ok(staleHash.blockers.includes("conflict_review_4_hash_mismatch"));
+
+  const malformedObjectType = evaluateMpgfCrecConflictReviewGate({
+    roundId,
+    requiredObjectRefs: [
+      { objectType: "fiscal-host" as MpgfCrecConflictReview["objectType"], objectId: "fiscal-host-clean-air-fund" },
+    ],
+    conflictReviews: reviews,
+  });
+
+  assert.equal(malformedObjectType.eligible, false);
+  assert.ok(malformedObjectType.blockers.includes("conflict_review_required_ref_0_invalid"));
 });
 
 test("CRECM v1.125 fail-closed helpers reject malformed payout and counterparty inputs", () => {
@@ -2914,6 +3068,126 @@ test("CRECM v1.125 authorization reconciliation events bind row identity, amount
   assert.equal(staleHashResult.eligible, false);
   assert.ok(staleHashResult.blockers.includes("authorization_reconciliation_state_amounts_invalid"));
   assert.ok(staleHashResult.blockers.includes("authorization_reconciliation_event_hash_mismatch"));
+
+  const custody = custodyAuthorization();
+  const custodyResult = validateMpgfCrecCustodyAuthorizationForPayableRow(custody, {
+    roundId,
+    participantId,
+    projectId,
+    requiredAmountCents: 1_000,
+    clearingIteration: 1,
+  });
+
+  assert.equal(custodyResult.eligible, true);
+  assert.equal(custodyResult.payableRowKept, true);
+  assert.equal(custodyResult.reclearingRequired, false);
+  assert.equal(custodyResult.custodyAuthorizationId, "auth-row-1");
+
+  const wrongRow = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ participantId: "participant-other" }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(wrongRow.eligible, false);
+  assert.equal(wrongRow.payableRowKept, false);
+  assert.equal(wrongRow.reclearingRequired, true);
+  assert.ok(wrongRow.blockers.includes("custody_authorization_wrong_participant"));
+
+  const weakIdentifier = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ providerRef: " pi_authorized_123" }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(weakIdentifier.eligible, false);
+  assert.ok(weakIdentifier.blockers.includes("custody_authorization_provider_ref_invalid"));
+
+  const wrongAmount = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ authorizedAmountCents: 900 }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(wrongAmount.eligible, false);
+  assert.ok(wrongAmount.blockers.includes("custody_authorization_exact_amount_not_covered"));
+
+  const overAuthorized = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ authorizedAmountCents: 1_100 }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(overAuthorized.eligible, false);
+  assert.ok(overAuthorized.blockers.includes("custody_authorization_exact_amount_not_covered"));
+
+  const alreadyCaptured = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ capturedAmountCents: 1 }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(alreadyCaptured.eligible, false);
+  assert.ok(alreadyCaptured.blockers.includes("custody_authorization_already_captured_before_capture"));
+
+  const invalidProvider = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ provider: "bank_wire" as MpgfCrecCustodyAuthorization["provider"] }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(invalidProvider.eligible, false);
+  assert.ok(invalidProvider.blockers.includes("custody_authorization_provider_invalid"));
+
+  const nonAuthorized = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ custodyState: "captured" }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(nonAuthorized.eligible, false);
+  assert.ok(nonAuthorized.blockers.includes("custody_authorization_state_not_authorized"));
+
+  const shortCustodyExpiry = validateMpgfCrecCustodyAuthorizationForPayableRow(
+    custodyAuthorization({ authExpiresAt: "2026-05-18T00:00:00.000Z" }),
+    {
+      roundId,
+      participantId,
+      projectId,
+      requiredAmountCents: 1_000,
+      clearingIteration: 1,
+    },
+  );
+  assert.equal(shortCustodyExpiry.eligible, false);
+  assert.ok(shortCustodyExpiry.blockers.includes("custody_authorization_short_expiry"));
 });
 
 test("CRECM v1.125 fee quotes bind fee policy hash and net-recipient accounting", () => {
@@ -3204,6 +3478,92 @@ test("CRECM v1.125 optimization traces bind Stage 3 coalition-clearing evidence"
   assert.ok(
     staleRewardInputResult.blockers.includes("optimization_trace_wrong_success_reward_input_hash"),
   );
+});
+
+test("CRECM v1.125 computes bonus score units with deterministic fixed-point QF primitives", () => {
+  const fixedNineHundredCents = BigInt(900) * BigInt(10) ** BigInt(12);
+  const qfRoot = fixedSqrtMpgfCrecBonusScore(fixedNineHundredCents);
+  const qfRaw = fixedSquareMpgfCrecBonusScore(qfRoot);
+
+  assert.equal(qfRoot.toString(), "30000000000000");
+  assert.equal(qfRaw.toString(), fixedNineHundredCents.toString());
+  assert.equal(
+    fixedSubtractMpgfCrecBonusScore(
+      fixedSumMpgfCrecBonusScore([BigInt(2), BigInt(3)]),
+      BigInt(4),
+    ).toString(),
+    "1",
+  );
+
+  const computed = computeMpgfCrecBonusScoreUnits({
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    projectId,
+    matchEligibleCents: 900,
+    supportStance: "strong",
+    clusterShareFixedValues: ["0.500000000000", "0.500000000000"],
+    reviewPressureSignalCount: 0,
+    reviewPressureThreshold: 10,
+    collusionRiskFixed: "0.000000000000",
+  });
+
+  assert.equal(computed.eligible, true);
+  assert.equal(computed.effectiveContributionFixed, "900.000000000000");
+  assert.equal(computed.qfRootFixed, "30.000000000000");
+  assert.equal(computed.qfRawScoreFixed, "900.000000000000");
+  assert.equal(computed.stanceWeightFixed, "1.000000000000");
+  assert.equal(computed.diversityFixed, "0.500000000000");
+  assert.equal(computed.dissentPressureFixed, "0.000000000000");
+  assert.equal(computed.collusionRiskFixed, "0.000000000000");
+  assert.equal(computed.collusionDiscountFixed, "1.000000000000");
+  assert.equal(computed.adjustedScoreFixed, "990.000000000000");
+  assert.equal(computed.bonusScoreUnits, "990000000000000");
+  assert.match(computed.scoreInputHash ?? "", /^sha256:/);
+});
+
+test("CRECM v1.125 bonus score-unit construction sanitizes risky fixed-point inputs before scoring", () => {
+  const computed = computeMpgfCrecBonusScoreUnits({
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    projectId,
+    matchEligibleCents: 100,
+    supportStance: "weak",
+    clusterShareFixedValues: ["0.750000000000", "0.750000000000"],
+    reviewPressureSignalCount: 1,
+    reviewPressureThreshold: 0,
+    collusionRiskFixed: "not-fixed-decimal",
+  });
+
+  assert.equal(computed.eligible, true);
+  assert.equal(computed.stanceWeightFixed, "0.600000000000");
+  assert.equal(computed.diversityFixed, "0.000000000000");
+  assert.equal(computed.dissentPressureFixed, "1.000000000000");
+  assert.equal(computed.collusionRiskFixed, "1.000000000000");
+  assert.equal(computed.collusionDiscountFixed, "0.500000000000");
+  assert.equal(computed.adjustedScoreFixed, "24.000000000000");
+  assert.equal(computed.bonusScoreUnits, "24000000000000");
+  assert.ok(
+    computed.sanitizedRowCodes.includes("bonus_cluster_share_distribution_invalid_zero_diversity"),
+  );
+  assert.ok(computed.sanitizedRowCodes.includes("bonus_review_pressure_threshold_invalid_guarded"));
+  assert.ok(computed.sanitizedRowCodes.includes("bonus_collusion_risk_invalid_maximum_risk"));
+
+  const blocked = computeMpgfCrecBonusScoreUnits({
+    calculationVersion: "crecm-v1.125-fixed-point-bonus",
+    projectId,
+    matchEligibleCents: 0,
+    supportStance: "strong",
+    clusterShareFixedValues: ["1.000000000000"],
+    reviewPressureSignalCount: 0,
+    reviewPressureThreshold: 1,
+    collusionRiskFixed: "0.000000000000",
+  });
+
+  assert.equal(blocked.eligible, false);
+  assert.equal(blocked.bonusScoreUnits, "0");
+  assert.ok(blocked.blockers.includes("bonus_score_match_eligible_cents_invalid"));
+
+  const source = readFileSync("src/lib/mpgf/public-goods-crecm-v1125.ts", "utf8");
+  assert.doesNotMatch(source, /Math\.(sqrt|pow)/);
+  assert.doesNotMatch(source, /\bstanceWeights?\b/);
 });
 
 test("CRECM v1.125 bonus match allocates from canonical integer score units with exact caps", () => {
@@ -3605,6 +3965,93 @@ test("CRECM v1.125 sponsor backing filters frozen commitments by round, pool, so
   assert.ok(lateResult.blockers.includes("sponsor_commitment_0_invalid"));
 });
 
+test("CRECM v1.125 round sponsor state is derived from pool-specific backing and gates clearing with project compatibility", () => {
+  const sponsorCommitments = [
+    sponsorCommitment({
+      id: "sponsor-base-funded",
+      poolType: "base_match",
+      commitmentState: "funded",
+      fundedCents: 10_000,
+      committedCents: 10_000,
+    }),
+    sponsorCommitment({
+      id: "sponsor-bonus-escrowed",
+      poolType: "bonus_match",
+      commitmentState: "escrowed",
+      fundedCents: 8_000,
+      committedCents: 8_000,
+    }),
+    sponsorCommitment({
+      id: "sponsor-failure-contractual",
+      poolType: "failure_bonus",
+      commitmentState: "contractually_committed",
+      fundedCents: 0,
+      committedCents: 6_000,
+    }),
+  ];
+  const requiredPools = requiredSponsorPools();
+  const gateInput = {
+    roundId,
+    sponsorPoolSourceHash: sourceHash,
+    parametersFrozenAt,
+    opensAt,
+    clearingBundleEligible: true,
+    sponsorCommitments,
+    requiredPools,
+  };
+  const roundSponsorGate = evaluateMpgfCrecRoundSponsorPoolStateGate(gateInput);
+  const projectGate = evaluateMpgfCrecProjectHardGate(projectHardGateInput());
+
+  assert.equal(roundSponsorGate.eligible, true);
+  assert.equal(roundSponsorGate.roundSponsorPoolState, "contractually_committed");
+  assert.deepEqual(roundSponsorGate.blockers, []);
+  assert.equal(roundSponsorGate.poolResults.length, 3);
+  assert.equal(roundSponsorGate.roundSponsorPoolStateHash, buildMpgfCrecRoundSponsorPoolStateHash({
+    roundId,
+    sponsorPoolSourceHash: sourceHash,
+    parametersFrozenAt,
+    opensAt,
+    clearingBundleEligible: true,
+    requiredPools,
+    poolResults: roundSponsorGate.poolResults,
+    roundSponsorPoolState: "contractually_committed",
+  }));
+  assert.equal(projectGate.eligible && roundSponsorGate.eligible, true);
+
+  const incompatibleProject = evaluateMpgfCrecProjectHardGate(
+    projectHardGateInput({ sponsorCompatibilityState: "blocked" }),
+  );
+  assert.equal(incompatibleProject.eligible, false);
+  assert.equal(roundSponsorGate.eligible, true);
+  assert.ok(incompatibleProject.blockers.includes("project_hard_gate_sponsor_not_compatible"));
+
+  const underbackedRound = evaluateMpgfCrecRoundSponsorPoolStateGate({
+    ...gateInput,
+    requiredPools: requiredSponsorPools({ bonus_match: 9_000 }),
+  });
+  assert.equal(underbackedRound.eligible, false);
+  assert.equal(underbackedRound.roundSponsorPoolState, "lost");
+  assert.ok(underbackedRound.blockers.includes("round_sponsor_pool_bonus_match_underbacked"));
+  assert.equal(projectGate.eligible, true);
+
+  const wrongRoundSponsor = evaluateMpgfCrecRoundSponsorPoolStateGate({
+    ...gateInput,
+    sponsorCommitments: [
+      sponsorCommitment({
+        id: "sponsor-base-wrong-round",
+        roundId: "other-round",
+        poolType: "base_match",
+        fundedCents: 20_000,
+        committedCents: 20_000,
+      }),
+      sponsorCommitments[1],
+      sponsorCommitments[2],
+    ],
+  });
+  assert.equal(wrongRoundSponsor.eligible, false);
+  assert.ok(wrongRoundSponsor.blockers.includes("round_sponsor_pool_base_match_underbacked"));
+});
+
 test("CRECM v1.125 failure-bonus claimant conflict snapshots bind the exact payout context", () => {
   const validSnapshot = failureBonusClaimantConflictSnapshot();
   const expected = {
@@ -3904,6 +4351,83 @@ test("CRECM v1.125 Stage 7 fallback execution requires bound user-consented rows
   assert.deepEqual(validReleaseHold.allowedExecutableFallbackRules, ["release_hold"]);
   assert.equal(validReleaseHold.releaseCancelNoCaptureOnly, false);
   assert.equal(validReleaseHold.freshConsentRequired, false);
+
+  const validReroute = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "reroute",
+    budgetFallbackRule: "reroute",
+    conditionalIntentFallbackRule: "reroute",
+    fallbackRuleUserConsented: true,
+    fallbackRulebookTermsUnchanged: true,
+    fallbackRecipientTermsUnchanged: true,
+    fallbackBucketTermsUnchanged: true,
+    fallbackCounterpartyTermsUnchanged: true,
+    fallbackExposureTermsUnchanged: true,
+  });
+
+  assert.equal(validReroute.eligible, true);
+  assert.deepEqual(validReroute.allowedExecutableFallbackRules, ["reroute"]);
+
+  const changedRerouteTerms = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "reroute",
+    budgetFallbackRule: "reroute",
+    conditionalIntentFallbackRule: "reroute",
+    fallbackRuleUserConsented: true,
+    fallbackRulebookTermsUnchanged: true,
+    fallbackRecipientTermsUnchanged: false,
+    fallbackBucketTermsUnchanged: true,
+    fallbackCounterpartyTermsUnchanged: true,
+    fallbackExposureTermsUnchanged: true,
+  });
+
+  assert.equal(changedRerouteTerms.eligible, false);
+  assert.equal(changedRerouteTerms.selectedFallbackRule, null);
+  assert.equal(changedRerouteTerms.releaseCancelNoCaptureOnly, true);
+  assert.equal(changedRerouteTerms.freshConsentRequired, true);
+  assert.ok(
+    changedRerouteTerms.blockers.includes(
+      "stage7_fallback_recipient_terms_changed_requires_fresh_consent",
+    ),
+  );
+
+  const changedCarryForwardExposure = evaluateMpgfCrecStage7FallbackExecutionGate({
+    roundStatus: "payable",
+    selectedPublicGoodProjectRowCount: 1,
+    selectedCommonGroundBudgetRowCount: 1,
+    selectedConditionalTradeIntentRowCount: 1,
+    projectRowEligible: true,
+    commonGroundBudgetRowEligible: true,
+    conditionalIntentRowEligible: true,
+    requestedFallbackRule: "carry_forward",
+    budgetFallbackRule: "carry_forward",
+    conditionalIntentFallbackRule: "carry_forward",
+    fallbackRuleUserConsented: true,
+    fallbackRulebookTermsUnchanged: true,
+    fallbackRecipientTermsUnchanged: true,
+    fallbackBucketTermsUnchanged: true,
+    fallbackCounterpartyTermsUnchanged: true,
+    fallbackExposureTermsUnchanged: false,
+  });
+
+  assert.equal(changedCarryForwardExposure.eligible, false);
+  assert.ok(
+    changedCarryForwardExposure.blockers.includes(
+      "stage7_fallback_exposure_terms_changed_requires_fresh_consent",
+    ),
+  );
 
   const missingRows = evaluateMpgfCrecStage7FallbackExecutionGate({
     roundStatus: "payable",
@@ -4347,6 +4871,21 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
     true,
   );
   assert.equal(summary.projectHardGates.failureBonusEligibilityRequiresProjectHardGateHash, true);
+  assert.deepEqual(summary.conflictReviewGate.requiredObjectTypesBeforePayable, [
+    "recipient",
+    "sponsor",
+    "reviewer",
+    "proposer",
+    "fiscal_host",
+  ]);
+  assert.equal(summary.conflictReviewGate.fiscalHostObjectTypeRequired, true);
+  assert.deepEqual(summary.conflictReviewGate.clearOrDisclosedNonblockingStatesAllowed, [
+    "clear",
+    "disclosed_nonblocking",
+  ]);
+  assert.deepEqual(summary.conflictReviewGate.reviewOrBlockedStatesDenyPayable, ["review", "blocked"]);
+  assert.equal(summary.conflictReviewGate.reviewHashBindsRoundObjectStateReviewerAndSummary, true);
+  assert.equal(summary.conflictReviewGate.missingMalformedDuplicateOrWrongRoundReviewsDenyPayable, true);
   assert.deepEqual(summary.projectIdentityRouteGate.validGoodTypes, ["consensus", "hybrid"]);
   assert.deepEqual(summary.projectIdentityRouteGate.validDestinationTypes, [
     "registered_nonprofit",
@@ -4364,7 +4903,45 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   );
   assert.equal(summary.moralBucketSnapshot.liveBucketDistinctnessReadsAllowed, false);
   assert.equal(summary.sponsorBacking.filteredByRoundAndPoolType, true);
+  assert.deepEqual(summary.sponsorBacking.roundSponsorPoolStates, [
+    "unverified",
+    "funded",
+    "escrowed",
+    "contractually_committed",
+    "lost",
+    "blocked",
+  ]);
+  assert.deepEqual(summary.sponsorBacking.positiveRoundSponsorPoolStates, [
+    "funded",
+    "escrowed",
+    "contractually_committed",
+  ]);
+  assert.equal(summary.sponsorBacking.roundSponsorPoolStateDerivedFromPoolSpecificBacking, true);
+  assert.equal(summary.sponsorBacking.manualRoundSponsorStateCannotBypassPoolBacking, true);
+  assert.equal(summary.sponsorBacking.projectSponsorCompatibilityAndRoundSponsorStateBothGateClearing, true);
+  assert.equal(summary.sponsorBacking.roundStateCannotSubstituteForProjectSponsorCompatibility, true);
+  assert.equal(summary.sponsorBacking.projectCompatibilityCannotSubstituteForRoundSponsorState, true);
   assert.equal(summary.authorizationReconciliation.eventHashBindsRemovedRowIdentityAndAmounts, true);
+  assert.deepEqual(summary.authorizationReconciliation.custodyAuthorizationProviders, [
+    "stripe",
+    "fiscal_host",
+    "escrow_partner",
+    "manual_external",
+  ]);
+  assert.deepEqual(summary.authorizationReconciliation.custodyAuthorizationStates, [
+    "none",
+    "authorized",
+    "captured",
+    "released",
+    "expired",
+    "canceled",
+    "failed",
+  ]);
+  assert.equal(summary.authorizationReconciliation.payableCustodyAuthorizationRequiresCurrentRowBinding, true);
+  assert.equal(summary.authorizationReconciliation.payableCustodyAuthorizationRequiresAuthorizedState, true);
+  assert.equal(summary.authorizationReconciliation.payableCustodyAuthorizationRequiresExactAmountCoverage, true);
+  assert.equal(summary.authorizationReconciliation.payableCustodyAuthorizationRequiresCanonicalTiming, true);
+  assert.equal(summary.authorizationReconciliation.invalidCustodyAuthorizationRequiresRemovalAndReclearing, true);
   assert.equal(summary.optimizationRunTrace.bindingStage, "stage_3_coalition_clearing");
   assert.equal(summary.optimizationRunTrace.singleSelectedTracePerBundleVersionStageRequired, true);
   assert.equal(summary.optimizationRunTrace.rewardCreditCertificateInputHashesRequired, true);
@@ -4378,6 +4955,11 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.bonusScoreUnits.canonicalNonNegativeIntegerStringsRequired, true);
   assert.equal(summary.bonusScoreUnits.allocationUsesExactBigIntProration, true);
   assert.equal(summary.bonusScoreUnits.floatingQfAdjustedMayNotDeterminePayoutCents, true);
+  assert.equal(summary.bonusScoreUnits.qfRawScoreUsesFixedSqrtAndFixedSquare, true);
+  assert.equal(summary.bonusScoreUnits.fixedPointOperationsUseFixedSumAndFixedSubtract, true);
+  assert.equal(summary.bonusScoreUnits.invalidClusterSharesProduceZeroDiversity, true);
+  assert.equal(summary.bonusScoreUnits.invalidCollusionRiskProducesMaximumRisk, true);
+  assert.equal(summary.bonusScoreUnits.invalidReviewPressureThresholdUsesDenominatorGuard, true);
   assert.equal(summary.roundCloseBundleRowUniqueness.formulaLevelGuardsRequired, true);
   assert.deepEqual(summary.roundCloseBundleRowUniqueness.commonGroundBudgetKeys, [
     "(roundId,id)",
@@ -4440,6 +5022,13 @@ test("CRECM v1.125 rulebook summary names the executable contract predicates", (
   assert.equal(summary.conditionalIntentInputGating.fallbackRuleMustBeValidAndMatchBudget, true);
   assert.equal(summary.stage7FallbackExecution.projectBudgetAndIntentRowsMustBeUniqueAndEligible, true);
   assert.equal(summary.stage7FallbackExecution.executableFallbackRequiresRequestedBudgetAndIntentRuleMatch, true);
+  assert.deepEqual(summary.stage7FallbackExecution.rerouteAndCarryForwardRequireUnchangedPreConsentedTerms, [
+    "rulebook",
+    "recipient",
+    "bucket",
+    "counterparty",
+    "exposure",
+  ]);
   assert.equal(summary.stage7FallbackExecution.ineligibleFallbackFallsBackToReleaseCancelNoCaptureAndFreshConsent, true);
   assert.equal(summary.stage7FallbackExecution.syntheticReleaseHoldForbidden, true);
   assert.equal(
