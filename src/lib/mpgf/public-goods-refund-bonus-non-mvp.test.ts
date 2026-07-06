@@ -38,6 +38,7 @@ import {
   isRefundBonusReserveBacked,
   planRefundBonusSettlement,
   validateRefundBonusCopy,
+  type RefundBonusAuthorizationAttempt,
   type RefundBonusBonusEligibilitySnapshot,
   type RefundBonusFeaturePromotionRecord,
   type RefundBonusFeeQuote,
@@ -236,6 +237,23 @@ function pledge(
     bonusExposureReservedCents,
     createdAt: now,
     updatedAt: now,
+    ...overrides,
+  };
+}
+
+function authorizationAttempt(
+  overrides: Partial<RefundBonusAuthorizationAttempt> = {},
+): RefundBonusAuthorizationAttempt {
+  return {
+    id: "authorization-attempt-a",
+    roundId,
+    poolId,
+    pledgeId: "a",
+    participantId: "alice",
+    authorizationState: "authorized_exact",
+    requiredGrossCents: 2_500,
+    providerAuthorizationRef: "auth-a",
+    eventHash: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
     ...overrides,
   };
 }
@@ -514,6 +532,18 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
   }), round(), pool()), false);
   assert.equal(isRefundBonusReserveBacked(reserve({
     committedCents: 25_001,
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    roundId: "other-round",
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    poolId: "other-pool",
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    publishedAt: "2026-07-06T00:00:01.000Z",
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    backingConfirmedAt: "2026-07-06T00:00:01.000Z",
   }), round(), pool()), false);
   assert.equal(isRefundBonusReserveBacked(reserve({
     jurisdictionSet: [],
@@ -1002,14 +1032,7 @@ test("authorization and capture side effects are status-gated and exact authoriz
   });
   assert.equal(cleared.status, "cleared");
 
-  const exactAuthorization = {
-    pledgeId: "a",
-    authorizationState: "authorized_exact" as const,
-    requiredGrossCents: 2_500,
-    authorizedGrossCents: 2_500,
-    providerAuthorizationRef: "auth-a",
-    validThroughCapture: true,
-  };
+  const exactAuthorization = authorizationAttempt();
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(exactAuthorization, pledges[0]!), true);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(undefined, pledges[0]!), false);
   const savedPaymentMethodOnlyPledge: RefundBonusPledge = {
@@ -1019,17 +1042,28 @@ test("authorization and capture side effects are status-gated and exact authoriz
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(undefined, savedPaymentMethodOnlyPledge), false);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
     ...exactAuthorization,
-    authorizationState: "short_expiring",
+    authorizationState: "short_expiry",
   }, pledges[0]!), false);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
     ...exactAuthorization,
-    authorizationState: "expired",
-    validThroughCapture: false,
+    authorizationState: "expired_before_capture",
   }, pledges[0]!), false);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
     ...exactAuthorization,
     authorizationState: "authorized_exact",
-    authorizedGrossCents: 2_400,
+    requiredGrossCents: 2_400,
+  }, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    roundId: "other-round",
+  }, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    poolId: "other-pool",
+  }, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    participantId: "mallory",
   }, pledges[0]!), false);
 
   const recomputed = evaluateRefundBonusRoundOutcome({
@@ -1040,14 +1074,15 @@ test("authorization and capture side effects are status-gated and exact authoriz
     pledges,
     authorizationAttempts: [
       exactAuthorization,
-      {
+      authorizationAttempt({
+        id: "authorization-attempt-b",
         pledgeId: "b",
+        participantId: "bob",
         authorizationState: "wrong_amount",
         requiredGrossCents: 2_500,
-        authorizedGrossCents: 2_400,
         providerAuthorizationRef: "auth-b",
-        validThroughCapture: true,
-      },
+        eventHash: "sha256:9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b",
+      }),
     ],
   });
   assert.equal(recomputed.status, "nonqualifying_failed");
@@ -1079,15 +1114,16 @@ test("authorization and capture side effects are status-gated and exact authoriz
     pledges,
     authorizationAttempts: [
       exactAuthorization,
-      {
+      authorizationAttempt({
+        id: "authorization-attempt-b",
         pledgeId: "b",
-        authorizationState: "short_expiring",
+        participantId: "bob",
+        authorizationState: "short_expiry",
         requiredGrossCents: 2_500,
-        authorizedGrossCents: 2_500,
         providerAuthorizationRef: "auth-b",
         expiresAt: "2026-07-06T00:02:00.000Z",
-        validThroughCapture: false,
-      },
+        eventHash: "sha256:9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c",
+      }),
     ],
   });
   assert.equal(shortExpiring.status, "nonqualifying_failed");
@@ -1105,15 +1141,16 @@ test("authorization and capture side effects are status-gated and exact authoriz
     ],
     authorizationAttempts: [
       exactAuthorization,
-      {
+      authorizationAttempt({
+        id: "authorization-attempt-b",
         pledgeId: "b",
-        authorizationState: "expired",
+        participantId: "bob",
+        authorizationState: "expired_before_capture",
         requiredGrossCents: 2_500,
-        authorizedGrossCents: 2_500,
         providerAuthorizationRef: "auth-b",
         expiresAt: "2026-07-06T00:00:01.000Z",
-        validThroughCapture: false,
-      },
+        eventHash: "sha256:9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d9d",
+      }),
     ],
   });
   assert.equal(expiredAndMissing.status, "nonqualifying_failed");
@@ -1318,14 +1355,15 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
     reserve: reserve(),
     pledge: pledges[0]!,
     plan: successPlan,
-    authorizationAttempt: {
+    authorizationAttempt: authorizationAttempt({
+      id: "authorization-attempt-receipt-a",
       pledgeId: "a",
+      participantId: "alice",
       authorizationState: "authorized_exact",
       requiredGrossCents: 1_000,
-      authorizedGrossCents: 1_000,
       providerAuthorizationRef: "auth-a",
-      validThroughCapture: true,
-    },
+      eventHash: "sha256:9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e",
+    }),
   });
   assert.equal(successReceipt.receiptKind, "success_charge");
   assert.equal(successReceipt.grossCapturedCents, 1_000);

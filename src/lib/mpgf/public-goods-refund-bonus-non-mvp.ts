@@ -460,47 +460,44 @@ export function isRefundBonusFeeQuoteValid(quote: RefundBonusFeeQuote) {
 }
 
 export interface RefundBonusAuthorizationAttempt {
-  id?: string;
-  roundId?: string;
-  poolId?: string;
+  id: string;
+  roundId: string;
+  poolId: string;
   pledgeId: string;
-  participantId?: string;
+  participantId: string;
+  requiredGrossCents: number;
+  providerAuthorizationRef?: string;
+  providerCaptureRef?: string;
   authorizationState:
     | "not_attempted"
     | "authorized_exact"
     | "failed"
     | "wrong_amount"
-    | "expired"
     | "expired_before_capture"
     | "short_expiry"
-    | "short_expiring"
-    | "missing"
     | "released"
     | "captured";
-  requiredGrossCents: number;
-  authorizedGrossCents: number;
-  providerAuthorizationRef?: string;
-  providerCaptureRef?: string;
   authorizedAt?: string;
   expiresAt?: string;
   capturedAt?: string;
   releasedAt?: string;
-  validThroughCapture: boolean;
-  eventHash?: string;
+  eventHash: string;
 }
 
 export function isRefundBonusAuthorizationAttemptCaptureReady(
   attempt: RefundBonusAuthorizationAttempt | undefined,
-  pledge: Pick<RefundBonusPledge, "id" | "maxGrossCents">,
+  pledge: Pick<RefundBonusPledge, "id" | "roundId" | "poolId" | "participantId" | "maxGrossCents">,
 ) {
   return Boolean(
     attempt &&
+      attempt.roundId === pledge.roundId &&
+      attempt.poolId === pledge.poolId &&
       attempt.pledgeId === pledge.id &&
+      attempt.participantId === pledge.participantId &&
       attempt.authorizationState === "authorized_exact" &&
       attempt.requiredGrossCents === pledge.maxGrossCents &&
-      attempt.authorizedGrossCents === pledge.maxGrossCents &&
       Boolean(attempt.providerAuthorizationRef) &&
-      attempt.validThroughCapture,
+      isCanonicalHash(attempt.eventHash),
   );
 }
 
@@ -535,11 +532,11 @@ export interface RefundBonusPayoutOperation {
   reserveId: string;
   bonusGrossCents: number;
   payoutFeeCents: number;
-  bonusPayoutFeeCents: number;
   bonusNetCents: number;
   currency: "usd";
   payoutDestinationRef?: string;
-  operationState:
+  providerPayoutRef?: string;
+  payoutState:
     | "not_attempted"
     | "pending"
     | "succeeded"
@@ -549,9 +546,7 @@ export interface RefundBonusPayoutOperation {
     | "unclaimed"
     | "forfeited_under_rules"
     | "reversed";
-  payoutState: RefundBonusPayoutOperation["operationState"];
   idempotencyKey: string;
-  providerPayoutRef?: string;
   eventHash: string;
   createdAt: string;
   updatedAt: string;
@@ -673,7 +668,7 @@ export interface RefundBonusReceipt {
   bonusGrossCents: number;
   bonusPayoutFeeCents: number;
   bonusNetCents: number;
-  bonusPayoutState?: RefundBonusPayoutOperation["operationState"];
+  bonusPayoutState?: RefundBonusPayoutOperation["payoutState"];
   bonusPayoutReference?: string;
   bonusReserveId?: string;
   authorizationReference?: string;
@@ -1795,6 +1790,8 @@ export function isRefundBonusReserveBacked(
 
   return (
     pool.refundBonusEnabled &&
+    reserve.roundId === round.id &&
+    reserve.poolId === pool.id &&
     pool.refundBonusReserveId === reserve.id &&
     reserve.reserveType === "failure_participation_bonus" &&
     (reserve.backingState === "funded" ||
@@ -1807,6 +1804,8 @@ export function isRefundBonusReserveBacked(
     reserve.maxExposureCents >= pool.roundBonusExposureCapCents &&
     reserve.maxExposureCents >= round.roundBonusExposureCapCents &&
     reserve.bonusPolicyHash === round.bonusPolicyHash &&
+    isOrderedIsoTimestamp(reserve.publishedAt, round.parametersFrozenAt) &&
+    isOrderedIsoTimestamp(reserve.backingConfirmedAt, round.parametersFrozenAt) &&
     /^sha256:[a-f0-9]{64}$/.test(reserve.sourceHash) &&
     Array.isArray(reserve.jurisdictionSet) &&
     reserve.jurisdictionSet.length > 0 &&
@@ -2256,11 +2255,9 @@ export function planRefundBonusSettlement({
         reserveId: reserve.id,
         bonusGrossCents: row.bonusEligibleCents,
         payoutFeeCents: 0,
-        bonusPayoutFeeCents: 0,
         bonusNetCents: row.bonusEligibleCents,
         currency: "usd" as const,
         payoutDestinationRef: row.pledge.paymentClusterId,
-        operationState: "succeeded" as const,
         payoutState: "succeeded" as const,
         idempotencyKey: `refund-bonus:${round.id}:${pool.id}:${row.pledge.id}`,
         providerPayoutRef: simulationOnly ? `simulated:${row.pledge.id}` : undefined,
@@ -2315,7 +2312,7 @@ export function planRefundBonusSettlement({
     const payoutOperation = payoutByPledgeId.get(row.pledge.id);
     const rowSuccess = success && blockedReasonCodes.length === 0;
     const rowBonusPaid = payoutOperation?.bonusNetCents ?? 0;
-    const rowBonusFee = payoutOperation?.bonusPayoutFeeCents ?? 0;
+    const rowBonusFee = payoutOperation?.payoutFeeCents ?? 0;
     const settlementState: RefundBonusPoolSettlementRow["settlementState"] = blockedReasonCodes.length > 0
       ? "blocked"
       : rowSuccess
@@ -2378,7 +2375,7 @@ export function planRefundBonusSettlement({
       bonusLiabilityCents,
       bonusHeldCents: reserve.heldCents,
       bonusPaidCents,
-      bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.bonusPayoutFeeCents, 0),
+      bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
       bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
       bonusUnearnedReleasedCents,
       verifiedSupporterCount: outcome.verifiedSupporterCount,
@@ -2405,7 +2402,7 @@ export function planRefundBonusSettlement({
         bonusLiabilityCents,
         bonusHeldCents: reserve.heldCents,
         bonusPaidCents,
-        bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.bonusPayoutFeeCents, 0),
+        bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
         bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
         bonusUnearnedReleasedCents,
         finalStatus,
@@ -2478,9 +2475,9 @@ export function buildRefundBonusReceipt({
       failureReasonCategory: plan.auditReport.reasonCodes[0],
       bonusEligibilityStatus: payoutOperation ? "eligible" : "not_eligible",
       bonusGrossCents: payoutOperation?.bonusGrossCents ?? 0,
-      bonusPayoutFeeCents: payoutOperation?.bonusPayoutFeeCents ?? 0,
+      bonusPayoutFeeCents: payoutOperation?.payoutFeeCents ?? 0,
       bonusNetCents: payoutOperation?.bonusNetCents ?? 0,
-      bonusPayoutState: payoutOperation?.operationState,
+      bonusPayoutState: payoutOperation?.payoutState,
       bonusPayoutReference: payoutOperation?.providerPayoutRef,
       bonusReserveId: reserve.id,
       rulebookHash: round.rulebookHash,

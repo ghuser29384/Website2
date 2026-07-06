@@ -25,6 +25,7 @@ import {
   validateAtLeastTierOrdinaryCopy,
   type AtLeastTierAdminWorkflowAction,
   type AtLeastTierFeaturePromotionRecord,
+  type AtLeastTierLossAuthorizationAttempt,
   type AtLeastTierPublicReportJson,
   type AtLeastTierPlatformMatchRound,
   type AtLeastTierPlatformMatchCommitment,
@@ -94,6 +95,23 @@ function backedReserve(overrides: Partial<PlatformMatchReserve> = {}): PlatformM
     status: "backed",
     createdAt: now,
     updatedAt: now,
+    ...overrides,
+  };
+}
+
+function lossAuthorizationAttempt(
+  overrides: Partial<AtLeastTierLossAuthorizationAttempt> = {},
+): AtLeastTierLossAuthorizationAttempt {
+  return {
+    id: "loss-authorization-attempt-a",
+    roundId,
+    poolId,
+    commitmentId: "auth-a",
+    participantId: "alice",
+    authorizationState: "authorized_exact",
+    requiredGrossCents: 1_000_000,
+    providerAuthorizationRef: "auth-a-ref",
+    eventHash: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
     ...overrides,
   };
 }
@@ -422,6 +440,8 @@ test("commitment open gate requires labs access, frozen schedule, backed reserve
   const passingGate = evaluateAtLeastTierCommitmentOpenGate({
     actorRole: "labs_participant",
     environment: "development",
+    roundId,
+    poolId,
     roundStatus: "labs_open",
     featureEnabled: true,
     rewardScheduleFrozen: true,
@@ -443,6 +463,8 @@ test("commitment open gate requires labs access, frozen schedule, backed reserve
   const reserveBlocked = evaluateAtLeastTierCommitmentOpenGate({
     actorRole: "labs_participant",
     environment: "development",
+    roundId,
+    poolId,
     roundStatus: "labs_open",
     featureEnabled: true,
     rewardScheduleFrozen: true,
@@ -461,9 +483,34 @@ test("commitment open gate requires labs access, frozen schedule, backed reserve
   assert.equal(reserveBlocked.allowed, false);
   assert.ok(reserveBlocked.blockerCodes.includes("reserve_exposure_exceeded"));
 
+  const reserveScopeMismatch = evaluateAtLeastTierCommitmentOpenGate({
+    actorRole: "labs_participant",
+    environment: "development",
+    roundId,
+    poolId,
+    roundStatus: "labs_open",
+    featureEnabled: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserve: backedReserve({ roundId: "other-round" }),
+    currentReservedExposureCents: 0,
+    requestedExposureCents: 1_000,
+    copyPreflightPassed: true,
+    paymentMethodProviderConfirmed: true,
+    finalReviewConfirmed: true,
+    ownCommitmentExclusionAcknowledged: true,
+    lossChargeAcknowledged: true,
+    noDirectPayoutAcknowledged: true,
+    nonMvpAcknowledged: true,
+  });
+  assert.equal(reserveScopeMismatch.allowed, false);
+  assert.ok(reserveScopeMismatch.blockerCodes.includes("reserve_unbacked"));
+
   const missingConsent = evaluateAtLeastTierCommitmentOpenGate({
     actorRole: "labs_participant",
     environment: "development",
+    roundId,
+    poolId,
     roundStatus: "labs_open",
     featureEnabled: true,
     rewardScheduleFrozen: true,
@@ -490,6 +537,8 @@ test("commitment open gate requires labs access, frozen schedule, backed reserve
   const productionGate = evaluateAtLeastTierCommitmentOpenGate({
     actorRole: "labs_participant",
     environment: "production",
+    roundId,
+    poolId,
     roundStatus: "open",
     featureEnabled: true,
     rewardScheduleFrozen: true,
@@ -694,24 +743,28 @@ test("failed loss authorizations are excluded before at-least-tier recomputation
     commitment("auth-b", "bob", tierOne.tierIndex, 1_000_000, tierOne.rewardRateBps, "cluster-b"),
     commitment("auth-c", "carol", tierOne.tierIndex, 1_000_000, tierOne.rewardRateBps, "cluster-c"),
   ];
-  const exactAttempt = {
-    commitmentId: "auth-a",
-    authorizationState: "authorized_exact" as const,
-    requiredGrossCents: 1_000_000,
-    authorizedGrossCents: 1_000_000,
-    providerAuthorizationRef: "auth-a-ref",
-    validThroughCapture: true,
-  };
+  const exactAttempt = lossAuthorizationAttempt();
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady(exactAttempt, commitments[0]!), true);
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
     ...exactAttempt,
     authorizationState: "wrong_amount",
-    authorizedGrossCents: 999_999,
+    requiredGrossCents: 999_999,
   }, commitments[0]!), false);
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
     ...exactAttempt,
-    authorizationState: "expired",
-    validThroughCapture: false,
+    authorizationState: "expired_before_capture",
+  }, commitments[0]!), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    roundId: "other-round",
+  }, commitments[0]!), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    poolId: "other-pool",
+  }, commitments[0]!), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    participantId: "mallory",
   }, commitments[0]!), false);
 
   const preAuthorizationResolution = resolveAtLeastTierPlatformMatch({
@@ -726,14 +779,15 @@ test("failed loss authorizations are excluded before at-least-tier recomputation
     commitments,
     authorizationAttempts: [
       exactAttempt,
-      {
+      lossAuthorizationAttempt({
+        id: "loss-authorization-attempt-b",
         commitmentId: "auth-b",
+        participantId: "bob",
         authorizationState: "wrong_amount",
         requiredGrossCents: 1_000_000,
-        authorizedGrossCents: 999_999,
         providerAuthorizationRef: "auth-b-ref",
-        validThroughCapture: true,
-      },
+        eventHash: "sha256:9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b9b",
+      }),
     ],
     now,
   });
@@ -928,6 +982,39 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(blocked.rows.every((row) => row.userGrossCapturedCents === 0));
   assert.ok(blocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
   assert.equal(new Set(blocked.rows.map((row) => row.userAuthorizationIdempotencyKey)).size, blocked.rows.length);
+
+  const reserveScopeMismatch = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments,
+    reserve: backedReserve({ roundId: "other-round" }),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    simulationOnly: true,
+    now,
+  });
+  assert.ok(reserveScopeMismatch.blockedReasonCodes.includes("platform_match_reserve_unbacked"));
+  assert.equal(reserveScopeMismatch.auditReport.finalStatus, "blocked");
+
+  const commitmentScopeMismatch = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments: [
+      commitments[0]!,
+      { ...commitments[1]!, poolId: "other-pool" },
+    ],
+    reserve: backedReserve(),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    simulationOnly: true,
+    now,
+  });
+  assert.ok(commitmentScopeMismatch.blockedReasonCodes.includes("commitment_scope_mismatch"));
+  assert.equal(commitmentScopeMismatch.auditReport.finalStatus, "blocked");
 });
 
 test("ordinary copy preflight blocks wagering and return language while requiring non-MVP user promises", () => {

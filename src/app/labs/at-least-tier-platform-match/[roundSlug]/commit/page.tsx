@@ -33,26 +33,28 @@ type PageProps = {
 
 const now = "2026-07-06T00:00:00.000Z";
 
-const simulatedReserve: PlatformMatchReserve = {
-  id: "platform-match-reserve-demo",
-  roundId: "labs-at-least-tier-demo",
-  poolId: "reviewed-public-goods-pool",
-  reserveType: "at_least_tier_platform_match",
-  backedCents: 1_000_000,
-  committedCents: 0,
-  paidCents: 0,
-  releasedUnusedCents: 0,
-  maxExposureCents: 1_000_000,
-  backingState: "dev_simulated",
-  legalComplianceState: "approved",
-  paymentProviderReady: true,
-  recipientRouteReady: true,
-  sourceHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  platformMatchPolicyHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  status: "backed",
-  createdAt: now,
-  updatedAt: now,
-};
+function buildSimulatedReserve(roundId: string): PlatformMatchReserve {
+  return {
+    id: "platform-match-reserve-demo",
+    roundId,
+    poolId: "reviewed-public-goods-pool",
+    reserveType: "at_least_tier_platform_match",
+    backedCents: 1_000_000,
+    committedCents: 0,
+    paidCents: 0,
+    releasedUnusedCents: 0,
+    maxExposureCents: 1_000_000,
+    backingState: "dev_simulated",
+    legalComplianceState: "approved",
+    paymentProviderReady: true,
+    recipientRouteReady: true,
+    sourceHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    platformMatchPolicyHash: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    status: "backed",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", {
@@ -64,10 +66,13 @@ function formatUsd(cents: number) {
 
 export default async function AtLeastTierPlatformMatchCommitPage({ params }: PageProps) {
   const { roundSlug } = await params;
+  const roundId = `labs-at-least-tier-${roundSlug}`;
+  const poolId = "reviewed-public-goods-pool";
+  const simulatedReserve = buildSimulatedReserve(roundId);
   const schedule = computeDampedOddsRewardSchedule({
     freeze: true,
     now,
-    roundId: `labs-at-least-tier-${roundSlug}`,
+    roundId,
     tiers: [
       { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
       { tierIndex: 2, thresholdNetRecipientCents: 300_000, frozenForecastProbabilityBps: 5_500 },
@@ -79,8 +84,8 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
   const selectedTier = schedule.tiers[1] ?? schedule.tiers[0]!;
   const preview = buildAtLeastTierPlatformMatchCommitmentPreview({
     id: "disabled-preview-commitment",
-    roundId: `labs-at-least-tier-${roundSlug}`,
-    poolId: "reviewed-public-goods-pool",
+    roundId,
+    poolId,
     participantId: "labs-preview-participant",
     selectedTierIndex: selectedTier.tierIndex,
     statedGrossCents: 2_500,
@@ -92,6 +97,8 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
   const openGate = evaluateAtLeastTierCommitmentOpenGate({
     actorRole: "labs_participant",
     environment: "development",
+    roundId,
+    poolId,
     roundStatus: "preflight",
     featureEnabled: true,
     rewardScheduleFrozen: true,

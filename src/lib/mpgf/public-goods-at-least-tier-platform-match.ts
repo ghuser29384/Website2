@@ -232,30 +232,27 @@ export interface AtLeastTierPlatformMatchCommitment {
 }
 
 export interface AtLeastTierLossAuthorizationAttempt {
-  id?: string;
-  roundId?: string;
-  poolId?: string;
+  id: string;
+  roundId: string;
+  poolId: string;
   commitmentId: string;
-  participantId?: string;
+  participantId: string;
+  requiredGrossCents: number;
+  providerAuthorizationRef?: string;
   authorizationState:
     | "not_attempted"
     | "authorized_exact"
     | "failed"
     | "wrong_amount"
-    | "expired"
     | "expired_before_capture"
     | "short_expiry"
-    | "short_expiring"
-    | "missing"
     | "released"
     | "captured";
-  requiredGrossCents: number;
-  authorizedGrossCents: number;
-  providerAuthorizationRef?: string;
   authorizedAt?: string;
   expiresAt?: string;
-  validThroughCapture: boolean;
-  eventHash?: string;
+  capturedAt?: string;
+  releasedAt?: string;
+  eventHash: string;
 }
 
 export interface AtLeastTierAuthorizationReconciliationResult {
@@ -620,6 +617,8 @@ export interface AtLeastTierJobGateInput {
 export interface AtLeastTierCommitmentOpenGateInput {
   actorRole: AtLeastTierPlatformMatchActorRole;
   environment: AtLeastTierPlatformMatchEnvironment;
+  roundId: string;
+  poolId: string;
   roundStatus: "draft" | "preflight" | "labs_open" | "open" | "closed_to_new_commitments" | "blocked" | "canceled";
   featureEnabled?: boolean;
   rewardScheduleFrozen?: boolean;
@@ -1047,7 +1046,7 @@ export function evaluateAtLeastTierCommitmentOpenGate(
   if (!input.rewardScheduleFrozen) {
     blockerCodes.push("schedule_not_frozen");
   }
-  if (!isReserveBacked(input.reserve)) {
+  if (!isReserveBacked(input.reserve, input.roundId, input.poolId)) {
     blockerCodes.push("reserve_unbacked");
   }
   if (
@@ -1476,16 +1475,18 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
 
 export function isAtLeastTierLossAuthorizationCaptureReady(
   attempt: AtLeastTierLossAuthorizationAttempt | undefined,
-  commitment: Pick<AtLeastTierPlatformMatchCommitment, "id" | "statedGrossCents">,
+  commitment: Pick<AtLeastTierPlatformMatchCommitment, "id" | "roundId" | "poolId" | "participantId" | "statedGrossCents">,
 ) {
   return Boolean(
     attempt &&
+      attempt.roundId === commitment.roundId &&
+      attempt.poolId === commitment.poolId &&
       attempt.commitmentId === commitment.id &&
+      attempt.participantId === commitment.participantId &&
       attempt.authorizationState === "authorized_exact" &&
       attempt.requiredGrossCents === commitment.statedGrossCents &&
-      attempt.authorizedGrossCents === commitment.statedGrossCents &&
       Boolean(attempt.providerAuthorizationRef) &&
-      attempt.validThroughCapture,
+      isCanonicalHash(attempt.eventHash),
   );
 }
 
@@ -1702,8 +1703,10 @@ export function resolveAtLeastTierPlatformMatch({
   };
 }
 
-function isReserveBacked(reserve: PlatformMatchReserve) {
+function isReserveBacked(reserve: PlatformMatchReserve, expectedRoundId: string, expectedPoolId: string) {
   return (
+    reserve.roundId === expectedRoundId &&
+    reserve.poolId === expectedPoolId &&
     reserve.reserveType === "at_least_tier_platform_match" &&
     (reserve.backingState === "funded" ||
       reserve.backingState === "escrowed" ||
@@ -1746,11 +1749,16 @@ export function planAtLeastTierPlatformMatchSettlement({
   const createdAt = nowIso(now);
   const commitmentById = new Map(commitments.map((commitment) => [commitment.id, commitment]));
   const blockedReasonCodes: string[] = [];
+  const commitmentPoolIds = [...new Set(commitments.map((commitment) => commitment.poolId))];
+  const expectedPoolId = commitmentPoolIds[0] ?? reserve.poolId;
+  if (commitmentPoolIds.length > 1 || commitments.some((commitment) => commitment.roundId !== roundId)) {
+    blockedReasonCodes.push("commitment_scope_mismatch");
+  }
   const totalWinnerExposureCents = resolution.rows
     .filter((row) => row.outcome === "won_platform_pays")
     .reduce((sum, row) => sum + row.platformMatchNetCents, 0);
 
-  if (!isReserveBacked(reserve)) {
+  if (!isReserveBacked(reserve, roundId, expectedPoolId)) {
     blockedReasonCodes.push("platform_match_reserve_unbacked");
   }
   if (totalWinnerExposureCents > reserve.maxExposureCents || reserve.maxExposureCents > reserve.backedCents) {
