@@ -2225,6 +2225,17 @@ export function planRefundBonusSettlement({
   if (bonusReservePaused) blockedReasonCodes.push("bonus_reserve_pause_active");
   if (payoutRailPaused) blockedReasonCodes.push("payout_rail_pause_active");
   if (!isRefundBonusReserveBacked(reserve, round, pool)) blockedReasonCodes.push("bonus_reserve_unbacked");
+  if (outcome.status === "cleared") {
+    if (!canRefundBonusCaptureSuccessCharge(roundStatus)) {
+      blockedReasonCodes.push("round_not_payable");
+    }
+    if (round.status !== "payable") {
+      blockedReasonCodes.push("round_record_not_payable");
+    }
+    if (pool.status !== "payable") {
+      blockedReasonCodes.push("pool_not_payable");
+    }
+  }
   if (outcome.status === "qualifying_failed") {
     if (!canRefundBonusPayoutBonus(roundStatus)) {
       blockedReasonCodes.push("round_not_bonus_payable");
@@ -2275,7 +2286,7 @@ export function planRefundBonusSettlement({
     ? outcome.eligiblePledges.reduce((sum, row) => sum + row.bonusEligibleCents, 0)
     : 0;
   const bonusPaidCents = payoutOperations.reduce((sum, operation) => sum + operation.bonusNetCents, 0);
-  const success = outcome.status === "cleared";
+  const success = outcome.status === "cleared" && blockedReasonCodes.length === 0;
   const feeCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.pledge.feeCents, 0) : 0;
   const grossCapturedCents = success ? outcome.grossExposureCents : 0;
   const netRecipientDisbursedCents = success ? outcome.netRecipientCents : 0;

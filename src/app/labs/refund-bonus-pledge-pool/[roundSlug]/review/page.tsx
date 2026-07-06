@@ -281,6 +281,18 @@ export default async function RefundBonusPledgePoolReviewPage({ params }: PagePr
               <dd>{formatUsd(pledge.estimatedNetRecipientCents)}</dd>
             </div>
             <div>
+              <dt>Counts toward pool threshold if all gates pass</dt>
+              <dd>{formatUsd(pledge.estimatedNetRecipientCents)}</dd>
+            </div>
+            <div>
+              <dt>Bonus reserve</dt>
+              <dd>{reserve.backingState === "dev_simulated" ? "labs simulation only" : "backed"}</dd>
+            </div>
+            <div>
+              <dt>Sponsor match</dt>
+              <dd>{pool.sponsorMatchBacked ? "backed if shown" : "not active"}</dd>
+            </div>
+            <div>
               <dt>Hard pledge gate</dt>
               <dd>{hardPledgeGate.blockerCodes.join(", ")}</dd>
             </div>

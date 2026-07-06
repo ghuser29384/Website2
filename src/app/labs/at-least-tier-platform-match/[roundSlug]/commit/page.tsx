@@ -191,10 +191,13 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
           <div className="mpgf-panel">
             <p>You are saving a hard, payment-backed platform-match commitment.</p>
             <p>
-              Selected forecast: at least Tier {preview.selectedTierIndex}. Estimated net to
-              projects if you pay: {formatUsd(preview.statedNetRecipientCents)}. Estimated
-              platform contribution if your forecast is met: {formatUsd(preview.platformMatchNetCents)}
-              {" "}net to projects.
+              Selected forecast: at least Tier {preview.selectedTierIndex}. Your stated intended
+              contribution if your forecast is not met: {formatUsd(preview.statedGrossCents)}.
+              Estimated net to projects if you pay: {formatUsd(preview.statedNetRecipientCents)}.
+              Platform-match rate if your forecast is met:{" "}
+              {(preview.platformMatchRewardRateBps / 100).toFixed(2)}%. Estimated platform
+              contribution if your forecast is met: {formatUsd(preview.platformMatchNetCents)}{" "}
+              net to projects.
             </p>
             <p>
               If other eligible users&apos; effective support reaches at least Tier{" "}
@@ -208,13 +211,18 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
               after fees.
             </p>
             <p>
+              Your own commitment and same-control accounts do not count toward your forecast
+              result. Platform-match payments, sponsor match, fees, drafts, and failed payments do
+              not count toward forecast results.
+            </p>
+            <p>
               Saving your payment method is not a charge, not a hold, not escrow, not custody, not
               an authorization, and not a guarantee that authorization will later succeed.
             </p>
             <ul>
               <li>I understand my own commitment does not count toward my forecast result.</li>
               <li>I understand that if I lose, I may be charged my stated contribution.</li>
-              <li>I understand that if I win, the platform contributes to the projects and I receive no direct payment.</li>
+              <li>I understand that if I win, the platform contributes the tier-specific match amount to the projects and I receive no direct payment.</li>
               <li>I understand this is non-MVP and may be simulation-only.</li>
             </ul>
             <button className="button button-secondary" type="button" disabled>

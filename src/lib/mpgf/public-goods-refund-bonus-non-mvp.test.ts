@@ -398,13 +398,50 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     createdAt: now,
   };
   assert.equal(isRefundBonusProjectReviewSnapshotPledgeable(projectReview), true);
+  const blockedReviewSnapshots: RefundBonusProjectReviewSnapshot[] = [
+    { ...projectReview, recipientRouteState: "blocked" },
+    { ...projectReview, recipientRouteState: "review" },
+    { ...projectReview, projectScopeState: "blocked" },
+    { ...projectReview, projectScopeState: "review" },
+    { ...projectReview, baselineState: "blocked" },
+    { ...projectReview, baselineState: "review" },
+    { ...projectReview, actionEvidenceState: "blocked" },
+    { ...projectReview, actionEvidenceState: "review" },
+    { ...projectReview, antiThreatState: "blocked" },
+    { ...projectReview, antiThreatState: "review" },
+    { ...projectReview, externalityState: "blocked" },
+    { ...projectReview, externalityState: "review" },
+    { ...projectReview, conflictState: "blocked" },
+    { ...projectReview, conflictState: "review" },
+    { ...projectReview, challengeState: "open" },
+    { ...projectReview, challengeState: "blocking" },
+  ];
+  for (const snapshot of blockedReviewSnapshots) {
+    assert.equal(isRefundBonusProjectReviewSnapshotPledgeable(snapshot), false, JSON.stringify(snapshot));
+  }
+
   assert.equal(isRefundBonusProjectReviewSnapshotPledgeable({
     ...projectReview,
-    challengeState: "open",
+    conflictState: "non_blocking",
+    challengeState: "non_blocking",
+  }), true);
+  assert.equal(isRefundBonusProjectReviewSnapshotPledgeable({
+    ...projectReview,
+    qualifyingFailureBonusAllowed: false,
+  }), false);
+  assert.equal(isRefundBonusProjectReviewSnapshotPledgeable({
+    ...projectReview,
+    reviewSnapshotHash: "not-a-canonical-hash",
   }), false);
   for (const prohibitedCategoryFlag of [
+    "prohibitsPoliticalCampaigns",
     "prohibitsCampaignDonations",
+    "prohibitsLobbyingTrades",
+    "prohibitsLifestyleTrades",
+    "prohibitsBehaviorChangePromises",
+    "prohibitsPrivateBenefitProjects",
     "prohibitsPayToStopHarmProposals",
+    "prohibitsThreatLikeProjects",
     "prohibitsCoerciveProposals",
     "prohibitsExtortionaryProposals",
   ] as const) {
@@ -1315,11 +1352,11 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
     pledges,
   });
   const successPlan = planRefundBonusSettlement({
-    round: round({ status: "captured" }),
-    pool: pool(),
+    round: round({ status: "payable" }),
+    pool: pool({ status: "payable" }),
     reserve: reserve(),
     outcome: success,
-    roundStatus: "captured",
+    roundStatus: "payable",
     simulationOnly: true,
   });
   assert.equal(successPlan.auditReport.finalStatus, "cleared_and_captured");
@@ -1327,6 +1364,21 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(successPlan.auditReport.netRecipientDisbursedCents, 2_000);
   assert.equal(successPlan.auditReport.bonusLiabilityCents, 0);
   assert.equal(successPlan.auditReport.bonusUnearnedReleasedCents, 200);
+
+  const disallowedCapturePlan = planRefundBonusSettlement({
+    round: round({ status: "reviewing" }),
+    pool: pool({ status: "closed" }),
+    reserve: reserve(),
+    outcome: success,
+    roundStatus: "reviewing",
+    simulationOnly: true,
+  });
+  assert.equal(disallowedCapturePlan.payoutOperations.length, 0);
+  assert.equal(disallowedCapturePlan.auditReport.grossCapturedCents, 0);
+  assert.ok(disallowedCapturePlan.blockedReasonCodes.includes("round_not_payable"));
+  assert.ok(disallowedCapturePlan.blockedReasonCodes.includes("round_record_not_payable"));
+  assert.ok(disallowedCapturePlan.blockedReasonCodes.includes("pool_not_payable"));
+  assert.ok(disallowedCapturePlan.settlementRows.every((row) => row.settlementState === "blocked"));
 });
 
 test("refund-bonus receipts distinguish success charge from qualifying-failure bonus", () => {
@@ -1342,11 +1394,11 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
     pledges,
   });
   const successPlan = planRefundBonusSettlement({
-    round: round({ status: "captured" }),
-    pool: pool(),
+    round: round({ status: "payable" }),
+    pool: pool({ status: "payable" }),
     reserve: reserve(),
     outcome: success,
-    roundStatus: "captured",
+    roundStatus: "payable",
     simulationOnly: true,
   });
   const successReceipt = buildRefundBonusReceipt({
@@ -1798,6 +1850,10 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(amountPage, /Prefer not to say counts as a verified supporter but does not count as a distinct/);
   assert.match(reviewPage, /Screen 3 of 3/);
   assert.match(reviewPage, /not making an immediate donation/);
+  assert.match(reviewPage, /Counts toward pool threshold if all gates pass/);
+  assert.match(reviewPage, /labs simulation only/);
+  assert.match(reviewPage, /Sponsor match/);
+  assert.match(reviewPage, /backed if shown/);
   assert.match(reviewPage, /Saving your payment method is not a charge, not a hold, not escrow, not custody/);
   assert.match(reviewPage, /not a moral score, not a public reputation reward/);
   assert.match(reviewPage, /REFUND_BONUS_COMPREHENSION_QUESTIONS/);

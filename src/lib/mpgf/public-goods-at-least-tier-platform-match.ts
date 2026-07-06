@@ -379,11 +379,12 @@ export interface AtLeastTierSettlementRow {
   platformMatchExposureReservedCents: number;
   platformMatchExposureReleasedCents: number;
   finalProjectDisbursementCents: number;
-  userAuthorizationOperation: "release" | "capture" | "none";
+  userAuthorizationOperation: "release" | "capture" | "simulated_capture" | "none";
   userAuthorizationIdempotencyKey?: string;
   settlementState:
     | "pending"
     | "captured_user_loss"
+    | "simulated_user_loss"
     | "paid_platform_match"
     | "released"
     | "blocked"
@@ -1757,11 +1758,26 @@ export function planAtLeastTierPlatformMatchSettlement({
   const totalWinnerExposureCents = resolution.rows
     .filter((row) => row.outcome === "won_platform_pays")
     .reduce((sum, row) => sum + row.platformMatchNetCents, 0);
+  const eligibleReservedExposureCents = commitments
+    .filter((commitment) => isEligibleCommitmentState(commitment.commitmentState))
+    .reduce((sum, commitment) => {
+      if (!isNonNegativeSafeInteger(commitment.platformMatchExposureReservedCents)) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return sum + commitment.platformMatchExposureReservedCents;
+    }, 0);
 
   if (!isReserveBacked(reserve, roundId, expectedPoolId)) {
     blockedReasonCodes.push("platform_match_reserve_unbacked");
   }
-  if (totalWinnerExposureCents > reserve.maxExposureCents || reserve.maxExposureCents > reserve.backedCents) {
+  if (
+    !Number.isSafeInteger(eligibleReservedExposureCents) ||
+    eligibleReservedExposureCents > reserve.maxExposureCents ||
+    eligibleReservedExposureCents > reserve.backedCents ||
+    totalWinnerExposureCents > reserve.maxExposureCents ||
+    reserve.maxExposureCents > reserve.backedCents
+  ) {
     blockedReasonCodes.push("reserve_exposure_exceeded");
   }
   if (!simulationOnly) {
@@ -1820,6 +1836,10 @@ export function planAtLeastTierPlatformMatchSettlement({
       };
     }
 
+    const userAuthorizationOperation = simulationOnly ? "simulated_capture" : "capture";
+    const userAuthorizationIdempotencyAction = simulationOnly ? "simulated-capture" : "capture";
+    const settlementState = simulationOnly ? "simulated_user_loss" : "captured_user_loss";
+
     return {
       id: `${row.id}:settlement`,
       roundId,
@@ -1835,9 +1855,9 @@ export function planAtLeastTierPlatformMatchSettlement({
       platformMatchExposureReservedCents: reservedExposure,
       platformMatchExposureReleasedCents: reservedExposure,
       finalProjectDisbursementCents: row.statedNetRecipientCents,
-      userAuthorizationOperation: "capture",
-      userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:capture`,
-      settlementState: "captured_user_loss",
+      userAuthorizationOperation,
+      userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:${userAuthorizationIdempotencyAction}`,
+      settlementState,
       createdAt,
     };
   });

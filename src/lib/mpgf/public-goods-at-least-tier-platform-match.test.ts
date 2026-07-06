@@ -881,7 +881,8 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(plan.rows.some((row) => row.outcome === "excluded" && row.userGrossCapturedCents === 0));
   assert.equal(plan.rows.find((row) => row.commitmentId === "winner")?.userAuthorizationOperation, "release");
   assert.equal(plan.rows.find((row) => row.commitmentId === "supporter-b")?.userAuthorizationOperation, "release");
-  assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.userAuthorizationOperation, "capture");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.userAuthorizationOperation, "simulated_capture");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.settlementState, "simulated_user_loss");
   assert.equal(plan.rows.find((row) => row.commitmentId === "payment-failed")?.userAuthorizationOperation, "release");
   assert.equal(
     new Set(plan.rows.map((row) => row.userAuthorizationIdempotencyKey).filter(Boolean)).size,
@@ -982,6 +983,30 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(blocked.rows.every((row) => row.userGrossCapturedCents === 0));
   assert.ok(blocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
   assert.equal(new Set(blocked.rows.map((row) => row.userAuthorizationIdempotencyKey)).size, blocked.rows.length);
+
+  const overReservedCommitments = commitments.map((item, index) =>
+    index < 2
+      ? { ...item, platformMatchExposureReservedCents: 600_000 }
+      : item
+  );
+  const overReserved = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments: overReservedCommitments,
+    reserve: backedReserve({ backedCents: 1_000_000, maxExposureCents: 1_000_000 }),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    simulationOnly: true,
+    now,
+  });
+  assert.ok(overReserved.blockedReasonCodes.includes("reserve_exposure_exceeded"));
+  assert.equal(overReserved.auditReport.finalStatus, "blocked");
+  assert.equal(overReserved.platformMatchOperations.length, 0);
+  assert.ok(overReserved.rows.every((row) => row.userAuthorizationOperation === "release"));
+  assert.ok(overReserved.rows.every((row) => row.userGrossCapturedCents === 0));
+  assert.ok(overReserved.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
 
   const reserveScopeMismatch = planAtLeastTierPlatformMatchSettlement({
     roundId,
@@ -1138,9 +1163,12 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsRoundPage, /View disabled commitment review/);
   assert.match(labsCommitPage, /required v137 commitment copy in an off state/);
   assert.match(labsCommitPage, /hard, payment-backed platform-match commitment/);
+  assert.match(labsCommitPage, /Your stated intended\s+contribution if your forecast is not met/);
+  assert.match(labsCommitPage, /Platform-match rate if your forecast is met/);
+  assert.match(labsCommitPage, /Platform-match payments, sponsor match, fees, drafts, and failed payments do\s+not count toward forecast results/);
   assert.match(labsCommitPage, /I understand my own commitment does not count toward my forecast result/);
   assert.match(labsCommitPage, /I understand that if I lose, I may be charged my stated contribution/);
-  assert.match(labsCommitPage, /I understand that if I win, the platform contributes to the projects and I receive no direct payment/);
+  assert.match(labsCommitPage, /I understand that if I win, the platform contributes the tier-specific match amount to the projects and I receive no direct payment/);
   assert.match(labsCommitPage, /Hard commitment disabled/);
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);
