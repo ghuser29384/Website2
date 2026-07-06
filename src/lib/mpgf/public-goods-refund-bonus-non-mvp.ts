@@ -1136,10 +1136,12 @@ export type RefundBonusHardPledgeBlocker =
   | "pool_not_labs_open"
   | "open_gate_not_passed"
   | "copy_preflight_failed"
+  | "draft_pledge_required"
   | "final_review_missing"
   | "fee_acknowledgement_missing"
   | "sealed_progress_acknowledgement_missing"
   | "bonus_terms_acknowledgement_missing"
+  | "payment_saved_before_final_review"
   | "identity_snapshot_missing_or_failed"
   | "bonus_eligibility_snapshot_missing_or_failed"
   | "payment_method_not_confirmed"
@@ -1712,6 +1714,17 @@ export function prepareRefundBonusHardPledgeSubmission({
     paymentCommitmentSnapshot.pledgeId === draftPledge.id &&
     paymentCommitmentSnapshot.participantId === draftPledge.participantId &&
     isRefundBonusPaymentCommitmentSnapshotCountable(paymentCommitmentSnapshot, round);
+  const submissionBlockerCodes: RefundBonusHardPledgeBlocker[] = [];
+
+  if (draftPledge.pledgeState !== "draft") {
+    submissionBlockerCodes.push("draft_pledge_required");
+  }
+  if (
+    draftPledge.finalReviewConfirmedAt &&
+    !isOrderedIsoTimestamp(draftPledge.finalReviewConfirmedAt, paymentCommitmentSnapshot.savedAt)
+  ) {
+    submissionBlockerCodes.push("payment_saved_before_final_review");
+  }
 
   const candidatePledge: RefundBonusPledge = {
     ...draftPledge,
@@ -1745,10 +1758,15 @@ export function prepareRefundBonusHardPledgeSubmission({
     currentGrossExposureCents,
     currentBonusExposureCents,
   });
+  const submissionResult: RefundBonusHardPledgeGateResult = {
+    ...gateResult,
+    allowed: gateResult.allowed && submissionBlockerCodes.length === 0,
+    blockerCodes: uniqueHardPledgeBlockers([...submissionBlockerCodes, ...gateResult.blockerCodes]),
+  };
 
-  if (gateResult.allowed) {
+  if (submissionResult.allowed) {
     return {
-      ...gateResult,
+      ...submissionResult,
       pledge: candidatePledge,
       reserve: {
         ...reserve,
@@ -1760,7 +1778,7 @@ export function prepareRefundBonusHardPledgeSubmission({
   }
 
   return {
-    ...gateResult,
+    ...submissionResult,
     pledge: {
       ...draftPledge,
       pledgeState: "draft",
@@ -2129,6 +2147,9 @@ function pledgeEligibilityBlockers({
   if (!pledge.feeAcknowledged) blockers.push("fee_acknowledgement_missing");
   if (!pledge.sealedProgressAcknowledged) blockers.push("sealed_progress_acknowledgement_missing");
   if (!pledge.bonusTermsAcknowledged) blockers.push("bonus_terms_acknowledgement_missing");
+  if (!isTrimStableNonEmpty(pledge.identityEligibilitySnapshotId)) blockers.push("identity_snapshot_missing");
+  if (!isTrimStableNonEmpty(pledge.bonusEligibilitySnapshotId)) blockers.push("bonus_eligibility_snapshot_missing");
+  if (!isTrimStableNonEmpty(pledge.paymentCommitmentSnapshotId)) blockers.push("payment_commitment_snapshot_missing");
   if (!pledge.providerPaymentMethodConfirmed) blockers.push("payment_method_not_confirmed");
   if (!isPositiveSafeInteger(pledge.maxGrossCents)) blockers.push("gross_invalid");
   if (pledge.maxGrossCents < round.participantMinGrossCents) blockers.push("below_participant_min");

@@ -922,6 +922,51 @@ test("screen 3 hard pledge submission saves only after confirmed snapshots and r
   assert.equal(saved.reserve.committedExposureCents, expectedBonusCents);
   assert.equal(saved.reserve.updatedAt, now);
 
+  const nonDraftReplay = prepareRefundBonusHardPledgeSubmission({
+    environment: "development",
+    featureEnabled: true,
+    round: labsRound,
+    pool: labsPool,
+    gate: gate(),
+    reserve: reserve(),
+    draftPledge: {
+      ...draft,
+      pledgeState: "hard_saved",
+    },
+    identitySnapshot: identitySnapshot(draft),
+    bonusEligibilitySnapshot: bonusEligibilitySnapshot(draft, expectedBonusCents),
+    paymentCommitmentSnapshot: paymentCommitmentSnapshot(draft),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(nonDraftReplay.allowed, false);
+  assert.equal(nonDraftReplay.pledge.pledgeState, "draft");
+  assert.equal(nonDraftReplay.reserve.committedCents, 0);
+  assert.equal(nonDraftReplay.reserve.committedExposureCents, 0);
+  assert.ok(nonDraftReplay.blockerCodes.includes("draft_pledge_required"));
+
+  const paymentBeforeReview = prepareRefundBonusHardPledgeSubmission({
+    environment: "development",
+    featureEnabled: true,
+    round: labsRound,
+    pool: labsPool,
+    gate: gate(),
+    reserve: reserve(),
+    draftPledge: draft,
+    identitySnapshot: identitySnapshot(draft),
+    bonusEligibilitySnapshot: bonusEligibilitySnapshot(draft, expectedBonusCents),
+    paymentCommitmentSnapshot: paymentCommitmentSnapshot(draft, {
+      savedAt: "2026-07-05T23:59:59.000Z",
+    }),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(paymentBeforeReview.allowed, false);
+  assert.equal(paymentBeforeReview.pledge.pledgeState, "draft");
+  assert.equal(paymentBeforeReview.reserve.committedCents, 0);
+  assert.equal(paymentBeforeReview.reserve.committedExposureCents, 0);
+  assert.ok(paymentBeforeReview.blockerCodes.includes("payment_saved_before_final_review"));
+
   const requiresAction = prepareRefundBonusHardPledgeSubmission({
     environment: "development",
     featureEnabled: true,
@@ -1099,6 +1144,26 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
   });
   assert.equal(unsupportedVerifiedShortfall.status, "nonqualifying_failed");
   assert.deepEqual(unsupportedVerifiedShortfall.reasonCodes, ["verified_supporter_threshold_shortfall"]);
+
+  const missingSnapshots = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ thresholdNetRecipientCents: 1_500, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges: [
+      pledge("a", "alice", 1_000, "humanitarian"),
+      pledge("missing-snapshots", "bob", 1_000, "animal_inclusive", {
+        identityEligibilitySnapshotId: undefined,
+        bonusEligibilitySnapshotId: undefined,
+        paymentCommitmentSnapshotId: undefined,
+      }),
+    ],
+  });
+  assert.equal(missingSnapshots.status, "qualifying_failed");
+  assert.deepEqual(missingSnapshots.excludedPledgeIds, ["missing-snapshots"]);
+  assert.equal(missingSnapshots.netRecipientCents, 1_000);
+  assert.equal(missingSnapshots.verifiedSupporterCount, 1);
+  assert.equal(missingSnapshots.distinctViewpointClusterCount, 1);
 
   const reviewBlocked = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -2122,7 +2187,14 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(reviewPage, /Correct answer/);
   assert.match(reviewPage, /more than 5% answer charge timing incorrectly/);
   assert.match(reviewPage, /more than\s+10% answer bonus eligibility incorrectly/);
-  assert.match(reviewPage, /Save hard pledge disabled/);
+  assert.match(reviewPage, /saveRefundBonusLabsHardPledgeAction/);
+  assert.match(reviewPage, /prepareRefundBonusHardPledgeSubmission/);
+  assert.match(reviewPage, /Run simulated hard pledge save/);
+  assert.match(reviewPage, /provider-confirmed payment\s+commitment snapshot/);
+  assert.match(reviewPage, /Simulated hard pledge saved/);
+  assert.match(reviewPage, /provider-confirmed simulation/);
+  assert.match(reviewPage, /no authorization, capture, provider\s+payout, public donor disclosure, or production persistence occurred/);
+  assert.equal(reviewPage.includes("Save hard pledge disabled"), false);
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);
   assert.equal(roundPage.includes("Refund-Bonus Pledge Pool"), false);
