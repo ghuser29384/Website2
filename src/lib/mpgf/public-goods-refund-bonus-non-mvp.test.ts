@@ -7,6 +7,7 @@ import {
   REFUND_BONUS_ACCOUNTING_METRIC_KEYS,
   REFUND_BONUS_COMPREHENSION_QUESTIONS,
   REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS,
+  REFUND_BONUS_EXPERIMENT_STAGE_POLICIES,
   REFUND_BONUS_FEATURE_CLASSIFICATION,
   REFUND_BONUS_FEATURE_KEY,
   REFUND_BONUS_LIVE_MONEY_FLAG,
@@ -19,12 +20,17 @@ import {
   computeRefundBonusCents,
   evaluateRefundBonusCapability,
   evaluateRefundBonusComprehensionMetrics,
+  evaluateRefundBonusCopyPreflightFreshness,
+  evaluateRefundBonusExperimentPivotCriteria,
+  evaluateRefundBonusExperimentStageReadiness,
   evaluateRefundBonusHardPledgeGate,
+  evaluateRefundBonusKillCriteria,
   evaluateRefundBonusOpenGate,
   evaluateRefundBonusRoundOutcome,
   isRefundBonusBonusEligibilitySnapshotEligible,
   isRefundBonusAuthorizationAttemptCaptureReady,
   isRefundBonusFeaturePromotionApproved,
+  isRefundBonusFeeQuoteValid,
   isRefundBonusIdentityEligibilitySnapshotEligible,
   isRefundBonusPaymentCommitmentSnapshotCountable,
   isRefundBonusProjectReviewSnapshotPledgeable,
@@ -32,6 +38,7 @@ import {
   validateRefundBonusCopy,
   type RefundBonusBonusEligibilitySnapshot,
   type RefundBonusFeaturePromotionRecord,
+  type RefundBonusFeeQuote,
   type RefundBonusIdentityEligibilitySnapshot,
   type RefundBonusOpenGate,
   type RefundBonusPaymentCommitmentSnapshot,
@@ -412,12 +419,48 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     commitmentState: "requires_action",
   }, round()), false);
 
+  const feeQuote: RefundBonusFeeQuote = {
+    id: "fee-quote-a",
+    roundId,
+    pledgeId: "pledge-a",
+    grossCents: 2_500,
+    feeCents: 125,
+    netRecipientCents: 2_375,
+    feePayer: "donor",
+    feePolicyHash,
+    quoteHash: "sha256:5858585858585858585858585858585858585858585858585858585858585858",
+  };
+  assert.equal(isRefundBonusFeeQuoteValid(feeQuote), true);
+  assert.equal(isRefundBonusFeeQuoteValid({
+    ...feeQuote,
+    netRecipientCents: 2_500,
+  }), false);
+  assert.equal(isRefundBonusFeeQuoteValid({
+    ...feeQuote,
+    feePayer: "waived",
+    feeCents: 125,
+  }), false);
+  assert.equal(isRefundBonusFeeQuoteValid({
+    ...feeQuote,
+    feePayer: "waived",
+    feeCents: 0,
+    netRecipientCents: 2_500,
+  }), true);
+
+  const latestDeployHash = "sha256:6767676767676767676767676767676767676767676767676767676767676767";
+  const requiredRefundBonusRoutes = [
+    "/labs/refund-bonus-pledge-pool",
+    "/labs/refund-bonus-pledge-pool/demo-round",
+    "/labs/refund-bonus-pledge-pool/demo-round/amount",
+    "/labs/refund-bonus-pledge-pool/demo-round/review",
+  ];
+
   const report = buildRefundBonusCopyPreflightReport({
     id: "copy-report",
     roundId,
     checkedAt: now,
-    lastDeployHash: "sha256:6767676767676767676767676767676767676767676767676767676767676767",
-    checkedRoutes: ["/labs/refund-bonus-pledge-pool"],
+    lastDeployHash: latestDeployHash,
+    checkedRoutes: requiredRefundBonusRoutes,
     activeCopy: `
       Non-MVP labs mechanism.
       If the pool misses the support threshold, eligible pledgers may receive a backed failure-participation bonus.
@@ -428,11 +471,59 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
   assert.equal(report.pass, true);
   assert.match(report.reportHash, /^sha256:[a-f0-9]{64}$/);
 
+  const freshReport = evaluateRefundBonusCopyPreflightFreshness({
+    report,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T23:59:59.000Z",
+    requiredRoutes: requiredRefundBonusRoutes,
+  });
+  assert.equal(freshReport.fresh, true);
+  assert.deepEqual(freshReport.reasonCodes, []);
+  assert.deepEqual(freshReport.missingRoutes, []);
+  assert.equal(freshReport.deployHashMatches, true);
+  assert.equal(freshReport.generatedAfterLatestDeploy, true);
+  assert.equal(freshReport.requiredRoutesCovered, true);
+
+  const staleHashReport = evaluateRefundBonusCopyPreflightFreshness({
+    report,
+    latestDeployHash: "sha256:6868686868686868686868686868686868686868686868686868686868686868",
+    latestDeployCompletedAt: "2026-07-05T23:59:59.000Z",
+    requiredRoutes: requiredRefundBonusRoutes,
+  });
+  assert.equal(staleHashReport.fresh, false);
+  assert.ok(staleHashReport.reasonCodes.includes("deploy_hash_mismatch"));
+
+  const preDeployReport = evaluateRefundBonusCopyPreflightFreshness({
+    report,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-06T00:00:01.000Z",
+    requiredRoutes: requiredRefundBonusRoutes,
+  });
+  assert.equal(preDeployReport.fresh, false);
+  assert.ok(preDeployReport.reasonCodes.includes("copy_preflight_before_latest_deploy"));
+
+  const routeCoverageFailure = evaluateRefundBonusCopyPreflightFreshness({
+    report: {
+      ...report,
+      checkedRoutes: ["/labs/refund-bonus-pledge-pool"],
+    },
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T23:59:59.000Z",
+    requiredRoutes: requiredRefundBonusRoutes,
+  });
+  assert.equal(routeCoverageFailure.fresh, false);
+  assert.ok(routeCoverageFailure.reasonCodes.includes("required_route_missing"));
+  assert.deepEqual(routeCoverageFailure.missingRoutes, [
+    "/labs/refund-bonus-pledge-pool/demo-round",
+    "/labs/refund-bonus-pledge-pool/demo-round/amount",
+    "/labs/refund-bonus-pledge-pool/demo-round/review",
+  ]);
+
   const failedReport = buildRefundBonusCopyPreflightReport({
     id: "copy-report-failed",
     roundId,
     checkedAt: now,
-    lastDeployHash: "sha256:6767676767676767676767676767676767676767676767676767676767676767",
+    lastDeployHash: latestDeployHash,
     checkedRoutes: ["/mpgf/rounds/demo"],
     activeCopy: "Get free money and a guaranteed return from bonus impact.",
     prohibitedActiveLabelsFound: ["MVP refund bonus"],
@@ -441,6 +532,15 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
   assert.equal(failedReport.pass, false);
   assert.equal(failedReport.bonusOverclaimFound, true);
   assert.equal(failedReport.financialPromotionRiskFound, true);
+  const failedFreshness = evaluateRefundBonusCopyPreflightFreshness({
+    report: failedReport,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T23:59:59.000Z",
+    requiredRoutes: requiredRefundBonusRoutes,
+  });
+  assert.equal(failedFreshness.fresh, false);
+  assert.ok(failedFreshness.reasonCodes.includes("copy_preflight_failed"));
+  assert.ok(failedFreshness.reasonCodes.includes("required_route_missing"));
 
   const approvedPromotion: RefundBonusFeaturePromotionRecord = {
     id: "promotion",
@@ -1147,6 +1247,282 @@ test("refund-bonus comprehension and metrics catalog match v137 experiment gates
   assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("grossCapturedCents"));
   assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("bonusHeldCents"));
   assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("bonusUnearnedReleasedCents"));
+});
+
+test("refund-bonus experiment stages and pivot criteria match v137 staged rollout", () => {
+  assert.equal(
+    REFUND_BONUS_EXPERIMENT_STAGE_POLICIES.stage_0_fake_door.chargeTimingCorrectMinBps,
+    8_500,
+  );
+  assert.deepEqual(
+    REFUND_BONUS_EXPERIMENT_STAGE_POLICIES.stage_1_internal_simulation.requiredSampleCases,
+    ["$0.50 pledge -> $1 simulated bonus", "$25 pledge -> 10% bonus capped at $2.50"],
+  );
+  assert.deepEqual(REFUND_BONUS_EXPERIMENT_STAGE_POLICIES.stage_2_closed_alpha.pledgeCapCents, {
+    min: 500,
+    max: 2_500,
+  });
+  assert.deepEqual(REFUND_BONUS_EXPERIMENT_STAGE_POLICIES.stage_3_limited_public_pilot.bonusRatioBps, {
+    min: 500,
+    max: 2_500,
+  });
+
+  const stage0 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_0_fake_door",
+    realMoneyEnabled: false,
+    bonusPayoutMode: "off",
+    userCommitmentMode: "none",
+    participantCohort: "fake_door",
+  });
+  assert.equal(stage0.allowed, true);
+  assert.deepEqual(stage0.blockerCodes, []);
+
+  const invalidStage0 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_0_fake_door",
+    realMoneyEnabled: true,
+    bonusPayoutMode: "real",
+    userCommitmentMode: "real",
+    participantCohort: "public",
+    publicMvpRouteConfusion: true,
+  });
+  assert.equal(invalidStage0.allowed, false);
+  assert.ok(invalidStage0.blockerCodes.includes("real_money_requires_promotion"));
+  assert.ok(invalidStage0.blockerCodes.includes("stage0_real_money_must_be_off"));
+  assert.ok(invalidStage0.blockerCodes.includes("stage0_bonus_payouts_must_be_off"));
+  assert.ok(invalidStage0.blockerCodes.includes("stage0_commitments_must_be_none"));
+  assert.ok(invalidStage0.blockerCodes.includes("stage0_public_mvp_route_confusion"));
+
+  const stage1 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_1_internal_simulation",
+    realMoneyEnabled: false,
+    bonusPayoutMode: "simulated",
+    userCommitmentMode: "simulated",
+    participantCohort: "internal",
+    sampleCaseFiftyCentOneDollarCovered: true,
+    sampleCaseTwentyFiveDollarTenPercentCovered: true,
+  });
+  assert.equal(stage1.allowed, true);
+
+  const invalidStage1 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_1_internal_simulation",
+    realMoneyEnabled: false,
+    bonusPayoutMode: "off",
+    userCommitmentMode: "none",
+    participantCohort: "public",
+    sampleCaseFiftyCentOneDollarCovered: true,
+    sampleCaseTwentyFiveDollarTenPercentCovered: false,
+  });
+  assert.equal(invalidStage1.allowed, false);
+  assert.ok(invalidStage1.blockerCodes.includes("stage1_requires_simulated_commitments"));
+  assert.ok(invalidStage1.blockerCodes.includes("stage1_requires_simulated_bonus"));
+  assert.ok(invalidStage1.blockerCodes.includes("stage1_requires_internal_or_test_users"));
+  assert.ok(invalidStage1.blockerCodes.includes("stage1_required_sample_cases_missing"));
+
+  const stage2 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_2_closed_alpha",
+    realMoneyEnabled: true,
+    promotionRecordApproved: true,
+    bonusPayoutMode: "real",
+    userCommitmentMode: "real",
+    participantCohort: "invite_only",
+    identityVerifiedRequired: true,
+    publicListingEnabled: false,
+    participantMinGrossCents: 500,
+    participantMaxGrossCents: 2_500,
+    bonusRatioBps: 1_000,
+    perUserBonusCapCents: 250,
+    roundGrossCapCents: 250_000,
+    roundBonusExposureCapCents: 25_000,
+  });
+  assert.equal(stage2.allowed, true);
+
+  const invalidStage2 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_2_closed_alpha",
+    realMoneyEnabled: true,
+    promotionRecordApproved: true,
+    bonusPayoutMode: "real",
+    userCommitmentMode: "real",
+    participantCohort: "public",
+    identityVerifiedRequired: false,
+    publicListingEnabled: true,
+    participantMinGrossCents: 50,
+    participantMaxGrossCents: 5_000,
+    bonusRatioBps: 2_000,
+    perUserBonusCapCents: 500,
+    roundGrossCapCents: 500_000,
+    roundBonusExposureCapCents: 50_000,
+    highRatioRealMoneyTestEnabled: true,
+    governanceHighRatioApproved: false,
+  });
+  assert.equal(invalidStage2.allowed, false);
+  assert.ok(invalidStage2.blockerCodes.includes("stage2_requires_invite_only_users"));
+  assert.ok(invalidStage2.blockerCodes.includes("stage2_requires_identity_verification"));
+  assert.ok(invalidStage2.blockerCodes.includes("stage2_blocks_public_listing"));
+  assert.ok(invalidStage2.blockerCodes.includes("stage2_pledge_cap_out_of_range"));
+  assert.ok(invalidStage2.blockerCodes.includes("stage2_high_ratio_real_money_requires_governance"));
+
+  const stage3 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_3_limited_public_pilot",
+    realMoneyEnabled: true,
+    promotionRecordApproved: true,
+    bonusPayoutMode: "real",
+    userCommitmentMode: "real",
+    participantCohort: "capped_public",
+    participantMinGrossCents: 500,
+    participantMaxGrossCents: 5_000,
+    bonusRatioBps: 2_500,
+    perUserBonusCapCents: 250,
+    roundGrossCapCents: 500_000,
+    roundBonusExposureCapCents: 25_000,
+    bonusExposureExplicitlyBacked: true,
+  });
+  assert.equal(stage3.allowed, true);
+
+  const invalidStage3 = evaluateRefundBonusExperimentStageReadiness({
+    stage: "stage_3_limited_public_pilot",
+    realMoneyEnabled: true,
+    bonusPayoutMode: "real",
+    userCommitmentMode: "real",
+    participantCohort: "public",
+    participantMinGrossCents: 100,
+    participantMaxGrossCents: 10_000,
+    bonusRatioBps: 3_000,
+    perUserBonusCapCents: 500,
+    roundGrossCapCents: 1_000_000,
+    roundBonusExposureCapCents: 25_000,
+    bonusExposureExplicitlyBacked: false,
+  });
+  assert.equal(invalidStage3.allowed, false);
+  assert.ok(invalidStage3.blockerCodes.includes("real_money_requires_promotion"));
+  assert.ok(invalidStage3.blockerCodes.includes("stage3_requires_promotion_record"));
+  assert.ok(invalidStage3.blockerCodes.includes("stage3_requires_capped_public_or_invite_only_users"));
+  assert.ok(invalidStage3.blockerCodes.includes("stage3_bonus_exposure_must_be_explicitly_backed"));
+
+  const pivot = evaluateRefundBonusExperimentPivotCriteria({
+    freeRidingRemainsHigh: true,
+    usersAttractedPrimarilyByBonusProfit: true,
+    sybilControlsCostlyRelativeToBonusValue: true,
+    bonusComprehensionLow: true,
+    legalComplianceUncertain: true,
+  });
+  assert.deepEqual(pivot.actions, [
+    "test_tiered_thresholds_or_standing_public_goods_microfunds",
+    "lower_bonus_ratio_or_stop",
+    "stop_or_restrict_to_verified_members",
+    "return_to_direct_capped_cgpp",
+    "keep_simulation_only",
+  ]);
+  assert.equal(pivot.pivotRecommended, true);
+  assert.equal(evaluateRefundBonusExperimentPivotCriteria({}).pivotRecommended, false);
+});
+
+test("refund-bonus kill criteria recommend fail-closed pauses and recovery actions", () => {
+  const pausedComprehension = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 100,
+    chargeTimingIncorrect: 6,
+    bonusEligibilityAnswered: 100,
+    bonusEligibilityIncorrect: 11,
+    bonusCharacterizationAnswered: 100,
+    bonusCharacterizationIncorrect: 0,
+    realMoneyPilot: true,
+  });
+  const kill = evaluateRefundBonusKillCriteria({
+    publicRouteClaimsMvpOrLive: true,
+    bonusCopyFinancialPromotionFound: true,
+    failureBonusDisplayedWithoutBackedReserveEvidence: true,
+    savedPaymentMethodCopyOverclaimsPaymentState: true,
+    preCloseExactGapLeak: true,
+    reviewBlockedPoolSideEffectStatus: "bonus_paid",
+    disallowedProjectDiscovered: true,
+    unresolvedBlockingConflictDiscovered: true,
+    paymentProviderHoldBeforeClose: true,
+    failedAuthorizationRowsRemovedBeforeRecompute: false,
+    capturedAfterRecomputeBelowThreshold: true,
+    bonusPayoutToIneligibleUser: true,
+    bonusPayoutForNonqualifyingFailure: true,
+    potentialBonusExposureCents: 251,
+    backedReserveCents: 250,
+    comprehensionMetrics: pausedComprehension,
+    privacyIncidentExposesDonorLevelSensitiveData: true,
+    controlClusterIssueMateriallyAffectsCounting: true,
+    potentialCaptureCents: 501,
+    roundGrossCaptureCapCents: 500,
+    roundBonusExposureCapCents: 250,
+    staleActiveCurrentProductLabel: true,
+    copyPreflightFailedAfterHardPledgeOpen: true,
+    hardPledgeCreationPossibleWhileOpenGateNotPassed: true,
+    authorizationPossibleInStatus: "open",
+    capturePossibleInStatus: "reviewing",
+    bonusPayoutPossibleInStatus: "payable",
+    pausePhase: "after_hard_pledges_before_authorization_or_bonus_payout",
+  });
+
+  assert.equal(kill.pauseRecommended, true);
+  assert.deepEqual(kill.reasonCodes, [
+    "public_route_claims_mvp_or_live",
+    "bonus_copy_financial_promotion",
+    "failure_bonus_displayed_without_backed_reserve_evidence",
+    "saved_payment_method_copy_overclaims_payment_state",
+    "pre_close_exact_gap_leak",
+    "review_blocked_pool_side_effect_state",
+    "disallowed_project_discovered",
+    "unresolved_blocking_conflict_discovered",
+    "payment_provider_hold_before_close",
+    "failed_authorization_rows_not_removed",
+    "capture_after_recompute_below_threshold",
+    "bonus_payout_to_ineligible_user",
+    "bonus_payout_for_nonqualifying_failure",
+    "bonus_exposure_exceeds_backed_reserve",
+    "charge_timing_incorrect_rate_above_5_percent",
+    "bonus_eligibility_incorrect_rate_above_10_percent",
+    "privacy_incident_exposes_donor_level_sensitive_data",
+    "control_cluster_issue_materially_affects_counting",
+    "potential_capture_exceeds_round_cap",
+    "potential_bonus_exposure_exceeds_round_cap",
+    "stale_active_current_product_label",
+    "copy_preflight_failed_after_hard_pledge_open",
+    "hard_pledge_possible_while_open_gate_not_passed",
+    "authorization_possible_in_disallowed_status",
+    "capture_possible_in_disallowed_status",
+    "bonus_payout_possible_in_disallowed_status",
+  ]);
+  assert.deepEqual(kill.requiredRecoveryActions, [
+    "keep_pledges_uncharged",
+    "publish_status_note",
+    "require_manual_review_before_resuming",
+  ]);
+
+  const authorizationPause = evaluateRefundBonusKillCriteria({
+    paymentProviderHoldBeforeClose: true,
+    pausePhase: "after_authorization_before_capture",
+  });
+  assert.deepEqual(authorizationPause.requiredRecoveryActions, [
+    "release_or_cancel_authorizations_where_possible",
+    "do_not_capture_until_resolved",
+  ]);
+
+  const bonusPause = evaluateRefundBonusKillCriteria({
+    bonusPayoutForNonqualifyingFailure: true,
+    pausePhase: "after_qualifying_failure_before_bonus_payout",
+  });
+  assert.deepEqual(bonusPause.requiredRecoveryActions, [
+    "hold_bonus_liabilities",
+    "do_not_pay_bonus_until_resolved",
+  ]);
+
+  const clear = evaluateRefundBonusKillCriteria({
+    potentialBonusExposureCents: 250,
+    backedReserveCents: 250,
+    potentialCaptureCents: 500,
+    roundGrossCaptureCapCents: 500,
+    roundBonusExposureCapCents: 250,
+    authorizationPossibleInStatus: "cleared",
+    capturePossibleInStatus: "payable",
+    bonusPayoutPossibleInStatus: "bonus_payable",
+  });
+  assert.equal(clear.pauseRecommended, false);
+  assert.deepEqual(clear.reasonCodes, []);
+  assert.deepEqual(clear.requiredRecoveryActions, []);
 });
 
 test("refund-bonus branch remains absent from active public MVP surfaces", () => {

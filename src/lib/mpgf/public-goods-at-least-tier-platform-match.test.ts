@@ -23,6 +23,7 @@ import {
   reconcileAtLeastTierLossAuthorizations,
   resolveAtLeastTierPlatformMatch,
   validateAtLeastTierOrdinaryCopy,
+  type AtLeastTierAdminWorkflowAction,
   type AtLeastTierFeaturePromotionRecord,
   type AtLeastTierPlatformMatchRound,
   type AtLeastTierPlatformMatchCommitment,
@@ -272,6 +273,36 @@ test("round, copy preflight report, and promotion record preserve at-least-tier 
 });
 
 test("admin and job gates keep at-least-tier live operations blocked while labs simulation can run", () => {
+  const allowedLabsAdminActions: AtLeastTierAdminWorkflowAction[] = [
+    "create_draft_labs_round",
+    "configure_reviewed_pool",
+    "configure_tiers",
+    "enter_frozen_forecast_probabilities",
+    "compute_reward_schedule",
+    "inspect_reward_schedule",
+    "freeze_reward_schedule",
+    "configure_platform_match_reserve",
+    "run_copy_preflight",
+    "run_simulated_commitments",
+    "run_simulated_authorization_resolution_settlement",
+    "view_audit_report",
+    "pause_or_kill_switch",
+  ];
+  for (const action of allowedLabsAdminActions) {
+    const gate = evaluateAtLeastTierAdminWorkflow({
+      action,
+      actorRole: "admin",
+      environment: "development",
+      featureEnabled: true,
+      rewardScheduleFrozen: true,
+      rewardScheduleValid: true,
+      reserveBacked: true,
+      reserveExposureExceeded: false,
+    });
+    assert.equal(gate.allowed, true, action);
+    assert.equal(gate.providerCallsAllowed, false, action);
+  }
+
   const labsSchedule = evaluateAtLeastTierAdminWorkflow({
     action: "compute_reward_schedule",
     actorRole: "admin",

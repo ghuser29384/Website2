@@ -422,6 +422,22 @@ export interface RefundBonusFeeQuote {
   quoteHash: string;
 }
 
+export function isRefundBonusFeeQuoteValid(quote: RefundBonusFeeQuote) {
+  return (
+    isTrimStableNonEmpty(quote.id) &&
+    isTrimStableNonEmpty(quote.roundId) &&
+    isTrimStableNonEmpty(quote.pledgeId) &&
+    isPositiveSafeInteger(quote.grossCents) &&
+    isNonNegativeSafeInteger(quote.feeCents) &&
+    isPositiveSafeInteger(quote.netRecipientCents) &&
+    quote.grossCents === quote.feeCents + quote.netRecipientCents &&
+    (quote.feePayer === "donor" || quote.feePayer === "waived") &&
+    (quote.feePayer !== "waived" || quote.feeCents === 0) &&
+    isCanonicalHash(quote.feePolicyHash) &&
+    isCanonicalHash(quote.quoteHash)
+  );
+}
+
 export interface RefundBonusAuthorizationAttempt {
   id?: string;
   roundId?: string;
@@ -651,6 +667,32 @@ export interface RefundBonusCopyPreflightReport {
   reportHash: string;
 }
 
+export type RefundBonusCopyPreflightFreshnessReason =
+  | "copy_preflight_failed"
+  | "invalid_copy_preflight_checked_at"
+  | "invalid_latest_deploy_completed_at"
+  | "invalid_latest_deploy_hash"
+  | "deploy_hash_mismatch"
+  | "copy_preflight_before_latest_deploy"
+  | "required_route_missing";
+
+export interface RefundBonusCopyPreflightFreshnessInput {
+  report: RefundBonusCopyPreflightReport;
+  latestDeployHash: string;
+  latestDeployCompletedAt: string;
+  requiredRoutes: string[];
+}
+
+export interface RefundBonusCopyPreflightFreshnessResult {
+  fresh: boolean;
+  reasonCodes: RefundBonusCopyPreflightFreshnessReason[];
+  missingRoutes: string[];
+  reportPasses: boolean;
+  deployHashMatches: boolean;
+  generatedAfterLatestDeploy: boolean;
+  requiredRoutesCovered: boolean;
+}
+
 export const REFUND_BONUS_PRODUCT_METRIC_KEYS = [
   "moral_public_goods_search_visits",
   "labs_card_click_through_rate",
@@ -806,6 +848,223 @@ export interface RefundBonusComprehensionMetricResult {
     | "bonus_characterization_sample_missing"
     | "invalid_comprehension_counts"
   >;
+}
+
+export type RefundBonusKillCriterion =
+  | "public_route_claims_mvp_or_live"
+  | "bonus_copy_financial_promotion"
+  | "failure_bonus_displayed_without_backed_reserve_evidence"
+  | "saved_payment_method_copy_overclaims_payment_state"
+  | "pre_close_exact_gap_leak"
+  | "review_blocked_pool_side_effect_state"
+  | "disallowed_project_discovered"
+  | "unresolved_blocking_conflict_discovered"
+  | "payment_provider_hold_before_close"
+  | "failed_authorization_rows_not_removed"
+  | "capture_after_recompute_below_threshold"
+  | "bonus_payout_to_ineligible_user"
+  | "bonus_payout_for_nonqualifying_failure"
+  | "bonus_exposure_exceeds_backed_reserve"
+  | "charge_timing_incorrect_rate_above_5_percent"
+  | "bonus_eligibility_incorrect_rate_above_10_percent"
+  | "privacy_incident_exposes_donor_level_sensitive_data"
+  | "control_cluster_issue_materially_affects_counting"
+  | "potential_capture_exceeds_round_cap"
+  | "potential_bonus_exposure_exceeds_round_cap"
+  | "stale_active_current_product_label"
+  | "copy_preflight_failed_after_hard_pledge_open"
+  | "hard_pledge_possible_while_open_gate_not_passed"
+  | "authorization_possible_in_disallowed_status"
+  | "capture_possible_in_disallowed_status"
+  | "bonus_payout_possible_in_disallowed_status";
+
+export type RefundBonusPausePhase =
+  | "after_hard_pledges_before_authorization_or_bonus_payout"
+  | "after_authorization_before_capture"
+  | "after_qualifying_failure_before_bonus_payout";
+
+export type RefundBonusPauseRecoveryAction =
+  | "keep_pledges_uncharged"
+  | "publish_status_note"
+  | "require_manual_review_before_resuming"
+  | "release_or_cancel_authorizations_where_possible"
+  | "do_not_capture_until_resolved"
+  | "hold_bonus_liabilities"
+  | "do_not_pay_bonus_until_resolved";
+
+export interface RefundBonusKillCriteriaInput {
+  publicRouteClaimsMvpOrLive?: boolean;
+  bonusCopyFinancialPromotionFound?: boolean;
+  failureBonusDisplayedWithoutBackedReserveEvidence?: boolean;
+  savedPaymentMethodCopyOverclaimsPaymentState?: boolean;
+  preCloseExactGapLeak?: boolean;
+  reviewBlockedPoolSideEffectStatus?: RefundBonusRoundStatus;
+  disallowedProjectDiscovered?: boolean;
+  unresolvedBlockingConflictDiscovered?: boolean;
+  paymentProviderHoldBeforeClose?: boolean;
+  failedAuthorizationRowsRemovedBeforeRecompute?: boolean;
+  capturedAfterRecomputeBelowThreshold?: boolean;
+  bonusPayoutToIneligibleUser?: boolean;
+  bonusPayoutForNonqualifyingFailure?: boolean;
+  potentialBonusExposureCents?: number;
+  backedReserveCents?: number;
+  comprehensionMetrics?: RefundBonusComprehensionMetricResult;
+  privacyIncidentExposesDonorLevelSensitiveData?: boolean;
+  controlClusterIssueMateriallyAffectsCounting?: boolean;
+  potentialCaptureCents?: number;
+  roundGrossCaptureCapCents?: number;
+  roundBonusExposureCapCents?: number;
+  staleActiveCurrentProductLabel?: boolean;
+  copyPreflightFailedAfterHardPledgeOpen?: boolean;
+  hardPledgeCreationPossibleWhileOpenGateNotPassed?: boolean;
+  authorizationPossibleInStatus?: RefundBonusRoundStatus;
+  capturePossibleInStatus?: RefundBonusRoundStatus;
+  bonusPayoutPossibleInStatus?: RefundBonusRoundStatus;
+  pausePhase?: RefundBonusPausePhase;
+}
+
+export interface RefundBonusKillCriteriaResult {
+  pauseRecommended: boolean;
+  reasonCodes: RefundBonusKillCriterion[];
+  requiredRecoveryActions: RefundBonusPauseRecoveryAction[];
+}
+
+export type RefundBonusExperimentStage =
+  | "stage_0_fake_door"
+  | "stage_1_internal_simulation"
+  | "stage_2_closed_alpha"
+  | "stage_3_limited_public_pilot";
+
+export type RefundBonusExperimentBonusPayoutMode = "off" | "simulated" | "real";
+export type RefundBonusExperimentCommitmentMode = "none" | "simulated" | "real";
+export type RefundBonusExperimentParticipantCohort =
+  | "none"
+  | "fake_door"
+  | "internal"
+  | "test"
+  | "invite_only"
+  | "capped_public"
+  | "public";
+
+export const REFUND_BONUS_EXPERIMENT_STAGE_POLICIES = {
+  stage_0_fake_door: {
+    realMoney: "off",
+    bonusPayouts: "off",
+    userCommitments: "none",
+    goal: "comprehension_and_willingness_to_pledge_measurement",
+    chargeTimingCorrectMinBps: REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0ChargeTimingCorrectMinBps,
+    bonusEligibilityCorrectMinBps: REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0BonusEligibilityCorrectMinBps,
+    bonusCharacterizationCorrectMinBps:
+      REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0BonusCharacterizationCorrectMinBps,
+  },
+  stage_1_internal_simulation: {
+    realMoney: "off",
+    simulatedPledge: "on",
+    simulatedBonus: "on",
+    participants: ["internal", "test"],
+    requiredSampleCases: [
+      "$0.50 pledge -> $1 simulated bonus",
+      "$25 pledge -> 10% bonus capped at $2.50",
+    ],
+  },
+  stage_2_closed_alpha: {
+    realMoney: "optional_only_if_promoted_for_alpha",
+    users: "invite_only_identity_verified",
+    pledgeCapCents: { min: 500, max: 2_500 },
+    bonusRatioBps: { min: 500, max: 1_000 },
+    bonusCapCents: { min: 50, max: 250 },
+    roundGrossCapCents: { min: 50_000, max: 250_000 },
+    bonusExposureCapCents: { min: 5_000, max: 25_000 },
+    highRatioRealMoneyRequiresGovernanceApproval: true,
+  },
+  stage_3_limited_public_pilot: {
+    realMoney: "enabled_only_after_promotion_record",
+    users: ["tightly_capped_public_entry", "invite_only"],
+    pledgeCapCents: { min: 500, max: 5_000 },
+    bonusRatioBps: { min: 500, max: 2_500 },
+    bonusCapCents: { min: 50, max: 250 },
+    roundGrossCapCents: { min: 100_000, max: 500_000 },
+    bonusExposureCap: "explicitly_backed",
+  },
+} as const;
+
+export type RefundBonusExperimentStageBlocker =
+  | "stage0_real_money_must_be_off"
+  | "stage0_bonus_payouts_must_be_off"
+  | "stage0_commitments_must_be_none"
+  | "stage0_public_mvp_route_confusion"
+  | "stage1_real_money_must_be_off"
+  | "stage1_requires_simulated_commitments"
+  | "stage1_requires_simulated_bonus"
+  | "stage1_requires_internal_or_test_users"
+  | "stage1_required_sample_cases_missing"
+  | "real_money_requires_promotion"
+  | "real_bonus_payout_requires_real_money"
+  | "stage2_requires_invite_only_users"
+  | "stage2_requires_identity_verification"
+  | "stage2_blocks_public_listing"
+  | "stage2_pledge_cap_out_of_range"
+  | "stage2_bonus_ratio_out_of_range"
+  | "stage2_bonus_cap_out_of_range"
+  | "stage2_round_gross_cap_out_of_range"
+  | "stage2_bonus_exposure_cap_out_of_range"
+  | "stage2_high_ratio_real_money_requires_governance"
+  | "stage3_requires_promotion_record"
+  | "stage3_requires_capped_public_or_invite_only_users"
+  | "stage3_pledge_cap_out_of_range"
+  | "stage3_bonus_ratio_out_of_range"
+  | "stage3_bonus_cap_out_of_range"
+  | "stage3_round_gross_cap_out_of_range"
+  | "stage3_bonus_exposure_must_be_explicitly_backed";
+
+export interface RefundBonusExperimentStageReadinessInput {
+  stage: RefundBonusExperimentStage;
+  realMoneyEnabled: boolean;
+  promotionRecordApproved?: boolean;
+  bonusPayoutMode: RefundBonusExperimentBonusPayoutMode;
+  userCommitmentMode: RefundBonusExperimentCommitmentMode;
+  participantCohort: RefundBonusExperimentParticipantCohort;
+  identityVerifiedRequired?: boolean;
+  publicListingEnabled?: boolean;
+  participantMinGrossCents?: number;
+  participantMaxGrossCents?: number;
+  bonusRatioBps?: number;
+  perUserBonusCapCents?: number;
+  roundGrossCapCents?: number;
+  roundBonusExposureCapCents?: number;
+  bonusExposureExplicitlyBacked?: boolean;
+  sampleCaseFiftyCentOneDollarCovered?: boolean;
+  sampleCaseTwentyFiveDollarTenPercentCovered?: boolean;
+  highRatioRealMoneyTestEnabled?: boolean;
+  governanceHighRatioApproved?: boolean;
+  publicMvpRouteConfusion?: boolean;
+}
+
+export interface RefundBonusExperimentStageReadinessResult {
+  allowed: boolean;
+  stage: RefundBonusExperimentStage;
+  policy: typeof REFUND_BONUS_EXPERIMENT_STAGE_POLICIES[RefundBonusExperimentStage];
+  blockerCodes: RefundBonusExperimentStageBlocker[];
+}
+
+export type RefundBonusExperimentPivotAction =
+  | "test_tiered_thresholds_or_standing_public_goods_microfunds"
+  | "lower_bonus_ratio_or_stop"
+  | "stop_or_restrict_to_verified_members"
+  | "return_to_direct_capped_cgpp"
+  | "keep_simulation_only";
+
+export interface RefundBonusExperimentPivotInput {
+  freeRidingRemainsHigh?: boolean;
+  usersAttractedPrimarilyByBonusProfit?: boolean;
+  sybilControlsCostlyRelativeToBonusValue?: boolean;
+  bonusComprehensionLow?: boolean;
+  legalComplianceUncertain?: boolean;
+}
+
+export interface RefundBonusExperimentPivotResult {
+  pivotRecommended: boolean;
+  actions: RefundBonusExperimentPivotAction[];
 }
 
 export interface RefundBonusFeaturePromotionRecord {
@@ -995,6 +1254,233 @@ export function evaluateRefundBonusComprehensionMetrics({
       reason === "invalid_comprehension_counts"
     ),
     pauseReasonCodes: unique(pauseReasonCodes),
+  };
+}
+
+export function evaluateRefundBonusKillCriteria(input: RefundBonusKillCriteriaInput): RefundBonusKillCriteriaResult {
+  const reasonCodes: RefundBonusKillCriterion[] = [];
+  const add = (condition: boolean | undefined, reason: RefundBonusKillCriterion) => {
+    if (condition) reasonCodes.push(reason);
+  };
+
+  add(input.publicRouteClaimsMvpOrLive, "public_route_claims_mvp_or_live");
+  add(input.bonusCopyFinancialPromotionFound, "bonus_copy_financial_promotion");
+  add(
+    input.failureBonusDisplayedWithoutBackedReserveEvidence,
+    "failure_bonus_displayed_without_backed_reserve_evidence",
+  );
+  add(input.savedPaymentMethodCopyOverclaimsPaymentState, "saved_payment_method_copy_overclaims_payment_state");
+  add(input.preCloseExactGapLeak, "pre_close_exact_gap_leak");
+  add(
+    input.reviewBlockedPoolSideEffectStatus === "open" ||
+      input.reviewBlockedPoolSideEffectStatus === "authorizing" ||
+      input.reviewBlockedPoolSideEffectStatus === "payable" ||
+      input.reviewBlockedPoolSideEffectStatus === "bonus_payable" ||
+      input.reviewBlockedPoolSideEffectStatus === "captured" ||
+      input.reviewBlockedPoolSideEffectStatus === "bonus_paid",
+    "review_blocked_pool_side_effect_state",
+  );
+  add(input.disallowedProjectDiscovered, "disallowed_project_discovered");
+  add(input.unresolvedBlockingConflictDiscovered, "unresolved_blocking_conflict_discovered");
+  add(input.paymentProviderHoldBeforeClose, "payment_provider_hold_before_close");
+  add(input.failedAuthorizationRowsRemovedBeforeRecompute === false, "failed_authorization_rows_not_removed");
+  add(input.capturedAfterRecomputeBelowThreshold, "capture_after_recompute_below_threshold");
+  add(input.bonusPayoutToIneligibleUser, "bonus_payout_to_ineligible_user");
+  add(input.bonusPayoutForNonqualifyingFailure, "bonus_payout_for_nonqualifying_failure");
+  add(
+    isNonNegativeSafeInteger(input.potentialBonusExposureCents) &&
+      isNonNegativeSafeInteger(input.backedReserveCents) &&
+      input.potentialBonusExposureCents > input.backedReserveCents,
+    "bonus_exposure_exceeds_backed_reserve",
+  );
+  add(
+    input.comprehensionMetrics?.pauseReasonCodes.includes("charge_timing_incorrect_rate_above_5_percent"),
+    "charge_timing_incorrect_rate_above_5_percent",
+  );
+  add(
+    input.comprehensionMetrics?.pauseReasonCodes.includes("bonus_eligibility_incorrect_rate_above_10_percent"),
+    "bonus_eligibility_incorrect_rate_above_10_percent",
+  );
+  add(
+    input.privacyIncidentExposesDonorLevelSensitiveData,
+    "privacy_incident_exposes_donor_level_sensitive_data",
+  );
+  add(input.controlClusterIssueMateriallyAffectsCounting, "control_cluster_issue_materially_affects_counting");
+  add(
+    isNonNegativeSafeInteger(input.potentialCaptureCents) &&
+      isNonNegativeSafeInteger(input.roundGrossCaptureCapCents) &&
+      input.potentialCaptureCents > input.roundGrossCaptureCapCents,
+    "potential_capture_exceeds_round_cap",
+  );
+  add(
+    isNonNegativeSafeInteger(input.potentialBonusExposureCents) &&
+      isNonNegativeSafeInteger(input.roundBonusExposureCapCents) &&
+      input.potentialBonusExposureCents > input.roundBonusExposureCapCents,
+    "potential_bonus_exposure_exceeds_round_cap",
+  );
+  add(input.staleActiveCurrentProductLabel, "stale_active_current_product_label");
+  add(input.copyPreflightFailedAfterHardPledgeOpen, "copy_preflight_failed_after_hard_pledge_open");
+  add(
+    input.hardPledgeCreationPossibleWhileOpenGateNotPassed,
+    "hard_pledge_possible_while_open_gate_not_passed",
+  );
+  add(
+    input.authorizationPossibleInStatus !== undefined &&
+      !canRefundBonusAuthorizeSuccessCharge(input.authorizationPossibleInStatus),
+    "authorization_possible_in_disallowed_status",
+  );
+  add(
+    input.capturePossibleInStatus !== undefined &&
+      !canRefundBonusCaptureSuccessCharge(input.capturePossibleInStatus),
+    "capture_possible_in_disallowed_status",
+  );
+  add(
+    input.bonusPayoutPossibleInStatus !== undefined &&
+      input.bonusPayoutPossibleInStatus !== "bonus_payable" &&
+      input.bonusPayoutPossibleInStatus !== "bonus_paying",
+    "bonus_payout_possible_in_disallowed_status",
+  );
+
+  const uniqueReasons = unique(reasonCodes);
+  const requiredRecoveryActions: RefundBonusPauseRecoveryAction[] = [];
+  if (uniqueReasons.length > 0) {
+    if (input.pausePhase === "after_hard_pledges_before_authorization_or_bonus_payout") {
+      requiredRecoveryActions.push(
+        "keep_pledges_uncharged",
+        "publish_status_note",
+        "require_manual_review_before_resuming",
+      );
+    }
+    if (input.pausePhase === "after_authorization_before_capture") {
+      requiredRecoveryActions.push("release_or_cancel_authorizations_where_possible", "do_not_capture_until_resolved");
+    }
+    if (input.pausePhase === "after_qualifying_failure_before_bonus_payout") {
+      requiredRecoveryActions.push("hold_bonus_liabilities", "do_not_pay_bonus_until_resolved");
+    }
+  }
+
+  return {
+    pauseRecommended: uniqueReasons.length > 0,
+    reasonCodes: uniqueReasons,
+    requiredRecoveryActions: unique(requiredRecoveryActions),
+  };
+}
+
+function centsInRange(value: number | undefined, min: number, max: number) {
+  return isPositiveSafeInteger(value) && value >= min && value <= max;
+}
+
+function bpsInRange(value: number | undefined, min: number, max: number) {
+  return isPositiveSafeInteger(value) && value >= min && value <= max;
+}
+
+export function evaluateRefundBonusExperimentStageReadiness(
+  input: RefundBonusExperimentStageReadinessInput,
+): RefundBonusExperimentStageReadinessResult {
+  const blockerCodes: RefundBonusExperimentStageBlocker[] = [];
+  const add = (condition: boolean, blocker: RefundBonusExperimentStageBlocker) => {
+    if (condition) blockerCodes.push(blocker);
+  };
+
+  const realBonusPayout = input.bonusPayoutMode === "real";
+  if ((input.realMoneyEnabled || realBonusPayout) && !input.promotionRecordApproved) {
+    blockerCodes.push("real_money_requires_promotion");
+  }
+  add(realBonusPayout && !input.realMoneyEnabled, "real_bonus_payout_requires_real_money");
+
+  if (input.stage === "stage_0_fake_door") {
+    add(input.realMoneyEnabled, "stage0_real_money_must_be_off");
+    add(input.bonusPayoutMode !== "off", "stage0_bonus_payouts_must_be_off");
+    add(input.userCommitmentMode !== "none", "stage0_commitments_must_be_none");
+    add(Boolean(input.publicMvpRouteConfusion), "stage0_public_mvp_route_confusion");
+  }
+
+  if (input.stage === "stage_1_internal_simulation") {
+    add(input.realMoneyEnabled, "stage1_real_money_must_be_off");
+    add(input.userCommitmentMode !== "simulated", "stage1_requires_simulated_commitments");
+    add(input.bonusPayoutMode !== "simulated", "stage1_requires_simulated_bonus");
+    add(
+      input.participantCohort !== "internal" && input.participantCohort !== "test",
+      "stage1_requires_internal_or_test_users",
+    );
+    add(
+      !input.sampleCaseFiftyCentOneDollarCovered || !input.sampleCaseTwentyFiveDollarTenPercentCovered,
+      "stage1_required_sample_cases_missing",
+    );
+  }
+
+  if (input.stage === "stage_2_closed_alpha") {
+    add(input.participantCohort !== "invite_only", "stage2_requires_invite_only_users");
+    add(!input.identityVerifiedRequired, "stage2_requires_identity_verification");
+    add(Boolean(input.publicListingEnabled), "stage2_blocks_public_listing");
+    add(
+      !centsInRange(input.participantMinGrossCents, 500, 2_500) ||
+        !centsInRange(input.participantMaxGrossCents, 500, 2_500) ||
+        (input.participantMinGrossCents ?? 0) > (input.participantMaxGrossCents ?? 0),
+      "stage2_pledge_cap_out_of_range",
+    );
+    add(!bpsInRange(input.bonusRatioBps, 500, 1_000), "stage2_bonus_ratio_out_of_range");
+    add(!centsInRange(input.perUserBonusCapCents, 50, 250), "stage2_bonus_cap_out_of_range");
+    add(!centsInRange(input.roundGrossCapCents, 50_000, 250_000), "stage2_round_gross_cap_out_of_range");
+    add(
+      !centsInRange(input.roundBonusExposureCapCents, 5_000, 25_000),
+      "stage2_bonus_exposure_cap_out_of_range",
+    );
+    add(
+      Boolean(input.realMoneyEnabled && input.highRatioRealMoneyTestEnabled && !input.governanceHighRatioApproved),
+      "stage2_high_ratio_real_money_requires_governance",
+    );
+  }
+
+  if (input.stage === "stage_3_limited_public_pilot") {
+    add(!input.promotionRecordApproved, "stage3_requires_promotion_record");
+    add(
+      input.participantCohort !== "capped_public" && input.participantCohort !== "invite_only",
+      "stage3_requires_capped_public_or_invite_only_users",
+    );
+    add(
+      !centsInRange(input.participantMinGrossCents, 500, 5_000) ||
+        !centsInRange(input.participantMaxGrossCents, 500, 5_000) ||
+        (input.participantMinGrossCents ?? 0) > (input.participantMaxGrossCents ?? 0),
+      "stage3_pledge_cap_out_of_range",
+    );
+    add(!bpsInRange(input.bonusRatioBps, 500, 2_500), "stage3_bonus_ratio_out_of_range");
+    add(!centsInRange(input.perUserBonusCapCents, 50, 250), "stage3_bonus_cap_out_of_range");
+    add(!centsInRange(input.roundGrossCapCents, 100_000, 500_000), "stage3_round_gross_cap_out_of_range");
+    add(!input.bonusExposureExplicitlyBacked, "stage3_bonus_exposure_must_be_explicitly_backed");
+  }
+
+  return {
+    allowed: blockerCodes.length === 0,
+    stage: input.stage,
+    policy: REFUND_BONUS_EXPERIMENT_STAGE_POLICIES[input.stage],
+    blockerCodes: unique(blockerCodes),
+  };
+}
+
+export function evaluateRefundBonusExperimentPivotCriteria(
+  input: RefundBonusExperimentPivotInput,
+): RefundBonusExperimentPivotResult {
+  const actions: RefundBonusExperimentPivotAction[] = [];
+  if (input.freeRidingRemainsHigh) {
+    actions.push("test_tiered_thresholds_or_standing_public_goods_microfunds");
+  }
+  if (input.usersAttractedPrimarilyByBonusProfit) {
+    actions.push("lower_bonus_ratio_or_stop");
+  }
+  if (input.sybilControlsCostlyRelativeToBonusValue) {
+    actions.push("stop_or_restrict_to_verified_members");
+  }
+  if (input.bonusComprehensionLow) {
+    actions.push("return_to_direct_capped_cgpp");
+  }
+  if (input.legalComplianceUncertain) {
+    actions.push("keep_simulation_only");
+  }
+
+  return {
+    pivotRecommended: actions.length > 0,
+    actions: unique(actions),
   };
 }
 
@@ -2068,5 +2554,48 @@ export function buildRefundBonusCopyPreflightReport({
   return {
     ...reportWithoutHash,
     reportHash: hashValue(reportWithoutHash),
+  };
+}
+
+function isValidIsoTimestamp(value: string) {
+  return !Number.isNaN(Date.parse(value));
+}
+
+export function evaluateRefundBonusCopyPreflightFreshness({
+  report,
+  latestDeployHash,
+  latestDeployCompletedAt,
+  requiredRoutes,
+}: RefundBonusCopyPreflightFreshnessInput): RefundBonusCopyPreflightFreshnessResult {
+  const checkedRoutes = new Set(report.checkedRoutes);
+  const missingRoutes = unique(requiredRoutes.filter((route) => !checkedRoutes.has(route)));
+  const checkedAtValid = isValidIsoTimestamp(report.checkedAt);
+  const latestDeployCompletedAtValid = isValidIsoTimestamp(latestDeployCompletedAt);
+  const latestDeployHashValid = isCanonicalHash(latestDeployHash);
+  const reportPasses = report.pass;
+  const deployHashMatches = latestDeployHashValid && report.lastDeployHash === latestDeployHash;
+  const generatedAfterLatestDeploy =
+    checkedAtValid &&
+    latestDeployCompletedAtValid &&
+    Date.parse(report.checkedAt) >= Date.parse(latestDeployCompletedAt);
+  const requiredRoutesCovered = missingRoutes.length === 0;
+
+  const reasonCodes: RefundBonusCopyPreflightFreshnessReason[] = [];
+  if (!reportPasses) reasonCodes.push("copy_preflight_failed");
+  if (!checkedAtValid) reasonCodes.push("invalid_copy_preflight_checked_at");
+  if (!latestDeployCompletedAtValid) reasonCodes.push("invalid_latest_deploy_completed_at");
+  if (!latestDeployHashValid) reasonCodes.push("invalid_latest_deploy_hash");
+  if (!deployHashMatches) reasonCodes.push("deploy_hash_mismatch");
+  if (!generatedAfterLatestDeploy) reasonCodes.push("copy_preflight_before_latest_deploy");
+  if (!requiredRoutesCovered) reasonCodes.push("required_route_missing");
+
+  return {
+    fresh: reasonCodes.length === 0,
+    reasonCodes: unique(reasonCodes),
+    missingRoutes,
+    reportPasses,
+    deployHashMatches,
+    generatedAfterLatestDeploy,
+    requiredRoutesCovered,
   };
 }
