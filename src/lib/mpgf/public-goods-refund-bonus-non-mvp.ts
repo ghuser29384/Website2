@@ -333,6 +333,7 @@ export interface RefundBonusPledge {
   visibility: "aggregate_only";
   sameControlClusterId?: string;
   paymentClusterId?: string;
+  bonusPayoutMethodRef?: string;
   pledgeState:
     | "draft"
     | "hard_saved"
@@ -488,6 +489,7 @@ export interface RefundBonusAuthorizationAttempt {
 export function isRefundBonusAuthorizationAttemptCaptureReady(
   attempt: RefundBonusAuthorizationAttempt | undefined,
   pledge: Pick<RefundBonusPledge, "id" | "roundId" | "poolId" | "participantId" | "maxGrossCents">,
+  expectedCaptureAt?: string,
 ) {
   return Boolean(
     attempt &&
@@ -498,6 +500,41 @@ export function isRefundBonusAuthorizationAttemptCaptureReady(
       attempt.authorizationState === "authorized_exact" &&
       attempt.requiredGrossCents === pledge.maxGrossCents &&
       Boolean(attempt.providerAuthorizationRef) &&
+      doesRefundBonusAuthorizationExpireAfter(attempt, expectedCaptureAt) &&
+      isCanonicalHash(attempt.eventHash),
+  );
+}
+
+function doesRefundBonusAuthorizationExpireAfter(
+  attempt: Pick<RefundBonusAuthorizationAttempt, "expiresAt"> | undefined,
+  expectedCaptureAt?: string,
+) {
+  if (!expectedCaptureAt) return true;
+  if (!attempt?.expiresAt) return false;
+  const expiresAtMs = Date.parse(attempt.expiresAt);
+  const expectedCaptureAtMs = Date.parse(expectedCaptureAt);
+  return Number.isFinite(expiresAtMs) && Number.isFinite(expectedCaptureAtMs) && expiresAtMs > expectedCaptureAtMs;
+}
+
+function isRefundBonusSuccessReceiptCaptureEvidenceReady(
+  attempt: RefundBonusAuthorizationAttempt | undefined,
+  pledge: Pick<RefundBonusPledge, "id" | "roundId" | "poolId" | "participantId" | "maxGrossCents">,
+  expectedCaptureAt: string,
+): attempt is RefundBonusAuthorizationAttempt & {
+  providerAuthorizationRef: string;
+  providerCaptureRef: string;
+} {
+  return Boolean(
+    attempt &&
+      attempt.roundId === pledge.roundId &&
+      attempt.poolId === pledge.poolId &&
+      attempt.pledgeId === pledge.id &&
+      attempt.participantId === pledge.participantId &&
+      attempt.authorizationState === "captured" &&
+      attempt.requiredGrossCents === pledge.maxGrossCents &&
+      isTrimStableNonEmpty(attempt.providerAuthorizationRef) &&
+      isTrimStableNonEmpty(attempt.providerCaptureRef) &&
+      doesRefundBonusAuthorizationExpireAfter(attempt, expectedCaptureAt) &&
       isCanonicalHash(attempt.eventHash),
   );
 }
@@ -1740,6 +1777,12 @@ export function prepareRefundBonusHardPledgeSubmission({
     collusionState: identitySnapshotValid ? identitySnapshot.collusionState : "blocked",
     sameControlClusterId: identitySnapshotValid ? identitySnapshot.sameControlClusterId : draftPledge.sameControlClusterId,
     paymentClusterId: bonusSnapshotValid ? bonusEligibilitySnapshot.paymentClusterId : draftPledge.paymentClusterId,
+    bonusPayoutMethodRef:
+      paymentSnapshotValid &&
+      paymentCommitmentSnapshot.supportsBonusPayoutMethod &&
+      isTrimStableNonEmpty(paymentCommitmentSnapshot.bonusPayoutMethodRef)
+        ? paymentCommitmentSnapshot.bonusPayoutMethodRef
+        : undefined,
     priorBonusAbuseState: bonusSnapshotValid ? bonusEligibilitySnapshot.priorBonusAbuseState : "blocked",
     jurisdictionEligibilityState: bonusSnapshotValid ? bonusEligibilitySnapshot.jurisdictionEligibilityState : "blocked",
     bonusEligibilityWeightBps: bonusSnapshotValid ? 10_000 : 0,
@@ -2242,7 +2285,7 @@ export function evaluateRefundBonusRoundOutcome({
   const afterAuthorization = deduped.accepted.filter((pledge) => {
     if (!recomputedAfterAuthorization) return true;
     const attempt = authorizationByPledge.get(pledge.id);
-    return isRefundBonusAuthorizationAttemptCaptureReady(attempt, pledge);
+    return isRefundBonusAuthorizationAttemptCaptureReady(attempt, pledge, round.challengeDeadlineAt);
   });
   const eligiblePledges = afterAuthorization.map((pledge) => {
     const netRecipientCents = Math.max(0, pledge.maxGrossCents - pledge.feeCents);
@@ -2380,6 +2423,25 @@ export function canRefundBonusPayoutBonus(status: RefundBonusRoundStatus) {
   return status === "bonus_payable" || status === "bonus_paying";
 }
 
+function isRefundBonusQualifyingFailureReason(
+  reason: RefundBonusFailureReason,
+): reason is RefundBonusQualifyingFailureMode {
+  return DEFAULT_QUALIFYING_FAILURE_MODES.includes(reason as RefundBonusQualifyingFailureMode);
+}
+
+function didRefundBonusQualifyingFailurePredicatePass(
+  outcome: RefundBonusOutcome,
+  pool: RefundBonusPledgePool,
+) {
+  return (
+    outcome.status === "qualifying_failed" &&
+    outcome.reasonCodes.some((reason) =>
+      isRefundBonusQualifyingFailureReason(reason) &&
+      pool.qualifyingFailureModes.includes(reason)
+    )
+  );
+}
+
 export function planRefundBonusSettlement({
   round,
   pool,
@@ -2410,6 +2472,7 @@ export function planRefundBonusSettlement({
   payoutRailPaused?: boolean;
 }): RefundBonusSettlementPlan {
   const blockedReasonCodes: string[] = [];
+  const qualifyingFailurePredicatePassed = didRefundBonusQualifyingFailurePredicatePass(outcome, pool);
   if (!simulationOnly) blockedReasonCodes.push("production_real_money_disabled");
   if (emergencyPaused) blockedReasonCodes.push("emergency_pause_active");
   if (featurePaused) blockedReasonCodes.push("feature_pause_active");
@@ -2433,6 +2496,12 @@ export function planRefundBonusSettlement({
     if (!outcome.recomputedAfterAuthorization) {
       blockedReasonCodes.push("authorization_reconciliation_missing");
     }
+    if (
+      !isNonNegativeSafeInteger(outcome.grossExposureCents) ||
+      outcome.grossExposureCents > round.roundGrossCaptureCapCents
+    ) {
+      blockedReasonCodes.push("gross_capture_cap_exceeded");
+    }
   }
   if (outcome.status === "qualifying_failed") {
     if (!canRefundBonusPayoutBonus(roundStatus)) {
@@ -2447,6 +2516,9 @@ export function planRefundBonusSettlement({
     if (reserve.status !== "active" && reserve.status !== "paying") {
       blockedReasonCodes.push("bonus_reserve_not_active");
     }
+    if (!qualifyingFailurePredicatePassed) {
+      blockedReasonCodes.push("qualifying_failure_predicate_not_passed");
+    }
     if (!bonusSettlementPlanApproved) {
       blockedReasonCodes.push("bonus_settlement_plan_not_approved");
     }
@@ -2456,8 +2528,12 @@ export function planRefundBonusSettlement({
   }
 
   const createdAt = round.updatedAt;
-  const payoutOperations = outcome.status === "qualifying_failed" && blockedReasonCodes.length === 0
-    ? outcome.eligiblePledges.map((row) => {
+  const payoutOperations = qualifyingFailurePredicatePassed && blockedReasonCodes.length === 0
+    ? outcome.eligiblePledges.flatMap((row) => {
+      if (!isTrimStableNonEmpty(row.pledge.bonusPayoutMethodRef)) {
+        return [];
+      }
+
       const operation = {
         id: `${row.pledge.id}:refund-bonus-payout`,
         roundId: round.id,
@@ -2469,7 +2545,7 @@ export function planRefundBonusSettlement({
         payoutFeeCents: 0,
         bonusNetCents: row.bonusEligibleCents,
         currency: "usd" as const,
-        payoutDestinationRef: row.pledge.paymentClusterId,
+        payoutDestinationRef: row.pledge.bonusPayoutMethodRef,
         payoutState: "succeeded" as const,
         idempotencyKey: `refund-bonus:${round.id}:${pool.id}:${row.pledge.id}`,
         providerPayoutRef: simulationOnly ? `simulated:${row.pledge.id}` : undefined,
@@ -2483,15 +2559,20 @@ export function planRefundBonusSettlement({
       };
     })
     : [];
-  const bonusLiabilityCents = outcome.status === "qualifying_failed"
+  const bonusLiabilityCents = qualifyingFailurePredicatePassed
     ? outcome.eligiblePledges.reduce((sum, row) => sum + row.bonusEligibleCents, 0)
     : 0;
   const bonusPaidCents = payoutOperations.reduce((sum, operation) => sum + operation.bonusNetCents, 0);
+  const bonusUnclaimedCents = Math.max(0, bonusLiabilityCents - bonusPaidCents);
   const success = outcome.status === "cleared" && blockedReasonCodes.length === 0;
   const feeCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.pledge.feeCents, 0) : 0;
   const grossCapturedCents = success ? outcome.grossExposureCents : 0;
   const netRecipientDisbursedCents = success ? outcome.netRecipientCents : 0;
-  const bonusUnearnedReleasedCents = outcome.status === "qualifying_failed"
+  const countedCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.countedCents, 0) : 0;
+  const matchEligibleCents = success
+    ? outcome.eligiblePledges.reduce((sum, row) => sum + row.matchEligibleCents, 0)
+    : 0;
+  const bonusUnearnedReleasedCents = qualifyingFailurePredicatePassed
     ? Math.max(0, outcome.bonusExposureReservedCents - bonusLiabilityCents)
     : outcome.bonusExposureReservedCents;
   const hasAuthorizationFailure = outcome.reasonCodes.includes("authorization_failure_recompute_below_threshold");
@@ -2516,7 +2597,7 @@ export function planRefundBonusSettlement({
           : "nonqualifying_failed_no_bonus"
     : success
       ? "cleared_and_captured"
-      : payoutOperations.length > 0
+      : payoutOperations.length > 0 && bonusUnclaimedCents === 0
         ? "qualifying_failed_bonus_paid"
         : "qualifying_failed_bonus_payable";
   const payoutByPledgeId = new Map(payoutOperations.map((operation) => [operation.pledgeId, operation]));
@@ -2527,13 +2608,13 @@ export function planRefundBonusSettlement({
     const rowBonusFee = payoutOperation?.payoutFeeCents ?? 0;
     const settlementState: RefundBonusPoolSettlementRow["settlementState"] = blockedReasonCodes.length > 0
       ? "blocked"
-      : rowSuccess
-        ? "captured"
-        : outcome.status === "qualifying_failed"
-          ? payoutOperation
-            ? "bonus_paid"
-            : "bonus_payable"
-          : "released";
+        : rowSuccess
+          ? "captured"
+          : qualifyingFailurePredicatePassed
+            ? payoutOperation
+              ? "bonus_paid"
+              : "bonus_held"
+            : "released";
 
     return {
       id: `${round.id}:${pool.id}:${row.pledge.id}:settlement`,
@@ -2551,10 +2632,10 @@ export function planRefundBonusSettlement({
         ? row.netRecipientCents
         : 0,
       bonusExposureReservedCents: row.pledge.bonusExposureReservedCents,
-      bonusEligibleCents: outcome.status === "qualifying_failed" ? row.bonusEligibleCents : 0,
+      bonusEligibleCents: qualifyingFailurePredicatePassed ? row.bonusEligibleCents : 0,
       bonusPaidCents: rowBonusPaid,
       bonusPayoutFeeCents: rowBonusFee,
-      bonusUnearnedReleasedCents: outcome.status === "qualifying_failed"
+      bonusUnearnedReleasedCents: qualifyingFailurePredicatePassed
         ? Math.max(0, row.pledge.bonusExposureReservedCents - row.bonusEligibleCents)
         : row.pledge.bonusExposureReservedCents,
       settlementState,
@@ -2579,8 +2660,8 @@ export function planRefundBonusSettlement({
       feeCents,
       netRecipientDisbursedCents,
       actualGrossExposureCents: outcome.grossExposureCents,
-      countedCents: success ? outcome.netRecipientCents : 0,
-      matchEligibleCents: success ? outcome.netRecipientCents : 0,
+      countedCents,
+      matchEligibleCents,
       sponsorBaseMatchCents: success ? outcome.sponsorMatchCents : 0,
       bonusReserveBackedCents: reserve.backedCents,
       bonusExposureReservedCents: outcome.bonusExposureReservedCents,
@@ -2588,7 +2669,7 @@ export function planRefundBonusSettlement({
       bonusHeldCents: reserve.heldCents,
       bonusPaidCents,
       bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
-      bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
+      bonusUnclaimedCents,
       bonusUnearnedReleasedCents,
       verifiedSupporterCount: outcome.verifiedSupporterCount,
       distinctViewpointClusterCount: outcome.distinctViewpointClusterCount,
@@ -2606,8 +2687,8 @@ export function planRefundBonusSettlement({
         feeCents,
         netRecipientDisbursedCents,
         actualGrossExposureCents: outcome.grossExposureCents,
-        countedCents: success ? outcome.netRecipientCents : 0,
-        matchEligibleCents: success ? outcome.netRecipientCents : 0,
+        countedCents,
+        matchEligibleCents,
         sponsorBaseMatchCents: success ? outcome.sponsorMatchCents : 0,
         bonusReserveBackedCents: reserve.backedCents,
         bonusExposureReservedCents: outcome.bonusExposureReservedCents,
@@ -2615,7 +2696,7 @@ export function planRefundBonusSettlement({
         bonusHeldCents: reserve.heldCents,
         bonusPaidCents,
         bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.payoutFeeCents, 0),
-        bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
+        bonusUnclaimedCents,
         bonusUnearnedReleasedCents,
         finalStatus,
         reasonCodes: outcome.reasonCodes,
@@ -2641,10 +2722,11 @@ export function buildRefundBonusReceipt({
   authorizationAttempt?: RefundBonusAuthorizationAttempt;
 }): RefundBonusReceipt {
   const payoutOperation = plan.payoutOperations.find((operation) => operation.pledgeId === pledge.id);
+  const settlementRow = plan.settlementRows.find((row) => row.pledgeId === pledge.id);
   const finalStatus = plan.auditReport.finalStatus;
 
   if (finalStatus === "cleared_and_captured") {
-    if (!isRefundBonusAuthorizationAttemptCaptureReady(authorizationAttempt, pledge)) {
+    if (!isRefundBonusSuccessReceiptCaptureEvidenceReady(authorizationAttempt, pledge, round.challengeDeadlineAt)) {
       return {
         receiptKind: "no_bonus_no_charge",
         roundId: round.id,
@@ -2699,9 +2781,7 @@ export function buildRefundBonusReceipt({
       bonusPayoutFeeCents: 0,
       bonusNetCents: 0,
       authorizationReference: authorizationAttempt?.providerAuthorizationRef,
-      captureReference: authorizationAttempt?.authorizationState === "authorized_exact"
-        ? `capture:${authorizationAttempt.providerAuthorizationRef ?? pledge.id}`
-        : undefined,
+      captureReference: authorizationAttempt.providerCaptureRef,
       rulebookHash: round.rulebookHash,
       feePolicyHash: round.feePolicyHash,
       bonusPolicyHash: round.bonusPolicyHash,
@@ -2710,6 +2790,15 @@ export function buildRefundBonusReceipt({
   }
 
   if (finalStatus === "qualifying_failed_bonus_payable" || finalStatus === "qualifying_failed_bonus_paid") {
+    const bonusGrossCents = payoutOperation?.bonusGrossCents ?? settlementRow?.bonusEligibleCents ?? 0;
+    const payoutState = payoutOperation?.payoutState ?? (
+      settlementRow?.settlementState === "bonus_held"
+        ? "unclaimed"
+        : settlementRow?.settlementState === "bonus_payable"
+          ? "not_attempted"
+          : undefined
+    );
+
     return {
       receiptKind: "qualifying_failure_bonus",
       roundId: round.id,
@@ -2727,16 +2816,16 @@ export function buildRefundBonusReceipt({
       matchEligibleCents: 0,
       sponsorBaseMatchCents: 0,
       failureReasonCategory: plan.auditReport.reasonCodes[0],
-      bonusEligibilityStatus: payoutOperation ? "eligible" : "not_eligible",
-      bonusGrossCents: payoutOperation?.bonusGrossCents ?? 0,
+      bonusEligibilityStatus: bonusGrossCents > 0 ? "eligible" : "not_eligible",
+      bonusGrossCents,
       bonusPayoutFeeCents: payoutOperation?.payoutFeeCents ?? 0,
       bonusNetCents: payoutOperation?.bonusNetCents ?? 0,
-      bonusPayoutState: payoutOperation?.payoutState,
+      bonusPayoutState: payoutState,
       bonusPayoutReference: payoutOperation?.providerPayoutRef,
       bonusReserveId: reserve.id,
       rulebookHash: round.rulebookHash,
       bonusPolicyHash: round.bonusPolicyHash,
-      copy: `The pool did not clear. You were charged 0 cents. Project funding: 0 cents. Failure reason: ${plan.auditReport.reasonCodes[0] ?? "support_threshold_shortfall"}. Backed failure-participation bonus: ${payoutOperation?.bonusGrossCents ?? 0} cents.`,
+      copy: `The pool did not clear. You were charged 0 cents. Project funding: 0 cents. Failure reason: ${plan.auditReport.reasonCodes[0] ?? "support_threshold_shortfall"}. Backed failure-participation bonus: ${bonusGrossCents} cents. Payout state: ${payoutState ?? "not_eligible"}.`,
     };
   }
 

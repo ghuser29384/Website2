@@ -59,6 +59,7 @@ function commitment(
   statedGrossCents: number,
   rewardRateBps: number,
   sameControlClusterId?: string,
+  estimatedFeeCents = 0,
 ): AtLeastTierPlatformMatchCommitment {
   return buildAtLeastTierPlatformMatchCommitmentPreview({
     id,
@@ -67,7 +68,7 @@ function commitment(
     participantId,
     selectedTierIndex,
     statedGrossCents,
-    estimatedFeeCents: 0,
+    estimatedFeeCents,
     rewardRateBps,
     platformMatchReserveId: reserveId,
     sameControlClusterId,
@@ -111,6 +112,7 @@ function lossAuthorizationAttempt(
     authorizationState: "authorized_exact",
     requiredGrossCents: 1_000_000,
     providerAuthorizationRef: "auth-a-ref",
+    expiresAt: "2026-07-07T00:00:00.000Z",
     eventHash: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
     ...overrides,
   };
@@ -807,6 +809,10 @@ test("failed loss authorizations are excluded before at-least-tier recomputation
   ];
   const exactAttempt = lossAuthorizationAttempt();
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady(exactAttempt, commitments[0]!), true);
+  assert.equal(
+    isAtLeastTierLossAuthorizationCaptureReady(exactAttempt, commitments[0]!, "2026-07-06T12:00:00.000Z"),
+    true,
+  );
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
     ...exactAttempt,
     authorizationState: "wrong_amount",
@@ -816,6 +822,14 @@ test("failed loss authorizations are excluded before at-least-tier recomputation
     ...exactAttempt,
     authorizationState: "expired_before_capture",
   }, commitments[0]!), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    expiresAt: "2026-07-06T12:00:00.000Z",
+  }, commitments[0]!, "2026-07-06T12:00:00.000Z"), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    expiresAt: undefined,
+  }, commitments[0]!, "2026-07-06T12:00:00.000Z"), false);
   assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
     ...exactAttempt,
     roundId: "other-round",
@@ -868,6 +882,19 @@ test("failed loss authorizations are excluded before at-least-tier recomputation
   assert.equal(recomputed.rows.find((row) => row.commitmentId === "auth-c")?.exclusionReason, "commitment_state_excluded_payment");
   assert.equal(recomputed.snapshot.eligibleCommitmentCount, 1);
   assert.equal(recomputed.snapshot.excludedCommitmentCount, 2);
+
+  const expiredReconciliation = reconcileAtLeastTierLossAuthorizations({
+    commitments: [commitments[0]!],
+    authorizationAttempts: [
+      lossAuthorizationAttempt({
+        expiresAt: "2026-07-06T12:00:00.000Z",
+      }),
+    ],
+    expectedCaptureAt: "2026-07-06T12:00:00.000Z",
+    now,
+  });
+  assert.deepEqual(expiredReconciliation.exactAuthorizedCommitmentIds, []);
+  assert.deepEqual(expiredReconciliation.excludedCommitmentIds, ["auth-a"]);
 });
 
 test("circularity guard does not clear a tier from raw stated commitments", () => {
@@ -905,7 +932,7 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   const commitments = [
     commitment("winner", "alice", 1, 10_000, 10_000, "cluster-a"),
     commitment("supporter-b", "bob", 1, 100_000, 10_000, "cluster-b"),
-    commitment("loser", "drew", 2, 10_000, schedule.tiers[1]!.rewardRateBps, "cluster-d"),
+    commitment("loser", "drew", 2, 10_000, schedule.tiers[1]!.rewardRateBps, "cluster-d", 250),
     {
       ...commitment("payment-failed", "erin", 1, 100_000, 10_000, "cluster-e"),
       commitmentState: "excluded_payment" as const,
@@ -952,6 +979,43 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   );
   assert.ok(plan.platformMatchOperations.every((operation) => operation.destinationProjectId === "reviewed-public-good-projects"));
   assert.equal(new Set(plan.platformMatchOperations.map((operation) => operation.idempotencyKey)).size, plan.platformMatchOperations.length);
+  assert.ok(plan.ledgerEntries.length > 0);
+  assert.ok(plan.ledgerEntries.every((entry) => entry.simulationOnly));
+  assert.ok(plan.ledgerEntries.every((entry) => entry.currency === "usd"));
+  assert.ok(plan.ledgerEntries.every((entry) => entry.amountCents >= 0));
+  assert.ok(plan.ledgerEntries.every((entry) => entry.debitAccount.length > 0 && entry.creditAccount.length > 0));
+  assert.equal(new Set(plan.ledgerEntries.map((entry) => entry.idempotencyKey)).size, plan.ledgerEntries.length);
+  const ledgerEntryTypes = new Set(plan.ledgerEntries.map((entry) => entry.entryType));
+  for (const entryType of [
+    "user_authorization",
+    "user_capture",
+    "user_release",
+    "platform_match_reserve_commitment",
+    "platform_match_reserve_disbursement",
+    "platform_match_exposure_release",
+    "project_disbursement",
+    "fee",
+    "provider_operation_reconciliation",
+  ] as const) {
+    assert.ok(ledgerEntryTypes.has(entryType), `missing at-least-tier settlement ledger entry type: ${entryType}`);
+  }
+  assert.ok(
+    plan.ledgerEntries
+      .filter((entry) => entry.providerOperationRef)
+      .every((entry) => entry.providerOperationRef?.startsWith("simulated:")),
+  );
+  assert.equal(
+    plan.ledgerEntries
+      .filter((entry) => entry.entryType === "project_disbursement")
+      .reduce((sum, entry) => sum + entry.amountCents, 0),
+    plan.auditReport.userLossNetRecipientCents + plan.auditReport.platformMatchNetRecipientCents,
+  );
+  assert.equal(
+    plan.ledgerEntries
+      .filter((entry) => entry.entryType === "fee")
+      .reduce((sum, entry) => sum + entry.amountCents, 0),
+    plan.auditReport.userLossFeeCents + plan.auditReport.platformMatchFeeCents,
+  );
   const retryPlan = planAtLeastTierPlatformMatchSettlement({
     roundId,
     resolution,
@@ -973,6 +1037,10 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.deepEqual(
     retryPlan.platformMatchOperations.map((operation) => [operation.commitmentId, operation.idempotencyKey]),
     plan.platformMatchOperations.map((operation) => [operation.commitmentId, operation.idempotencyKey]),
+  );
+  assert.deepEqual(
+    retryPlan.ledgerEntries.map((entry) => [entry.commitmentId, entry.entryType, entry.idempotencyKey, entry.amountCents]),
+    plan.ledgerEntries.map((entry) => [entry.commitmentId, entry.entryType, entry.idempotencyKey, entry.amountCents]),
   );
   assert.equal(retryPlan.auditReport.grossUserLossCapturedCents, plan.auditReport.grossUserLossCapturedCents);
   assert.equal(retryPlan.auditReport.platformMatchGrossPaidCents, plan.auditReport.platformMatchGrossPaidCents);
@@ -1007,7 +1075,7 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
     assert.ok(channel in publicReport, `missing at-least-tier accounting channel: ${channel}`);
   }
   assert.equal(publicReport.forecastCommitmentGrossCents, 220_000);
-  assert.equal(publicReport.forecastCommitmentNetRecipientCents, 220_000);
+  assert.equal(publicReport.forecastCommitmentNetRecipientCents, 219_750);
   assert.equal(
     publicReport.forecastResolutionOtherUserNetCents,
     resolution.rows.reduce((sum, row) => sum + row.otherEligibleEffectiveSupportCents, 0),
@@ -1041,6 +1109,17 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(blocked.blockedReasonCodes.includes("platform_match_reserve_unbacked"));
   assert.equal(blocked.auditReport.finalStatus, "blocked");
   assert.equal(blocked.platformMatchOperations.length, 0);
+  assert.ok(blocked.ledgerEntries.length > 0);
+  assert.ok(blocked.ledgerEntries.every((entry) => entry.simulationOnly));
+  assert.ok(blocked.ledgerEntries.every((entry) => !entry.providerOperationRef));
+  assert.equal(
+    blocked.ledgerEntries.filter((entry) => entry.entryType === "user_capture").length,
+    0,
+  );
+  assert.equal(
+    blocked.ledgerEntries.filter((entry) => entry.entryType === "platform_match_reserve_disbursement").length,
+    0,
+  );
   assert.ok(blocked.rows.every((row) => row.userAuthorizationOperation === "release"));
   assert.ok(blocked.rows.every((row) => row.userGrossCapturedCents === 0));
   assert.ok(blocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));

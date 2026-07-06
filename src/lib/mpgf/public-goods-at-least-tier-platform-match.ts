@@ -364,6 +364,32 @@ export interface PlatformMatchContributionOperation {
   updatedAt: string;
 }
 
+export type AtLeastTierSettlementLedgerEntryType =
+  | "user_authorization"
+  | "user_capture"
+  | "user_release"
+  | "platform_match_reserve_commitment"
+  | "platform_match_reserve_disbursement"
+  | "platform_match_exposure_release"
+  | "project_disbursement"
+  | "fee"
+  | "provider_operation_reconciliation";
+
+export interface AtLeastTierSettlementLedgerEntry {
+  id: string;
+  roundId: string;
+  commitmentId: string;
+  entryType: AtLeastTierSettlementLedgerEntryType;
+  debitAccount: string;
+  creditAccount: string;
+  amountCents: number;
+  currency: "usd";
+  simulationOnly: boolean;
+  providerOperationRef?: string;
+  idempotencyKey: string;
+  createdAt: string;
+}
+
 export interface AtLeastTierSettlementRow {
   id: string;
   roundId: string;
@@ -453,6 +479,7 @@ export interface AtLeastTierPublicReportJson {
 export interface AtLeastTierSettlementPlan {
   rows: AtLeastTierSettlementRow[];
   platformMatchOperations: PlatformMatchContributionOperation[];
+  ledgerEntries: AtLeastTierSettlementLedgerEntry[];
   auditReport: AtLeastTierAuditReport;
   blockedReasonCodes: string[];
 }
@@ -1500,7 +1527,16 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
 export function isAtLeastTierLossAuthorizationCaptureReady(
   attempt: AtLeastTierLossAuthorizationAttempt | undefined,
   commitment: Pick<AtLeastTierPlatformMatchCommitment, "id" | "roundId" | "poolId" | "participantId" | "statedGrossCents">,
+  expectedCaptureAt?: string,
 ) {
+  const expiresAfterExpectedCapture = (() => {
+    if (!expectedCaptureAt) return true;
+    if (!attempt?.expiresAt) return false;
+    const expiresAtMs = Date.parse(attempt.expiresAt);
+    const expectedCaptureAtMs = Date.parse(expectedCaptureAt);
+    return Number.isFinite(expiresAtMs) && Number.isFinite(expectedCaptureAtMs) && expiresAtMs > expectedCaptureAtMs;
+  })();
+
   return Boolean(
     attempt &&
       attempt.roundId === commitment.roundId &&
@@ -1510,6 +1546,7 @@ export function isAtLeastTierLossAuthorizationCaptureReady(
       attempt.authorizationState === "authorized_exact" &&
       attempt.requiredGrossCents === commitment.statedGrossCents &&
       Boolean(attempt.providerAuthorizationRef) &&
+      expiresAfterExpectedCapture &&
       isCanonicalHash(attempt.eventHash),
   );
 }
@@ -1517,13 +1554,16 @@ export function isAtLeastTierLossAuthorizationCaptureReady(
 export function reconcileAtLeastTierLossAuthorizations({
   commitments,
   authorizationAttempts,
+  expectedCaptureAt,
   now,
 }: {
   commitments: AtLeastTierPlatformMatchCommitment[];
   authorizationAttempts: AtLeastTierLossAuthorizationAttempt[];
+  expectedCaptureAt?: string;
   now?: string;
 }): AtLeastTierAuthorizationReconciliationResult {
   const updatedAt = nowIso(now);
+  const captureMustRemainValidThrough = expectedCaptureAt ?? updatedAt;
   const attemptsByCommitmentId = new Map(
     authorizationAttempts.map((attempt) => [attempt.commitmentId, attempt]),
   );
@@ -1535,7 +1575,7 @@ export function reconcileAtLeastTierLossAuthorizations({
     }
 
     const attempt = attemptsByCommitmentId.get(commitment.id);
-    if (!isAtLeastTierLossAuthorizationCaptureReady(attempt, commitment)) {
+    if (!isAtLeastTierLossAuthorizationCaptureReady(attempt, commitment, captureMustRemainValidThrough)) {
       excludedCommitmentIds.push(commitment.id);
       return {
         ...commitment,
@@ -1743,6 +1783,216 @@ function isReserveBacked(reserve: PlatformMatchReserve, expectedRoundId: string,
   );
 }
 
+function buildAtLeastTierSettlementLedgerEntries({
+  roundId,
+  rows,
+  commitmentById,
+  platformMatchOperations,
+  simulationOnly,
+  createdAt,
+}: {
+  roundId: string;
+  rows: AtLeastTierSettlementRow[];
+  commitmentById: Map<string, AtLeastTierPlatformMatchCommitment>;
+  platformMatchOperations: PlatformMatchContributionOperation[];
+  simulationOnly: boolean;
+  createdAt: string;
+}): AtLeastTierSettlementLedgerEntry[] {
+  const platformMatchOperationByCommitmentId = new Map(
+    platformMatchOperations.map((operation) => [operation.commitmentId, operation]),
+  );
+  const ledgerEntries: AtLeastTierSettlementLedgerEntry[] = [];
+
+  const addLedgerEntry = ({
+    row,
+    entryType,
+    variant,
+    amountCents,
+    debitAccount,
+    creditAccount,
+    providerOperationRef,
+  }: {
+    row: AtLeastTierSettlementRow;
+    entryType: AtLeastTierSettlementLedgerEntryType;
+    variant: string;
+    amountCents: number;
+    debitAccount: string;
+    creditAccount: string;
+    providerOperationRef?: string;
+  }) => {
+    ledgerEntries.push({
+      id: `${row.id}:ledger:${entryType}:${variant}`,
+      roundId,
+      commitmentId: row.commitmentId,
+      entryType,
+      debitAccount,
+      creditAccount,
+      amountCents,
+      currency: "usd",
+      simulationOnly,
+      providerOperationRef,
+      idempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:ledger:${entryType}:${variant}`,
+      createdAt,
+    });
+  };
+
+  for (const row of rows) {
+    const commitment = commitmentById.get(row.commitmentId);
+    const authorizationAmountCents = commitment?.statedGrossCents ?? row.userGrossCapturedCents;
+    const simulatedProviderPrefix =
+      simulationOnly && row.outcome !== "blocked" ? `simulated:${row.commitmentId}` : undefined;
+
+    if (row.userAuthorizationOperation !== "none") {
+      addLedgerEntry({
+        row,
+        entryType: "user_authorization",
+        variant: "loss-payment",
+        amountCents: authorizationAmountCents,
+        debitAccount: "user_authorization_pending",
+        creditAccount: "user_authorization_control",
+      });
+    }
+
+    if (row.userAuthorizationOperation === "release") {
+      const providerOperationRef = simulatedProviderPrefix
+        ? `${simulatedProviderPrefix}:user-authorization-release`
+        : undefined;
+      addLedgerEntry({
+        row,
+        entryType: "user_release",
+        variant: "loss-payment",
+        amountCents: authorizationAmountCents,
+        debitAccount: "user_authorization_control",
+        creditAccount: "user_authorization_released",
+        providerOperationRef,
+      });
+      addLedgerEntry({
+        row,
+        entryType: "provider_operation_reconciliation",
+        variant: "user-authorization-release",
+        amountCents: authorizationAmountCents,
+        debitAccount: "payment_provider_release_events",
+        creditAccount: "user_authorization_released",
+        providerOperationRef,
+      });
+    }
+
+    if (row.userAuthorizationOperation === "capture" || row.userAuthorizationOperation === "simulated_capture") {
+      const providerOperationRef = simulatedProviderPrefix
+        ? `${simulatedProviderPrefix}:user-loss-capture`
+        : undefined;
+      addLedgerEntry({
+        row,
+        entryType: "user_capture",
+        variant: "loss-payment",
+        amountCents: row.userGrossCapturedCents,
+        debitAccount: "user_payment_capture_receivable",
+        creditAccount: "user_loss_captured_funds",
+        providerOperationRef,
+      });
+      addLedgerEntry({
+        row,
+        entryType: "provider_operation_reconciliation",
+        variant: "user-loss-capture",
+        amountCents: row.userGrossCapturedCents,
+        debitAccount: "payment_provider_capture_events",
+        creditAccount: "user_loss_captured_funds",
+        providerOperationRef,
+      });
+    }
+
+    if (row.platformMatchExposureReservedCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "platform_match_reserve_commitment",
+        variant: "maximum-exposure",
+        amountCents: row.platformMatchExposureReservedCents,
+        debitAccount: "platform_match_reserve_available",
+        creditAccount: "platform_match_reserve_committed",
+      });
+    }
+
+    if (row.platformMatchGrossCostCents > 0) {
+      const platformMatchOperation = platformMatchOperationByCommitmentId.get(row.commitmentId);
+      addLedgerEntry({
+        row,
+        entryType: "platform_match_reserve_disbursement",
+        variant: "reviewed-projects",
+        amountCents: row.platformMatchGrossCostCents,
+        debitAccount: "platform_match_reserve_committed",
+        creditAccount: "platform_match_reserve_disbursed",
+        providerOperationRef: platformMatchOperation?.providerOperationRef,
+      });
+      addLedgerEntry({
+        row,
+        entryType: "provider_operation_reconciliation",
+        variant: "platform-match-reviewed-projects",
+        amountCents: row.platformMatchGrossCostCents,
+        debitAccount: "payment_provider_platform_match_events",
+        creditAccount: "platform_match_reserve_disbursed",
+        providerOperationRef: platformMatchOperation?.providerOperationRef,
+      });
+    }
+
+    if (row.platformMatchExposureReleasedCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "platform_match_exposure_release",
+        variant: "unused-exposure",
+        amountCents: row.platformMatchExposureReleasedCents,
+        debitAccount: "platform_match_reserve_committed",
+        creditAccount: "platform_match_reserve_available",
+      });
+    }
+
+    if (row.userNetRecipientDisbursedCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "project_disbursement",
+        variant: "user-loss-reviewed-projects",
+        amountCents: row.userNetRecipientDisbursedCents,
+        debitAccount: "user_loss_captured_funds",
+        creditAccount: "reviewed_project_disbursements",
+      });
+    }
+
+    if (row.platformMatchNetRecipientDisbursedCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "project_disbursement",
+        variant: "platform-match-reviewed-projects",
+        amountCents: row.platformMatchNetRecipientDisbursedCents,
+        debitAccount: "platform_match_reserve_disbursed",
+        creditAccount: "reviewed_project_disbursements",
+      });
+    }
+
+    if (row.userFeeCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "fee",
+        variant: "user-loss-provider-fee",
+        amountCents: row.userFeeCents,
+        debitAccount: "user_loss_captured_funds",
+        creditAccount: "payment_provider_fee_payable",
+      });
+    }
+
+    if (row.platformMatchFeeCents > 0) {
+      addLedgerEntry({
+        row,
+        entryType: "fee",
+        variant: "platform-match-provider-fee",
+        amountCents: row.platformMatchFeeCents,
+        debitAccount: "platform_match_reserve_disbursed",
+        creditAccount: "payment_provider_fee_payable",
+      });
+    }
+  }
+
+  return ledgerEntries;
+}
+
 export function planAtLeastTierPlatformMatchSettlement({
   roundId,
   resolution,
@@ -1903,6 +2153,14 @@ export function planAtLeastTierPlatformMatchSettlement({
       createdAt,
       updatedAt: createdAt,
     }));
+  const ledgerEntries = buildAtLeastTierSettlementLedgerEntries({
+    roundId,
+    rows,
+    commitmentById,
+    platformMatchOperations,
+    simulationOnly,
+    createdAt,
+  });
 
   const grossUserLossCapturedCents = rows.reduce((sum, row) => sum + row.userGrossCapturedCents, 0);
   const userLossFeeCents = rows.reduce((sum, row) => sum + row.userFeeCents, 0);
@@ -1929,6 +2187,7 @@ export function planAtLeastTierPlatformMatchSettlement({
   return {
     rows,
     platformMatchOperations,
+    ledgerEntries,
     blockedReasonCodes,
     auditReport: {
       id: `${roundId}:at-least-tier-audit`,
