@@ -37,6 +37,7 @@ import {
   isRefundBonusProjectReviewSnapshotPledgeable,
   isRefundBonusReserveBacked,
   planRefundBonusSettlement,
+  prepareRefundBonusHardPledgeSubmission,
   validateRefundBonusCopy,
   type RefundBonusAuthorizationAttempt,
   type RefundBonusBonusEligibilitySnapshot,
@@ -237,6 +238,84 @@ function pledge(
     bonusExposureReservedCents,
     createdAt: now,
     updatedAt: now,
+    ...overrides,
+  };
+}
+
+function identitySnapshot(
+  pledgeRow: RefundBonusPledge,
+  overrides: Partial<RefundBonusIdentityEligibilitySnapshot> = {},
+): RefundBonusIdentityEligibilitySnapshot {
+  return {
+    id: `${pledgeRow.id}:identity-snapshot`,
+    roundId: pledgeRow.roundId,
+    participantId: pledgeRow.participantId,
+    humanVerified: true,
+    identityVerified: true,
+    sybilState: "clear",
+    collusionState: "clear",
+    sameControlClusterId: pledgeRow.sameControlClusterId,
+    paymentClusterId: pledgeRow.paymentClusterId,
+    countingWeightBps: 10_000,
+    bonusEligibilityWeightBps: 10_000,
+    snapshotHash: "sha256:abababababababababababababababababababababababababababababababab",
+    asOf: now,
+    ...overrides,
+  };
+}
+
+function bonusEligibilitySnapshot(
+  pledgeRow: RefundBonusPledge,
+  bonusCents = pledgeRow.expectedBonusCents,
+  overrides: Partial<RefundBonusBonusEligibilitySnapshot> = {},
+): RefundBonusBonusEligibilitySnapshot {
+  return {
+    id: `${pledgeRow.id}:bonus-snapshot`,
+    roundId: pledgeRow.roundId,
+    poolId: pledgeRow.poolId,
+    pledgeId: pledgeRow.id,
+    participantId: pledgeRow.participantId,
+    eligibleAtPledgeSave: true,
+    eligibilityReasonCodes: [],
+    humanVerified: true,
+    identityVerified: true,
+    sybilState: "clear",
+    collusionState: "clear",
+    sameControlClusterId: pledgeRow.sameControlClusterId,
+    paymentClusterId: pledgeRow.paymentClusterId,
+    priorBonusAbuseState: "clear",
+    jurisdictionEligibilityState: "clear",
+    bonusCalculationMode: "percentage_of_pledge_capped",
+    computedBonusCents: bonusCents,
+    perUserBonusCapCents: 250,
+    reserveId,
+    reserveBackingStateAtSave: "dev_simulated",
+    snapshotHash: "sha256:bcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbcbc",
+    asOf: now,
+    ...overrides,
+  };
+}
+
+function paymentCommitmentSnapshot(
+  pledgeRow: RefundBonusPledge,
+  overrides: Partial<RefundBonusPaymentCommitmentSnapshot> = {},
+): RefundBonusPaymentCommitmentSnapshot {
+  return {
+    id: `${pledgeRow.id}:payment-snapshot`,
+    roundId: pledgeRow.roundId,
+    poolId: pledgeRow.poolId,
+    pledgeId: pledgeRow.id,
+    participantId: pledgeRow.participantId,
+    paymentMethodRef: `pm:${pledgeRow.id}`,
+    commitmentState: "provider_confirmed",
+    savedAt: now,
+    confirmedAt: now,
+    asOf: now,
+    supportsFutureAuthorization: true,
+    supportsBonusPayoutMethod: true,
+    bonusPayoutMethodRef: `bonus-payout:${pledgeRow.id}`,
+    providerEvidenceHash: "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+    snapshotHash: "sha256:dededededededededededededededededededededededededededededededede",
     ...overrides,
   };
 }
@@ -799,6 +878,97 @@ test("hard pledge gate requires final review, provider-confirmed payment, backed
   assert.ok(production.blockerCodes.includes("pool_not_labs_open"));
 });
 
+test("screen 3 hard pledge submission saves only after confirmed snapshots and reserve exposure", () => {
+  const draft = pledge("screen3", "sasha", 2_500, "humanitarian", {
+    pledgeState: "draft",
+    paymentCommitmentSnapshotId: undefined,
+    identityEligibilitySnapshotId: undefined,
+    bonusEligibilitySnapshotId: undefined,
+    expectedBonusCents: 0,
+    providerPaymentMethodConfirmed: false,
+    bonusExposureReservedCents: 0,
+  });
+  const labsRound = round({ status: "labs_open" });
+  const labsPool = pool({ status: "labs_open" });
+  const expectedBonusCents = computeRefundBonusCents({
+    mode: labsPool.bonusCalculationMode,
+    maxGrossCents: draft.maxGrossCents,
+    bonusRatioBps: labsPool.bonusRatioBps,
+    perUserBonusCapCents: labsPool.perUserBonusCapCents,
+  });
+  const saved = prepareRefundBonusHardPledgeSubmission({
+    environment: "development",
+    featureEnabled: true,
+    round: labsRound,
+    pool: labsPool,
+    gate: gate(),
+    reserve: reserve(),
+    draftPledge: draft,
+    identitySnapshot: identitySnapshot(draft),
+    bonusEligibilitySnapshot: bonusEligibilitySnapshot(draft, expectedBonusCents),
+    paymentCommitmentSnapshot: paymentCommitmentSnapshot(draft),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(saved.allowed, true);
+  assert.equal(saved.providerCallsAllowed, false);
+  assert.equal(saved.pledge.pledgeState, "hard_saved");
+  assert.equal(saved.pledge.paymentCommitmentSnapshotId, "screen3:payment-snapshot");
+  assert.equal(saved.pledge.identityEligibilitySnapshotId, "screen3:identity-snapshot");
+  assert.equal(saved.pledge.bonusEligibilitySnapshotId, "screen3:bonus-snapshot");
+  assert.equal(saved.pledge.providerPaymentMethodConfirmed, true);
+  assert.equal(saved.pledge.bonusExposureReservedCents, expectedBonusCents);
+  assert.equal(saved.reserve.committedCents, expectedBonusCents);
+  assert.equal(saved.reserve.committedExposureCents, expectedBonusCents);
+  assert.equal(saved.reserve.updatedAt, now);
+
+  const requiresAction = prepareRefundBonusHardPledgeSubmission({
+    environment: "development",
+    featureEnabled: true,
+    round: labsRound,
+    pool: labsPool,
+    gate: gate(),
+    reserve: reserve(),
+    draftPledge: draft,
+    identitySnapshot: identitySnapshot(draft),
+    bonusEligibilitySnapshot: bonusEligibilitySnapshot(draft, expectedBonusCents),
+    paymentCommitmentSnapshot: paymentCommitmentSnapshot(draft, { commitmentState: "requires_action" }),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(requiresAction.allowed, false);
+  assert.equal(requiresAction.pledge.pledgeState, "draft");
+  assert.equal(requiresAction.pledge.providerPaymentMethodConfirmed, false);
+  assert.equal(requiresAction.pledge.bonusExposureReservedCents, 0);
+  assert.equal(requiresAction.reserve.committedCents, 0);
+  assert.equal(requiresAction.reserve.committedExposureCents, 0);
+  assert.ok(requiresAction.blockerCodes.includes("payment_method_not_confirmed"));
+
+  const bonusBlocked = prepareRefundBonusHardPledgeSubmission({
+    environment: "development",
+    featureEnabled: true,
+    round: labsRound,
+    pool: labsPool,
+    gate: gate(),
+    reserve: reserve(),
+    draftPledge: draft,
+    identitySnapshot: identitySnapshot(draft),
+    bonusEligibilitySnapshot: bonusEligibilitySnapshot(draft, expectedBonusCents, {
+      eligibleAtPledgeSave: false,
+      eligibilityReasonCodes: ["prior_bonus_abuse"],
+    }),
+    paymentCommitmentSnapshot: paymentCommitmentSnapshot(draft),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(bonusBlocked.allowed, false);
+  assert.equal(bonusBlocked.pledge.pledgeState, "draft");
+  assert.equal(bonusBlocked.pledge.bonusExposureReservedCents, 0);
+  assert.equal(bonusBlocked.reserve.committedCents, 0);
+  assert.equal(bonusBlocked.reserve.committedExposureCents, 0);
+  assert.ok(bonusBlocked.blockerCodes.includes("bonus_eligibility_snapshot_missing_or_failed"));
+});
+
 test("refund-bonus copy preflight blocks misleading financial language and requires conditional backed-bonus copy", () => {
   const valid = validateRefundBonusCopy(`
     Non-MVP labs mechanism.
@@ -1325,6 +1495,34 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.ok(missingPayoutEvidence.blockedReasonCodes.includes("bonus_settlement_plan_not_approved"));
   assert.ok(missingPayoutEvidence.blockedReasonCodes.includes("eligible_rows_not_recomputed"));
 
+  const disallowedBonusPayoutPlan = planRefundBonusSettlement({
+    round: round({ status: "qualifying_failed" }),
+    pool: pool({ status: "qualifying_failed" }),
+    reserve: reserve({ status: "active" }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.equal(disallowedBonusPayoutPlan.payoutOperations.length, 0);
+  assert.equal(disallowedBonusPayoutPlan.auditReport.bonusPaidCents, 0);
+  assert.ok(disallowedBonusPayoutPlan.blockedReasonCodes.includes("round_record_not_bonus_payable"));
+  assert.ok(disallowedBonusPayoutPlan.settlementRows.every((row) => row.settlementState === "blocked"));
+
+  const disallowedBonusPoolState = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "closed" }),
+    reserve: reserve({ status: "active" }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.equal(disallowedBonusPoolState.payoutOperations.length, 0);
+  assert.ok(disallowedBonusPoolState.blockedReasonCodes.includes("pool_not_qualifying_failed_or_bonus_payable"));
+
   const pausedPayoutRail = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),
     pool: pool({ status: "bonus_payable" }),
@@ -1344,12 +1542,42 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.ok(pausedPayoutRail.blockedReasonCodes.includes("bonus_reserve_pause_active"));
   assert.ok(pausedPayoutRail.blockedReasonCodes.includes("payout_rail_pause_active"));
 
+  const preAuthorizationSuccess = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ thresholdNetRecipientCents: 1_500, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  const disallowedUnrecomputedCapturePlan = planRefundBonusSettlement({
+    round: round({ status: "payable" }),
+    pool: pool({ status: "payable" }),
+    reserve: reserve(),
+    outcome: preAuthorizationSuccess,
+    roundStatus: "payable",
+    simulationOnly: true,
+  });
+  assert.equal(disallowedUnrecomputedCapturePlan.auditReport.grossCapturedCents, 0);
+  assert.ok(disallowedUnrecomputedCapturePlan.blockedReasonCodes.includes("eligible_rows_not_recomputed"));
+  assert.ok(disallowedUnrecomputedCapturePlan.blockedReasonCodes.includes("authorization_reconciliation_missing"));
+  assert.ok(disallowedUnrecomputedCapturePlan.settlementRows.every((row) => row.settlementState === "blocked"));
+
   const success = evaluateRefundBonusRoundOutcome({
     round: round(),
     pool: pool({ thresholdNetRecipientCents: 1_500, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
     gate: gate(),
     reserve: reserve(),
     pledges,
+    authorizationAttempts: [
+      authorizationAttempt({ pledgeId: "a", participantId: "alice", requiredGrossCents: 1_000 }),
+      authorizationAttempt({
+        id: "authorization-attempt-b",
+        pledgeId: "b",
+        participantId: "bob",
+        requiredGrossCents: 1_000,
+        providerAuthorizationRef: "auth-b",
+      }),
+    ],
   });
   const successPlan = planRefundBonusSettlement({
     round: round({ status: "payable" }),
@@ -1358,6 +1586,7 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
     outcome: success,
     roundStatus: "payable",
     simulationOnly: true,
+    eligibleRowsRecomputed: true,
   });
   assert.equal(successPlan.auditReport.finalStatus, "cleared_and_captured");
   assert.ok(successPlan.settlementRows.every((row) => row.settlementState === "captured"));
@@ -1372,6 +1601,7 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
     outcome: success,
     roundStatus: "reviewing",
     simulationOnly: true,
+    eligibleRowsRecomputed: true,
   });
   assert.equal(disallowedCapturePlan.payoutOperations.length, 0);
   assert.equal(disallowedCapturePlan.auditReport.grossCapturedCents, 0);
@@ -1392,6 +1622,16 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
     gate: gate(),
     reserve: reserve(),
     pledges,
+    authorizationAttempts: [
+      authorizationAttempt({ pledgeId: "a", participantId: "alice", requiredGrossCents: 1_000 }),
+      authorizationAttempt({
+        id: "authorization-attempt-b",
+        pledgeId: "b",
+        participantId: "bob",
+        requiredGrossCents: 1_000,
+        providerAuthorizationRef: "auth-b",
+      }),
+    ],
   });
   const successPlan = planRefundBonusSettlement({
     round: round({ status: "payable" }),
@@ -1400,6 +1640,7 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
     outcome: success,
     roundStatus: "payable",
     simulationOnly: true,
+    eligibleRowsRecomputed: true,
   });
   const successReceipt = buildRefundBonusReceipt({
     round: round(),
@@ -1420,6 +1661,11 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
   assert.equal(successReceipt.receiptKind, "success_charge");
   assert.equal(successReceipt.grossCapturedCents, 1_000);
   assert.equal(successReceipt.netRecipientDisbursedCents, 1_000);
+  assert.deepEqual(successReceipt.projectAllocationCentsByProjectId, { "project-a": 500, "project-b": 500 });
+  assert.equal(successReceipt.actualGrossExposureCents, 1_000);
+  assert.equal(successReceipt.countedCents, 1_000);
+  assert.equal(successReceipt.matchEligibleCents, 1_000);
+  assert.equal(successReceipt.sponsorBaseMatchCents, 1_000);
   assert.equal(successReceipt.bonusGrossCents, 0);
   assert.equal(successReceipt.authorizationReference, "auth-a");
   assert.equal(successReceipt.captureReference, "capture:auth-a");
@@ -1428,6 +1674,21 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
   assert.equal(successReceipt.bonusPolicyHash, bonusPolicyHash);
   assert.equal(successReceipt.calculationVersion, REFUND_BONUS_CALCULATION_VERSION);
   assert.match(successReceipt.copy, /Failure bonus: 0 cents because the pool cleared/);
+
+  const missingAuthorizationReceipt = buildRefundBonusReceipt({
+    round: round(),
+    pool: pool(),
+    reserve: reserve(),
+    pledge: pledges[0]!,
+    plan: successPlan,
+  });
+  assert.equal(missingAuthorizationReceipt.receiptKind, "no_bonus_no_charge");
+  assert.equal(missingAuthorizationReceipt.grossCapturedCents, 0);
+  assert.deepEqual(missingAuthorizationReceipt.projectAllocationCentsByProjectId, { "project-a": 0, "project-b": 0 });
+  assert.equal(missingAuthorizationReceipt.sponsorBaseMatchCents, 0);
+  assert.equal(missingAuthorizationReceipt.authorizationReference, undefined);
+  assert.equal(missingAuthorizationReceipt.captureReference, undefined);
+  assert.match(missingAuthorizationReceipt.copy, /exact authorization evidence was missing or invalid/);
 
   const qualifying = evaluateRefundBonusRoundOutcome({
     round: round(),

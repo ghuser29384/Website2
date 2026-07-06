@@ -241,6 +241,7 @@ export interface RefundBonusPledgePool {
     | "payable"
     | "captured"
     | "bonus_payable"
+    | "bonus_paying"
     | "bonus_paid"
     | "released"
     | "blocked"
@@ -663,6 +664,11 @@ export interface RefundBonusReceipt {
   feeCents: number;
   netRecipientDisbursedCents: number;
   projectFundingCents: number;
+  projectAllocationCentsByProjectId: Record<string, number>;
+  actualGrossExposureCents: number;
+  countedCents: number;
+  matchEligibleCents: number;
+  sponsorBaseMatchCents: number;
   failureReasonCategory?: RefundBonusFailureReason;
   bonusEligibilityStatus: "not_applicable_cleared" | "eligible" | "not_eligible";
   bonusGrossCents: number;
@@ -1171,6 +1177,29 @@ export interface RefundBonusHardPledgeGateResult {
   blockerCodes: RefundBonusHardPledgeBlocker[];
 }
 
+export interface RefundBonusHardPledgeSubmissionInput {
+  environment: RefundBonusEnvironment;
+  featureEnabled?: boolean;
+  round: RefundBonusRound;
+  pool: RefundBonusPledgePool;
+  gate: RefundBonusOpenGate;
+  reserve: RefundBonusReserve;
+  draftPledge: RefundBonusPledge;
+  identitySnapshot: RefundBonusIdentityEligibilitySnapshot;
+  bonusEligibilitySnapshot: RefundBonusBonusEligibilitySnapshot;
+  paymentCommitmentSnapshot: RefundBonusPaymentCommitmentSnapshot;
+  currentGrossExposureCents: number;
+  currentBonusExposureCents: number;
+}
+
+export interface RefundBonusHardPledgeSubmissionResult {
+  allowed: boolean;
+  providerCallsAllowed: false;
+  blockerCodes: RefundBonusHardPledgeBlocker[];
+  pledge: RefundBonusPledge;
+  reserve: RefundBonusReserve;
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonicalize);
@@ -1211,6 +1240,44 @@ function isOrderedIsoTimestamp(left: string, right: string) {
 
 function unique<T>(items: T[]) {
   return [...new Set(items)];
+}
+
+function allocateProjectFundingCents(pool: RefundBonusPledgePool, totalCents: number) {
+  const projectIds = pool.projectIds;
+  const zeroAllocations = Object.fromEntries(projectIds.map((projectId) => [projectId, 0]));
+  if (!isPositiveSafeInteger(totalCents)) return zeroAllocations;
+
+  const weightedProjects = projectIds.map((projectId, index) => ({
+    projectId,
+    index,
+    weightBps: Math.max(0, pool.allocationWeightsBpsByProjectId[projectId] ?? 0),
+  }));
+  const denominator = weightedProjects.reduce((sum, item) => sum + item.weightBps, 0);
+  if (denominator <= 0) return zeroAllocations;
+
+  const allocations = { ...zeroAllocations };
+  const fractionalRows = weightedProjects.map((item) => {
+    const weightedCents = totalCents * item.weightBps;
+    const floorCents = Math.floor(weightedCents / denominator);
+    allocations[item.projectId] = floorCents;
+
+    return {
+      ...item,
+      remainder: weightedCents % denominator,
+    };
+  });
+  let remainingCents = totalCents - Object.values(allocations).reduce((sum, cents) => sum + cents, 0);
+  const remainderOrder = [...fractionalRows].sort((left, right) =>
+    right.remainder - left.remainder || left.index - right.index
+  );
+
+  for (const row of remainderOrder) {
+    if (remainingCents <= 0) break;
+    allocations[row.projectId] += 1;
+    remainingCents -= 1;
+  }
+
+  return allocations;
 }
 
 function incorrectRateBps(answered: number, incorrect: number) {
@@ -1603,6 +1670,110 @@ export function isRefundBonusPaymentCommitmentSnapshotCountable(
     isCanonicalHash(snapshot.providerEvidenceHash) &&
     isCanonicalHash(snapshot.snapshotHash)
   );
+}
+
+export function prepareRefundBonusHardPledgeSubmission({
+  environment,
+  featureEnabled,
+  round,
+  pool,
+  gate,
+  reserve,
+  draftPledge,
+  identitySnapshot,
+  bonusEligibilitySnapshot,
+  paymentCommitmentSnapshot,
+  currentGrossExposureCents,
+  currentBonusExposureCents,
+}: RefundBonusHardPledgeSubmissionInput): RefundBonusHardPledgeSubmissionResult {
+  const identitySnapshotValid =
+    identitySnapshot.roundId === round.id &&
+    identitySnapshot.participantId === draftPledge.participantId &&
+    isRefundBonusIdentityEligibilitySnapshotEligible(identitySnapshot);
+  const bonusSnapshotValid =
+    bonusEligibilitySnapshot.roundId === round.id &&
+    bonusEligibilitySnapshot.poolId === pool.id &&
+    bonusEligibilitySnapshot.pledgeId === draftPledge.id &&
+    bonusEligibilitySnapshot.participantId === draftPledge.participantId &&
+    bonusEligibilitySnapshot.reserveId === reserve.id &&
+    bonusEligibilitySnapshot.bonusCalculationMode === pool.bonusCalculationMode &&
+    bonusEligibilitySnapshot.reserveBackingStateAtSave === reserve.backingState &&
+    bonusEligibilitySnapshot.computedBonusCents === computeRefundBonusCents({
+      mode: pool.bonusCalculationMode,
+      maxGrossCents: draftPledge.maxGrossCents,
+      fixedBonusCents: pool.fixedBonusCents,
+      bonusRatioBps: pool.bonusRatioBps,
+      perUserBonusCapCents: pool.perUserBonusCapCents,
+    }) &&
+    isRefundBonusBonusEligibilitySnapshotEligible(bonusEligibilitySnapshot);
+  const paymentSnapshotValid =
+    paymentCommitmentSnapshot.roundId === round.id &&
+    paymentCommitmentSnapshot.poolId === pool.id &&
+    paymentCommitmentSnapshot.pledgeId === draftPledge.id &&
+    paymentCommitmentSnapshot.participantId === draftPledge.participantId &&
+    isRefundBonusPaymentCommitmentSnapshotCountable(paymentCommitmentSnapshot, round);
+
+  const candidatePledge: RefundBonusPledge = {
+    ...draftPledge,
+    pledgeState: "hard_saved",
+    paymentCommitmentSnapshotId: paymentSnapshotValid ? paymentCommitmentSnapshot.id : undefined,
+    identityEligibilitySnapshotId: identitySnapshotValid ? identitySnapshot.id : undefined,
+    bonusEligibilitySnapshotId: bonusSnapshotValid ? bonusEligibilitySnapshot.id : undefined,
+    expectedBonusCents: bonusSnapshotValid ? bonusEligibilitySnapshot.computedBonusCents : 0,
+    providerPaymentMethodConfirmed: paymentSnapshotValid,
+    humanVerified: identitySnapshotValid && identitySnapshot.humanVerified,
+    identityVerified: identitySnapshotValid && identitySnapshot.identityVerified,
+    sybilState: identitySnapshotValid ? identitySnapshot.sybilState : "blocked",
+    collusionState: identitySnapshotValid ? identitySnapshot.collusionState : "blocked",
+    sameControlClusterId: identitySnapshotValid ? identitySnapshot.sameControlClusterId : draftPledge.sameControlClusterId,
+    paymentClusterId: bonusSnapshotValid ? bonusEligibilitySnapshot.paymentClusterId : draftPledge.paymentClusterId,
+    priorBonusAbuseState: bonusSnapshotValid ? bonusEligibilitySnapshot.priorBonusAbuseState : "blocked",
+    jurisdictionEligibilityState: bonusSnapshotValid ? bonusEligibilitySnapshot.jurisdictionEligibilityState : "blocked",
+    bonusEligibilityWeightBps: bonusSnapshotValid ? 10_000 : 0,
+    countingWeightBps: identitySnapshotValid ? identitySnapshot.countingWeightBps : 0,
+    bonusExposureReservedCents: bonusSnapshotValid ? bonusEligibilitySnapshot.computedBonusCents : 0,
+    updatedAt: paymentCommitmentSnapshot.asOf,
+  };
+  const gateResult = evaluateRefundBonusHardPledgeGate({
+    environment,
+    featureEnabled,
+    round,
+    pool,
+    gate,
+    reserve,
+    pledge: candidatePledge,
+    currentGrossExposureCents,
+    currentBonusExposureCents,
+  });
+
+  if (gateResult.allowed) {
+    return {
+      ...gateResult,
+      pledge: candidatePledge,
+      reserve: {
+        ...reserve,
+        committedCents: reserve.committedCents + candidatePledge.bonusExposureReservedCents,
+        committedExposureCents: reserve.committedExposureCents + candidatePledge.bonusExposureReservedCents,
+        updatedAt: paymentCommitmentSnapshot.asOf,
+      },
+    };
+  }
+
+  return {
+    ...gateResult,
+    pledge: {
+      ...draftPledge,
+      pledgeState: "draft",
+      paymentCommitmentSnapshotId: undefined,
+      identityEligibilitySnapshotId: undefined,
+      bonusEligibilitySnapshotId: undefined,
+      providerPaymentMethodConfirmed: false,
+      bonusExposureReservedCents: 0,
+      expectedBonusCents: 0,
+      updatedAt: paymentCommitmentSnapshot.asOf,
+    },
+    reserve,
+  };
 }
 
 export function isRefundBonusFeaturePromotionApproved(record: RefundBonusFeaturePromotionRecord) {
@@ -2235,10 +2406,19 @@ export function planRefundBonusSettlement({
     if (pool.status !== "payable") {
       blockedReasonCodes.push("pool_not_payable");
     }
+    if (!eligibleRowsRecomputed) {
+      blockedReasonCodes.push("eligible_rows_not_recomputed");
+    }
+    if (!outcome.recomputedAfterAuthorization) {
+      blockedReasonCodes.push("authorization_reconciliation_missing");
+    }
   }
   if (outcome.status === "qualifying_failed") {
     if (!canRefundBonusPayoutBonus(roundStatus)) {
       blockedReasonCodes.push("round_not_bonus_payable");
+    }
+    if (!canRefundBonusPayoutBonus(round.status)) {
+      blockedReasonCodes.push("round_record_not_bonus_payable");
     }
     if (pool.status !== "qualifying_failed" && pool.status !== "bonus_payable") {
       blockedReasonCodes.push("pool_not_qualifying_failed_or_bonus_payable");
@@ -2443,7 +2623,39 @@ export function buildRefundBonusReceipt({
   const finalStatus = plan.auditReport.finalStatus;
 
   if (finalStatus === "cleared_and_captured") {
+    if (!isRefundBonusAuthorizationAttemptCaptureReady(authorizationAttempt, pledge)) {
+      return {
+        receiptKind: "no_bonus_no_charge",
+        roundId: round.id,
+        poolId: pool.id,
+        pledgeId: pledge.id,
+        participantId: pledge.participantId,
+        calculationVersion: REFUND_BONUS_CALCULATION_VERSION,
+        grossCapturedCents: 0,
+        feeCents: 0,
+        netRecipientDisbursedCents: 0,
+        projectFundingCents: 0,
+        projectAllocationCentsByProjectId: allocateProjectFundingCents(pool, 0),
+        actualGrossExposureCents: 0,
+        countedCents: 0,
+        matchEligibleCents: 0,
+        sponsorBaseMatchCents: 0,
+        failureReasonCategory: "authorization_failure_recompute_below_threshold",
+        bonusEligibilityStatus: "not_eligible",
+        bonusGrossCents: 0,
+        bonusPayoutFeeCents: 0,
+        bonusNetCents: 0,
+        bonusReserveId: reserve.id,
+        rulebookHash: round.rulebookHash,
+        bonusPolicyHash: round.bonusPolicyHash,
+        copy: "A success-charge receipt was not issued because exact authorization evidence was missing or invalid. You were charged 0 cents.",
+      };
+    }
+
     const netRecipientDisbursedCents = Math.max(0, pledge.maxGrossCents - pledge.feeCents);
+    const sponsorBaseMatchCents = pool.sponsorMatchEnabled && pool.sponsorMatchBacked
+      ? netRecipientDisbursedCents
+      : 0;
 
     return {
       receiptKind: "success_charge",
@@ -2456,6 +2668,11 @@ export function buildRefundBonusReceipt({
       feeCents: pledge.feeCents,
       netRecipientDisbursedCents,
       projectFundingCents: netRecipientDisbursedCents,
+      projectAllocationCentsByProjectId: allocateProjectFundingCents(pool, netRecipientDisbursedCents),
+      actualGrossExposureCents: pledge.maxGrossCents,
+      countedCents: netRecipientDisbursedCents,
+      matchEligibleCents: netRecipientDisbursedCents,
+      sponsorBaseMatchCents,
       bonusEligibilityStatus: "not_applicable_cleared",
       bonusGrossCents: 0,
       bonusPayoutFeeCents: 0,
@@ -2483,6 +2700,11 @@ export function buildRefundBonusReceipt({
       feeCents: 0,
       netRecipientDisbursedCents: 0,
       projectFundingCents: 0,
+      projectAllocationCentsByProjectId: allocateProjectFundingCents(pool, 0),
+      actualGrossExposureCents: 0,
+      countedCents: 0,
+      matchEligibleCents: 0,
+      sponsorBaseMatchCents: 0,
       failureReasonCategory: plan.auditReport.reasonCodes[0],
       bonusEligibilityStatus: payoutOperation ? "eligible" : "not_eligible",
       bonusGrossCents: payoutOperation?.bonusGrossCents ?? 0,
@@ -2508,6 +2730,11 @@ export function buildRefundBonusReceipt({
     feeCents: 0,
     netRecipientDisbursedCents: 0,
     projectFundingCents: 0,
+    projectAllocationCentsByProjectId: allocateProjectFundingCents(pool, 0),
+    actualGrossExposureCents: 0,
+    countedCents: 0,
+    matchEligibleCents: 0,
+    sponsorBaseMatchCents: 0,
     failureReasonCategory: plan.auditReport.reasonCodes[0],
     bonusEligibilityStatus: "not_eligible",
     bonusGrossCents: 0,
