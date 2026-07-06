@@ -396,6 +396,35 @@ test("refund-bonus metadata and capability gates keep production disabled by def
   assert.equal(promotedProductionMoney.allowed, true);
   assert.deepEqual(promotedProductionMoney.reasons, ["feature_non_mvp"]);
 
+  for (const action of [
+    "create_hard_pledge",
+    "authorize_success_charge",
+    "capture_success_charge",
+    "plan_bonus_payout",
+  ] as const) {
+    const missingBonusPayoutProvider = evaluateRefundBonusCapability({
+      action,
+      actorRole: "service",
+      environment: "production",
+      featureEnabled: true,
+      openGatePassed: true,
+      bonusReserveBacked: true,
+      legalComplianceApproved: true,
+      paymentProviderReady: true,
+      bonusPayoutProviderReady: false,
+      liveMoneyEnabled: true,
+      promotionRecordApproved: true,
+      copyPreflightPassed: true,
+      identitySybilControlsReady: true,
+      bonusExposureCapConfigured: true,
+      emergencyPauseConfigured: true,
+      auditReportingTemplatesReviewed: true,
+      staleActiveLabelsAbsent: true,
+    });
+    assert.equal(missingBonusPayoutProvider.allowed, false, action);
+    assert.ok(missingBonusPayoutProvider.reasons.includes("bonus_payout_provider_not_ready"), action);
+  }
+
   const legalBlockedBonusRoute = evaluateRefundBonusCapability({
     action: "execute_bonus_payout",
     actorRole: "service",

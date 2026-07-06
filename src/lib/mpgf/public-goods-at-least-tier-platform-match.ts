@@ -828,12 +828,35 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     if (!input.promotionRecordApproved) {
       reasons.push("missing_promotion_record");
     }
+    if (input.action === "open_round") {
+      if (!input.platformMatchReserveExists) {
+        reasons.push("missing_platform_match_reserve");
+      }
+      if (!input.platformMatchReserveBacked) {
+        reasons.push("platform_match_reserve_unbacked");
+      }
+      if (!input.rewardScheduleFrozen || !input.rewardScheduleValid) {
+        reasons.push("damped_odds_schedule_invalid");
+      }
+      if (!input.legalComplianceApproved) {
+        reasons.push("legal_compliance_not_approved");
+      }
+      if (!input.paymentProviderReady) {
+        reasons.push("payment_provider_not_ready");
+      }
+      if (!input.sybilControlsReady) {
+        reasons.push("sybil_controls_not_ready");
+      }
+    }
     if (!input.copyPreflightPassed) {
       reasons.push("copy_preflight_failed");
     }
   }
 
   if (MONEY_OR_PROVIDER_ACTIONS.has(input.action)) {
+    if (input.environment !== "production") {
+      reasons.push("payment_mode_not_allowed_for_non_mvp");
+    }
     if (!input.liveMoneyEnabled) {
       reasons.push("production_real_money_disabled");
     }

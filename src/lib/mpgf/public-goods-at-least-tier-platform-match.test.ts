@@ -155,6 +155,39 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(productionMoney.reasons.includes("copy_preflight_failed"));
   assert.ok(productionMoney.reasons.includes("sybil_controls_not_ready"));
 
+  for (const environment of ["development", "preview", "test"] as const) {
+    for (const action of [
+      "save_payment_method",
+      "authorize_loss_payment",
+      "capture_loss_payment",
+      "release_winner_authorization",
+      "execute_platform_match_contribution",
+      "execute_user_loss_contribution",
+    ] as const) {
+      const nonProductionProviderAction = evaluateAtLeastTierPlatformMatchCapability({
+        action,
+        actorRole: "service",
+        environment,
+        featureEnabled: true,
+        liveMoneyEnabled: true,
+        promotionRecordApproved: true,
+        platformMatchReserveExists: true,
+        platformMatchReserveBacked: true,
+        rewardScheduleFrozen: true,
+        rewardScheduleValid: true,
+        copyPreflightPassed: true,
+        paymentProviderReady: true,
+        legalComplianceApproved: true,
+        sybilControlsReady: true,
+      });
+      assert.equal(nonProductionProviderAction.allowed, false, `${environment}:${action}`);
+      assert.ok(
+        nonProductionProviderAction.reasons.includes("payment_mode_not_allowed_for_non_mvp"),
+        `${environment}:${action}`,
+      );
+    }
+  }
+
   const productionOpenRound = evaluateAtLeastTierPlatformMatchCapability({
     action: "open_round",
     actorRole: "admin",
@@ -167,7 +200,36 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.equal(productionOpenRound.allowed, false);
   assert.ok(productionOpenRound.reasons.includes("production_real_money_disabled"));
   assert.ok(productionOpenRound.reasons.includes("missing_promotion_record"));
+  assert.ok(productionOpenRound.reasons.includes("missing_platform_match_reserve"));
+  assert.ok(productionOpenRound.reasons.includes("platform_match_reserve_unbacked"));
+  assert.ok(productionOpenRound.reasons.includes("damped_odds_schedule_invalid"));
   assert.ok(productionOpenRound.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionOpenRound.reasons.includes("legal_compliance_not_approved"));
+  assert.ok(productionOpenRound.reasons.includes("payment_provider_not_ready"));
+  assert.ok(productionOpenRound.reasons.includes("sybil_controls_not_ready"));
+
+  const incompletePromotedOpenRound = evaluateAtLeastTierPlatformMatchCapability({
+    action: "open_round",
+    actorRole: "admin",
+    environment: "production",
+    featureEnabled: true,
+    liveMoneyEnabled: true,
+    promotionRecordApproved: true,
+    platformMatchReserveExists: true,
+    platformMatchReserveBacked: false,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: false,
+    copyPreflightPassed: true,
+    paymentProviderReady: false,
+    legalComplianceApproved: false,
+    sybilControlsReady: false,
+  });
+  assert.equal(incompletePromotedOpenRound.allowed, false);
+  assert.ok(incompletePromotedOpenRound.reasons.includes("platform_match_reserve_unbacked"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("damped_odds_schedule_invalid"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("legal_compliance_not_approved"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("payment_provider_not_ready"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("sybil_controls_not_ready"));
 
   const productionPublicReport = evaluateAtLeastTierPlatformMatchCapability({
     action: "publish_public_report",

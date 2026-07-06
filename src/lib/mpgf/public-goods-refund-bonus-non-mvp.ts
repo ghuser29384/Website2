@@ -1875,7 +1875,7 @@ export function evaluateRefundBonusCapability(input: RefundBonusCapabilityInput)
     if (!input.paymentProviderReady) {
       reasons.push("payment_provider_not_ready");
     }
-    if (input.action === "execute_bonus_payout" && !input.bonusPayoutProviderReady) {
+    if (!input.bonusPayoutProviderReady) {
       reasons.push("bonus_payout_provider_not_ready");
     }
   }
