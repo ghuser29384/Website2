@@ -27,6 +27,10 @@ export function MpgfRoundBoard({
           success-without-me status stay sealed before close. Public exact aggregates appear only
           after close in final reports or audit bundles.
         </p>
+        <p>
+          Deployment mode: capped pilot. Real capture remains capped by the published round and
+          participant limits; the board shows qualitative progress before close.
+        </p>
       </div>
 
       <div className="mpgf-round-board-header">
@@ -66,12 +70,12 @@ export function MpgfRoundBoard({
                 <dd>Shown after close in final reports</dd>
               </div>
               <div>
-                <dt>Your stance</dt>
-                <dd>{card.yourStanceLabel}</dd>
+                <dt>Your choice</dt>
+                <dd>{card.yourChoiceLabel}</dd>
               </div>
               <div>
-                <dt>Your possible allocation if gates pass</dt>
-                <dd>{formatUsd(card.projectedAllocationCents)}</dd>
+                <dt>Your maximum</dt>
+                <dd>{formatUsd(card.yourMaximumCents)}</dd>
               </div>
             </dl>
             <div className="mpgf-allocation-row">

@@ -9,7 +9,7 @@ import {
   MPGF_ROUND_BOARD_SCHEMA_VERSION,
 } from "@/lib/mpgf/public-goods-round-board";
 
-test("MPGF round board exposes threshold, match, stance, allocation, and action fields", () => {
+test("MPGF round board exposes threshold, match, choice, maximum, and action fields", () => {
   const cards = buildMpgfRoundBoardCards({
     allocation: allocateMpgfAssuranceRound(),
     campaigns: demoMpgfPublicGoodsCampaigns,
@@ -28,7 +28,9 @@ test("MPGF round board exposes threshold, match, stance, allocation, and action 
       ),
     ),
   );
-  assert.ok(cards.every((card) => card.yourStanceLabel.length > 0));
+  assert.ok(cards.every((card) => card.yourChoiceLabel.length > 0));
+  assert.ok(cards.every((card) => card.yourStanceLabel === card.yourChoiceLabel));
+  assert.ok(cards.every((card) => card.yourMaximumCents >= 0));
   assert.ok(cards.every((card) => card.pivotalActionLabel.length > 0));
   assert.ok(cards.every((card) => card.inviteActionLabel.length > 0));
 
@@ -42,6 +44,8 @@ test("MPGF round board exposes threshold, match, stance, allocation, and action 
   const nearThreshold = cards.find((card) => card.status === "near_threshold");
   assert.ok(nearThreshold);
   assert.equal(nearThreshold.sealedProgressLabel, "Likely near threshold");
+  assert.equal(nearThreshold.yourChoiceLabel, "Fund if different-view support joins");
+  assert.equal(nearThreshold.yourMaximumCents, 500);
   assert.equal(nearThreshold.pivotalActionLabel, "Preview $5 budget");
   assert.equal(nearThreshold.inviteActionLabel, "Copy user-initiated invite link");
   assert.equal(nearThreshold.projectedAllocationCents, 500);
@@ -59,11 +63,15 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.match(component, /Round board and budget router/);
   assert.match(component, /Exact\s+threshold progress, supporter counts, active-cluster counts/);
   assert.match(component, /Public exact aggregates appear only\s+after close in final reports or audit bundles/);
+  assert.match(component, /Deployment mode: capped pilot/);
+  assert.match(component, /participant limits/);
   assert.match(component, /Sealed before close/);
   assert.match(component, /Qualitative progress/);
   assert.match(component, /card\.sealedProgressLabel/);
-  assert.match(component, /Your stance/);
-  assert.match(component, /Your possible allocation if gates pass/);
+  assert.match(component, /Your choice/);
+  assert.match(component, /card\.yourChoiceLabel/);
+  assert.match(component, /Your maximum/);
+  assert.match(component, /card\.yourMaximumCents/);
   assert.match(component, /Possible bonus match if gates pass/);
   assert.equal(component.includes("Your projected allocation"), false);
   assert.equal(component.includes("Projected bonus match"), false);
@@ -71,7 +79,9 @@ test("MPGF hub renders the moraltrade60 round board surface", () => {
   assert.equal(component.includes("{formatUsd(card.directCountedCents)}"), false);
   assert.equal(component.includes("{card.verifiedSupporterCount}/{card.thresholdSupporters}"), false);
   assert.match(helper, /Copy user-initiated invite link/);
+  assert.match(helper, /getMpgfCrecPlainLanguageLabelForStance\("weak"\)/);
   assert.match(helper, /Preview \$5 budget/);
+  assert.equal(helper.includes("weak common-ground preview"), false);
   assert.match(helper, /Likely near threshold/);
   assert.match(helper, /Needs more support/);
   assert.match(helper, /Review pending/);

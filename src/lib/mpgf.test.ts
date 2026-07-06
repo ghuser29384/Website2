@@ -1531,6 +1531,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const contributionModal = readFileSync("src/components/mpgf/mpgf-contribution-modal.tsx", "utf8");
   const realMoneyCheckout = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
   const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
+  const roundBoardComponent = readFileSync("src/components/mpgf/mpgf-round-board.tsx", "utf8");
 
   for (const expected of [
     /Sponsor-pool size/,
@@ -1663,6 +1664,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.match(mpgfHubPage, /Public progress/);
   assert.match(mpgfHubPage, /Base match unlocked/);
   assert.match(mpgfHubPage, /Estimated bonus range/);
+  assert.match(roundBoardComponent, /Your choice/);
+  assert.match(roundBoardComponent, /Your maximum/);
+  assert.match(roundBoardComponent, /Deployment mode: capped pilot/);
   assert.equal(mpgfHubPage.includes("status.verifiedSupporterCount"), false);
   assert.equal(mpgfHubPage.includes("status.amountProgressBps"), false);
   assert.match(mpgfHubPage, /Verify identity, authorize conditionally, then wait for review/);
@@ -3066,6 +3070,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
       ],
       minCounterpartyVolumeCents: 20_000,
       rankOrder: 1,
+      reviewSignalVisibility: "pseudonymous",
     }],
   });
   const missingConditionPreview = buildMpgfCommonGroundBudgetPreview({
@@ -3120,6 +3125,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   );
   const capsCaptureMigration = readFileSync(
     "supabase/migrations/20260626_mpgf_common_ground_budget_caps_capture.sql",
+    "utf8",
+  );
+  const reviewSignalVisibilityMigration = readFileSync(
+    "supabase/migrations/20260703_mpgf_support_stance_review_signal_visibility.sql",
     "utf8",
   );
   const serialized = JSON.stringify({ report, persistedReport, supportSignalContract });
@@ -3236,6 +3245,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreview.termsSnapshotHash, /^sha256:/);
   assert.match(budgetPreview.participantConfirmationHash ?? "", /^sha256:/);
   assert.equal(budgetPreview.rows[0]?.stance, "weak");
+  assert.equal(budgetPreview.rows[0]?.reviewSignalVisibility, "pseudonymous");
   assert.equal(budgetPreview.rows[0]?.maxAllocCents, 3_000);
   assert.equal(budgetPreview.rows[0]?.maxAllocBps, 10_000);
   assert.equal("maxAllocPctBps" in (budgetPreview.rows[0] ?? {}), false);
@@ -3245,6 +3255,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.equal(defaultSkipPreview.nextCaptureAt, null);
   assert.equal(defaultSkipPreview.nextCaptureRule, "none_before_final_review");
   assert.equal(defaultSkipPreview.rows[0]?.stance, "abstain");
+  assert.equal(defaultSkipPreview.rows[0]?.reviewSignalVisibility, "aggregate_only");
   assert.equal(defaultSkipPreview.routedAllocationCents, 0);
   assert.equal(defaultSkipPreview.activationState, "preview_only_confirmation_required");
   assert.equal(missingConditionPreview.rows[0]?.stance, "weak");
@@ -3294,6 +3305,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreviewRoute, /conditionAccepted/);
   assert.match(budgetPreviewRoute, /acceptableCounterBucketIds/);
   assert.match(budgetPreviewRoute, /minCounterpartyVolumeCents/);
+  assert.match(budgetPreviewRoute, /reviewSignalVisibilityField/);
+  assert.match(budgetPreviewRoute, /reviewSignalVisibility: reviewSignalVisibilityField\(record\.reviewSignalVisibility\)/);
+  assert.match(budgetPreviewRoute, /review_signal_visibility: row\.reviewSignalVisibility/);
   assert.match(budgetPreviewRoute, /counts_for_common_ground: row\.stance === "strong" \|\| row\.stance === "weak"/);
   assert.match(budgetPreviewRoute, /stateMutation/);
   assert.match(budgetPreviewRoute, /paymentCaptureAllowed/);
@@ -3367,13 +3381,31 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /Safe defaults become binding only after the final review screen shows them/);
   assert.match(roundPage, /Pick projects with the plain-language choices below/);
   assert.match(roundPage, /MPGF_CRECM_PLAIN_LANGUAGE_LABELS/);
+  assert.match(roundPage, /COMMON_GROUND_STANCE_OPTIONS/);
   assert.match(roundPage, /id="common-ground-stance-copy-map"/);
   assert.match(roundPage, /aria-describedby="common-ground-stance-copy-map"/);
+  assert.match(roundPage, /type="radio"/);
+  assert.match(roundPage, /stance-canonical-effect-\$\{row\.campaignId\}-\$\{option\.value\}/);
+  assert.match(roundPage, /aria-describedby=\{`\$\{canonicalEffectId\} common-ground-stance-copy-map`\}/);
+  assert.match(roundPage, /<small id=\{canonicalEffectId\}>\{option\.canonicalEffect\}<\/small>/);
+  assert.match(roundPage, /defaultChecked=\{row\.stance === option\.value\}/);
+  assert.match(roundPage, /option\.canonicalEffect/);
   assert.match(roundPage, /ProjectSupportStance\.stance strong/);
   assert.match(roundPage, /ProjectSupportStance\.stance weak/);
   assert.match(roundPage, /ProjectSupportStance\.stance dissent/);
   assert.match(roundPage, /ProjectSupportStance\.stance abstain/);
   assert.match(roundPage, /allocates zero by default/);
+  assert.match(roundPage, /reviewSignalVisibilityFromParams/);
+  assert.match(roundPage, /reviewSignalVisibility: reviewSignalVisibilityFromParams/);
+  assert.match(roundPage, /reviewSignalVisibility: row\.reviewSignalVisibility/);
+  assert.match(roundPage, /You chose:/);
+  assert.match(roundPage, /Canonical stance:/);
+  assert.match(roundPage, /Money allocation: \$0/);
+  assert.match(roundPage, /Review note: use the project review-note field below/);
+  assert.match(roundPage, /Visibility of review signal/);
+  assert.match(roundPage, /reviewSignalVisibility_\$\{row\.campaignId\}/);
+  assert.match(roundPage, /Defaults to aggregate-only and does not create allocation power/);
+  assert.match(roundPage, /No support, opposition, or allocatable intent is\s+inferred from skipping/);
   assert.match(roundPage, /Edit condition/);
   assert.match(roundPage, /verified match-eligible support clears from morally/);
   assert.match(roundPage, /Morally distinct buckets/);
@@ -3435,7 +3467,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /finalReviewDisclosureDescription/);
   assert.match(budgetSavePanel, /getMpgfCrecPlainLanguageLabelForStance/);
   assert.match(budgetSavePanel, /MpgfCrecGuidedStance/);
+  assert.match(budgetSavePanel, /MpgfCommonGroundBudgetReviewSignalVisibility/);
   assert.match(budgetSavePanel, /@\/lib\/mpgf\/public-goods-crecm-labels/);
+  assert.match(budgetSavePanel, /reviewSignalVisibilityLabel/);
+  assert.match(budgetSavePanel, /selected\s+review-signal visibility shown per project/);
   assert.match(budgetSavePanel, /maximumThisRound/);
   assert.match(plainLanguageLabels, /defaultUiText: "Maximum this round"/);
   assert.match(plainLanguageLabels, /defaultUiText: "Maximum for this project"/);
@@ -3466,6 +3501,8 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetSavePanel, /condition accepted/);
   assert.match(budgetSavePanel, /condition still missing/);
   assert.match(budgetSavePanel, /Private review note:/);
+  assert.match(budgetSavePanel, /Review signal visibility:/);
+  assert.match(budgetSavePanel, /project\.reviewSignalVisibility/);
   assert.match(budgetSavePanel, /reviewer-only/);
   assert.match(plainLanguageLabels, /label: "Failure-bonus denial categories"/);
   assert.match(budgetSavePanel, /review-not-approved, challenge-blocked, anti-threat, destination/);
@@ -3571,6 +3608,9 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(migration, /participant_confirmation_hash text/);
   assert.match(migration, /rank_order integer/);
   assert.match(migration, /redacted_note_hash text/);
+  assert.match(reviewSignalVisibilityMigration, /add column if not exists review_signal_visibility text not null default 'aggregate_only'/);
+  assert.match(reviewSignalVisibilityMigration, /review_signal_visibility in \('aggregate_only', 'pseudonymous', 'public'\)/);
+  assert.match(reviewSignalVisibilityMigration, /does not create allocation power/);
   assert.match(migration, /threshold_feasible_flag boolean not null default false/);
   assert.match(migration, /failure_bonus_or_carry_forward_eligible boolean not null default false/);
   assert.match(migration, /mpgf_user_budgets_write_own/);
@@ -3588,6 +3628,8 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(schemaSql, /participant_confirmation_hash text/);
   assert.match(schemaSql, /rank_order integer/);
   assert.match(schemaSql, /redacted_note_hash text/);
+  assert.match(schemaSql, /review_signal_visibility text not null default 'aggregate_only'/);
+  assert.match(schemaSql, /review-signal visibility/);
   assert.match(schemaSql, /mpgf_coalition_candidates_public_select/);
   assert.match(schemaSql, /mpgf_user_budgets_write_own/);
   assert.match(schemaSql, /mpgf_support_stances_write_own/);

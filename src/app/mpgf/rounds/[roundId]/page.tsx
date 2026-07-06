@@ -18,6 +18,7 @@ import {
   type MpgfCommonGroundBudgetFallbackRule,
   type MpgfCommonGroundBudgetNextCaptureRule,
   type MpgfCommonGroundBudgetPeriod,
+  type MpgfCommonGroundBudgetReviewSignalVisibility,
   type MpgfCommonGroundBudgetStance,
   type MpgfCommonGroundBudgetUnroutablePolicy,
 } from "@/lib/mpgf/public-goods-common-ground-budget";
@@ -126,6 +127,33 @@ function commonGroundStanceLabel(stance: MpgfCommonGroundBudgetStance) {
   return getMpgfCrecPlainLanguageLabelForStance(stance);
 }
 
+const COMMON_GROUND_STANCE_OPTIONS = [
+  {
+    value: "strong",
+    label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.strong,
+    canonicalEffect: "Allocatable only after explicit caps, conditions, gates, and final review.",
+  },
+  {
+    value: "weak",
+    label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.weak,
+    canonicalEffect: "Allocatable only if different-view support joins and the cross-view condition clears.",
+  },
+  {
+    value: "dissent",
+    label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.dissent,
+    canonicalEffect: "Allocates $0 and can send a review signal with your selected visibility.",
+  },
+  {
+    value: "abstain",
+    label: MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.abstain,
+    canonicalEffect: "Allocates $0 and does not imply support or opposition.",
+  },
+] satisfies Array<{
+  value: MpgfCommonGroundBudgetStance;
+  label: string;
+  canonicalEffect: string;
+}>;
+
 function searchParamValue(
   params: Record<string, string | string[] | undefined>,
   key: string,
@@ -203,6 +231,26 @@ function stanceFromParams(
   }
 
   return value === "weak" ? "weak" : "abstain";
+}
+
+function reviewSignalVisibilityFromParams(
+  params: Record<string, string | string[] | undefined>,
+  campaignId: string,
+): MpgfCommonGroundBudgetReviewSignalVisibility {
+  const value = searchParamValue(params, `reviewSignalVisibility_${campaignId}`);
+
+  return value === "public" || value === "pseudonymous" ? value : "aggregate_only";
+}
+
+function reviewSignalVisibilityLabel(value: MpgfCommonGroundBudgetReviewSignalVisibility) {
+  switch (value) {
+    case "public":
+      return "Public";
+    case "pseudonymous":
+      return "Pseudonymous";
+    case "aggregate_only":
+      return "Aggregate only";
+  }
 }
 
 function workflowState({
@@ -351,6 +399,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       ),
       rankOrder: index + 1,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${campaign.campaignId}`),
+      reviewSignalVisibility: reviewSignalVisibilityFromParams(resolvedSearchParams, campaign.campaignId),
     })),
   });
   const commonGroundBudgetReleaseGate = commonGroundBudgetPreview.releaseGateRequirementBundle;
@@ -387,6 +436,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
       rankOrder: row.rankOrder,
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
+      reviewSignalVisibility: row.reviewSignalVisibility,
     })),
     unroutableBudgetPolicy: commonGroundBudgetPreview.unroutableBudgetPolicy,
   } satisfies CommonGroundBudgetSavePayload;
@@ -969,16 +1019,64 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                         <tr key={`budget-input-${row.campaignId}`}>
                           <th scope="row">{row.title}</th>
                           <td>
-                            <select
-                              aria-describedby="common-ground-stance-copy-map"
-                              name={`stance_${row.campaignId}`}
-                              defaultValue={row.stance}
+                            <fieldset className="field">
+                              <legend className="sr-only">Your choice for {row.title}</legend>
+                              <div className="radio-stack" aria-describedby="common-ground-stance-copy-map">
+                                {COMMON_GROUND_STANCE_OPTIONS.map((option) => {
+                                  const canonicalEffectId =
+                                    `stance-canonical-effect-${row.campaignId}-${option.value}`;
+
+                                  return (
+                                    <label className="radio-row" key={`${row.campaignId}-${option.value}`}>
+                                      <input
+                                        aria-describedby={`${canonicalEffectId} common-ground-stance-copy-map`}
+                                        name={`stance_${row.campaignId}`}
+                                        type="radio"
+                                        value={option.value}
+                                        defaultChecked={row.stance === option.value}
+                                      />
+                                      <span>{option.label}</span>
+                                      <small id={canonicalEffectId}>{option.canonicalEffect}</small>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </fieldset>
+                            <div
+                              className="mpgf-small"
+                              aria-label={`${row.title} selected choice summary`}
                             >
-                              <option value="strong">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.strong}</option>
-                              <option value="weak">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.weak}</option>
-                              <option value="dissent">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.dissent}</option>
-                              <option value="abstain">{MPGF_CRECM_PLAIN_LANGUAGE_LABELS.stance.abstain}</option>
-                            </select>
+                              <p>
+                                <strong>You chose:</strong> {commonGroundStanceLabel(row.stance)}
+                              </p>
+                              <p>Canonical stance: {row.canonicalStance}</p>
+                              {row.stance === "strong" ? (
+                                <p>
+                                  Money allocation: up to {formatUsd(row.projectedAllocationCents)} if caps,
+                                  condition, review, threshold, and authorization gates pass. Use suggested
+                                  condition or Edit condition before final review.
+                                </p>
+                              ) : null}
+                              {row.stance === "weak" ? (
+                                <p>
+                                  Money allocation: up to {formatUsd(row.projectedAllocationCents)} only if
+                                  different-view support joins; this does not count as unconditional support.
+                                  Use suggested condition or Edit condition before final review.
+                                </p>
+                              ) : null}
+                              {row.stance === "dissent" ? (
+                                <p>
+                                  Money allocation: $0. Review note: use the project review-note field below.
+                                  Visibility of review signal: {reviewSignalVisibilityLabel(row.reviewSignalVisibility)}.
+                                </p>
+                              ) : null}
+                              {row.stance === "abstain" ? (
+                                <p>
+                                  Money allocation: $0. No support, opposition, or allocatable intent is
+                                  inferred from skipping.
+                                </p>
+                              ) : null}
+                            </div>
                           </td>
                           <td>
                             <input
@@ -1031,6 +1129,20 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                               type="text"
                               defaultValue={searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`)}
                             />
+                            <label className="field">
+                              <span>Visibility of review signal</span>
+                              <select
+                                name={`reviewSignalVisibility_${row.campaignId}`}
+                                defaultValue={row.reviewSignalVisibility}
+                              >
+                                <option value="aggregate_only">Aggregate only</option>
+                                <option value="pseudonymous">Pseudonymous</option>
+                                <option value="public">Public</option>
+                              </select>
+                            </label>
+                            <p className="mpgf-small">
+                              Defaults to aggregate-only and does not create allocation power.
+                            </p>
                           </td>
                         </tr>
                       ))}
@@ -1134,6 +1246,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   minCounterpartyVolumeCents: row.minCounterpartyVolumeCents,
                   rankOrder: row.rankOrder,
                   redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
+                  reviewSignalVisibility: row.reviewSignalVisibility,
                   stance: row.stance,
                   title: row.title,
                 }))}
@@ -1150,7 +1263,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                     <h3>{row.title}</h3>
                     <dl className="mpgf-headline-metrics">
                       <div>
-                        <dt>Your stance</dt>
+                        <dt>Your choice</dt>
                         <dd>{commonGroundStanceLabel(row.stance)}</dd>
                       </div>
                       <div>

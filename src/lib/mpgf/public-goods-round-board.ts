@@ -1,4 +1,5 @@
 import { getMpgfCampaignAssuranceStatus } from "./mechanism";
+import { getMpgfCrecPlainLanguageLabelForStance } from "./public-goods-crecm-labels";
 import type {
   MpgfPublicGoodsAssuranceStatus,
   MpgfPublicGoodsCampaign,
@@ -33,6 +34,8 @@ export interface MpgfRoundBoardCard {
   thresholdAmountCents: number;
   thresholdSupporters: number;
   title: string;
+  yourChoiceLabel: string;
+  yourMaximumCents: number;
   verifiedSupporterCount: number;
   yourStanceLabel: string;
 }
@@ -82,24 +85,24 @@ export function sealedProgressLabelForBoardStatus(status: MpgfRoundBoardStatus):
   return "Likely near threshold";
 }
 
-function stanceLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: boolean) {
+function choiceLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: boolean) {
   if (!viewerPresent) {
-    return "Sign in to set stance";
+    return "Sign in to set choice";
   }
 
   if (status === "cleared") {
-    return "strong or weak common-ground";
+    return getMpgfCrecPlainLanguageLabelForStance("strong");
   }
 
   if (status === "failed") {
-    return "carry forward or abstain";
+    return getMpgfCrecPlainLanguageLabelForStance("abstain");
   }
 
   if (status === "needs_review") {
-    return "weak common-ground after review";
+    return getMpgfCrecPlainLanguageLabelForStance("dissent");
   }
 
-  return "weak common-ground preview";
+  return getMpgfCrecPlainLanguageLabelForStance("weak");
 }
 
 function actionLabelForBoardStatus(status: MpgfRoundBoardStatus, viewerPresent: boolean) {
@@ -182,8 +185,10 @@ export function buildMpgfRoundBoardCards({
       thresholdAmountCents: assuranceStatus.thresholdAmountCents,
       thresholdSupporters: assuranceStatus.thresholdSupporters,
       title: campaign.title,
+      yourChoiceLabel: choiceLabelForBoardStatus(status, viewerPresent),
+      yourMaximumCents: projectedAllocationCents,
       verifiedSupporterCount: assuranceStatus.verifiedSupporterCount,
-      yourStanceLabel: stanceLabelForBoardStatus(status, viewerPresent),
+      yourStanceLabel: choiceLabelForBoardStatus(status, viewerPresent),
     };
   });
 }

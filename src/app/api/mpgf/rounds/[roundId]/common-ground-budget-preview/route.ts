@@ -10,6 +10,7 @@ import {
   type MpgfCommonGroundBudgetFallbackRule,
   type MpgfCommonGroundBudgetNextCaptureRule,
   type MpgfCommonGroundBudgetPeriod,
+  type MpgfCommonGroundBudgetReviewSignalVisibility,
   type MpgfCommonGroundBudgetStance,
   type MpgfCommonGroundBudgetUnroutablePolicy,
 } from "@/lib/mpgf/public-goods-common-ground-budget";
@@ -125,6 +126,10 @@ function nextCaptureRuleField(record: Record<string, unknown>): MpgfCommonGround
   return null;
 }
 
+function reviewSignalVisibilityField(value: unknown): MpgfCommonGroundBudgetReviewSignalVisibility {
+  return value === "public" || value === "pseudonymous" ? value : "aggregate_only";
+}
+
 function stanceField(value: unknown): MpgfCommonGroundBudgetStance {
   return value === "strong" || value === "dissent" || value === "abstain" ? value : "weak";
 }
@@ -144,6 +149,7 @@ function stancesField(value: unknown) {
     minCounterpartyVolumeCents: numberField(record, "minCounterpartyVolumeCents"),
     rankOrder: numberField(record, "rankOrder") ?? index + 1,
     redactedNote: stringField(record, "redactedNote"),
+    reviewSignalVisibility: reviewSignalVisibilityField(record.reviewSignalVisibility),
   }));
 }
 
@@ -327,6 +333,7 @@ async function persistCommonGroundBudgetPreview({
     max_alloc_pct_bps: row.maxAllocBps,
     rank_order: row.rankOrder,
     redacted_note_hash: redactedNoteHashes.get(row.campaignId) ?? null,
+    review_signal_visibility: row.reviewSignalVisibility,
     acceptable_counter_buckets: row.acceptableCounterBucketIds,
     private_by_default: true,
     counts_for_common_ground: row.stance === "strong" || row.stance === "weak",

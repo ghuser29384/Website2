@@ -13,6 +13,7 @@ import {
   type MpgfCrecFinalReviewDisclosureKey,
   type MpgfCrecGuidedStance,
 } from "@/lib/mpgf/public-goods-crecm-labels";
+import type { MpgfCommonGroundBudgetReviewSignalVisibility } from "@/lib/mpgf/public-goods-common-ground-budget";
 
 type BudgetPeriod = "monthly" | "round_limited";
 type BaselineConfidence = "low" | "medium" | "high";
@@ -31,6 +32,7 @@ interface CommonGroundBudgetStancePayload {
   minCounterpartyVolumeCents: number;
   rankOrder: number;
   redactedNote?: string;
+  reviewSignalVisibility: MpgfCommonGroundBudgetReviewSignalVisibility;
 }
 
 export interface CommonGroundBudgetSavePayload {
@@ -90,6 +92,7 @@ interface CommonGroundBudgetReviewProject {
   minCounterpartyVolumeCents: number;
   rankOrder: number;
   redactedNote?: string;
+  reviewSignalVisibility: MpgfCommonGroundBudgetReviewSignalVisibility;
   stance: SupportStance;
   title: string;
 }
@@ -113,6 +116,17 @@ function formatCents(cents: number) {
 
 function stanceLabel(value: SupportStance) {
   return getMpgfCrecPlainLanguageLabelForStance(value);
+}
+
+function reviewSignalVisibilityLabel(value: MpgfCommonGroundBudgetReviewSignalVisibility) {
+  switch (value) {
+    case "public":
+      return "public";
+    case "pseudonymous":
+      return "pseudonymous";
+    case "aggregate_only":
+      return "aggregate only";
+  }
 }
 
 function fallbackLabel(value: FallbackRule) {
@@ -262,6 +276,7 @@ export function MpgfCommonGroundBudgetSavePanel({
           minCounterpartyVolumeCents: stance.minCounterpartyVolumeCents,
           rankOrder: stance.rankOrder,
           redactedNote: stance.redactedNote,
+          reviewSignalVisibility: stance.reviewSignalVisibility,
           stance: stance.stance,
           title: stance.campaignId,
         }));
@@ -352,7 +367,10 @@ export function MpgfCommonGroundBudgetSavePanel({
           </div>
           <div>
             <dt>Privacy</dt>
-            <dd>Project stances and review notes stay participant/reviewer-only; public output is aggregate only.</dd>
+            <dd>
+              Project stances and review notes stay participant/reviewer-only except for the selected
+              review-signal visibility shown per project; public output is aggregate only by default.
+            </dd>
           </div>
           <div>
             <dt>Sealed progress</dt>
@@ -372,6 +390,7 @@ export function MpgfCommonGroundBudgetSavePanel({
                     }`}, priority{" "}
                 {project.rankOrder}. Private review note:{" "}
                 {project.redactedNote ? `${project.redactedNote} (reviewer-only)` : "none"}
+                . Review signal visibility: {reviewSignalVisibilityLabel(project.reviewSignalVisibility)}
               </li>
             ))}
           </ul>

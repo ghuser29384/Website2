@@ -7013,6 +7013,9 @@ create table if not exists public.mpgf_support_stances (
   redacted_note_hash text check (
     redacted_note_hash is null or redacted_note_hash ~ '^sha256:[0-9a-f]{64}$'
   ),
+  review_signal_visibility text not null default 'aggregate_only' check (
+    review_signal_visibility in ('aggregate_only', 'pseudonymous', 'public')
+  ),
   acceptable_counter_buckets text[] not null default '{}',
   private_by_default boolean not null default true check (private_by_default = true),
   counts_for_common_ground boolean not null default true,
@@ -7879,7 +7882,7 @@ comment on table public.mpgf_user_budgets is
   'Per-round MPGF Common Ground Budget records. Budget records freeze baseline, participant surplus confirmation, eligible-set hashes, fallback policy, and no-capture preview terms; public outputs remain aggregate-only.';
 
 comment on table public.mpgf_support_stances is
-  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances include caps, rank order, and redacted-note hashes, feed coalition feasibility, and never create global moral rankings.';
+  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances include caps, rank order, redacted-note hashes, review-signal visibility, feed coalition feasibility, and never create global moral rankings.';
 
 comment on table public.mpgf_conditional_trade_intents is
   'No-capture Common Ground Budget conditional intent setup records. Rows bind explicit caps, accepted counterparty buckets, min counterparty volume, fallback rule, terms hash, and final-review disclosure before any later authorization path can use them.';

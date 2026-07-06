@@ -73,6 +73,7 @@ export type MpgfCommonGroundBudgetBaselineConfidence = "low" | "medium" | "high"
 export type MpgfCommonGroundBudgetStance = "strong" | "weak" | "dissent" | "abstain";
 export type MpgfCommonGroundBudgetFallbackRule = "carry_forward" | "reroute" | "release_hold";
 export type MpgfCommonGroundBudgetUnroutablePolicy = "carry_forward" | "release_hold" | "manual_review";
+export type MpgfCommonGroundBudgetReviewSignalVisibility = "aggregate_only" | "pseudonymous" | "public";
 export type MpgfCommonGroundBudgetNextCaptureRule =
   | "none_before_final_review"
   | "monthly_after_final_review"
@@ -161,6 +162,7 @@ export interface MpgfCommonGroundBudgetStanceInput {
   minCounterpartyVolumeCents?: number | null;
   rankOrder?: number | null;
   redactedNote?: string | null;
+  reviewSignalVisibility?: MpgfCommonGroundBudgetReviewSignalVisibility | null;
 }
 
 export interface MpgfCommonGroundBudgetPreviewInput {
@@ -192,6 +194,7 @@ export interface MpgfCommonGroundBudgetPreviewRow {
   plainLabel: string;
   canonicalStance: MpgfCommonGroundBudgetStance;
   rankOrder: number;
+  reviewSignalVisibility: MpgfCommonGroundBudgetReviewSignalVisibility;
   maxAllocCents: number;
   maxAllocBps: number;
   conditionAccepted: boolean;
@@ -545,6 +548,12 @@ function normalizeUnroutablePolicy(value: MpgfCommonGroundBudgetUnroutablePolicy
   return value === "release_hold" || value === "manual_review" ? value : "carry_forward";
 }
 
+function normalizeReviewSignalVisibility(
+  value: MpgfCommonGroundBudgetReviewSignalVisibility | null | undefined,
+): MpgfCommonGroundBudgetReviewSignalVisibility {
+  return value === "pseudonymous" || value === "public" ? value : "aggregate_only";
+}
+
 function normalizeProjectSetChangePolicy(value: MpgfCommonGroundBudgetPreviewInput["projectSetChangePolicy"]) {
   return value === "allow_if_matches_preapproved_policy"
     ? "allow_if_matches_preapproved_policy"
@@ -726,6 +735,7 @@ export function buildMpgfCommonGroundBudgetPreview(
         ? Math.floor(Number(stance.rankOrder))
         : index + 1,
       redactedNoteHash: stance.redactedNote ? hashValue(["mpgf-common-ground-redacted-note", stance.redactedNote]) : null,
+      reviewSignalVisibility: normalizeReviewSignalVisibility(stance.reviewSignalVisibility),
     }))
     .sort((left, right) => left.rankOrder - right.rankOrder || left.campaignId.localeCompare(right.campaignId));
   const eligibleProjectIds = normalizedStances
@@ -826,6 +836,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       plainLabel: plainLabelForStance(stance.stance),
       canonicalStance: stance.stance,
       rankOrder: stance.rankOrder,
+      reviewSignalVisibility: stance.reviewSignalVisibility,
       maxAllocCents: stance.maxAllocCents,
       maxAllocBps: stance.maxAllocBps,
       conditionAccepted: stance.conditionAccepted,
@@ -1006,6 +1017,7 @@ export function buildMpgfCommonGroundBudgetPreview(
       rows.map((row) => [
         row.campaignId,
         row.stance,
+        row.reviewSignalVisibility,
         row.conditionAccepted,
         row.acceptableCounterBucketIds,
         row.minCounterpartyVolumeCents,
