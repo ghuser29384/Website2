@@ -837,6 +837,8 @@ test("ordinary copy preflight blocks wagering and return language while requirin
 test("documentation and route absence match v137 non-MVP constraints", () => {
   const docs = readFileSync("docs/at-least-tier-platform-match-non-mvp.md", "utf8");
   const labsPage = readFileSync("src/app/labs/at-least-tier-platform-match/page.tsx", "utf8");
+  const labsRoundPage = readFileSync("src/app/labs/at-least-tier-platform-match/[roundSlug]/page.tsx", "utf8");
+  const labsCommitPage = readFileSync("src/app/labs/at-least-tier-platform-match/[roundSlug]/commit/page.tsx", "utf8");
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
 
@@ -852,6 +854,16 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsPage, /you contribute the stated amount/);
   assert.match(labsPage, /Production real-money use is disabled unless this mechanism is explicitly promoted/);
   assert.match(labsPage, /Own commitments, same-control accounts, fees, sponsor match/);
+  assert.match(labsRoundPage, /read-only labs surface/);
+  assert.match(labsRoundPage, /sealed qualitative status only before close/);
+  assert.match(labsRoundPage, /other eligible users&apos; effective support/);
+  assert.match(labsRoundPage, /View disabled commitment review/);
+  assert.match(labsCommitPage, /required v137 commitment copy in an off state/);
+  assert.match(labsCommitPage, /hard, payment-backed platform-match commitment/);
+  assert.match(labsCommitPage, /I understand my own commitment does not count toward my forecast result/);
+  assert.match(labsCommitPage, /I understand that if I lose, I may be charged my stated contribution/);
+  assert.match(labsCommitPage, /I understand that if I win, the platform contributes to the projects and I receive no direct payment/);
+  assert.match(labsCommitPage, /Hard commitment disabled/);
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);
 });

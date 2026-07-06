@@ -167,4 +167,4 @@ The current implementation includes tests for:
 
 ## Production Gaps
 
-This document does not authorize production launch. Remaining production work includes persistent database tables, admin CRUD, labs-only routes, signed payment setup, provider-specific authorization/capture/release adapters, platform-match project-routing adapters, live audit publication, promotion governance, legal/compliance approval, and rendered browser QA for any future labs UI.
+This document does not authorize production launch. The current labs route family is read-only and route-safe. Remaining production work includes persistent database tables, admin CRUD, signed payment setup, provider-specific authorization/capture/release adapters, platform-match project-routing adapters, live audit publication, promotion governance, legal/compliance approval, and rendered browser QA for any future live labs UI.

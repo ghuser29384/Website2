@@ -1070,6 +1070,9 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
 
 test("refund-bonus branch remains absent from active public MVP surfaces", () => {
   const labsPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/page.tsx", "utf8");
+  const poolPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/[roundSlug]/page.tsx", "utf8");
+  const amountPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/[roundSlug]/amount/page.tsx", "utf8");
+  const reviewPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/[roundSlug]/review/page.tsx", "utf8");
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
 
@@ -1084,6 +1087,22 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(labsPage, /Optional viewpoint tags are aggregate-only/);
   assert.match(labsPage, /not a moral score/);
   assert.match(labsPage, /do not affect\s+pledge power/);
+  assert.match(poolPage, /Screen 1 of 3/);
+  assert.match(poolPage, /read-only labs Pool screen/);
+  assert.match(poolPage, /sealed qualitative status only before close/);
+  assert.match(poolPage, /No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed/);
+  assert.match(poolPage, /View disabled amount screen/);
+  assert.match(amountPage, /Screen 2 of 3/);
+  assert.match(amountPage, /Maximum pledge/);
+  assert.match(amountPage, /not a moral score/);
+  assert.match(amountPage, /does not affect pledge power/);
+  assert.match(amountPage, /not interest, not an investment return, not a donation receipt, not a lottery, and not public-good impact/);
+  assert.match(amountPage, /Prefer not to say counts as a verified supporter but does not count as a distinct/);
+  assert.match(reviewPage, /Screen 3 of 3/);
+  assert.match(reviewPage, /not making an immediate donation/);
+  assert.match(reviewPage, /Saving your payment method is not a charge, not a hold, not escrow, not custody/);
+  assert.match(reviewPage, /not a moral score, not a public reputation reward/);
+  assert.match(reviewPage, /Save hard pledge disabled/);
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);
   assert.equal(roundPage.includes("Refund-Bonus Pledge Pool"), false);
