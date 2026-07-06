@@ -609,8 +609,28 @@ export interface RefundBonusAuditReport {
   excludedBonusAbuseCount: number;
   reviewBlockCount: number;
   reasonCodes: RefundBonusFailureReason[];
-  publicReportJson: unknown;
+  publicReportJson: RefundBonusPublicReportJson;
   publishedAt: string;
+}
+
+export interface RefundBonusPublicReportJson {
+  grossCapturedCents: number;
+  feeCents: number;
+  netRecipientDisbursedCents: number;
+  actualGrossExposureCents: number;
+  countedCents: number;
+  matchEligibleCents: number;
+  sponsorBaseMatchCents: number;
+  bonusReserveBackedCents: number;
+  bonusExposureReservedCents: number;
+  bonusLiabilityCents: number;
+  bonusHeldCents: number;
+  bonusPaidCents: number;
+  bonusPayoutFeeCents: number;
+  bonusUnclaimedCents: number;
+  bonusUnearnedReleasedCents: number;
+  finalStatus: RefundBonusAuditReport["finalStatus"];
+  reasonCodes: RefundBonusFailureReason[];
 }
 
 export interface RefundBonusSettlementPlan {
@@ -2343,6 +2363,8 @@ export function planRefundBonusSettlement({
         bonusLiabilityCents,
         bonusHeldCents: reserve.heldCents,
         bonusPaidCents,
+        bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.bonusPayoutFeeCents, 0),
+        bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
         bonusUnearnedReleasedCents,
         finalStatus,
         reasonCodes: outcome.reasonCodes,

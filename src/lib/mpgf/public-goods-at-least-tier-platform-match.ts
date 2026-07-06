@@ -50,8 +50,10 @@ export type AtLeastTierPlatformMatchCapabilityReason =
   | "damped_odds_schedule_invalid"
   | "payment_mode_not_allowed_for_non_mvp"
   | "route_not_available_in_current_deployment"
+  | "copy_preflight_failed"
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
+  | "sybil_controls_not_ready"
   | "emergency_pause_active";
 
 export interface AtLeastTierPlatformMatchCapabilityInput {
@@ -65,8 +67,10 @@ export interface AtLeastTierPlatformMatchCapabilityInput {
   platformMatchReserveBacked?: boolean;
   rewardScheduleFrozen?: boolean;
   rewardScheduleValid?: boolean;
+  copyPreflightPassed?: boolean;
   paymentProviderReady?: boolean;
   legalComplianceApproved?: boolean;
+  sybilControlsReady?: boolean;
   emergencyPaused?: boolean;
 }
 
@@ -420,8 +424,32 @@ export interface AtLeastTierAuditReport {
   excludedSameControlCount: number;
   authorizationFailureCount: number;
   finalStatus: "settled" | "blocked" | "canceled" | "simulation_only";
-  publicReportJson: unknown;
+  publicReportJson: AtLeastTierPublicReportJson;
   publishedAt?: string;
+}
+
+export interface AtLeastTierPublicReportJson {
+  forecastCommitmentGrossCents: number;
+  forecastCommitmentNetRecipientCents: number;
+  forecastResolutionOtherUserNetCents: number;
+  selectedAtLeastTier: Record<string, number>;
+  resolvedAtLeastTier: number | null;
+  forecastWon: {
+    wonCount: number;
+    lostCount: number;
+    excludedCount: number;
+  };
+  userPaidOnLossCents: number;
+  platformPaidOnWinCents: number;
+  platformMatchReserveBackedCents: number;
+  platformMatchExposureReservedCents: number;
+  platformMatchPaidCents: number;
+  platformMatchReleasedUnusedCents: number;
+  ordinaryDirectPledgeNetCents: number;
+  sponsorMatchNetRecipientCents: number;
+  finalProjectDisbursementCents: number;
+  feesCents: number;
+  note: string;
 }
 
 export interface AtLeastTierSettlementPlan {
@@ -645,6 +673,11 @@ const COMMITMENT_ACTIONS = new Set<AtLeastTierPlatformMatchAction>([
   "execute_user_loss_contribution",
 ]);
 
+const PRODUCTION_PROMOTION_REQUIRED_ACTIONS = new Set<AtLeastTierPlatformMatchAction>([
+  "open_round",
+  "publish_public_report",
+]);
+
 const LIVE_ADMIN_WORKFLOW_ACTIONS = new Set<AtLeastTierAdminWorkflowAction>([
   "open_public_real_money_round",
   "accept_public_real_money_commitments",
@@ -788,6 +821,18 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     reasons.push("payment_mode_not_allowed_for_non_mvp");
   }
 
+  if (PRODUCTION_PROMOTION_REQUIRED_ACTIONS.has(input.action) && input.environment === "production") {
+    if (!input.liveMoneyEnabled) {
+      reasons.push("production_real_money_disabled");
+    }
+    if (!input.promotionRecordApproved) {
+      reasons.push("missing_promotion_record");
+    }
+    if (!input.copyPreflightPassed) {
+      reasons.push("copy_preflight_failed");
+    }
+  }
+
   if (MONEY_OR_PROVIDER_ACTIONS.has(input.action)) {
     if (!input.liveMoneyEnabled) {
       reasons.push("production_real_money_disabled");
@@ -804,11 +849,17 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     if (!input.rewardScheduleFrozen || !input.rewardScheduleValid) {
       reasons.push("damped_odds_schedule_invalid");
     }
+    if (!input.copyPreflightPassed) {
+      reasons.push("copy_preflight_failed");
+    }
     if (!input.legalComplianceApproved) {
       reasons.push("legal_compliance_not_approved");
     }
     if (!input.paymentProviderReady) {
       reasons.push("payment_provider_not_ready");
+    }
+    if (!input.sybilControlsReady) {
+      reasons.push("sybil_controls_not_ready");
     }
   }
 
@@ -1731,10 +1782,8 @@ export function planAtLeastTierPlatformMatchSettlement({
         platformMatchExposureReservedCents: reservedExposure,
         platformMatchExposureReleasedCents: reservedExposure,
         finalProjectDisbursementCents: 0,
-        userAuthorizationOperation: settlementBlocked ? "none" : "release",
-        userAuthorizationIdempotencyKey: settlementBlocked
-          ? undefined
-          : `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
+        userAuthorizationOperation: "release",
+        userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
         settlementState: settlementBlocked ? "blocked" : "released",
         createdAt,
       };
@@ -1817,6 +1866,14 @@ export function planAtLeastTierPlatformMatchSettlement({
     platformMatchNetRecipientCents +
     ordinaryDirectPledgeNetCents +
     sponsorMatchNetRecipientCents;
+  const selectedAtLeastTier: Record<string, number> = {};
+  for (const row of resolution.rows) {
+    selectedAtLeastTier[String(row.selectedTierIndex)] = (selectedAtLeastTier[String(row.selectedTierIndex)] ?? 0) + 1;
+  }
+  const resolvedAtLeastTier = resolution.rows.reduce<number | null>((highest, row) => {
+    if (resolution.snapshot.effectiveSupportTotalCents < row.selectedTierThresholdNetCents) return highest;
+    return highest === null || row.selectedTierIndex > highest ? row.selectedTierIndex : highest;
+  }, null);
 
   return {
     rows,
@@ -1853,6 +1910,18 @@ export function planAtLeastTierPlatformMatchSettlement({
       finalStatus: settlementBlocked ? "blocked" : "simulation_only",
       publicReportJson: {
         forecastCommitmentGrossCents: commitments.reduce((sum, commitment) => sum + commitment.statedGrossCents, 0),
+        forecastCommitmentNetRecipientCents: commitments.reduce((sum, commitment) => sum + commitment.statedNetRecipientCents, 0),
+        forecastResolutionOtherUserNetCents: resolution.rows.reduce(
+          (sum, row) => sum + row.otherEligibleEffectiveSupportCents,
+          0,
+        ),
+        selectedAtLeastTier,
+        resolvedAtLeastTier,
+        forecastWon: {
+          wonCount: rows.filter((row) => row.outcome === "won_platform_pays").length,
+          lostCount: rows.filter((row) => row.outcome === "lost_user_pays").length,
+          excludedCount: rows.filter((row) => row.outcome === "excluded" || row.outcome === "blocked").length,
+        },
         userPaidOnLossCents: userLossNetRecipientCents,
         platformPaidOnWinCents: platformMatchNetRecipientCents,
         platformMatchReserveBackedCents: reserve.backedCents,

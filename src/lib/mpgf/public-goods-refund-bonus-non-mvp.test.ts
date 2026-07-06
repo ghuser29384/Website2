@@ -46,6 +46,7 @@ import {
   type RefundBonusPledge,
   type RefundBonusPledgePool,
   type RefundBonusProjectReviewSnapshot,
+  type RefundBonusPublicReportJson,
   type RefundBonusReserve,
   type RefundBonusRound,
 } from "@/lib/mpgf/public-goods-refund-bonus-non-mvp";
@@ -1080,6 +1081,26 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.ok(bonusPlan.payoutOperations.every((operation) => operation.payoutState === "succeeded"));
   assert.ok(bonusPlan.payoutOperations.every((operation) => operation.eventHash.startsWith("sha256:")));
   assert.ok(bonusPlan.settlementRows.every((row) => row.settlementState === "bonus_paid"));
+  const retryBonusPlan = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active", heldCents: 300 }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.deepEqual(
+    retryBonusPlan.payoutOperations.map((operation) => [operation.pledgeId, operation.idempotencyKey, operation.eventHash]),
+    bonusPlan.payoutOperations.map((operation) => [operation.pledgeId, operation.idempotencyKey, operation.eventHash]),
+  );
+  assert.deepEqual(
+    retryBonusPlan.settlementRows.map((row) => [row.pledgeId, row.settlementState, row.bonusPaidCents]),
+    bonusPlan.settlementRows.map((row) => [row.pledgeId, row.settlementState, row.bonusPaidCents]),
+  );
+  assert.equal(retryBonusPlan.auditReport.bonusPaidCents, bonusPlan.auditReport.bonusPaidCents);
+  assert.equal(retryBonusPlan.auditReport.bonusUnclaimedCents, bonusPlan.auditReport.bonusUnclaimedCents);
   assert.equal(bonusPlan.auditReport.finalStatus, "qualifying_failed_bonus_paid");
   assert.equal(bonusPlan.auditReport.rulebookHash, rulebookHash);
   assert.equal(bonusPlan.auditReport.feePolicyHash, feePolicyHash);
@@ -1088,7 +1109,29 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(bonusPlan.auditReport.bonusPaidCents, 200);
   assert.equal(bonusPlan.auditReport.bonusReserveBackedCents, 25_000);
   assert.equal(bonusPlan.auditReport.bonusHeldCents, 300);
-  const publicReport = bonusPlan.auditReport.publicReportJson as Record<string, unknown>;
+  const publicReport = bonusPlan.auditReport.publicReportJson as RefundBonusPublicReportJson;
+  const requiredPublicReportChannels: Array<keyof RefundBonusPublicReportJson> = [
+    "grossCapturedCents",
+    "feeCents",
+    "netRecipientDisbursedCents",
+    "actualGrossExposureCents",
+    "countedCents",
+    "matchEligibleCents",
+    "sponsorBaseMatchCents",
+    "bonusReserveBackedCents",
+    "bonusExposureReservedCents",
+    "bonusLiabilityCents",
+    "bonusHeldCents",
+    "bonusPaidCents",
+    "bonusPayoutFeeCents",
+    "bonusUnclaimedCents",
+    "bonusUnearnedReleasedCents",
+    "finalStatus",
+    "reasonCodes",
+  ];
+  for (const channel of requiredPublicReportChannels) {
+    assert.ok(channel in publicReport, `missing refund-bonus public report channel: ${channel}`);
+  }
   assert.equal(publicReport.grossCapturedCents, 0);
   assert.equal(publicReport.feeCents, 0);
   assert.equal(publicReport.netRecipientDisbursedCents, 0);
@@ -1101,6 +1144,8 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(publicReport.bonusLiabilityCents, 200);
   assert.equal(publicReport.bonusHeldCents, 300);
   assert.equal(publicReport.bonusPaidCents, 200);
+  assert.equal(publicReport.bonusPayoutFeeCents, 0);
+  assert.equal(publicReport.bonusUnclaimedCents, 0);
   assert.equal(publicReport.bonusUnearnedReleasedCents, 0);
   const serializedPublicReport = JSON.stringify(publicReport);
   assert.equal(serializedPublicReport.includes("humanitarian"), false);

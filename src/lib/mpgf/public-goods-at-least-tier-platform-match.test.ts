@@ -25,6 +25,7 @@ import {
   validateAtLeastTierOrdinaryCopy,
   type AtLeastTierAdminWorkflowAction,
   type AtLeastTierFeaturePromotionRecord,
+  type AtLeastTierPublicReportJson,
   type AtLeastTierPlatformMatchRound,
   type AtLeastTierPlatformMatchCommitment,
   type PlatformMatchReserve,
@@ -125,12 +126,42 @@ test("at-least-tier feature metadata and capability gate keep production disable
     platformMatchReserveBacked: true,
     rewardScheduleFrozen: true,
     rewardScheduleValid: true,
+    copyPreflightPassed: false,
     paymentProviderReady: true,
     legalComplianceApproved: true,
+    sybilControlsReady: false,
   });
   assert.equal(productionMoney.allowed, false);
   assert.ok(productionMoney.reasons.includes("production_real_money_disabled"));
   assert.ok(productionMoney.reasons.includes("missing_promotion_record"));
+  assert.ok(productionMoney.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionMoney.reasons.includes("sybil_controls_not_ready"));
+
+  const productionOpenRound = evaluateAtLeastTierPlatformMatchCapability({
+    action: "open_round",
+    actorRole: "admin",
+    environment: "production",
+    featureEnabled: true,
+    liveMoneyEnabled: false,
+    promotionRecordApproved: false,
+    copyPreflightPassed: false,
+  });
+  assert.equal(productionOpenRound.allowed, false);
+  assert.ok(productionOpenRound.reasons.includes("production_real_money_disabled"));
+  assert.ok(productionOpenRound.reasons.includes("missing_promotion_record"));
+  assert.ok(productionOpenRound.reasons.includes("copy_preflight_failed"));
+
+  const productionPublicReport = evaluateAtLeastTierPlatformMatchCapability({
+    action: "publish_public_report",
+    actorRole: "service",
+    environment: "production",
+    featureEnabled: true,
+    promotionRecordApproved: false,
+    copyPreflightPassed: false,
+  });
+  assert.equal(productionPublicReport.allowed, false);
+  assert.ok(productionPublicReport.reasons.includes("missing_promotion_record"));
+  assert.ok(productionPublicReport.reasons.includes("copy_preflight_failed"));
 
   const labsSchedule = evaluateAtLeastTierPlatformMatchCapability({
     action: "compute_reward_schedule",
@@ -804,6 +835,30 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   );
   assert.ok(plan.platformMatchOperations.every((operation) => operation.destinationProjectId === "reviewed-public-good-projects"));
   assert.equal(new Set(plan.platformMatchOperations.map((operation) => operation.idempotencyKey)).size, plan.platformMatchOperations.length);
+  const retryPlan = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments,
+    reserve: backedReserve(),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    ordinaryDirectPledgeNetCents: 100_000,
+    sponsorMatchNetRecipientCents: 20_000,
+    simulationOnly: true,
+    now,
+  });
+  assert.deepEqual(
+    retryPlan.rows.map((row) => [row.commitmentId, row.userAuthorizationOperation, row.userAuthorizationIdempotencyKey]),
+    plan.rows.map((row) => [row.commitmentId, row.userAuthorizationOperation, row.userAuthorizationIdempotencyKey]),
+  );
+  assert.deepEqual(
+    retryPlan.platformMatchOperations.map((operation) => [operation.commitmentId, operation.idempotencyKey]),
+    plan.platformMatchOperations.map((operation) => [operation.commitmentId, operation.idempotencyKey]),
+  );
+  assert.equal(retryPlan.auditReport.grossUserLossCapturedCents, plan.auditReport.grossUserLossCapturedCents);
+  assert.equal(retryPlan.auditReport.platformMatchGrossPaidCents, plan.auditReport.platformMatchGrossPaidCents);
   assert.equal(
     plan.auditReport.finalProjectDisbursementCents,
       plan.auditReport.userLossNetRecipientCents +
@@ -812,7 +867,37 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
       plan.auditReport.sponsorMatchNetRecipientCents,
   );
   assert.equal(plan.auditReport.sponsorMatchNetRecipientCents, 20_000);
-  const publicReport = plan.auditReport.publicReportJson as Record<string, unknown>;
+  const publicReport = plan.auditReport.publicReportJson as AtLeastTierPublicReportJson;
+  const requiredAccountingChannels: Array<keyof AtLeastTierPublicReportJson> = [
+    "forecastCommitmentGrossCents",
+    "forecastCommitmentNetRecipientCents",
+    "forecastResolutionOtherUserNetCents",
+    "selectedAtLeastTier",
+    "resolvedAtLeastTier",
+    "forecastWon",
+    "userPaidOnLossCents",
+    "platformPaidOnWinCents",
+    "platformMatchReserveBackedCents",
+    "platformMatchExposureReservedCents",
+    "platformMatchPaidCents",
+    "platformMatchReleasedUnusedCents",
+    "ordinaryDirectPledgeNetCents",
+    "sponsorMatchNetRecipientCents",
+    "finalProjectDisbursementCents",
+    "feesCents",
+  ];
+  for (const channel of requiredAccountingChannels) {
+    assert.ok(channel in publicReport, `missing at-least-tier accounting channel: ${channel}`);
+  }
+  assert.equal(publicReport.forecastCommitmentGrossCents, 220_000);
+  assert.equal(publicReport.forecastCommitmentNetRecipientCents, 220_000);
+  assert.equal(
+    publicReport.forecastResolutionOtherUserNetCents,
+    resolution.rows.reduce((sum, row) => sum + row.otherEligibleEffectiveSupportCents, 0),
+  );
+  assert.deepEqual(publicReport.selectedAtLeastTier, { "1": 3, "2": 1 });
+  assert.equal(publicReport.resolvedAtLeastTier, 1);
+  assert.deepEqual(publicReport.forecastWon, { wonCount: 2, lostCount: 1, excludedCount: 1 });
   assert.equal(publicReport.sponsorMatchNetRecipientCents, 20_000);
   assert.equal(
     publicReport.feesCents,
@@ -838,6 +923,11 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   });
   assert.ok(blocked.blockedReasonCodes.includes("platform_match_reserve_unbacked"));
   assert.equal(blocked.auditReport.finalStatus, "blocked");
+  assert.equal(blocked.platformMatchOperations.length, 0);
+  assert.ok(blocked.rows.every((row) => row.userAuthorizationOperation === "release"));
+  assert.ok(blocked.rows.every((row) => row.userGrossCapturedCents === 0));
+  assert.ok(blocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
+  assert.equal(new Set(blocked.rows.map((row) => row.userAuthorizationIdempotencyKey)).size, blocked.rows.length);
 });
 
 test("ordinary copy preflight blocks wagering and return language while requiring non-MVP user promises", () => {

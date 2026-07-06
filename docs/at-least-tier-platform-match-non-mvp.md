@@ -119,19 +119,22 @@ If a new commitment would exceed the reserve exposure cap, it must not become ha
 
 Reports must keep these channels separate:
 
-- forecast commitment gross;
-- forecast commitment net recipient;
-- selected at-least tier;
-- resolved at-least tier;
-- user-paid loss funds;
-- platform-paid win funds;
-- platform-match reserve backed;
-- platform-match exposure reserved;
-- platform-match paid;
-- platform-match released unused;
-- ordinary direct pledges;
-- fees;
-- final project disbursement.
+- `forecastCommitmentGrossCents`;
+- `forecastCommitmentNetRecipientCents`;
+- `forecastResolutionOtherUserNetCents`;
+- `selectedAtLeastTier`;
+- `resolvedAtLeastTier`;
+- `forecastWon`;
+- `userPaidOnLossCents`;
+- `platformPaidOnWinCents`;
+- `platformMatchReserveBackedCents`;
+- `platformMatchExposureReservedCents`;
+- `platformMatchPaidCents`;
+- `platformMatchReleasedUnusedCents`;
+- `ordinaryDirectPledgeNetCents`;
+- `sponsorMatchNetRecipientCents`;
+- `finalProjectDisbursementCents`;
+- `feesCents`.
 
 Do not merge user-paid loss funds and platform-paid winning contributions into a single unlabeled impact number.
 
@@ -159,9 +162,10 @@ The current implementation includes tests for:
 - leave-one-cluster-out effective-support resolution;
 - the circularity guard where raw stated commitments do not clear a tier;
 - simulated settlement separation of user-paid, platform-paid, reserve, fee, and final disbursement channels;
-- idempotency keys for platform-match operations;
+- idempotency keys and retry-stable settlement plans for user-authorization and platform-match operations;
 - ordinary-copy preflight, including out-of-scope forecast-shape and tradable-claim language;
 - commitment-open gate enforcement for reserve backing, caps, provider-confirmed payment, and final acknowledgements;
+- generic capability gates for production round opening, public-report publication, copy preflight, and Sybil-control prerequisites;
 - admin workflow and scheduled-job gates before live provider calls;
 - documentation presence and absence from primary public/MVP routes.
 
