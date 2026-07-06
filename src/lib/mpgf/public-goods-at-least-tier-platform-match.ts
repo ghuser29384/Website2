@@ -227,6 +227,40 @@ export interface AtLeastTierPlatformMatchCommitment {
   updatedAt: string;
 }
 
+export interface AtLeastTierLossAuthorizationAttempt {
+  id?: string;
+  roundId?: string;
+  poolId?: string;
+  commitmentId: string;
+  participantId?: string;
+  authorizationState:
+    | "not_attempted"
+    | "authorized_exact"
+    | "failed"
+    | "wrong_amount"
+    | "expired"
+    | "expired_before_capture"
+    | "short_expiry"
+    | "short_expiring"
+    | "missing"
+    | "released"
+    | "captured";
+  requiredGrossCents: number;
+  authorizedGrossCents: number;
+  providerAuthorizationRef?: string;
+  authorizedAt?: string;
+  expiresAt?: string;
+  validThroughCapture: boolean;
+  eventHash?: string;
+}
+
+export interface AtLeastTierAuthorizationReconciliationResult {
+  commitments: AtLeastTierPlatformMatchCommitment[];
+  excludedCommitmentIds: string[];
+  exactAuthorizedCommitmentIds: string[];
+  authorizationFailureCount: number;
+}
+
 export interface OrdinaryDirectHardPledge {
   id: string;
   participantId: string;
@@ -344,6 +378,8 @@ export interface AtLeastTierSettlementRow {
   platformMatchExposureReservedCents: number;
   platformMatchExposureReleasedCents: number;
   finalProjectDisbursementCents: number;
+  userAuthorizationOperation: "release" | "capture" | "none";
+  userAuthorizationIdempotencyKey?: string;
   settlementState:
     | "pending"
     | "captured_user_loss"
@@ -373,6 +409,7 @@ export interface AtLeastTierAuditReport {
   platformMatchNetRecipientCents: number;
   platformMatchUnusedReleasedCents: number;
   ordinaryDirectPledgeNetCents: number;
+  sponsorMatchNetRecipientCents: number;
   finalProjectDisbursementCents: number;
   eligibleCommitmentCount: number;
   winningCommitmentCount: number;
@@ -1384,6 +1421,67 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
   };
 }
 
+export function isAtLeastTierLossAuthorizationCaptureReady(
+  attempt: AtLeastTierLossAuthorizationAttempt | undefined,
+  commitment: Pick<AtLeastTierPlatformMatchCommitment, "id" | "statedGrossCents">,
+) {
+  return Boolean(
+    attempt &&
+      attempt.commitmentId === commitment.id &&
+      attempt.authorizationState === "authorized_exact" &&
+      attempt.requiredGrossCents === commitment.statedGrossCents &&
+      attempt.authorizedGrossCents === commitment.statedGrossCents &&
+      Boolean(attempt.providerAuthorizationRef) &&
+      attempt.validThroughCapture,
+  );
+}
+
+export function reconcileAtLeastTierLossAuthorizations({
+  commitments,
+  authorizationAttempts,
+  now,
+}: {
+  commitments: AtLeastTierPlatformMatchCommitment[];
+  authorizationAttempts: AtLeastTierLossAuthorizationAttempt[];
+  now?: string;
+}): AtLeastTierAuthorizationReconciliationResult {
+  const updatedAt = nowIso(now);
+  const attemptsByCommitmentId = new Map(
+    authorizationAttempts.map((attempt) => [attempt.commitmentId, attempt]),
+  );
+  const excludedCommitmentIds: string[] = [];
+  const exactAuthorizedCommitmentIds: string[] = [];
+  const reconciledCommitments = commitments.map((commitment) => {
+    if (!isEligibleCommitmentState(commitment.commitmentState)) {
+      return commitment;
+    }
+
+    const attempt = attemptsByCommitmentId.get(commitment.id);
+    if (!isAtLeastTierLossAuthorizationCaptureReady(attempt, commitment)) {
+      excludedCommitmentIds.push(commitment.id);
+      return {
+        ...commitment,
+        commitmentState: "excluded_payment" as const,
+        updatedAt,
+      };
+    }
+
+    exactAuthorizedCommitmentIds.push(commitment.id);
+    return {
+      ...commitment,
+      commitmentState: "authorized_for_possible_loss" as const,
+      updatedAt,
+    };
+  });
+
+  return {
+    commitments: reconciledCommitments,
+    excludedCommitmentIds,
+    exactAuthorizedCommitmentIds,
+    authorizationFailureCount: excludedCommitmentIds.length,
+  };
+}
+
 function isEligibleCommitmentState(state: AtLeastTierPlatformMatchCommitmentState) {
   return state === "hard_saved" || state === "authorized_for_possible_loss";
 }
@@ -1575,6 +1673,7 @@ export function planAtLeastTierPlatformMatchSettlement({
   platformMatchPolicyHash,
   rewardScheduleHash,
   ordinaryDirectPledgeNetCents = 0,
+  sponsorMatchNetRecipientCents = 0,
   simulationOnly = true,
   now,
 }: {
@@ -1587,6 +1686,7 @@ export function planAtLeastTierPlatformMatchSettlement({
   platformMatchPolicyHash: string;
   rewardScheduleHash: string;
   ordinaryDirectPledgeNetCents?: number;
+  sponsorMatchNetRecipientCents?: number;
   simulationOnly?: boolean;
   now?: string;
 }): AtLeastTierSettlementPlan {
@@ -1629,6 +1729,10 @@ export function planAtLeastTierPlatformMatchSettlement({
         platformMatchExposureReservedCents: reservedExposure,
         platformMatchExposureReleasedCents: reservedExposure,
         finalProjectDisbursementCents: 0,
+        userAuthorizationOperation: settlementBlocked ? "none" : "release",
+        userAuthorizationIdempotencyKey: settlementBlocked
+          ? undefined
+          : `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
         settlementState: settlementBlocked ? "blocked" : "released",
         createdAt,
       };
@@ -1650,6 +1754,8 @@ export function planAtLeastTierPlatformMatchSettlement({
         platformMatchExposureReservedCents: reservedExposure,
         platformMatchExposureReleasedCents: Math.max(0, reservedExposure - row.platformMatchNetCents),
         finalProjectDisbursementCents: row.platformMatchNetCents,
+        userAuthorizationOperation: "release",
+        userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
         settlementState: "paid_platform_match",
         createdAt,
       };
@@ -1670,6 +1776,8 @@ export function planAtLeastTierPlatformMatchSettlement({
       platformMatchExposureReservedCents: reservedExposure,
       platformMatchExposureReleasedCents: reservedExposure,
       finalProjectDisbursementCents: row.statedNetRecipientCents,
+      userAuthorizationOperation: "capture",
+      userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:capture`,
       settlementState: "captured_user_loss",
       createdAt,
     };
@@ -1703,7 +1811,10 @@ export function planAtLeastTierPlatformMatchSettlement({
   const platformMatchExposureReservedCents = rows.reduce((sum, row) => sum + row.platformMatchExposureReservedCents, 0);
   const platformMatchUnusedReleasedCents = rows.reduce((sum, row) => sum + row.platformMatchExposureReleasedCents, 0);
   const finalProjectDisbursementCents =
-    userLossNetRecipientCents + platformMatchNetRecipientCents + ordinaryDirectPledgeNetCents;
+    userLossNetRecipientCents +
+    platformMatchNetRecipientCents +
+    ordinaryDirectPledgeNetCents +
+    sponsorMatchNetRecipientCents;
 
   return {
     rows,
@@ -1727,6 +1838,7 @@ export function planAtLeastTierPlatformMatchSettlement({
       platformMatchNetRecipientCents,
       platformMatchUnusedReleasedCents,
       ordinaryDirectPledgeNetCents,
+      sponsorMatchNetRecipientCents,
       finalProjectDisbursementCents,
       eligibleCommitmentCount: resolution.snapshot.eligibleCommitmentCount,
       winningCommitmentCount: rows.filter((row) => row.outcome === "won_platform_pays").length,
@@ -1746,9 +1858,10 @@ export function planAtLeastTierPlatformMatchSettlement({
         platformMatchPaidCents: platformMatchNetRecipientCents,
         platformMatchReleasedUnusedCents: platformMatchUnusedReleasedCents,
         ordinaryDirectPledgeNetCents,
+        sponsorMatchNetRecipientCents,
         finalProjectDisbursementCents,
         feesCents: userLossFeeCents + platformMatchFeeCents,
-        note: "Simulation-only non-MVP report. User-paid loss funds, platform-paid win funds, reserves, fees, and final project disbursement are separate.",
+        note: "Simulation-only non-MVP report. User-paid loss funds, platform-paid win funds, ordinary direct pledges, sponsor match, reserves, fees, and final project disbursement are separate.",
       },
     },
   };

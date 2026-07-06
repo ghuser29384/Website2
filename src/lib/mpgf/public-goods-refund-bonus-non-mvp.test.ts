@@ -17,6 +17,7 @@ import {
   evaluateRefundBonusOpenGate,
   evaluateRefundBonusRoundOutcome,
   isRefundBonusBonusEligibilitySnapshotEligible,
+  isRefundBonusAuthorizationAttemptCaptureReady,
   isRefundBonusFeaturePromotionApproved,
   isRefundBonusIdentityEligibilitySnapshotEligible,
   isRefundBonusPaymentCommitmentSnapshotCountable,
@@ -248,6 +249,20 @@ test("refund-bonus metadata and capability gates keep production disabled by def
   assert.equal(money.allowed, false);
   assert.ok(money.reasons.includes("production_real_money_disabled"));
   assert.ok(money.reasons.includes("missing_promotion_record"));
+
+  const legalBlockedBonusRoute = evaluateRefundBonusCapability({
+    action: "execute_bonus_payout",
+    actorRole: "service",
+    environment: "development",
+    featureEnabled: true,
+    openGatePassed: true,
+    bonusReserveBacked: true,
+    legalComplianceApproved: false,
+    paymentProviderReady: true,
+    bonusPayoutProviderReady: true,
+  });
+  assert.equal(legalBlockedBonusRoute.allowed, false);
+  assert.ok(legalBlockedBonusRoute.reasons.includes("legal_compliance_not_approved"));
 });
 
 test("open gate fails closed without promotion or clean copy and passes only when every readiness check passes", () => {
@@ -579,6 +594,36 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
   assert.equal(qualifying.verifiedSupporterCount, 2);
   assert.equal(qualifying.distinctViewpointClusterCount, 1);
 
+  const verifiedSupporterShortfall = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({
+      thresholdNetRecipientCents: 1_000,
+      minVerifiedSupporters: 3,
+      minDistinctViewpointClusters: 1,
+      qualifyingFailureModes: ["verified_supporter_threshold_shortfall"],
+    }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  assert.equal(verifiedSupporterShortfall.status, "qualifying_failed");
+  assert.deepEqual(verifiedSupporterShortfall.reasonCodes, ["verified_supporter_threshold_shortfall"]);
+
+  const unsupportedVerifiedShortfall = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({
+      thresholdNetRecipientCents: 1_000,
+      minVerifiedSupporters: 3,
+      minDistinctViewpointClusters: 1,
+      qualifyingFailureModes: ["net_recipient_threshold_shortfall"],
+    }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  assert.equal(unsupportedVerifiedShortfall.status, "nonqualifying_failed");
+  assert.deepEqual(unsupportedVerifiedShortfall.reasonCodes, ["verified_supporter_threshold_shortfall"]);
+
   const reviewBlocked = evaluateRefundBonusRoundOutcome({
     round: round(),
     pool: pool({ reviewGates: { ...pool().reviewGates, antiThreat: "blocked" } }),
@@ -630,6 +675,69 @@ test("same-control and same-payment duplicates do not increase thresholds or bon
   assert.equal(outcome.distinctViewpointClusterCount, 2);
 });
 
+test("abuse-blocked refund-bonus pledges cannot collect bonuses and nonqualifying failures do not pay", () => {
+  const pledges = [
+    pledge("a", "alice", 1_000, "humanitarian"),
+    pledge("b", "bob", 1_000, "animal_inclusive"),
+    pledge("sybil", "casey", 1_000, "long_run_future", {
+      sybilState: "blocked",
+    }),
+    pledge("prior-abuse", "drew", 1_000, "public_knowledge", {
+      priorBonusAbuseState: "blocked",
+    }),
+    pledge("collusion-review", "erin", 1_000, "institutional_resilience", {
+      collusionState: "review",
+    }),
+  ];
+  const qualifying = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool(),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  assert.equal(qualifying.status, "qualifying_failed");
+  assert.deepEqual(qualifying.excludedPledgeIds.sort(), ["collusion-review", "prior-abuse", "sybil"]);
+  assert.deepEqual(qualifying.eligiblePledges.map((row) => row.pledge.id), ["a", "b"]);
+
+  const plan = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.deepEqual(plan.payoutOperations.map((operation) => operation.pledgeId), ["a", "b"]);
+  assert.equal(plan.payoutOperations.some((operation) => qualifying.excludedPledgeIds.includes(operation.pledgeId)), false);
+
+  const nonqualifyingReasons = [
+    "review_block",
+    "legal_compliance_block",
+    "safety_pause",
+  ] as const;
+  for (const reason of nonqualifyingReasons) {
+    const blocked = planRefundBonusSettlement({
+      round: round({ status: "bonus_payable" }),
+      pool: pool({ status: "bonus_payable" }),
+      reserve: reserve({ status: "active" }),
+      outcome: {
+        ...qualifying,
+        status: "nonqualifying_failed",
+        reasonCodes: [reason],
+      },
+      roundStatus: "bonus_payable",
+      simulationOnly: true,
+      bonusSettlementPlanApproved: true,
+      eligibleRowsRecomputed: true,
+    });
+    assert.equal(blocked.payoutOperations.length, 0);
+    assert.notEqual(blocked.auditReport.finalStatus, "qualifying_failed_bonus_paid");
+  }
+});
+
 test("authorization and capture side effects are status-gated and exact authorization recomputes thresholds", () => {
   assert.equal(canRefundBonusAuthorizeSuccessCharge("open"), false);
   assert.equal(canRefundBonusAuthorizeSuccessCharge("reviewing"), false);
@@ -650,6 +758,31 @@ test("authorization and capture side effects are status-gated and exact authoriz
   });
   assert.equal(cleared.status, "cleared");
 
+  const exactAuthorization = {
+    pledgeId: "a",
+    authorizationState: "authorized_exact" as const,
+    requiredGrossCents: 2_500,
+    authorizedGrossCents: 2_500,
+    providerAuthorizationRef: "auth-a",
+    validThroughCapture: true,
+  };
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(exactAuthorization, pledges[0]!), true);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(undefined, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    authorizationState: "short_expiring",
+  }, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    authorizationState: "expired",
+    validThroughCapture: false,
+  }, pledges[0]!), false);
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
+    ...exactAuthorization,
+    authorizationState: "authorized_exact",
+    authorizedGrossCents: 2_400,
+  }, pledges[0]!), false);
+
   const recomputed = evaluateRefundBonusRoundOutcome({
     round: round(),
     pool: pool({ thresholdNetRecipientCents: 5_000, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
@@ -657,14 +790,7 @@ test("authorization and capture side effects are status-gated and exact authoriz
     reserve: reserve(),
     pledges,
     authorizationAttempts: [
-      {
-        pledgeId: "a",
-        authorizationState: "authorized_exact",
-        requiredGrossCents: 2_500,
-        authorizedGrossCents: 2_500,
-        providerAuthorizationRef: "auth-a",
-        validThroughCapture: true,
-      },
+      exactAuthorization,
       {
         pledgeId: "b",
         authorizationState: "wrong_amount",
@@ -679,6 +805,55 @@ test("authorization and capture side effects are status-gated and exact authoriz
   assert.deepEqual(recomputed.reasonCodes, ["authorization_failure_recompute_below_threshold"]);
   assert.equal(recomputed.recomputedAfterAuthorization, true);
   assert.deepEqual(recomputed.excludedPledgeIds, ["b"]);
+
+  const shortExpiring = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ thresholdNetRecipientCents: 5_000, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+    authorizationAttempts: [
+      exactAuthorization,
+      {
+        pledgeId: "b",
+        authorizationState: "short_expiring",
+        requiredGrossCents: 2_500,
+        authorizedGrossCents: 2_500,
+        providerAuthorizationRef: "auth-b",
+        expiresAt: "2026-07-06T00:02:00.000Z",
+        validThroughCapture: false,
+      },
+    ],
+  });
+  assert.equal(shortExpiring.status, "nonqualifying_failed");
+  assert.deepEqual(shortExpiring.reasonCodes, ["authorization_failure_recompute_below_threshold"]);
+  assert.deepEqual(shortExpiring.excludedPledgeIds, ["b"]);
+
+  const expiredAndMissing = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ thresholdNetRecipientCents: 5_000, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges: [
+      ...pledges,
+      pledge("c", "carol", 2_500, "long_run_future"),
+    ],
+    authorizationAttempts: [
+      exactAuthorization,
+      {
+        pledgeId: "b",
+        authorizationState: "expired",
+        requiredGrossCents: 2_500,
+        authorizedGrossCents: 2_500,
+        providerAuthorizationRef: "auth-b",
+        expiresAt: "2026-07-06T00:00:01.000Z",
+        validThroughCapture: false,
+      },
+    ],
+  });
+  assert.equal(expiredAndMissing.status, "nonqualifying_failed");
+  assert.deepEqual(expiredAndMissing.reasonCodes, ["authorization_failure_recompute_below_threshold"]);
+  assert.deepEqual(expiredAndMissing.excludedPledgeIds.sort(), ["b", "c"]);
 });
 
 test("settlement separates success, qualifying-failure bonus, and unused reserve channels with idempotent payouts", () => {
@@ -696,7 +871,7 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   const bonusPlan = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),
     pool: pool({ status: "bonus_payable" }),
-    reserve: reserve({ status: "active" }),
+    reserve: reserve({ status: "active", heldCents: 300 }),
     outcome: qualifying,
     roundStatus: "bonus_payable",
     simulationOnly: true,
@@ -717,6 +892,29 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(bonusPlan.auditReport.grossCapturedCents, 0);
   assert.equal(bonusPlan.auditReport.bonusPaidCents, 200);
   assert.equal(bonusPlan.auditReport.bonusReserveBackedCents, 25_000);
+  assert.equal(bonusPlan.auditReport.bonusHeldCents, 300);
+  const publicReport = bonusPlan.auditReport.publicReportJson as Record<string, unknown>;
+  assert.equal(publicReport.grossCapturedCents, 0);
+  assert.equal(publicReport.feeCents, 0);
+  assert.equal(publicReport.netRecipientDisbursedCents, 0);
+  assert.equal(publicReport.actualGrossExposureCents, 2_000);
+  assert.equal(publicReport.countedCents, 0);
+  assert.equal(publicReport.matchEligibleCents, 0);
+  assert.equal(publicReport.sponsorBaseMatchCents, 0);
+  assert.equal(publicReport.bonusReserveBackedCents, 25_000);
+  assert.equal(publicReport.bonusExposureReservedCents, 200);
+  assert.equal(publicReport.bonusLiabilityCents, 200);
+  assert.equal(publicReport.bonusHeldCents, 300);
+  assert.equal(publicReport.bonusPaidCents, 200);
+  assert.equal(publicReport.bonusUnearnedReleasedCents, 0);
+  const serializedPublicReport = JSON.stringify(publicReport);
+  assert.equal(serializedPublicReport.includes("humanitarian"), false);
+  assert.equal(serializedPublicReport.includes("animal_inclusive"), false);
+  assert.equal(serializedPublicReport.includes("participantId"), false);
+  assert.equal(serializedPublicReport.includes("viewpointCluster"), false);
+  assert.equal(serializedPublicReport.includes("bonusEligibilityStatus"), false);
+  assert.equal(serializedPublicReport.includes("bonusPayoutState"), false);
+  assert.equal(serializedPublicReport.includes("simulated:"), false);
 
   const blocked = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),

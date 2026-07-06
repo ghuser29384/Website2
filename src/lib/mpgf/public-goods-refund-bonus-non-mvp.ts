@@ -452,6 +452,21 @@ export interface RefundBonusAuthorizationAttempt {
   eventHash?: string;
 }
 
+export function isRefundBonusAuthorizationAttemptCaptureReady(
+  attempt: RefundBonusAuthorizationAttempt | undefined,
+  pledge: Pick<RefundBonusPledge, "id" | "maxGrossCents">,
+) {
+  return Boolean(
+    attempt &&
+      attempt.pledgeId === pledge.id &&
+      attempt.authorizationState === "authorized_exact" &&
+      attempt.requiredGrossCents === pledge.maxGrossCents &&
+      attempt.authorizedGrossCents === pledge.maxGrossCents &&
+      Boolean(attempt.providerAuthorizationRef) &&
+      attempt.validThroughCapture,
+  );
+}
+
 export interface RefundBonusEligiblePledge {
   pledge: RefundBonusPledge;
   netRecipientCents: number;
@@ -561,6 +576,7 @@ export interface RefundBonusAuditReport {
   bonusReserveBackedCents: number;
   bonusExposureReservedCents: number;
   bonusLiabilityCents: number;
+  bonusHeldCents: number;
   bonusPaidCents: number;
   bonusPayoutFeeCents: number;
   bonusUnclaimedCents: number;
@@ -1226,23 +1242,24 @@ export function evaluateRefundBonusRoundOutcome({
   authorizationAttempts?: RefundBonusAuthorizationAttempt[];
 }): RefundBonusOutcome {
   const reserveBacked = isRefundBonusReserveBacked(reserve, round, pool);
-  const hardEligible = pledges.filter((pledge) =>
-    pledgeEligibilityBlockers({ round, pool, gate, reserve, pledge }).length === 0
-  );
+  const hardEligibilityRows = pledges.map((pledge) => ({
+    pledge,
+    blockers: pledgeEligibilityBlockers({ round, pool, gate, reserve, pledge }),
+  }));
+  const hardEligible = hardEligibilityRows
+    .filter((row) => row.blockers.length === 0)
+    .map((row) => row.pledge);
+  const hardIneligiblePledgeIds = hardEligibilityRows
+    .filter((row) => row.blockers.length > 0)
+    .map((row) => row.pledge.id);
   const deduped = dedupeEligiblePledges(hardEligible);
   const authorizationByPledge = new Map((authorizationAttempts ?? []).map((attempt) => [attempt.pledgeId, attempt]));
-  const afterAuthorization = deduped.accepted.filter((pledge) => {
-    const attempt = authorizationByPledge.get(pledge.id);
-    if (!attempt) return true;
-    return (
-      attempt.authorizationState === "authorized_exact" &&
-      attempt.requiredGrossCents === pledge.maxGrossCents &&
-      attempt.authorizedGrossCents === pledge.maxGrossCents &&
-      Boolean(attempt.providerAuthorizationRef) &&
-      attempt.validThroughCapture
-    );
-  });
   const recomputedAfterAuthorization = Boolean(authorizationAttempts?.length);
+  const afterAuthorization = deduped.accepted.filter((pledge) => {
+    if (!recomputedAfterAuthorization) return true;
+    const attempt = authorizationByPledge.get(pledge.id);
+    return isRefundBonusAuthorizationAttemptCaptureReady(attempt, pledge);
+  });
   const eligiblePledges = afterAuthorization.map((pledge) => {
     const netRecipientCents = Math.max(0, pledge.maxGrossCents - pledge.feeCents);
     return {
@@ -1290,18 +1307,20 @@ export function evaluateRefundBonusRoundOutcome({
     bonusExposureReservedCents > pool.roundBonusExposureCapCents;
   const allThresholdsPass = thresholdFailures.length === 0 && !capsFail;
   const excludedPledgeIds = [
+    ...hardIneligiblePledgeIds,
     ...deduped.excludedIds,
     ...deduped.accepted
       .filter((pledge) => !afterAuthorization.includes(pledge))
       .map((pledge) => pledge.id),
   ];
+  const uniqueExcludedPledgeIds = unique(excludedPledgeIds);
 
   if (baseFailure || round.copyPreflightState !== "passed" || gate.state !== "passed") {
     return {
       status: "nonqualifying_failed",
       reasonCodes: [baseFailure ?? (round.copyPreflightState !== "passed" ? "copy_preflight_failure" : "review_block")],
       eligiblePledges,
-      excludedPledgeIds,
+      excludedPledgeIds: uniqueExcludedPledgeIds,
       netRecipientCents,
       grossExposureCents,
       verifiedSupporterCount,
@@ -1315,9 +1334,9 @@ export function evaluateRefundBonusRoundOutcome({
   if (allThresholdsPass) {
     return {
       status: "cleared",
-      reasonCodes: recomputedAfterAuthorization && excludedPledgeIds.length > 0 ? [] : [],
+      reasonCodes: recomputedAfterAuthorization && uniqueExcludedPledgeIds.length > 0 ? [] : [],
       eligiblePledges,
-      excludedPledgeIds,
+      excludedPledgeIds: uniqueExcludedPledgeIds,
       netRecipientCents,
       grossExposureCents,
       verifiedSupporterCount,
@@ -1328,12 +1347,12 @@ export function evaluateRefundBonusRoundOutcome({
     };
   }
 
-  if (recomputedAfterAuthorization && excludedPledgeIds.length > 0) {
+  if (recomputedAfterAuthorization && uniqueExcludedPledgeIds.length > 0) {
     return {
       status: "nonqualifying_failed",
       reasonCodes: ["authorization_failure_recompute_below_threshold"],
       eligiblePledges,
-      excludedPledgeIds,
+      excludedPledgeIds: uniqueExcludedPledgeIds,
       netRecipientCents,
       grossExposureCents,
       verifiedSupporterCount,
@@ -1354,7 +1373,7 @@ export function evaluateRefundBonusRoundOutcome({
       ? allowedQualifyingFailures
       : (thresholdFailures.length > 0 ? thresholdFailures : ["authorization_failure_recompute_below_threshold"]),
     eligiblePledges,
-    excludedPledgeIds,
+    excludedPledgeIds: uniqueExcludedPledgeIds,
     netRecipientCents,
     grossExposureCents,
     verifiedSupporterCount,
@@ -1560,6 +1579,7 @@ export function planRefundBonusSettlement({
       bonusReserveBackedCents: reserve.backedCents,
       bonusExposureReservedCents: outcome.bonusExposureReservedCents,
       bonusLiabilityCents,
+      bonusHeldCents: reserve.heldCents,
       bonusPaidCents,
       bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.bonusPayoutFeeCents, 0),
       bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
@@ -1586,6 +1606,7 @@ export function planRefundBonusSettlement({
         bonusReserveBackedCents: reserve.backedCents,
         bonusExposureReservedCents: outcome.bonusExposureReservedCents,
         bonusLiabilityCents,
+        bonusHeldCents: reserve.heldCents,
         bonusPaidCents,
         bonusUnearnedReleasedCents,
         finalStatus,

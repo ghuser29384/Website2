@@ -17,8 +17,10 @@ import {
   evaluateAtLeastTierJobGate,
   evaluateAtLeastTierPlatformMatchCapability,
   isAtLeastTierFeaturePromotionApproved,
+  isAtLeastTierLossAuthorizationCaptureReady,
   isAtLeastTierRoundReadyForLabs,
   planAtLeastTierPlatformMatchSettlement,
+  reconcileAtLeastTierLossAuthorizations,
   resolveAtLeastTierPlatformMatch,
   validateAtLeastTierOrdinaryCopy,
   type AtLeastTierFeaturePromotionRecord,
@@ -480,6 +482,43 @@ test("damped odds schedule computes frozen monotone default tier rates and fails
   assert.equal(nonDecreasingQ.valid, false);
   assert.ok(nonDecreasingQ.schedule.invalidReasonCodes.includes("tier_2_q_not_strictly_decreasing"));
 
+  const invalidQ = computeDampedOddsRewardSchedule({
+    roundId,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 50 },
+    ],
+  });
+  assert.equal(invalidQ.valid, false);
+  assert.ok(invalidQ.schedule.invalidReasonCodes.includes("tier_2_q_invalid"));
+
+  const cappedReward = computeDampedOddsRewardSchedule({
+    roundId,
+    rMinBps: 100,
+    rMaxBps: 600,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_500 },
+      { tierIndex: 3, thresholdNetRecipientCents: 300_000, frozenForecastProbabilityBps: 3_500 },
+    ],
+  });
+  assert.equal(cappedReward.valid, true);
+  assert.equal(cappedReward.tiers.at(-1)?.rewardRateBps, 600);
+  assert.ok(cappedReward.tiers.every((tier) => tier.rewardRateBps <= 600));
+
+  const impossibleRounding = computeDampedOddsRewardSchedule({
+    roundId,
+    rMinBps: 500,
+    rMaxBps: 501,
+    minRewardIncrementBps: 2,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_500 },
+    ],
+  });
+  assert.equal(impossibleRounding.valid, false);
+  assert.ok(impossibleRounding.schedule.invalidReasonCodes.includes("reward_rounding_breaks_monotonicity"));
+
   const gammaSix = computeDampedOddsRewardSchedule({
     roundId,
     gammaDecimalString: "0.6",
@@ -585,6 +624,74 @@ test("leave-one-cluster-out resolution uses effective support and excludes own, 
   assert.match(resolution.snapshot.outputHash, /^sha256:[a-f0-9]{64}$/);
 });
 
+test("failed loss authorizations are excluded before at-least-tier recomputation", () => {
+  const schedule = defaultSchedule();
+  const tierOne = schedule.tiers[0]!;
+  const commitments = [
+    commitment("auth-a", "alice", tierOne.tierIndex, 1_000_000, tierOne.rewardRateBps, "cluster-a"),
+    commitment("auth-b", "bob", tierOne.tierIndex, 1_000_000, tierOne.rewardRateBps, "cluster-b"),
+    commitment("auth-c", "carol", tierOne.tierIndex, 1_000_000, tierOne.rewardRateBps, "cluster-c"),
+  ];
+  const exactAttempt = {
+    commitmentId: "auth-a",
+    authorizationState: "authorized_exact" as const,
+    requiredGrossCents: 1_000_000,
+    authorizedGrossCents: 1_000_000,
+    providerAuthorizationRef: "auth-a-ref",
+    validThroughCapture: true,
+  };
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady(exactAttempt, commitments[0]!), true);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    authorizationState: "wrong_amount",
+    authorizedGrossCents: 999_999,
+  }, commitments[0]!), false);
+  assert.equal(isAtLeastTierLossAuthorizationCaptureReady({
+    ...exactAttempt,
+    authorizationState: "expired",
+    validThroughCapture: false,
+  }, commitments[0]!), false);
+
+  const preAuthorizationResolution = resolveAtLeastTierPlatformMatch({
+    roundId,
+    tiers: schedule.tiers,
+    commitments,
+    now,
+  });
+  assert.ok(preAuthorizationResolution.rows.every((row) => row.outcome === "won_platform_pays"));
+
+  const reconciled = reconcileAtLeastTierLossAuthorizations({
+    commitments,
+    authorizationAttempts: [
+      exactAttempt,
+      {
+        commitmentId: "auth-b",
+        authorizationState: "wrong_amount",
+        requiredGrossCents: 1_000_000,
+        authorizedGrossCents: 999_999,
+        providerAuthorizationRef: "auth-b-ref",
+        validThroughCapture: true,
+      },
+    ],
+    now,
+  });
+  assert.deepEqual(reconciled.exactAuthorizedCommitmentIds, ["auth-a"]);
+  assert.deepEqual(reconciled.excludedCommitmentIds.sort(), ["auth-b", "auth-c"]);
+  assert.equal(reconciled.authorizationFailureCount, 2);
+
+  const recomputed = resolveAtLeastTierPlatformMatch({
+    roundId,
+    tiers: schedule.tiers,
+    commitments: reconciled.commitments,
+    now,
+  });
+  assert.equal(recomputed.rows.find((row) => row.commitmentId === "auth-a")?.outcome, "lost_user_pays");
+  assert.equal(recomputed.rows.find((row) => row.commitmentId === "auth-b")?.exclusionReason, "commitment_state_excluded_payment");
+  assert.equal(recomputed.rows.find((row) => row.commitmentId === "auth-c")?.exclusionReason, "commitment_state_excluded_payment");
+  assert.equal(recomputed.snapshot.eligibleCommitmentCount, 1);
+  assert.equal(recomputed.snapshot.excludedCommitmentCount, 2);
+});
+
 test("circularity guard does not clear a tier from raw stated commitments", () => {
   const schedule = computeDampedOddsRewardSchedule({
     roundId: "circularity-round",
@@ -621,6 +728,10 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
     commitment("winner", "alice", 1, 10_000, 10_000, "cluster-a"),
     commitment("supporter-b", "bob", 1, 100_000, 10_000, "cluster-b"),
     commitment("loser", "drew", 2, 10_000, schedule.tiers[1]!.rewardRateBps, "cluster-d"),
+    {
+      ...commitment("payment-failed", "erin", 1, 100_000, 10_000, "cluster-e"),
+      commitmentState: "excluded_payment" as const,
+    },
   ];
   const resolution = resolveAtLeastTierPlatformMatch({
     roundId,
@@ -641,6 +752,7 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
     platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     rewardScheduleHash: schedule.schedule.outputHash,
     ordinaryDirectPledgeNetCents: 100_000,
+    sponsorMatchNetRecipientCents: 20_000,
     simulationOnly: true,
     now,
   });
@@ -650,17 +762,35 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.equal(plan.auditReport.finalStatus, "simulation_only");
   assert.ok(plan.rows.some((row) => row.outcome === "won_platform_pays" && row.userGrossCapturedCents === 0));
   assert.ok(plan.rows.some((row) => row.outcome === "lost_user_pays" && row.userGrossCapturedCents > 0));
+  assert.ok(plan.rows.some((row) => row.outcome === "excluded" && row.userGrossCapturedCents === 0));
+  assert.equal(plan.rows.find((row) => row.commitmentId === "winner")?.userAuthorizationOperation, "release");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "supporter-b")?.userAuthorizationOperation, "release");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.userAuthorizationOperation, "capture");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "payment-failed")?.userAuthorizationOperation, "release");
+  assert.equal(
+    new Set(plan.rows.map((row) => row.userAuthorizationIdempotencyKey).filter(Boolean)).size,
+    plan.rows.filter((row) => row.userAuthorizationOperation !== "none").length,
+  );
   assert.ok(plan.platformMatchOperations.every((operation) => operation.destinationProjectId === "reviewed-public-good-projects"));
   assert.equal(new Set(plan.platformMatchOperations.map((operation) => operation.idempotencyKey)).size, plan.platformMatchOperations.length);
   assert.equal(
     plan.auditReport.finalProjectDisbursementCents,
-    plan.auditReport.userLossNetRecipientCents +
+      plan.auditReport.userLossNetRecipientCents +
       plan.auditReport.platformMatchNetRecipientCents +
-      plan.auditReport.ordinaryDirectPledgeNetCents,
+      plan.auditReport.ordinaryDirectPledgeNetCents +
+      plan.auditReport.sponsorMatchNetRecipientCents,
   );
+  assert.equal(plan.auditReport.sponsorMatchNetRecipientCents, 20_000);
+  const publicReport = plan.auditReport.publicReportJson as Record<string, unknown>;
+  assert.equal(publicReport.sponsorMatchNetRecipientCents, 20_000);
+  assert.equal(
+    publicReport.feesCents,
+    plan.auditReport.userLossFeeCents + plan.auditReport.platformMatchFeeCents,
+  );
+  assert.equal(JSON.stringify(publicReport).includes("objective impact"), false);
   assert.match(
     JSON.stringify(plan.auditReport.publicReportJson),
-    /User-paid loss funds, platform-paid win funds, reserves, fees, and final project disbursement are separate/,
+    /User-paid loss funds, platform-paid win funds, ordinary direct pledges, sponsor match, reserves, fees, and final project disbursement are separate/,
   );
 
   const blocked = planAtLeastTierPlatformMatchSettlement({
