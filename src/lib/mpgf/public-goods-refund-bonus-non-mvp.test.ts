@@ -35,6 +35,7 @@ import {
   isRefundBonusIdentityEligibilitySnapshotEligible,
   isRefundBonusPaymentCommitmentSnapshotCountable,
   isRefundBonusProjectReviewSnapshotPledgeable,
+  isRefundBonusReserveBacked,
   planRefundBonusSettlement,
   validateRefundBonusCopy,
   type RefundBonusBonusEligibilitySnapshot,
@@ -132,8 +133,10 @@ function reserve(overrides: Partial<RefundBonusReserve> = {}): RefundBonusReserv
     roundId,
     poolId,
     reserveType: "failure_participation_bonus",
+    sponsorNamePublic: "Labs bonus sponsor",
     backedCents: 25_000,
     maxExposureCents: 25_000,
+    committedCents: 0,
     committedExposureCents: 0,
     paidCents: 0,
     heldCents: 0,
@@ -141,11 +144,14 @@ function reserve(overrides: Partial<RefundBonusReserve> = {}): RefundBonusReserv
     backingState: "dev_simulated",
     legalComplianceState: "approved",
     payoutProviderReady: true,
+    jurisdictionSet: ["labs"],
     sourceHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     bonusPolicyHash,
     publishedAt: now,
     backingConfirmedAt: now,
     status: "backed",
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
@@ -264,6 +270,34 @@ test("refund-bonus metadata and capability gates keep production disabled by def
   assert.equal(money.allowed, false);
   assert.ok(money.reasons.includes("production_real_money_disabled"));
   assert.ok(money.reasons.includes("missing_promotion_record"));
+  assert.ok(money.reasons.includes("copy_preflight_failed"));
+  assert.ok(money.reasons.includes("identity_sybil_controls_not_ready"));
+  assert.ok(money.reasons.includes("bonus_exposure_cap_not_configured"));
+  assert.ok(money.reasons.includes("emergency_pause_not_configured"));
+  assert.ok(money.reasons.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(money.reasons.includes("stale_active_labels_present"));
+
+  const promotedProductionMoney = evaluateRefundBonusCapability({
+    action: "execute_bonus_payout",
+    actorRole: "service",
+    environment: "production",
+    featureEnabled: true,
+    openGatePassed: true,
+    bonusReserveBacked: true,
+    legalComplianceApproved: true,
+    paymentProviderReady: true,
+    bonusPayoutProviderReady: true,
+    liveMoneyEnabled: true,
+    promotionRecordApproved: true,
+    copyPreflightPassed: true,
+    identitySybilControlsReady: true,
+    bonusExposureCapConfigured: true,
+    emergencyPauseConfigured: true,
+    auditReportingTemplatesReviewed: true,
+    staleActiveLabelsAbsent: true,
+  });
+  assert.equal(promotedProductionMoney.allowed, true);
+  assert.deepEqual(promotedProductionMoney.reasons, ["feature_non_mvp"]);
 
   const legalBlockedBonusRoute = evaluateRefundBonusCapability({
     action: "execute_bonus_payout",
@@ -463,6 +497,30 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     feeCents: 0,
     netRecipientCents: 2_500,
   }), true);
+
+  assert.equal(isRefundBonusReserveBacked(reserve(), round(), pool()), true);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    backingState: "dev_simulated",
+    legalComplianceState: "review",
+    payoutProviderReady: false,
+  }), round(), pool()), true);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    backingState: "funded",
+    legalComplianceState: "review",
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    backingState: "funded",
+    payoutProviderReady: false,
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    committedCents: 25_001,
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    jurisdictionSet: [],
+  }), round(), pool()), false);
+  assert.equal(isRefundBonusReserveBacked(reserve({
+    jurisdictionSet: [" labs "],
+  }), round(), pool()), false);
 
   const latestDeployHash = "sha256:6767676767676767676767676767676767676767676767676767676767676767";
   const requiredRefundBonusRoutes = [
@@ -682,6 +740,17 @@ test("refund-bonus copy preflight blocks misleading financial language and requi
     This bonus is not interest, not an investment return, not a lottery, and not public-good impact.
   `);
   assert.equal(valid.passed, true);
+
+  const requiredPaymentDisclaimer = validateRefundBonusCopy(`
+    Non-MVP labs mechanism.
+    If the pool misses the support threshold, eligible pledgers may receive a backed failure-participation bonus.
+    No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed, or abuse-flagged pledges.
+    This bonus is not interest, not an investment return, not a lottery, and not public-good impact.
+    Saving your payment method is not a charge, not a hold, not escrow, not custody,
+    not an authorization, not a guarantee that authorization will later succeed, and
+    not a guarantee of bonus payout outside the listed bonus-eligible failure state.
+  `);
+  assert.equal(requiredPaymentDisclaimer.passed, true);
 
   const invalid = validateRefundBonusCopy(
     "Get free money, cashback, profit, a risk-free return, a refund with interest, " +

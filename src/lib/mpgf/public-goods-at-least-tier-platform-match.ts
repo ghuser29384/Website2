@@ -2259,8 +2259,15 @@ const REQUIRED_ORDINARY_COPY_CLAIMS: Array<[string, RegExp]> = [
 export function validateAtLeastTierOrdinaryCopy(copy: string): AtLeastTierOrdinaryCopyPreflight {
   const copyForBlockedTerms = copy
     .replace(/\bnon[-\s]?mvp\b/gi, "")
+    .replace(/\bnot\s+part\s+of\b[\s\S]{0,140}\bMVP\b/gi, "")
     .replace(/\bno\s+direct\s+user[-\s]?payout\b/gi, "")
-    .replace(/\bno\s+user[-\s]?payout\b/gi, "");
+    .replace(/\bno\s+user[-\s]?payout\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?charge\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?hold\b/gi, "")
+    .replace(/\bnot\s+escrow\b/gi, "")
+    .replace(/\bnot\s+custody\b/gi, "")
+    .replace(/\bnot\s+(?:an?\s+)?authorization\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?guarantee\b[\s\S]{0,120}\bauthorization\b/gi, "");
   const blockedTerms = PROHIBITED_ORDINARY_COPY_PATTERNS
     .filter(([, pattern]) => pattern.test(copyForBlockedTerms))
     .map(([term]) => term);

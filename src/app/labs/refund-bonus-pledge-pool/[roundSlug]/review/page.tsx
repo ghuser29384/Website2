@@ -128,8 +128,10 @@ function buildReserve(roundId: string): RefundBonusReserve {
     roundId,
     poolId: "labs-refund-bonus-pool",
     reserveType: "failure_participation_bonus",
+    sponsorNamePublic: "Labs bonus sponsor",
     backedCents: 25_000,
     maxExposureCents: 25_000,
+    committedCents: 0,
     committedExposureCents: 0,
     paidCents: 0,
     heldCents: 0,
@@ -137,11 +139,14 @@ function buildReserve(roundId: string): RefundBonusReserve {
     backingState: "dev_simulated",
     legalComplianceState: "approved",
     payoutProviderReady: true,
+    jurisdictionSet: ["labs"],
     sourceHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     bonusPolicyHash,
     publishedAt: now,
     backingConfirmedAt: now,
     status: "backed",
+    createdAt: now,
+    updatedAt: now,
   };
 }
 

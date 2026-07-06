@@ -943,6 +943,20 @@ test("ordinary copy preflight blocks wagering and return language while requirin
   `);
   assert.equal(valid.passed, true);
 
+  const requiredFinalReviewCopy = validateAtLeastTierOrdinaryCopy(`
+    ${AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING}
+    There is no direct user payout.
+    If the user wins, the platform contributes the tier-specific match to reviewed projects.
+    If the user loses, the user contributes the stated amount to reviewed projects.
+    The user's own commitment does not count toward the forecast result.
+    Same-control accounts do not count toward the forecast result.
+    Platform-match payments do not count toward forecast results.
+    Saving your payment method is not a charge, not a hold, not escrow, not custody,
+    not an authorization, and not a guarantee that authorization will later succeed.
+    Production real-money use is disabled unless this mechanism is explicitly promoted.
+  `);
+  assert.equal(requiredFinalReviewCopy.passed, true);
+
   const invalid = validateAtLeastTierOrdinaryCopy(`
     Make a bet with odds for a guaranteed return and get a payout to you if right. This is user-payout language.
   `);

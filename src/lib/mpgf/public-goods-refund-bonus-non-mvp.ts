@@ -86,6 +86,12 @@ export type RefundBonusCapabilityReason =
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
   | "bonus_payout_provider_not_ready"
+  | "identity_sybil_controls_not_ready"
+  | "copy_preflight_failed"
+  | "bonus_exposure_cap_not_configured"
+  | "emergency_pause_not_configured"
+  | "audit_reporting_templates_not_reviewed"
+  | "stale_active_labels_present"
   | "emergency_pause_active";
 
 export interface RefundBonusCapabilityInput {
@@ -100,6 +106,12 @@ export interface RefundBonusCapabilityInput {
   legalComplianceApproved?: boolean;
   paymentProviderReady?: boolean;
   bonusPayoutProviderReady?: boolean;
+  identitySybilControlsReady?: boolean;
+  copyPreflightPassed?: boolean;
+  bonusExposureCapConfigured?: boolean;
+  emergencyPauseConfigured?: boolean;
+  auditReportingTemplatesReviewed?: boolean;
+  staleActiveLabelsAbsent?: boolean;
   emergencyPaused?: boolean;
 }
 
@@ -286,8 +298,10 @@ export interface RefundBonusReserve {
   roundId: string;
   poolId: string;
   reserveType: "failure_participation_bonus";
+  sponsorNamePublic?: string;
   backedCents: number;
   maxExposureCents: number;
+  committedCents: number;
   committedExposureCents: number;
   paidCents: number;
   heldCents: number;
@@ -295,11 +309,14 @@ export interface RefundBonusReserve {
   backingState: "funded" | "escrowed" | "contractually_committed" | "unbacked" | "dev_simulated";
   legalComplianceState: "approved" | "review" | "blocked";
   payoutProviderReady: boolean;
+  jurisdictionSet: string[];
   sourceHash: string;
   bonusPolicyHash: string;
   publishedAt: string;
   backingConfirmedAt: string;
   status: "draft" | "backed" | "active" | "paying" | "paid" | "released_unused" | "blocked";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RefundBonusPledge {
@@ -1636,13 +1653,31 @@ export function evaluateRefundBonusCapability(input: RefundBonusCapabilityInput)
     reasons.push("open_gate_not_passed");
   }
 
-  if (input.action !== "view_labs_pool" && input.environment === "production") {
-    reasons.push("production_real_money_disabled");
+  const productionRealMoneyAction = input.action !== "view_labs_pool" && input.environment === "production";
+  if (productionRealMoneyAction) {
     if (!input.liveMoneyEnabled) {
       reasons.push("production_real_money_disabled");
     }
     if (!input.promotionRecordApproved) {
       reasons.push("missing_promotion_record");
+    }
+    if (!input.copyPreflightPassed) {
+      reasons.push("copy_preflight_failed");
+    }
+    if (!input.identitySybilControlsReady) {
+      reasons.push("identity_sybil_controls_not_ready");
+    }
+    if (!input.bonusExposureCapConfigured) {
+      reasons.push("bonus_exposure_cap_not_configured");
+    }
+    if (!input.emergencyPauseConfigured) {
+      reasons.push("emergency_pause_not_configured");
+    }
+    if (!input.auditReportingTemplatesReviewed) {
+      reasons.push("audit_reporting_templates_not_reviewed");
+    }
+    if (!input.staleActiveLabelsAbsent) {
+      reasons.push("stale_active_labels_present");
     }
   }
 
@@ -1756,6 +1791,8 @@ export function isRefundBonusReserveBacked(
   round: RefundBonusRound,
   pool: RefundBonusPledgePool,
 ) {
+  const devSimulationReserve = reserve.backingState === "dev_simulated";
+
   return (
     pool.refundBonusEnabled &&
     pool.refundBonusReserveId === reserve.id &&
@@ -1765,12 +1802,17 @@ export function isRefundBonusReserveBacked(
       reserve.backingState === "contractually_committed" ||
       reserve.backingState === "dev_simulated") &&
     reserve.backedCents >= reserve.maxExposureCents &&
+    isNonNegativeSafeInteger(reserve.committedCents) &&
+    reserve.committedCents <= reserve.maxExposureCents &&
     reserve.maxExposureCents >= pool.roundBonusExposureCapCents &&
     reserve.maxExposureCents >= round.roundBonusExposureCapCents &&
     reserve.bonusPolicyHash === round.bonusPolicyHash &&
     /^sha256:[a-f0-9]{64}$/.test(reserve.sourceHash) &&
-    reserve.legalComplianceState === "approved" &&
-    reserve.payoutProviderReady
+    Array.isArray(reserve.jurisdictionSet) &&
+    reserve.jurisdictionSet.length > 0 &&
+    reserve.jurisdictionSet.every(isTrimStableNonEmpty) &&
+    (devSimulationReserve || reserve.legalComplianceState === "approved") &&
+    (devSimulationReserve || reserve.payoutProviderReady)
   );
 }
 
@@ -2514,7 +2556,13 @@ export function validateRefundBonusCopy(copy: string): RefundBonusCopyPreflight 
     .replace(/\bnot\s+(?:an?\s+)?investment(?:\s+return)?\b/gi, "")
     .replace(/\bnot\s+interest\b/gi, "")
     .replace(/\bnot\s+(?:a\s+)?lottery\b/gi, "")
-    .replace(/\bnot\s+public-good\s+impact\b/gi, "");
+    .replace(/\bnot\s+public-good\s+impact\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?charge\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?hold\b/gi, "")
+    .replace(/\bnot\s+escrow\b/gi, "")
+    .replace(/\bnot\s+custody\b/gi, "")
+    .replace(/\bnot\s+(?:an?\s+)?authorization\b/gi, "")
+    .replace(/\bnot\s+(?:a\s+)?guarantee\b[\s\S]{0,120}\b(?:authorization|bonus payout|bonus-eligible failure state)\b/gi, "");
   const blockedTerms = PROHIBITED_COPY_PATTERNS
     .filter(([, pattern]) => pattern.test(copyForBlockedTerms))
     .map(([term]) => term);
