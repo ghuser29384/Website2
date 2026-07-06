@@ -55,7 +55,7 @@ r_k =
     * ((o_k ^ gamma - o_1 ^ gamma) / (o_K ^ gamma - o_1 ^ gamma))
 ```
 
-The current implementation supports the default square-root schedule `gamma = 0.5` using deterministic integer arithmetic. Invalid thresholds, non-decreasing probabilities, invalid `q`, denominator zero, invalid reward bounds, and monotonicity-breaking rounding fail closed.
+The current implementation supports `gamma` values from `0.5` through `0.7` inclusive, with the default square-root schedule at `gamma = 0.5`. Schedule outputs use deterministic rational integer arithmetic. Invalid thresholds, non-decreasing probabilities, invalid `q`, denominator zero, invalid reward bounds, unsupported gamma precision, out-of-range gamma values, and monotonicity-breaking rounding fail closed.
 
 ## Effective-Support Resolution
 
@@ -100,6 +100,8 @@ Dev/test behavior may simulate settlement. In simulation:
 - excluded rows are released with no platform contribution and no user charge.
 
 If this branch is later promoted, live settlement must re-check feature gates, promotion record, legal/compliance approval, payment-provider readiness, reserve backing, identity/Sybil controls, frozen schedule, copy preflight, and emergency pause before provider calls.
+
+Admin, commitment-open, and scheduled-job gates are server-side checks. Labs admins may configure draft rounds, compute and freeze schedules, configure reserves, run copy preflight, simulate commitments, simulate authorization/resolution/settlement, view audit reports, and pause the mechanism. A labs hard commitment can open only when the round is `labs_open`, the feature is explicitly enabled for labs, the reward schedule is valid and frozen, the platform-match reserve is backed, the requested exposure fits within the backed cap, copy preflight passes, the payment method is provider-confirmed, and the final review acknowledgements are present. While the branch is non-MVP, real public round opening, public real-money commitments, real payment authorization/capture, live platform-match contributions, and public reports implying live product availability remain blocked.
 
 ## Reserve Requirements
 
@@ -153,12 +155,14 @@ Ordinary user-facing copy must not use betting, wagering, gambling, profit, priz
 The current implementation includes tests for:
 
 - non-MVP feature metadata and production-disabled capability gates;
-- default damped odds schedule computation and fail-closed invalid schedules;
+- default and non-default v137 gamma damped-odds schedule computation and fail-closed invalid schedules;
 - leave-one-cluster-out effective-support resolution;
 - the circularity guard where raw stated commitments do not clear a tier;
 - simulated settlement separation of user-paid, platform-paid, reserve, fee, and final disbursement channels;
 - idempotency keys for platform-match operations;
 - ordinary-copy preflight;
+- commitment-open gate enforcement for reserve backing, caps, provider-confirmed payment, and final acknowledgements;
+- admin workflow and scheduled-job gates before live provider calls;
 - documentation presence and absence from primary public/MVP routes.
 
 ## Production Gaps

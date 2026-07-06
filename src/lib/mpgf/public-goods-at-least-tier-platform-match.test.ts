@@ -10,6 +10,9 @@ import {
   AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING,
   buildAtLeastTierPlatformMatchCommitmentPreview,
   computeDampedOddsRewardSchedule,
+  evaluateAtLeastTierAdminWorkflow,
+  evaluateAtLeastTierCommitmentOpenGate,
+  evaluateAtLeastTierJobGate,
   evaluateAtLeastTierPlatformMatchCapability,
   planAtLeastTierPlatformMatchSettlement,
   resolveAtLeastTierPlatformMatch,
@@ -129,6 +132,184 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.equal(labsSchedule.allowed, true);
 });
 
+test("admin and job gates keep at-least-tier live operations blocked while labs simulation can run", () => {
+  const labsSchedule = evaluateAtLeastTierAdminWorkflow({
+    action: "compute_reward_schedule",
+    actorRole: "admin",
+    environment: "development",
+    featureEnabled: true,
+  });
+  assert.equal(labsSchedule.allowed, true);
+  assert.equal(labsSchedule.providerCallsAllowed, false);
+
+  const invalidSimulation = evaluateAtLeastTierAdminWorkflow({
+    action: "run_simulated_authorization_resolution_settlement",
+    actorRole: "admin",
+    environment: "development",
+    featureEnabled: true,
+    rewardScheduleFrozen: false,
+    rewardScheduleValid: false,
+    reserveBacked: false,
+  });
+  assert.equal(invalidSimulation.allowed, false);
+  assert.ok(invalidSimulation.blockerCodes.includes("invalid_damped_odds_schedule"));
+  assert.ok(invalidSimulation.blockerCodes.includes("schedule_not_frozen"));
+  assert.ok(invalidSimulation.blockerCodes.includes("reserve_unbacked"));
+
+  const realSettlement = evaluateAtLeastTierAdminWorkflow({
+    action: "execute_real_payment_authorization_capture",
+    actorRole: "admin",
+    environment: "production",
+    featureEnabled: true,
+    liveMoneyEnabled: true,
+    promotionRecordApproved: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserveBacked: true,
+    copyPreflightPassed: true,
+    legalComplianceApproved: true,
+    paymentProviderReady: true,
+    sybilControlsReady: true,
+  });
+  assert.equal(realSettlement.allowed, false);
+  assert.equal(realSettlement.providerCallsAllowed, false);
+  assert.ok(realSettlement.blockerCodes.includes("feature_non_mvp"));
+  assert.ok(realSettlement.blockerCodes.includes("production_real_money_disabled"));
+
+  const settlementJob = evaluateAtLeastTierJobGate({
+    job: "settlement_job",
+    actorRole: "service",
+    environment: "production",
+    featureEnabled: true,
+    simulationOnly: false,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserveBacked: true,
+  });
+  assert.equal(settlementJob.allowed, false);
+  assert.equal(settlementJob.providerCallsAllowed, false);
+  assert.ok(settlementJob.blockerCodes.includes("feature_non_mvp"));
+  assert.ok(settlementJob.blockerCodes.includes("production_real_money_disabled"));
+  assert.ok(settlementJob.blockerCodes.includes("missing_promotion_record"));
+
+  const scheduledCloseSimulation = evaluateAtLeastTierJobGate({
+    job: "scheduled_close_job",
+    actorRole: "service",
+    environment: "test",
+    featureEnabled: true,
+    simulationOnly: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+  });
+  assert.equal(scheduledCloseSimulation.allowed, true);
+
+  const productionReport = evaluateAtLeastTierJobGate({
+    job: "public_report_job",
+    actorRole: "service",
+    environment: "production",
+    featureEnabled: true,
+    simulationOnly: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    publicReportImpliesLiveProduct: true,
+  });
+  assert.equal(productionReport.allowed, false);
+  assert.ok(productionReport.blockerCodes.includes("public_report_live_product_copy_blocked"));
+});
+
+test("commitment open gate requires labs access, frozen schedule, backed reserve, caps, payment, and final acknowledgements", () => {
+  const passingGate = evaluateAtLeastTierCommitmentOpenGate({
+    actorRole: "labs_participant",
+    environment: "development",
+    roundStatus: "labs_open",
+    featureEnabled: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserve: backedReserve({ backedCents: 10_000, maxExposureCents: 10_000 }),
+    currentReservedExposureCents: 2_000,
+    requestedExposureCents: 1_000,
+    copyPreflightPassed: true,
+    paymentMethodProviderConfirmed: true,
+    finalReviewConfirmed: true,
+    ownCommitmentExclusionAcknowledged: true,
+    lossChargeAcknowledged: true,
+    noDirectPayoutAcknowledged: true,
+    nonMvpAcknowledged: true,
+  });
+  assert.equal(passingGate.allowed, true);
+  assert.equal(passingGate.providerCallsAllowed, false);
+
+  const reserveBlocked = evaluateAtLeastTierCommitmentOpenGate({
+    actorRole: "labs_participant",
+    environment: "development",
+    roundStatus: "labs_open",
+    featureEnabled: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserve: backedReserve({ backedCents: 3_000, maxExposureCents: 3_000 }),
+    currentReservedExposureCents: 2_500,
+    requestedExposureCents: 1_000,
+    copyPreflightPassed: true,
+    paymentMethodProviderConfirmed: true,
+    finalReviewConfirmed: true,
+    ownCommitmentExclusionAcknowledged: true,
+    lossChargeAcknowledged: true,
+    noDirectPayoutAcknowledged: true,
+    nonMvpAcknowledged: true,
+  });
+  assert.equal(reserveBlocked.allowed, false);
+  assert.ok(reserveBlocked.blockerCodes.includes("reserve_exposure_exceeded"));
+
+  const missingConsent = evaluateAtLeastTierCommitmentOpenGate({
+    actorRole: "labs_participant",
+    environment: "development",
+    roundStatus: "labs_open",
+    featureEnabled: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserve: backedReserve(),
+    currentReservedExposureCents: 0,
+    requestedExposureCents: 1_000,
+    copyPreflightPassed: true,
+    paymentMethodProviderConfirmed: false,
+    finalReviewConfirmed: false,
+    ownCommitmentExclusionAcknowledged: false,
+    lossChargeAcknowledged: false,
+    noDirectPayoutAcknowledged: false,
+    nonMvpAcknowledged: false,
+  });
+  assert.equal(missingConsent.allowed, false);
+  assert.ok(missingConsent.blockerCodes.includes("payment_method_not_confirmed"));
+  assert.ok(missingConsent.blockerCodes.includes("final_review_consent_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("own_commitment_exclusion_ack_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("loss_charge_ack_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("no_direct_payout_ack_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("non_mvp_ack_missing"));
+
+  const productionGate = evaluateAtLeastTierCommitmentOpenGate({
+    actorRole: "labs_participant",
+    environment: "production",
+    roundStatus: "open",
+    featureEnabled: true,
+    rewardScheduleFrozen: true,
+    rewardScheduleValid: true,
+    reserve: backedReserve(),
+    currentReservedExposureCents: 0,
+    requestedExposureCents: 1_000,
+    copyPreflightPassed: true,
+    paymentMethodProviderConfirmed: true,
+    finalReviewConfirmed: true,
+    ownCommitmentExclusionAcknowledged: true,
+    lossChargeAcknowledged: true,
+    noDirectPayoutAcknowledged: true,
+    nonMvpAcknowledged: true,
+  });
+  assert.equal(productionGate.allowed, false);
+  assert.ok(productionGate.blockerCodes.includes("feature_non_mvp"));
+  assert.ok(productionGate.blockerCodes.includes("production_real_money_disabled"));
+  assert.ok(productionGate.blockerCodes.includes("round_not_labs_open"));
+});
+
 test("damped odds schedule computes frozen monotone default tier rates and fails closed on invalid inputs", () => {
   const schedule = defaultSchedule();
 
@@ -162,6 +343,35 @@ test("damped odds schedule computes frozen monotone default tier rates and fails
   assert.equal(nonDecreasingQ.valid, false);
   assert.ok(nonDecreasingQ.schedule.invalidReasonCodes.includes("tier_2_q_not_strictly_decreasing"));
 
+  const gammaSix = computeDampedOddsRewardSchedule({
+    roundId,
+    gammaDecimalString: "0.6",
+    freeze: true,
+    now,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 300_000, frozenForecastProbabilityBps: 5_500 },
+      { tierIndex: 3, thresholdNetRecipientCents: 500_000, frozenForecastProbabilityBps: 3_500 },
+      { tierIndex: 4, thresholdNetRecipientCents: 1_000_000, frozenForecastProbabilityBps: 2_000 },
+      { tierIndex: 5, thresholdNetRecipientCents: 2_500_000, frozenForecastProbabilityBps: 1_000 },
+    ],
+  });
+  assert.equal(gammaSix.valid, true);
+  assert.equal(gammaSix.schedule.gammaDecimalString, "0.6");
+  assert.equal(gammaSix.tiers[0]?.rewardRateBps, 500);
+  assert.equal(gammaSix.tiers.at(-1)?.rewardRateBps, 3500);
+  assert.ok(gammaSix.tiers.every((tier, index, tiers) => index === 0 || tier.rewardRateBps > tiers[index - 1]!.rewardRateBps));
+
+  const gammaSeven = computeDampedOddsRewardSchedule({
+    roundId,
+    gammaDecimalString: "0.70",
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_500 },
+    ],
+  });
+  assert.equal(gammaSeven.valid, true);
+
   const invalidGamma = computeDampedOddsRewardSchedule({
     roundId,
     gammaDecimalString: "0.9",
@@ -171,7 +381,18 @@ test("damped odds schedule computes frozen monotone default tier rates and fails
     ],
   });
   assert.equal(invalidGamma.valid, false);
-  assert.ok(invalidGamma.schedule.invalidReasonCodes.includes("gamma_not_supported_by_sqrt_v0_1"));
+  assert.ok(invalidGamma.schedule.invalidReasonCodes.includes("gamma_out_of_range"));
+
+  const unsupportedPrecision = computeDampedOddsRewardSchedule({
+    roundId,
+    gammaDecimalString: "0.555",
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_500 },
+    ],
+  });
+  assert.equal(unsupportedPrecision.valid, false);
+  assert.ok(unsupportedPrecision.schedule.invalidReasonCodes.includes("gamma_decimal_precision_unsupported"));
 });
 
 test("leave-one-cluster-out resolution uses effective support and excludes own, same-control, fees, drafts, and failed rows", () => {

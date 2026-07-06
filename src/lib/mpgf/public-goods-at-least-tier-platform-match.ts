@@ -361,6 +361,119 @@ export interface AtLeastTierOrdinaryCopyPreflight {
   missingRequiredClaims: string[];
 }
 
+export type AtLeastTierAdminWorkflowAction =
+  | "create_draft_labs_round"
+  | "configure_reviewed_pool"
+  | "configure_tiers"
+  | "compute_reward_schedule"
+  | "freeze_reward_schedule"
+  | "configure_platform_match_reserve"
+  | "run_copy_preflight"
+  | "run_simulated_commitments"
+  | "run_simulated_authorization_resolution_settlement"
+  | "view_audit_report"
+  | "pause_or_kill_switch"
+  | "open_public_real_money_round"
+  | "accept_public_real_money_commitments"
+  | "execute_real_payment_authorization_capture"
+  | "execute_live_platform_match_contribution"
+  | "publish_live_public_report";
+
+export type AtLeastTierJobAction =
+  | "resolution_job"
+  | "settlement_job"
+  | "scheduled_close_job"
+  | "public_report_job";
+
+export type AtLeastTierOperationalBlocker =
+  | "feature_non_mvp"
+  | "feature_disabled"
+  | "insufficient_role"
+  | "production_real_money_disabled"
+  | "missing_promotion_record"
+  | "invalid_damped_odds_schedule"
+  | "schedule_not_frozen"
+  | "reserve_unbacked"
+  | "reserve_exposure_exceeded"
+  | "copy_preflight_failed"
+  | "legal_compliance_not_approved"
+  | "payment_provider_not_ready"
+  | "sybil_controls_not_ready"
+  | "emergency_pause_active"
+  | "simulation_only_allowed_in_dev_or_test"
+  | "public_report_live_product_copy_blocked"
+  | "round_not_labs_open"
+  | "payment_method_not_confirmed"
+  | "final_review_consent_missing"
+  | "own_commitment_exclusion_ack_missing"
+  | "loss_charge_ack_missing"
+  | "no_direct_payout_ack_missing"
+  | "non_mvp_ack_missing";
+
+export interface AtLeastTierAdminWorkflowInput {
+  action: AtLeastTierAdminWorkflowAction;
+  actorRole: AtLeastTierPlatformMatchActorRole;
+  environment: AtLeastTierPlatformMatchEnvironment;
+  featureEnabled?: boolean;
+  liveMoneyEnabled?: boolean;
+  promotionRecordApproved?: boolean;
+  rewardScheduleFrozen?: boolean;
+  rewardScheduleValid?: boolean;
+  reserveBacked?: boolean;
+  reserveExposureExceeded?: boolean;
+  copyPreflightPassed?: boolean;
+  legalComplianceApproved?: boolean;
+  paymentProviderReady?: boolean;
+  sybilControlsReady?: boolean;
+  emergencyPaused?: boolean;
+}
+
+export interface AtLeastTierJobGateInput {
+  job: AtLeastTierJobAction;
+  actorRole: AtLeastTierPlatformMatchActorRole;
+  environment: AtLeastTierPlatformMatchEnvironment;
+  featureEnabled?: boolean;
+  simulationOnly?: boolean;
+  liveMoneyEnabled?: boolean;
+  promotionRecordApproved?: boolean;
+  rewardScheduleFrozen?: boolean;
+  rewardScheduleValid?: boolean;
+  reserveBacked?: boolean;
+  reserveExposureExceeded?: boolean;
+  copyPreflightPassed?: boolean;
+  legalComplianceApproved?: boolean;
+  paymentProviderReady?: boolean;
+  sybilControlsReady?: boolean;
+  emergencyPaused?: boolean;
+  publicReportImpliesLiveProduct?: boolean;
+}
+
+export interface AtLeastTierCommitmentOpenGateInput {
+  actorRole: AtLeastTierPlatformMatchActorRole;
+  environment: AtLeastTierPlatformMatchEnvironment;
+  roundStatus: "draft" | "preflight" | "labs_open" | "open" | "closed_to_new_commitments" | "blocked" | "canceled";
+  featureEnabled?: boolean;
+  rewardScheduleFrozen?: boolean;
+  rewardScheduleValid?: boolean;
+  reserve: PlatformMatchReserve;
+  currentReservedExposureCents: number;
+  requestedExposureCents: number;
+  copyPreflightPassed?: boolean;
+  paymentMethodProviderConfirmed?: boolean;
+  finalReviewConfirmed?: boolean;
+  ownCommitmentExclusionAcknowledged?: boolean;
+  lossChargeAcknowledged?: boolean;
+  noDirectPayoutAcknowledged?: boolean;
+  nonMvpAcknowledged?: boolean;
+  emergencyPaused?: boolean;
+}
+
+export interface AtLeastTierOperationalGateResult {
+  allowed: boolean;
+  providerCallsAllowed: boolean;
+  blockerCodes: AtLeastTierOperationalBlocker[];
+}
+
 const ADMIN_OR_SERVICE_ACTIONS = new Set<AtLeastTierPlatformMatchAction>([
   "create_config",
   "create_round",
@@ -389,6 +502,33 @@ const COMMITMENT_ACTIONS = new Set<AtLeastTierPlatformMatchAction>([
   "release_winner_authorization",
   "execute_platform_match_contribution",
   "execute_user_loss_contribution",
+]);
+
+const LIVE_ADMIN_WORKFLOW_ACTIONS = new Set<AtLeastTierAdminWorkflowAction>([
+  "open_public_real_money_round",
+  "accept_public_real_money_commitments",
+  "execute_real_payment_authorization_capture",
+  "execute_live_platform_match_contribution",
+  "publish_live_public_report",
+]);
+
+const SCHEDULE_DEPENDENT_ADMIN_ACTIONS = new Set<AtLeastTierAdminWorkflowAction>([
+  "run_simulated_authorization_resolution_settlement",
+  "open_public_real_money_round",
+  "accept_public_real_money_commitments",
+  "execute_real_payment_authorization_capture",
+  "execute_live_platform_match_contribution",
+  "publish_live_public_report",
+]);
+
+const RESERVE_DEPENDENT_ADMIN_ACTIONS = new Set<AtLeastTierAdminWorkflowAction>([
+  "run_simulated_commitments",
+  "run_simulated_authorization_resolution_settlement",
+  "open_public_real_money_round",
+  "accept_public_real_money_commitments",
+  "execute_real_payment_authorization_capture",
+  "execute_live_platform_match_contribution",
+  "publish_live_public_report",
 ]);
 
 function canonicalize(value: unknown): unknown {
@@ -433,6 +573,10 @@ function isRoleAllowedForAdminAction(role: AtLeastTierPlatformMatchActorRole) {
 
 function uniqueReasons(reasons: AtLeastTierPlatformMatchCapabilityReason[]) {
   return [...new Set(reasons)];
+}
+
+function uniqueOperationalBlockers(blockers: AtLeastTierOperationalBlocker[]) {
+  return [...new Set(blockers)];
 }
 
 export function evaluateAtLeastTierPlatformMatchCapability(
@@ -515,6 +659,207 @@ export function assertAtLeastTierPlatformMatchCapability(
   return result;
 }
 
+export function evaluateAtLeastTierAdminWorkflow(
+  input: AtLeastTierAdminWorkflowInput,
+): AtLeastTierOperationalGateResult {
+  const blockerCodes: AtLeastTierOperationalBlocker[] = [];
+
+  if (!input.featureEnabled) {
+    blockerCodes.push("feature_disabled");
+  }
+  if (!isRoleAllowedForAdminAction(input.actorRole)) {
+    blockerCodes.push("insufficient_role");
+  }
+  if (input.emergencyPaused && input.action !== "pause_or_kill_switch") {
+    blockerCodes.push("emergency_pause_active");
+  }
+  if (SCHEDULE_DEPENDENT_ADMIN_ACTIONS.has(input.action)) {
+    if (!input.rewardScheduleValid) {
+      blockerCodes.push("invalid_damped_odds_schedule");
+    }
+    if (!input.rewardScheduleFrozen) {
+      blockerCodes.push("schedule_not_frozen");
+    }
+  }
+  if (RESERVE_DEPENDENT_ADMIN_ACTIONS.has(input.action)) {
+    if (!input.reserveBacked) {
+      blockerCodes.push("reserve_unbacked");
+    }
+    if (input.reserveExposureExceeded) {
+      blockerCodes.push("reserve_exposure_exceeded");
+    }
+  }
+  if (LIVE_ADMIN_WORKFLOW_ACTIONS.has(input.action)) {
+    blockerCodes.push("feature_non_mvp");
+    if (!input.liveMoneyEnabled || input.environment === "production") {
+      blockerCodes.push("production_real_money_disabled");
+    }
+    if (!input.promotionRecordApproved) {
+      blockerCodes.push("missing_promotion_record");
+    }
+    if (!input.copyPreflightPassed) {
+      blockerCodes.push("copy_preflight_failed");
+    }
+    if (!input.legalComplianceApproved) {
+      blockerCodes.push("legal_compliance_not_approved");
+    }
+    if (!input.paymentProviderReady) {
+      blockerCodes.push("payment_provider_not_ready");
+    }
+    if (!input.sybilControlsReady) {
+      blockerCodes.push("sybil_controls_not_ready");
+    }
+  }
+
+  const uniqueBlockerCodes = uniqueOperationalBlockers(blockerCodes);
+
+  return {
+    allowed: uniqueBlockerCodes.length === 0,
+    providerCallsAllowed: false,
+    blockerCodes: uniqueBlockerCodes,
+  };
+}
+
+export function evaluateAtLeastTierJobGate(input: AtLeastTierJobGateInput): AtLeastTierOperationalGateResult {
+  const blockerCodes: AtLeastTierOperationalBlocker[] = [];
+  const simulationOnly = input.simulationOnly ?? true;
+
+  if (!input.featureEnabled) {
+    blockerCodes.push("feature_disabled");
+  }
+  if (!isRoleAllowedForAdminAction(input.actorRole)) {
+    blockerCodes.push("insufficient_role");
+  }
+  if (input.emergencyPaused) {
+    blockerCodes.push("emergency_pause_active");
+  }
+  if (!input.rewardScheduleValid) {
+    blockerCodes.push("invalid_damped_odds_schedule");
+  }
+  if (!input.rewardScheduleFrozen) {
+    blockerCodes.push("schedule_not_frozen");
+  }
+
+  if (input.job === "scheduled_close_job" && input.environment !== "development" && input.environment !== "test") {
+    blockerCodes.push("simulation_only_allowed_in_dev_or_test");
+  }
+
+  if (input.job === "settlement_job") {
+    if (!input.reserveBacked) {
+      blockerCodes.push("reserve_unbacked");
+    }
+    if (input.reserveExposureExceeded) {
+      blockerCodes.push("reserve_exposure_exceeded");
+    }
+    if (!simulationOnly) {
+      blockerCodes.push("feature_non_mvp");
+      if (!input.liveMoneyEnabled || input.environment === "production") {
+        blockerCodes.push("production_real_money_disabled");
+      }
+      if (!input.promotionRecordApproved) {
+        blockerCodes.push("missing_promotion_record");
+      }
+      if (!input.copyPreflightPassed) {
+        blockerCodes.push("copy_preflight_failed");
+      }
+      if (!input.legalComplianceApproved) {
+        blockerCodes.push("legal_compliance_not_approved");
+      }
+      if (!input.paymentProviderReady) {
+        blockerCodes.push("payment_provider_not_ready");
+      }
+      if (!input.sybilControlsReady) {
+        blockerCodes.push("sybil_controls_not_ready");
+      }
+    }
+  }
+
+  if (
+    input.job === "public_report_job" &&
+    input.environment === "production" &&
+    input.publicReportImpliesLiveProduct
+  ) {
+    blockerCodes.push("public_report_live_product_copy_blocked");
+  }
+
+  const uniqueBlockerCodes = uniqueOperationalBlockers(blockerCodes);
+
+  return {
+    allowed: uniqueBlockerCodes.length === 0,
+    providerCallsAllowed: uniqueBlockerCodes.length === 0 && !simulationOnly && input.job === "settlement_job",
+    blockerCodes: uniqueBlockerCodes,
+  };
+}
+
+export function evaluateAtLeastTierCommitmentOpenGate(
+  input: AtLeastTierCommitmentOpenGateInput,
+): AtLeastTierOperationalGateResult {
+  const blockerCodes: AtLeastTierOperationalBlocker[] = [];
+
+  if (!input.featureEnabled) {
+    blockerCodes.push("feature_disabled");
+  }
+  if (!isRoleAllowedForLabs(input.actorRole)) {
+    blockerCodes.push("insufficient_role");
+  }
+  if (input.environment === "production") {
+    blockerCodes.push("feature_non_mvp");
+    blockerCodes.push("production_real_money_disabled");
+  }
+  if (input.roundStatus !== "labs_open") {
+    blockerCodes.push("round_not_labs_open");
+  }
+  if (input.emergencyPaused) {
+    blockerCodes.push("emergency_pause_active");
+  }
+  if (!input.rewardScheduleValid) {
+    blockerCodes.push("invalid_damped_odds_schedule");
+  }
+  if (!input.rewardScheduleFrozen) {
+    blockerCodes.push("schedule_not_frozen");
+  }
+  if (!isReserveBacked(input.reserve)) {
+    blockerCodes.push("reserve_unbacked");
+  }
+  if (
+    !isNonNegativeSafeInteger(input.currentReservedExposureCents) ||
+    !isPositiveSafeInteger(input.requestedExposureCents) ||
+    input.currentReservedExposureCents + input.requestedExposureCents > input.reserve.maxExposureCents ||
+    input.currentReservedExposureCents + input.requestedExposureCents > input.reserve.backedCents
+  ) {
+    blockerCodes.push("reserve_exposure_exceeded");
+  }
+  if (!input.copyPreflightPassed) {
+    blockerCodes.push("copy_preflight_failed");
+  }
+  if (!input.paymentMethodProviderConfirmed) {
+    blockerCodes.push("payment_method_not_confirmed");
+  }
+  if (!input.finalReviewConfirmed) {
+    blockerCodes.push("final_review_consent_missing");
+  }
+  if (!input.ownCommitmentExclusionAcknowledged) {
+    blockerCodes.push("own_commitment_exclusion_ack_missing");
+  }
+  if (!input.lossChargeAcknowledged) {
+    blockerCodes.push("loss_charge_ack_missing");
+  }
+  if (!input.noDirectPayoutAcknowledged) {
+    blockerCodes.push("no_direct_payout_ack_missing");
+  }
+  if (!input.nonMvpAcknowledged) {
+    blockerCodes.push("non_mvp_ack_missing");
+  }
+
+  const uniqueBlockerCodes = uniqueOperationalBlockers(blockerCodes);
+
+  return {
+    allowed: uniqueBlockerCodes.length === 0,
+    providerCallsAllowed: false,
+    blockerCodes: uniqueBlockerCodes,
+  };
+}
+
 function integerSquareRoot(value: bigint) {
   const zero = BigInt(0);
   const two = BigInt(2);
@@ -537,6 +882,49 @@ function integerSquareRoot(value: bigint) {
   return x0;
 }
 
+function integerNthRoot(value: bigint, degree: number) {
+  if (!Number.isSafeInteger(degree) || degree < 1) {
+    throw new Error("root degree must be a positive safe integer");
+  }
+  if (degree === 1) {
+    return value;
+  }
+  if (degree === 2) {
+    return integerSquareRoot(value);
+  }
+  if (value < BigInt(0)) {
+    throw new Error("root input must be non-negative");
+  }
+  if (value < BigInt(2)) {
+    return value;
+  }
+
+  const bigDegree = BigInt(degree);
+  const bitLength = value.toString(2).length;
+  let current = BigInt(1) << BigInt(Math.ceil(bitLength / degree));
+  let next = (
+    BigInt(degree - 1) * current +
+    value / (current ** BigInt(degree - 1))
+  ) / bigDegree;
+
+  while (next < current) {
+    current = next;
+    next = (
+      BigInt(degree - 1) * current +
+      value / (current ** BigInt(degree - 1))
+    ) / bigDegree;
+  }
+
+  while ((current + BigInt(1)) ** bigDegree <= value) {
+    current += BigInt(1);
+  }
+  while (current ** bigDegree > value) {
+    current -= BigInt(1);
+  }
+
+  return current;
+}
+
 function roundDivide(numerator: bigint, denominator: bigint) {
   if (denominator <= BigInt(0)) {
     throw new Error("denominator must be positive");
@@ -556,10 +944,62 @@ function oddsAgainstDecimalString(qBps: number) {
   return `${whole}.${fractional}`;
 }
 
-function sqrtOddsScaled(qBps: number) {
-  return integerSquareRoot(
-    BigInt(BPS_DENOMINATOR - qBps) * SQRT_SCALE * SQRT_SCALE / BigInt(qBps),
-  );
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+
+  while (b !== 0) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+
+  return a;
+}
+
+function parseGammaDecimal(gammaDecimalString: string) {
+  const trimmed = gammaDecimalString.trim();
+  const match = /^0\.(\d{1,2})$/.exec(trimmed);
+
+  if (!match) {
+    return {
+      valid: false as const,
+      invalidReasonCodes: ["gamma_decimal_precision_unsupported"],
+    };
+  }
+
+  const decimalDigits = match[1]!;
+  const numerator = Number(decimalDigits);
+  const denominator = 10 ** decimalDigits.length;
+
+  if (numerator * 2 < denominator || numerator * 10 > 7 * denominator) {
+    return {
+      valid: false as const,
+      invalidReasonCodes: ["gamma_out_of_range"],
+    };
+  }
+
+  const divisor = greatestCommonDivisor(numerator, denominator);
+
+  return {
+    valid: true as const,
+    numerator: numerator / divisor,
+    denominator: denominator / divisor,
+    invalidReasonCodes: [],
+  };
+}
+
+function oddsPowerScaled(qBps: number, gamma: { numerator: number; denominator: number }) {
+  const oddsNumerator = BigInt(BPS_DENOMINATOR - qBps);
+  const oddsDenominator = BigInt(qBps);
+  const exponentNumerator = BigInt(gamma.numerator);
+  const exponentDenominator = BigInt(gamma.denominator);
+  const radicand =
+    (oddsNumerator ** exponentNumerator) *
+    (SQRT_SCALE ** exponentDenominator) /
+    (oddsDenominator ** exponentNumerator);
+
+  return integerNthRoot(radicand, gamma.denominator);
 }
 
 function invalidSchedule(
@@ -626,9 +1066,8 @@ export function computeDampedOddsRewardSchedule(
   if (isNonNegativeSafeInteger(rMinBps) && isPositiveSafeInteger(rMaxBps) && rMinBps >= rMaxBps) {
     invalidReasonCodes.push("reward_bounds_not_increasing");
   }
-  if (gammaDecimalString !== "0.5") {
-    invalidReasonCodes.push("gamma_not_supported_by_sqrt_v0_1");
-  }
+  const gamma = parseGammaDecimal(gammaDecimalString);
+  invalidReasonCodes.push(...gamma.invalidReasonCodes);
   if (!isPositiveSafeInteger(qMinBps) || !isPositiveSafeInteger(qMaxBps) || qMinBps >= qMaxBps) {
     invalidReasonCodes.push("q_bounds_invalid");
   }
@@ -664,11 +1103,11 @@ export function computeDampedOddsRewardSchedule(
     }
   });
 
-  if (invalidReasonCodes.length > 0) {
+  if (invalidReasonCodes.length > 0 || !gamma.valid) {
     return invalidSchedule(input, invalidReasonCodes);
   }
 
-  const roots = tiers.map((tier) => sqrtOddsScaled(tier.frozenForecastProbabilityBps));
+  const roots = tiers.map((tier) => oddsPowerScaled(tier.frozenForecastProbabilityBps, gamma));
   const firstRoot = roots[0] ?? BigInt(0);
   const lastRoot = roots[roots.length - 1] ?? BigInt(0);
   const denominator = lastRoot - firstRoot;

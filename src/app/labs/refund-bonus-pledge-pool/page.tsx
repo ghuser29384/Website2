@@ -174,6 +174,12 @@ export default function RefundBonusPledgePoolLabsPage() {
               only in bonus-payable states after qualifying failure, reserve, legal, provider, and
               emergency-pause gates pass.
             </p>
+            <p>
+              A hard pledge can exist only after the open gate passes, final review is confirmed,
+              fee and sealed-progress acknowledgements are recorded, bonus terms are acknowledged,
+              identity and bonus eligibility checks pass, the payment method is provider-confirmed,
+              and backed bonus exposure fits within the round, pool, and reserve caps.
+            </p>
           </div>
         </section>
       </main>

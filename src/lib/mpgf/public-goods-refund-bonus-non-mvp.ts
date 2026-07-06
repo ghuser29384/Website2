@@ -338,10 +338,86 @@ export interface RefundBonusSettlementPlan {
   blockedReasonCodes: string[];
 }
 
+export interface RefundBonusReceipt {
+  receiptKind: "success_charge" | "qualifying_failure_bonus" | "no_bonus_no_charge";
+  roundId: string;
+  poolId: string;
+  pledgeId: string;
+  participantId: string;
+  calculationVersion: typeof REFUND_BONUS_CALCULATION_VERSION;
+  grossCapturedCents: number;
+  feeCents: number;
+  netRecipientDisbursedCents: number;
+  projectFundingCents: number;
+  failureReasonCategory?: RefundBonusFailureReason;
+  bonusEligibilityStatus: "not_applicable_cleared" | "eligible" | "not_eligible";
+  bonusGrossCents: number;
+  bonusPayoutFeeCents: number;
+  bonusNetCents: number;
+  bonusPayoutState?: RefundBonusPayoutOperation["operationState"];
+  bonusPayoutReference?: string;
+  bonusReserveId?: string;
+  authorizationReference?: string;
+  captureReference?: string;
+  rulebookHash: string;
+  feePolicyHash?: string;
+  bonusPolicyHash: string;
+  copy: string;
+}
+
 export interface RefundBonusCopyPreflight {
   passed: boolean;
   blockedTerms: string[];
   missingRequiredClaims: string[];
+}
+
+export type RefundBonusHardPledgeBlocker =
+  | "feature_non_mvp"
+  | "feature_disabled"
+  | "production_real_money_disabled"
+  | "round_not_labs_open"
+  | "pool_not_labs_open"
+  | "open_gate_not_passed"
+  | "copy_preflight_failed"
+  | "final_review_missing"
+  | "fee_acknowledgement_missing"
+  | "sealed_progress_acknowledgement_missing"
+  | "bonus_terms_acknowledgement_missing"
+  | "identity_snapshot_missing_or_failed"
+  | "bonus_eligibility_snapshot_missing_or_failed"
+  | "payment_method_not_confirmed"
+  | "bonus_exposure_not_reserved"
+  | "bonus_reserve_unbacked"
+  | "gross_invalid"
+  | "below_participant_min"
+  | "above_participant_max"
+  | "fixed_pledge_amount_mismatch"
+  | "round_gross_cap_exceeded"
+  | "round_bonus_exposure_cap_exceeded"
+  | "pool_bonus_exposure_cap_exceeded"
+  | "reserve_exposure_cap_exceeded"
+  | "rulebook_hash_mismatch"
+  | "fee_policy_hash_mismatch"
+  | "bonus_policy_hash_mismatch"
+  | "visibility_not_aggregate_only";
+
+export interface RefundBonusHardPledgeGateInput {
+  environment: RefundBonusEnvironment;
+  featureEnabled?: boolean;
+  round: RefundBonusRound;
+  pool: RefundBonusPledgePool;
+  gate: RefundBonusOpenGate;
+  reserve: RefundBonusReserve;
+  pledge: RefundBonusPledge;
+  currentGrossExposureCents: number;
+  currentBonusExposureCents: number;
+  visibility?: "aggregate_only" | "public_name" | "public_amount";
+}
+
+export interface RefundBonusHardPledgeGateResult {
+  allowed: boolean;
+  providerCallsAllowed: false;
+  blockerCodes: RefundBonusHardPledgeBlocker[];
 }
 
 function canonicalize(value: unknown): unknown {
@@ -376,6 +452,10 @@ function unique<T>(items: T[]) {
 
 function roleCanUseLabs(role: RefundBonusActorRole) {
   return role === "labs_participant" || role === "admin" || role === "service";
+}
+
+function uniqueHardPledgeBlockers(blockers: RefundBonusHardPledgeBlocker[]) {
+  return [...new Set(blockers)];
 }
 
 export function evaluateRefundBonusCapability(input: RefundBonusCapabilityInput): RefundBonusCapabilityResult {
@@ -542,6 +622,128 @@ export function isRefundBonusReserveBacked(
     reserve.legalComplianceState === "approved" &&
     reserve.payoutProviderReady
   );
+}
+
+export function evaluateRefundBonusHardPledgeGate({
+  environment,
+  featureEnabled,
+  round,
+  pool,
+  gate,
+  reserve,
+  pledge,
+  currentGrossExposureCents,
+  currentBonusExposureCents,
+  visibility = "aggregate_only",
+}: RefundBonusHardPledgeGateInput): RefundBonusHardPledgeGateResult {
+  const blockerCodes: RefundBonusHardPledgeBlocker[] = ["feature_non_mvp"];
+  const reserveBacked = isRefundBonusReserveBacked(reserve, round, pool);
+  const nextGrossExposureCents = currentGrossExposureCents + pledge.maxGrossCents;
+  const nextBonusExposureCents = currentBonusExposureCents + pledge.bonusExposureReservedCents;
+
+  if (!featureEnabled) {
+    blockerCodes.push("feature_disabled");
+  }
+  if (environment === "production") {
+    blockerCodes.push("production_real_money_disabled");
+  }
+  if (round.status !== "labs_open") {
+    blockerCodes.push("round_not_labs_open");
+  }
+  if (pool.status !== "labs_open") {
+    blockerCodes.push("pool_not_labs_open");
+  }
+  if (gate.state !== "passed") {
+    blockerCodes.push("open_gate_not_passed");
+  }
+  if (round.copyPreflightState !== "passed") {
+    blockerCodes.push("copy_preflight_failed");
+  }
+  if (!pledge.finalReviewConfirmedAt) {
+    blockerCodes.push("final_review_missing");
+  }
+  if (!pledge.feeAcknowledged) {
+    blockerCodes.push("fee_acknowledgement_missing");
+  }
+  if (!pledge.sealedProgressAcknowledged) {
+    blockerCodes.push("sealed_progress_acknowledgement_missing");
+  }
+  if (!pledge.bonusTermsAcknowledged) {
+    blockerCodes.push("bonus_terms_acknowledgement_missing");
+  }
+  if (
+    !pledge.humanVerified ||
+    !pledge.identityVerified ||
+    pledge.sybilState !== "clear" ||
+    pledge.collusionState !== "clear" ||
+    pledge.countingWeightBps !== 10_000
+  ) {
+    blockerCodes.push("identity_snapshot_missing_or_failed");
+  }
+  if (
+    pledge.priorBonusAbuseState !== "clear" ||
+    pledge.jurisdictionEligibilityState !== "clear" ||
+    pledge.bonusEligibilityWeightBps !== 10_000
+  ) {
+    blockerCodes.push("bonus_eligibility_snapshot_missing_or_failed");
+  }
+  if (!pledge.providerPaymentMethodConfirmed) {
+    blockerCodes.push("payment_method_not_confirmed");
+  }
+  if (!isPositiveSafeInteger(pledge.bonusExposureReservedCents)) {
+    blockerCodes.push("bonus_exposure_not_reserved");
+  }
+  if (!reserveBacked) {
+    blockerCodes.push("bonus_reserve_unbacked");
+  }
+  if (!isPositiveSafeInteger(pledge.maxGrossCents)) {
+    blockerCodes.push("gross_invalid");
+  }
+  if (pledge.maxGrossCents < round.participantMinGrossCents) {
+    blockerCodes.push("below_participant_min");
+  }
+  if (pledge.maxGrossCents > round.participantMaxGrossCents) {
+    blockerCodes.push("above_participant_max");
+  }
+  if (round.fixedPledgeGrossCents != null && pledge.maxGrossCents !== round.fixedPledgeGrossCents) {
+    blockerCodes.push("fixed_pledge_amount_mismatch");
+  }
+  if (!isNonNegativeSafeInteger(currentGrossExposureCents) || nextGrossExposureCents > round.roundGrossCaptureCapCents) {
+    blockerCodes.push("round_gross_cap_exceeded");
+  }
+  if (
+    !isNonNegativeSafeInteger(currentBonusExposureCents) ||
+    nextBonusExposureCents > round.roundBonusExposureCapCents
+  ) {
+    blockerCodes.push("round_bonus_exposure_cap_exceeded");
+  }
+  if (nextBonusExposureCents > pool.roundBonusExposureCapCents) {
+    blockerCodes.push("pool_bonus_exposure_cap_exceeded");
+  }
+  if (nextBonusExposureCents > reserve.maxExposureCents || nextBonusExposureCents > reserve.backedCents) {
+    blockerCodes.push("reserve_exposure_cap_exceeded");
+  }
+  if (pledge.rulebookHashAtConsent !== round.rulebookHash) {
+    blockerCodes.push("rulebook_hash_mismatch");
+  }
+  if (pledge.feePolicyHashAtConsent !== round.feePolicyHash) {
+    blockerCodes.push("fee_policy_hash_mismatch");
+  }
+  if (pledge.bonusPolicyHashAtConsent !== round.bonusPolicyHash) {
+    blockerCodes.push("bonus_policy_hash_mismatch");
+  }
+  if (visibility !== "aggregate_only") {
+    blockerCodes.push("visibility_not_aggregate_only");
+  }
+
+  const hardBlockers = uniqueHardPledgeBlockers(blockerCodes)
+    .filter((blocker) => blocker !== "feature_non_mvp");
+
+  return {
+    allowed: hardBlockers.length === 0,
+    providerCallsAllowed: false,
+    blockerCodes: uniqueHardPledgeBlockers(blockerCodes),
+  };
 }
 
 function pledgeEligibilityBlockers({
@@ -872,6 +1074,102 @@ export function planRefundBonusSettlement({
         reasonCodes: outcome.reasonCodes,
       },
     },
+  };
+}
+
+export function buildRefundBonusReceipt({
+  round,
+  pool,
+  reserve,
+  pledge,
+  plan,
+  authorizationAttempt,
+}: {
+  round: RefundBonusRound;
+  pool: RefundBonusPledgePool;
+  reserve: RefundBonusReserve;
+  pledge: RefundBonusPledge;
+  plan: RefundBonusSettlementPlan;
+  authorizationAttempt?: RefundBonusAuthorizationAttempt;
+}): RefundBonusReceipt {
+  const payoutOperation = plan.payoutOperations.find((operation) => operation.pledgeId === pledge.id);
+  const finalStatus = plan.auditReport.finalStatus;
+
+  if (finalStatus === "captured") {
+    const netRecipientDisbursedCents = Math.max(0, pledge.maxGrossCents - pledge.feeCents);
+
+    return {
+      receiptKind: "success_charge",
+      roundId: round.id,
+      poolId: pool.id,
+      pledgeId: pledge.id,
+      participantId: pledge.participantId,
+      calculationVersion: REFUND_BONUS_CALCULATION_VERSION,
+      grossCapturedCents: pledge.maxGrossCents,
+      feeCents: pledge.feeCents,
+      netRecipientDisbursedCents,
+      projectFundingCents: netRecipientDisbursedCents,
+      bonusEligibilityStatus: "not_applicable_cleared",
+      bonusGrossCents: 0,
+      bonusPayoutFeeCents: 0,
+      bonusNetCents: 0,
+      authorizationReference: authorizationAttempt?.providerAuthorizationRef,
+      captureReference: authorizationAttempt?.authorizationState === "authorized_exact"
+        ? `capture:${authorizationAttempt.providerAuthorizationRef ?? pledge.id}`
+        : undefined,
+      rulebookHash: round.rulebookHash,
+      feePolicyHash: round.feePolicyHash,
+      bonusPolicyHash: round.bonusPolicyHash,
+      copy: `The pool cleared. Gross captured: ${pledge.maxGrossCents} cents. Fees: ${pledge.feeCents} cents. Net sent to reviewed projects: ${netRecipientDisbursedCents} cents. Failure bonus: 0 cents because the pool cleared.`,
+    };
+  }
+
+  if (finalStatus === "qualifying_failed") {
+    return {
+      receiptKind: "qualifying_failure_bonus",
+      roundId: round.id,
+      poolId: pool.id,
+      pledgeId: pledge.id,
+      participantId: pledge.participantId,
+      calculationVersion: REFUND_BONUS_CALCULATION_VERSION,
+      grossCapturedCents: 0,
+      feeCents: 0,
+      netRecipientDisbursedCents: 0,
+      projectFundingCents: 0,
+      failureReasonCategory: plan.auditReport.reasonCodes[0],
+      bonusEligibilityStatus: payoutOperation ? "eligible" : "not_eligible",
+      bonusGrossCents: payoutOperation?.bonusGrossCents ?? 0,
+      bonusPayoutFeeCents: payoutOperation?.bonusPayoutFeeCents ?? 0,
+      bonusNetCents: payoutOperation?.bonusNetCents ?? 0,
+      bonusPayoutState: payoutOperation?.operationState,
+      bonusPayoutReference: payoutOperation?.providerPayoutRef,
+      bonusReserveId: reserve.id,
+      rulebookHash: round.rulebookHash,
+      bonusPolicyHash: round.bonusPolicyHash,
+      copy: `The pool did not clear. You were charged 0 cents. Project funding: 0 cents. Failure reason: ${plan.auditReport.reasonCodes[0] ?? "support_threshold_shortfall"}. Backed failure-participation bonus: ${payoutOperation?.bonusGrossCents ?? 0} cents.`,
+    };
+  }
+
+  return {
+    receiptKind: "no_bonus_no_charge",
+    roundId: round.id,
+    poolId: pool.id,
+    pledgeId: pledge.id,
+    participantId: pledge.participantId,
+    calculationVersion: REFUND_BONUS_CALCULATION_VERSION,
+    grossCapturedCents: 0,
+    feeCents: 0,
+    netRecipientDisbursedCents: 0,
+    projectFundingCents: 0,
+    failureReasonCategory: plan.auditReport.reasonCodes[0],
+    bonusEligibilityStatus: "not_eligible",
+    bonusGrossCents: 0,
+    bonusPayoutFeeCents: 0,
+    bonusNetCents: 0,
+    bonusReserveId: reserve.id,
+    rulebookHash: round.rulebookHash,
+    bonusPolicyHash: round.bonusPolicyHash,
+    copy: `The pool did not produce a charge or a bonus. You were charged 0 cents. No project funds were disbursed from this pledge.`,
   };
 }
 

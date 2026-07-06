@@ -7,10 +7,12 @@ import {
   REFUND_BONUS_FEATURE_CLASSIFICATION,
   REFUND_BONUS_FEATURE_KEY,
   REFUND_BONUS_LIVE_MONEY_FLAG,
+  buildRefundBonusReceipt,
   canRefundBonusAuthorizeSuccessCharge,
   canRefundBonusCaptureSuccessCharge,
   computeRefundBonusCents,
   evaluateRefundBonusCapability,
+  evaluateRefundBonusHardPledgeGate,
   evaluateRefundBonusOpenGate,
   evaluateRefundBonusRoundOutcome,
   planRefundBonusSettlement,
@@ -255,6 +257,76 @@ test("open gate fails closed without promotion or clean copy and passes only whe
   assert.equal(gate().state, "passed");
 });
 
+test("hard pledge gate requires final review, provider-confirmed payment, backed reserve, and exposure caps", () => {
+  const candidate = pledge("candidate", "casey", 2_500, "humanitarian");
+  const passing = evaluateRefundBonusHardPledgeGate({
+    environment: "development",
+    featureEnabled: true,
+    round: round({ status: "labs_open" }),
+    pool: pool({ status: "labs_open" }),
+    gate: gate(),
+    reserve: reserve(),
+    pledge: candidate,
+    currentGrossExposureCents: 10_000,
+    currentBonusExposureCents: 1_000,
+  });
+  assert.equal(passing.allowed, true);
+  assert.equal(passing.providerCallsAllowed, false);
+
+  const missingConsent = evaluateRefundBonusHardPledgeGate({
+    environment: "development",
+    featureEnabled: true,
+    round: round({ status: "labs_open" }),
+    pool: pool({ status: "labs_open" }),
+    gate: gate(),
+    reserve: reserve(),
+    pledge: pledge("missing", "morgan", 2_500, "humanitarian", {
+      bonusTermsAcknowledged: false,
+      finalReviewConfirmedAt: undefined,
+      providerPaymentMethodConfirmed: false,
+    }),
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(missingConsent.allowed, false);
+  assert.ok(missingConsent.blockerCodes.includes("final_review_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("bonus_terms_acknowledgement_missing"));
+  assert.ok(missingConsent.blockerCodes.includes("payment_method_not_confirmed"));
+
+  const capFailure = evaluateRefundBonusHardPledgeGate({
+    environment: "development",
+    featureEnabled: true,
+    round: round({ status: "labs_open", roundGrossCaptureCapCents: 2_500, roundBonusExposureCapCents: 250 }),
+    pool: pool({ status: "labs_open", roundBonusExposureCapCents: 250 }),
+    gate: gate(),
+    reserve: reserve({ backedCents: 250, maxExposureCents: 250 }),
+    pledge: candidate,
+    currentGrossExposureCents: 1,
+    currentBonusExposureCents: 1,
+  });
+  assert.equal(capFailure.allowed, false);
+  assert.ok(capFailure.blockerCodes.includes("round_gross_cap_exceeded"));
+  assert.ok(capFailure.blockerCodes.includes("round_bonus_exposure_cap_exceeded"));
+  assert.ok(capFailure.blockerCodes.includes("pool_bonus_exposure_cap_exceeded"));
+  assert.ok(capFailure.blockerCodes.includes("reserve_exposure_cap_exceeded"));
+
+  const production = evaluateRefundBonusHardPledgeGate({
+    environment: "production",
+    featureEnabled: true,
+    round: round({ status: "open" }),
+    pool: pool({ status: "open" }),
+    gate: gate(),
+    reserve: reserve(),
+    pledge: candidate,
+    currentGrossExposureCents: 0,
+    currentBonusExposureCents: 0,
+  });
+  assert.equal(production.allowed, false);
+  assert.ok(production.blockerCodes.includes("production_real_money_disabled"));
+  assert.ok(production.blockerCodes.includes("round_not_labs_open"));
+  assert.ok(production.blockerCodes.includes("pool_not_labs_open"));
+});
+
 test("refund-bonus copy preflight blocks misleading financial language and requires conditional backed-bonus copy", () => {
   const valid = validateRefundBonusCopy(`
     Non-MVP labs mechanism.
@@ -461,6 +533,89 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(successPlan.auditReport.bonusUnearnedReleasedCents, 200);
 });
 
+test("refund-bonus receipts distinguish success charge from qualifying-failure bonus", () => {
+  const pledges = [
+    pledge("a", "alice", 1_000, "humanitarian"),
+    pledge("b", "bob", 1_000, "animal-inclusive"),
+  ];
+  const success = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ thresholdNetRecipientCents: 1_500, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  const successPlan = planRefundBonusSettlement({
+    round: round({ status: "captured" }),
+    pool: pool(),
+    reserve: reserve(),
+    outcome: success,
+    roundStatus: "captured",
+    simulationOnly: true,
+  });
+  const successReceipt = buildRefundBonusReceipt({
+    round: round(),
+    pool: pool(),
+    reserve: reserve(),
+    pledge: pledges[0]!,
+    plan: successPlan,
+    authorizationAttempt: {
+      pledgeId: "a",
+      authorizationState: "authorized_exact",
+      requiredGrossCents: 1_000,
+      authorizedGrossCents: 1_000,
+      providerAuthorizationRef: "auth-a",
+      validThroughCapture: true,
+    },
+  });
+  assert.equal(successReceipt.receiptKind, "success_charge");
+  assert.equal(successReceipt.grossCapturedCents, 1_000);
+  assert.equal(successReceipt.netRecipientDisbursedCents, 1_000);
+  assert.equal(successReceipt.bonusGrossCents, 0);
+  assert.equal(successReceipt.authorizationReference, "auth-a");
+  assert.equal(successReceipt.captureReference, "capture:auth-a");
+  assert.equal(successReceipt.rulebookHash, rulebookHash);
+  assert.equal(successReceipt.feePolicyHash, feePolicyHash);
+  assert.equal(successReceipt.bonusPolicyHash, bonusPolicyHash);
+  assert.equal(successReceipt.calculationVersion, REFUND_BONUS_CALCULATION_VERSION);
+  assert.match(successReceipt.copy, /Failure bonus: 0 cents because the pool cleared/);
+
+  const qualifying = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool(),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  const bonusPlan = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool(),
+    reserve: reserve(),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+  });
+  const failureReceipt = buildRefundBonusReceipt({
+    round: round(),
+    pool: pool(),
+    reserve: reserve(),
+    pledge: pledges[0]!,
+    plan: bonusPlan,
+  });
+  assert.equal(failureReceipt.receiptKind, "qualifying_failure_bonus");
+  assert.equal(failureReceipt.grossCapturedCents, 0);
+  assert.equal(failureReceipt.projectFundingCents, 0);
+  assert.equal(failureReceipt.bonusReserveId, reserveId);
+  assert.equal(failureReceipt.bonusGrossCents, 100);
+  assert.equal(failureReceipt.bonusPayoutState, "succeeded");
+  assert.equal(failureReceipt.bonusPayoutReference, "simulated:a");
+  assert.equal(failureReceipt.rulebookHash, rulebookHash);
+  assert.equal(failureReceipt.bonusPolicyHash, bonusPolicyHash);
+  assert.equal(failureReceipt.calculationVersion, REFUND_BONUS_CALCULATION_VERSION);
+  assert.match(failureReceipt.copy, /charged 0 cents/);
+  assert.match(failureReceipt.copy, /Backed failure-participation bonus: 100 cents/);
+});
+
 test("refund-bonus branch remains absent from active public MVP surfaces", () => {
   const labsPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/page.tsx", "utf8");
   const site = readFileSync("src/lib/site.ts", "utf8");
@@ -472,6 +627,8 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(labsPage, /No bonus is paid for blocked, unsafe, ineligible/);
   assert.match(labsPage, /Support shortfall only/);
   assert.match(labsPage, /No charge occurs from this read-only labs page/);
+  assert.match(labsPage, /A hard pledge can exist only after the open gate passes/);
+  assert.match(labsPage, /backed bonus exposure fits within the round, pool, and reserve caps/);
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);
   assert.equal(roundPage.includes("Refund-Bonus Pledge Pool"), false);
