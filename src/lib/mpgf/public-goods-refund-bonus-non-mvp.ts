@@ -268,11 +268,15 @@ export interface RefundBonusProjectReviewSnapshot {
   qualifyingFailureBonusAllowed: boolean;
   blockedFailureBonusAllowed: false;
   prohibitsPoliticalCampaigns: true;
+  prohibitsCampaignDonations: true;
   prohibitsLobbyingTrades: true;
   prohibitsLifestyleTrades: true;
   prohibitsBehaviorChangePromises: true;
   prohibitsPrivateBenefitProjects: true;
+  prohibitsPayToStopHarmProposals: true;
   prohibitsThreatLikeProjects: true;
+  prohibitsCoerciveProposals: true;
+  prohibitsExtortionaryProposals: true;
   reviewSnapshotHash: string;
   createdAt: string;
 }
@@ -1505,11 +1509,15 @@ export function isRefundBonusProjectReviewSnapshotPledgeable(snapshot: RefundBon
     snapshot.qualifyingFailureBonusAllowed &&
     snapshot.blockedFailureBonusAllowed === false &&
     snapshot.prohibitsPoliticalCampaigns &&
+    snapshot.prohibitsCampaignDonations &&
     snapshot.prohibitsLobbyingTrades &&
     snapshot.prohibitsLifestyleTrades &&
     snapshot.prohibitsBehaviorChangePromises &&
     snapshot.prohibitsPrivateBenefitProjects &&
+    snapshot.prohibitsPayToStopHarmProposals &&
     snapshot.prohibitsThreatLikeProjects &&
+    snapshot.prohibitsCoerciveProposals &&
+    snapshot.prohibitsExtortionaryProposals &&
     isCanonicalHash(snapshot.reviewSnapshotHash)
   );
 }
@@ -2115,6 +2123,10 @@ export function canRefundBonusCaptureSuccessCharge(status: RefundBonusRoundStatu
   return status === "payable";
 }
 
+export function canRefundBonusPayoutBonus(status: RefundBonusRoundStatus) {
+  return status === "bonus_payable" || status === "bonus_paying";
+}
+
 export function planRefundBonusSettlement({
   round,
   pool,
@@ -2153,7 +2165,7 @@ export function planRefundBonusSettlement({
   if (payoutRailPaused) blockedReasonCodes.push("payout_rail_pause_active");
   if (!isRefundBonusReserveBacked(reserve, round, pool)) blockedReasonCodes.push("bonus_reserve_unbacked");
   if (outcome.status === "qualifying_failed") {
-    if (roundStatus !== "bonus_payable" && roundStatus !== "bonus_paying") {
+    if (!canRefundBonusPayoutBonus(roundStatus)) {
       blockedReasonCodes.push("round_not_bonus_payable");
     }
     if (pool.status !== "qualifying_failed" && pool.status !== "bonus_payable") {
@@ -2443,18 +2455,28 @@ const PROHIBITED_COPY_PATTERNS: Array<[string, RegExp]> = [
   ["interest", /\binterest\b/i],
   ["lottery", /\blottery\b/i],
   ["guaranteed return", /\bguaranteed\s+return\b/i],
+  ["risk-free", /\brisk[-\s]?free\b/i],
   ["risk-free return", /\brisk[-\s]?free\s+return\b/i],
   ["cashback", /\bcashback\b/i],
   ["refund with interest", /\brefund\s+with\s+interest\b/i],
   ["guaranteed bonus", /\bguaranteed\s+bonus\b/i],
+  ["paid to donate", /\bpaid\s+to\s+donate\b/i],
   ["failure impact", /\bfailure\s+impact\b/i],
   ["paid if it fails no matter why", /\bpaid\s+if\s+it\s+fails\b[\s\S]{0,80}\bno\s+matter\s+why\b/i],
   ["impact", /\bbonus\s+impact\b/i],
   ["held", /\bfunds\s+(?:are\s+)?held\b/i],
   ["escrow", /\bescrow(?:ed)?\b/i],
+  ["custody", /\bcustody\b/i],
   ["protected", /\bprotected\b/i],
   ["reserved", /\bfunds\s+(?:are\s+)?reserved\b/i],
   ["authorized", /\bsaved.*authorized\b/i],
+  ["guaranteed impact", /\bguaranteed\s+impact\b/i],
+  ["tax treatment", /\btax\s+treatment\b/i],
+  ["legal advice", /\blegal\s+advice\b/i],
+  ["moral ranking", /\bmoral\s+ranking\b/i],
+  ["moral reputation power", /\bmoral\s+reputation(?:\s+power)?\b/i],
+  ["exact live pivotality", /\bexact\s+live\s+pivotality\b/i],
+  ["current CRECM mechanism", /\bcurrent\s+CRECM\s+mechanism\b/i],
 ];
 
 const REQUIRED_COPY_PATTERNS: Array<[string, RegExp]> = [
@@ -2521,9 +2543,11 @@ export function buildRefundBonusCopyPreflightReport({
     term === "interest" ||
     term === "lottery" ||
     term === "guaranteed return" ||
+    term === "risk-free" ||
     term === "risk-free return" ||
     term === "cashback" ||
-    term === "refund with interest"
+    term === "refund with interest" ||
+    term === "paid to donate"
   );
   const reportWithoutHash = {
     id,

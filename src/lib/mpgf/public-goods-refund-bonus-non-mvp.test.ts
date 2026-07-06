@@ -17,6 +17,7 @@ import {
   buildRefundBonusReceipt,
   canRefundBonusAuthorizeSuccessCharge,
   canRefundBonusCaptureSuccessCharge,
+  canRefundBonusPayoutBonus,
   computeRefundBonusCents,
   evaluateRefundBonusCapability,
   evaluateRefundBonusComprehensionMetrics,
@@ -331,11 +332,15 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     qualifyingFailureBonusAllowed: true,
     blockedFailureBonusAllowed: false,
     prohibitsPoliticalCampaigns: true,
+    prohibitsCampaignDonations: true,
     prohibitsLobbyingTrades: true,
     prohibitsLifestyleTrades: true,
     prohibitsBehaviorChangePromises: true,
     prohibitsPrivateBenefitProjects: true,
+    prohibitsPayToStopHarmProposals: true,
     prohibitsThreatLikeProjects: true,
+    prohibitsCoerciveProposals: true,
+    prohibitsExtortionaryProposals: true,
     reviewSnapshotHash: "sha256:1212121212121212121212121212121212121212121212121212121212121212",
     createdAt: now,
   };
@@ -344,6 +349,17 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     ...projectReview,
     challengeState: "open",
   }), false);
+  for (const prohibitedCategoryFlag of [
+    "prohibitsCampaignDonations",
+    "prohibitsPayToStopHarmProposals",
+    "prohibitsCoerciveProposals",
+    "prohibitsExtortionaryProposals",
+  ] as const) {
+    assert.equal(isRefundBonusProjectReviewSnapshotPledgeable({
+      ...projectReview,
+      [prohibitedCategoryFlag]: false,
+    }), false, prohibitedCategoryFlag);
+  }
 
   const identitySnapshot: RefundBonusIdentityEligibilitySnapshot = {
     id: "identity-snapshot",
@@ -532,6 +548,26 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
   assert.equal(failedReport.pass, false);
   assert.equal(failedReport.bonusOverclaimFound, true);
   assert.equal(failedReport.financialPromotionRiskFound, true);
+
+  const paidToDonateReport = buildRefundBonusCopyPreflightReport({
+    id: "copy-report-paid-to-donate",
+    roundId,
+    checkedAt: now,
+    lastDeployHash: latestDeployHash,
+    checkedRoutes: requiredRefundBonusRoutes,
+    activeCopy: `
+      Non-MVP labs mechanism.
+      If the pool misses the support threshold, eligible pledgers may receive a backed failure-participation bonus.
+      No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed, or abuse-flagged pledges.
+      This bonus is not interest, not an investment return, not a lottery, and not public-good impact.
+      You are paid to donate through a risk-free bonus.
+    `,
+  });
+  assert.equal(paidToDonateReport.pass, false);
+  assert.equal(paidToDonateReport.bonusOverclaimFound, true);
+  assert.equal(paidToDonateReport.financialPromotionRiskFound, true);
+  assert.equal(paidToDonateReport.prohibitedActiveLabelsFound.length, 0);
+
   const failedFreshness = evaluateRefundBonusCopyPreflightFreshness({
     report: failedReport,
     latestDeployHash,
@@ -648,17 +684,44 @@ test("refund-bonus copy preflight blocks misleading financial language and requi
 
   const invalid = validateRefundBonusCopy(
     "Get free money, cashback, profit, a risk-free return, a refund with interest, " +
-      "and a guaranteed return from bonus impact. You get paid if it fails, no matter why, with failure impact.",
+      "and a guaranteed return from bonus impact. You get paid to donate and paid if it fails, no matter why, with failure impact.",
   );
   assert.equal(invalid.passed, false);
   assert.ok(invalid.blockedTerms.includes("free money"));
   assert.ok(invalid.blockedTerms.includes("cashback"));
   assert.ok(invalid.blockedTerms.includes("profit"));
+  assert.ok(invalid.blockedTerms.includes("risk-free"));
   assert.ok(invalid.blockedTerms.includes("risk-free return"));
   assert.ok(invalid.blockedTerms.includes("refund with interest"));
   assert.ok(invalid.blockedTerms.includes("guaranteed return"));
   assert.ok(invalid.blockedTerms.includes("failure impact"));
+  assert.ok(invalid.blockedTerms.includes("paid to donate"));
   assert.ok(invalid.blockedTerms.includes("paid if it fails no matter why"));
+
+  const misleadingProductCopy = validateRefundBonusCopy(`
+    Non-MVP labs mechanism.
+    If the pool misses the support threshold, eligible pledgers may receive a backed failure-participation bonus.
+    No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed, or abuse-flagged pledges.
+    This bonus is not interest, not an investment return, not a lottery, and not public-good impact.
+    Saved funds are authorized, funds are held, funds are reserved, funds are protected, and custody is available.
+    This is escrowed with guaranteed impact, guaranteed bonus, tax treatment, legal advice, moral ranking,
+    moral reputation power, exact live pivotality, and current CRECM mechanism status.
+  `);
+  assert.equal(misleadingProductCopy.passed, false);
+  assert.ok(misleadingProductCopy.blockedTerms.includes("authorized"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("held"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("reserved"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("protected"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("custody"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("escrow"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed impact"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed bonus"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("tax treatment"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("legal advice"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("moral ranking"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("moral reputation power"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("exact live pivotality"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("current CRECM mechanism"));
 });
 
 test("bonus calculation handles fixed and percentage capped modes", () => {
@@ -846,10 +909,15 @@ test("abuse-blocked refund-bonus pledges cannot collect bonuses and nonqualifyin
 
 test("authorization and capture side effects are status-gated and exact authorization recomputes thresholds", () => {
   assert.equal(canRefundBonusAuthorizeSuccessCharge("open"), false);
+  assert.equal(canRefundBonusAuthorizeSuccessCharge("closed_to_new_pledges"), false);
   assert.equal(canRefundBonusAuthorizeSuccessCharge("reviewing"), false);
   assert.equal(canRefundBonusAuthorizeSuccessCharge("cleared"), true);
   assert.equal(canRefundBonusCaptureSuccessCharge("authorizing"), false);
   assert.equal(canRefundBonusCaptureSuccessCharge("payable"), true);
+  assert.equal(canRefundBonusCaptureSuccessCharge("bonus_payable"), false);
+  assert.equal(canRefundBonusPayoutBonus("payable"), false);
+  assert.equal(canRefundBonusPayoutBonus("bonus_payable"), true);
+  assert.equal(canRefundBonusPayoutBonus("bonus_paying"), true);
 
   const pledges = [
     pledge("a", "alice", 2_500, "humanitarian"),
@@ -874,6 +942,11 @@ test("authorization and capture side effects are status-gated and exact authoriz
   };
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(exactAuthorization, pledges[0]!), true);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(undefined, pledges[0]!), false);
+  const savedPaymentMethodOnlyPledge: RefundBonusPledge = {
+    ...pledges[0]!,
+    providerPaymentMethodConfirmed: true,
+  };
+  assert.equal(isRefundBonusAuthorizationAttemptCaptureReady(undefined, savedPaymentMethodOnlyPledge), false);
   assert.equal(isRefundBonusAuthorizationAttemptCaptureReady({
     ...exactAuthorization,
     authorizationState: "short_expiring",
@@ -911,6 +984,22 @@ test("authorization and capture side effects are status-gated and exact authoriz
   assert.deepEqual(recomputed.reasonCodes, ["authorization_failure_recompute_below_threshold"]);
   assert.equal(recomputed.recomputedAfterAuthorization, true);
   assert.deepEqual(recomputed.excludedPledgeIds, ["b"]);
+
+  const recomputedSettlement = planRefundBonusSettlement({
+    round: round({ status: "payable" }),
+    pool: pool({ status: "payable", thresholdNetRecipientCents: 5_000, minVerifiedSupporters: 2, minDistinctViewpointClusters: 2 }),
+    reserve: reserve({ status: "active" }),
+    outcome: recomputed,
+    roundStatus: "payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.equal(recomputedSettlement.payoutOperations.length, 0);
+  assert.equal(recomputedSettlement.auditReport.grossCapturedCents, 0);
+  assert.equal(recomputedSettlement.auditReport.bonusPaidCents, 0);
+  assert.equal(recomputedSettlement.auditReport.finalStatus, "failed_authorization_no_bonus");
+  assert.ok(recomputedSettlement.settlementRows.every((row) => row.settlementState === "released"));
 
   const shortExpiring = evaluateRefundBonusRoundOutcome({
     round: round(),

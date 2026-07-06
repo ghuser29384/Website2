@@ -863,6 +863,62 @@ test("ordinary copy preflight blocks wagering and return language while requirin
   assert.ok(invalid.blockedTerms.includes("payout to you"));
   assert.ok(invalid.blockedTerms.includes("user-payout"));
   assert.ok(invalid.missingRequiredClaims.includes("non_mvp_warning"));
+
+  const unsupportedForecastCopy = validateAtLeastTierOrdinaryCopy(`
+    Non-MVP labs mechanism.
+    There is no direct user payout.
+    If you win, the platform contributes the tier-specific match to reviewed projects.
+    If you lose, the user contributes the stated amount to reviewed projects.
+    Your own commitment does not count toward your forecast result.
+    Same-control accounts do not count toward your forecast result.
+    Platform-match payments do not count toward forecast results.
+    Production real-money use is disabled unless this mechanism is explicitly promoted.
+    Try exact-tier forecasts, below-tier rewards, under-tier claims, shorting failure,
+    peer-to-peer forecasts, tradable tier claims, tradable impact claims, reward to you, and win money.
+  `);
+  assert.equal(unsupportedForecastCopy.passed, false);
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("exact-tier forecast"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("below-tier forecast"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("under-tier forecast"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("shorting failure"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("peer-to-peer forecast"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("tradable tier claim"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("tradable impact claim"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("reward to you"));
+  assert.ok(unsupportedForecastCopy.blockedTerms.includes("win money"));
+
+  const misleadingProductCopy = validateAtLeastTierOrdinaryCopy(`
+    Non-MVP labs mechanism.
+    There is no direct user payout.
+    If you win, the platform contributes the tier-specific match to reviewed projects.
+    If you lose, the user contributes the stated amount to reviewed projects.
+    Your own commitment does not count toward your forecast result.
+    Same-control accounts do not count toward your forecast result.
+    Platform-match payments do not count toward forecast results.
+    Production real-money use is disabled unless this mechanism is explicitly promoted.
+    User funds are reserved, funds are held, funds are protected, saved funds are authorized,
+    escrowed custody is available, and the platform match has tax treatment and legal advice.
+    It offers a guaranteed match, guaranteed impact, guaranteed bonus, paid to donate, risk-free, moral ranking,
+    moral reputation power, exact live pivotality, and current CRECM mechanism status.
+  `);
+  assert.equal(misleadingProductCopy.passed, false);
+  assert.ok(misleadingProductCopy.blockedTerms.includes("reserved user funds"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("held funds"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("protected funds"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("authorized funds"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("escrow"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("custody"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("tax treatment"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("legal advice"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed match"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed impact"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed bonus"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("paid to donate"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("risk-free"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("moral ranking"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("moral reputation power"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("exact live pivotality"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("current CRECM mechanism"));
 });
 
 test("documentation and route absence match v137 non-MVP constraints", () => {
@@ -897,4 +953,35 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsCommitPage, /Hard commitment disabled/);
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);
+});
+
+test("v137 non-MVP branches do not expose advanced allocation control surfaces", () => {
+  const branchSources = [
+    readFileSync("src/lib/mpgf/public-goods-refund-bonus-non-mvp.ts", "utf8"),
+    readFileSync("src/lib/mpgf/public-goods-at-least-tier-platform-match.ts", "utf8"),
+  ].join("\n");
+  const docs = readFileSync("docs/at-least-tier-platform-match-non-mvp.md", "utf8");
+
+  const prohibitedControls: Array<[string, RegExp]> = [
+    ["per-user counterparty buckets", /\b(?:counterpartyBucket|counterpartyBuckets|perUserCounterpartyBucket)\b/],
+    ["per-project stances", /\b(?:projectStance|projectStances|perProjectStance)\b/],
+    ["per-project caps", /\b(?:projectCap|projectCaps|perProjectCap)\b/],
+    ["conditional trade intents", /\b(?:conditionalTradeIntent|conditionalTradeIntents)\b/],
+    ["coalition optimizer", /\b(?:coalitionOptimizer|coalitionOptimizers)\b/],
+    ["algorithmic pool allocation changes", /\b(?:algorithmicPoolAllocation|poolAllocationChangeAfterConsent)\b/],
+    ["user-defined fallback routing", /\b(?:userDefinedFallback|fallbackRouting|fallbackRouteOverride)\b/],
+    ["coordination credits", /\b(?:coordinationCredit|coordinationCredits)\b/],
+    ["impact certificates", /\b(?:impactCertificate|impactCertificates)\b/],
+    ["diversity-aware bonus match", /\b(?:diversityAwareBonusMatch|diversityBonusMatch)\b/],
+    ["QF-like bonus scoring", /\b(?:qfLikeBonusScoring|quadraticFundingBonusScoring)\b/],
+    ["public moral reputation", /\b(?:publicMoralReputation|moralReputationScore)\b/],
+  ];
+
+  for (const [label, pattern] of prohibitedControls) {
+    assert.equal(pattern.test(branchSources), false, label);
+  }
+  assert.match(docs, /Advanced allocation controls remain out of scope/);
+  assert.match(docs, /per-user counterparty buckets/);
+  assert.match(docs, /coalition optimizers/);
+  assert.match(docs, /user-defined fallback routing/);
 });

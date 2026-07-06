@@ -148,7 +148,7 @@ Ordinary user-facing copy must say:
 - platform-match payments do not count toward forecast results;
 - production real money is disabled unless explicitly promoted.
 
-Ordinary user-facing copy must not use betting, wagering, gambling, profit, prize, lottery, investment, return, cashback, free-money, paid-if-right, payout-to-you, objective-impact, or production-ready language.
+Ordinary user-facing copy must not use betting, wagering, gambling, profit, prize, lottery, investment, return, risk-free, cashback, free-money, paid-to-donate, paid-if-right, payout-to-you, objective-impact, production-ready, direct-user reward, out-of-scope forecast-shape, peer-to-peer, tradable-claim, escrow, custody, held-funds, reserved-funds, guaranteed-impact, tax-treatment, legal-advice, moral-ranking, moral-reputation, exact-live-pivotality, or current-CRECM-status language.
 
 ## Tests
 
@@ -160,7 +160,7 @@ The current implementation includes tests for:
 - the circularity guard where raw stated commitments do not clear a tier;
 - simulated settlement separation of user-paid, platform-paid, reserve, fee, and final disbursement channels;
 - idempotency keys for platform-match operations;
-- ordinary-copy preflight;
+- ordinary-copy preflight, including out-of-scope forecast-shape and tradable-claim language;
 - commitment-open gate enforcement for reserve backing, caps, provider-confirmed payment, and final acknowledgements;
 - admin workflow and scheduled-job gates before live provider calls;
 - documentation presence and absence from primary public/MVP routes.
@@ -168,3 +168,5 @@ The current implementation includes tests for:
 ## Production Gaps
 
 This document does not authorize production launch. The current labs route family is read-only and route-safe. Remaining production work includes persistent database tables, admin CRUD, signed payment setup, provider-specific authorization/capture/release adapters, platform-match project-routing adapters, live audit publication, promotion governance, legal/compliance approval, and rendered browser QA for any future live labs UI.
+
+Advanced allocation controls remain out of scope for this branch: per-user counterparty buckets, per-project stances, per-project caps, conditional trade intents, coalition optimizers, algorithmic pool allocation changes after consent, and user-defined fallback routing are not part of the mechanism.
