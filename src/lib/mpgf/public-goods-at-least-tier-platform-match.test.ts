@@ -60,6 +60,7 @@ function commitment(
   rewardRateBps: number,
   sameControlClusterId?: string,
   estimatedFeeCents = 0,
+  paymentClusterId?: string,
 ): AtLeastTierPlatformMatchCommitment {
   return buildAtLeastTierPlatformMatchCommitmentPreview({
     id,
@@ -72,6 +73,7 @@ function commitment(
     rewardRateBps,
     platformMatchReserveId: reserveId,
     sameControlClusterId,
+    paymentClusterId,
     now,
   });
 }
@@ -751,10 +753,11 @@ test("leave-one-cluster-out resolution uses effective support and excludes own, 
   const tierOne = schedule.tiers[0]!;
   const tierFive = schedule.tiers[4]!;
   const commitments = [
-    commitment("winner", "alice", tierOne.tierIndex, 10_000, 10_000, "cluster-a"),
+    commitment("winner", "alice", tierOne.tierIndex, 10_000, 10_000, "cluster-a", 0, "payment-a"),
     commitment("supporter-b", "bob", tierOne.tierIndex, 100_000, 10_000, "cluster-b"),
     commitment("supporter-c", "carol", tierOne.tierIndex, 100_000, 10_000, "cluster-c"),
     commitment("same-control", "alex", tierOne.tierIndex, 1_000_000, 10_000, "cluster-a"),
+    commitment("same-payment", "avery", tierOne.tierIndex, 100_000, 10_000, "cluster-z", 0, "payment-a"),
     commitment("loser", "drew", tierFive.tierIndex, 10_000, tierFive.rewardRateBps, "cluster-d"),
     {
       ...commitment("draft", "erin", tierOne.tierIndex, 1_000_000, 10_000, "cluster-e"),
@@ -773,6 +776,7 @@ test("leave-one-cluster-out resolution uses effective support and excludes own, 
       { id: "direct-hard", participantId: "grace", netRecipientCents: 25_000, state: "hard_saved" },
       { id: "direct-fee-only", participantId: "hank", netRecipientCents: 0, state: "hard_saved" },
       { id: "direct-stale", participantId: "irene", netRecipientCents: 1_000_000, state: "stale_authorization" },
+      { id: "direct-same-payment", participantId: "isabel", paymentClusterId: "payment-a", netRecipientCents: 100_000, state: "captured" },
     ],
     now,
   });
@@ -781,7 +785,7 @@ test("leave-one-cluster-out resolution uses effective support and excludes own, 
   assert.ok(winner);
   assert.equal(winner.outcome, "won_platform_pays");
   assert.equal(winner.otherEligibleEffectiveSupportCents, 228_500);
-  assert.equal(winner.excludedSameControlEffectiveSupportCents, 1_000_000);
+  assert.equal(winner.excludedSameControlEffectiveSupportCents, 1_200_000);
   assert.equal(winner.guaranteedEffectiveSupportCents, 10_000);
 
   const loser = resolution.rows.find((row) => row.commitmentId === "loser");
@@ -795,7 +799,7 @@ test("leave-one-cluster-out resolution uses effective support and excludes own, 
   const paymentFailed = resolution.rows.find((row) => row.commitmentId === "payment-failed");
   assert.equal(paymentFailed?.outcome, "excluded");
   assert.equal(paymentFailed?.exclusionReason, "commitment_state_excluded_payment");
-  assert.equal(resolution.snapshot.ordinaryDirectPledgeSupportCents, 25_000);
+  assert.equal(resolution.snapshot.ordinaryDirectPledgeSupportCents, 125_000);
   assert.match(resolution.snapshot.outputHash, /^sha256:[a-f0-9]{64}$/);
 });
 
@@ -925,12 +929,59 @@ test("circularity guard does not clear a tier from raw stated commitments", () =
   assert.equal(resolution.snapshot.effectiveSupportTotalCents, 10_000);
   assert.equal(first.otherEligibleEffectiveSupportCents, 9_900);
   assert.equal(first.outcome, "lost_user_pays");
+
+  const selfCountSchedule = computeDampedOddsRewardSchedule({
+    roundId: "self-count-circularity-round",
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 11_000, frozenForecastProbabilityBps: 7_000 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_000 },
+    ],
+    rMinBps: 1_000,
+    rMaxBps: 2_000,
+    freeze: true,
+    now,
+  });
+  assert.equal(selfCountSchedule.valid, true);
+  const selfCountCommitments = Array.from({ length: 11 }, (_, index) =>
+    commitment(`self-count-user-${index}`, `self-count-participant-${index}`, 1, 10_000, 1_000, `self-count-cluster-${index}`),
+  );
+  const selfCountResolution = resolveAtLeastTierPlatformMatch({
+    roundId: "self-count-circularity-round",
+    tiers: selfCountSchedule.tiers,
+    commitments: selfCountCommitments,
+    now,
+  });
+  assert.equal(selfCountResolution.snapshot.effectiveSupportTotalCents, 11_000);
+  assert.ok(selfCountResolution.rows.every((row) => row.outcome === "lost_user_pays"));
+  assert.ok(selfCountResolution.rows.every((row) => row.otherEligibleEffectiveSupportCents === 10_000));
+  const selfCountPlan = planAtLeastTierPlatformMatchSettlement({
+    roundId: "self-count-circularity-round",
+    resolution: selfCountResolution,
+    commitments: selfCountCommitments,
+    reserve: backedReserve({
+      roundId: "self-count-circularity-round",
+      backedCents: 1_000_000,
+      maxExposureCents: 1_000_000,
+    }),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: selfCountSchedule.schedule.outputHash,
+    simulationOnly: true,
+    now,
+  });
+  assert.equal(selfCountPlan.auditReport.publicReportJson.resolvedAtLeastTier, null);
 });
 
 test("simulated settlement separates user-paid loss, platform-paid win, reserve, fees, and idempotency channels", () => {
   const schedule = defaultSchedule();
+  const feeBearingWinner = commitment("winner", "alice", 1, 10_000, 10_000, "cluster-a");
   const commitments = [
-    commitment("winner", "alice", 1, 10_000, 10_000, "cluster-a"),
+    {
+      ...feeBearingWinner,
+      platformMatchGrossCostCents: feeBearingWinner.platformMatchNetCents + 25,
+      platformMatchExposureReservedCents: feeBearingWinner.platformMatchNetCents + 25,
+    },
     commitment("supporter-b", "bob", 1, 100_000, 10_000, "cluster-b"),
     commitment("loser", "drew", 2, 10_000, schedule.tiers[1]!.rewardRateBps, "cluster-d", 250),
     {
@@ -973,6 +1024,9 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.userAuthorizationOperation, "simulated_capture");
   assert.equal(plan.rows.find((row) => row.commitmentId === "loser")?.settlementState, "simulated_user_loss");
   assert.equal(plan.rows.find((row) => row.commitmentId === "payment-failed")?.userAuthorizationOperation, "release");
+  assert.equal(plan.rows.find((row) => row.commitmentId === "winner")?.platformMatchFeeCents, 25);
+  assert.equal(plan.rows.find((row) => row.commitmentId === "winner")?.platformMatchGrossCostCents, 10_025);
+  assert.equal(plan.platformMatchOperations.find((operation) => operation.commitmentId === "winner")?.grossCostCents, 10_025);
   assert.equal(
     new Set(plan.rows.map((row) => row.userAuthorizationIdempotencyKey).filter(Boolean)).size,
     plan.rows.filter((row) => row.userAuthorizationOperation !== "none").length,
@@ -1074,13 +1128,15 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   for (const channel of requiredAccountingChannels) {
     assert.ok(channel in publicReport, `missing at-least-tier accounting channel: ${channel}`);
   }
-  assert.equal(publicReport.forecastCommitmentGrossCents, 220_000);
-  assert.equal(publicReport.forecastCommitmentNetRecipientCents, 219_750);
+  assert.equal(publicReport.forecastCommitmentGrossCents, 120_000);
+  assert.equal(publicReport.forecastCommitmentNetRecipientCents, 119_750);
   assert.equal(
     publicReport.forecastResolutionOtherUserNetCents,
-    resolution.rows.reduce((sum, row) => sum + row.otherEligibleEffectiveSupportCents, 0),
+    resolution.rows
+      .filter((row) => row.outcome !== "excluded")
+      .reduce((sum, row) => sum + row.otherEligibleEffectiveSupportCents, 0),
   );
-  assert.deepEqual(publicReport.selectedAtLeastTier, { "1": 3, "2": 1 });
+  assert.deepEqual(publicReport.selectedAtLeastTier, { "1": 2, "2": 1 });
   assert.equal(publicReport.resolvedAtLeastTier, 1);
   assert.deepEqual(publicReport.forecastWon, { wonCount: 2, lostCount: 1, excludedCount: 1 });
   assert.equal(publicReport.sponsorMatchNetRecipientCents, 20_000);
@@ -1125,6 +1181,41 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(blocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
   assert.equal(new Set(blocked.rows.map((row) => row.userAuthorizationIdempotencyKey)).size, blocked.rows.length);
 
+  const productionDefaultBlocked = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments,
+    reserve: backedReserve(),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    simulationOnly: false,
+    now,
+  });
+  assert.ok(productionDefaultBlocked.blockedReasonCodes.includes("production_real_money_disabled"));
+  assert.ok(productionDefaultBlocked.blockedReasonCodes.includes("missing_promotion_record"));
+  assert.equal(productionDefaultBlocked.auditReport.finalStatus, "blocked");
+  assert.equal(productionDefaultBlocked.platformMatchOperations.length, 0);
+  assert.ok(productionDefaultBlocked.rows.every((row) => row.userAuthorizationOperation === "none"));
+  assert.ok(productionDefaultBlocked.rows.every((row) => row.userAuthorizationIdempotencyKey === undefined));
+  assert.ok(productionDefaultBlocked.rows.every((row) => row.userGrossCapturedCents === 0));
+  assert.ok(productionDefaultBlocked.rows.every((row) => row.platformMatchGrossCostCents === 0));
+  assert.ok(productionDefaultBlocked.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
+  assert.equal(
+    productionDefaultBlocked.ledgerEntries
+      .filter((entry) =>
+        entry.entryType === "user_authorization" ||
+        entry.entryType === "user_capture" ||
+        entry.entryType === "user_release" ||
+        entry.entryType === "platform_match_reserve_disbursement" ||
+        entry.entryType === "project_disbursement" ||
+        entry.entryType === "provider_operation_reconciliation"
+      ).length,
+    0,
+  );
+  assert.ok(productionDefaultBlocked.ledgerEntries.every((entry) => !entry.providerOperationRef));
+
   const overReservedCommitments = commitments.map((item, index) =>
     index < 2
       ? { ...item, platformMatchExposureReservedCents: 600_000 }
@@ -1148,6 +1239,31 @@ test("simulated settlement separates user-paid loss, platform-paid win, reserve,
   assert.ok(overReserved.rows.every((row) => row.userAuthorizationOperation === "release"));
   assert.ok(overReserved.rows.every((row) => row.userGrossCapturedCents === 0));
   assert.ok(overReserved.rows.every((row) => row.platformMatchNetRecipientDisbursedCents === 0));
+
+  const underReservedGrossCostCommitments = commitments.map((item) =>
+    item.id === "winner"
+      ? {
+        ...item,
+        platformMatchGrossCostCents: item.platformMatchNetCents + 5_000,
+        platformMatchExposureReservedCents: item.platformMatchNetCents,
+      }
+      : item
+  );
+  const underReservedGrossCost = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments: underReservedGrossCostCommitments,
+    reserve: backedReserve({ backedCents: 1_000_000, maxExposureCents: 1_000_000 }),
+    rulebookHash: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    feePolicyHash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    platformMatchPolicyHash: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    simulationOnly: true,
+    now,
+  });
+  assert.ok(underReservedGrossCost.blockedReasonCodes.includes("reserve_exposure_exceeded"));
+  assert.equal(underReservedGrossCost.auditReport.finalStatus, "blocked");
+  assert.equal(underReservedGrossCost.platformMatchOperations.length, 0);
 
   const reserveScopeMismatch = planAtLeastTierPlatformMatchSettlement({
     roundId,

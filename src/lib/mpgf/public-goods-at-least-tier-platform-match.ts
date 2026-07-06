@@ -221,6 +221,7 @@ export interface AtLeastTierPlatformMatchCommitment {
   paymentCommitmentSnapshotId?: string;
   identityEligibilitySnapshotId?: string;
   sameControlClusterId?: string;
+  paymentClusterId?: string;
   platformMatchReserveId: string;
   platformMatchExposureReservedCents: number;
   rulebookHashAtConsent: string;
@@ -266,6 +267,7 @@ export interface OrdinaryDirectHardPledge {
   id: string;
   participantId: string;
   sameControlClusterId?: string;
+  paymentClusterId?: string;
   netRecipientCents: number;
   state: "draft" | "hard_saved" | "captured" | "payment_failed" | "blocked" | "stale_authorization";
 }
@@ -315,6 +317,7 @@ interface AtLeastTierEffectiveSupportSource {
   id: string;
   participantId: string;
   sameControlClusterId?: string;
+  paymentClusterId?: string;
   effectiveSupportCents: number;
   sourceType: "at_least_tier" | "ordinary_direct_pledge";
 }
@@ -1478,6 +1481,7 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
   rewardRateBps,
   platformMatchReserveId,
   sameControlClusterId,
+  paymentClusterId,
   now,
 }: {
   id: string;
@@ -1490,6 +1494,7 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
   rewardRateBps: number;
   platformMatchReserveId: string;
   sameControlClusterId?: string;
+  paymentClusterId?: string;
   now?: string;
 }): AtLeastTierPlatformMatchCommitment {
   const createdAt = nowIso(now);
@@ -1513,6 +1518,7 @@ export function buildAtLeastTierPlatformMatchCommitmentPreview({
     visibility: "aggregate_only",
     commitmentState: "hard_saved",
     sameControlClusterId,
+    paymentClusterId,
     platformMatchReserveId,
     platformMatchExposureReservedCents: platformMatchGrossCostCents,
     rulebookHashAtConsent: hashValue([AT_LEAST_TIER_PLATFORM_MATCH_CALCULATION_VERSION, "rulebook"]),
@@ -1605,8 +1611,8 @@ function isEligibleCommitmentState(state: AtLeastTierPlatformMatchCommitmentStat
 }
 
 function sameControl(
-  left: { participantId: string; sameControlClusterId?: string },
-  right: { participantId: string; sameControlClusterId?: string },
+  left: { participantId: string; sameControlClusterId?: string; paymentClusterId?: string },
+  right: { participantId: string; sameControlClusterId?: string; paymentClusterId?: string },
 ) {
   return (
     left.participantId === right.participantId ||
@@ -1614,6 +1620,11 @@ function sameControl(
       Boolean(left.sameControlClusterId) &&
       Boolean(right.sameControlClusterId) &&
       left.sameControlClusterId === right.sameControlClusterId
+    ) ||
+    (
+      Boolean(left.paymentClusterId) &&
+      Boolean(right.paymentClusterId) &&
+      left.paymentClusterId === right.paymentClusterId
     )
   );
 }
@@ -1657,6 +1668,7 @@ export function resolveAtLeastTierPlatformMatch({
       id: commitment.id,
       participantId: commitment.participantId,
       sameControlClusterId: commitment.sameControlClusterId,
+      paymentClusterId: commitment.paymentClusterId,
       effectiveSupportCents: Math.min(commitment.statedNetRecipientCents, commitment.platformMatchNetCents),
       sourceType: "at_least_tier" as const,
     }));
@@ -1669,6 +1681,7 @@ export function resolveAtLeastTierPlatformMatch({
       id: pledge.id,
       participantId: pledge.participantId,
       sameControlClusterId: pledge.sameControlClusterId,
+      paymentClusterId: pledge.paymentClusterId,
       effectiveSupportCents: pledge.netRecipientCents,
       sourceType: "ordinary_direct_pledge" as const,
     }));
@@ -2030,11 +2043,27 @@ export function planAtLeastTierPlatformMatchSettlement({
   }
   const totalWinnerExposureCents = resolution.rows
     .filter((row) => row.outcome === "won_platform_pays")
-    .reduce((sum, row) => sum + row.platformMatchNetCents, 0);
+    .reduce((sum, row) => {
+      const commitment = commitmentById.get(row.commitmentId);
+      const grossCostCents = commitment?.platformMatchGrossCostCents ?? row.platformMatchNetCents;
+      if (
+        !isNonNegativeSafeInteger(grossCostCents) ||
+        grossCostCents < row.platformMatchNetCents
+      ) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return sum + grossCostCents;
+    }, 0);
   const eligibleReservedExposureCents = commitments
     .filter((commitment) => isEligibleCommitmentState(commitment.commitmentState))
     .reduce((sum, commitment) => {
-      if (!isNonNegativeSafeInteger(commitment.platformMatchExposureReservedCents)) {
+      if (
+        !isNonNegativeSafeInteger(commitment.platformMatchExposureReservedCents) ||
+        !isNonNegativeSafeInteger(commitment.platformMatchGrossCostCents) ||
+        commitment.platformMatchGrossCostCents < commitment.platformMatchNetCents ||
+        commitment.platformMatchExposureReservedCents < commitment.platformMatchGrossCostCents
+      ) {
         return Number.POSITIVE_INFINITY;
       }
 
@@ -2064,6 +2093,9 @@ export function planAtLeastTierPlatformMatchSettlement({
     const reservedExposure = commitment?.platformMatchExposureReservedCents ?? row.platformMatchNetCents;
 
     if (settlementBlocked || row.outcome === "excluded") {
+      const suppressProviderActions = settlementBlocked && !simulationOnly;
+      const userAuthorizationOperation = suppressProviderActions ? "none" : "release";
+
       return {
         id: `${row.id}:settlement`,
         roundId,
@@ -2079,14 +2111,19 @@ export function planAtLeastTierPlatformMatchSettlement({
         platformMatchExposureReservedCents: reservedExposure,
         platformMatchExposureReleasedCents: reservedExposure,
         finalProjectDisbursementCents: 0,
-        userAuthorizationOperation: "release",
-        userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
+        userAuthorizationOperation,
+        userAuthorizationIdempotencyKey: suppressProviderActions
+          ? undefined
+          : `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
         settlementState: settlementBlocked ? "blocked" : "released",
         createdAt,
       };
     }
 
     if (row.outcome === "won_platform_pays") {
+      const platformMatchGrossCostCents = commitment?.platformMatchGrossCostCents ?? row.platformMatchNetCents;
+      const platformMatchFeeCents = Math.max(0, platformMatchGrossCostCents - row.platformMatchNetCents);
+
       return {
         id: `${row.id}:settlement`,
         roundId,
@@ -2096,11 +2133,11 @@ export function planAtLeastTierPlatformMatchSettlement({
         userGrossCapturedCents: 0,
         userFeeCents: 0,
         userNetRecipientDisbursedCents: 0,
-        platformMatchGrossCostCents: row.platformMatchNetCents,
-        platformMatchFeeCents: 0,
+        platformMatchGrossCostCents,
+        platformMatchFeeCents,
         platformMatchNetRecipientDisbursedCents: row.platformMatchNetCents,
         platformMatchExposureReservedCents: reservedExposure,
-        platformMatchExposureReleasedCents: Math.max(0, reservedExposure - row.platformMatchNetCents),
+        platformMatchExposureReleasedCents: Math.max(0, reservedExposure - platformMatchGrossCostCents),
         finalProjectDisbursementCents: row.platformMatchNetCents,
         userAuthorizationOperation: "release",
         userAuthorizationIdempotencyKey: `at-least-tier:${roundId}:${row.commitmentId}:user-authorization:release`,
@@ -2175,14 +2212,27 @@ export function planAtLeastTierPlatformMatchSettlement({
     platformMatchNetRecipientCents +
     ordinaryDirectPledgeNetCents +
     sponsorMatchNetRecipientCents;
+  const eligibleResolutionRows = resolution.rows.filter((row) => row.outcome !== "excluded");
   const selectedAtLeastTier: Record<string, number> = {};
-  for (const row of resolution.rows) {
+  for (const row of eligibleResolutionRows) {
     selectedAtLeastTier[String(row.selectedTierIndex)] = (selectedAtLeastTier[String(row.selectedTierIndex)] ?? 0) + 1;
   }
-  const resolvedAtLeastTier = resolution.rows.reduce<number | null>((highest, row) => {
-    if (resolution.snapshot.effectiveSupportTotalCents < row.selectedTierThresholdNetCents) return highest;
+  const resolvedAtLeastTier = eligibleResolutionRows.reduce<number | null>((highest, row) => {
+    if (!row.won) return highest;
     return highest === null || row.selectedTierIndex > highest ? row.selectedTierIndex : highest;
   }, null);
+  const forecastCommitmentGrossCents = eligibleResolutionRows.reduce(
+    (sum, row) => sum + (commitmentById.get(row.commitmentId)?.statedGrossCents ?? 0),
+    0,
+  );
+  const forecastCommitmentNetRecipientCents = eligibleResolutionRows.reduce(
+    (sum, row) => sum + row.statedNetRecipientCents,
+    0,
+  );
+  const forecastResolutionOtherUserNetCents = eligibleResolutionRows.reduce(
+    (sum, row) => sum + row.otherEligibleEffectiveSupportCents,
+    0,
+  );
 
   return {
     rows,
@@ -2219,12 +2269,9 @@ export function planAtLeastTierPlatformMatchSettlement({
       authorizationFailureCount: resolution.rows.filter((row) => row.exclusionReason === "commitment_state_excluded_payment").length,
       finalStatus: settlementBlocked ? "blocked" : "simulation_only",
       publicReportJson: {
-        forecastCommitmentGrossCents: commitments.reduce((sum, commitment) => sum + commitment.statedGrossCents, 0),
-        forecastCommitmentNetRecipientCents: commitments.reduce((sum, commitment) => sum + commitment.statedNetRecipientCents, 0),
-        forecastResolutionOtherUserNetCents: resolution.rows.reduce(
-          (sum, row) => sum + row.otherEligibleEffectiveSupportCents,
-          0,
-        ),
+        forecastCommitmentGrossCents,
+        forecastCommitmentNetRecipientCents,
+        forecastResolutionOtherUserNetCents,
         selectedAtLeastTier,
         resolvedAtLeastTier,
         forecastWon: {
