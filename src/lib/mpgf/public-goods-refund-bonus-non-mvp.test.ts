@@ -7,6 +7,7 @@ import {
   REFUND_BONUS_FEATURE_CLASSIFICATION,
   REFUND_BONUS_FEATURE_KEY,
   REFUND_BONUS_LIVE_MONEY_FLAG,
+  buildRefundBonusCopyPreflightReport,
   buildRefundBonusReceipt,
   canRefundBonusAuthorizeSuccessCharge,
   canRefundBonusCaptureSuccessCharge,
@@ -15,11 +16,21 @@ import {
   evaluateRefundBonusHardPledgeGate,
   evaluateRefundBonusOpenGate,
   evaluateRefundBonusRoundOutcome,
+  isRefundBonusBonusEligibilitySnapshotEligible,
+  isRefundBonusFeaturePromotionApproved,
+  isRefundBonusIdentityEligibilitySnapshotEligible,
+  isRefundBonusPaymentCommitmentSnapshotCountable,
+  isRefundBonusProjectReviewSnapshotPledgeable,
   planRefundBonusSettlement,
   validateRefundBonusCopy,
+  type RefundBonusBonusEligibilitySnapshot,
+  type RefundBonusFeaturePromotionRecord,
+  type RefundBonusIdentityEligibilitySnapshot,
   type RefundBonusOpenGate,
+  type RefundBonusPaymentCommitmentSnapshot,
   type RefundBonusPledge,
   type RefundBonusPledgePool,
+  type RefundBonusProjectReviewSnapshot,
   type RefundBonusReserve,
   type RefundBonusRound,
 } from "@/lib/mpgf/public-goods-refund-bonus-non-mvp";
@@ -43,6 +54,9 @@ function round(overrides: Partial<RefundBonusRound> = {}): RefundBonusRound {
     participantMaxGrossCents: 2_500,
     roundGrossCaptureCapCents: 100_000,
     roundBonusExposureCapCents: 25_000,
+    opensAt: "2026-07-06T00:00:00.000Z",
+    closesAt: "2026-07-13T00:00:00.000Z",
+    challengeDeadlineAt: "2026-07-14T00:00:00.000Z",
     parametersFrozenAt: now,
     rulebookHash,
     feePolicyHash,
@@ -52,6 +66,8 @@ function round(overrides: Partial<RefundBonusRound> = {}): RefundBonusRound {
     copyPreflightState: "passed",
     productionPublicEnabled: false,
     productionRealMoneyEnabled: false,
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
@@ -151,9 +167,16 @@ function pledge(
   id: string,
   participantId: string,
   maxGrossCents: number,
-  viewpointTag: string,
+  viewpointCluster: RefundBonusPledge["viewpointCluster"],
   overrides: Partial<RefundBonusPledge> = {},
 ): RefundBonusPledge {
+  const bonusExposureReservedCents = computeRefundBonusCents({
+    mode: "percentage_of_pledge_capped",
+    maxGrossCents,
+    bonusRatioBps: 1_000,
+    perUserBonusCapCents: 250,
+  });
+
   return {
     id,
     roundId,
@@ -161,10 +184,17 @@ function pledge(
     participantId,
     maxGrossCents,
     feeCents: 0,
-    viewpointTag,
+    estimatedFeeCents: 0,
+    estimatedNetRecipientCents: maxGrossCents,
+    viewpointCluster,
+    visibility: "aggregate_only",
     sameControlClusterId: `sc-${participantId}`,
     paymentClusterId: `pay-${participantId}`,
     pledgeState: "hard_saved",
+    paymentCommitmentSnapshotId: `${id}:payment-snapshot`,
+    identityEligibilitySnapshotId: `${id}:identity-snapshot`,
+    bonusEligibilitySnapshotId: `${id}:bonus-snapshot`,
+    expectedBonusCents: bonusExposureReservedCents,
     finalReviewConfirmedAt: now,
     feeAcknowledged: true,
     sealedProgressAcknowledged: true,
@@ -181,13 +211,9 @@ function pledge(
     rulebookHashAtConsent: rulebookHash,
     feePolicyHashAtConsent: feePolicyHash,
     bonusPolicyHashAtConsent: bonusPolicyHash,
-    bonusExposureReservedCents: computeRefundBonusCents({
-      mode: "percentage_of_pledge_capped",
-      maxGrossCents,
-      bonusRatioBps: 1_000,
-      perUserBonusCapCents: 250,
-    }),
+    bonusExposureReservedCents,
     createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
@@ -255,6 +281,169 @@ test("open gate fails closed without promotion or clean copy and passes only whe
   assert.match(failed.gateHash, /^sha256:[a-f0-9]{64}$/);
 
   assert.equal(gate().state, "passed");
+});
+
+test("refund-bonus v137 model artifacts validate project, identity, payment, copy, and promotion readiness", () => {
+  const projectReview: RefundBonusProjectReviewSnapshot = {
+    id: "project-review",
+    roundId,
+    poolId,
+    projectId: "project-a",
+    title: "Reviewed public-good project",
+    summary: "A reviewed moral public good.",
+    recipientRouteRef: "recipient-route-a",
+    recipientRouteState: "verified",
+    projectScopeState: "valid_moral_public_good",
+    baselineState: "clear",
+    actionEvidenceState: "adequate",
+    antiThreatState: "clear",
+    externalityState: "clear",
+    conflictState: "non_blocking",
+    challengeState: "clear",
+    qualifyingFailureBonusAllowed: true,
+    blockedFailureBonusAllowed: false,
+    prohibitsPoliticalCampaigns: true,
+    prohibitsLobbyingTrades: true,
+    prohibitsLifestyleTrades: true,
+    prohibitsBehaviorChangePromises: true,
+    prohibitsPrivateBenefitProjects: true,
+    prohibitsThreatLikeProjects: true,
+    reviewSnapshotHash: "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+    createdAt: now,
+  };
+  assert.equal(isRefundBonusProjectReviewSnapshotPledgeable(projectReview), true);
+  assert.equal(isRefundBonusProjectReviewSnapshotPledgeable({
+    ...projectReview,
+    challengeState: "open",
+  }), false);
+
+  const identitySnapshot: RefundBonusIdentityEligibilitySnapshot = {
+    id: "identity-snapshot",
+    roundId,
+    participantId: "alice",
+    humanVerified: true,
+    identityVerified: true,
+    sybilState: "clear",
+    collusionState: "clear",
+    sameControlClusterId: "sc-alice",
+    paymentClusterId: "pay-alice",
+    countingWeightBps: 10_000,
+    bonusEligibilityWeightBps: 10_000,
+    snapshotHash: "sha256:2323232323232323232323232323232323232323232323232323232323232323",
+    asOf: now,
+  };
+  assert.equal(isRefundBonusIdentityEligibilitySnapshotEligible(identitySnapshot), true);
+  assert.equal(isRefundBonusIdentityEligibilitySnapshotEligible({
+    ...identitySnapshot,
+    countingWeightBps: 0,
+  }), false);
+
+  const bonusSnapshot: RefundBonusBonusEligibilitySnapshot = {
+    id: "bonus-snapshot",
+    roundId,
+    poolId,
+    pledgeId: "pledge-a",
+    participantId: "alice",
+    eligibleAtPledgeSave: true,
+    eligibilityReasonCodes: [],
+    humanVerified: true,
+    identityVerified: true,
+    sybilState: "clear",
+    collusionState: "clear",
+    sameControlClusterId: "sc-alice",
+    paymentClusterId: "pay-alice",
+    priorBonusAbuseState: "clear",
+    jurisdictionEligibilityState: "clear",
+    bonusCalculationMode: "percentage_of_pledge_capped",
+    computedBonusCents: 250,
+    perUserBonusCapCents: 250,
+    reserveId,
+    reserveBackingStateAtSave: "dev_simulated",
+    snapshotHash: "sha256:3434343434343434343434343434343434343434343434343434343434343434",
+    asOf: now,
+  };
+  assert.equal(isRefundBonusBonusEligibilitySnapshotEligible(bonusSnapshot), true);
+  assert.equal(isRefundBonusBonusEligibilitySnapshotEligible({
+    ...bonusSnapshot,
+    priorBonusAbuseState: "blocked",
+  }), false);
+
+  const paymentSnapshot: RefundBonusPaymentCommitmentSnapshot = {
+    id: "payment-snapshot",
+    roundId,
+    poolId,
+    pledgeId: "pledge-a",
+    participantId: "alice",
+    paymentMethodRef: "pm_alice",
+    commitmentState: "provider_confirmed",
+    savedAt: "2026-07-06T00:00:00.000Z",
+    confirmedAt: "2026-07-06T00:01:00.000Z",
+    asOf: "2026-07-06T00:02:00.000Z",
+    supportsFutureAuthorization: true,
+    supportsBonusPayoutMethod: true,
+    bonusPayoutMethodRef: "bonus-destination-alice",
+    providerEvidenceHash: "sha256:4545454545454545454545454545454545454545454545454545454545454545",
+    snapshotHash: "sha256:5656565656565656565656565656565656565656565656565656565656565656",
+  };
+  assert.equal(isRefundBonusPaymentCommitmentSnapshotCountable(paymentSnapshot, round()), true);
+  assert.equal(isRefundBonusPaymentCommitmentSnapshotCountable({
+    ...paymentSnapshot,
+    commitmentState: "requires_action",
+  }, round()), false);
+
+  const report = buildRefundBonusCopyPreflightReport({
+    id: "copy-report",
+    roundId,
+    checkedAt: now,
+    lastDeployHash: "sha256:6767676767676767676767676767676767676767676767676767676767676767",
+    checkedRoutes: ["/labs/refund-bonus-pledge-pool"],
+    activeCopy: `
+      Non-MVP labs mechanism.
+      If the pool misses the support threshold, eligible pledgers may receive a backed failure-participation bonus.
+      No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed, or abuse-flagged pledges.
+      This bonus is not interest, not an investment return, not a lottery, and not public-good impact.
+    `,
+  });
+  assert.equal(report.pass, true);
+  assert.match(report.reportHash, /^sha256:[a-f0-9]{64}$/);
+
+  const failedReport = buildRefundBonusCopyPreflightReport({
+    id: "copy-report-failed",
+    roundId,
+    checkedAt: now,
+    lastDeployHash: "sha256:6767676767676767676767676767676767676767676767676767676767676767",
+    checkedRoutes: ["/mpgf/rounds/demo"],
+    activeCopy: "Get free money and a guaranteed return from bonus impact.",
+    prohibitedActiveLabelsFound: ["MVP refund bonus"],
+    ordinaryZeroStatePrimaryFound: false,
+  });
+  assert.equal(failedReport.pass, false);
+  assert.equal(failedReport.bonusOverclaimFound, true);
+  assert.equal(failedReport.financialPromotionRiskFound, true);
+
+  const approvedPromotion: RefundBonusFeaturePromotionRecord = {
+    id: "promotion",
+    featureKey: REFUND_BONUS_FEATURE_KEY,
+    fromClassification: REFUND_BONUS_FEATURE_CLASSIFICATION,
+    toClassification: "limited_public",
+    requestedBy: "product",
+    approvedByProduct: "product",
+    approvedByPayments: "payments",
+    approvedByLegal: "legal",
+    approvedByTrustSafety: "trust-safety",
+    approvedByGovernance: "governance",
+    approvalState: "approved",
+    approvedAt: now,
+    notes: "Approved for later limited public pilot.",
+    promotionHash: "sha256:7878787878787878787878787878787878787878787878787878787878787878",
+    createdAt: now,
+    updatedAt: now,
+  };
+  assert.equal(isRefundBonusFeaturePromotionApproved(approvedPromotion), true);
+  assert.equal(isRefundBonusFeaturePromotionApproved({
+    ...approvedPromotion,
+    approvedByLegal: undefined,
+  }), false);
 });
 
 test("hard pledge gate requires final review, provider-confirmed payment, backed reserve, and exposure caps", () => {
@@ -336,11 +525,19 @@ test("refund-bonus copy preflight blocks misleading financial language and requi
   `);
   assert.equal(valid.passed, true);
 
-  const invalid = validateRefundBonusCopy("Get free money, cashback, and a guaranteed return from bonus impact.");
+  const invalid = validateRefundBonusCopy(
+    "Get free money, cashback, profit, a risk-free return, a refund with interest, " +
+      "and a guaranteed return from bonus impact. You get paid if it fails, no matter why, with failure impact.",
+  );
   assert.equal(invalid.passed, false);
   assert.ok(invalid.blockedTerms.includes("free money"));
   assert.ok(invalid.blockedTerms.includes("cashback"));
+  assert.ok(invalid.blockedTerms.includes("profit"));
+  assert.ok(invalid.blockedTerms.includes("risk-free return"));
+  assert.ok(invalid.blockedTerms.includes("refund with interest"));
   assert.ok(invalid.blockedTerms.includes("guaranteed return"));
+  assert.ok(invalid.blockedTerms.includes("failure impact"));
+  assert.ok(invalid.blockedTerms.includes("paid if it fails no matter why"));
 });
 
 test("bonus calculation handles fixed and percentage capped modes", () => {
@@ -392,6 +589,16 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
   assert.equal(reviewBlocked.status, "nonqualifying_failed");
   assert.deepEqual(reviewBlocked.reasonCodes, ["anti_threat_block"]);
 
+  const unbackedSponsorMatch = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ sponsorMatchEnabled: true, sponsorMatchBacked: false }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  assert.equal(unbackedSponsorMatch.status, "nonqualifying_failed");
+  assert.deepEqual(unbackedSponsorMatch.reasonCodes, ["sponsor_match_unbacked"]);
+
   const unbacked = evaluateRefundBonusRoundOutcome({
     round: round(),
     pool: pool(),
@@ -406,9 +613,9 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
 test("same-control and same-payment duplicates do not increase thresholds or bonus counts", () => {
   const pledges = [
     pledge("a", "alice", 2_500, "humanitarian", { sameControlClusterId: "same", paymentClusterId: "pay-a", createdAt: "2026-07-06T00:00:00.000Z" }),
-    pledge("b", "bob", 2_500, "animal-inclusive", { sameControlClusterId: "same", paymentClusterId: "pay-b", createdAt: "2026-07-06T00:01:00.000Z" }),
-    pledge("c", "carol", 2_500, "long-run-future", { paymentClusterId: "pay-a", createdAt: "2026-07-06T00:02:00.000Z" }),
-    pledge("d", "drew", 2_500, "animal-inclusive", { sameControlClusterId: "drew", paymentClusterId: "pay-d", createdAt: "2026-07-06T00:03:00.000Z" }),
+    pledge("b", "bob", 2_500, "animal_inclusive", { sameControlClusterId: "same", paymentClusterId: "pay-b", createdAt: "2026-07-06T00:01:00.000Z" }),
+    pledge("c", "carol", 2_500, "long_run_future", { paymentClusterId: "pay-a", createdAt: "2026-07-06T00:02:00.000Z" }),
+    pledge("d", "drew", 2_500, "animal_inclusive", { sameControlClusterId: "drew", paymentClusterId: "pay-d", createdAt: "2026-07-06T00:03:00.000Z" }),
   ];
   const outcome = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -432,7 +639,7 @@ test("authorization and capture side effects are status-gated and exact authoriz
 
   const pledges = [
     pledge("a", "alice", 2_500, "humanitarian"),
-    pledge("b", "bob", 2_500, "animal-inclusive"),
+    pledge("b", "bob", 2_500, "animal_inclusive"),
   ];
   const cleared = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -468,7 +675,8 @@ test("authorization and capture side effects are status-gated and exact authoriz
       },
     ],
   });
-  assert.equal(recomputed.status, "qualifying_failed");
+  assert.equal(recomputed.status, "nonqualifying_failed");
+  assert.deepEqual(recomputed.reasonCodes, ["authorization_failure_recompute_below_threshold"]);
   assert.equal(recomputed.recomputedAfterAuthorization, true);
   assert.deepEqual(recomputed.excludedPledgeIds, ["b"]);
 });
@@ -476,7 +684,7 @@ test("authorization and capture side effects are status-gated and exact authoriz
 test("settlement separates success, qualifying-failure bonus, and unused reserve channels with idempotent payouts", () => {
   const pledges = [
     pledge("a", "alice", 1_000, "humanitarian"),
-    pledge("b", "bob", 1_000, "animal-inclusive"),
+    pledge("b", "bob", 1_000, "animal_inclusive"),
   ];
   const qualifying = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -487,30 +695,73 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   });
   const bonusPlan = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),
-    pool: pool(),
-    reserve: reserve(),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
     outcome: qualifying,
     roundStatus: "bonus_payable",
     simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
   });
   assert.equal(bonusPlan.blockedReasonCodes.length, 0);
   assert.equal(bonusPlan.payoutOperations.length, 2);
+  assert.equal(bonusPlan.settlementRows.length, 2);
   assert.equal(new Set(bonusPlan.payoutOperations.map((operation) => operation.idempotencyKey)).size, 2);
-  assert.equal(bonusPlan.auditReport.finalStatus, "qualifying_failed");
+  assert.ok(bonusPlan.payoutOperations.every((operation) => operation.payoutState === "succeeded"));
+  assert.ok(bonusPlan.payoutOperations.every((operation) => operation.eventHash.startsWith("sha256:")));
+  assert.ok(bonusPlan.settlementRows.every((row) => row.settlementState === "bonus_paid"));
+  assert.equal(bonusPlan.auditReport.finalStatus, "qualifying_failed_bonus_paid");
+  assert.equal(bonusPlan.auditReport.rulebookHash, rulebookHash);
+  assert.equal(bonusPlan.auditReport.feePolicyHash, feePolicyHash);
+  assert.equal(bonusPlan.auditReport.bonusPolicyHash, bonusPolicyHash);
   assert.equal(bonusPlan.auditReport.grossCapturedCents, 0);
   assert.equal(bonusPlan.auditReport.bonusPaidCents, 200);
   assert.equal(bonusPlan.auditReport.bonusReserveBackedCents, 25_000);
 
   const blocked = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),
-    pool: pool(),
-    reserve: reserve(),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
     outcome: qualifying,
     roundStatus: "bonus_payable",
     emergencyPaused: true,
     simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
   });
   assert.ok(blocked.blockedReasonCodes.includes("emergency_pause_active"));
+
+  const missingPayoutEvidence = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "qualifying_failed" }),
+    reserve: reserve({ status: "backed" }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+  });
+  assert.equal(missingPayoutEvidence.payoutOperations.length, 0);
+  assert.ok(missingPayoutEvidence.blockedReasonCodes.includes("bonus_reserve_not_active"));
+  assert.ok(missingPayoutEvidence.blockedReasonCodes.includes("bonus_settlement_plan_not_approved"));
+  assert.ok(missingPayoutEvidence.blockedReasonCodes.includes("eligible_rows_not_recomputed"));
+
+  const pausedPayoutRail = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
+    outcome: qualifying,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+    featurePaused: true,
+    roundPaused: true,
+    bonusReservePaused: true,
+    payoutRailPaused: true,
+  });
+  assert.ok(pausedPayoutRail.blockedReasonCodes.includes("feature_pause_active"));
+  assert.ok(pausedPayoutRail.blockedReasonCodes.includes("round_pause_active"));
+  assert.ok(pausedPayoutRail.blockedReasonCodes.includes("bonus_reserve_pause_active"));
+  assert.ok(pausedPayoutRail.blockedReasonCodes.includes("payout_rail_pause_active"));
 
   const success = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -527,7 +778,8 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
     roundStatus: "captured",
     simulationOnly: true,
   });
-  assert.equal(successPlan.auditReport.finalStatus, "captured");
+  assert.equal(successPlan.auditReport.finalStatus, "cleared_and_captured");
+  assert.ok(successPlan.settlementRows.every((row) => row.settlementState === "captured"));
   assert.equal(successPlan.auditReport.netRecipientDisbursedCents, 2_000);
   assert.equal(successPlan.auditReport.bonusLiabilityCents, 0);
   assert.equal(successPlan.auditReport.bonusUnearnedReleasedCents, 200);
@@ -536,7 +788,7 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
 test("refund-bonus receipts distinguish success charge from qualifying-failure bonus", () => {
   const pledges = [
     pledge("a", "alice", 1_000, "humanitarian"),
-    pledge("b", "bob", 1_000, "animal-inclusive"),
+    pledge("b", "bob", 1_000, "animal_inclusive"),
   ];
   const success = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -589,11 +841,13 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
   });
   const bonusPlan = planRefundBonusSettlement({
     round: round({ status: "bonus_payable" }),
-    pool: pool(),
-    reserve: reserve(),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
     outcome: qualifying,
     roundStatus: "bonus_payable",
     simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
   });
   const failureReceipt = buildRefundBonusReceipt({
     round: round(),
@@ -629,6 +883,9 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(labsPage, /No charge occurs from this read-only labs page/);
   assert.match(labsPage, /A hard pledge can exist only after the open gate passes/);
   assert.match(labsPage, /backed bonus exposure fits within the round, pool, and reserve caps/);
+  assert.match(labsPage, /Optional viewpoint tags are aggregate-only/);
+  assert.match(labsPage, /not a moral score/);
+  assert.match(labsPage, /do not affect\s+pledge power/);
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);
   assert.equal(roundPage.includes("Refund-Bonus Pledge Pool"), false);

@@ -80,6 +80,45 @@ export interface AtLeastTierPlatformMatchCapabilityResult {
   productionRealMoneyEnabled: false;
 }
 
+export interface AtLeastTierPlatformMatchRound {
+  id: string;
+  poolId: string;
+  roundId?: string;
+  featureKey: typeof AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY;
+  deploymentMode: typeof AT_LEAST_TIER_PLATFORM_MATCH_DEPLOYMENT_MODE;
+  featureClassification: typeof AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION;
+  status:
+    | "draft"
+    | "preflight"
+    | "labs_open"
+    | "open"
+    | "closed_to_new_commitments"
+    | "reviewing"
+    | "authorizing"
+    | "resolving"
+    | "settlement_planned"
+    | "payable"
+    | "settling"
+    | "settled"
+    | "released"
+    | "blocked"
+    | "canceled";
+  opensAt: string;
+  closesAt: string;
+  parametersFrozenAt: string;
+  rulebookHash: string;
+  feePolicyHash: string;
+  platformMatchPolicyHash: string;
+  rewardScheduleHash: string;
+  calculationVersion: typeof AT_LEAST_TIER_PLATFORM_MATCH_CALCULATION_VERSION;
+  sealedProgressMode: "qualitative_only_before_close";
+  productionPublicEnabled: boolean;
+  productionRealMoneyEnabled: boolean;
+  promotionRecordId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PublicGoodTierInput {
   id?: string;
   tierIndex: number;
@@ -355,10 +394,73 @@ export interface AtLeastTierSettlementPlan {
   blockedReasonCodes: string[];
 }
 
+export interface AtLeastTierReviewedSeedPool {
+  id: string;
+  roundId: string;
+  title: string;
+  projectIds: [string, string] | [string, string, string];
+  projectReviewState: "reviewed_moral_public_good";
+  recipientRouteState: "verified";
+  createdAt: string;
+}
+
 export interface AtLeastTierOrdinaryCopyPreflight {
   passed: boolean;
   blockedTerms: string[];
   missingRequiredClaims: string[];
+}
+
+export interface AtLeastTierCopyPreflightReport {
+  id: string;
+  roundId: string;
+  checkedAt: string;
+  lastDeployHash: string;
+  checkedRoutes: string[];
+  prohibitedTermsFound: string[];
+  missingRequiredClaims: string[];
+  publicMvpSurfaceLeakFound: boolean;
+  liveMoneyOverclaimFound: boolean;
+  exactProgressLeakFound: boolean;
+  ordinaryCopyPass: boolean;
+  pass: boolean;
+  reportHash: string;
+}
+
+export interface AtLeastTierFeaturePromotionRecord {
+  id: string;
+  featureKey: typeof AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY;
+  fromClassification: typeof AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION;
+  toClassification: "limited_public" | "mvp_candidate" | "production";
+  requestedBy: string;
+  approvedByProduct?: string;
+  approvedByPayments?: string;
+  approvedByLegal?: string;
+  approvedByTrustSafety?: string;
+  approvedByGovernance?: string;
+  approvalState: "draft" | "approved" | "rejected" | "revoked";
+  approvedAt?: string;
+  notes: string;
+  promotionHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AtLeastTierDevSeedData {
+  allowed: boolean;
+  blockerCodes: string[];
+  productionSeedCreatesActiveRecords: false;
+  publicRoutes: string[];
+  round?: AtLeastTierPlatformMatchRound;
+  reviewedPool?: AtLeastTierReviewedSeedPool;
+  schedule?: DampedOddsRewardSchedule;
+  tiers: PublicGoodTier[];
+  reserve?: PlatformMatchReserve;
+  commitments: AtLeastTierPlatformMatchCommitment[];
+  ordinaryDirectPledges: OrdinaryDirectHardPledge[];
+  resolution?: AtLeastTierResolutionResult;
+  settlementPlan?: AtLeastTierSettlementPlan;
+  reserveInsufficiencyPlan?: AtLeastTierSettlementPlan;
+  circularityResolution?: AtLeastTierResolutionResult;
 }
 
 export type AtLeastTierAdminWorkflowAction =
@@ -563,6 +665,10 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) > 0;
 }
 
+function isCanonicalHash(value: unknown): value is string {
+  return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
 function isRoleAllowedForLabs(role: AtLeastTierPlatformMatchActorRole) {
   return role === "labs_participant" || role === "admin" || role === "service";
 }
@@ -577,6 +683,39 @@ function uniqueReasons(reasons: AtLeastTierPlatformMatchCapabilityReason[]) {
 
 function uniqueOperationalBlockers(blockers: AtLeastTierOperationalBlocker[]) {
   return [...new Set(blockers)];
+}
+
+export function isAtLeastTierRoundReadyForLabs(round: AtLeastTierPlatformMatchRound) {
+  return (
+    round.featureKey === AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY &&
+    round.deploymentMode === AT_LEAST_TIER_PLATFORM_MATCH_DEPLOYMENT_MODE &&
+    round.featureClassification === AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION &&
+    round.calculationVersion === AT_LEAST_TIER_PLATFORM_MATCH_CALCULATION_VERSION &&
+    round.sealedProgressMode === "qualitative_only_before_close" &&
+    round.productionPublicEnabled === false &&
+    round.productionRealMoneyEnabled === false &&
+    round.opensAt <= round.closesAt &&
+    round.parametersFrozenAt <= round.opensAt &&
+    isCanonicalHash(round.rulebookHash) &&
+    isCanonicalHash(round.feePolicyHash) &&
+    isCanonicalHash(round.platformMatchPolicyHash) &&
+    isCanonicalHash(round.rewardScheduleHash)
+  );
+}
+
+export function isAtLeastTierFeaturePromotionApproved(record: AtLeastTierFeaturePromotionRecord) {
+  return (
+    record.featureKey === AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY &&
+    record.fromClassification === AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION &&
+    record.approvalState === "approved" &&
+    Boolean(record.approvedAt) &&
+    Boolean(record.approvedByProduct) &&
+    Boolean(record.approvedByPayments) &&
+    Boolean(record.approvedByLegal) &&
+    Boolean(record.approvedByTrustSafety) &&
+    Boolean(record.approvedByGovernance) &&
+    isCanonicalHash(record.promotionHash)
+  );
 }
 
 export function evaluateAtLeastTierPlatformMatchCapability(
@@ -1615,10 +1754,268 @@ export function planAtLeastTierPlatformMatchSettlement({
   };
 }
 
+export function buildAtLeastTierDevSeedData({
+  environment,
+  now,
+}: {
+  environment: AtLeastTierPlatformMatchEnvironment;
+  now?: string;
+}): AtLeastTierDevSeedData {
+  const createdAt = nowIso(now);
+  const roundId = "dev-at-least-tier-platform-match-round";
+  const poolId = "dev-reviewed-public-good-pool";
+  const reserveId = "dev-platform-match-reserve";
+
+  if (environment !== "development" && environment !== "test") {
+    return {
+      allowed: false,
+      blockerCodes: ["production_seed_disabled"],
+      productionSeedCreatesActiveRecords: false,
+      publicRoutes: [],
+      tiers: [],
+      commitments: [],
+      ordinaryDirectPledges: [],
+    };
+  }
+
+  const rewardSchedule = computeDampedOddsRewardSchedule({
+    roundId,
+    freeze: true,
+    now: createdAt,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_500 },
+      { tierIndex: 2, thresholdNetRecipientCents: 300_000, frozenForecastProbabilityBps: 5_500 },
+      { tierIndex: 3, thresholdNetRecipientCents: 500_000, frozenForecastProbabilityBps: 3_500 },
+      { tierIndex: 4, thresholdNetRecipientCents: 1_000_000, frozenForecastProbabilityBps: 2_000 },
+      { tierIndex: 5, thresholdNetRecipientCents: 2_500_000, frozenForecastProbabilityBps: 1_000 },
+    ],
+  });
+  const tierOne = rewardSchedule.tiers[0]!;
+  const tierFive = rewardSchedule.tiers[4]!;
+  const round: AtLeastTierPlatformMatchRound = {
+    id: roundId,
+    poolId,
+    featureKey: AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY,
+    deploymentMode: AT_LEAST_TIER_PLATFORM_MATCH_DEPLOYMENT_MODE,
+    featureClassification: AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION,
+    status: "labs_open",
+    opensAt: createdAt,
+    closesAt: "2026-07-13T00:00:00.000Z",
+    parametersFrozenAt: createdAt,
+    rulebookHash: hashValue([roundId, "rulebook"]),
+    feePolicyHash: hashValue([roundId, "fee-policy"]),
+    platformMatchPolicyHash: hashValue([roundId, "platform-match-policy"]),
+    rewardScheduleHash: rewardSchedule.schedule.outputHash,
+    calculationVersion: AT_LEAST_TIER_PLATFORM_MATCH_CALCULATION_VERSION,
+    sealedProgressMode: "qualitative_only_before_close",
+    productionPublicEnabled: false,
+    productionRealMoneyEnabled: false,
+    createdAt,
+    updatedAt: createdAt,
+  };
+  const reviewedPool: AtLeastTierReviewedSeedPool = {
+    id: poolId,
+    roundId,
+    title: "Dev reviewed moral public-good pool",
+    projectIds: ["reviewed-project-a", "reviewed-project-b"],
+    projectReviewState: "reviewed_moral_public_good",
+    recipientRouteState: "verified",
+    createdAt,
+  };
+  const reserve: PlatformMatchReserve = {
+    id: reserveId,
+    roundId,
+    poolId,
+    reserveType: "at_least_tier_platform_match",
+    backedCents: 500_000,
+    committedCents: 0,
+    paidCents: 0,
+    releasedUnusedCents: 0,
+    maxExposureCents: 500_000,
+    backingState: "dev_simulated",
+    legalComplianceState: "approved",
+    paymentProviderReady: true,
+    recipientRouteReady: true,
+    sourceHash: hashValue([roundId, reserveId, "source"]),
+    platformMatchPolicyHash: round.platformMatchPolicyHash,
+    status: "backed",
+    createdAt,
+    updatedAt: createdAt,
+  };
+  const commitments: AtLeastTierPlatformMatchCommitment[] = [
+    buildAtLeastTierPlatformMatchCommitmentPreview({
+      id: "seed-winning-alpha",
+      roundId,
+      poolId,
+      participantId: "seed-alpha",
+      selectedTierIndex: tierOne.tierIndex,
+      statedGrossCents: 2_000_000,
+      estimatedFeeCents: 0,
+      rewardRateBps: tierOne.rewardRateBps,
+      platformMatchReserveId: reserveId,
+      sameControlClusterId: "seed-cluster-alpha",
+      now: createdAt,
+    }),
+    buildAtLeastTierPlatformMatchCommitmentPreview({
+      id: "seed-same-control-shadow",
+      roundId,
+      poolId,
+      participantId: "seed-alpha-shadow",
+      selectedTierIndex: tierOne.tierIndex,
+      statedGrossCents: 2_000_000,
+      estimatedFeeCents: 0,
+      rewardRateBps: tierOne.rewardRateBps,
+      platformMatchReserveId: reserveId,
+      sameControlClusterId: "seed-cluster-alpha",
+      now: createdAt,
+    }),
+    buildAtLeastTierPlatformMatchCommitmentPreview({
+      id: "seed-winning-beta",
+      roundId,
+      poolId,
+      participantId: "seed-beta",
+      selectedTierIndex: tierOne.tierIndex,
+      statedGrossCents: 2_000_000,
+      estimatedFeeCents: 0,
+      rewardRateBps: tierOne.rewardRateBps,
+      platformMatchReserveId: reserveId,
+      sameControlClusterId: "seed-cluster-beta",
+      now: createdAt,
+    }),
+    buildAtLeastTierPlatformMatchCommitmentPreview({
+      id: "seed-losing-tier-five",
+      roundId,
+      poolId,
+      participantId: "seed-gamma",
+      selectedTierIndex: tierFive.tierIndex,
+      statedGrossCents: 10_000,
+      estimatedFeeCents: 0,
+      rewardRateBps: tierFive.rewardRateBps,
+      platformMatchReserveId: reserveId,
+      sameControlClusterId: "seed-cluster-gamma",
+      now: createdAt,
+    }),
+    {
+      ...buildAtLeastTierPlatformMatchCommitmentPreview({
+        id: "seed-payment-failed",
+        roundId,
+        poolId,
+        participantId: "seed-delta",
+        selectedTierIndex: tierOne.tierIndex,
+        statedGrossCents: 2_000_000,
+        estimatedFeeCents: 0,
+        rewardRateBps: tierOne.rewardRateBps,
+        platformMatchReserveId: reserveId,
+        sameControlClusterId: "seed-cluster-delta",
+        now: createdAt,
+      }),
+      commitmentState: "excluded_payment",
+    },
+  ];
+  const ordinaryDirectPledges: OrdinaryDirectHardPledge[] = [
+    {
+      id: "seed-direct-hard-pledge",
+      participantId: "seed-direct",
+      sameControlClusterId: "seed-direct-cluster",
+      netRecipientCents: 25_000,
+      state: "hard_saved",
+    },
+  ];
+  const resolution = resolveAtLeastTierPlatformMatch({
+    roundId,
+    tiers: rewardSchedule.tiers,
+    commitments,
+    ordinaryDirectPledges,
+    now: createdAt,
+  });
+  const settlementPlan = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments,
+    reserve,
+    rulebookHash: round.rulebookHash,
+    feePolicyHash: round.feePolicyHash,
+    platformMatchPolicyHash: round.platformMatchPolicyHash,
+    rewardScheduleHash: round.rewardScheduleHash,
+    ordinaryDirectPledgeNetCents: ordinaryDirectPledges[0]!.netRecipientCents,
+    simulationOnly: true,
+    now: createdAt,
+  });
+  const reserveInsufficiencyPlan = planAtLeastTierPlatformMatchSettlement({
+    roundId,
+    resolution,
+    commitments,
+    reserve: {
+      ...reserve,
+      id: "dev-platform-match-reserve-insufficient",
+      backedCents: 5_000,
+      maxExposureCents: 5_000,
+    },
+    rulebookHash: round.rulebookHash,
+    feePolicyHash: round.feePolicyHash,
+    platformMatchPolicyHash: round.platformMatchPolicyHash,
+    rewardScheduleHash: round.rewardScheduleHash,
+    ordinaryDirectPledgeNetCents: ordinaryDirectPledges[0]!.netRecipientCents,
+    simulationOnly: true,
+    now: createdAt,
+  });
+  const circularitySchedule = computeDampedOddsRewardSchedule({
+    roundId: `${roundId}-circularity`,
+    freeze: true,
+    now: createdAt,
+    tiers: [
+      { tierIndex: 1, thresholdNetRecipientCents: 100_000, frozenForecastProbabilityBps: 7_000 },
+      { tierIndex: 2, thresholdNetRecipientCents: 200_000, frozenForecastProbabilityBps: 5_000 },
+    ],
+    rMinBps: 1_000,
+    rMaxBps: 2_000,
+  });
+  const circularityCommitments = Array.from({ length: 100 }, (_, index) =>
+    buildAtLeastTierPlatformMatchCommitmentPreview({
+      id: `seed-circularity-${index}`,
+      roundId: `${roundId}-circularity`,
+      poolId,
+      participantId: `seed-circularity-participant-${index}`,
+      selectedTierIndex: 1,
+      statedGrossCents: 1_000,
+      estimatedFeeCents: 0,
+      rewardRateBps: 1_000,
+      platformMatchReserveId: reserveId,
+      sameControlClusterId: `seed-circularity-cluster-${index}`,
+      now: createdAt,
+    })
+  );
+  const circularityResolution = resolveAtLeastTierPlatformMatch({
+    roundId: `${roundId}-circularity`,
+    tiers: circularitySchedule.tiers,
+    commitments: circularityCommitments,
+    now: createdAt,
+  });
+
+  return {
+    allowed: true,
+    blockerCodes: [],
+    productionSeedCreatesActiveRecords: false,
+    publicRoutes: [],
+    round,
+    reviewedPool,
+    schedule: rewardSchedule.schedule,
+    tiers: rewardSchedule.tiers,
+    reserve,
+    commitments,
+    ordinaryDirectPledges,
+    resolution,
+    settlementPlan,
+    reserveInsufficiencyPlan,
+    circularityResolution,
+  };
+}
+
 const PROHIBITED_ORDINARY_COPY_PATTERNS: Array<[string, RegExp]> = [
   ["bet", /\bbet(?:s|ting)?\b/i],
   ["wager", /\bwager(?:s|ing)?\b/i],
   ["gamble", /\bgambl(?:e|es|ing)\b/i],
+  ["odds", /\bodds\b/i],
   ["profit", /\bprofit\b/i],
   ["prize", /\bprize\b/i],
   ["lottery", /\blottery\b/i],
@@ -1626,10 +2023,15 @@ const PROHIBITED_ORDINARY_COPY_PATTERNS: Array<[string, RegExp]> = [
   ["return", /\b(?:guaranteed\s+)?return\b/i],
   ["cashback", /\bcashback\b/i],
   ["free money", /\bfree\s+money\b/i],
+  ["user-payout", /\buser[-\s]?payout\b/i],
   ["paid if right", /\bpaid\s+if\s+right\b/i],
   ["payout to you", /\bpayout\s+to\s+you\b/i],
+  ["tax-deductible platform match", /\btax[-\s]?deductible\b[\s\S]{0,80}\bplatform[-\s]?paid match\b/i],
   ["guaranteed match", /\bguaranteed\s+match\b/i],
   ["objective impact", /\bobjective\s+impact\b/i],
+  ["MVP", /\bMVP\b/],
+  ["live", /\blive\b/i],
+  ["launch", /\blaunch\b/i],
   ["production-ready", /\bproduction[-\s]+ready\b/i],
   ["real-money available", /\breal[-\s]+money\s+available\b/i],
 ];
@@ -1642,11 +2044,16 @@ const REQUIRED_ORDINARY_COPY_CLAIMS: Array<[string, RegExp]> = [
   ["own_commitment_excluded", /\bown commitment\b[\s\S]{0,80}\b(?:does not|doesn't|do not)\s+count\b/i],
   ["same_control_excluded", /\bsame[-\s]?control\b[\s\S]{0,80}\b(?:does not|doesn't|do not)\s+count\b/i],
   ["platform_match_excluded_from_forecast", /\bplatform[-\s]?match payments\b[\s\S]{0,80}\bdo not count\b/i],
+  ["production_real_money_disabled", /\bproduction\b[\s\S]{0,80}\breal[-\s]?money\b[\s\S]{0,80}\bdisabled\b[\s\S]{0,80}\bpromoted\b/i],
 ];
 
 export function validateAtLeastTierOrdinaryCopy(copy: string): AtLeastTierOrdinaryCopyPreflight {
+  const copyForBlockedTerms = copy
+    .replace(/\bnon[-\s]?mvp\b/gi, "")
+    .replace(/\bno\s+direct\s+user[-\s]?payout\b/gi, "")
+    .replace(/\bno\s+user[-\s]?payout\b/gi, "");
   const blockedTerms = PROHIBITED_ORDINARY_COPY_PATTERNS
-    .filter(([, pattern]) => pattern.test(copy))
+    .filter(([, pattern]) => pattern.test(copyForBlockedTerms))
     .map(([term]) => term);
   const missingRequiredClaims = REQUIRED_ORDINARY_COPY_CLAIMS
     .filter(([, pattern]) => !pattern.test(copy))
@@ -1656,5 +2063,48 @@ export function validateAtLeastTierOrdinaryCopy(copy: string): AtLeastTierOrdina
     passed: blockedTerms.length === 0 && missingRequiredClaims.length === 0,
     blockedTerms,
     missingRequiredClaims,
+  };
+}
+
+export function buildAtLeastTierCopyPreflightReport({
+  id,
+  roundId,
+  checkedAt,
+  lastDeployHash,
+  checkedRoutes,
+  ordinaryCopy,
+  publicMvpSurfaceLeakFound = false,
+  liveMoneyOverclaimFound = false,
+  exactProgressLeakFound = false,
+}: {
+  id: string;
+  roundId: string;
+  checkedAt: string;
+  lastDeployHash: string;
+  checkedRoutes: string[];
+  ordinaryCopy: string;
+  publicMvpSurfaceLeakFound?: boolean;
+  liveMoneyOverclaimFound?: boolean;
+  exactProgressLeakFound?: boolean;
+}): AtLeastTierCopyPreflightReport {
+  const ordinary = validateAtLeastTierOrdinaryCopy(ordinaryCopy);
+  const reportWithoutHash = {
+    id,
+    roundId,
+    checkedAt,
+    lastDeployHash,
+    checkedRoutes,
+    prohibitedTermsFound: ordinary.blockedTerms,
+    missingRequiredClaims: ordinary.missingRequiredClaims,
+    publicMvpSurfaceLeakFound,
+    liveMoneyOverclaimFound,
+    exactProgressLeakFound,
+    ordinaryCopyPass: ordinary.passed,
+    pass: ordinary.passed && !publicMvpSurfaceLeakFound && !liveMoneyOverclaimFound && !exactProgressLeakFound,
+  };
+
+  return {
+    ...reportWithoutHash,
+    reportHash: hashValue(reportWithoutHash),
   };
 }

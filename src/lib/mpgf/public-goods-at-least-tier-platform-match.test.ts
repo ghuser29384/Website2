@@ -8,15 +8,21 @@ import {
   AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY,
   AT_LEAST_TIER_PLATFORM_MATCH_LIVE_MONEY_FLAG,
   AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING,
+  buildAtLeastTierCopyPreflightReport,
+  buildAtLeastTierDevSeedData,
   buildAtLeastTierPlatformMatchCommitmentPreview,
   computeDampedOddsRewardSchedule,
   evaluateAtLeastTierAdminWorkflow,
   evaluateAtLeastTierCommitmentOpenGate,
   evaluateAtLeastTierJobGate,
   evaluateAtLeastTierPlatformMatchCapability,
+  isAtLeastTierFeaturePromotionApproved,
+  isAtLeastTierRoundReadyForLabs,
   planAtLeastTierPlatformMatchSettlement,
   resolveAtLeastTierPlatformMatch,
   validateAtLeastTierOrdinaryCopy,
+  type AtLeastTierFeaturePromotionRecord,
+  type AtLeastTierPlatformMatchRound,
   type AtLeastTierPlatformMatchCommitment,
   type PlatformMatchReserve,
 } from "@/lib/mpgf/public-goods-at-least-tier-platform-match";
@@ -130,6 +136,137 @@ test("at-least-tier feature metadata and capability gate keep production disable
     featureEnabled: true,
   });
   assert.equal(labsSchedule.allowed, true);
+});
+
+test("dev and test seed data covers v137 sample cases without production activation", () => {
+  const production = buildAtLeastTierDevSeedData({ environment: "production", now });
+  assert.equal(production.allowed, false);
+  assert.deepEqual(production.blockerCodes, ["production_seed_disabled"]);
+  assert.equal(production.productionSeedCreatesActiveRecords, false);
+  assert.deepEqual(production.publicRoutes, []);
+  assert.deepEqual(production.tiers, []);
+  assert.deepEqual(production.commitments, []);
+
+  const seed = buildAtLeastTierDevSeedData({ environment: "development", now });
+  assert.equal(seed.allowed, true);
+  assert.equal(seed.productionSeedCreatesActiveRecords, false);
+  assert.deepEqual(seed.publicRoutes, []);
+  assert.equal(seed.reviewedPool?.projectReviewState, "reviewed_moral_public_good");
+  assert.equal(seed.reviewedPool?.recipientRouteState, "verified");
+  assert.deepEqual(seed.tiers.map((tier) => tier.thresholdNetRecipientCents), [
+    100_000,
+    300_000,
+    500_000,
+    1_000_000,
+    2_500_000,
+  ]);
+  assert.deepEqual(seed.tiers.map((tier) => tier.frozenForecastProbabilityBps), [7_500, 5_500, 3_500, 2_000, 1_000]);
+  assert.deepEqual(seed.tiers.map((tier) => tier.rewardRateBps), [500, 905, 1473, 2262, 3500]);
+  assert.equal(seed.reserve?.backingState, "dev_simulated");
+  assert.equal(seed.reserve?.status, "backed");
+
+  assert.ok(seed.resolution?.rows.some((row) => row.outcome === "won_platform_pays"));
+  assert.ok(seed.resolution?.rows.some((row) => row.outcome === "lost_user_pays"));
+  assert.ok(seed.resolution?.rows.some((row) => row.exclusionReason === "commitment_state_excluded_payment"));
+  assert.ok(seed.resolution?.rows.some((row) => row.excludedSameControlEffectiveSupportCents > 0));
+  assert.deepEqual(seed.settlementPlan?.blockedReasonCodes, []);
+  assert.ok(seed.reserveInsufficiencyPlan?.blockedReasonCodes.includes("reserve_exposure_exceeded"));
+
+  const firstCircularityRow = seed.circularityResolution?.rows[0];
+  assert.equal(seed.circularityResolution?.snapshot.effectiveSupportTotalCents, 10_000);
+  assert.equal(firstCircularityRow?.otherEligibleEffectiveSupportCents, 9_900);
+  assert.equal(firstCircularityRow?.outcome, "lost_user_pays");
+});
+
+test("round, copy preflight report, and promotion record preserve at-least-tier non-MVP gates", () => {
+  const schedule = defaultSchedule();
+  const round: AtLeastTierPlatformMatchRound = {
+    id: roundId,
+    poolId,
+    featureKey: AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY,
+    deploymentMode: "at_least_tier_platform_match_non_mvp_labs",
+    featureClassification: "non_mvp",
+    status: "labs_open",
+    opensAt: "2026-07-06T00:00:00.000Z",
+    closesAt: "2026-07-13T00:00:00.000Z",
+    parametersFrozenAt: "2026-07-05T00:00:00.000Z",
+    rulebookHash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    feePolicyHash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    platformMatchPolicyHash: "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    rewardScheduleHash: schedule.schedule.outputHash,
+    calculationVersion: AT_LEAST_TIER_PLATFORM_MATCH_CALCULATION_VERSION,
+    sealedProgressMode: "qualitative_only_before_close",
+    productionPublicEnabled: false,
+    productionRealMoneyEnabled: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  assert.equal(isAtLeastTierRoundReadyForLabs(round), true);
+  assert.equal(isAtLeastTierRoundReadyForLabs({
+    ...round,
+    productionRealMoneyEnabled: true,
+  }), false);
+
+  const report = buildAtLeastTierCopyPreflightReport({
+    id: "at-least-copy-report",
+    roundId,
+    checkedAt: now,
+    lastDeployHash: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    checkedRoutes: ["/labs/at-least-tier-platform-match"],
+    ordinaryCopy: `
+      Non-MVP labs mechanism.
+      There is no direct user payout.
+      If the user wins, the platform contributes the tier-specific match to reviewed projects.
+      If the user loses, the user contributes the stated amount to reviewed projects.
+      The user's own commitment does not count toward the forecast result.
+      Same-control accounts do not count toward the forecast result.
+      Platform-match payments do not count toward forecast results.
+      Production real-money use is disabled unless this mechanism is explicitly promoted.
+    `,
+  });
+  assert.equal(report.pass, true);
+  assert.equal(report.ordinaryCopyPass, true);
+  assert.match(report.reportHash, /^sha256:[a-f0-9]{64}$/);
+
+  const failedReport = buildAtLeastTierCopyPreflightReport({
+    id: "at-least-copy-report-failed",
+    roundId,
+    checkedAt: now,
+    lastDeployHash: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    checkedRoutes: ["/mpgf"],
+    ordinaryCopy: "Live MVP launch: make a bet for guaranteed return and payout to you.",
+    publicMvpSurfaceLeakFound: true,
+    liveMoneyOverclaimFound: true,
+  });
+  assert.equal(failedReport.pass, false);
+  assert.ok(failedReport.prohibitedTermsFound.includes("bet"));
+  assert.ok(failedReport.prohibitedTermsFound.includes("MVP"));
+  assert.ok(failedReport.prohibitedTermsFound.includes("live"));
+  assert.ok(failedReport.missingRequiredClaims.includes("production_real_money_disabled"));
+
+  const promotion: AtLeastTierFeaturePromotionRecord = {
+    id: "at-least-promotion",
+    featureKey: AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY,
+    fromClassification: AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_CLASSIFICATION,
+    toClassification: "limited_public",
+    requestedBy: "product",
+    approvedByProduct: "product",
+    approvedByPayments: "payments",
+    approvedByLegal: "legal",
+    approvedByTrustSafety: "trust-safety",
+    approvedByGovernance: "governance",
+    approvalState: "approved",
+    approvedAt: now,
+    notes: "Approved for a future limited public pilot.",
+    promotionHash: "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    createdAt: now,
+    updatedAt: now,
+  };
+  assert.equal(isAtLeastTierFeaturePromotionApproved(promotion), true);
+  assert.equal(isAtLeastTierFeaturePromotionApproved({
+    ...promotion,
+    approvedByPayments: undefined,
+  }), false);
 });
 
 test("admin and job gates keep at-least-tier live operations blocked while labs simulation can run", () => {
@@ -551,16 +688,19 @@ test("ordinary copy preflight blocks wagering and return language while requirin
     Your own commitment does not count toward your forecast result.
     Same-control accounts do not count toward your forecast result.
     Platform-match payments do not count toward forecast results.
+    Production real-money use is disabled unless this mechanism is explicitly promoted.
   `);
   assert.equal(valid.passed, true);
 
   const invalid = validateAtLeastTierOrdinaryCopy(`
-    Make a bet for a guaranteed return and get a payout to you if right.
+    Make a bet with odds for a guaranteed return and get a payout to you if right. This is user-payout language.
   `);
   assert.equal(invalid.passed, false);
   assert.ok(invalid.blockedTerms.includes("bet"));
+  assert.ok(invalid.blockedTerms.includes("odds"));
   assert.ok(invalid.blockedTerms.includes("return"));
   assert.ok(invalid.blockedTerms.includes("payout to you"));
+  assert.ok(invalid.blockedTerms.includes("user-payout"));
   assert.ok(invalid.missingRequiredClaims.includes("non_mvp_warning"));
 });
 
@@ -580,6 +720,7 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsPage, /There is no direct user payout/);
   assert.match(labsPage, /platform contributes/);
   assert.match(labsPage, /you contribute the stated amount/);
+  assert.match(labsPage, /Production real-money use is disabled unless this mechanism is explicitly promoted/);
   assert.match(labsPage, /Own commitments, same-control accounts, fees, sponsor match/);
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);

@@ -66,6 +66,7 @@ export default function AtLeastTierPlatformMatchLabsPage() {
     The user's own commitment does not count toward the forecast result.
     Same-control accounts do not count toward the forecast result.
     Platform-match payments do not count toward forecast results.
+    Production real-money use is disabled unless this mechanism is explicitly promoted.
   `);
 
   return (

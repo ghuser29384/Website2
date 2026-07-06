@@ -24,6 +24,7 @@ export type RefundBonusFailureReason =
   | "conflict_block"
   | "legal_compliance_block"
   | "payment_provider_outage"
+  | "sponsor_match_unbacked"
   | "bonus_reserve_unbacked"
   | "copy_preflight_failure"
   | "round_canceled_by_admin"
@@ -65,6 +66,14 @@ export type RefundBonusCapabilityAction =
 
 export type RefundBonusActorRole = "public" | "labs_participant" | "admin" | "service";
 export type RefundBonusEnvironment = "production" | "preview" | "development" | "test";
+export type RefundBonusViewpointCluster =
+  | "humanitarian"
+  | "animal_inclusive"
+  | "long_run_future"
+  | "institutional_resilience"
+  | "public_knowledge"
+  | "other"
+  | "prefer_not_to_say";
 export type RefundBonusCapabilityReason =
   | "feature_non_mvp"
   | "feature_disabled"
@@ -166,21 +175,30 @@ export interface RefundBonusRound {
   fixedPledgeGrossCents?: number;
   roundGrossCaptureCapCents: number;
   roundBonusExposureCapCents: number;
+  opensAt: string;
+  closesAt: string;
+  challengeDeadlineAt: string;
   parametersFrozenAt: string;
   rulebookHash: string;
   feePolicyHash: string;
   bonusPolicyHash: string;
   calculationVersion: typeof REFUND_BONUS_CALCULATION_VERSION;
   sealedProgressMode: "qualitative_only_before_close";
+  refundBonusOpenGateId?: string;
   copyPreflightState: "not_run" | "passed" | "failed";
+  copyPreflightHash?: string;
   productionPublicEnabled: boolean;
   productionRealMoneyEnabled: boolean;
   promotionRecordId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RefundBonusPledgePool {
   id: string;
   roundId: string;
+  title?: string;
+  summary?: string;
   projectIds: [string, string] | [string, string, string];
   allocationWeightsBpsByProjectId: Record<string, number>;
   thresholdNetRecipientCents: number;
@@ -189,6 +207,9 @@ export interface RefundBonusPledgePool {
   minNetRecipientCentsPerSupporter: number;
   sponsorMatchEnabled: boolean;
   sponsorMatchBacked: boolean;
+  sponsorMatchPoolId?: string;
+  sponsorMatchRatioBps?: number;
+  sponsorMatchCapCents?: number;
   refundBonusEnabled: boolean;
   refundBonusReserveId?: string;
   bonusCalculationMode: "fixed_cents" | "percentage_of_pledge_capped" | "none";
@@ -197,7 +218,21 @@ export interface RefundBonusPledgePool {
   perUserBonusCapCents: number;
   roundBonusExposureCapCents: number;
   qualifyingFailureModes: RefundBonusQualifyingFailureMode[];
-  status: "draft" | "labs_open" | "open" | "closed" | "cleared" | "qualifying_failed" | "nonqualifying_failed" | "blocked" | "canceled";
+  status:
+    | "draft"
+    | "labs_open"
+    | "open"
+    | "closed"
+    | "cleared"
+    | "qualifying_failed"
+    | "nonqualifying_failed"
+    | "payable"
+    | "captured"
+    | "bonus_payable"
+    | "bonus_paid"
+    | "released"
+    | "blocked"
+    | "canceled";
   reviewGates: {
     projectScope: "clear" | "review" | "blocked";
     recipientRoute: "verified" | "review" | "blocked";
@@ -208,6 +243,38 @@ export interface RefundBonusPledgePool {
     conflict: "clear" | "non_blocking" | "review" | "blocked";
     challenge: "clear" | "non_blocking" | "open" | "blocking";
   };
+  rulebookHash?: string;
+  feePolicyHash?: string;
+  bonusPolicyHash?: string;
+  createdAt?: string;
+}
+
+export interface RefundBonusProjectReviewSnapshot {
+  id: string;
+  roundId: string;
+  poolId: string;
+  projectId: string;
+  title: string;
+  summary: string;
+  recipientRouteRef: string;
+  recipientRouteState: "verified" | "blocked" | "review";
+  projectScopeState: "valid_moral_public_good" | "blocked" | "review";
+  baselineState: "clear" | "blocked" | "review";
+  actionEvidenceState: "adequate" | "blocked" | "review";
+  antiThreatState: "clear" | "blocked" | "review";
+  externalityState: "clear" | "blocked" | "review";
+  conflictState: "clear" | "non_blocking" | "blocked" | "review";
+  challengeState: "clear" | "non_blocking" | "open" | "blocking";
+  qualifyingFailureBonusAllowed: boolean;
+  blockedFailureBonusAllowed: false;
+  prohibitsPoliticalCampaigns: true;
+  prohibitsLobbyingTrades: true;
+  prohibitsLifestyleTrades: true;
+  prohibitsBehaviorChangePromises: true;
+  prohibitsPrivateBenefitProjects: true;
+  prohibitsThreatLikeProjects: true;
+  reviewSnapshotHash: string;
+  createdAt: string;
 }
 
 export interface RefundBonusReserve {
@@ -238,10 +305,31 @@ export interface RefundBonusPledge {
   participantId: string;
   maxGrossCents: number;
   feeCents: number;
-  viewpointTag: string;
+  estimatedFeeCents: number;
+  estimatedNetRecipientCents: number;
+  viewpointCluster: RefundBonusViewpointCluster;
+  visibility: "aggregate_only";
   sameControlClusterId?: string;
   paymentClusterId?: string;
-  pledgeState: "draft" | "hard_saved" | "withdrawn" | "excluded" | "captured" | "bonus_paid";
+  pledgeState:
+    | "draft"
+    | "hard_saved"
+    | "excluded_identity"
+    | "excluded_payment"
+    | "excluded_bonus_abuse"
+    | "authorized"
+    | "captured"
+    | "released"
+    | "bonus_eligible"
+    | "bonus_ineligible"
+    | "bonus_payable"
+    | "bonus_paid"
+    | "failed"
+    | "canceled";
+  paymentCommitmentSnapshotId?: string;
+  identityEligibilitySnapshotId?: string;
+  bonusEligibilitySnapshotId?: string;
+  expectedBonusCents: number;
   finalReviewConfirmedAt?: string;
   feeAcknowledged: boolean;
   sealedProgressAcknowledged: boolean;
@@ -260,15 +348,108 @@ export interface RefundBonusPledge {
   bonusPolicyHashAtConsent: string;
   bonusExposureReservedCents: number;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface RefundBonusBonusEligibilitySnapshot {
+  id: string;
+  roundId: string;
+  poolId: string;
+  pledgeId: string;
+  participantId: string;
+  eligibleAtPledgeSave: boolean;
+  eligibilityReasonCodes: string[];
+  humanVerified: boolean;
+  identityVerified: boolean;
+  sybilState: "clear" | "review" | "blocked";
+  collusionState: "clear" | "review" | "blocked";
+  sameControlClusterId?: string;
+  paymentClusterId?: string;
+  priorBonusAbuseState: "clear" | "review" | "blocked";
+  jurisdictionEligibilityState: "clear" | "review" | "blocked";
+  bonusCalculationMode: RefundBonusPledgePool["bonusCalculationMode"];
+  computedBonusCents: number;
+  perUserBonusCapCents: number;
+  reserveId: string;
+  reserveBackingStateAtSave: "funded" | "escrowed" | "contractually_committed" | "dev_simulated";
+  snapshotHash: string;
+  asOf: string;
+}
+
+export interface RefundBonusIdentityEligibilitySnapshot {
+  id: string;
+  roundId: string;
+  participantId: string;
+  humanVerified: boolean;
+  identityVerified: boolean;
+  sybilState: "clear" | "review" | "blocked";
+  collusionState: "clear" | "review" | "blocked";
+  sameControlClusterId?: string;
+  paymentClusterId?: string;
+  countingWeightBps: 0 | 10_000;
+  bonusEligibilityWeightBps: 0 | 10_000;
+  snapshotHash: string;
+  asOf: string;
+}
+
+export interface RefundBonusPaymentCommitmentSnapshot {
+  id: string;
+  roundId: string;
+  poolId: string;
+  pledgeId: string;
+  participantId: string;
+  paymentMethodRef: string;
+  commitmentState: "provider_confirmed" | "requires_action" | "invalid" | "detached";
+  savedAt: string;
+  confirmedAt: string;
+  asOf: string;
+  supportsFutureAuthorization: boolean;
+  supportsBonusPayoutMethod?: boolean;
+  bonusPayoutMethodRef?: string;
+  providerEvidenceHash: string;
+  snapshotHash: string;
+}
+
+export interface RefundBonusFeeQuote {
+  id: string;
+  roundId: string;
+  pledgeId: string;
+  grossCents: number;
+  feeCents: number;
+  netRecipientCents: number;
+  feePayer: "donor" | "waived";
+  feePolicyHash: string;
+  quoteHash: string;
 }
 
 export interface RefundBonusAuthorizationAttempt {
+  id?: string;
+  roundId?: string;
+  poolId?: string;
   pledgeId: string;
-  authorizationState: "authorized_exact" | "failed" | "wrong_amount" | "expired" | "short_expiring" | "missing";
+  participantId?: string;
+  authorizationState:
+    | "not_attempted"
+    | "authorized_exact"
+    | "failed"
+    | "wrong_amount"
+    | "expired"
+    | "expired_before_capture"
+    | "short_expiry"
+    | "short_expiring"
+    | "missing"
+    | "released"
+    | "captured";
   requiredGrossCents: number;
   authorizedGrossCents: number;
   providerAuthorizationRef?: string;
+  providerCaptureRef?: string;
+  authorizedAt?: string;
+  expiresAt?: string;
+  capturedAt?: string;
+  releasedAt?: string;
   validThroughCapture: boolean;
+  eventHash?: string;
 }
 
 export interface RefundBonusEligiblePledge {
@@ -301,19 +482,75 @@ export interface RefundBonusPayoutOperation {
   participantId: string;
   reserveId: string;
   bonusGrossCents: number;
+  payoutFeeCents: number;
   bonusPayoutFeeCents: number;
   bonusNetCents: number;
-  operationState: "not_attempted" | "pending" | "succeeded" | "failed_retryable" | "failed_final" | "held_compliance";
+  currency: "usd";
+  payoutDestinationRef?: string;
+  operationState:
+    | "not_attempted"
+    | "pending"
+    | "succeeded"
+    | "failed_retryable"
+    | "failed_final"
+    | "held_compliance"
+    | "unclaimed"
+    | "forfeited_under_rules"
+    | "reversed";
+  payoutState: RefundBonusPayoutOperation["operationState"];
   idempotencyKey: string;
   providerPayoutRef?: string;
+  eventHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RefundBonusPoolSettlementRow {
+  id: string;
+  roundId: string;
+  poolId: string;
+  pledgeId: string;
+  participantId: string;
+  grossCapturedCents: number;
+  feeCents: number;
+  netRecipientDisbursedCents: number;
+  actualGrossExposureCents: number;
+  countedCents: number;
+  matchEligibleCents: number;
+  sponsorBaseMatchCents: number;
+  bonusExposureReservedCents: number;
+  bonusEligibleCents: number;
+  bonusPaidCents: number;
+  bonusPayoutFeeCents: number;
+  bonusUnearnedReleasedCents: number;
+  settlementState:
+    | "pending"
+    | "captured"
+    | "released"
+    | "bonus_payable"
+    | "bonus_paid"
+    | "bonus_held"
+    | "blocked"
+    | "failed";
+  createdAt: string;
 }
 
 export interface RefundBonusAuditReport {
   id: string;
   roundId: string;
   poolId: string;
+  rulebookHash: string;
+  feePolicyHash: string;
+  bonusPolicyHash: string;
   calculationVersion: typeof REFUND_BONUS_CALCULATION_VERSION;
-  finalStatus: "captured" | "qualifying_failed" | "nonqualifying_failed" | "blocked" | "simulation_only";
+  finalStatus:
+    | "cleared_and_captured"
+    | "qualifying_failed_bonus_payable"
+    | "qualifying_failed_bonus_paid"
+    | "nonqualifying_failed_no_bonus"
+    | "failed_authorization_no_bonus"
+    | "blocked_review_no_bonus"
+    | "canceled_no_bonus";
   grossCapturedCents: number;
   feeCents: number;
   netRecipientDisbursedCents: number;
@@ -328,11 +565,20 @@ export interface RefundBonusAuditReport {
   bonusPayoutFeeCents: number;
   bonusUnclaimedCents: number;
   bonusUnearnedReleasedCents: number;
+  verifiedSupporterCount: number;
+  distinctViewpointClusterCount: number;
+  authorizationFailureCount: number;
+  excludedIdentityCount: number;
+  excludedPaymentClusterCount: number;
+  excludedBonusAbuseCount: number;
+  reviewBlockCount: number;
   reasonCodes: RefundBonusFailureReason[];
   publicReportJson: unknown;
+  publishedAt: string;
 }
 
 export interface RefundBonusSettlementPlan {
+  settlementRows: RefundBonusPoolSettlementRow[];
   payoutOperations: RefundBonusPayoutOperation[];
   auditReport: RefundBonusAuditReport;
   blockedReasonCodes: string[];
@@ -369,6 +615,43 @@ export interface RefundBonusCopyPreflight {
   passed: boolean;
   blockedTerms: string[];
   missingRequiredClaims: string[];
+}
+
+export interface RefundBonusCopyPreflightReport {
+  id: string;
+  roundId: string;
+  checkedAt: string;
+  lastDeployHash: string;
+  checkedRoutes: string[];
+  prohibitedActiveLabelsFound: string[];
+  exactProgressLeakFound: boolean;
+  paymentOverclaimFound: boolean;
+  bonusOverclaimFound: boolean;
+  financialPromotionRiskFound: boolean;
+  ordinaryZeroStatePrimaryFound: boolean;
+  staleCtaFound: boolean;
+  nonMvpSurfaceLeakFound: boolean;
+  pass: boolean;
+  reportHash: string;
+}
+
+export interface RefundBonusFeaturePromotionRecord {
+  id: string;
+  featureKey: typeof REFUND_BONUS_FEATURE_KEY;
+  fromClassification: typeof REFUND_BONUS_FEATURE_CLASSIFICATION;
+  toClassification: "limited_public" | "mvp_candidate" | "production";
+  requestedBy: string;
+  approvedByProduct?: string;
+  approvedByPayments?: string;
+  approvedByLegal?: string;
+  approvedByTrustSafety?: string;
+  approvedByGovernance?: string;
+  approvalState: "draft" | "approved" | "rejected" | "revoked";
+  approvedAt?: string;
+  notes: string;
+  promotionHash: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type RefundBonusHardPledgeBlocker =
@@ -446,6 +729,18 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
 
+function isCanonicalHash(value: unknown): value is string {
+  return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
+function isTrimStableNonEmpty(value: unknown): value is string {
+  return typeof value === "string" && value.trim() === value && value.length > 0;
+}
+
+function isOrderedIsoTimestamp(left: string, right: string) {
+  return left <= right;
+}
+
 function unique<T>(items: T[]) {
   return [...new Set(items)];
 }
@@ -456,6 +751,94 @@ function roleCanUseLabs(role: RefundBonusActorRole) {
 
 function uniqueHardPledgeBlockers(blockers: RefundBonusHardPledgeBlocker[]) {
   return [...new Set(blockers)];
+}
+
+export function isRefundBonusProjectReviewSnapshotPledgeable(snapshot: RefundBonusProjectReviewSnapshot) {
+  return (
+    snapshot.recipientRouteState === "verified" &&
+    snapshot.projectScopeState === "valid_moral_public_good" &&
+    snapshot.baselineState === "clear" &&
+    snapshot.actionEvidenceState === "adequate" &&
+    snapshot.antiThreatState === "clear" &&
+    snapshot.externalityState === "clear" &&
+    (snapshot.conflictState === "clear" || snapshot.conflictState === "non_blocking") &&
+    (snapshot.challengeState === "clear" || snapshot.challengeState === "non_blocking") &&
+    snapshot.qualifyingFailureBonusAllowed &&
+    snapshot.blockedFailureBonusAllowed === false &&
+    snapshot.prohibitsPoliticalCampaigns &&
+    snapshot.prohibitsLobbyingTrades &&
+    snapshot.prohibitsLifestyleTrades &&
+    snapshot.prohibitsBehaviorChangePromises &&
+    snapshot.prohibitsPrivateBenefitProjects &&
+    snapshot.prohibitsThreatLikeProjects &&
+    isCanonicalHash(snapshot.reviewSnapshotHash)
+  );
+}
+
+export function isRefundBonusIdentityEligibilitySnapshotEligible(
+  snapshot: RefundBonusIdentityEligibilitySnapshot,
+) {
+  return (
+    snapshot.humanVerified &&
+    snapshot.identityVerified &&
+    snapshot.sybilState === "clear" &&
+    snapshot.collusionState === "clear" &&
+    (snapshot.countingWeightBps === 0 || snapshot.countingWeightBps === 10_000) &&
+    (snapshot.bonusEligibilityWeightBps === 0 || snapshot.bonusEligibilityWeightBps === 10_000) &&
+    snapshot.countingWeightBps === 10_000 &&
+    snapshot.bonusEligibilityWeightBps === 10_000 &&
+    isCanonicalHash(snapshot.snapshotHash)
+  );
+}
+
+export function isRefundBonusBonusEligibilitySnapshotEligible(
+  snapshot: RefundBonusBonusEligibilitySnapshot,
+) {
+  return (
+    snapshot.eligibleAtPledgeSave &&
+    snapshot.eligibilityReasonCodes.length === 0 &&
+    snapshot.humanVerified &&
+    snapshot.identityVerified &&
+    snapshot.sybilState === "clear" &&
+    snapshot.collusionState === "clear" &&
+    snapshot.priorBonusAbuseState === "clear" &&
+    snapshot.jurisdictionEligibilityState === "clear" &&
+    isNonNegativeSafeInteger(snapshot.computedBonusCents) &&
+    snapshot.computedBonusCents <= snapshot.perUserBonusCapCents &&
+    isCanonicalHash(snapshot.snapshotHash)
+  );
+}
+
+export function isRefundBonusPaymentCommitmentSnapshotCountable(
+  snapshot: RefundBonusPaymentCommitmentSnapshot,
+  round: Pick<RefundBonusRound, "id" | "closesAt">,
+) {
+  return (
+    snapshot.roundId === round.id &&
+    snapshot.commitmentState === "provider_confirmed" &&
+    isTrimStableNonEmpty(snapshot.paymentMethodRef) &&
+    snapshot.supportsFutureAuthorization &&
+    isOrderedIsoTimestamp(snapshot.savedAt, snapshot.confirmedAt) &&
+    isOrderedIsoTimestamp(snapshot.confirmedAt, snapshot.asOf) &&
+    isOrderedIsoTimestamp(snapshot.asOf, round.closesAt) &&
+    isCanonicalHash(snapshot.providerEvidenceHash) &&
+    isCanonicalHash(snapshot.snapshotHash)
+  );
+}
+
+export function isRefundBonusFeaturePromotionApproved(record: RefundBonusFeaturePromotionRecord) {
+  return (
+    record.featureKey === REFUND_BONUS_FEATURE_KEY &&
+    record.fromClassification === REFUND_BONUS_FEATURE_CLASSIFICATION &&
+    record.approvalState === "approved" &&
+    Boolean(record.approvedAt) &&
+    Boolean(record.approvedByProduct) &&
+    Boolean(record.approvedByPayments) &&
+    Boolean(record.approvedByLegal) &&
+    Boolean(record.approvedByTrustSafety) &&
+    Boolean(record.approvedByGovernance) &&
+    isCanonicalHash(record.promotionHash)
+  );
 }
 
 export function evaluateRefundBonusCapability(input: RefundBonusCapabilityInput): RefundBonusCapabilityResult {
@@ -822,6 +1205,7 @@ function blockedFailureReason(pool: RefundBonusPledgePool, reserveBacked: boolea
   if (pool.reviewGates.externality !== "clear") return "externality_block";
   if (pool.reviewGates.conflict === "blocked" || pool.reviewGates.conflict === "review") return "conflict_block";
   if (pool.reviewGates.challenge === "open" || pool.reviewGates.challenge === "blocking") return "challenge_block";
+  if (pool.sponsorMatchEnabled && !pool.sponsorMatchBacked) return "sponsor_match_unbacked";
   if (!reserveBacked) return "bonus_reserve_unbacked";
   return null;
 }
@@ -883,7 +1267,7 @@ export function evaluateRefundBonusRoundOutcome({
     .length;
   const distinctViewpointClusterCount = new Set(
     eligiblePledges
-      .map((row) => row.pledge.viewpointTag)
+      .map((row) => row.pledge.viewpointCluster)
       .filter((tag) => tag && tag !== "prefer_not_to_say"),
   ).size;
   const sponsorMatchCents = pool.sponsorMatchEnabled && pool.sponsorMatchBacked ? netRecipientCents : 0;
@@ -944,6 +1328,22 @@ export function evaluateRefundBonusRoundOutcome({
     };
   }
 
+  if (recomputedAfterAuthorization && excludedPledgeIds.length > 0) {
+    return {
+      status: "nonqualifying_failed",
+      reasonCodes: ["authorization_failure_recompute_below_threshold"],
+      eligiblePledges,
+      excludedPledgeIds,
+      netRecipientCents,
+      grossExposureCents,
+      verifiedSupporterCount,
+      distinctViewpointClusterCount,
+      bonusExposureReservedCents,
+      sponsorMatchCents,
+      recomputedAfterAuthorization,
+    };
+  }
+
   const allowedQualifyingFailures = thresholdFailures.filter((reason) =>
     pool.qualifyingFailureModes.includes(reason)
   );
@@ -981,6 +1381,12 @@ export function planRefundBonusSettlement({
   roundStatus,
   emergencyPaused = false,
   simulationOnly = true,
+  bonusSettlementPlanApproved = false,
+  eligibleRowsRecomputed = false,
+  featurePaused = false,
+  roundPaused = false,
+  bonusReservePaused = false,
+  payoutRailPaused = false,
 }: {
   round: RefundBonusRound;
   pool: RefundBonusPledgePool;
@@ -989,57 +1395,159 @@ export function planRefundBonusSettlement({
   roundStatus: RefundBonusRoundStatus;
   emergencyPaused?: boolean;
   simulationOnly?: boolean;
+  bonusSettlementPlanApproved?: boolean;
+  eligibleRowsRecomputed?: boolean;
+  featurePaused?: boolean;
+  roundPaused?: boolean;
+  bonusReservePaused?: boolean;
+  payoutRailPaused?: boolean;
 }): RefundBonusSettlementPlan {
   const blockedReasonCodes: string[] = [];
   if (!simulationOnly) blockedReasonCodes.push("production_real_money_disabled");
   if (emergencyPaused) blockedReasonCodes.push("emergency_pause_active");
+  if (featurePaused) blockedReasonCodes.push("feature_pause_active");
+  if (roundPaused) blockedReasonCodes.push("round_pause_active");
+  if (bonusReservePaused) blockedReasonCodes.push("bonus_reserve_pause_active");
+  if (payoutRailPaused) blockedReasonCodes.push("payout_rail_pause_active");
   if (!isRefundBonusReserveBacked(reserve, round, pool)) blockedReasonCodes.push("bonus_reserve_unbacked");
-  if (outcome.status === "qualifying_failed" && roundStatus !== "bonus_payable" && roundStatus !== "bonus_paying") {
-    blockedReasonCodes.push("round_not_bonus_payable");
+  if (outcome.status === "qualifying_failed") {
+    if (roundStatus !== "bonus_payable" && roundStatus !== "bonus_paying") {
+      blockedReasonCodes.push("round_not_bonus_payable");
+    }
+    if (pool.status !== "qualifying_failed" && pool.status !== "bonus_payable") {
+      blockedReasonCodes.push("pool_not_qualifying_failed_or_bonus_payable");
+    }
+    if (reserve.status !== "active" && reserve.status !== "paying") {
+      blockedReasonCodes.push("bonus_reserve_not_active");
+    }
+    if (!bonusSettlementPlanApproved) {
+      blockedReasonCodes.push("bonus_settlement_plan_not_approved");
+    }
+    if (!eligibleRowsRecomputed) {
+      blockedReasonCodes.push("eligible_rows_not_recomputed");
+    }
   }
 
+  const createdAt = round.updatedAt;
   const payoutOperations = outcome.status === "qualifying_failed" && blockedReasonCodes.length === 0
-    ? outcome.eligiblePledges.map((row) => ({
-      id: `${row.pledge.id}:refund-bonus-payout`,
-      roundId: round.id,
-      poolId: pool.id,
-      pledgeId: row.pledge.id,
-      participantId: row.pledge.participantId,
-      reserveId: reserve.id,
-      bonusGrossCents: row.bonusEligibleCents,
-      bonusPayoutFeeCents: 0,
-      bonusNetCents: row.bonusEligibleCents,
-      operationState: "succeeded" as const,
-      idempotencyKey: `refund-bonus:${round.id}:${pool.id}:${row.pledge.id}`,
-      providerPayoutRef: simulationOnly ? `simulated:${row.pledge.id}` : undefined,
-    }))
+    ? outcome.eligiblePledges.map((row) => {
+      const operation = {
+        id: `${row.pledge.id}:refund-bonus-payout`,
+        roundId: round.id,
+        poolId: pool.id,
+        pledgeId: row.pledge.id,
+        participantId: row.pledge.participantId,
+        reserveId: reserve.id,
+        bonusGrossCents: row.bonusEligibleCents,
+        payoutFeeCents: 0,
+        bonusPayoutFeeCents: 0,
+        bonusNetCents: row.bonusEligibleCents,
+        currency: "usd" as const,
+        payoutDestinationRef: row.pledge.paymentClusterId,
+        operationState: "succeeded" as const,
+        payoutState: "succeeded" as const,
+        idempotencyKey: `refund-bonus:${round.id}:${pool.id}:${row.pledge.id}`,
+        providerPayoutRef: simulationOnly ? `simulated:${row.pledge.id}` : undefined,
+        createdAt,
+        updatedAt: createdAt,
+      };
+
+      return {
+        ...operation,
+        eventHash: hashValue(operation),
+      };
+    })
     : [];
   const bonusLiabilityCents = outcome.status === "qualifying_failed"
     ? outcome.eligiblePledges.reduce((sum, row) => sum + row.bonusEligibleCents, 0)
     : 0;
   const bonusPaidCents = payoutOperations.reduce((sum, operation) => sum + operation.bonusNetCents, 0);
   const success = outcome.status === "cleared";
-  const finalStatus = blockedReasonCodes.length > 0
-    ? "blocked"
-    : success
-      ? "captured"
-      : outcome.status === "qualifying_failed"
-        ? "qualifying_failed"
-        : "nonqualifying_failed";
   const feeCents = success ? outcome.eligiblePledges.reduce((sum, row) => sum + row.pledge.feeCents, 0) : 0;
   const grossCapturedCents = success ? outcome.grossExposureCents : 0;
   const netRecipientDisbursedCents = success ? outcome.netRecipientCents : 0;
   const bonusUnearnedReleasedCents = outcome.status === "qualifying_failed"
     ? Math.max(0, outcome.bonusExposureReservedCents - bonusLiabilityCents)
     : outcome.bonusExposureReservedCents;
+  const hasAuthorizationFailure = outcome.reasonCodes.includes("authorization_failure_recompute_below_threshold");
+  const hasReviewBlock = outcome.reasonCodes.some((reason) =>
+    reason === "review_block" ||
+    reason === "challenge_block" ||
+    reason === "anti_threat_block" ||
+    reason === "externality_block" ||
+    reason === "conflict_block" ||
+    reason === "legal_compliance_block" ||
+    reason === "sponsor_match_unbacked" ||
+    reason === "bonus_reserve_unbacked" ||
+    reason === "copy_preflight_failure"
+  );
+  const finalStatus: RefundBonusAuditReport["finalStatus"] = blockedReasonCodes.length > 0 || outcome.status === "nonqualifying_failed"
+    ? outcome.reasonCodes.includes("round_canceled_by_admin")
+      ? "canceled_no_bonus"
+      : hasAuthorizationFailure
+        ? "failed_authorization_no_bonus"
+        : hasReviewBlock
+          ? "blocked_review_no_bonus"
+          : "nonqualifying_failed_no_bonus"
+    : success
+      ? "cleared_and_captured"
+      : payoutOperations.length > 0
+        ? "qualifying_failed_bonus_paid"
+        : "qualifying_failed_bonus_payable";
+  const payoutByPledgeId = new Map(payoutOperations.map((operation) => [operation.pledgeId, operation]));
+  const settlementRows: RefundBonusPoolSettlementRow[] = outcome.eligiblePledges.map((row) => {
+    const payoutOperation = payoutByPledgeId.get(row.pledge.id);
+    const rowSuccess = success && blockedReasonCodes.length === 0;
+    const rowBonusPaid = payoutOperation?.bonusNetCents ?? 0;
+    const rowBonusFee = payoutOperation?.bonusPayoutFeeCents ?? 0;
+    const settlementState: RefundBonusPoolSettlementRow["settlementState"] = blockedReasonCodes.length > 0
+      ? "blocked"
+      : rowSuccess
+        ? "captured"
+        : outcome.status === "qualifying_failed"
+          ? payoutOperation
+            ? "bonus_paid"
+            : "bonus_payable"
+          : "released";
+
+    return {
+      id: `${round.id}:${pool.id}:${row.pledge.id}:settlement`,
+      roundId: round.id,
+      poolId: pool.id,
+      pledgeId: row.pledge.id,
+      participantId: row.pledge.participantId,
+      grossCapturedCents: rowSuccess ? row.pledge.maxGrossCents : 0,
+      feeCents: rowSuccess ? row.pledge.feeCents : 0,
+      netRecipientDisbursedCents: rowSuccess ? row.netRecipientCents : 0,
+      actualGrossExposureCents: row.pledge.maxGrossCents,
+      countedCents: rowSuccess ? row.countedCents : 0,
+      matchEligibleCents: rowSuccess ? row.matchEligibleCents : 0,
+      sponsorBaseMatchCents: rowSuccess && pool.sponsorMatchEnabled && pool.sponsorMatchBacked
+        ? row.netRecipientCents
+        : 0,
+      bonusExposureReservedCents: row.pledge.bonusExposureReservedCents,
+      bonusEligibleCents: outcome.status === "qualifying_failed" ? row.bonusEligibleCents : 0,
+      bonusPaidCents: rowBonusPaid,
+      bonusPayoutFeeCents: rowBonusFee,
+      bonusUnearnedReleasedCents: outcome.status === "qualifying_failed"
+        ? Math.max(0, row.pledge.bonusExposureReservedCents - row.bonusEligibleCents)
+        : row.pledge.bonusExposureReservedCents,
+      settlementState,
+      createdAt,
+    };
+  });
 
   return {
+    settlementRows,
     payoutOperations,
     blockedReasonCodes,
     auditReport: {
       id: `${round.id}:${pool.id}:refund-bonus-audit`,
       roundId: round.id,
       poolId: pool.id,
+      rulebookHash: round.rulebookHash,
+      feePolicyHash: round.feePolicyHash,
+      bonusPolicyHash: round.bonusPolicyHash,
       calculationVersion: REFUND_BONUS_CALCULATION_VERSION,
       finalStatus,
       grossCapturedCents,
@@ -1056,6 +1564,16 @@ export function planRefundBonusSettlement({
       bonusPayoutFeeCents: payoutOperations.reduce((sum, operation) => sum + operation.bonusPayoutFeeCents, 0),
       bonusUnclaimedCents: Math.max(0, bonusLiabilityCents - bonusPaidCents),
       bonusUnearnedReleasedCents,
+      verifiedSupporterCount: outcome.verifiedSupporterCount,
+      distinctViewpointClusterCount: outcome.distinctViewpointClusterCount,
+      authorizationFailureCount: hasAuthorizationFailure ? outcome.excludedPledgeIds.length : 0,
+      excludedIdentityCount: 0,
+      excludedPaymentClusterCount: outcome.excludedPledgeIds.length,
+      excludedBonusAbuseCount: outcome.reasonCodes.includes("material_collusion_attack") ||
+        outcome.reasonCodes.includes("material_sybil_attack")
+        ? outcome.excludedPledgeIds.length
+        : 0,
+      reviewBlockCount: hasReviewBlock ? 1 : 0,
       reasonCodes: outcome.reasonCodes,
       publicReportJson: {
         grossCapturedCents,
@@ -1070,9 +1588,10 @@ export function planRefundBonusSettlement({
         bonusLiabilityCents,
         bonusPaidCents,
         bonusUnearnedReleasedCents,
-        finalStatus: outcome.status,
+        finalStatus,
         reasonCodes: outcome.reasonCodes,
       },
+      publishedAt: createdAt,
     },
   };
 }
@@ -1095,7 +1614,7 @@ export function buildRefundBonusReceipt({
   const payoutOperation = plan.payoutOperations.find((operation) => operation.pledgeId === pledge.id);
   const finalStatus = plan.auditReport.finalStatus;
 
-  if (finalStatus === "captured") {
+  if (finalStatus === "cleared_and_captured") {
     const netRecipientDisbursedCents = Math.max(0, pledge.maxGrossCents - pledge.feeCents);
 
     return {
@@ -1124,7 +1643,7 @@ export function buildRefundBonusReceipt({
     };
   }
 
-  if (finalStatus === "qualifying_failed") {
+  if (finalStatus === "qualifying_failed_bonus_payable" || finalStatus === "qualifying_failed_bonus_paid") {
     return {
       receiptKind: "qualifying_failure_bonus",
       roundId: round.id,
@@ -1175,12 +1694,17 @@ export function buildRefundBonusReceipt({
 
 const PROHIBITED_COPY_PATTERNS: Array<[string, RegExp]> = [
   ["free money", /\bfree\s+money\b/i],
+  ["profit", /\bprofit\b/i],
   ["investment", /\binvestment\b/i],
   ["interest", /\binterest\b/i],
   ["lottery", /\blottery\b/i],
   ["guaranteed return", /\bguaranteed\s+return\b/i],
+  ["risk-free return", /\brisk[-\s]?free\s+return\b/i],
   ["cashback", /\bcashback\b/i],
+  ["refund with interest", /\brefund\s+with\s+interest\b/i],
   ["guaranteed bonus", /\bguaranteed\s+bonus\b/i],
+  ["failure impact", /\bfailure\s+impact\b/i],
+  ["paid if it fails no matter why", /\bpaid\s+if\s+it\s+fails\b[\s\S]{0,80}\bno\s+matter\s+why\b/i],
   ["impact", /\bbonus\s+impact\b/i],
   ["held", /\bfunds\s+(?:are\s+)?held\b/i],
   ["escrow", /\bescrow(?:ed)?\b/i],
@@ -1214,5 +1738,77 @@ export function validateRefundBonusCopy(copy: string): RefundBonusCopyPreflight 
     passed: blockedTerms.length === 0 && missingRequiredClaims.length === 0,
     blockedTerms,
     missingRequiredClaims,
+  };
+}
+
+export function buildRefundBonusCopyPreflightReport({
+  id,
+  roundId,
+  checkedAt,
+  lastDeployHash,
+  checkedRoutes,
+  activeCopy,
+  prohibitedActiveLabelsFound = [],
+  exactProgressLeakFound = false,
+  paymentOverclaimFound = false,
+  ordinaryZeroStatePrimaryFound = true,
+  staleCtaFound = false,
+  nonMvpSurfaceLeakFound = false,
+}: {
+  id: string;
+  roundId: string;
+  checkedAt: string;
+  lastDeployHash: string;
+  checkedRoutes: string[];
+  activeCopy: string;
+  prohibitedActiveLabelsFound?: string[];
+  exactProgressLeakFound?: boolean;
+  paymentOverclaimFound?: boolean;
+  ordinaryZeroStatePrimaryFound?: boolean;
+  staleCtaFound?: boolean;
+  nonMvpSurfaceLeakFound?: boolean;
+}): RefundBonusCopyPreflightReport {
+  const copy = validateRefundBonusCopy(activeCopy);
+  const bonusOverclaimFound = copy.blockedTerms.length > 0 || copy.missingRequiredClaims.length > 0;
+  const financialPromotionRiskFound = copy.blockedTerms.some((term) =>
+    term === "free money" ||
+    term === "profit" ||
+    term === "investment" ||
+    term === "interest" ||
+    term === "lottery" ||
+    term === "guaranteed return" ||
+    term === "risk-free return" ||
+    term === "cashback" ||
+    term === "refund with interest"
+  );
+  const reportWithoutHash = {
+    id,
+    roundId,
+    checkedAt,
+    lastDeployHash,
+    checkedRoutes,
+    prohibitedActiveLabelsFound,
+    exactProgressLeakFound,
+    paymentOverclaimFound,
+    bonusOverclaimFound,
+    financialPromotionRiskFound,
+    ordinaryZeroStatePrimaryFound,
+    staleCtaFound,
+    nonMvpSurfaceLeakFound,
+    pass: (
+      prohibitedActiveLabelsFound.length === 0 &&
+      !exactProgressLeakFound &&
+      !paymentOverclaimFound &&
+      !bonusOverclaimFound &&
+      !financialPromotionRiskFound &&
+      ordinaryZeroStatePrimaryFound &&
+      !staleCtaFound &&
+      !nonMvpSurfaceLeakFound
+    ),
+  };
+
+  return {
+    ...reportWithoutHash,
+    reportHash: hashValue(reportWithoutHash),
   };
 }

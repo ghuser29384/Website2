@@ -180,6 +180,10 @@ export default function RefundBonusPledgePoolLabsPage() {
               identity and bonus eligibility checks pass, the payment method is provider-confirmed,
               and backed bonus exposure fits within the round, pool, and reserve caps.
             </p>
+            <p>
+              Optional viewpoint tags are aggregate-only: they are not a moral score, do not affect
+              pledge power, and are used only for different-view support checks.
+            </p>
           </div>
         </section>
       </main>
