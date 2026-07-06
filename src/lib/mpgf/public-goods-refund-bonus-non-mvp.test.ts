@@ -1230,10 +1230,41 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
 
 test("same-control and same-payment duplicates do not increase thresholds or bonus counts", () => {
   const pledges = [
-    pledge("a", "alice", 2_500, "humanitarian", { sameControlClusterId: "same", paymentClusterId: "pay-a", createdAt: "2026-07-06T00:00:00.000Z" }),
-    pledge("b", "bob", 2_500, "animal_inclusive", { sameControlClusterId: "same", paymentClusterId: "pay-b", createdAt: "2026-07-06T00:01:00.000Z" }),
-    pledge("c", "carol", 2_500, "long_run_future", { paymentClusterId: "pay-a", createdAt: "2026-07-06T00:02:00.000Z" }),
-    pledge("d", "drew", 2_500, "animal_inclusive", { sameControlClusterId: "drew", paymentClusterId: "pay-d", createdAt: "2026-07-06T00:03:00.000Z" }),
+    pledge("a", "alice", 2_500, "humanitarian", {
+      sameControlClusterId: "same",
+      paymentClusterId: "pay-a",
+      createdAt: "2026-07-06T00:00:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:02:00.000Z",
+    }),
+    pledge("b", "bob", 2_500, "animal_inclusive", {
+      sameControlClusterId: "same",
+      paymentClusterId: "pay-b",
+      createdAt: "2026-07-06T00:01:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:00:00.000Z",
+    }),
+    pledge("c", "carol", 2_500, "long_run_future", {
+      paymentClusterId: "pay-a",
+      createdAt: "2026-07-06T00:02:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:01:00.000Z",
+    }),
+    pledge("d", "drew", 2_500, "animal_inclusive", {
+      sameControlClusterId: "drew",
+      paymentClusterId: "pay-d",
+      createdAt: "2026-07-06T00:03:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:04:00.000Z",
+    }),
+    pledge("e", "erin", 2_500, "public_knowledge", {
+      sameControlClusterId: "erin",
+      paymentClusterId: "pay-b",
+      createdAt: "2026-07-06T00:04:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:03:00.000Z",
+    }),
+    pledge("f", "fern", 2_500, "institutional_resilience", {
+      sameControlClusterId: "same",
+      paymentClusterId: "pay-f",
+      createdAt: "2026-07-06T00:05:00.000Z",
+      finalReviewConfirmedAt: "2026-07-06T00:05:00.000Z",
+    }),
   ];
   const outcome = evaluateRefundBonusRoundOutcome({
     round: round(),
@@ -1243,8 +1274,9 @@ test("same-control and same-payment duplicates do not increase thresholds or bon
     pledges,
   });
   assert.equal(outcome.status, "cleared");
-  assert.deepEqual(outcome.excludedPledgeIds.sort(), ["b", "c"]);
-  assert.equal(outcome.verifiedSupporterCount, 2);
+  assert.deepEqual(outcome.eligiblePledges.map((row) => row.pledge.id), ["b", "c", "d"]);
+  assert.deepEqual(outcome.excludedPledgeIds.sort(), ["a", "e", "f"]);
+  assert.equal(outcome.verifiedSupporterCount, 3);
   assert.equal(outcome.distinctViewpointClusterCount, 2);
 });
 

@@ -178,8 +178,11 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
               {formatUsd(preview.statedNetRecipientCents)} going to the projects after fees.
             </p>
             <p>
-              The participant&apos;s own commitment and same-control accounts do not count toward
-              the forecast result. Platform-match payments do not count toward forecast results.
+              The participant&apos;s own commitment, same-control accounts, and duplicate payment
+              clusters treated as same-control do not count toward the forecast result. Platform-match
+              payments, sponsor match, refund-bonus reserves, fees, soft intents, drafts, failed
+              payments, Sybil-failed rows, blocked or review-failed rows, stale authorizations, and
+              final project disbursement after settlement do not count toward forecast results.
             </p>
           </div>
         </section>
@@ -211,9 +214,11 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
               after fees.
             </p>
             <p>
-              Your own commitment and same-control accounts do not count toward your forecast
-              result. Platform-match payments, sponsor match, fees, drafts, and failed payments do
-              not count toward forecast results.
+              Your own commitment, same-control accounts, and duplicate payment clusters treated as
+              same-control do not count toward your forecast result. Platform-match payments,
+              sponsor match, refund-bonus reserves, fees, soft intents, drafts, failed payments,
+              Sybil-failed rows, blocked or review-failed rows, stale authorizations, and final
+              project disbursement after settlement do not count toward forecast results.
             </p>
             <p>
               Saving your payment method is not a charge, not a hold, not escrow, not custody, not
@@ -221,6 +226,7 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
             </p>
             <ul>
               <li>I understand my own commitment does not count toward my forecast result.</li>
+              <li>I understand same-control accounts and duplicate payment clusters treated as same-control do not count toward my forecast result.</li>
               <li>I understand that if I lose, I may be charged my stated contribution.</li>
               <li>I understand that if I win, the platform contributes the tier-specific match amount to the projects and I receive no direct payment.</li>
               <li>I understand this is non-MVP and may be simulation-only.</li>

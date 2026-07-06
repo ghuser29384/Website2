@@ -1399,6 +1399,17 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   const labsPage = readFileSync("src/app/labs/at-least-tier-platform-match/page.tsx", "utf8");
   const labsRoundPage = readFileSync("src/app/labs/at-least-tier-platform-match/[roundSlug]/page.tsx", "utf8");
   const labsCommitPage = readFileSync("src/app/labs/at-least-tier-platform-match/[roundSlug]/commit/page.tsx", "utf8");
+  const accountLabsPage = readFileSync("src/app/account/labs/at-least-tier-platform-match/page.tsx", "utf8");
+  const adminPage = readFileSync("src/app/admin/moral-public-goods/at-least-tier-platform-match/page.tsx", "utf8");
+  const adminRouteAliases = [
+    "rounds",
+    "reward-schedule",
+    "resolution",
+    "settlement",
+    "audit",
+  ].map((section) =>
+    readFileSync(`src/app/admin/moral-public-goods/at-least-tier-platform-match/${section}/page.tsx`, "utf8")
+  );
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
 
@@ -1406,6 +1417,8 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(docs, /no direct user payout/i);
   assert.match(docs, /damped odds schedule formula/i);
   assert.match(docs, /leave-one-cluster-out/i);
+  assert.match(docs, /duplicate payment clusters treated as same-control/);
+  assert.match(docs, /soft intents, drafts, payment-failed rows, Sybil-failed rows, blocked\/review-failed rows, stale authorizations/);
   assert.match(docs, /Production public commitments, real-money authorization, capture, platform-match contribution, project routing, and settlement are disabled/);
   assert.match(labsPage, /At-Least-Tier Platform Match/);
   assert.match(labsPage, /AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING/);
@@ -1413,21 +1426,44 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsPage, /platform contributes/);
   assert.match(labsPage, /you contribute the stated amount/);
   assert.match(labsPage, /Production real-money use is disabled unless this mechanism is explicitly promoted/);
-  assert.match(labsPage, /Own commitments, same-control accounts, fees, sponsor match/);
+  assert.match(labsPage, /Own commitments, same-control accounts, duplicate payment clusters treated as\s+same-control/);
+  assert.match(labsPage, /refund-bonus reserves,\s+soft intents, drafts, payment-failed rows, Sybil-failed rows, blocked or review-failed\s+rows, stale authorizations/);
   assert.match(labsRoundPage, /read-only labs surface/);
   assert.match(labsRoundPage, /sealed qualitative status only before close/);
   assert.match(labsRoundPage, /other eligible users&apos; effective support/);
+  assert.match(labsRoundPage, /duplicate payment clusters treated as\s+same-control/);
+  assert.match(labsRoundPage, /refund-bonus reserves, fees, soft\s+intents, drafts, failed payments, Sybil-failed rows, blocked or review-failed rows/);
   assert.match(labsRoundPage, /View disabled commitment review/);
   assert.match(labsCommitPage, /required v137 commitment copy in an off state/);
   assert.match(labsCommitPage, /hard, payment-backed platform-match commitment/);
   assert.match(labsCommitPage, /Your stated intended\s+contribution if your forecast is not met/);
   assert.match(labsCommitPage, /Platform-match rate if your forecast is met/);
-  assert.match(labsCommitPage, /Platform-match payments, sponsor match, fees, drafts, and failed payments do\s+not count toward forecast results/);
+  assert.match(labsCommitPage, /duplicate payment clusters treated as\s+same-control do not count toward your forecast/);
+  assert.match(labsCommitPage, /Platform-match payments,\s+sponsor match, refund-bonus reserves, fees, soft intents, drafts, failed payments,\s+Sybil-failed rows, blocked or review-failed rows, stale authorizations, and final\s+project disbursement after settlement do not count toward forecast results/);
   assert.match(labsCommitPage, /I understand my own commitment does not count toward my forecast result/);
+  assert.match(labsCommitPage, /I understand same-control accounts and duplicate payment clusters treated as same-control do not count toward my forecast result/);
   assert.match(labsCommitPage, /I understand that if I lose, I may be charged my stated contribution/);
   assert.match(labsCommitPage, /I understand that if I win, the platform contributes the tier-specific match amount to the projects and I receive no direct payment/);
   assert.match(labsCommitPage, /Hard commitment disabled/);
+  assert.match(accountLabsPage, /Account labs route/);
+  assert.match(accountLabsPage, /AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING/);
+  assert.match(accountLabsPage, /does not create,\s+display, or persist personal account commitments/);
+  assert.match(accountLabsPage, /no winner receives a direct user payout/);
+  assert.match(accountLabsPage, /not linked from the primary CGPP pledge flow/);
+  assert.match(adminPage, /Non-MVP admin console/);
+  assert.match(adminPage, /AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING/);
+  assert.match(adminPage, /draft\s+labs rounds, reviewed pools, tier thresholds, frozen probabilities/);
+  assert.match(adminPage, /Provider calls are disabled/);
+  assert.match(adminPage, /run_simulated_authorization_resolution_settlement/);
+  assert.match(adminPage, /publicReportImpliesLiveProduct: true/);
+  assert.match(adminPage, /reportJob\.blockerCodes\.join/);
+  assert.match(adminPage, /Suggested v137 admin URLs resolve/);
+  for (const routeAlias of adminRouteAliases) {
+    assert.match(routeAlias, /export \{ default, metadata \} from "\.\.\/page"/);
+  }
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
+  assert.equal(site.includes("/account/labs/at-least-tier-platform-match"), false);
+  assert.equal(site.includes("/admin/moral-public-goods/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);
 });
 

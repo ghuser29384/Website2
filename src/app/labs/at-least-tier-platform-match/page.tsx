@@ -65,6 +65,7 @@ export default function AtLeastTierPlatformMatchLabsPage() {
     If the user loses, the user contributes the stated amount to reviewed projects.
     The user's own commitment does not count toward the forecast result.
     Same-control accounts do not count toward the forecast result.
+    Duplicate payment clusters treated as same-control do not count toward the forecast result.
     Platform-match payments do not count toward forecast results.
     Production real-money use is disabled unless this mechanism is explicitly promoted.
   `);
@@ -137,10 +138,11 @@ export default function AtLeastTierPlatformMatchLabsPage() {
           </SectionHeader>
           <div className="mpgf-panel">
             <p>
-              Own commitments, same-control accounts, fees, sponsor match, platform-match payments,
-              refund-bonus reserves, drafts, payment-failed rows, blocked rows, stale authorizations,
-              and final project disbursement after settlement do not count toward a participant&apos;s
-              forecast result.
+              Own commitments, same-control accounts, duplicate payment clusters treated as
+              same-control, fees, sponsor match, platform-match payments, refund-bonus reserves,
+              soft intents, drafts, payment-failed rows, Sybil-failed rows, blocked or review-failed
+              rows, stale authorizations, and final project disbursement after settlement do not
+              count toward a participant&apos;s forecast result.
             </p>
           </div>
         </section>

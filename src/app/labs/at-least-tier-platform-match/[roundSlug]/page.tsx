@@ -130,7 +130,11 @@ export default async function AtLeastTierPlatformMatchRoundPage({ params }: Page
 
         <section className="section section-white" aria-labelledby="resolution-heading">
           <SectionHeader eyebrow="Resolution" id="resolution-heading" title="Forecasts use other eligible effective support.">
-            Own commitments, same-control accounts, platform-match payments, sponsor match, fees, drafts, failed payments, and stale authorizations do not count toward forecast results.
+            Own commitments, same-control accounts, duplicate payment clusters treated as
+            same-control, platform-match payments, sponsor match, refund-bonus reserves, fees, soft
+            intents, drafts, failed payments, Sybil-failed rows, blocked or review-failed rows,
+            stale authorizations, and final project disbursement after settlement do not count
+            toward forecast results.
           </SectionHeader>
           <div className="mpgf-panel">
             <p>

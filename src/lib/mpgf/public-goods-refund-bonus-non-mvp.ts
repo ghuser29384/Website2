@@ -2223,7 +2223,9 @@ function dedupeEligiblePledges(pledges: RefundBonusPledge[]) {
   const excludedIds: string[] = [];
 
   for (const pledge of [...pledges].sort((left, right) =>
-    left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+    (left.finalReviewConfirmedAt ?? left.createdAt).localeCompare(right.finalReviewConfirmedAt ?? right.createdAt) ||
+    left.createdAt.localeCompare(right.createdAt) ||
+    left.id.localeCompare(right.id)
   )) {
     const sameControlKey = pledge.sameControlClusterId ? `sc:${pledge.sameControlClusterId}` : `participant:${pledge.participantId}`;
     const paymentKey = pledge.paymentClusterId ? `pay:${pledge.paymentClusterId}` : `pledge:${pledge.id}`;
