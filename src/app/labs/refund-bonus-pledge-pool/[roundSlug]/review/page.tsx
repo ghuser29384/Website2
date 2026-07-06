@@ -5,8 +5,10 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, SectionHeader } from "@/components/ui/page-primitives";
 import {
   REFUND_BONUS_CALCULATION_VERSION,
+  REFUND_BONUS_COMPREHENSION_QUESTIONS,
   REFUND_BONUS_NON_MVP_WARNING,
   computeRefundBonusCents,
+  evaluateRefundBonusComprehensionMetrics,
   evaluateRefundBonusHardPledgeGate,
   evaluateRefundBonusOpenGate,
   type RefundBonusPledge,
@@ -224,6 +226,15 @@ export default async function RefundBonusPledgePoolReviewPage({ params }: PagePr
     currentGrossExposureCents: 0,
     currentBonusExposureCents: 0,
   });
+  const comprehensionMetrics = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 0,
+    chargeTimingIncorrect: 0,
+    bonusEligibilityAnswered: 0,
+    bonusEligibilityIncorrect: 0,
+    bonusCharacterizationAnswered: 0,
+    bonusCharacterizationIncorrect: 0,
+    realMoneyPilot: false,
+  });
 
   return (
     <div className="page-shell page-shell-focused">
@@ -313,6 +324,36 @@ export default async function RefundBonusPledgePoolReviewPage({ params }: PagePr
             <button className="button button-secondary" type="button" disabled>
               Save hard pledge disabled
             </button>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="comprehension-heading">
+          <SectionHeader eyebrow="Comprehension checks" id="comprehension-heading" title="Charge timing and bonus eligibility must be understood.">
+            These questions are required before hard pledge or immediately after save in any later promoted flow; this labs route records no answers.
+          </SectionHeader>
+          <div className="data-grid">
+            {REFUND_BONUS_COMPREHENSION_QUESTIONS.map((question) => (
+              <article className="panel data-card" key={question.id}>
+                <p className="detail-kicker">Correct answer: {question.correctChoiceId}</p>
+                <h3>{question.prompt}</h3>
+                <ol>
+                  {question.choices.map((choice) => (
+                    <li key={choice.id}>
+                      {choice.id}. {choice.label}
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
+          </div>
+          <div className="mpgf-panel">
+            <p>
+              Real-money pilots pause if more than 5% answer charge timing incorrectly or more than
+              10% answer bonus eligibility incorrectly.
+            </p>
+            <p>
+              Current labs measurement state: {comprehensionMetrics.pauseReasonCodes.join(", ")}.
+            </p>
           </div>
         </section>
       </main>

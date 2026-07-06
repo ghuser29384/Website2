@@ -4,15 +4,21 @@ import test from "node:test";
 
 import {
   REFUND_BONUS_CALCULATION_VERSION,
+  REFUND_BONUS_ACCOUNTING_METRIC_KEYS,
+  REFUND_BONUS_COMPREHENSION_QUESTIONS,
+  REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS,
   REFUND_BONUS_FEATURE_CLASSIFICATION,
   REFUND_BONUS_FEATURE_KEY,
   REFUND_BONUS_LIVE_MONEY_FLAG,
+  REFUND_BONUS_PRODUCT_METRIC_KEYS,
+  REFUND_BONUS_SAFETY_METRIC_KEYS,
   buildRefundBonusCopyPreflightReport,
   buildRefundBonusReceipt,
   canRefundBonusAuthorizeSuccessCharge,
   canRefundBonusCaptureSuccessCharge,
   computeRefundBonusCents,
   evaluateRefundBonusCapability,
+  evaluateRefundBonusComprehensionMetrics,
   evaluateRefundBonusHardPledgeGate,
   evaluateRefundBonusOpenGate,
   evaluateRefundBonusRoundOutcome,
@@ -1068,6 +1074,81 @@ test("refund-bonus receipts distinguish success charge from qualifying-failure b
   assert.match(failureReceipt.copy, /Backed failure-participation bonus: 100 cents/);
 });
 
+test("refund-bonus comprehension and metrics catalog match v137 experiment gates", () => {
+  assert.deepEqual(REFUND_BONUS_COMPREHENSION_QUESTIONS.map((question) => question.id), [
+    "charge_timing",
+    "bonus_eligibility",
+    "bonus_characterization",
+  ]);
+  assert.deepEqual(REFUND_BONUS_COMPREHENSION_QUESTIONS.map((question) => question.correctChoiceId), ["B", "B", "C"]);
+  assert.ok(REFUND_BONUS_COMPREHENSION_QUESTIONS.every((question) =>
+    question.deliveryRequirement === "before_hard_pledge_or_immediately_after_save"
+  ));
+  assert.match(REFUND_BONUS_COMPREHENSION_QUESTIONS[0]!.choices[1]!.label, /Only after the round closes/);
+  assert.match(REFUND_BONUS_COMPREHENSION_QUESTIONS[1]!.choices[1]!.label, /bonus-eligible support-threshold reason/);
+  assert.match(REFUND_BONUS_COMPREHENSION_QUESTIONS[2]!.choices[2]!.label, /not project impact/);
+  assert.equal(REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.realMoneyChargeTimingIncorrectPauseBps, 500);
+  assert.equal(REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.realMoneyBonusEligibilityIncorrectPauseBps, 1_000);
+
+  const passing = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 100,
+    chargeTimingIncorrect: 5,
+    bonusEligibilityAnswered: 100,
+    bonusEligibilityIncorrect: 10,
+    bonusCharacterizationAnswered: 100,
+    bonusCharacterizationIncorrect: 25,
+    realMoneyPilot: true,
+  });
+  assert.equal(passing.stage0Success, true);
+  assert.equal(passing.pauseRecommended, false);
+  assert.deepEqual(passing.pauseReasonCodes, []);
+
+  const paused = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 100,
+    chargeTimingIncorrect: 6,
+    bonusEligibilityAnswered: 100,
+    bonusEligibilityIncorrect: 11,
+    bonusCharacterizationAnswered: 100,
+    bonusCharacterizationIncorrect: 25,
+    realMoneyPilot: true,
+  });
+  assert.equal(paused.pauseRecommended, true);
+  assert.ok(paused.pauseReasonCodes.includes("charge_timing_incorrect_rate_above_5_percent"));
+  assert.ok(paused.pauseReasonCodes.includes("bonus_eligibility_incorrect_rate_above_10_percent"));
+
+  const missing = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 0,
+    chargeTimingIncorrect: 0,
+    bonusEligibilityAnswered: 0,
+    bonusEligibilityIncorrect: 0,
+    bonusCharacterizationAnswered: 0,
+    bonusCharacterizationIncorrect: 0,
+  });
+  assert.equal(missing.stage0Success, false);
+  assert.ok(missing.pauseReasonCodes.includes("charge_timing_sample_missing"));
+  assert.ok(missing.pauseReasonCodes.includes("bonus_eligibility_sample_missing"));
+  assert.ok(missing.pauseReasonCodes.includes("bonus_characterization_sample_missing"));
+
+  const invalid = evaluateRefundBonusComprehensionMetrics({
+    chargeTimingAnswered: 10,
+    chargeTimingIncorrect: 11,
+    bonusEligibilityAnswered: 10,
+    bonusEligibilityIncorrect: 0,
+    bonusCharacterizationAnswered: 10,
+    bonusCharacterizationIncorrect: 0,
+  });
+  assert.equal(invalid.pauseRecommended, true);
+  assert.ok(invalid.pauseReasonCodes.includes("invalid_comprehension_counts"));
+
+  assert.ok(REFUND_BONUS_PRODUCT_METRIC_KEYS.includes("provider_confirmed_payment_method_rate"));
+  assert.ok(REFUND_BONUS_PRODUCT_METRIC_KEYS.includes("bonus_unclaimed_cents"));
+  assert.ok(REFUND_BONUS_SAFETY_METRIC_KEYS.includes("bonus_copy_incidents"));
+  assert.ok(REFUND_BONUS_SAFETY_METRIC_KEYS.includes("refund_bonus_open_gate_failures"));
+  assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("grossCapturedCents"));
+  assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("bonusHeldCents"));
+  assert.ok(REFUND_BONUS_ACCOUNTING_METRIC_KEYS.includes("bonusUnearnedReleasedCents"));
+});
+
 test("refund-bonus branch remains absent from active public MVP surfaces", () => {
   const labsPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/page.tsx", "utf8");
   const poolPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/[roundSlug]/page.tsx", "utf8");
@@ -1102,6 +1183,11 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(reviewPage, /not making an immediate donation/);
   assert.match(reviewPage, /Saving your payment method is not a charge, not a hold, not escrow, not custody/);
   assert.match(reviewPage, /not a moral score, not a public reputation reward/);
+  assert.match(reviewPage, /REFUND_BONUS_COMPREHENSION_QUESTIONS/);
+  assert.match(reviewPage, /Comprehension checks/);
+  assert.match(reviewPage, /Correct answer/);
+  assert.match(reviewPage, /more than 5% answer charge timing incorrectly/);
+  assert.match(reviewPage, /more than\s+10% answer bonus eligibility incorrectly/);
   assert.match(reviewPage, /Save hard pledge disabled/);
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);

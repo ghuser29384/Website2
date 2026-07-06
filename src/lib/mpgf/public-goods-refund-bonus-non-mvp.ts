@@ -651,6 +651,163 @@ export interface RefundBonusCopyPreflightReport {
   reportHash: string;
 }
 
+export const REFUND_BONUS_PRODUCT_METRIC_KEYS = [
+  "moral_public_goods_search_visits",
+  "labs_card_click_through_rate",
+  "pool_page_completion_rate",
+  "amount_screen_completion_rate",
+  "final_review_completion_rate",
+  "provider_confirmed_payment_method_rate",
+  "hard_pledges_saved",
+  "hard_pledged_gross_cents",
+  "hard_pledged_net_recipient_cents",
+  "cleared_net_recipient_cents",
+  "captured_gross_cents",
+  "verified_supporter_count",
+  "distinct_eligible_viewpoint_cluster_count",
+  "qualifying_failures",
+  "nonqualifying_failures",
+  "bonus_eligible_pledges",
+  "bonus_ineligible_pledges",
+  "bonus_reserve_utilization_cents",
+  "bonus_paid_cents",
+  "bonus_unclaimed_cents",
+] as const;
+
+export const REFUND_BONUS_SAFETY_METRIC_KEYS = [
+  "sybil_flags",
+  "collusion_flags",
+  "same_control_exclusions",
+  "same_payment_cluster_exclusions",
+  "bonus_abuse_flags",
+  "prior_bonus_abuse_exclusions",
+  "review_blocks",
+  "challenge_blocks",
+  "conflict_review_flags",
+  "anti_threat_flags",
+  "externality_review_blocks",
+  "authorization_failures",
+  "bonus_payout_failures",
+  "payment_copy_incidents",
+  "bonus_copy_incidents",
+  "stale_copy_incidents",
+  "privacy_incidents",
+  "exact_progress_leak_incidents",
+  "refund_bonus_open_gate_failures",
+] as const;
+
+export const REFUND_BONUS_ACCOUNTING_METRIC_KEYS = [
+  "grossCapturedCents",
+  "feeCents",
+  "netRecipientDisbursedCents",
+  "actualGrossExposureCents",
+  "countedCents",
+  "matchEligibleCents",
+  "sponsorBaseMatchCents",
+  "bonusReserveBackedCents",
+  "bonusExposureReservedCents",
+  "bonusLiabilityCents",
+  "bonusHeldCents",
+  "bonusPaidCents",
+  "bonusPayoutFeeCents",
+  "bonusUnclaimedCents",
+  "bonusUnearnedReleasedCents",
+] as const;
+
+export type RefundBonusProductMetricKey = typeof REFUND_BONUS_PRODUCT_METRIC_KEYS[number];
+export type RefundBonusSafetyMetricKey = typeof REFUND_BONUS_SAFETY_METRIC_KEYS[number];
+export type RefundBonusAccountingMetricKey = typeof REFUND_BONUS_ACCOUNTING_METRIC_KEYS[number];
+
+export type RefundBonusComprehensionQuestionId =
+  | "charge_timing"
+  | "bonus_eligibility"
+  | "bonus_characterization";
+
+export interface RefundBonusComprehensionQuestion {
+  id: RefundBonusComprehensionQuestionId;
+  prompt: string;
+  choices: Array<{
+    id: "A" | "B" | "C";
+    label: string;
+  }>;
+  correctChoiceId: "A" | "B" | "C";
+  deliveryRequirement: "before_hard_pledge_or_immediately_after_save";
+}
+
+export const REFUND_BONUS_COMPREHENSION_QUESTIONS: RefundBonusComprehensionQuestion[] = [
+  {
+    id: "charge_timing",
+    prompt: "When can you be charged?",
+    choices: [
+      { id: "A", label: "Immediately when I save my payment method." },
+      { id: "B", label: "Only after the round closes and all listed success gates pass." },
+      { id: "C", label: "Whenever the platform chooses." },
+    ],
+    correctChoiceId: "B",
+    deliveryRequirement: "before_hard_pledge_or_immediately_after_save",
+  },
+  {
+    id: "bonus_eligibility",
+    prompt: "When can you receive the failure-participation bonus?",
+    choices: [
+      { id: "A", label: "Any time the pool fails for any reason." },
+      {
+        id: "B",
+        label: "Only if I saved an eligible pledge and the pool fails for a bonus-eligible support-threshold reason.",
+      },
+      { id: "C", label: "Whenever I decide not to donate." },
+    ],
+    correctChoiceId: "B",
+    deliveryRequirement: "before_hard_pledge_or_immediately_after_save",
+  },
+  {
+    id: "bonus_characterization",
+    prompt: "What is the failure-participation bonus?",
+    choices: [
+      { id: "A", label: "A donation receipt." },
+      { id: "B", label: "Investment interest." },
+      { id: "C", label: "A separate backed participation incentive, not project impact." },
+    ],
+    correctChoiceId: "C",
+    deliveryRequirement: "before_hard_pledge_or_immediately_after_save",
+  },
+];
+
+export const REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS = {
+  stage0ChargeTimingCorrectMinBps: 8_500,
+  stage0BonusEligibilityCorrectMinBps: 8_000,
+  stage0BonusCharacterizationCorrectMinBps: 7_000,
+  realMoneyChargeTimingIncorrectPauseBps: 500,
+  realMoneyBonusEligibilityIncorrectPauseBps: 1_000,
+} as const;
+
+export interface RefundBonusComprehensionMetricInput {
+  chargeTimingAnswered: number;
+  chargeTimingIncorrect: number;
+  bonusEligibilityAnswered: number;
+  bonusEligibilityIncorrect: number;
+  bonusCharacterizationAnswered: number;
+  bonusCharacterizationIncorrect: number;
+  realMoneyPilot?: boolean;
+}
+
+export interface RefundBonusComprehensionMetricResult {
+  deliveryRequirement: RefundBonusComprehensionQuestion["deliveryRequirement"];
+  chargeTimingIncorrectBps: number | null;
+  bonusEligibilityIncorrectBps: number | null;
+  bonusCharacterizationIncorrectBps: number | null;
+  stage0Success: boolean;
+  pauseRecommended: boolean;
+  pauseReasonCodes: Array<
+    | "charge_timing_incorrect_rate_above_5_percent"
+    | "bonus_eligibility_incorrect_rate_above_10_percent"
+    | "charge_timing_sample_missing"
+    | "bonus_eligibility_sample_missing"
+    | "bonus_characterization_sample_missing"
+    | "invalid_comprehension_counts"
+  >;
+}
+
 export interface RefundBonusFeaturePromotionRecord {
   id: string;
   featureKey: typeof REFUND_BONUS_FEATURE_KEY;
@@ -759,6 +916,86 @@ function isOrderedIsoTimestamp(left: string, right: string) {
 
 function unique<T>(items: T[]) {
   return [...new Set(items)];
+}
+
+function incorrectRateBps(answered: number, incorrect: number) {
+  if (answered <= 0) return null;
+  return Math.round((incorrect * 10_000) / answered);
+}
+
+export function evaluateRefundBonusComprehensionMetrics({
+  chargeTimingAnswered,
+  chargeTimingIncorrect,
+  bonusEligibilityAnswered,
+  bonusEligibilityIncorrect,
+  bonusCharacterizationAnswered,
+  bonusCharacterizationIncorrect,
+  realMoneyPilot = false,
+}: RefundBonusComprehensionMetricInput): RefundBonusComprehensionMetricResult {
+  const pauseReasonCodes: RefundBonusComprehensionMetricResult["pauseReasonCodes"] = [];
+  const counts = [
+    [chargeTimingAnswered, chargeTimingIncorrect],
+    [bonusEligibilityAnswered, bonusEligibilityIncorrect],
+    [bonusCharacterizationAnswered, bonusCharacterizationIncorrect],
+  ];
+  if (counts.some(([answered, incorrect]) =>
+    !isNonNegativeSafeInteger(answered) ||
+    !isNonNegativeSafeInteger(incorrect) ||
+    incorrect > answered
+  )) {
+    pauseReasonCodes.push("invalid_comprehension_counts");
+  }
+
+  if (chargeTimingAnswered === 0) pauseReasonCodes.push("charge_timing_sample_missing");
+  if (bonusEligibilityAnswered === 0) pauseReasonCodes.push("bonus_eligibility_sample_missing");
+  if (bonusCharacterizationAnswered === 0) pauseReasonCodes.push("bonus_characterization_sample_missing");
+
+  const chargeTimingIncorrectBps = incorrectRateBps(chargeTimingAnswered, chargeTimingIncorrect);
+  const bonusEligibilityIncorrectBps = incorrectRateBps(bonusEligibilityAnswered, bonusEligibilityIncorrect);
+  const bonusCharacterizationIncorrectBps = incorrectRateBps(
+    bonusCharacterizationAnswered,
+    bonusCharacterizationIncorrect,
+  );
+
+  if (
+    realMoneyPilot &&
+    chargeTimingIncorrectBps !== null &&
+    chargeTimingIncorrectBps > REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.realMoneyChargeTimingIncorrectPauseBps
+  ) {
+    pauseReasonCodes.push("charge_timing_incorrect_rate_above_5_percent");
+  }
+  if (
+    realMoneyPilot &&
+    bonusEligibilityIncorrectBps !== null &&
+    bonusEligibilityIncorrectBps > REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.realMoneyBonusEligibilityIncorrectPauseBps
+  ) {
+    pauseReasonCodes.push("bonus_eligibility_incorrect_rate_above_10_percent");
+  }
+
+  const stage0Success =
+    chargeTimingIncorrectBps !== null &&
+    bonusEligibilityIncorrectBps !== null &&
+    bonusCharacterizationIncorrectBps !== null &&
+    10_000 - chargeTimingIncorrectBps >=
+      REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0ChargeTimingCorrectMinBps &&
+    10_000 - bonusEligibilityIncorrectBps >=
+      REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0BonusEligibilityCorrectMinBps &&
+    10_000 - bonusCharacterizationIncorrectBps >=
+      REFUND_BONUS_COMPREHENSION_THRESHOLDS_BPS.stage0BonusCharacterizationCorrectMinBps;
+
+  return {
+    deliveryRequirement: "before_hard_pledge_or_immediately_after_save",
+    chargeTimingIncorrectBps,
+    bonusEligibilityIncorrectBps,
+    bonusCharacterizationIncorrectBps,
+    stage0Success,
+    pauseRecommended: pauseReasonCodes.some((reason) =>
+      reason === "charge_timing_incorrect_rate_above_5_percent" ||
+      reason === "bonus_eligibility_incorrect_rate_above_10_percent" ||
+      reason === "invalid_comprehension_counts"
+    ),
+    pauseReasonCodes: unique(pauseReasonCodes),
+  };
 }
 
 function roleCanUseLabs(role: RefundBonusActorRole) {
