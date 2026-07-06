@@ -51,6 +51,7 @@ export type AtLeastTierPlatformMatchCapabilityReason =
   | "payment_mode_not_allowed_for_non_mvp"
   | "route_not_available_in_current_deployment"
   | "copy_preflight_failed"
+  | "copy_preflight_stale"
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
   | "sybil_controls_not_ready"
@@ -72,6 +73,7 @@ export interface AtLeastTierPlatformMatchCapabilityInput {
   rewardScheduleFrozen?: boolean;
   rewardScheduleValid?: boolean;
   copyPreflightPassed?: boolean;
+  copyPreflightFresh?: boolean;
   paymentProviderReady?: boolean;
   legalComplianceApproved?: boolean;
   sybilControlsReady?: boolean;
@@ -527,6 +529,32 @@ export interface AtLeastTierCopyPreflightReport {
   reportHash: string;
 }
 
+export type AtLeastTierCopyPreflightFreshnessReason =
+  | "copy_preflight_failed"
+  | "invalid_copy_preflight_checked_at"
+  | "invalid_latest_deploy_completed_at"
+  | "invalid_latest_deploy_hash"
+  | "deploy_hash_mismatch"
+  | "copy_preflight_before_latest_deploy"
+  | "required_route_missing";
+
+export interface AtLeastTierCopyPreflightFreshnessInput {
+  report: AtLeastTierCopyPreflightReport;
+  latestDeployHash: string;
+  latestDeployCompletedAt: string;
+  requiredRoutes: string[];
+}
+
+export interface AtLeastTierCopyPreflightFreshnessResult {
+  fresh: boolean;
+  reasonCodes: AtLeastTierCopyPreflightFreshnessReason[];
+  missingRoutes: string[];
+  reportPasses: boolean;
+  deployHashMatches: boolean;
+  generatedAfterLatestDeploy: boolean;
+  requiredRoutesCovered: boolean;
+}
+
 export interface AtLeastTierFeaturePromotionRecord {
   id: string;
   featureKey: typeof AT_LEAST_TIER_PLATFORM_MATCH_FEATURE_KEY;
@@ -601,6 +629,7 @@ export type AtLeastTierOperationalBlocker =
   | "reserve_unbacked"
   | "reserve_exposure_exceeded"
   | "copy_preflight_failed"
+  | "copy_preflight_stale"
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
   | "sybil_controls_not_ready"
@@ -631,6 +660,7 @@ export interface AtLeastTierAdminWorkflowInput {
   reserveBacked?: boolean;
   reserveExposureExceeded?: boolean;
   copyPreflightPassed?: boolean;
+  copyPreflightFresh?: boolean;
   legalComplianceApproved?: boolean;
   paymentProviderReady?: boolean;
   sybilControlsReady?: boolean;
@@ -650,6 +680,7 @@ export interface AtLeastTierJobGateInput {
   reserveBacked?: boolean;
   reserveExposureExceeded?: boolean;
   copyPreflightPassed?: boolean;
+  copyPreflightFresh?: boolean;
   legalComplianceApproved?: boolean;
   paymentProviderReady?: boolean;
   sybilControlsReady?: boolean;
@@ -787,6 +818,10 @@ function isCanonicalHash(value: unknown): value is string {
   return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
 }
 
+function isValidIsoTimestamp(value: string) {
+  return !Number.isNaN(Date.parse(value));
+}
+
 function isRoleAllowedForLabs(role: AtLeastTierPlatformMatchActorRole) {
   return role === "labs_participant" || role === "admin" || role === "service";
 }
@@ -909,6 +944,9 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     if (!input.copyPreflightPassed) {
       reasons.push("copy_preflight_failed");
     }
+    if (!input.copyPreflightFresh) {
+      reasons.push("copy_preflight_stale");
+    }
     if (!input.auditReportingTemplatesReviewed) {
       reasons.push("audit_reporting_templates_not_reviewed");
     }
@@ -938,6 +976,9 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     }
     if (!input.copyPreflightPassed) {
       reasons.push("copy_preflight_failed");
+    }
+    if (!input.copyPreflightFresh) {
+      reasons.push("copy_preflight_stale");
     }
     if (!input.legalComplianceApproved) {
       reasons.push("legal_compliance_not_approved");
@@ -1028,6 +1069,9 @@ export function evaluateAtLeastTierAdminWorkflow(
     if (!input.copyPreflightPassed) {
       blockerCodes.push("copy_preflight_failed");
     }
+    if (!input.copyPreflightFresh) {
+      blockerCodes.push("copy_preflight_stale");
+    }
     if (!input.legalComplianceApproved) {
       blockerCodes.push("legal_compliance_not_approved");
     }
@@ -1090,6 +1134,9 @@ export function evaluateAtLeastTierJobGate(input: AtLeastTierJobGateInput): AtLe
       if (!input.copyPreflightPassed) {
         blockerCodes.push("copy_preflight_failed");
       }
+      if (!input.copyPreflightFresh) {
+        blockerCodes.push("copy_preflight_stale");
+      }
       if (!input.legalComplianceApproved) {
         blockerCodes.push("legal_compliance_not_approved");
       }
@@ -1115,6 +1162,12 @@ export function evaluateAtLeastTierJobGate(input: AtLeastTierJobGateInput): AtLe
   }
 
   if (input.job === "public_report_job" && input.environment === "production") {
+    if (!input.copyPreflightPassed) {
+      blockerCodes.push("copy_preflight_failed");
+    }
+    if (!input.copyPreflightFresh) {
+      blockerCodes.push("copy_preflight_stale");
+    }
     if (!input.auditReportingTemplatesReviewed) {
       blockerCodes.push("audit_reporting_templates_not_reviewed");
     }
@@ -2749,5 +2802,44 @@ export function buildAtLeastTierCopyPreflightReport({
   return {
     ...reportWithoutHash,
     reportHash: hashValue(reportWithoutHash),
+  };
+}
+
+export function evaluateAtLeastTierCopyPreflightFreshness({
+  report,
+  latestDeployHash,
+  latestDeployCompletedAt,
+  requiredRoutes,
+}: AtLeastTierCopyPreflightFreshnessInput): AtLeastTierCopyPreflightFreshnessResult {
+  const checkedRoutes = new Set(report.checkedRoutes);
+  const missingRoutes = [...new Set(requiredRoutes.filter((route) => !checkedRoutes.has(route)))];
+  const checkedAtValid = isValidIsoTimestamp(report.checkedAt);
+  const latestDeployCompletedAtValid = isValidIsoTimestamp(latestDeployCompletedAt);
+  const latestDeployHashValid = isCanonicalHash(latestDeployHash);
+  const reportPasses = report.pass;
+  const deployHashMatches = latestDeployHashValid && report.lastDeployHash === latestDeployHash;
+  const generatedAfterLatestDeploy =
+    checkedAtValid &&
+    latestDeployCompletedAtValid &&
+    Date.parse(report.checkedAt) >= Date.parse(latestDeployCompletedAt);
+  const requiredRoutesCovered = missingRoutes.length === 0;
+
+  const reasonCodes: AtLeastTierCopyPreflightFreshnessReason[] = [];
+  if (!reportPasses) reasonCodes.push("copy_preflight_failed");
+  if (!checkedAtValid) reasonCodes.push("invalid_copy_preflight_checked_at");
+  if (!latestDeployCompletedAtValid) reasonCodes.push("invalid_latest_deploy_completed_at");
+  if (!latestDeployHashValid) reasonCodes.push("invalid_latest_deploy_hash");
+  if (!deployHashMatches) reasonCodes.push("deploy_hash_mismatch");
+  if (!generatedAfterLatestDeploy) reasonCodes.push("copy_preflight_before_latest_deploy");
+  if (!requiredRoutesCovered) reasonCodes.push("required_route_missing");
+
+  return {
+    fresh: reasonCodes.length === 0,
+    reasonCodes: [...new Set(reasonCodes)],
+    missingRoutes,
+    reportPasses,
+    deployHashMatches,
+    generatedAfterLatestDeploy,
+    requiredRoutesCovered,
   };
 }

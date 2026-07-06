@@ -14,6 +14,7 @@ import {
   computeDampedOddsRewardSchedule,
   evaluateAtLeastTierAdminWorkflow,
   evaluateAtLeastTierCommitmentOpenGate,
+  evaluateAtLeastTierCopyPreflightFreshness,
   evaluateAtLeastTierJobGate,
   evaluateAtLeastTierPlatformMatchCapability,
   isAtLeastTierFeaturePromotionApproved,
@@ -157,6 +158,7 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(productionMoney.reasons.includes("production_real_money_disabled"));
   assert.ok(productionMoney.reasons.includes("missing_promotion_record"));
   assert.ok(productionMoney.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionMoney.reasons.includes("copy_preflight_stale"));
   assert.ok(productionMoney.reasons.includes("sybil_controls_not_ready"));
   assert.ok(productionMoney.reasons.includes("reserve_exposure_cap_not_configured"));
   assert.ok(productionMoney.reasons.includes("emergency_pause_not_configured"));
@@ -187,6 +189,7 @@ test("at-least-tier feature metadata and capability gate keep production disable
         paymentProviderReady: true,
         legalComplianceApproved: true,
         sybilControlsReady: true,
+        copyPreflightFresh: true,
         reserveExposureCapConfigured: true,
         emergencyPauseConfigured: true,
         auditReportingTemplatesReviewed: true,
@@ -216,6 +219,7 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(productionOpenRound.reasons.includes("platform_match_reserve_unbacked"));
   assert.ok(productionOpenRound.reasons.includes("damped_odds_schedule_invalid"));
   assert.ok(productionOpenRound.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionOpenRound.reasons.includes("copy_preflight_stale"));
   assert.ok(productionOpenRound.reasons.includes("legal_compliance_not_approved"));
   assert.ok(productionOpenRound.reasons.includes("payment_provider_not_ready"));
   assert.ok(productionOpenRound.reasons.includes("sybil_controls_not_ready"));
@@ -236,6 +240,7 @@ test("at-least-tier feature metadata and capability gate keep production disable
     rewardScheduleFrozen: true,
     rewardScheduleValid: false,
     copyPreflightPassed: true,
+    copyPreflightFresh: false,
     paymentProviderReady: false,
     legalComplianceApproved: false,
     sybilControlsReady: false,
@@ -266,6 +271,7 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.equal(productionPublicReport.allowed, false);
   assert.ok(productionPublicReport.reasons.includes("missing_promotion_record"));
   assert.ok(productionPublicReport.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionPublicReport.reasons.includes("copy_preflight_stale"));
   assert.ok(productionPublicReport.reasons.includes("audit_reporting_templates_not_reviewed"));
   assert.ok(productionPublicReport.reasons.includes("prohibited_public_copy_present"));
 
@@ -347,12 +353,17 @@ test("round, copy preflight report, and promotion record preserve at-least-tier 
     productionRealMoneyEnabled: true,
   }), false);
 
+  const latestDeployHash = "sha256:4444444444444444444444444444444444444444444444444444444444444444";
+  const requiredPreflightRoutes = [
+    "/labs/at-least-tier-platform-match",
+    "/labs/at-least-tier-platform-match/demo-round/commit",
+  ];
   const report = buildAtLeastTierCopyPreflightReport({
     id: "at-least-copy-report",
     roundId,
     checkedAt: now,
-    lastDeployHash: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
-    checkedRoutes: ["/labs/at-least-tier-platform-match"],
+    lastDeployHash: latestDeployHash,
+    checkedRoutes: requiredPreflightRoutes,
     ordinaryCopy: `
       Non-MVP labs mechanism.
       There is no direct user payout.
@@ -367,12 +378,50 @@ test("round, copy preflight report, and promotion record preserve at-least-tier 
   assert.equal(report.pass, true);
   assert.equal(report.ordinaryCopyPass, true);
   assert.match(report.reportHash, /^sha256:[a-f0-9]{64}$/);
+  const freshReport = evaluateAtLeastTierCopyPreflightFreshness({
+    report,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T00:00:00.000Z",
+    requiredRoutes: requiredPreflightRoutes,
+  });
+  assert.equal(freshReport.fresh, true);
+  assert.equal(freshReport.deployHashMatches, true);
+  assert.equal(freshReport.generatedAfterLatestDeploy, true);
+  assert.equal(freshReport.requiredRoutesCovered, true);
+
+  const staleHashReport = evaluateAtLeastTierCopyPreflightFreshness({
+    report,
+    latestDeployHash: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+    latestDeployCompletedAt: "2026-07-05T00:00:00.000Z",
+    requiredRoutes: requiredPreflightRoutes,
+  });
+  assert.equal(staleHashReport.fresh, false);
+  assert.ok(staleHashReport.reasonCodes.includes("deploy_hash_mismatch"));
+
+  const preDeployReport = evaluateAtLeastTierCopyPreflightFreshness({
+    report,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-07T00:00:00.000Z",
+    requiredRoutes: requiredPreflightRoutes,
+  });
+  assert.equal(preDeployReport.fresh, false);
+  assert.ok(preDeployReport.reasonCodes.includes("copy_preflight_before_latest_deploy"));
+
+  const routeCoverageFailure = evaluateAtLeastTierCopyPreflightFreshness({
+    report,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T00:00:00.000Z",
+    requiredRoutes: [...requiredPreflightRoutes, "/account/labs/at-least-tier-platform-match"],
+  });
+  assert.equal(routeCoverageFailure.fresh, false);
+  assert.ok(routeCoverageFailure.reasonCodes.includes("required_route_missing"));
+  assert.deepEqual(routeCoverageFailure.missingRoutes, ["/account/labs/at-least-tier-platform-match"]);
 
   const failedReport = buildAtLeastTierCopyPreflightReport({
     id: "at-least-copy-report-failed",
     roundId,
     checkedAt: now,
-    lastDeployHash: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    lastDeployHash: latestDeployHash,
     checkedRoutes: ["/mpgf"],
     ordinaryCopy: "Live MVP launch: make a bet for guaranteed return and payout to you.",
     publicMvpSurfaceLeakFound: true,
@@ -383,6 +432,14 @@ test("round, copy preflight report, and promotion record preserve at-least-tier 
   assert.ok(failedReport.prohibitedTermsFound.includes("MVP"));
   assert.ok(failedReport.prohibitedTermsFound.includes("live"));
   assert.ok(failedReport.missingRequiredClaims.includes("production_real_money_disabled"));
+  const failedFreshness = evaluateAtLeastTierCopyPreflightFreshness({
+    report: failedReport,
+    latestDeployHash,
+    latestDeployCompletedAt: "2026-07-05T00:00:00.000Z",
+    requiredRoutes: requiredPreflightRoutes,
+  });
+  assert.equal(failedFreshness.fresh, false);
+  assert.ok(failedFreshness.reasonCodes.includes("copy_preflight_failed"));
 
   const promotion: AtLeastTierFeaturePromotionRecord = {
     id: "at-least-promotion",
@@ -480,6 +537,7 @@ test("admin and job gates keep at-least-tier live operations blocked while labs 
     rewardScheduleValid: true,
     reserveBacked: true,
     copyPreflightPassed: true,
+    copyPreflightFresh: true,
     legalComplianceApproved: true,
     paymentProviderReady: true,
     sybilControlsReady: true,
@@ -505,6 +563,7 @@ test("admin and job gates keep at-least-tier live operations blocked while labs 
   assert.ok(settlementJob.blockerCodes.includes("production_real_money_disabled"));
   assert.ok(settlementJob.blockerCodes.includes("missing_promotion_record"));
   assert.ok(settlementJob.blockerCodes.includes("copy_preflight_failed"));
+  assert.ok(settlementJob.blockerCodes.includes("copy_preflight_stale"));
   assert.ok(settlementJob.blockerCodes.includes("legal_compliance_not_approved"));
   assert.ok(settlementJob.blockerCodes.includes("payment_provider_not_ready"));
   assert.ok(settlementJob.blockerCodes.includes("sybil_controls_not_ready"));
@@ -536,6 +595,8 @@ test("admin and job gates keep at-least-tier live operations blocked while labs 
   });
   assert.equal(productionReport.allowed, false);
   assert.ok(productionReport.blockerCodes.includes("public_report_live_product_copy_blocked"));
+  assert.ok(productionReport.blockerCodes.includes("copy_preflight_failed"));
+  assert.ok(productionReport.blockerCodes.includes("copy_preflight_stale"));
   assert.ok(productionReport.blockerCodes.includes("audit_reporting_templates_not_reviewed"));
   assert.ok(productionReport.blockerCodes.includes("prohibited_public_copy_present"));
 });

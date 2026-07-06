@@ -581,6 +581,15 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     ...identitySnapshot,
     countingWeightBps: 0,
   }), false);
+  assert.equal(isRefundBonusIdentityEligibilitySnapshotEligible({
+    ...identitySnapshot,
+    // Deliberately malformed fixture to prove the runtime guard rejects partial weights too.
+    countingWeightBps: 5_000 as unknown as 0 | 10_000,
+  }), false);
+  assert.equal(isRefundBonusIdentityEligibilitySnapshotEligible({
+    ...identitySnapshot,
+    bonusEligibilityWeightBps: 5_000 as unknown as 0 | 10_000,
+  }), false);
 
   const bonusSnapshot: RefundBonusBonusEligibilitySnapshot = {
     id: "bonus-snapshot",
@@ -2433,6 +2442,11 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
     "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/amount/page.tsx",
     "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/review/page.tsx",
   ];
+  const decisionScreenRouteFiles = [
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/page.tsx",
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/amount/page.tsx",
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/review/page.tsx",
+  ];
   const prohibitedPublicRouteFiles = [
     "src/app/refund-bonus-pledge-pool/page.tsx",
     "src/app/mpgf/refund-bonus-pledge-pool/page.tsx",
@@ -2454,7 +2468,9 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(labsPage, /do not affect\s+pledge power/);
   assert.match(poolPage, /Screen 1 of 3/);
   assert.match(poolPage, /read-only labs Pool screen/);
+  assert.match(poolPage, /does not create drafts, save hard\s+pledges, save payment methods, authorize charges, capture funds/);
   assert.match(poolPage, /sealed qualitative status only before close/);
+  assert.match(poolPage, /eligible pledgers are charged \$0/);
   assert.match(poolPage, /No bonus is paid for blocked, unsafe, ineligible, duplicate, payment-failed/);
   assert.match(poolPage, /View disabled amount screen/);
   assert.match(amountPage, /Screen 2 of 3/);
@@ -2487,6 +2503,10 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   for (const routeFile of requiredLabsRouteFiles) {
     assert.equal(existsSync(routeFile), true, routeFile);
   }
+  assert.equal(decisionScreenRouteFiles.length, 3);
+  assert.equal(poolPage.includes("/labs/refund-bonus-pledge-pool/${roundSlug}/amount"), true);
+  assert.equal(amountPage.includes("/labs/refund-bonus-pledge-pool/${roundSlug}/review"), true);
+  assert.equal(reviewPage.includes("prepareRefundBonusHardPledgeSubmission"), true);
   for (const routeFile of prohibitedPublicRouteFiles) {
     assert.equal(existsSync(routeFile), false, routeFile);
   }
