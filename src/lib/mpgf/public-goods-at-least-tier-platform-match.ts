@@ -54,6 +54,10 @@ export type AtLeastTierPlatformMatchCapabilityReason =
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
   | "sybil_controls_not_ready"
+  | "reserve_exposure_cap_not_configured"
+  | "emergency_pause_not_configured"
+  | "audit_reporting_templates_not_reviewed"
+  | "prohibited_public_copy_present"
   | "emergency_pause_active";
 
 export interface AtLeastTierPlatformMatchCapabilityInput {
@@ -71,6 +75,10 @@ export interface AtLeastTierPlatformMatchCapabilityInput {
   paymentProviderReady?: boolean;
   legalComplianceApproved?: boolean;
   sybilControlsReady?: boolean;
+  reserveExposureCapConfigured?: boolean;
+  emergencyPauseConfigured?: boolean;
+  auditReportingTemplatesReviewed?: boolean;
+  prohibitedPublicCopyAbsent?: boolean;
   emergencyPaused?: boolean;
 }
 
@@ -596,6 +604,10 @@ export type AtLeastTierOperationalBlocker =
   | "legal_compliance_not_approved"
   | "payment_provider_not_ready"
   | "sybil_controls_not_ready"
+  | "reserve_exposure_cap_not_configured"
+  | "emergency_pause_not_configured"
+  | "audit_reporting_templates_not_reviewed"
+  | "prohibited_public_copy_present"
   | "emergency_pause_active"
   | "simulation_only_allowed_in_dev_or_test"
   | "public_report_live_product_copy_blocked"
@@ -641,6 +653,10 @@ export interface AtLeastTierJobGateInput {
   legalComplianceApproved?: boolean;
   paymentProviderReady?: boolean;
   sybilControlsReady?: boolean;
+  reserveExposureCapConfigured?: boolean;
+  emergencyPauseConfigured?: boolean;
+  auditReportingTemplatesReviewed?: boolean;
+  prohibitedPublicCopyAbsent?: boolean;
   emergencyPaused?: boolean;
   publicReportImpliesLiveProduct?: boolean;
 }
@@ -877,9 +893,27 @@ export function evaluateAtLeastTierPlatformMatchCapability(
       if (!input.sybilControlsReady) {
         reasons.push("sybil_controls_not_ready");
       }
+      if (!input.reserveExposureCapConfigured) {
+        reasons.push("reserve_exposure_cap_not_configured");
+      }
+      if (!input.emergencyPauseConfigured) {
+        reasons.push("emergency_pause_not_configured");
+      }
+      if (!input.auditReportingTemplatesReviewed) {
+        reasons.push("audit_reporting_templates_not_reviewed");
+      }
+      if (!input.prohibitedPublicCopyAbsent) {
+        reasons.push("prohibited_public_copy_present");
+      }
     }
     if (!input.copyPreflightPassed) {
       reasons.push("copy_preflight_failed");
+    }
+    if (!input.auditReportingTemplatesReviewed) {
+      reasons.push("audit_reporting_templates_not_reviewed");
+    }
+    if (!input.prohibitedPublicCopyAbsent) {
+      reasons.push("prohibited_public_copy_present");
     }
   }
 
@@ -913,6 +947,18 @@ export function evaluateAtLeastTierPlatformMatchCapability(
     }
     if (!input.sybilControlsReady) {
       reasons.push("sybil_controls_not_ready");
+    }
+    if (!input.reserveExposureCapConfigured) {
+      reasons.push("reserve_exposure_cap_not_configured");
+    }
+    if (!input.emergencyPauseConfigured) {
+      reasons.push("emergency_pause_not_configured");
+    }
+    if (!input.auditReportingTemplatesReviewed) {
+      reasons.push("audit_reporting_templates_not_reviewed");
+    }
+    if (!input.prohibitedPublicCopyAbsent) {
+      reasons.push("prohibited_public_copy_present");
     }
   }
 
@@ -1053,6 +1099,27 @@ export function evaluateAtLeastTierJobGate(input: AtLeastTierJobGateInput): AtLe
       if (!input.sybilControlsReady) {
         blockerCodes.push("sybil_controls_not_ready");
       }
+      if (!input.reserveExposureCapConfigured) {
+        blockerCodes.push("reserve_exposure_cap_not_configured");
+      }
+      if (!input.emergencyPauseConfigured) {
+        blockerCodes.push("emergency_pause_not_configured");
+      }
+      if (!input.auditReportingTemplatesReviewed) {
+        blockerCodes.push("audit_reporting_templates_not_reviewed");
+      }
+      if (!input.prohibitedPublicCopyAbsent) {
+        blockerCodes.push("prohibited_public_copy_present");
+      }
+    }
+  }
+
+  if (input.job === "public_report_job" && input.environment === "production") {
+    if (!input.auditReportingTemplatesReviewed) {
+      blockerCodes.push("audit_reporting_templates_not_reviewed");
+    }
+    if (!input.prohibitedPublicCopyAbsent) {
+      blockerCodes.push("prohibited_public_copy_present");
     }
   }
 
@@ -2584,7 +2651,10 @@ const PROHIBITED_ORDINARY_COPY_PATTERNS: Array<[string, RegExp]> = [
   ["reserved user funds", /\b(?:reserved\s+user\s+funds|user\s+funds\s+(?:are\s+)?reserved|funds\s+(?:are\s+)?reserved)\b/i],
   ["protected funds", /\b(?:protected\s+funds|funds\s+(?:are\s+)?protected)\b/i],
   ["authorized funds", /\b(?:authorized\s+funds|funds\s+(?:are\s+)?authorized|saved\s+funds\s+(?:are\s+)?authorized)\b/i],
-  ["tax-deductible platform match", /\btax[-\s]?deductible\b[\s\S]{0,80}\bplatform[-\s]?paid match\b/i],
+  [
+    "tax-deductible platform match",
+    /\btax[-\s]?deductible\b[\s\S]{0,80}\b(?:for\s+)?platform[-\s]?paid\s+(?:platform[-\s]?)?match\b/i,
+  ],
   ["tax treatment", /\btax\s+treatment\b/i],
   ["legal advice", /\blegal\s+advice\b/i],
   ["guaranteed match", /\bguaranteed\s+match\b/i],

@@ -78,7 +78,7 @@ export default function AtLeastTierPlatformMatchAccountLabsPage() {
               This account route is present for v137 route coverage only. It does not create,
               display, or persist personal account commitments, save payment methods, authorize
               loss payments, capture user funds, execute platform-match contributions, or publish
-              live settlement status.
+              settlement status.
             </p>
           </div>
           <dl className="mpgf-summary-grid">
@@ -104,7 +104,7 @@ export default function AtLeastTierPlatformMatchAccountLabsPage() {
         <section className="section section-subtle" aria-labelledby="account-simulation-heading">
           <SectionHeader eyebrow="Simulation reference" id="account-simulation-heading" title="Demo rows remain aggregate-only.">
             The route can summarize the mechanism using dev seed data, but it does not expose donor
-            identities, payment state, bonus eligibility, or live account records.
+            identities, payment state, bonus eligibility, or account records.
           </SectionHeader>
           <div className="data-grid">
             <article className="panel data-card">
@@ -125,7 +125,7 @@ export default function AtLeastTierPlatformMatchAccountLabsPage() {
               </p>
             </article>
             <article className="panel data-card">
-              <p className="detail-kicker">Public MVP placement</p>
+              <p className="detail-kicker">Public placement</p>
               <h3>absent</h3>
               <p>This route is not linked from the primary CGPP pledge flow.</p>
             </article>

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -158,6 +158,10 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(productionMoney.reasons.includes("missing_promotion_record"));
   assert.ok(productionMoney.reasons.includes("copy_preflight_failed"));
   assert.ok(productionMoney.reasons.includes("sybil_controls_not_ready"));
+  assert.ok(productionMoney.reasons.includes("reserve_exposure_cap_not_configured"));
+  assert.ok(productionMoney.reasons.includes("emergency_pause_not_configured"));
+  assert.ok(productionMoney.reasons.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(productionMoney.reasons.includes("prohibited_public_copy_present"));
 
   for (const environment of ["development", "preview", "test"] as const) {
     for (const action of [
@@ -183,6 +187,10 @@ test("at-least-tier feature metadata and capability gate keep production disable
         paymentProviderReady: true,
         legalComplianceApproved: true,
         sybilControlsReady: true,
+        reserveExposureCapConfigured: true,
+        emergencyPauseConfigured: true,
+        auditReportingTemplatesReviewed: true,
+        prohibitedPublicCopyAbsent: true,
       });
       assert.equal(nonProductionProviderAction.allowed, false, `${environment}:${action}`);
       assert.ok(
@@ -211,6 +219,10 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(productionOpenRound.reasons.includes("legal_compliance_not_approved"));
   assert.ok(productionOpenRound.reasons.includes("payment_provider_not_ready"));
   assert.ok(productionOpenRound.reasons.includes("sybil_controls_not_ready"));
+  assert.ok(productionOpenRound.reasons.includes("reserve_exposure_cap_not_configured"));
+  assert.ok(productionOpenRound.reasons.includes("emergency_pause_not_configured"));
+  assert.ok(productionOpenRound.reasons.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(productionOpenRound.reasons.includes("prohibited_public_copy_present"));
 
   const incompletePromotedOpenRound = evaluateAtLeastTierPlatformMatchCapability({
     action: "open_round",
@@ -227,6 +239,10 @@ test("at-least-tier feature metadata and capability gate keep production disable
     paymentProviderReady: false,
     legalComplianceApproved: false,
     sybilControlsReady: false,
+    reserveExposureCapConfigured: false,
+    emergencyPauseConfigured: false,
+    auditReportingTemplatesReviewed: false,
+    prohibitedPublicCopyAbsent: false,
   });
   assert.equal(incompletePromotedOpenRound.allowed, false);
   assert.ok(incompletePromotedOpenRound.reasons.includes("platform_match_reserve_unbacked"));
@@ -234,6 +250,10 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.ok(incompletePromotedOpenRound.reasons.includes("legal_compliance_not_approved"));
   assert.ok(incompletePromotedOpenRound.reasons.includes("payment_provider_not_ready"));
   assert.ok(incompletePromotedOpenRound.reasons.includes("sybil_controls_not_ready"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("reserve_exposure_cap_not_configured"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("emergency_pause_not_configured"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(incompletePromotedOpenRound.reasons.includes("prohibited_public_copy_present"));
 
   const productionPublicReport = evaluateAtLeastTierPlatformMatchCapability({
     action: "publish_public_report",
@@ -246,6 +266,8 @@ test("at-least-tier feature metadata and capability gate keep production disable
   assert.equal(productionPublicReport.allowed, false);
   assert.ok(productionPublicReport.reasons.includes("missing_promotion_record"));
   assert.ok(productionPublicReport.reasons.includes("copy_preflight_failed"));
+  assert.ok(productionPublicReport.reasons.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(productionPublicReport.reasons.includes("prohibited_public_copy_present"));
 
   const labsSchedule = evaluateAtLeastTierPlatformMatchCapability({
     action: "compute_reward_schedule",
@@ -385,6 +407,12 @@ test("round, copy preflight report, and promotion record preserve at-least-tier 
     ...promotion,
     approvedByPayments: undefined,
   }), false);
+  for (const approvalState of ["rejected", "revoked"] as const) {
+    assert.equal(isAtLeastTierFeaturePromotionApproved({
+      ...promotion,
+      approvalState,
+    }), false);
+  }
 });
 
 test("admin and job gates keep at-least-tier live operations blocked while labs simulation can run", () => {
@@ -476,6 +504,14 @@ test("admin and job gates keep at-least-tier live operations blocked while labs 
   assert.ok(settlementJob.blockerCodes.includes("feature_non_mvp"));
   assert.ok(settlementJob.blockerCodes.includes("production_real_money_disabled"));
   assert.ok(settlementJob.blockerCodes.includes("missing_promotion_record"));
+  assert.ok(settlementJob.blockerCodes.includes("copy_preflight_failed"));
+  assert.ok(settlementJob.blockerCodes.includes("legal_compliance_not_approved"));
+  assert.ok(settlementJob.blockerCodes.includes("payment_provider_not_ready"));
+  assert.ok(settlementJob.blockerCodes.includes("sybil_controls_not_ready"));
+  assert.ok(settlementJob.blockerCodes.includes("reserve_exposure_cap_not_configured"));
+  assert.ok(settlementJob.blockerCodes.includes("emergency_pause_not_configured"));
+  assert.ok(settlementJob.blockerCodes.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(settlementJob.blockerCodes.includes("prohibited_public_copy_present"));
 
   const scheduledCloseSimulation = evaluateAtLeastTierJobGate({
     job: "scheduled_close_job",
@@ -500,6 +536,8 @@ test("admin and job gates keep at-least-tier live operations blocked while labs 
   });
   assert.equal(productionReport.allowed, false);
   assert.ok(productionReport.blockerCodes.includes("public_report_live_product_copy_blocked"));
+  assert.ok(productionReport.blockerCodes.includes("audit_reporting_templates_not_reviewed"));
+  assert.ok(productionReport.blockerCodes.includes("prohibited_public_copy_present"));
 });
 
 test("commitment open gate requires labs access, frozen schedule, backed reserve, caps, payment, and final acknowledgements", () => {
@@ -1370,7 +1408,8 @@ test("ordinary copy preflight blocks wagering and return language while requirin
     Platform-match payments do not count toward forecast results.
     Production real-money use is disabled unless this mechanism is explicitly promoted.
     User funds are reserved, funds are held, funds are protected, saved funds are authorized,
-    escrowed custody is available, and the platform match has tax treatment and legal advice.
+    escrowed custody is available, tax-deductible for platform-paid match language appears,
+    and the platform match has tax treatment and legal advice.
     It offers a guaranteed match, guaranteed impact, guaranteed bonus, paid to donate, risk-free, moral ranking,
     moral reputation power, exact live pivotality, and current CRECM mechanism status.
   `);
@@ -1381,6 +1420,7 @@ test("ordinary copy preflight blocks wagering and return language while requirin
   assert.ok(misleadingProductCopy.blockedTerms.includes("authorized funds"));
   assert.ok(misleadingProductCopy.blockedTerms.includes("escrow"));
   assert.ok(misleadingProductCopy.blockedTerms.includes("custody"));
+  assert.ok(misleadingProductCopy.blockedTerms.includes("tax-deductible platform match"));
   assert.ok(misleadingProductCopy.blockedTerms.includes("tax treatment"));
   assert.ok(misleadingProductCopy.blockedTerms.includes("legal advice"));
   assert.ok(misleadingProductCopy.blockedTerms.includes("guaranteed match"));
@@ -1412,6 +1452,25 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   );
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const requiredRouteFiles = [
+    "src/app/labs/at-least-tier-platform-match/page.tsx",
+    "src/app/labs/at-least-tier-platform-match/[roundSlug]/page.tsx",
+    "src/app/labs/at-least-tier-platform-match/[roundSlug]/commit/page.tsx",
+    "src/app/account/labs/at-least-tier-platform-match/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/rounds/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/reward-schedule/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/resolution/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/settlement/page.tsx",
+    "src/app/admin/moral-public-goods/at-least-tier-platform-match/audit/page.tsx",
+  ];
+  const prohibitedPublicRouteFiles = [
+    "src/app/at-least-tier-platform-match/page.tsx",
+    "src/app/mpgf/at-least-tier-platform-match/page.tsx",
+    "src/app/mpgf/rounds/[roundId]/at-least-tier-platform-match/page.tsx",
+    "src/app/public-goods-fund/at-least-tier-platform-match/page.tsx",
+    "src/app/moral-public-goods/at-least-tier-platform-match/page.tsx",
+  ];
 
   assert.match(docs, /Status: NON-MVP/);
   assert.match(docs, /no direct user payout/i);
@@ -1448,8 +1507,13 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(accountLabsPage, /Account labs route/);
   assert.match(accountLabsPage, /AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING/);
   assert.match(accountLabsPage, /does not create,\s+display, or persist personal account commitments/);
+  assert.match(accountLabsPage, /or publish\s+settlement status/);
+  assert.match(accountLabsPage, /or account records/);
   assert.match(accountLabsPage, /no winner receives a direct user payout/);
   assert.match(accountLabsPage, /not linked from the primary CGPP pledge flow/);
+  assert.equal(accountLabsPage.includes("live settlement status"), false);
+  assert.equal(accountLabsPage.includes("live account records"), false);
+  assert.equal(accountLabsPage.includes("Public MVP placement"), false);
   assert.match(adminPage, /Non-MVP admin console/);
   assert.match(adminPage, /AT_LEAST_TIER_PLATFORM_MATCH_NON_MVP_WARNING/);
   assert.match(adminPage, /draft\s+labs rounds, reviewed pools, tier thresholds, frozen probabilities/);
@@ -1460,6 +1524,12 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(adminPage, /Suggested v137 admin URLs resolve/);
   for (const routeAlias of adminRouteAliases) {
     assert.match(routeAlias, /export \{ default, metadata \} from "\.\.\/page"/);
+  }
+  for (const routeFile of requiredRouteFiles) {
+    assert.equal(existsSync(routeFile), true, routeFile);
+  }
+  for (const routeFile of prohibitedPublicRouteFiles) {
+    assert.equal(existsSync(routeFile), false, routeFile);
   }
   assert.equal(site.includes("/labs/at-least-tier-platform-match"), false);
   assert.equal(site.includes("/account/labs/at-least-tier-platform-match"), false);

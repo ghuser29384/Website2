@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -837,6 +837,12 @@ test("refund-bonus v137 model artifacts validate project, identity, payment, cop
     ...approvedPromotion,
     approvedByLegal: undefined,
   }), false);
+  for (const approvalState of ["rejected", "revoked"] as const) {
+    assert.equal(isRefundBonusFeaturePromotionApproved({
+      ...approvedPromotion,
+      approvalState,
+    }), false);
+  }
 });
 
 test("hard pledge gate requires final review, provider-confirmed payment, backed reserve, and exposure caps", () => {
@@ -2421,6 +2427,19 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   const reviewPage = readFileSync("src/app/labs/refund-bonus-pledge-pool/[roundSlug]/review/page.tsx", "utf8");
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const requiredLabsRouteFiles = [
+    "src/app/labs/refund-bonus-pledge-pool/page.tsx",
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/page.tsx",
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/amount/page.tsx",
+    "src/app/labs/refund-bonus-pledge-pool/[roundSlug]/review/page.tsx",
+  ];
+  const prohibitedPublicRouteFiles = [
+    "src/app/refund-bonus-pledge-pool/page.tsx",
+    "src/app/mpgf/refund-bonus-pledge-pool/page.tsx",
+    "src/app/mpgf/rounds/[roundId]/refund-bonus-pledge-pool/page.tsx",
+    "src/app/public-goods-fund/refund-bonus-pledge-pool/page.tsx",
+    "src/app/moral-public-goods/refund-bonus-pledge-pool/page.tsx",
+  ];
 
   assert.match(labsPage, /Refund-Bonus Pledge Pool/);
   assert.match(labsPage, /REFUND_BONUS_NON_MVP_WARNING/);
@@ -2465,6 +2484,12 @@ test("refund-bonus branch remains absent from active public MVP surfaces", () =>
   assert.match(reviewPage, /provider-confirmed simulation/);
   assert.match(reviewPage, /no authorization, capture, provider\s+payout, public donor disclosure, or production persistence occurred/);
   assert.equal(reviewPage.includes("Save hard pledge disabled"), false);
+  for (const routeFile of requiredLabsRouteFiles) {
+    assert.equal(existsSync(routeFile), true, routeFile);
+  }
+  for (const routeFile of prohibitedPublicRouteFiles) {
+    assert.equal(existsSync(routeFile), false, routeFile);
+  }
   assert.equal(site.includes("Refund-Bonus Pledge Pool"), false);
   assert.equal(site.includes(REFUND_BONUS_FEATURE_KEY), false);
   assert.equal(roundPage.includes("Refund-Bonus Pledge Pool"), false);
