@@ -7,18 +7,29 @@ type LinkLike = {
 };
 
 export type IconName =
+  | "bookmark"
+  | "checklist"
   | "evidence"
   | "example"
   | "fund"
+  | "hands"
+  | "filter"
+  | "lock"
   | "marketplace"
+  | "meal"
   | "offset"
   | "payment"
   | "pilot"
+  | "progress"
   | "profile"
+  | "publicGoods"
   | "review"
   | "safety"
+  | "search"
+  | "scale"
   | "source"
-  | "swap";
+  | "swap"
+  | "vector";
 
 export function IconMark({ name }: { name: IconName }) {
   if (name === "swap") {
@@ -56,6 +67,180 @@ export function IconMark({ name }: { name: IconName }) {
           <path d="M12 18V6" />
           <path d="M17 18v-5" />
           <path d="M7 9l5-3 5 7" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "progress") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 3.8a8.2 8.2 0 1 1-7.1 12.3" />
+          <path d="M4.9 9.5V4.8h4.7" />
+          <path d="M12 7.4a4.6 4.6 0 1 1-4.6 4.6" />
+          <path d="M9.3 12h5.4" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "publicGoods") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 4.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15z" />
+          <path d="M4.8 12h14.4" />
+          <path d="M12 4.5c-2 2-3 4.5-3 7.5s1 5.5 3 7.5" />
+          <path d="M12 4.5c2 2 3 4.5 3 7.5s-1 5.5-3 7.5" />
+          <path
+            d="M12 15.7c-2.4-1.6-3.6-2.8-3.6-4.1 0-1 .7-1.7 1.7-1.7.7 0 1.3.3 1.9.9.6-.6 1.2-.9 1.9-.9 1 0 1.7.7 1.7 1.7 0 1.3-1.2 2.5-3.6 4.1z"
+            fill="currentColor"
+            stroke="none"
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "hands") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 12h3l2 2 3-4" />
+          <path d="M5 15c2 2 4 3 7 3s5-1 7-3" />
+          <path d="M6 9c1.5-2 3.4-3 6-3s4.5 1 6 3" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "checklist") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 6h11" />
+          <path d="M7 12h11" />
+          <path d="M7 18h8" />
+          <path d="m3.8 6 1 1 1.8-2" />
+          <path d="m3.8 12 1 1 1.8-2" />
+          <path d="m3.8 18 1 1 1.8-2" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "filter") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M5 6h14l-5.5 6.2V18l-3 1.5v-7.3z" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "bookmark") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 5.5h10v14l-5-3.1-5 3.1z" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "search") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <circle cx="10.7" cy="10.7" r="5.4" />
+          <path d="m15 15 4 4" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "meal") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path
+            d="M4.1 12.2h15.8c-.5 4.1-3.5 6.4-7.9 6.4s-7.4-2.3-7.9-6.4z"
+            fill="currentColor"
+            stroke="none"
+          />
+          <path d="M6.4 19.8h11.2" />
+          <path
+            d="M7.4 11c.9-4.4 3.5-6.8 7.8-7.2.1 4.4-2.6 6.7-7.8 7.2z"
+            fill="currentColor"
+            stroke="none"
+          />
+          <path
+            d="M14 9.1c3-.9 5.2-.1 6.3 2.4-3.1.8-5.2 0-6.3-2.4z"
+            fill="currentColor"
+            stroke="none"
+          />
+          <circle cx="9.3" cy="14.8" r="0.7" fill="#ffffff" stroke="none" />
+          <circle cx="12" cy="15.15" r="0.7" fill="#ffffff" stroke="none" />
+          <circle cx="14.7" cy="14.8" r="0.7" fill="#ffffff" stroke="none" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "lock") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 10h10v9H7z" />
+          <path d="M9 10V8a3 3 0 0 1 6 0v2" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "vector") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <circle cx="12" cy="5.25" r="0.78" fill="currentColor" stroke="none" />
+          <path d="M11.65 6.65h.7c.46 2.35.46 5.6 0 9.75l-.35 2.35-.35-2.35c-.46-4.15-.46-7.4 0-9.75z" fill="currentColor" stroke="none" />
+          <path d="M12 6.2v12.6" />
+          <path
+            d="M11 8.75C8.35 6.35 6 6 4.35 7.6c1.05 2.05 3.25 2.45 6.65 1.15z"
+            fill="currentColor"
+            stroke="none"
+          />
+          <path
+            d="M13 8.75c2.65-2.4 5-2.75 6.65-1.15-1.05 2.05-3.25 2.45-6.65 1.15z"
+            fill="currentColor"
+            stroke="none"
+          />
+          <path d="m11.05 10.35-5.25 2.25" />
+          <path d="m12.95 10.35 5.25 2.25" />
+          <path d="m11.05 12.5-4.25 3.55" />
+          <path d="m12.95 12.5 4.25 3.55" />
+          <path d="m11.2 14.85-2.2 3.5" />
+          <path d="m12.8 14.85 2.2 3.5" />
+          <path d="M11.15 4.2 9.75 3.25" />
+          <path d="m12.85 4.2 1.4-.95" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "scale") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M12 4.8v14.6" />
+          <path d="M7 19.4h10" />
+          <path d="M5.1 8.2h13.8" />
+          <path d="m7 8.2-3 6h6z" fill="currentColor" stroke="none" />
+          <path d="m17 8.2-3 6h6z" fill="currentColor" stroke="none" />
+          <path d="M4.5 14.2h5" stroke="#ffffff" strokeWidth="1.1" />
+          <path d="M14.5 14.2h5" stroke="#ffffff" strokeWidth="1.1" />
         </svg>
       </span>
     );

@@ -13883,6 +13883,10 @@ pre,
   display: none;
 }
 
+.offer-create-shell.marketplace-app-shell #main-content > .section {
+  display: block;
+}
+
 .mt-v75-route-board > .mt-v75-side-nav {
   display: none;
 }
@@ -14134,15 +14138,15 @@ pre,
   .marketplace-app-shell {
     width: 100%;
     max-width: none;
-    padding: 0.45rem;
+    padding: 0.25rem;
     background: #f6f8fb;
   }
 
   .marketplace-app-shell .moral-marketplace-home {
-    width: min(100%, 1448px);
-    max-width: 1448px;
+    width: min(100%, 780px);
+    max-width: 780px;
     min-height: 0;
-    margin: 0 auto;
+    margin: 0;
     padding: 0;
   }
 
@@ -14156,10 +14160,14 @@ pre,
     display: none;
   }
 
+  .marketplace-app-shell .moral-marketplace-home > .moral-marketplace-search .moral-marketplace-search-button {
+    display: none;
+  }
+
   .marketplace-app-shell .mt-v75-desktop-board {
     display: grid;
-    grid-template-columns: 132px minmax(0, 1fr);
-    gap: 10px;
+    grid-template-columns: 133px minmax(0, 1fr);
+    gap: 6px;
     align-items: stretch;
   }
 
@@ -14195,57 +14203,65 @@ pre,
   .mt-v75-planner-tray,
   .mt-v75-mini-tile {
     border: 1px solid #dfe5ec;
-    border-radius: 9px;
+    border-radius: 7px;
     background: #ffffff;
-    box-shadow: 0 8px 20px rgba(22, 29, 41, 0.04);
+    box-shadow: 0 6px 16px rgba(22, 29, 41, 0.035);
   }
 
   .mt-v75-side-nav {
     display: grid;
-    grid-template-rows: auto 1fr auto;
-    gap: 18px;
+    grid-template-rows: auto auto auto;
+    align-content: start;
+    gap: 12px;
     min-height: 604px;
-    padding: 18px 14px;
+    padding: 13px 10px;
   }
 
   .mt-v75-side-brand,
   .mt-v75-side-link {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
     color: #0e1928;
     text-decoration: none;
   }
 
   .mt-v75-side-brand {
+    min-height: 30px;
     font-weight: 900;
-    letter-spacing: -0.01em;
+    font-size: 11px;
+    letter-spacing: 0;
+    white-space: nowrap;
   }
 
   .mt-v75-side-brand .icon-mark {
-    width: 20px;
-    height: 20px;
+    width: 14px;
+    height: 14px;
+    border: 0;
+    background: transparent;
     color: #078c42;
   }
 
   .mt-v75-side-nav nav {
     display: grid;
     align-content: start;
-    gap: 8px;
+    gap: 6px;
   }
 
   .mt-v75-side-link {
-    min-height: 38px;
-    padding: 8px 9px;
-    border-radius: 7px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border-radius: 6px;
     color: #203047;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
   }
 
   .mt-v75-side-link .icon-mark {
-    width: 17px;
-    height: 17px;
+    width: 13px;
+    height: 13px;
+    border: 0;
+    background: transparent;
     color: #344257;
   }
 
@@ -14262,80 +14278,136 @@ pre,
 
   .mt-v75-side-plan {
     display: grid;
-    gap: 7px;
-    padding: 12px;
+    gap: 6px;
+    margin-top: 78px;
+    min-height: 153px;
+    padding: 8px 8px 7px;
     border: 1px solid #dfe9df;
-    border-radius: 8px;
-    background: #fbfdfb;
-    font-size: 12px;
+    border-radius: 7px;
+    background: #ffffff;
+    box-shadow: 0 5px 14px rgba(25, 34, 46, 0.035);
+    font-size: 11px;
   }
 
   .mt-v75-side-plan strong {
     color: #111b2b;
-    font-size: 14px;
+    font-size: 11px;
   }
 
   .mt-v75-side-plan span {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
     color: #5b6878;
-    line-height: 1.25;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+
+  .mt-v75-side-plan em,
+  .mt-v75-side-plan b {
+    font-style: normal;
+    line-height: 1.2;
+  }
+
+  .mt-v75-side-plan em {
+    color: #5b6878;
+    font-size: 9.5px;
+    font-weight: 750;
+  }
+
+  .mt-v75-side-plan b {
+    color: #26364b;
+    font-size: 10px;
+    font-weight: 900;
+    text-align: right;
   }
 
   .mt-v75-side-plan .button {
-    min-height: 34px;
+    display: inline-flex;
+    min-height: 27px;
+    height: 27px;
     justify-content: center;
-    margin-top: 4px;
+    margin-top: 2px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .mt-v75-workspace {
     display: grid;
+    grid-template-rows: auto auto auto;
+    align-content: start;
     gap: 12px;
-    padding: 18px;
+    padding: 12px;
   }
 
   .mt-v75-toolbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 42px;
-    gap: 12px;
+    grid-template-columns: minmax(320px, 430px) minmax(0, 1fr) 34px;
+    gap: 10px;
     align-items: center;
+    min-height: 38px;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search {
     position: relative;
     top: auto;
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 44px;
-    border-radius: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 38px;
+    height: 38px;
+    border-radius: 9px;
     box-shadow: none;
   }
 
+  .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    width: 15px;
+    height: 15px;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 50% 28%, #078c42 0 2px, transparent 2.5px),
+      radial-gradient(circle at 50% 72%, #078c42 0 2px, transparent 2.5px),
+      linear-gradient(#078c42, #078c42) 0 28% / 100% 1.5px no-repeat,
+      linear-gradient(#078c42, #078c42) 0 72% / 100% 1.5px no-repeat;
+    transform: translateY(-50%) rotate(90deg);
+    pointer-events: none;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search::before {
+    position: relative;
+    width: 11px;
+    height: 11px;
+    margin-left: 12px;
+    border-width: 1.4px;
+    color: #6f7a73;
+    box-shadow: 4px 4px 0 -2.5px currentColor;
+    transform: translateY(-1px);
+  }
+
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search input {
-    font-size: 13px;
+    min-height: 32px;
+    padding-right: 32px;
+    font-size: 12.5px;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search-button {
-    position: relative;
-    grid-row: 1;
-    grid-column: 2;
-    align-self: center;
-    width: auto;
-    height: 34px;
-    min-height: 34px;
-    overflow: visible;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 8px;
-    clip-path: none;
-    font-size: 12px;
-    line-height: 1;
-    white-space: nowrap;
+    display: none;
   }
 
   .mt-v75-bell {
+    display: none;
     position: relative;
-    display: grid;
+    grid-column: 3;
+    justify-self: end;
     place-items: center;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border: 1px solid #dfe5ec;
     border-radius: 999px;
     color: #172033;
@@ -14365,22 +14437,22 @@ pre,
 
   .mt-v75-tabs {
     display: flex;
-    gap: 9px;
+    gap: 5px;
     align-items: center;
-    min-height: 36px;
+    min-height: 28px;
   }
 
   .mt-v75-tabs a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 32px;
-    padding: 6px 15px;
+    min-height: 25px;
+    padding: 4px 9px;
     border: 1px solid #dfe5ec;
     border-radius: 999px;
     color: #203047;
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 850;
     text-decoration: none;
   }
 
@@ -14394,32 +14466,36 @@ pre,
 
   .mt-v75-browse-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 118px;
-    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 8px;
     align-items: start;
   }
 
   .mt-v75-browse-main {
     display: grid;
-    gap: 12px;
+    gap: 8px;
     min-width: 0;
   }
 
   .mt-v75-safety-strip {
+    position: relative;
+    top: -5px;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
-    min-height: 48px;
-    padding: 10px 12px;
+    min-height: 44px;
+    padding: 6px 10px;
     border: 1px solid #e2e8ef;
     border-radius: 8px;
     background: #f4f7fb;
   }
 
   .mt-v75-safety-strip .icon-mark {
-    width: 25px;
-    height: 25px;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: transparent;
     color: #1d2c44;
   }
 
@@ -14430,26 +14506,36 @@ pre,
 
   .mt-v75-safety-strip strong {
     color: #152033;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.15;
   }
 
   .mt-v75-safety-strip span {
     margin-top: 2px;
     color: #526070;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .mt-v75-safety-strip a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 13px;
+    border: 1px solid #dfe5ec;
+    border-radius: 7px;
+    background: #ffffff;
     color: #203047;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 800;
+    line-height: 1;
     text-decoration: none;
+    white-space: nowrap;
   }
 
   .mt-v75-filter-row {
     display: flex;
-    gap: 9px;
+    gap: 7px;
     align-items: center;
     overflow-x: auto;
     padding-bottom: 1px;
@@ -14459,13 +14545,13 @@ pre,
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 34px;
-    padding: 6px 20px;
+    min-height: 25px;
+    padding: 4px 14px;
     border: 1px solid #dfe5ec;
-    border-radius: 8px;
+    border-radius: 7px;
     background: #ffffff;
     color: #26364b;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
     text-decoration: none;
     white-space: nowrap;
@@ -14485,17 +14571,22 @@ pre,
   }
 
   .mt-v75-filter-more .icon-mark {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
+    color: #26364b;
   }
 
   .mt-v75-featured-deal {
     display: grid;
-    grid-template-columns: 182px minmax(0, 1fr) 154px;
-    gap: 18px;
-    align-items: center;
-    min-height: 182px;
-    padding: 18px;
+    grid-template-columns: 188px minmax(0, 1fr) 82px;
+    grid-template-rows: minmax(0, 133px) 36px;
+    align-content: start;
+    gap: 6px;
+    align-items: stretch;
+    height: 187px;
+    min-height: 187px;
+    margin-bottom: 4px;
+    padding: 6px;
   }
 
   .marketplace-app-shell .marketplace-detail-section {
@@ -14571,95 +14662,182 @@ pre,
   .mt-v75-featured-visuals {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    grid-template-columns: 86px 86px;
+    gap: 8px;
     align-items: center;
+    align-content: center;
+    justify-content: start;
   }
 
   .mt-v75-featured-visuals > .badge {
     position: absolute;
-    top: 6px;
-    left: 6px;
+    top: 5px;
+    left: 5px;
     z-index: 2;
+    min-height: 16px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 7px;
+    line-height: 1;
+    letter-spacing: 0;
   }
 
-  .mt-v75-featured-visuals .moral-deal-visual {
-    width: 82px;
-    min-width: 82px;
-    border-radius: 9px;
+  .marketplace-app-shell .mt-v75-featured-visuals > .badge.badge-preview,
+  .marketplace-app-shell .mt-v75-mini-head > .badge.badge-preview {
+    background: #078c42;
+    color: #ffffff;
   }
 
-  .mt-v75-featured-visuals .moral-deal-visual .icon-mark {
-    width: 44px;
-    height: 44px;
+  .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual {
+    position: relative;
+    width: 86px;
+    min-width: 86px;
+    min-height: 104px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #ecfae6 0%, #d7f2cc 100%);
+    color: #05873d;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual .icon-mark {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border: 0;
+    background: transparent;
+    color: currentColor;
+    opacity: 1;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual .icon-mark svg,
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual .icon-mark svg {
+    width: 100%;
+    height: 100%;
+    stroke-width: 2.35px;
   }
 
   .mt-v75-pair-arrow {
     position: absolute;
-    left: calc(50% - 18px);
-    top: calc(50% - 18px);
+    left: 78px;
+    top: 51px;
+    z-index: 3;
     display: grid;
     place-items: center;
-    width: 36px;
-    height: 36px;
-    border: 4px solid #ffffff;
+    width: 34px;
+    height: 34px;
+    border: 3px solid #ffffff;
     border-radius: 999px;
     background: #078c42;
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(12, 120, 61, 0.18);
+    box-shadow: 0 5px 13px rgba(12, 120, 61, 0.2);
   }
 
   .mt-v75-pair-arrow .icon-mark {
-    width: 20px;
-    height: 20px;
+    width: 19px;
+    height: 19px;
   }
 
-  .mt-v75-counter-visual {
-    background: linear-gradient(135deg, #fff4e2, #fee4b9);
-    color: #1a1a1a;
+  .mt-v75-pair-arrow .icon-mark svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual {
+    background: linear-gradient(135deg, #fff8ec, #feeccf);
+    color: #111111;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark {
+    width: 46px;
+    height: 46px;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark svg {
+    stroke-width: 1.75px;
   }
 
   .mt-v75-featured-copy {
     display: grid;
-    gap: 8px;
+    gap: 6px;
+    align-content: start;
     min-width: 0;
+    padding-top: 3px;
+  }
+
+  .mt-v75-featured-copy .moral-deal-chip-row {
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .mt-v75-featured-copy .source-pill {
+    min-height: 18px;
+    max-width: 88px;
+    padding: 2px 6px;
+    overflow: hidden;
+    font-size: 9px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mt-v75-featured-copy .source-pill:first-of-type {
+    background: #e8f1ff;
+    color: #1c63a2;
   }
 
   .mt-v75-featured-copy h2 {
+    display: -webkit-box;
     margin: 0;
-    max-width: 26ch;
+    max-width: 34ch;
+    overflow: hidden;
     color: #111b2b;
-    font-size: 22px;
-    line-height: 1.12;
-    letter-spacing: -0.01em;
+    font-size: 14px;
+    font-weight: 950;
+    line-height: 1.1;
+    letter-spacing: 0;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .mt-v75-featured-copy p {
+    display: -webkit-box;
     margin: 0;
-    max-width: 42ch;
+    max-width: 34ch;
+    overflow: hidden;
     color: #526070;
-    font-size: 13px;
-    line-height: 1.42;
+    font-size: 9.75px;
+    line-height: 1.22;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .mt-v75-featured-copy .mt-v75-status-row {
+    margin-top: 20px;
   }
 
   .mt-v75-status-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-wrap: nowrap;
+    gap: 3px;
     align-items: center;
+    min-width: 0;
   }
 
   .mt-v75-status-chip {
     display: inline-flex;
     align-items: center;
-    min-height: 22px;
-    padding: 4px 8px;
+    min-height: 18px;
+    padding: 2px 4px;
     border-radius: 999px;
     background: #f0f3f6;
     color: #526070;
-    font-size: 11px;
+    font-size: 8px;
     font-weight: 850;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .mt-v75-status-chip.is-good {
@@ -14677,154 +14855,424 @@ pre,
     color: #1c63a2;
   }
 
-  .mt-v75-featured-receipt {
+  .mt-v75-featured-decision {
     display: grid;
-    gap: 8px;
-    margin: 0;
-    padding-left: 14px;
-    border-left: 1px solid #e2e8ef;
+    align-content: start;
+    gap: 26px;
+    min-width: 0;
+    padding-top: 22px;
   }
 
-  .mt-v75-featured-receipt div {
+  .mt-v75-featured-exposure {
     display: grid;
     gap: 2px;
-  }
-
-  .mt-v75-featured-receipt dt {
-    color: #6d7888;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .mt-v75-featured-receipt dd {
-    margin: 0;
+    align-content: start;
+    padding: 4px 0 2px;
     color: #111b2b;
-    font-size: 13px;
-    font-weight: 850;
-    line-height: 1.2;
+  }
+
+  .mt-v75-featured-exposure span,
+  .mt-v75-featured-exposure small {
+    color: #526070;
+    font-size: 9.5px;
+    font-weight: 800;
+    line-height: 1.1;
+    max-width: 82px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mt-v75-featured-exposure strong {
+    color: #111b2b;
+    font-size: 15px;
+    font-weight: 950;
+    line-height: 1.05;
+    white-space: nowrap;
   }
 
   .mt-v75-featured-actions {
-    grid-column: 1 / -1;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
   }
 
   .mt-v75-featured-actions .button {
-    min-height: 36px;
+    min-height: 31px;
+    height: 31px;
+    justify-content: center;
+    border-radius: 7px;
+    padding: 0 9px;
+    line-height: 1;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  .mt-v75-featured-actions .button-primary {
+    min-width: 0;
+    border: 1px solid #0a8a43;
+    background: #ffffff;
+    color: #057136;
+    box-shadow: none;
   }
 
   .mt-v75-save-hint {
-    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    justify-self: start;
     color: #526070;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 850;
+  }
+
+  .mt-v75-save-hint .icon-mark {
+    width: 13px;
+    height: 13px;
+    border: 0;
+    background: transparent;
+    color: currentColor;
+  }
+
+  .mt-v75-featured-facts {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    overflow: hidden;
+    border-top: 1px solid #e7ecf2;
+  }
+
+  .mt-v75-featured-facts div {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    min-height: 34px;
+    padding: 5px 8px 4px;
+  }
+
+  .mt-v75-featured-facts div + div {
+    border-left: 1px solid #edf1f5;
+  }
+
+  .mt-v75-featured-facts .icon-mark {
+    width: 14px;
+    height: 14px;
+    border: 0;
+    background: transparent;
+    color: #26364b;
+  }
+
+  .mt-v75-featured-facts dd {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: #111b2b;
+    font-size: 9.5px;
+    font-weight: 850;
+    line-height: 1.12;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .mt-v75-secondary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
   }
 
   .mt-v75-mini-tile {
-    display: grid;
-    gap: 9px;
-    min-height: 150px;
-    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    height: 195px;
+    min-height: 0;
+    overflow: hidden;
+    padding: 5px;
     color: #111b2b;
     text-decoration: none;
   }
 
-  .mt-v75-mini-head {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 8px;
+  .marketplace-app-shell .mt-v75-mini-tile-cross-view-donation-swap {
+    border-color: #f0dfcf;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffffff 74%);
   }
 
-  .mt-v75-mini-head .moral-deal-visual,
+  .marketplace-app-shell .mt-v75-mini-tile-public-goods-round {
+    border-color: #d7e7f2;
+    background: linear-gradient(180deg, #f4fbff 0%, #ffffff 75%);
+  }
+
+  .marketplace-app-shell .mt-v75-mini-tile-action-for-donation {
+    border-color: #e1d9f3;
+    background: linear-gradient(180deg, #f7f3ff 0%, #ffffff 75%);
+  }
+
+  .marketplace-app-shell .mt-v75-mini-tile-pledge-funding-round,
+  .marketplace-app-shell .mt-v75-mini-tile-local-pledge,
+  .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat {
+    border-color: #d7ebd1;
+    background: linear-gradient(180deg, #f3fbef 0%, #ffffff 75%);
+  }
+
+  .mt-v75-mini-head {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 6px;
+    flex: 0 0 78px;
+    min-height: 78px;
+  }
+
+  .mt-v75-mini-head > .badge {
+    position: absolute;
+    top: 0;
+    right: auto;
+    left: 0;
+    z-index: 2;
+    min-height: 15px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 6px;
+    line-height: 1;
+    letter-spacing: 0;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual,
   .mt-v75-planner-row .moral-deal-visual,
   .mt-v75-review-summary .moral-deal-visual {
-    width: 56px;
-    min-width: 56px;
-    border-radius: 9px;
+    width: 62px;
+    min-width: 62px;
+    border-radius: 7px;
   }
 
-  .mt-v75-mini-head .moral-deal-visual .icon-mark,
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual {
+    width: 100%;
+    min-width: 0;
+    height: 78px;
+    min-height: 78px;
+    aspect-ratio: auto;
+    border: 0;
+    background: linear-gradient(135deg, #e6f8df 0%, #c8edbf 100%);
+    color: #078c42;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-public-goods-round {
+    background: linear-gradient(135deg, #edf7ff 0%, #cfe7f7 100%);
+    color: #1f7c95;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .mt-v75-progress-visual {
+    background: linear-gradient(135deg, #f5fbff 0%, #e6f3fb 100%);
+    color: #237c96;
+  }
+
+  .mt-v75-progress-ring {
+    --mt-v75-progress: 0deg;
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 999px;
+    background: conic-gradient(#147fac var(--mt-v75-progress), #d9ebf4 0deg);
+    box-shadow: inset 0 0 0 1px rgba(24, 107, 145, 0.08);
+  }
+
+  .mt-v75-progress-ring::before {
+    position: absolute;
+    inset: 7px;
+    border-radius: inherit;
+    background: #ffffff;
+    content: "";
+  }
+
+  .mt-v75-progress-ring strong {
+    position: relative;
+    z-index: 1;
+    color: #146c92;
+    font-size: 12px;
+    font-weight: 950;
+    line-height: 1;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat .moral-deal-visual-public-goods-round {
+    background: linear-gradient(135deg, #e8f8e2 0%, #c9efbd 100%);
+    color: #078c42;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-pledge-funding-round {
+    background: linear-gradient(135deg, #eef9e8 0%, #c9efbd 100%);
+    color: #078c42;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap {
+    background: linear-gradient(135deg, #fff8ef 0%, #ffe9cf 100%);
+    color: #d15d00;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap .icon-mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-action-for-donation {
+    background: linear-gradient(135deg, #f0ebff 0%, #d3c6ff 100%);
+    color: #6852b8;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-local-pledge {
+    background: linear-gradient(135deg, #eef9e8 0%, #c9efbd 100%);
+    color: #078c42;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual .icon-mark,
   .mt-v75-planner-row .moral-deal-visual .icon-mark,
   .mt-v75-review-summary .moral-deal-visual .icon-mark {
-    width: 28px;
-    height: 28px;
+    width: 50px;
+    height: 50px;
+    border: 0;
+    background: transparent;
+    color: currentColor;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual .icon-mark {
+    width: 44px;
+    height: 44px;
   }
 
   .mt-v75-mini-tile strong {
+    display: -webkit-box;
+    flex: 0 0 auto;
+    overflow: hidden;
     color: #111b2b;
-    font-size: 14px;
-    line-height: 1.14;
+    font-size: 10.5px;
+    font-weight: 950;
+    line-height: 1.1;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .mt-v75-mini-tile > span {
+    flex: 0 0 auto;
+    overflow: hidden;
     color: #526070;
-    font-size: 12px;
-    line-height: 1.25;
+    font-size: 9.25px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mt-v75-mini-tile .mt-v75-mini-amount {
+    color: #111b2b;
+    font-size: 10.5px;
+    font-weight: 900;
+  }
+
+  .mt-v75-mini-tile .mt-v75-status-row {
+    margin-top: auto;
+    overflow: hidden;
+  }
+
+  .mt-v75-mini-tile .mt-v75-status-chip {
+    min-height: 16px;
+    padding-inline: 5px;
+    font-size: 7px;
+    font-weight: 900;
   }
 
   .mt-v75-quick-rail {
+    display: grid;
     position: sticky;
     top: 12px;
-    display: grid;
-    gap: 10px;
-    padding: 14px 10px;
+    gap: 4px;
+    align-content: start;
+    grid-auto-rows: max-content;
+    min-height: 500px;
+    overflow: hidden;
+    padding: 8px 6px;
+    color: #344257;
   }
 
   .mt-v75-rail-head {
-    display: grid;
-    gap: 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
   }
 
   .mt-v75-rail-head strong {
     color: #111b2b;
-    font-size: 13px;
+    font-size: 10px;
   }
 
   .mt-v75-rail-head a,
   .mt-v75-rail-sort span {
     color: #078c42;
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 800;
     text-decoration: none;
   }
 
+  .mt-v75-rail-head a,
+  .mt-v75-rail-sort {
+    display: none;
+  }
+
   .mt-v75-quick-link {
     display: grid;
-    justify-items: center;
-    gap: 5px;
-    min-height: 66px;
-    padding: 8px 5px;
+    grid-template-columns: auto minmax(82px, 1fr) auto;
+    gap: 4px;
+    align-items: center;
+    min-height: 26px;
+    padding: 4px 0;
     border-bottom: 1px solid #e6ebf0;
     color: #203047;
-    text-align: center;
     text-decoration: none;
   }
 
   .mt-v75-quick-link .icon-mark {
-    width: 20px;
-    height: 20px;
+    width: 13px;
+    height: 13px;
+    border: 0;
+    background: transparent;
     color: #078c42;
+    opacity: 0.7;
+  }
+
+  .mt-v75-quick-link.is-warn .icon-mark {
+    color: #ff6a1a;
+  }
+
+  .mt-v75-quick-link.is-info .icon-mark {
+    color: #2f77d0;
+  }
+
+  .mt-v75-quick-link.is-neutral .icon-mark {
+    color: #5b6878;
   }
 
   .mt-v75-quick-link span {
-    font-size: 11px;
+    overflow: hidden;
+    font-size: 8px;
     font-weight: 850;
     line-height: 1.15;
+    text-overflow: clip;
+    white-space: nowrap;
   }
 
-  .mt-v75-quick-link small {
-    color: #6d7888;
-    font-size: 10px;
-    line-height: 1;
+  .mt-v75-quick-link strong {
+    display: grid;
+    place-items: center;
+    min-width: 15px;
+    height: 15px;
+    border-radius: 999px;
+    background: #eef7f0;
+    color: #047638;
+    font-size: 8px;
+    font-weight: 900;
   }
 
   .mt-v75-quick-link.is-muted {
@@ -14834,11 +15282,64 @@ pre,
   .mt-v75-rail-sort {
     display: grid;
     gap: 4px;
-    padding: 6px;
+    min-height: 38px;
+    margin-top: 6px;
+    padding: 7px 8px;
+    border: 1px solid #e3e8ee;
+    border-radius: 6px;
   }
 
   .mt-v75-rail-sort strong {
     font-size: 12px;
+  }
+
+  .mt-v75-rail-section {
+    display: grid;
+    gap: 3px;
+    margin-top: 14px;
+    padding: 6px 0 2px;
+    border-top: 1px solid #e6ebf0;
+  }
+
+  .mt-v75-rail-section > strong {
+    color: #111b2b;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .mt-v75-rail-category {
+    display: grid;
+    grid-template-columns: minmax(84px, 1fr) auto;
+    gap: 5px;
+    align-items: center;
+    min-height: 19px;
+    color: #203047;
+    text-decoration: none;
+  }
+
+  .mt-v75-rail-category span {
+    overflow: hidden;
+    color: #314056;
+    font-size: 8px;
+    font-weight: 750;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mt-v75-rail-category strong {
+    color: #526070;
+    font-size: 9px;
+    font-weight: 850;
+    transform: translateX(42px);
+  }
+
+  .mt-v75-rail-show {
+    margin-top: 2px;
+    color: #078c42;
+    font-size: 9px;
+    font-weight: 800;
+    text-decoration: none;
   }
 
   .mt-v75-planner-tray {

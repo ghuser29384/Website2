@@ -16,6 +16,15 @@ import {
   getPledgeFundingRounds,
   type PledgeFundingRound,
 } from "@/lib/moral-trade/pledge-funding-rounds";
+import {
+  getDonationCancellationPublicRound,
+  getDonationCancellationRounds,
+  type DonationCancellationRound,
+} from "@/lib/moral-trade/donation-cancellation-clearinghouse";
+import {
+  buildFallbackLivestreamEvidenceDisplay,
+  type FallbackLivestreamEvidenceDisplay,
+} from "@/lib/moral-trade/fallback-livestream-evidence";
 
 export const MIN_PUBLIC_GROUP_COUNT = 5;
 
@@ -83,11 +92,14 @@ export type MarketplaceFilterKey =
   | "cross_cluster_trade"
   | "public_goods_round"
   | "action_for_donation"
-  | "donation_cancellation"
   | "recurring_pledge"
   | "no_personal_exposure"
   | "requires_evidence"
-  | "reviewer_approved_only";
+  | "reviewer_approved_only"
+  | "cause_health"
+  | "cause_animals"
+  | "cause_environment"
+  | "cause_ai_safety";
 
 export type CommitmentCenterStatus =
   | "draft"
@@ -132,6 +144,7 @@ export interface MarketplaceDeal {
   chargeTiming?: string;
   executionCondition?: string;
   failureRule?: string;
+  fallbackLivestreamEvidence?: FallbackLivestreamEvidenceDisplay | null;
   sourceLabel?: string;
   searchText?: string;
   filterTags?: MarketplaceFilterKey[];
@@ -286,11 +299,14 @@ const FILTER_DEFINITIONS = [
   ["cross_cluster_trade", "Cross-cluster trade"],
   ["public_goods_round", "Public-goods round"],
   ["action_for_donation", "Action-for-donation"],
-  ["donation_cancellation", "Donation cancellation"],
   ["recurring_pledge", "Recurring pledge"],
   ["no_personal_exposure", "No personal exposure"],
   ["requires_evidence", "Requires evidence"],
   ["reviewer_approved_only", "Reviewer-approved only"],
+  ["cause_health", "Health"],
+  ["cause_animals", "Animals"],
+  ["cause_environment", "Environment"],
+  ["cause_ai_safety", "AI Safety"],
 ] as const satisfies ReadonlyArray<readonly [MarketplaceFilterKey, string]>;
 
 const DEFAULT_SAFE_PROXIMITY = [
@@ -482,6 +498,18 @@ function buildFilterTags(deal: MarketplaceDeal): MarketplaceFilterKey[] {
   if (deal.causeTags.length > 1 || deal.mechanismType === "cross_view_donation_swap") {
     filters.push("cross_cluster_trade");
   }
+  if (deal.causeTags.some((tag) => /health|poverty|malaria|disease|medical/i.test(tag))) {
+    filters.push("cause_health");
+  }
+  if (deal.causeTags.some((tag) => /animal|vegetarian|vegan|welfare/i.test(tag))) {
+    filters.push("cause_animals");
+  }
+  if (deal.causeTags.some((tag) => /climate|environment|carbon|offset/i.test(tag))) {
+    filters.push("cause_environment");
+  }
+  if (deal.causeTags.some((tag) => /ai|existential|future|x-risk|alignment/i.test(tag))) {
+    filters.push("cause_ai_safety");
+  }
   if (deal.mechanismType === "public_goods_round") {
     filters.push("public_goods_round", "requires_evidence");
   }
@@ -491,9 +519,6 @@ function buildFilterTags(deal: MarketplaceDeal): MarketplaceFilterKey[] {
   if (deal.mechanismType === "action_for_donation") {
     filters.push("action_for_donation");
   }
-  if (deal.mechanismType === "offset_trade" || deal.mechanismType === "cross_view_donation_swap") {
-    filters.push("donation_cancellation");
-  }
   if (/month|recurring|open-ended/i.test(text)) {
     filters.push("recurring_pledge");
   }
@@ -501,6 +526,9 @@ function buildFilterTags(deal: MarketplaceDeal): MarketplaceFilterKey[] {
     filters.push("no_personal_exposure");
   }
   if (deal.verificationSummary) {
+    filters.push("requires_evidence");
+  }
+  if (deal.fallbackLivestreamEvidence) {
     filters.push("requires_evidence");
   }
 
@@ -541,6 +569,10 @@ function withDerivedDealFields(deal: MarketplaceDeal): MarketplaceDeal {
     baseDeal.verificationSummary,
     baseDeal.reviewStatus,
     baseDeal.baselineConfidence,
+    baseDeal.fallbackLivestreamEvidence?.title,
+    baseDeal.fallbackLivestreamEvidence?.branchLabel,
+    baseDeal.fallbackLivestreamEvidence?.observationLabel,
+    baseDeal.fallbackLivestreamEvidence?.statusLabel,
     baseDeal.proximityLabels?.join(" "),
     baseDeal.actionDescription,
     baseDeal.executionCondition,
@@ -593,6 +625,9 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
     offer.donationOffset?.participation_mode === "pool"
       ? offer.donationOffset.pool?.matchedCompromiseCents
       : undefined;
+  const fallbackLivestreamEvidence = offer.fallbackLivestreamEvidenceRoutes[0]
+    ? buildFallbackLivestreamEvidenceDisplay(offer.fallbackLivestreamEvidenceRoutes[0])
+    : null;
 
   return withDerivedDealFields({
     actionDescription: offer.offer_action,
@@ -609,6 +644,7 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
       offer.mode === "offset"
         ? "Executes only if matching, review, evidence, and participant confirmation conditions pass."
         : "Executes only after both sides accept frozen terms and evidence requirements.",
+    fallbackLivestreamEvidence,
     failureRule:
       offer.mode === "offset"
         ? "If matching or review fails, no new donation is implied by this marketplace card."
@@ -799,13 +835,50 @@ export function marketplaceDealFromPledgeFundingRound(round: PledgeFundingRound)
   });
 }
 
+export function marketplaceDealFromDonationCancellationRound(round: DonationCancellationRound): MarketplaceDeal {
+  const publicRound = getDonationCancellationPublicRound(round);
+
+  return withDerivedDealFields({
+    actionDescription:
+      "Labs-only research mechanism record. Simulated matched opposed amounts can be inspected only under non-MVP admin review.",
+    baselineConfidence: "unavailable",
+    categoryKeys: ["recommended", "offset_trades", "cross_view_swaps"],
+    causeTags: ["Donation clearinghouse", "Opposed donations", "Charity routing"],
+    chargeTiming: publicRound.paymentCopy,
+    ctaLabel: "View labs mechanism",
+    deadline: round.closesAt,
+    executionCondition:
+      "Production real-money registration, authorization, capture, routing, and settlement remain disabled unless a later promotion is approved.",
+    failureRule: "Non-MVP labs records do not create public commitments or real-money routing.",
+    filterTags: ["cross_cluster_trade", "requires_evidence", "reviewer_approved_only"],
+    href: `/donation-cancellation/${round.slug}`,
+    id: round.id,
+    mechanismType: "cross_view_donation_swap",
+    privacyNotes: [
+      "Counterparty identities are not public.",
+      "Priority weights and exact private scores are not public.",
+      "Pre-close progress is qualitative only.",
+    ],
+    reviewStatus: round.copyPreflightState === "passed" ? "reviewer_approved" : "review_pending",
+    sourceLabel: "Donation clearinghouse",
+    status: round.status === "settled" ? "completed" : round.status === "open" ? "pending_match" : "under_review",
+    subtitle: "Non-MVP labs/research mechanism, not part of CGPP",
+    thresholdTargetCents: round.roundGrossCapMinor,
+    title: "Donation clearinghouse labs record",
+    userMaxExposureCents: round.perUserGrossMaxMinor,
+    verificationSummary: "Admin-reviewed recipients and opposition markets required.",
+  });
+}
+
 export function buildMarketplaceDeals({
+  includeNonMvpLabs = false,
   liveOffers,
   publicGoodsCampaigns,
   publicGoodsMatchPool,
   publicGoodsRound,
   workedOffers,
 }: {
+  includeNonMvpLabs?: boolean;
   liveOffers: readonly OfferRecord[];
   publicGoodsCampaigns: readonly MpgfPublicGoodsCampaign[];
   publicGoodsMatchPool: MpgfPublicGoodsMatchPool;
@@ -815,6 +888,9 @@ export function buildMarketplaceDeals({
   return [
     ...liveOffers.map(marketplaceDealFromOfferRecord),
     ...getPledgeFundingRounds().map(marketplaceDealFromPledgeFundingRound),
+    ...(includeNonMvpLabs
+      ? getDonationCancellationRounds({ includeNonMvpLabs: true }).map(marketplaceDealFromDonationCancellationRound)
+      : []),
     ...marketplaceDealsFromPublicGoodsCampaigns({
       campaigns: publicGoodsCampaigns,
       matchPool: publicGoodsMatchPool,

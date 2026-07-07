@@ -13,6 +13,7 @@ import {
 import {
   MIN_PUBLIC_GROUP_COUNT,
   buildDealEconomics,
+  buildMarketplaceDeals,
   buildMarketplaceHref,
   buildMarketplaceSurface,
   getCommitmentStatusLabel,
@@ -24,6 +25,7 @@ import {
   type MarketplaceDeal,
 } from "@/lib/marketplace-deals";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { buildFallbackLivestreamEvidenceDisplay } from "@/lib/moral-trade/fallback-livestream-evidence";
 import { SEED_OFFERS } from "@/lib/offers";
 
 function requiredDealFields(overrides: Partial<MarketplaceDeal> = {}): MarketplaceDeal {
@@ -69,6 +71,38 @@ test("marketplace adapter maps worked offers into bounded deal economics without
   assert.equal(economics.totalMovedIfClearedLabel, "$2,000");
   assert.equal(economics.effectiveMultiplierLabel, "2.00x if cleared");
   assert.match(economics.chargeTiming, /do not charge/i);
+});
+
+test("marketplace card surfaces fallback livestream evidence without proof language", () => {
+  const fallbackLivestreamEvidence = buildFallbackLivestreamEvidenceDisplay({
+    baseline_claim: "If no trade clears, the no-trade branch remains observable.",
+    challenge_code: "MT-FLE-ABCD-2345",
+    challenge_issued_at: "2026-07-06T12:00:00.000Z",
+    clearing_deadline_at: "2026-07-07T12:00:00.000Z",
+    fallback_action_statement: "Record the stated fallback action in the scheduled external stream.",
+    fallback_event_label: "No-trade branch evidence",
+    id: "fallback-route-1",
+    recording_due_at: "2026-07-08T13:00:00.000Z",
+    recording_url: "",
+    review_decision: null,
+    review_notes: "",
+    reviewed_at: null,
+    scheduled_end_at: "2026-07-07T13:00:00.000Z",
+    scheduled_start_at: "2026-07-07T12:30:00.000Z",
+    status: "scheduled",
+    stream_provider: "external_url",
+    stream_url: "",
+    submitted_at: null,
+    visibility: "private_review",
+  });
+  const markup = renderToStaticMarkup(
+    createElement(MoralDealCard, {
+      deal: requiredDealFields({ fallbackLivestreamEvidence }),
+    }),
+  );
+
+  assert.match(markup, /Observed if no trade clears/);
+  assert.doesNotMatch(markup, /Counterfactual verified|Natural baseline proven|Verified intent|Guaranteed counterfactual|Counterfactual proof|Public proof badge/);
 });
 
 test("public-goods adapter keeps unavailable sponsor-match economics unavailable", () => {
@@ -171,11 +205,62 @@ test("marketplace source filters are derived from display-model owners", () => {
   const emptySurface = buildMarketplaceSurface(
     [workedDeal, publicGoodsDeal],
     parseMarketplaceQuery({
-      marketplace_filter: ["source_public_goods", "donation_cancellation"],
+      marketplace_filter: ["source_public_goods", "source_worked_example"],
     }),
   );
   assert.equal(emptySurface.deals.length, 0);
   assert.match(emptySurface.emptyState ?? "", /No reliable public deal data matches these filters/);
+});
+
+test("compact browse cause filters use honest query state", () => {
+  const healthDeal = requiredDealFields({
+    filterTags: ["cause_health", "requires_evidence"],
+    id: "health-deal",
+    title: "Public health pledge",
+  });
+  const animalDeal = requiredDealFields({
+    filterTags: ["cause_animals"],
+    id: "animal-deal",
+    title: "Animal welfare pledge",
+  });
+  const query = parseMarketplaceQuery({ marketplace_filter: "cause_health" });
+  const surface = buildMarketplaceSurface([healthDeal, animalDeal], query);
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query,
+      surface,
+    }),
+  );
+
+  assert.deepEqual(query.filters, ["cause_health"]);
+  assert.equal(surface.deals.length, 1);
+  assert.equal(surface.deals[0].id, "health-deal");
+  assert.match(markup, /href="\/offers\?marketplace_filter=cause_health"/);
+  assert.match(markup, /aria-current="true" href="\/offers\?marketplace_filter=cause_health">Health/);
+  assert.doesNotMatch(markup, /Health<\/a><a[^>]+requires_evidence/);
+});
+
+test("donation cancellation is excluded from ordinary marketplace and only included for labs", () => {
+  const ordinaryDeals = buildMarketplaceDeals({
+    liveOffers: [],
+    publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    publicGoodsMatchPool: demoMpgfMatchPool,
+    publicGoodsRound: demoMpgfAssuranceRound,
+    workedOffers: [],
+  });
+  const labsDeals = buildMarketplaceDeals({
+    includeNonMvpLabs: true,
+    liveOffers: [],
+    publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    publicGoodsMatchPool: demoMpgfMatchPool,
+    publicGoodsRound: demoMpgfAssuranceRound,
+    workedOffers: [],
+  });
+
+  assert.equal(ordinaryDeals.some((deal) => deal.href.startsWith("/donation-cancellation")), false);
+  assert.ok(labsDeals.some((deal) => deal.href.startsWith("/donation-cancellation")));
 });
 
 test("marketplace home renders one-rail filter sheet with URL apply controls", () => {
@@ -217,7 +302,7 @@ test("marketplace app shell keeps desktop browse cards in mobile-app proportions
 
   assert.match(
     css,
-    /\.marketplace-app-shell\s*{[^}]*max-width:\s*500px;/s,
+    /\.marketplace-app-shell\s*{[\s\S]*?max-width:\s*500px;/,
     "desktop Browse shell should be capped to a mobile-app canvas",
   );
   assert.equal(
@@ -227,32 +312,32 @@ test("marketplace app shell keeps desktop browse cards in mobile-app proportions
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.marketplace-directory-layout,\s*\.marketplace-app-shell \.collection-trust-panel,\s*\.marketplace-app-shell \.footer\s*{[^}]*display:\s*none;/s,
+    /\.marketplace-app-shell \.marketplace-directory-layout,\s*\.marketplace-app-shell \.collection-trust-panel,\s*\.marketplace-app-shell \.footer\s*{[\s\S]*?display:\s*none;/,
     "legacy desktop browse rails should be hidden inside the v72 app shell",
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.moral-marketplace-search\s*{[^}]*position:\s*sticky;[^}]*top:/s,
+    /\.marketplace-app-shell \.moral-marketplace-search\s*{[\s\S]*?position:\s*sticky;[\s\S]*?top:/,
     "search should remain a real sticky top control",
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.moral-marketplace-search-button\s*{[^}]*clip-path:\s*inset\(50%\);/s,
+    /\.marketplace-app-shell \.moral-marketplace-search-button\s*{[\s\S]*?clip-path:\s*inset\(50%\);/,
     "app-shell search should not render a separate oversized submit button",
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.moral-deal-card\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s,
+    /\.marketplace-app-shell \.moral-deal-card\s*{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
     "desktop cards should no longer stretch into a two-column desktop ad row",
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.moral-deal-card-main\s*{[^}]*grid-template-columns:\s*5\.85rem minmax\(0,\s*1fr\);/s,
+    /\.marketplace-app-shell \.moral-deal-card-main\s*{[\s\S]*?grid-template-columns:\s*5\.85rem minmax\(0,\s*1fr\);/,
     "card visual and copy should use compact marketplace proportions",
   );
   assert.match(
     css,
-    /\.marketplace-app-shell \.marketplace-bottom-nav\s*{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/s,
+    /\.marketplace-app-shell \.marketplace-bottom-nav\s*{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/,
     "bottom navigation should stay app-like with v76 Browse, Planner, Track, Messages, and Profile destinations",
   );
 });

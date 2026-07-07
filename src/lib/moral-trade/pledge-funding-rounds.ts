@@ -160,7 +160,7 @@ export const PLEDGE_FUNDING_PREVIEW_ROUNDS: PledgeFundingRound[] = [
     sponsorBonusPoolId: null,
     state: "preview",
     targetAmountCents: 2_000,
-    title: "Fund a vegetarian pledge with a capped 3缺1-style cohort",
+    title: "Fund a vegetarian pledge with a capped cohort",
   },
 ];
 
