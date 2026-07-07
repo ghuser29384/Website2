@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, FormHTMLAttributes, ReactNode } from "react";
 
 import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import {
@@ -225,7 +225,7 @@ function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" 
   ] as const;
 
   return (
-    <aside className="mt-v75-side-nav" aria-label="Marketplace sections">
+    <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
       <Link className="mt-v75-side-brand" href="/offers">
         <IconMark name="meal" />
         <span>Moral Trade</span>
@@ -360,7 +360,7 @@ function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
   ] as const;
 
   return (
-    <article className="mt-v75-featured-deal">
+    <article className="mt-v75-featured-deal" data-marketplace-featured>
       <div className="mt-v75-featured-visuals">
         <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
         <DealSemanticVisual deal={deal} icon={browseVisualIcon(deal.mechanismType)} />
@@ -408,9 +408,9 @@ function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
           </span>
         </div>
       </div>
-      <dl className="mt-v75-featured-facts" aria-label="Receipt facts">
+      <dl className="mt-v75-featured-facts" data-marketplace-featured-facts aria-label="Receipt facts">
         {factRow.map((fact) => (
-          <div key={fact.label}>
+          <div data-receipt-fact key={fact.label}>
             <IconMark name={fact.icon} />
             <dt className="sr-only">{fact.label}</dt>
             <dd>{fact.value}</dd>
@@ -692,7 +692,7 @@ function QuickFilterRail({ deals }: { deals: readonly MarketplaceDeal[] }) {
   ] as const;
 
   return (
-    <aside className="mt-v75-quick-rail" aria-label="Quick filters">
+    <aside className="mt-v75-quick-rail" data-marketplace-quick-rail aria-label="Quick filters">
       <div className="mt-v75-rail-head">
         <strong>Quick filters</strong>
         <Link href="/offers">Clear all</Link>
@@ -1164,13 +1164,28 @@ export function MarketplaceSearch({
   inputId = "marketplace-search-input",
   query,
   showButton = true,
+  ...formProps
 }: {
   inputId?: string;
   query: string;
   showButton?: boolean;
-}) {
+} & Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "method" | "role">) {
   return (
-    <form action="/offers" className="moral-marketplace-search" method="get" role="search">
+    <form
+      {...formProps}
+      action="/offers"
+      className={joinClassName(["moral-marketplace-search", formProps.className])}
+      method="get"
+      role="search"
+    >
+      <span className="mt-v75-search-icon" aria-hidden="true">
+        <IconMark name="search" />
+      </span>
+      {!showButton ? (
+        <span className="mt-v75-search-tune" aria-hidden="true">
+          <IconMark name="filter" />
+        </span>
+      ) : null}
       <label className="sr-only" htmlFor={inputId}>
         Search marketplace
       </label>
@@ -1676,6 +1691,7 @@ export function MarketplaceHome({
         <div className="mt-v75-workspace">
           <div className="mt-v75-toolbar">
             <MarketplaceSearch
+              data-marketplace-search
               inputId="marketplace-desktop-search-input"
               query={surface.query}
               showButton={false}
@@ -1684,7 +1700,7 @@ export function MarketplaceHome({
               <IconMark name="review" />
             </Link>
           </div>
-          <nav className="mt-v75-tabs" aria-label="Marketplace tabs">
+          <nav className="mt-v75-tabs" data-marketplace-tabs aria-label="Marketplace tabs">
             {tabLinks.map(([label, href], index) => (
               <Link aria-current={index === 0 ? "page" : undefined} href={href} key={label}>
                 {label}
@@ -1693,7 +1709,7 @@ export function MarketplaceHome({
           </nav>
           <div className="mt-v75-browse-grid">
             <main className="mt-v75-browse-main">
-              <div className="mt-v75-safety-strip">
+              <div className="mt-v75-safety-strip" data-marketplace-safety>
                 <IconMark name="lock" />
                 <div>
                   <strong>Preview only until you confirm</strong>
@@ -1701,7 +1717,7 @@ export function MarketplaceHome({
                 </div>
                 <Link href="/what-is-moral-trade">Learn how &gt;</Link>
               </div>
-              <div className="mt-v75-filter-row" aria-label="Compact filters">
+              <div className="mt-v75-filter-row" data-marketplace-filters aria-label="Compact filters">
                 {compactFilterLinks.map(({ active, href, label }) => (
                   <Link aria-current={active ? "true" : undefined} href={href} key={label}>
                     {label}
@@ -1724,7 +1740,7 @@ export function MarketplaceHome({
                   </div>
                 </div>
               )}
-              <div className="mt-v75-secondary-grid">
+              <div className="mt-v75-secondary-grid" data-marketplace-secondary-grid>
                 {secondaryDeals.map((deal, index) => {
                   const publicGoodsIndex =
                     deal.mechanismType === "public_goods_round"

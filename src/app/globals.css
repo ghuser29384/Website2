@@ -14134,6 +14134,11 @@ pre,
   opacity: 0.86;
 }
 
+.mt-v75-search-icon,
+.mt-v75-search-tune {
+  display: none;
+}
+
 @media (min-width: 980px) {
   .marketplace-app-shell {
     width: 100%;
@@ -14278,11 +14283,11 @@ pre,
 
   .mt-v75-side-plan {
     display: grid;
-    gap: 6px;
+    gap: 5px;
     margin-top: 78px;
-    min-height: 153px;
-    padding: 8px 8px 7px;
-    border: 1px solid #dfe9df;
+    min-height: 148px;
+    padding: 7px 8px;
+    border: 1px solid #e4ebe5;
     border-radius: 7px;
     background: #ffffff;
     box-shadow: 0 5px 14px rgba(25, 34, 46, 0.035);
@@ -14362,37 +14367,62 @@ pre,
     box-shadow: none;
   }
 
+  .mt-v75-search-icon,
+  .mt-v75-search-tune {
+    display: none;
+  }
+
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    right: 14px;
-    width: 15px;
-    height: 15px;
-    border-radius: 999px;
-    background:
-      radial-gradient(circle at 50% 28%, #078c42 0 2px, transparent 2.5px),
-      radial-gradient(circle at 50% 72%, #078c42 0 2px, transparent 2.5px),
-      linear-gradient(#078c42, #078c42) 0 28% / 100% 1.5px no-repeat,
-      linear-gradient(#078c42, #078c42) 0 72% / 100% 1.5px no-repeat;
-    transform: translateY(-50%) rotate(90deg);
-    pointer-events: none;
+    content: none;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search::before {
-    position: relative;
-    width: 11px;
-    height: 11px;
-    margin-left: 12px;
-    border-width: 1.4px;
-    color: #6f7a73;
-    box-shadow: 4px 4px 0 -2.5px currentColor;
-    transform: translateY(-1px);
+    content: none;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon,
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon {
+    left: 13px;
+    color: #566474;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune {
+    right: 13px;
+    color: #078c42;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon .icon-mark,
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune .icon-mark {
+    width: 16px;
+    height: 16px;
+    border: 0;
+    background: transparent;
+    color: currentColor;
+  }
+
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon .icon-mark svg,
+  .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune .icon-mark svg {
+    width: 100%;
+    height: 100%;
+    stroke-width: 2px;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search input {
     min-height: 32px;
-    padding-right: 32px;
+    padding-right: 34px;
+    padding-left: 34px;
     font-size: 12.5px;
   }
 
@@ -14486,9 +14516,9 @@ pre,
     align-items: center;
     min-height: 44px;
     padding: 6px 10px;
-    border: 1px solid #e2e8ef;
+    border: 1px solid #e6ebf2;
     border-radius: 8px;
-    background: #f4f7fb;
+    background: #f7f9fd;
   }
 
   .mt-v75-safety-strip .icon-mark {
@@ -14759,7 +14789,7 @@ pre,
 
   .mt-v75-featured-copy {
     display: grid;
-    gap: 6px;
+    gap: 5px;
     align-content: start;
     min-width: 0;
     padding-top: 3px;
@@ -14794,7 +14824,7 @@ pre,
     max-width: 34ch;
     overflow: hidden;
     color: #111b2b;
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 950;
     line-height: 1.1;
     letter-spacing: 0;
@@ -14808,14 +14838,14 @@ pre,
     max-width: 34ch;
     overflow: hidden;
     color: #526070;
-    font-size: 9.75px;
+    font-size: 9.5px;
     line-height: 1.22;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
 
   .mt-v75-featured-copy .mt-v75-status-row {
-    margin-top: 20px;
+    margin-top: 12px;
   }
 
   .mt-v75-status-row {
@@ -14858,7 +14888,7 @@ pre,
   .mt-v75-featured-decision {
     display: grid;
     align-content: start;
-    gap: 26px;
+    gap: 14px;
     min-width: 0;
     padding-top: 22px;
   }
@@ -14951,7 +14981,7 @@ pre,
     gap: 6px;
     align-items: center;
     min-height: 34px;
-    padding: 5px 8px 4px;
+    padding: 4px 8px;
   }
 
   .mt-v75-featured-facts div + div {
@@ -14987,7 +15017,7 @@ pre,
   .mt-v75-mini-tile {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     height: 195px;
     min-height: 0;
     overflow: hidden;
@@ -14997,24 +15027,24 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-mini-tile-cross-view-donation-swap {
-    border-color: #f0dfcf;
+    border-color: #f2e7dc;
     background: linear-gradient(180deg, #fff7ed 0%, #ffffff 74%);
   }
 
   .marketplace-app-shell .mt-v75-mini-tile-public-goods-round {
-    border-color: #d7e7f2;
+    border-color: #e0edf5;
     background: linear-gradient(180deg, #f4fbff 0%, #ffffff 75%);
   }
 
   .marketplace-app-shell .mt-v75-mini-tile-action-for-donation {
-    border-color: #e1d9f3;
+    border-color: #e7e0f5;
     background: linear-gradient(180deg, #f7f3ff 0%, #ffffff 75%);
   }
 
   .marketplace-app-shell .mt-v75-mini-tile-pledge-funding-round,
   .marketplace-app-shell .mt-v75-mini-tile-local-pledge,
   .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat {
-    border-color: #d7ebd1;
+    border-color: #e0efd9;
     background: linear-gradient(180deg, #f3fbef 0%, #ffffff 75%);
   }
 
@@ -15188,12 +15218,12 @@ pre,
     display: grid;
     position: sticky;
     top: 12px;
-    gap: 4px;
+    gap: 3px;
     align-content: start;
     grid-auto-rows: max-content;
     min-height: 500px;
     overflow: hidden;
-    padding: 8px 6px;
+    padding: 7px 6px;
     color: #344257;
   }
 
@@ -15226,8 +15256,8 @@ pre,
     grid-template-columns: auto minmax(82px, 1fr) auto;
     gap: 4px;
     align-items: center;
-    min-height: 26px;
-    padding: 4px 0;
+    min-height: 25px;
+    padding: 3px 0;
     border-bottom: 1px solid #e6ebf0;
     color: #203047;
     text-decoration: none;
