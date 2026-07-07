@@ -16,15 +16,6 @@ import {
   getPledgeFundingRounds,
   type PledgeFundingRound,
 } from "@/lib/moral-trade/pledge-funding-rounds";
-import {
-  getDonationCancellationPublicRound,
-  getDonationCancellationRounds,
-  type DonationCancellationRound,
-} from "@/lib/moral-trade/donation-cancellation-clearinghouse";
-import {
-  buildFallbackLivestreamEvidenceDisplay,
-  type FallbackLivestreamEvidenceDisplay,
-} from "@/lib/moral-trade/fallback-livestream-evidence";
 
 export const MIN_PUBLIC_GROUP_COUNT = 5;
 
@@ -149,6 +140,18 @@ export interface MarketplaceDeal {
   searchText?: string;
   filterTags?: MarketplaceFilterKey[];
   categoryKeys?: MarketplaceCategoryKey[];
+}
+
+export interface FallbackLivestreamEvidenceDisplay {
+  actionStatement: string;
+  branchLabel: string;
+  href: string;
+  observationLabel: string;
+  providerLabel: string;
+  recordingDueLabel: string;
+  scheduleLabel: string;
+  statusLabel: string;
+  title: string;
 }
 
 export interface MarketplaceCategory {
@@ -625,10 +628,6 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
     offer.donationOffset?.participation_mode === "pool"
       ? offer.donationOffset.pool?.matchedCompromiseCents
       : undefined;
-  const fallbackLivestreamEvidence = offer.fallbackLivestreamEvidenceRoutes[0]
-    ? buildFallbackLivestreamEvidenceDisplay(offer.fallbackLivestreamEvidenceRoutes[0])
-    : null;
-
   return withDerivedDealFields({
     actionDescription: offer.offer_action,
     baselineConfidence: normalizeBaselineConfidence(getBaselineConfidence(reviewInput)),
@@ -644,7 +643,7 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
       offer.mode === "offset"
         ? "Executes only if matching, review, evidence, and participant confirmation conditions pass."
         : "Executes only after both sides accept frozen terms and evidence requirements.",
-    fallbackLivestreamEvidence,
+    fallbackLivestreamEvidence: null,
     failureRule:
       offer.mode === "offset"
         ? "If matching or review fails, no new donation is implied by this marketplace card."
@@ -835,43 +834,8 @@ export function marketplaceDealFromPledgeFundingRound(round: PledgeFundingRound)
   });
 }
 
-export function marketplaceDealFromDonationCancellationRound(round: DonationCancellationRound): MarketplaceDeal {
-  const publicRound = getDonationCancellationPublicRound(round);
-
-  return withDerivedDealFields({
-    actionDescription:
-      "Labs-only research mechanism record. Simulated matched opposed amounts can be inspected only under non-MVP admin review.",
-    baselineConfidence: "unavailable",
-    categoryKeys: ["recommended", "offset_trades", "cross_view_swaps"],
-    causeTags: ["Donation clearinghouse", "Opposed donations", "Charity routing"],
-    chargeTiming: publicRound.paymentCopy,
-    ctaLabel: "View labs mechanism",
-    deadline: round.closesAt,
-    executionCondition:
-      "Production real-money registration, authorization, capture, routing, and settlement remain disabled unless a later promotion is approved.",
-    failureRule: "Non-MVP labs records do not create public commitments or real-money routing.",
-    filterTags: ["cross_cluster_trade", "requires_evidence", "reviewer_approved_only"],
-    href: `/donation-cancellation/${round.slug}`,
-    id: round.id,
-    mechanismType: "cross_view_donation_swap",
-    privacyNotes: [
-      "Counterparty identities are not public.",
-      "Priority weights and exact private scores are not public.",
-      "Pre-close progress is qualitative only.",
-    ],
-    reviewStatus: round.copyPreflightState === "passed" ? "reviewer_approved" : "review_pending",
-    sourceLabel: "Donation clearinghouse",
-    status: round.status === "settled" ? "completed" : round.status === "open" ? "pending_match" : "under_review",
-    subtitle: "Non-MVP labs/research mechanism, not part of CGPP",
-    thresholdTargetCents: round.roundGrossCapMinor,
-    title: "Donation clearinghouse labs record",
-    userMaxExposureCents: round.perUserGrossMaxMinor,
-    verificationSummary: "Admin-reviewed recipients and opposition markets required.",
-  });
-}
-
 export function buildMarketplaceDeals({
-  includeNonMvpLabs = false,
+  includeNonMvpLabs: _includeNonMvpLabs = false,
   liveOffers,
   publicGoodsCampaigns,
   publicGoodsMatchPool,
@@ -888,9 +852,6 @@ export function buildMarketplaceDeals({
   return [
     ...liveOffers.map(marketplaceDealFromOfferRecord),
     ...getPledgeFundingRounds().map(marketplaceDealFromPledgeFundingRound),
-    ...(includeNonMvpLabs
-      ? getDonationCancellationRounds({ includeNonMvpLabs: true }).map(marketplaceDealFromDonationCancellationRound)
-      : []),
     ...marketplaceDealsFromPublicGoodsCampaigns({
       campaigns: publicGoodsCampaigns,
       matchPool: publicGoodsMatchPool,

@@ -25,7 +25,6 @@ import {
   type MarketplaceDeal,
 } from "@/lib/marketplace-deals";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
-import { buildFallbackLivestreamEvidenceDisplay } from "@/lib/moral-trade/fallback-livestream-evidence";
 import { SEED_OFFERS } from "@/lib/offers";
 
 function requiredDealFields(overrides: Partial<MarketplaceDeal> = {}): MarketplaceDeal {
@@ -73,31 +72,22 @@ test("marketplace adapter maps worked offers into bounded deal economics without
   assert.match(economics.chargeTiming, /do not charge/i);
 });
 
-test("marketplace card surfaces fallback livestream evidence without proof language", () => {
-  const fallbackLivestreamEvidence = buildFallbackLivestreamEvidenceDisplay({
-    baseline_claim: "If no trade clears, the no-trade branch remains observable.",
-    challenge_code: "MT-FLE-ABCD-2345",
-    challenge_issued_at: "2026-07-06T12:00:00.000Z",
-    clearing_deadline_at: "2026-07-07T12:00:00.000Z",
-    fallback_action_statement: "Record the stated fallback action in the scheduled external stream.",
-    fallback_event_label: "No-trade branch evidence",
-    id: "fallback-route-1",
-    recording_due_at: "2026-07-08T13:00:00.000Z",
-    recording_url: "",
-    review_decision: null,
-    review_notes: "",
-    reviewed_at: null,
-    scheduled_end_at: "2026-07-07T13:00:00.000Z",
-    scheduled_start_at: "2026-07-07T12:30:00.000Z",
-    status: "scheduled",
-    stream_provider: "external_url",
-    stream_url: "",
-    submitted_at: null,
-    visibility: "private_review",
-  });
+test("marketplace card surfaces optional fallback evidence without proof language", () => {
   const markup = renderToStaticMarkup(
     createElement(MoralDealCard, {
-      deal: requiredDealFields({ fallbackLivestreamEvidence }),
+      deal: requiredDealFields({
+        fallbackLivestreamEvidence: {
+          actionStatement: "Record the stated fallback action in the scheduled external stream.",
+          branchLabel: "No-trade branch evidence",
+          href: "/evidence/fallback-livestream/fallback-route-1",
+          observationLabel: "Observed if no trade clears",
+          providerLabel: "External stream URL",
+          recordingDueLabel: "Jul 8, 2026, 1:00 PM",
+          scheduleLabel: "Jul 7, 2026, 12:30 PM - Jul 7, 2026, 1:00 PM",
+          statusLabel: "Livestream scheduled",
+          title: "Fallback livestream evidence",
+        },
+      }),
     }),
   );
 
@@ -242,7 +232,7 @@ test("compact browse cause filters use honest query state", () => {
   assert.doesNotMatch(markup, /Health<\/a><a[^>]+requires_evidence/);
 });
 
-test("donation cancellation is excluded from ordinary marketplace and only included for labs", () => {
+test("non-MVP labs inventory is omitted from Region A marketplace browse", () => {
   const ordinaryDeals = buildMarketplaceDeals({
     liveOffers: [],
     publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
@@ -260,7 +250,7 @@ test("donation cancellation is excluded from ordinary marketplace and only inclu
   });
 
   assert.equal(ordinaryDeals.some((deal) => deal.href.startsWith("/donation-cancellation")), false);
-  assert.ok(labsDeals.some((deal) => deal.href.startsWith("/donation-cancellation")));
+  assert.equal(labsDeals.some((deal) => deal.href.startsWith("/donation-cancellation")), false);
 });
 
 test("marketplace home renders one-rail filter sheet with URL apply controls", () => {
