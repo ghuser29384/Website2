@@ -1183,7 +1183,7 @@ export function MarketplaceSearch({
       </span>
       {!showButton ? (
         <span className="mt-v75-search-tune" aria-hidden="true">
-          <IconMark name="filter" />
+          <IconMark name="tune" />
         </span>
       ) : null}
       <label className="sr-only" htmlFor={inputId}>

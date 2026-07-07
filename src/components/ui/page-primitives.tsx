@@ -29,6 +29,7 @@ export type IconName =
   | "scale"
   | "source"
   | "swap"
+  | "tune"
   | "vector";
 
 export function IconMark({ name }: { name: IconName }) {
@@ -135,6 +136,19 @@ export function IconMark({ name }: { name: IconName }) {
       <span aria-hidden="true" className="icon-mark">
         <svg viewBox="0 0 24 24" focusable="false">
           <path d="M5 6h14l-5.5 6.2V18l-3 1.5v-7.3z" />
+        </svg>
+      </span>
+    );
+  }
+
+  if (name === "tune") {
+    return (
+      <span aria-hidden="true" className="icon-mark">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 5.5v13" />
+          <path d="M17 5.5v13" />
+          <circle cx="7" cy="9" r="2.1" />
+          <circle cx="17" cy="15" r="2.1" />
         </svg>
       </span>
     );
