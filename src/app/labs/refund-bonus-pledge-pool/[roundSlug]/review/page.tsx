@@ -487,9 +487,11 @@ export default async function RefundBonusPledgePoolReviewPage({ params, searchPa
               terms, the pool fails for a bonus-eligible support-threshold reason, and the pool is
               not blocked or canceled for safety, legal, review, fraud, or threat-like reasons.
             </p>
-            <p>
-              Rulebook hash: {rulebookHash}. Fee policy hash: {feePolicyHash}. Bonus policy hash:
-              {` ${bonusPolicyHash}`}.
+            <p style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+              Rulebook hash: <code style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{rulebookHash}</code>.
+              Fee policy hash:{" "}
+              <code style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{feePolicyHash}</code>. Bonus
+              policy hash: <code style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{bonusPolicyHash}</code>.
             </p>
             <form action={saveRefundBonusLabsHardPledgeAction} className="compact-form">
               <input name="roundSlug" type="hidden" value={roundSlug} />

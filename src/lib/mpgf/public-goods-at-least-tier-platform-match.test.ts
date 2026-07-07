@@ -1513,6 +1513,11 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   );
   const site = readFileSync("src/lib/site.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const decisionScreens = [
+    { label: "Screen 1", source: labsRoundPage },
+    { label: "Screen 2", source: labsCommitPage },
+    { label: "Screen 3", source: labsCommitPage },
+  ];
   const requiredRouteFiles = [
     "src/app/labs/at-least-tier-platform-match/page.tsx",
     "src/app/labs/at-least-tier-platform-match/[roundSlug]/page.tsx",
@@ -1549,12 +1554,22 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(labsPage, /Own commitments, same-control accounts, duplicate payment clusters treated as\s+same-control/);
   assert.match(labsPage, /refund-bonus reserves,\s+soft intents, drafts, payment-failed rows, Sybil-failed rows, blocked or review-failed\s+rows, stale authorizations/);
   assert.match(labsRoundPage, /read-only labs surface/);
+  assert.match(labsRoundPage, /Reviewed pool: shared moral public goods package/);
+  assert.match(labsRoundPage, /Reviewed projects in this labs\s+brief are/);
+  assert.match(labsRoundPage, /Reserve status: dev simulated/);
   assert.match(labsRoundPage, /sealed qualitative status only before close/);
+  assert.match(labsRoundPage, /no exact live progress appears before close/);
   assert.match(labsRoundPage, /other eligible users&apos; effective support/);
   assert.match(labsRoundPage, /duplicate payment clusters treated as\s+same-control/);
   assert.match(labsRoundPage, /refund-bonus reserves, fees, soft\s+intents, drafts, failed payments, Sybil-failed rows, blocked or review-failed rows/);
   assert.match(labsRoundPage, /View disabled commitment review/);
+  assert.match(labsRoundPage, /href=\{`\/labs\/at-least-tier-platform-match\/\$\{roundSlug\}\/commit`\}/);
   assert.match(labsCommitPage, /required v137 commitment copy in an off state/);
+  assert.match(labsCommitPage, /Screen 2/);
+  assert.match(labsCommitPage, /Screen 3/);
+  assert.match(labsCommitPage, /Selected at-least tier: Tier/);
+  assert.match(labsCommitPage, /Visibility defaults to\s+aggregate_only/);
+  assert.match(labsCommitPage, /optional, aggregate-only, not a moral score/);
   assert.match(labsCommitPage, /hard, payment-backed platform-match commitment/);
   assert.match(labsCommitPage, /Your stated intended\s+contribution if your forecast is not met/);
   assert.match(labsCommitPage, /Platform-match rate if your forecast is met/);
@@ -1581,6 +1596,7 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.match(adminPage, /Provider calls are disabled/);
   assert.match(adminPage, /run_simulated_authorization_resolution_settlement/);
   assert.match(adminPage, /publicReportImpliesLiveProduct: true/);
+  assert.match(adminPage, /copy_preflight_stale/);
   assert.match(adminPage, /reportJob\.blockerCodes\.join/);
   assert.match(adminPage, /Suggested v137 admin URLs resolve/);
   for (const routeAlias of adminRouteAliases) {
@@ -1596,6 +1612,10 @@ test("documentation and route absence match v137 non-MVP constraints", () => {
   assert.equal(site.includes("/account/labs/at-least-tier-platform-match"), false);
   assert.equal(site.includes("/admin/moral-public-goods/at-least-tier-platform-match"), false);
   assert.equal(roundPage.includes("At-Least-Tier Platform Match"), false);
+  assert.equal(decisionScreens.length, 3);
+  for (const screen of decisionScreens) {
+    assert.match(screen.source, new RegExp(screen.label));
+  }
 });
 
 test("v137 non-MVP branches do not expose advanced allocation control surfaces", () => {

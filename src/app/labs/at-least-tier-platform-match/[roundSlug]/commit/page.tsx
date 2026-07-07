@@ -167,6 +167,12 @@ export default async function AtLeastTierPlatformMatchCommitPage({ params }: Pag
           </SectionHeader>
           <div className="mpgf-panel">
             <p>
+              Selected at-least tier: Tier {preview.selectedTierIndex}. Stated intended
+              contribution: {formatUsd(preview.statedGrossCents)}. Visibility defaults to
+              aggregate_only; any viewpoint tag is optional, aggregate-only, not a moral score, and
+              does not affect voting power or forecast power.
+            </p>
+            <p>
               Higher tiers have higher platform-match rates because they are harder to reach. The
               rates are frozen before the round opens using a reviewed schedule.
             </p>

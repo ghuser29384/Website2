@@ -88,6 +88,7 @@ export type RefundBonusCapabilityReason =
   | "bonus_payout_provider_not_ready"
   | "identity_sybil_controls_not_ready"
   | "copy_preflight_failed"
+  | "copy_preflight_stale"
   | "bonus_exposure_cap_not_configured"
   | "emergency_pause_not_configured"
   | "audit_reporting_templates_not_reviewed"
@@ -108,6 +109,7 @@ export interface RefundBonusCapabilityInput {
   bonusPayoutProviderReady?: boolean;
   identitySybilControlsReady?: boolean;
   copyPreflightPassed?: boolean;
+  copyPreflightFresh?: boolean;
   bonusExposureCapConfigured?: boolean;
   emergencyPauseConfigured?: boolean;
   auditReportingTemplatesReviewed?: boolean;
@@ -1890,6 +1892,9 @@ export function evaluateRefundBonusCapability(input: RefundBonusCapabilityInput)
     }
     if (!input.copyPreflightPassed) {
       reasons.push("copy_preflight_failed");
+    }
+    if (input.copyPreflightFresh !== true) {
+      reasons.push("copy_preflight_stale");
     }
     if (!input.identitySybilControlsReady) {
       reasons.push("identity_sybil_controls_not_ready");

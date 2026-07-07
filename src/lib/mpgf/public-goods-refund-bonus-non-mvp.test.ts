@@ -370,6 +370,7 @@ test("refund-bonus metadata and capability gates keep production disabled by def
   assert.ok(money.reasons.includes("production_real_money_disabled"));
   assert.ok(money.reasons.includes("missing_promotion_record"));
   assert.ok(money.reasons.includes("copy_preflight_failed"));
+  assert.ok(money.reasons.includes("copy_preflight_stale"));
   assert.ok(money.reasons.includes("identity_sybil_controls_not_ready"));
   assert.ok(money.reasons.includes("bonus_exposure_cap_not_configured"));
   assert.ok(money.reasons.includes("emergency_pause_not_configured"));
@@ -389,6 +390,7 @@ test("refund-bonus metadata and capability gates keep production disabled by def
     liveMoneyEnabled: true,
     promotionRecordApproved: true,
     copyPreflightPassed: true,
+    copyPreflightFresh: true,
     identitySybilControlsReady: true,
     bonusExposureCapConfigured: true,
     emergencyPauseConfigured: true,
@@ -417,6 +419,7 @@ test("refund-bonus metadata and capability gates keep production disabled by def
       liveMoneyEnabled: true,
       promotionRecordApproved: true,
       copyPreflightPassed: true,
+      copyPreflightFresh: true,
       identitySybilControlsReady: true,
       bonusExposureCapConfigured: true,
       emergencyPauseConfigured: true,
@@ -1231,6 +1234,29 @@ test("round clearing distinguishes qualifying support failures from nonqualifyin
   });
   assert.equal(unbackedSponsorMatch.status, "nonqualifying_failed");
   assert.deepEqual(unbackedSponsorMatch.reasonCodes, ["sponsor_match_unbacked"]);
+
+  const blockingChallenge = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: pool({ reviewGates: { ...pool().reviewGates, challenge: "open" } }),
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+  });
+  assert.equal(blockingChallenge.status, "nonqualifying_failed");
+  assert.deepEqual(blockingChallenge.reasonCodes, ["challenge_block"]);
+  const blockingChallengeSettlement = planRefundBonusSettlement({
+    round: round({ status: "bonus_payable" }),
+    pool: pool({ status: "bonus_payable" }),
+    reserve: reserve({ status: "active" }),
+    outcome: blockingChallenge,
+    roundStatus: "bonus_payable",
+    simulationOnly: true,
+    bonusSettlementPlanApproved: true,
+    eligibleRowsRecomputed: true,
+  });
+  assert.equal(blockingChallengeSettlement.payoutOperations.length, 0);
+  assert.equal(blockingChallengeSettlement.auditReport.finalStatus, "blocked_review_no_bonus");
+  assert.deepEqual(blockingChallengeSettlement.auditReport.reasonCodes, ["challenge_block"]);
 
   const unbacked = evaluateRefundBonusRoundOutcome({
     round: round(),

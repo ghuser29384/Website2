@@ -169,6 +169,13 @@ export default function AtLeastTierPlatformMatchAdminPage() {
             Each listed action is evaluated through the v137 admin workflow gate. The labs path has
             no provider calls and no live-money authority.
           </SectionHeader>
+          <div className="mpgf-panel">
+            <p>
+              Production admin actions also require copy preflight passed after the latest
+              deployment; stale copy-preflight evidence blocks with copy_preflight_stale before
+              provider calls or public-report publication.
+            </p>
+          </div>
           <div className="data-grid">
             {allowedAdminActions.map(({ action, gate }) => (
               <article className="panel data-card" key={action}>

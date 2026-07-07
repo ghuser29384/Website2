@@ -45,6 +45,12 @@ function formatRoundLabel(roundSlug: string) {
     .join(" ");
 }
 
+const reviewedProjects = [
+  "Air-quality legal defense fund",
+  "Open-source biosecurity tooling",
+  "Farmed-animal policy litigation",
+];
+
 export default async function AtLeastTierPlatformMatchRoundPage({ params }: PageProps) {
   const { roundSlug } = await params;
   const schedule = computeDampedOddsRewardSchedule({
@@ -114,6 +120,17 @@ export default async function AtLeastTierPlatformMatchRoundPage({ params }: Page
           <SectionHeader eyebrow="Screen 1" id="pool-heading" title="Pool and tiers.">
             Review the public-good pool, selected at-least tiers, frozen reward rates, and reserve state before any commitment copy.
           </SectionHeader>
+          <div className="mpgf-panel">
+            <p>
+              Reviewed pool: shared moral public goods package. Reviewed projects in this labs
+              brief are {reviewedProjects.join(", ")}.
+            </p>
+            <p>
+              Reserve status: dev simulated and unavailable for production payment movement unless
+              a later promotion backs and freezes the platform-match reserve. Pre-close progress is
+              sealed qualitative status only; no exact live progress appears before close.
+            </p>
+          </div>
           <div className="data-grid">
             {schedule.tiers.map((tier) => (
               <article className="panel data-card" key={tier.id}>
