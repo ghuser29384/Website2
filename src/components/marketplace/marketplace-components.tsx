@@ -48,7 +48,13 @@ function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
 }
 
 function counterVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
-  if (value === "pledge_funding_round" || value === "cross_view_donation_swap") return "vector";
+  if (
+    value === "pledge_funding_round" ||
+    value === "cross_view_donation_swap" ||
+    value === "local_pledge"
+  ) {
+    return "vector";
+  }
   if (
     value === "public_goods_round" ||
     value === "action_for_donation"
@@ -62,6 +68,7 @@ function counterVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
 function browseVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
   if (value === "public_goods_round") return "progress";
   if (value === "pledge_funding_round") return "meal";
+  if (value === "local_pledge") return "meal";
   if (value === "cross_view_donation_swap") return "scale";
   if (value === "action_for_donation") return "checklist";
   return mechanismIcon(value);
@@ -105,6 +112,14 @@ function statusChipTone(value: string) {
   if (normalized.includes("review") || normalized.includes("preview")) return "is-warn";
   if (normalized.includes("evidence")) return "is-info";
   return "";
+}
+
+function statusChipIcon(value: string): IconName {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("verified") || normalized.includes("no charge")) return "safety";
+  if (normalized.includes("evidence")) return "evidence";
+  if (normalized.includes("review") || normalized.includes("preview")) return "review";
+  return "source";
 }
 
 function getDealStatusChips(deal: MarketplaceDeal) {
@@ -215,6 +230,26 @@ function selectSecondaryDeals(
   return selected;
 }
 
+function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: boolean) {
+  if (!zeroLive) return deals[0] ?? null;
+
+  return (
+    deals.find((deal) => deal.id === "seed-paul") ??
+    deals.find(
+      (deal) =>
+        deal.mechanismType === "local_pledge" &&
+        /animal welfare|vegetarian|global poverty|public health/i.test(
+          [deal.title, deal.subtitle, deal.actionDescription, ...deal.causeTags].filter(Boolean).join(" "),
+        ),
+    ) ??
+    deals.find((deal) => deal.mechanismType === "local_pledge") ??
+    deals.find((deal) => deal.mechanismType === "cross_view_donation_swap") ??
+    deals.find((deal) => deal.mechanismType === "pledge_funding_round") ??
+    deals[0] ??
+    null
+  );
+}
+
 function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" | "track" | "messages" | "profile" }) {
   const items = [
     { key: "browse", href: "/offers", label: "Browse", icon: "search" },
@@ -299,7 +334,12 @@ function DealSemanticVisual({
 }
 
 function StatusChip({ label }: { label: string }) {
-  return <span className={joinClassName(["mt-v75-status-chip", statusChipTone(label)])}>{label}</span>;
+  return (
+    <span className={joinClassName(["mt-v75-status-chip", statusChipTone(label)])}>
+      <IconMark name={statusChipIcon(label)} />
+      {label}
+    </span>
+  );
 }
 
 function FallbackLivestreamEvidencePill({ deal }: { deal: MarketplaceDeal }) {
@@ -1643,10 +1683,7 @@ export function MarketplaceHome({
 
     return category.availabilityLabel !== "Unavailable" || category.key === surface.activeCategory;
   });
-  const primaryDeal =
-    (zeroLive
-      ? visibleDeals.find((deal) => deal.mechanismType === "pledge_funding_round") ?? visibleDeals[0]
-      : visibleDeals[0]) ?? null;
+  const primaryDeal = selectPrimaryBrowseDeal(visibleDeals, zeroLive);
   const secondaryDeals = selectSecondaryDeals(visibleDeals, primaryDeal);
   const tabLinks = [
     ["For you", buildMarketplaceHref({ query: surface.query })],

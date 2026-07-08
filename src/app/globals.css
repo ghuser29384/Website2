@@ -14868,6 +14868,7 @@ pre,
   .mt-v75-status-chip {
     display: inline-flex;
     align-items: center;
+    gap: 2px;
     min-height: 18px;
     padding: 2px 4px;
     border-radius: 999px;
@@ -14877,6 +14878,15 @@ pre,
     font-weight: 850;
     line-height: 1;
     white-space: nowrap;
+  }
+
+  .mt-v75-status-chip .icon-mark {
+    width: 9px;
+    height: 9px;
+    min-width: 9px;
+    border: 0;
+    background: transparent;
+    color: currentColor;
   }
 
   .mt-v75-status-chip.is-good {
