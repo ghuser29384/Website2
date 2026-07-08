@@ -14516,7 +14516,7 @@ pre,
 
   .mt-v75-browse-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 150px;
+    grid-template-columns: minmax(0, 491px) 150px minmax(0, 1fr);
     gap: 8px;
     align-items: start;
     margin-top: 8px;
@@ -14631,9 +14631,10 @@ pre,
 
   .mt-v75-featured-deal {
     display: grid;
-    grid-template-columns: 184px minmax(0, 1fr) 118px;
+    grid-template-columns: 184px minmax(0, 200px) 83px;
     grid-template-rows: 128px 38px;
     align-content: start;
+    justify-content: start;
     gap: 6px;
     align-items: stretch;
     height: 180px;
@@ -15251,6 +15252,7 @@ pre,
   .mt-v75-quick-rail {
     display: grid;
     position: sticky;
+    grid-column: 2;
     top: 8px;
     gap: 3px;
     align-content: start;
