@@ -15049,6 +15049,17 @@ pre,
     gap: 8px;
   }
 
+  .mt-v75-browse-more {
+    display: grid;
+    grid-column: 3;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 8px;
+    align-content: start;
+    min-width: 0;
+    max-height: calc(100dvh - 112px);
+    overflow: hidden;
+  }
+
   .mt-v75-mini-tile {
     display: flex;
     flex-direction: column;
@@ -15518,6 +15529,16 @@ pre,
   }
 
   .marketplace-app-shell .marketplace-bottom-nav {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1120px) {
+  .mt-v75-browse-grid {
+    grid-template-columns: minmax(0, 491px) 150px;
+  }
+
+  .mt-v75-browse-more {
     display: none;
   }
 }
