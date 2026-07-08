@@ -1685,10 +1685,6 @@ export function MarketplaceHome({
   });
   const primaryDeal = selectPrimaryBrowseDeal(visibleDeals, zeroLive);
   const secondaryDeals = selectSecondaryDeals(visibleDeals, primaryDeal);
-  const secondaryDealIds = new Set(secondaryDeals.map((deal) => deal.id));
-  const wideInventoryDeals = visibleDeals
-    .filter((deal) => deal.id !== primaryDeal?.id && !secondaryDealIds.has(deal.id))
-    .slice(0, 16);
   const tabLinks = [
     ["For you", buildMarketplaceHref({ query: surface.query })],
     ["Offers", "/offers?tab=live"],
@@ -1801,26 +1797,6 @@ export function MarketplaceHome({
               </div>
             </main>
             <QuickFilterRail deals={visibleDeals} />
-            {wideInventoryDeals.length ? (
-              <div className="mt-v75-browse-more" data-marketplace-wide-grid aria-label="More browse items">
-                {wideInventoryDeals.map((deal, index) => {
-                  const publicGoodsIndex =
-                    deal.mechanismType === "public_goods_round"
-                      ? wideInventoryDeals
-                          .slice(0, index + 1)
-                          .filter((candidate) => candidate.mechanismType === "public_goods_round").length - 1
-                      : -1;
-
-                  return (
-                    <MiniDealTile
-                      deal={deal}
-                      key={deal.id}
-                      publicGoodsVariant={publicGoodsIndex > 0 ? "repeat" : "default"}
-                    />
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
