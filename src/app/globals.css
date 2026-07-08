@@ -14516,11 +14516,11 @@ pre,
 
   .mt-v75-browse-grid {
     display: grid;
-    grid-template-columns: minmax(0, 491px) 150px;
+    grid-template-columns: minmax(0, 1fr) 160px;
     gap: 8px;
     align-items: start;
-    width: max-content;
-    max-width: 100%;
+    width: 100%;
+    max-width: none;
     margin-top: 8px;
     min-width: 0;
     min-height: calc(100dvh - 105px);
@@ -14530,6 +14530,7 @@ pre,
     display: grid;
     gap: 10px;
     min-width: 0;
+    width: 100%;
   }
 
   .mt-v75-safety-strip {
@@ -15049,6 +15050,7 @@ pre,
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
+    width: 100%;
   }
 
   .mt-v75-mini-tile {
