@@ -14142,6 +14142,7 @@ pre,
 @media (min-width: 980px) {
   .marketplace-app-shell {
     width: 100vw;
+    min-width: 100vw;
     max-width: none;
     min-height: 100dvh;
     margin: 0;
@@ -14361,7 +14362,7 @@ pre,
     gap: 12px;
     min-width: 0;
     min-height: 100dvh;
-    padding: 14px 10px 0 6px;
+    padding: 14px 0 0 6px;
     border: 0;
     border-radius: 0;
     background: #ffffff;
@@ -14520,6 +14521,7 @@ pre,
     align-items: start;
     margin-top: 8px;
     min-width: 0;
+    min-height: calc(100dvh - 105px);
   }
 
   .mt-v75-browse-main {
@@ -15253,7 +15255,8 @@ pre,
     gap: 3px;
     align-content: start;
     grid-auto-rows: max-content;
-    min-height: min(520px, calc(100dvh - 112px));
+    height: calc(100dvh - 112px);
+    min-height: 0;
     overflow: hidden;
     padding: 8px 7px;
     color: #344257;
