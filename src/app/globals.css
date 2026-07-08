@@ -14634,13 +14634,12 @@ pre,
 
   .mt-v75-featured-deal {
     display: grid;
-    grid-template-columns: 184px minmax(0, 200px) 83px;
-    grid-template-rows: 128px 38px;
+    grid-template-columns: minmax(250px, 330px) minmax(0, 1fr) minmax(148px, 170px);
+    grid-template-rows: auto 38px;
     align-content: start;
-    justify-content: start;
+    justify-content: stretch;
     gap: 6px;
     align-items: stretch;
-    height: 180px;
     min-height: 180px;
     margin-bottom: 2px;
     padding: 6px;
@@ -14750,7 +14749,8 @@ pre,
     width: 100%;
     min-width: 0;
     min-height: 104px;
-    height: 104px;
+    height: auto;
+    aspect-ratio: 1;
     overflow: hidden;
     border: 0;
     border-radius: 7px;
