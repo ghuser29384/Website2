@@ -408,6 +408,49 @@ test("DealScout recommendations are deterministic and bounded to explicit prefer
   ]);
 });
 
+test("browse cards avoid default charge-state copy while preserving safety and sheet copy", () => {
+  const query = parseMarketplaceQuery({});
+  const deals = buildMarketplaceDeals({
+    liveOffers: [],
+    publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    publicGoodsMatchPool: demoMpgfMatchPool,
+    publicGoodsRound: demoMpgfAssuranceRound,
+    workedOffers: SEED_OFFERS,
+  });
+  const surface = buildMarketplaceSurface(deals, query);
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query,
+      surface,
+    }),
+  );
+  const seedPaulDeal = surface.deals.find((deal) => deal.id === "seed-paul");
+  assert.ok(seedPaulDeal);
+  const sheetMarkup = renderToStaticMarkup(
+    createElement(CommitmentSheet, {
+      commitHref: "/offers/examples/seed-paul",
+      deal: seedPaulDeal,
+      paymentSupportAvailable: false,
+    }),
+  );
+
+  assert.match(markup, /data-marketplace-featured/);
+  assert.match(markup, /Preview only until you confirm/);
+  assert.match(markup, /No commitment · No charge · You review every detail/);
+  assert.match(markup, /12-month pledge/);
+  assert.match(markup, /Effective poverty fund/);
+  assert.match(markup, /Your action: vegetarian meals/);
+  assert.match(markup, /No charge now/);
+  assert.doesNotMatch(markup, /No commitment yet/);
+  assert.doesNotMatch(markup, /<small>No commitment<\/small>/);
+  assert.doesNotMatch(markup, /No commitment will be created/);
+  assert.match(sheetMarkup, /No commitment was created\./);
+  assert.match(sheetMarkup, /No commitment will be created/);
+  assert.match(sheetMarkup, /Preview only/);
+});
+
 test("deal card and commitment sheet render missing optional fields as unavailable and conditional", () => {
   const incompleteDeal = requiredDealFields({
     ctaLabel: "View details",
@@ -431,7 +474,7 @@ test("deal card and commitment sheet render missing optional fields as unavailab
   );
 
   assert.match(cardMarkup, /Incomplete public preview/);
-  assert.match(cardMarkup, /Reviewing/);
+  assert.match(cardMarkup, /Review required/);
   assert.match(cardMarkup, /Exposure unknown/);
   assert.match(cardMarkup, /View details/);
   assert.match(sheetMarkup, /<details/);

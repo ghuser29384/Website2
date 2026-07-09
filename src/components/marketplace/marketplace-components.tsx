@@ -7,6 +7,7 @@ import {
   buildDealEconomics,
   buildMarketplaceHref,
   getCommitmentStatusLabel,
+  getMarketplaceRecipientDisplay,
   type CommitmentCenterStatus,
   type MarketplaceCategory,
   type MarketplaceDeal,
@@ -292,7 +293,7 @@ function getDealStatusChips(deal: MarketplaceDeal) {
     /preview|no durable state changed|payment not connected/i.test(
       [receipt.state, receipt.conditionOrProtection, receipt.protection].join(" "),
     )
-      ? "No charge now"
+      ? getBrowseChargeFact(receipt)
       : receipt.exposure;
   const chips = [
     currentChargeState,
@@ -315,7 +316,7 @@ function getDealAmountLabel(deal: MarketplaceDeal) {
     return centsToV72Exposure(deal.pledgeAmountCents).replace("Max ", "");
   }
 
-  return receipt.exposure;
+  return getBrowseExposureFact(receipt);
 }
 
 function getDealSubline(deal: MarketplaceDeal) {
@@ -339,6 +340,101 @@ function compactReceiptFact(value: string) {
   if (/not connected/i.test(value)) return "Not connected";
   return value;
 }
+
+type BrowseCardReceiptAtom = ReturnType<typeof getDealReceiptAtom>;
+type BrowseCardFact = {
+  icon: IconName;
+  label: string;
+  value: string;
+};
+
+function getBrowsePledgeFact(deal: MarketplaceDeal) {
+  const text = [deal.title, deal.subtitle, deal.actionDescription].filter(Boolean).join(" ");
+  const durationMatch = text.match(/\b(\d+)\s*(day|week|month|year)s?\b/i);
+
+  if (durationMatch) {
+    return String(durationMatch[1]) + "-" + durationMatch[2].toLowerCase() + " pledge";
+  }
+
+  if (/vegetarian|vegan|meal/i.test(text)) return "Vegetarian pledge";
+  if (deal.mechanismType === "pledge_funding_round") return "Pledge funding";
+  return getDealSubline(deal);
+}
+
+function getBrowseActionObjectFact(deal: MarketplaceDeal) {
+  const text = normalizedDealSearchText(deal);
+
+  if (/vegetarian|vegan|meal|animal welfare/.test(text)) return "Your action: vegetarian meals";
+  if (/donat|fund|contribut/.test(deal.actionDescription ?? "")) return "Your action: donation";
+
+  return getDealActionFact(deal);
+}
+
+function getBrowseChargeFact(receipt: BrowseCardReceiptAtom) {
+  const text = [receipt.state, receipt.source, receipt.conditionOrProtection, receipt.protection].join(" ");
+
+  if (/preview|example|no durable state changed|no commitment|no charge|not connected/i.test(text)) {
+    return "No charge now";
+  }
+
+  return "Review required";
+}
+
+function getBrowseExposureFact(receipt: BrowseCardReceiptAtom) {
+  return receipt.exposure;
+}
+
+function getBrowseConditionFact(receipt: BrowseCardReceiptAtom) {
+  const value = compactReceiptFact(receipt.conditionOrProtection);
+
+  return /no commitment/i.test(value) ? getBrowseChargeFact(receipt) : value;
+}
+
+function getFeaturedDealFacts({
+  amountLabel,
+  deal,
+  receipt,
+  recipientLabel,
+}: {
+  amountLabel: string;
+  deal: MarketplaceDeal;
+  receipt: BrowseCardReceiptAtom;
+  recipientLabel: string;
+}): BrowseCardFact[] {
+  if (deal.mechanismType === "local_pledge") {
+    return [
+      { icon: "source", label: "Pledge", value: getBrowsePledgeFact(deal) },
+      { icon: "review", label: "Recipient", value: recipientLabel },
+      { icon: "payment", label: "Action", value: getBrowseActionObjectFact(deal) },
+      { icon: "safety", label: "Charge", value: getBrowseChargeFact(receipt) },
+    ];
+  }
+
+  if (deal.mechanismType === "pledge_funding_round") {
+    return [
+      { icon: "source", label: "Pledge", value: getBrowsePledgeFact(deal) },
+      { icon: "review", label: "Counteraction", value: "Small contribution" },
+      { icon: "payment", label: "Action", value: getBrowseActionObjectFact(deal) },
+      { icon: "safety", label: "Charge", value: getBrowseChargeFact(receipt) },
+    ];
+  }
+
+  return [
+    { icon: "source", label: "Recipient", value: recipientLabel },
+    { icon: "review", label: "Action", value: getBrowseActionObjectFact(deal) },
+    { icon: "payment", label: "Exposure", value: amountLabel },
+    { icon: "safety", label: "Protection", value: getBrowseConditionFact(receipt) },
+  ];
+}
+
+function getBrowseCardReceiptLine(deal: MarketplaceDeal, receipt: BrowseCardReceiptAtom) {
+  return [
+    getBrowseExposureFact(receipt),
+    getBrowseConditionFact(receipt),
+    getBrowseChargeFact(receipt),
+  ].map((value) => (/no commitment/i.test(value) ? getBrowseActionObjectFact(deal) : value));
+}
+
 
 type BrowseDealSecondarySlotType =
   | "preview_match"
@@ -623,14 +719,15 @@ function FallbackLivestreamEvidenceSummary({ deal }: { deal: MarketplaceDeal }) 
 
 function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
   const receipt = getDealReceiptAtom(deal);
+  const recipientDisplay = getMarketplaceRecipientDisplay(deal);
   const amountLabel = getDealAmountLabel(deal);
   const statusChips = getDealStatusChips(deal);
-  const factRow = [
-    { icon: "source", label: "Source", value: receipt.source },
-    { icon: "review", label: "Action", value: getDealActionFact(deal) },
-    { icon: "payment", label: "Exposure", value: amountLabel },
-    { icon: "safety", label: "Protection", value: compactReceiptFact(receipt.conditionOrProtection) },
-  ] as const;
+  const factRow = getFeaturedDealFacts({
+    amountLabel,
+    deal,
+    receipt,
+    recipientLabel: recipientDisplay.browseLabel,
+  });
 
   return (
     <article className="mt-v75-featured-deal" data-marketplace-featured>
@@ -669,7 +766,7 @@ function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
         <div className="mt-v75-featured-exposure" aria-label="Adjacent receipt facts">
           <span>Max exposure</span>
           <strong>{amountLabel}</strong>
-          <small>{compactReceiptFact(receipt.conditionOrProtection)}</small>
+          <small>{getBrowseConditionFact(receipt)}</small>
         </div>
         <div className="mt-v75-featured-actions" aria-label="Primary action">
           <Link className="button button-primary" href={deal.href}>
@@ -784,7 +881,7 @@ function getMiniDealAmount(deal: MarketplaceDeal, slotType: BrowseDealSecondaryS
     return getDealAmountLabel(deal);
   }
 
-  return receipt.exposure;
+  return getBrowseExposureFact(receipt);
 }
 
 function getMiniDealStatusChips(
@@ -1799,6 +1896,7 @@ export function MoralDealCard({
   variant?: "feed" | "compact" | "detail";
 }) {
   const receipt = getDealReceiptAtom(deal);
+  const receiptLine = getBrowseCardReceiptLine(deal, receipt);
 
   return (
     <article
@@ -1824,9 +1922,9 @@ export function MoralDealCard({
           <h3>{deal.title}</h3>
           {deal.subtitle ? <p className="moral-deal-summary">{deal.subtitle}</p> : null}
           <p className="moral-deal-receipt-line">
-            <strong>{receipt.exposure}</strong>
-            <span>{receipt.conditionOrProtection}</span>
-            <span>{receipt.protection}</span>
+            <strong>{receiptLine[0]}</strong>
+            <span>{receiptLine[1]}</span>
+            <span>{receiptLine[2]}</span>
           </p>
           <div className="moral-deal-chip-row" aria-label="Listing tags">
             <FallbackLivestreamEvidencePill deal={deal} />
