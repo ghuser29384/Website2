@@ -14,6 +14,7 @@ export type MoralPublicGoodsLabsRuntimeEnvironment = "production" | "preview" | 
 export type MoralPublicGoodsLabsActorRole = "public" | "labs_participant" | "admin" | "service";
 
 export interface MoralPublicGoodsLabsProject {
+  readonly id: string;
   readonly name: string;
   readonly reviewState: "Reviewed";
   readonly description: string;
@@ -82,18 +83,21 @@ export const MORAL_PUBLIC_GOODS_LABS_POOL: MoralPublicGoodsLabsPool = {
   nonMvp: true,
   projects: [
     {
+      id: "pathogen-surveillance-data-commons",
       name: "Pathogen Surveillance Data Commons",
       reviewState: "Reviewed",
       description:
         "Shared infrastructure for reviewed pathogen surveillance datasets, documentation, and access norms.",
     },
     {
+      id: "open-biosecurity-methods-lab",
       name: "Open Biosecurity Methods Lab",
       reviewState: "Reviewed",
       description:
         "Independent methods work for safer biosecurity measurement, red-teaming, and coordination practice.",
     },
     {
+      id: "global-outbreak-coordination-network",
       name: "Global Outbreak Coordination Network",
       reviewState: "Reviewed",
       description:

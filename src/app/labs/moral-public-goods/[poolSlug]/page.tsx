@@ -23,6 +23,12 @@ import {
   type MoralPublicGoodsLabsActorRole,
   type MoralPublicGoodsLabsRuntimeEnvironment,
 } from "@/lib/mpgf/moral-public-goods-labs-ui";
+import {
+  PROJECT_RECOMMENDATION_FEATURE_KEY,
+  buildMoralPublicGoodsRecommendationDevSeedData,
+  buildProjectRecommendationPublicView,
+  evaluateProjectRecommendationCapability,
+} from "@/lib/mpgf/public-goods-project-recommendations-non-mvp";
 import { getAbsoluteUrl } from "@/lib/seo";
 import MoralPublicGoodsLabsClient from "./moral-public-goods-labs-client";
 import styles from "./moral-public-goods-labs.module.css";
@@ -129,13 +135,42 @@ export default async function MoralPublicGoodsLabsPage({ params }: PageProps) {
 
   const environment = getRuntimeEnvironment();
   const actorRole = getActorRole(environment);
-  const productionLike = environment === "production";
+  const productionDeployment = environment === "production";
   const refundBonusFeatureEnabled =
-    !productionLike || getFlagValue(MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_FEATURE_FLAG);
+    !productionDeployment || getFlagValue(MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_FEATURE_FLAG);
   const atLeastTierFeatureEnabled =
-    !productionLike || getFlagValue(MORAL_PUBLIC_GOODS_LABS_AT_LEAST_TIER_FEATURE_FLAG);
+    !productionDeployment || getFlagValue(MORAL_PUBLIC_GOODS_LABS_AT_LEAST_TIER_FEATURE_FLAG);
   const refundBonusLiveMoneyEnabled = getFlagValue(MORAL_PUBLIC_GOODS_LABS_REFUND_BONUS_LIVE_MONEY_FLAG);
   const atLeastTierLiveMoneyEnabled = getFlagValue(MORAL_PUBLIC_GOODS_LABS_AT_LEAST_TIER_LIVE_MONEY_FLAG);
+  const projectRecommendationFeatureEnabled = !productionDeployment || getFlagValue(PROJECT_RECOMMENDATION_FEATURE_KEY);
+  const projectRecommendationCapability = evaluateProjectRecommendationCapability({
+    action: "view_detail_drawer",
+    actorRole: actorRole === "service" ? "service" : actorRole === "admin" ? "admin" : actorRole === "labs_participant" ? "labs_participant" : "public",
+    environment,
+    explicitPromotionRecordApproved: false,
+    featureEnabled: projectRecommendationFeatureEnabled,
+    publicSurfaceEnabled: false,
+    targetReviewed: true,
+  });
+  const recommendationRows = buildMoralPublicGoodsRecommendationDevSeedData({
+    environment,
+  });
+  const recommendationViewsByProjectId = Object.fromEntries(
+    MORAL_PUBLIC_GOODS_LABS_POOL.projects.map((project) => [
+      project.id,
+      projectRecommendationCapability.allowed
+        ? buildProjectRecommendationPublicView({
+            recommendations: recommendationRows,
+            target: {
+              blocked: false,
+              reviewed: project.reviewState === "Reviewed",
+              targetId: project.id,
+              targetType: "project",
+            },
+          })
+        : null,
+    ]),
+  );
 
   const refundBonusViewCapability = evaluateRefundBonusCapability({
     action: "view_labs_pool",
@@ -220,6 +255,8 @@ export default async function MoralPublicGoodsLabsPage({ params }: PageProps) {
         atLeastTierGateReasons={atLeastTierCommitmentCapability.reasons}
         environment={environment}
         pool={MORAL_PUBLIC_GOODS_LABS_POOL}
+        projectRecommendationGateReasons={projectRecommendationCapability.reasons}
+        projectRecommendationViewsByProjectId={recommendationViewsByProjectId}
         refundBonusGateReasons={refundBonusCommitmentCapability.reasons}
         simulationOnly={
           !refundBonusCommitmentCapability.allowed ||

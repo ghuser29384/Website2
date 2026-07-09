@@ -15,16 +15,20 @@ import {
   type MoralPublicGoodsLabsPool,
   type MoralPublicGoodsLabsRuntimeEnvironment,
 } from "@/lib/mpgf/moral-public-goods-labs-ui";
+import type { ProjectRecommendationPublicView } from "@/lib/mpgf/public-goods-project-recommendations-non-mvp";
 import styles from "./moral-public-goods-labs.module.css";
 
 type DetailPanel = "refund_rules" | "tier_rules" | "project_details" | "audit_approach" | null;
 type ReviewMechanism = MoralPublicGoodsLabsMechanism | null;
+type RecommendationFlow = "recommend" | "concern" | null;
 
 interface MoralPublicGoodsLabsClientProps {
   actorRole: MoralPublicGoodsLabsActorRole;
   atLeastTierGateReasons: readonly string[];
   environment: MoralPublicGoodsLabsRuntimeEnvironment;
   pool: MoralPublicGoodsLabsPool;
+  projectRecommendationGateReasons: readonly string[];
+  projectRecommendationViewsByProjectId: Record<string, ProjectRecommendationPublicView | null>;
   refundBonusGateReasons: readonly string[];
   simulationOnly: boolean;
 }
@@ -94,6 +98,8 @@ export default function MoralPublicGoodsLabsClient({
   atLeastTierGateReasons,
   environment,
   pool,
+  projectRecommendationGateReasons,
+  projectRecommendationViewsByProjectId,
   refundBonusGateReasons,
   simulationOnly,
 }: MoralPublicGoodsLabsClientProps) {
@@ -104,9 +110,20 @@ export default function MoralPublicGoodsLabsClient({
   const [viewpoint, setViewpoint] = useState<(typeof MORAL_PUBLIC_GOODS_LABS_VIEWPOINT_OPTIONS)[number]>("Humanitarian");
   const [activePanel, setActivePanel] = useState<DetailPanel>(null);
   const [reviewMechanism, setReviewMechanism] = useState<ReviewMechanism>(null);
+  const [recommendationFlow, setRecommendationFlow] = useState<RecommendationFlow>(null);
+  const [recommendationTargetId, setRecommendationTargetId] = useState(pool.projects[0]?.id ?? "");
+  const [recommendationStance, setRecommendationStance] = useState("recommend_funding");
+  const [recommendationSourceType, setRecommendationSourceType] = useState("expert_assessment");
+  const [recommendationSummary, setRecommendationSummary] = useState("");
+  const [recommendationSourceUrl, setRecommendationSourceUrl] = useState("");
+  const [recommendationConflict, setRecommendationConflict] = useState("");
+  const [recommendationVisibility, setRecommendationVisibility] = useState("aggregate_only");
+  const [concernUrgency, setConcernUrgency] = useState("routine");
   const [simulationMessage, setSimulationMessage] = useState("");
   const refundAcks = useAcknowledgements(["not_charged_now", "charged_only_if_clears", "eligible_failure_only", "non_mvp"]);
   const platformAcks = useAcknowledgements(["own_excluded", "may_be_charged", "no_direct_payment", "non_mvp"]);
+  const recommendationAcks = useAcknowledgements(["not_vote", "conflicts", "moderation"]);
+  const concernAcks = useAcknowledgements(["moderated", "no_abuse", "serious_route"]);
 
   const pledgeCents = parseUsdInputToCents(pledgeAmount);
   const platformCents = parseUsdInputToCents(platformAmount);
@@ -117,17 +134,18 @@ export default function MoralPublicGoodsLabsClient({
   const sidebarNotes = useMemo(() => getMoralPublicGoodsLabsSidebarNotes(mechanism), [mechanism]);
 
   useEffect(() => {
-    if (!activePanel && !reviewMechanism) return;
+    if (!activePanel && !reviewMechanism && !recommendationFlow) return;
 
     function handleEscape(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
       setActivePanel(null);
       setReviewMechanism(null);
+      setRecommendationFlow(null);
     }
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [activePanel, reviewMechanism]);
+  }, [activePanel, recommendationFlow, reviewMechanism]);
 
   function switchMechanism(nextMechanism: MoralPublicGoodsLabsMechanism) {
     setMechanism(nextMechanism);
@@ -153,10 +171,25 @@ export default function MoralPublicGoodsLabsClient({
     setReviewMechanism(nextMechanism);
   }
 
+  function openRecommendationFlow(flow: Exclude<RecommendationFlow, null>, targetId: string) {
+    setRecommendationTargetId(targetId);
+    setRecommendationFlow(flow);
+    setSimulationMessage("");
+    recommendationAcks.reset();
+    concernAcks.reset();
+  }
+
   function recordSimulation(label: string) {
     setSimulationMessage(
       `Simulation only: ${label}. No production commitment, payment-method setup, authorization, capture, routing, platform match, or bonus payment was created.`,
     );
+  }
+
+  function recordRecommendationSimulation(label: string) {
+    setSimulationMessage(
+      `Simulation only: ${label}. The entry was not publicly displayed and did not affect clearing, thresholds, payment, allocation, review approval, or any ranking.`,
+    );
+    setRecommendationFlow(null);
   }
 
   return (
@@ -436,9 +469,14 @@ export default function MoralPublicGoodsLabsClient({
             </div>
             <ul className={styles.projectList}>
               {pool.projects.map((project) => (
-                <li key={project.name}>
+                <li key={project.id}>
                   <TinyIcon name="project" />
-                  <span>{project.name}</span>
+                  <span className={styles.projectNameBlock}>
+                    <span>{project.name}</span>
+                    {projectRecommendationViewsByProjectId[project.id] ? (
+                      <small>{projectRecommendationViewsByProjectId[project.id]?.aggregate.publicSummaryText}</small>
+                    ) : null}
+                  </span>
                   <strong>{project.reviewState}</strong>
                 </li>
               ))}
@@ -487,7 +525,14 @@ export default function MoralPublicGoodsLabsClient({
       </p>
 
       {activePanel ? (
-        <DetailDrawer activePanel={activePanel} pool={pool} onClose={() => setActivePanel(null)} />
+        <DetailDrawer
+          activePanel={activePanel}
+          pool={pool}
+          projectRecommendationGateReasons={projectRecommendationGateReasons}
+          projectRecommendationViewsByProjectId={projectRecommendationViewsByProjectId}
+          onClose={() => setActivePanel(null)}
+          onOpenRecommendation={openRecommendationFlow}
+        />
       ) : null}
 
       {reviewMechanism ? (
@@ -630,6 +675,31 @@ export default function MoralPublicGoodsLabsClient({
           </section>
         </div>
       ) : null}
+
+      {recommendationFlow ? (
+        <RecommendationSubmissionModal
+          acks={recommendationFlow === "recommend" ? recommendationAcks : concernAcks}
+          concernUrgency={concernUrgency}
+          flow={recommendationFlow}
+          projects={pool.projects}
+          selectedTargetId={recommendationTargetId}
+          sourceType={recommendationSourceType}
+          sourceUrl={recommendationSourceUrl}
+          stance={recommendationStance}
+          summary={recommendationSummary}
+          visibility={recommendationVisibility}
+          conflictDisclosure={recommendationConflict}
+          onClose={() => setRecommendationFlow(null)}
+          onConcernUrgencyChange={setConcernUrgency}
+          onConflictDisclosureChange={setRecommendationConflict}
+          onSourceTypeChange={setRecommendationSourceType}
+          onSourceUrlChange={setRecommendationSourceUrl}
+          onStanceChange={setRecommendationStance}
+          onSubmit={recordRecommendationSimulation}
+          onSummaryChange={setRecommendationSummary}
+          onVisibilityChange={setRecommendationVisibility}
+        />
+      ) : null}
     </main>
   );
 }
@@ -658,11 +728,17 @@ function AcknowledgementList({
 function DetailDrawer({
   activePanel,
   onClose,
+  onOpenRecommendation,
   pool,
+  projectRecommendationGateReasons,
+  projectRecommendationViewsByProjectId,
 }: {
   activePanel: Exclude<DetailPanel, null>;
   onClose: () => void;
+  onOpenRecommendation: (flow: Exclude<RecommendationFlow, null>, targetId: string) => void;
   pool: MoralPublicGoodsLabsPool;
+  projectRecommendationGateReasons: readonly string[];
+  projectRecommendationViewsByProjectId: Record<string, ProjectRecommendationPublicView | null>;
 }) {
   const title =
     activePanel === "refund_rules"
@@ -731,10 +807,16 @@ function DetailDrawer({
         {activePanel === "project_details" ? (
           <div className={styles.drawerSections}>
             {pool.projects.map((project) => (
-              <section key={project.name}>
+              <section key={project.id}>
                 <h3>{project.name}</h3>
                 <span className={styles.reviewChip}>{project.reviewState}</span>
                 <p>{project.description}</p>
+                <RecommendationSection
+                  gateReasons={projectRecommendationGateReasons}
+                  projectId={project.id}
+                  view={projectRecommendationViewsByProjectId[project.id] ?? null}
+                  onOpenRecommendation={onOpenRecommendation}
+                />
               </section>
             ))}
           </div>
@@ -748,6 +830,269 @@ function DetailDrawer({
           </div>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+function RecommendationSection({
+  gateReasons,
+  onOpenRecommendation,
+  projectId,
+  view,
+}: {
+  gateReasons: readonly string[];
+  onOpenRecommendation: (flow: Exclude<RecommendationFlow, null>, targetId: string) => void;
+  projectId: string;
+  view: ProjectRecommendationPublicView | null;
+}) {
+  if (!view) {
+    return (
+      <div className={styles.recommendationBlock}>
+        <h4>Recommendations and concerns</h4>
+        <p>Recommendations are hidden for this viewer or environment.</p>
+        {gateReasons.length ? <p className={styles.gateCopy}>{gateReasons.join(", ")}</p> : null}
+      </div>
+    );
+  }
+
+  const recommendations = view.entries.filter((entry) => entry.kind !== "concern");
+  const concerns = view.entries.filter((entry) => entry.kind === "concern");
+
+  return (
+    <div className={styles.recommendationBlock}>
+      <h4>Recommendations and concerns</h4>
+      <p className={styles.compactSignal}>{view.aggregate.publicSummaryText}</p>
+
+      <section aria-label="Recommendations">
+        <h5>Recommendations</h5>
+        {recommendations.length ? (
+          <ul className={styles.recommendationList}>
+            {recommendations.map((entry) => (
+              <li key={entry.id}>
+                <strong>
+                  {entry.displayLabel} - &quot;{entry.publicSummary}&quot;
+                </strong>
+                <span>
+                  Source: {entry.sourceLabel} · Conflict: {entry.conflictLabel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No approved public recommendations.</p>
+        )}
+      </section>
+
+      <section aria-label="Concerns">
+        <h5>Concerns</h5>
+        {concerns.length ? (
+          <ul className={styles.recommendationList}>
+            {concerns.map((entry) => (
+              <li key={entry.id}>
+                <strong>{entry.displayLabel}</strong>
+                <span>
+                  Source: {entry.sourceLabel} · Conflict: {entry.conflictLabel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : view.concernNotice ? (
+          <p aria-label="concern under review status">{view.concernNotice}</p>
+        ) : (
+          <p>No unresolved public concerns.</p>
+        )}
+      </section>
+
+      <div className={styles.recommendationActions}>
+        <button className={styles.secondaryButton} type="button" onClick={() => onOpenRecommendation("recommend", projectId)}>
+          Recommend funding
+        </button>
+        <button className={styles.secondaryButton} type="button" onClick={() => onOpenRecommendation("concern", projectId)}>
+          Record a concern
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecommendationSubmissionModal({
+  acks,
+  concernUrgency,
+  conflictDisclosure,
+  flow,
+  onClose,
+  onConcernUrgencyChange,
+  onConflictDisclosureChange,
+  onSourceTypeChange,
+  onSourceUrlChange,
+  onStanceChange,
+  onSubmit,
+  onSummaryChange,
+  onVisibilityChange,
+  projects,
+  selectedTargetId,
+  sourceType,
+  sourceUrl,
+  stance,
+  summary,
+  visibility,
+}: {
+  acks: ReturnType<typeof useAcknowledgements>;
+  concernUrgency: string;
+  conflictDisclosure: string;
+  flow: Exclude<RecommendationFlow, null>;
+  onClose: () => void;
+  onConcernUrgencyChange: (value: string) => void;
+  onConflictDisclosureChange: (value: string) => void;
+  onSourceTypeChange: (value: string) => void;
+  onSourceUrlChange: (value: string) => void;
+  onStanceChange: (value: string) => void;
+  onSubmit: (label: string) => void;
+  onSummaryChange: (value: string) => void;
+  onVisibilityChange: (value: string) => void;
+  projects: readonly MoralPublicGoodsLabsPool["projects"][number][];
+  selectedTargetId: string;
+  sourceType: string;
+  sourceUrl: string;
+  stance: string;
+  summary: string;
+  visibility: string;
+}) {
+  const selectedProject = projects.find((project) => project.id === selectedTargetId) ?? projects[0];
+  const sourceRequiresUrl = sourceType === "linked_public_source";
+  const sourceRequiresEvidence = sourceType === "private_evidence_reviewed";
+  const requiredFieldsPresent =
+    Boolean(summary.trim()) &&
+    Boolean(conflictDisclosure.trim()) &&
+    Boolean(sourceType) &&
+    (!sourceRequiresUrl || Boolean(sourceUrl.trim())) &&
+    !sourceRequiresEvidence;
+  const canSubmit = requiredFieldsPresent && acks.allChecked;
+  const title = flow === "recommend" ? "Recommend funding" : "Record a concern";
+
+  return (
+    <div className={styles.modalBackdrop} role="presentation">
+      <section aria-labelledby="recommendation-modal-heading" aria-modal="true" className={styles.reviewModal} role="dialog">
+        <div className={styles.modalHead}>
+          <h2 id="recommendation-modal-heading">{title}</h2>
+          <button className={styles.iconButton} type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className={styles.submissionForm}>
+          <label className={styles.field}>
+            <span>Target</span>
+            <input readOnly value={selectedProject?.name ?? "Reviewed public-good project"} />
+          </label>
+
+          {flow === "recommend" ? (
+            <>
+              <label className={styles.field}>
+                <span>Stance</span>
+                <select value={stance} onChange={(event) => onStanceChange(event.target.value)}>
+                  <option value="recommend_funding">Recommend funding</option>
+                  <option value="support_with_caveats">Support with caveats</option>
+                  <option value="donated">I donated</option>
+                  <option value="reviewed_positive">Reviewed positively</option>
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span>Source type</span>
+                <select value={sourceType} onChange={(event) => onSourceTypeChange(event.target.value)}>
+                  <option value="verified_donation">I donated to this.</option>
+                  <option value="grant_review">I reviewed this.</option>
+                  <option value="expert_assessment">I have relevant domain expertise.</option>
+                  <option value="direct_experience">I have direct experience with this project.</option>
+                  <option value="linked_public_source">I am linking a public source.</option>
+                </select>
+              </label>
+            </>
+          ) : (
+            <>
+              <label className={styles.field}>
+                <span>Source type</span>
+                <select value={sourceType} onChange={(event) => onSourceTypeChange(event.target.value)}>
+                  <option value="direct_experience">Direct experience</option>
+                  <option value="linked_public_source">Linked public source</option>
+                  <option value="expert_assessment">Expert assessment</option>
+                  <option value="private_evidence_reviewed">Private evidence reviewed</option>
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span>Urgency</span>
+                <select value={concernUrgency} onChange={(event) => onConcernUrgencyChange(event.target.value)}>
+                  <option value="routine">Routine</option>
+                  <option value="material_before_funding">Material before funding</option>
+                  <option value="safety_legal_review_concern">Safety/legal/review concern</option>
+                </select>
+              </label>
+            </>
+          )}
+
+          <label className={styles.field}>
+            <span>{flow === "recommend" ? "Public summary" : "Concern summary"}</span>
+            <textarea
+              maxLength={600}
+              rows={5}
+              value={summary}
+              onChange={(event) => onSummaryChange(event.target.value)}
+            />
+            <small>Source-backed summary for moderator review. 600 characters max.</small>
+          </label>
+          <label className={styles.field}>
+            <span>Source URL</span>
+            <input
+              placeholder={sourceRequiresUrl ? "Required for linked public source" : "Optional unless the source type requires it"}
+              type="url"
+              value={sourceUrl}
+              onChange={(event) => onSourceUrlChange(event.target.value)}
+            />
+          </label>
+          <label className={styles.field}>
+            <span>Conflict disclosure</span>
+            <textarea rows={3} value={conflictDisclosure} onChange={(event) => onConflictDisclosureChange(event.target.value)} />
+          </label>
+          <label className={styles.field}>
+            <span>Visibility</span>
+            <select value={visibility} onChange={(event) => onVisibilityChange(event.target.value)}>
+              <option value="aggregate_only">Aggregate only</option>
+              <option value="public">Public</option>
+              <option value="reviewer_only">Reviewer only</option>
+            </select>
+          </label>
+
+          {sourceRequiresEvidence ? (
+            <p className={styles.gateCopy}>
+              Private evidence upload is not enabled in this labs UI. Choose another source type or send evidence through reviewer handling.
+            </p>
+          ) : null}
+
+          <AcknowledgementList
+            checked={acks.checked}
+            items={
+              flow === "recommend"
+                ? [
+                    ["not_vote", "I understand this is not a vote, ranking, review approval, or clearing input."],
+                    ["conflicts", "I have disclosed relevant conflicts."],
+                    ["moderation", "I understand moderators may aggregate, redact, reject, or hide this signal."],
+                  ]
+                : [
+                    ["moderated", "I understand concerns are moderated before public display."],
+                    [
+                      "no_abuse",
+                      "I am not using this to harass, dox, threaten, or pressure a project or donor.",
+                    ],
+                    ["serious_route", "I understand serious concerns may route to reviewer/challenge handling."],
+                  ]
+            }
+            onToggle={acks.toggle}
+          />
+          <button className={styles.primaryButton} disabled={!canSubmit} type="button" onClick={() => onSubmit("Submit for review")}>
+            {flow === "recommend" ? "Submit for review" : "Submit concern"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
