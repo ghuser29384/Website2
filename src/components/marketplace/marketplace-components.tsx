@@ -16,6 +16,10 @@ import {
   type MarketplaceSurface,
 } from "@/lib/marketplace-deals";
 import {
+  getPublicReviewedSeedTemplateSummaries,
+  type PublicReviewedSeedTemplateSummary,
+} from "@/lib/marketplace-seed-templates";
+import {
   getPledgeFundingMechanismState,
   getPledgeFundingReceiptAtom,
   getPreferredCharityBonusCopy,
@@ -176,58 +180,125 @@ function compactReceiptFact(value: string) {
   return value;
 }
 
-function selectSecondaryDeals(
-  deals: readonly MarketplaceDeal[],
-  primaryDeal: MarketplaceDeal | null,
-  limit = 4,
+type BrowseDealSecondarySlotType =
+  | "preview_match"
+  | "threshold_public_goods"
+  | "recipient_public_good";
+
+type BrowseSecondarySlot =
+  | {
+      deal: MarketplaceDeal;
+      kind: "deal";
+      slotType: BrowseDealSecondarySlotType;
+    }
+  | {
+      kind: "template";
+      slotType: "template";
+      template: PublicReviewedSeedTemplateSummary;
+    };
+
+function normalizedDealSearchText(deal: MarketplaceDeal) {
+  return [
+    deal.title,
+    deal.subtitle,
+    deal.mechanismType,
+    deal.sourceLabel,
+    deal.verificationSummary,
+    deal.actionDescription,
+    deal.causeTags.join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function selectDealForSlot(
+  candidates: readonly MarketplaceDeal[],
+  selectedIds: Set<string>,
+  predicates: Array<(deal: MarketplaceDeal) => boolean>,
 ) {
-  const targetRhythm: MarketplaceDeal["mechanismType"][] = [
-    "cross_view_donation_swap",
-    "public_goods_round",
-    "action_for_donation",
-    "public_goods_round",
-  ];
-  const mechanismOrder: MarketplaceDeal["mechanismType"][] = [
-    "cross_view_donation_swap",
-    "public_goods_round",
-    "action_for_donation",
-    "local_pledge",
-    "offset_trade",
-    "pledge_funding_round",
-    "unknown",
-  ];
-  const mechanismRank = new Map(mechanismOrder.map((mechanism, index) => [mechanism, index]));
-  const candidates = [...deals]
-    .filter((deal) => deal.id !== primaryDeal?.id)
-    .sort((a, b) => {
-      const rankDelta =
-        (mechanismRank.get(a.mechanismType) ?? mechanismOrder.length) -
-        (mechanismRank.get(b.mechanismType) ?? mechanismOrder.length);
-
-      return rankDelta || deals.indexOf(a) - deals.indexOf(b);
-    });
-  const selected: MarketplaceDeal[] = [];
-
-  for (const mechanism of targetRhythm) {
-    if (selected.length >= limit) break;
-    const nextDeal = candidates.find(
-      (deal) =>
-        deal.mechanismType === mechanism &&
-        !selected.some((selectedDeal) => selectedDeal.id === deal.id),
-    );
-
-    if (nextDeal) {
-      selected.push(nextDeal);
+  for (const predicate of predicates) {
+    const deal = candidates.find((candidate) => !selectedIds.has(candidate.id) && predicate(candidate));
+    if (deal) {
+      selectedIds.add(deal.id);
+      return deal;
     }
   }
 
-  for (const deal of candidates) {
-    if (selected.length >= limit) break;
-    if (selected.some((selectedDeal) => selectedDeal.id === deal.id)) continue;
-    selected.push(deal);
+  return null;
+}
+
+function selectTemplateForBrowseSlot(templates: readonly PublicReviewedSeedTemplateSummary[]) {
+  return (
+    templates.find((template) =>
+      /plastic|climate|environment|carbon/i.test(`${template.title} ${template.summary}`),
+    ) ??
+    templates.find((template) => template.format === "pledge_swap") ??
+    templates[0] ??
+    null
+  );
+}
+
+function selectRegionASecondarySlots(
+  deals: readonly MarketplaceDeal[],
+  primaryDeal: MarketplaceDeal | null,
+  templates: readonly PublicReviewedSeedTemplateSummary[],
+  limit = 4,
+) {
+  const candidates = deals.filter((deal) => deal.id !== primaryDeal?.id);
+  const selectedIds = new Set<string>();
+  const slots: BrowseSecondarySlot[] = [];
+
+  const previewMatchDeal = selectDealForSlot(candidates, selectedIds, [
+    (deal) =>
+      /ai safety|alignment|x-risk/i.test(normalizedDealSearchText(deal)) &&
+      (deal.mechanismType === "cross_view_donation_swap" || deal.reviewStatus === "review_pending"),
+    (deal) => deal.mechanismType === "cross_view_donation_swap",
+    (deal) => deal.reviewStatus === "review_pending" && deal.mechanismType !== "public_goods_round",
+  ]);
+
+  if (previewMatchDeal) {
+    slots.push({ deal: previewMatchDeal, kind: "deal", slotType: "preview_match" });
   }
 
-  return selected;
+  const thresholdDeal = selectDealForSlot(candidates, selectedIds, [
+    (deal) => deal.mechanismType === "public_goods_round" && getDealProgressPercent(deal) !== null,
+    (deal) => deal.mechanismType === "public_goods_round",
+  ]);
+
+  if (thresholdDeal) {
+    slots.push({ deal: thresholdDeal, kind: "deal", slotType: "threshold_public_goods" });
+  }
+
+  const template = selectTemplateForBrowseSlot(templates);
+
+  if (template) {
+    slots.push({ kind: "template", slotType: "template", template });
+  }
+
+  const recipientPublicGoodDeal = selectDealForSlot(candidates, selectedIds, [
+    (deal) =>
+      deal.mechanismType === "public_goods_round" &&
+      /health|malaria|poverty|basic needs|treatment/i.test(normalizedDealSearchText(deal)),
+    (deal) => deal.mechanismType === "public_goods_round",
+  ]);
+
+  if (recipientPublicGoodDeal) {
+    slots.push({
+      deal: recipientPublicGoodDeal,
+      kind: "deal",
+      slotType: "recipient_public_good",
+    });
+  }
+
+  for (const deal of candidates) {
+    if (slots.length >= limit) break;
+    if (selectedIds.has(deal.id) || deal.mechanismType === "action_for_donation") continue;
+    selectedIds.add(deal.id);
+    slots.push({ deal, kind: "deal", slotType: "preview_match" });
+  }
+
+  return slots.slice(0, limit);
 }
 
 function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: boolean) {
@@ -464,14 +535,15 @@ function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
 function getDealProgressPercent(deal: MarketplaceDeal) {
   if (
     deal.mechanismType !== "public_goods_round" ||
-    typeof deal.thresholdCurrentCents !== "number" ||
     typeof deal.thresholdTargetCents !== "number" ||
     deal.thresholdTargetCents <= 0
   ) {
     return null;
   }
 
-  const rawProgress = Math.round((deal.thresholdCurrentCents / deal.thresholdTargetCents) * 100);
+  const currentCents =
+    typeof deal.thresholdCurrentCents === "number" ? deal.thresholdCurrentCents : 0;
+  const rawProgress = Math.round((currentCents / deal.thresholdTargetCents) * 100);
   return Math.max(0, Math.min(100, rawProgress));
 }
 
@@ -499,23 +571,113 @@ function PublicGoodsProgressVisual({ deal }: { deal: MarketplaceDeal }) {
   );
 }
 
-function MiniDealTile({
-  deal,
-  publicGoodsVariant = "default",
-}: {
-  deal: MarketplaceDeal;
-  publicGoodsVariant?: "default" | "repeat";
-}) {
+function getMiniDealBadgeLabel(
+  deal: MarketplaceDeal,
+  receipt: ReturnType<typeof getDealReceiptAtom>,
+  slotType: BrowseDealSecondarySlotType,
+) {
+  if (slotType === "preview_match") return "PREVIEW";
+  if (slotType === "threshold_public_goods" || slotType === "recipient_public_good") return null;
+  return receipt.state;
+}
+
+function displayCauseChip(value: string) {
+  const normalized = value.toLowerCase();
+
+  if (/health|poverty|malaria|treatment|medical|basic needs/.test(normalized)) return "Health";
+  if (/animal|welfare|vegetarian|vegan|food-abstention|meal/.test(normalized)) return "Animals";
+  if (/environment|climate|carbon|plastic/.test(normalized)) return "Environment";
+  if (/ai|alignment|x-risk|existential|future/.test(normalized)) return "AI Safety";
+
+  return value
+    .split(" ")
+    .map((word) => (word ? `${word[0].toUpperCase()}${word.slice(1)}` : word))
+    .join(" ");
+}
+
+function getMiniDealCategoryChips(deal: MarketplaceDeal, slotType: BrowseDealSecondarySlotType) {
+  if (slotType === "recipient_public_good") {
+    return uniqueVisibleStrings(["Public good", ...deal.causeTags.map(displayCauseChip)]).slice(0, 2);
+  }
+
+  return uniqueVisibleStrings(deal.causeTags.map(displayCauseChip)).slice(0, 2);
+}
+
+function getMiniDealSubline(deal: MarketplaceDeal, slotType: BrowseDealSecondarySlotType) {
+  if (slotType === "preview_match") return "Max exposure";
+  if (slotType === "threshold_public_goods") return "Threshold round";
+  if (slotType === "recipient_public_good") return "Suggested";
+  return getDealSubline(deal);
+}
+
+function getMiniDealAmount(deal: MarketplaceDeal, slotType: BrowseDealSecondarySlotType) {
   const receipt = getDealReceiptAtom(deal);
-  const visualIcon: IconName =
-    deal.mechanismType === "public_goods_round" && publicGoodsVariant === "repeat"
-      ? "publicGoods"
-      : browseVisualIcon(deal.mechanismType);
-  const chips = uniqueVisibleStrings([
+
+  if (slotType === "threshold_public_goods") {
+    const economics = buildDealEconomics(deal);
+    return economics.thresholdLabel === "Unavailable" ? receipt.exposure : economics.thresholdLabel;
+  }
+
+  if (slotType === "preview_match") {
+    return getDealAmountLabel(deal);
+  }
+
+  return receipt.exposure;
+}
+
+function getMiniDealStatusChips(
+  deal: MarketplaceDeal,
+  slotType: BrowseDealSecondarySlotType,
+  publicGoodsVariant: "default" | "repeat",
+) {
+  if (slotType === "preview_match") {
+    return uniqueVisibleStrings([
+      reviewStatusLabel(deal.reviewStatus),
+      deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
+    ]).slice(0, 2);
+  }
+
+  if (slotType === "threshold_public_goods") {
+    return uniqueVisibleStrings([
+      deal.verificationSummary ? "Evidence later" : null,
+      deal.reviewStatus === "verified_recipient" ? "Verified recipient" : reviewStatusLabel(deal.reviewStatus),
+    ]).slice(0, 2);
+  }
+
+  if (slotType === "recipient_public_good" || publicGoodsVariant === "repeat") {
+    return uniqueVisibleStrings([
+      "No charge now",
+      deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
+    ]).slice(0, 2);
+  }
+
+  const receipt = getDealReceiptAtom(deal);
+  return uniqueVisibleStrings([
     receipt.conditionOrProtection,
     deal.reviewStatus === "verified_recipient" ? reviewStatusLabel(deal.reviewStatus) : null,
     deal.fallbackLivestreamEvidence?.statusLabel,
   ]).slice(0, 2);
+}
+
+function MiniDealTile({
+  deal,
+  publicGoodsVariant = "default",
+  slotType = "preview_match",
+}: {
+  deal: MarketplaceDeal;
+  publicGoodsVariant?: "default" | "repeat";
+  slotType?: BrowseDealSecondarySlotType;
+}) {
+  const receipt = getDealReceiptAtom(deal);
+  const visualIcon: IconName =
+    slotType === "preview_match"
+      ? "scale"
+      : deal.mechanismType === "public_goods_round" && publicGoodsVariant === "repeat"
+      ? "publicGoods"
+      : browseVisualIcon(deal.mechanismType);
+  const badgeLabel = getMiniDealBadgeLabel(deal, receipt, slotType);
+  const categoryChips = getMiniDealCategoryChips(deal, slotType);
+  const chips = getMiniDealStatusChips(deal, slotType, publicGoodsVariant);
 
   return (
     <Link
@@ -524,10 +686,11 @@ function MiniDealTile({
         `mt-v75-mini-tile-${deal.mechanismType.replaceAll("_", "-")}`,
         publicGoodsVariant === "repeat" && "is-public-good-repeat",
       ])}
+      data-region-a-slot={slotType}
       href={deal.href}
     >
       <div className="mt-v75-mini-head">
-        <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
+        {badgeLabel ? <span className={badgeClassName(badgeLabel, "state")}>{badgeLabel}</span> : null}
         {deal.mechanismType === "public_goods_round" && publicGoodsVariant === "default" ? (
           <PublicGoodsProgressVisual deal={deal} />
         ) : (
@@ -535,12 +698,83 @@ function MiniDealTile({
         )}
       </div>
       <strong>{deal.title}</strong>
-      <span>{getDealSubline(deal)}</span>
-      <span className="mt-v75-mini-amount">{receipt.exposure}</span>
+      <div className="moral-deal-chip-row mt-v75-mini-chip-row">
+        {categoryChips.map((chip) => (
+          <span className="source-pill" key={chip}>
+            {chip}
+          </span>
+        ))}
+      </div>
+      <span>{getMiniDealSubline(deal, slotType)}</span>
+      <span className="mt-v75-mini-amount">{getMiniDealAmount(deal, slotType)}</span>
       <div className="mt-v75-status-row">
         {chips.map((chip) => (
           <StatusChip label={chip} key={chip} />
         ))}
+      </div>
+    </Link>
+  );
+}
+
+function templateCardTitle(template: PublicReviewedSeedTemplateSummary) {
+  if (/food-abstention/i.test(template.title)) return "One-meal food pledge template";
+  if (/micro-pledge sequence/i.test(template.title)) return "Few-day pledge template";
+  if (/template/i.test(template.title)) return template.title;
+
+  return template.title
+    .replace(/\bpledge swap\b/i, "pledge template")
+    .replace(/\bmicro-pledge sequence\b/i, "micro-pledge template")
+    .replace(/\boffset pool\b/i, "offset template");
+}
+
+function templateCategoryChips(template: PublicReviewedSeedTemplateSummary) {
+  const text = `${template.title} ${template.summary} ${template.formatLabel}`;
+  const chips = [
+    /plastic|climate|environment|carbon/i.test(text) ? "Environment" : null,
+    /food|meal|animal|welfare|vegetarian/i.test(text) ? "Animals" : null,
+    /health|poverty|malaria|treatment|basic needs/i.test(text) ? "Health" : null,
+  ];
+
+  return uniqueVisibleStrings(chips).slice(0, 2);
+}
+
+function TemplateSemanticVisual() {
+  return (
+    <span
+      aria-label="Reusable template checklist visual"
+      className="moral-deal-visual moral-deal-visual-template mt-v75-template-visual"
+      role="img"
+    >
+      <IconMark name="checklist" />
+    </span>
+  );
+}
+
+function TemplateMiniTile({ template }: { template: PublicReviewedSeedTemplateSummary }) {
+  const categoryChips = templateCategoryChips(template);
+
+  return (
+    <Link
+      className="mt-v75-mini-tile mt-v75-mini-tile-template"
+      data-region-a-slot="template"
+      data-template-source-id={template.id}
+      href={template.href}
+    >
+      <div className="mt-v75-mini-head">
+        <span className={badgeClassName("TEMPLATE", "state")}>TEMPLATE</span>
+        <TemplateSemanticVisual />
+      </div>
+      <strong>{templateCardTitle(template)}</strong>
+      <div className="moral-deal-chip-row mt-v75-mini-chip-row">
+        {(categoryChips.length ? categoryChips : ["Template"]).map((chip) => (
+          <span className="source-pill" key={chip}>
+            {chip}
+          </span>
+        ))}
+      </div>
+      <span>Template · Add your terms</span>
+      <div className="mt-v75-status-row">
+        <StatusChip label="Review required" />
       </div>
     </Link>
   );
@@ -1684,7 +1918,8 @@ export function MarketplaceHome({
     return category.availabilityLabel !== "Unavailable" || category.key === surface.activeCategory;
   });
   const primaryDeal = selectPrimaryBrowseDeal(visibleDeals, zeroLive);
-  const secondaryDeals = selectSecondaryDeals(visibleDeals, primaryDeal);
+  const reviewedSeedTemplates = getPublicReviewedSeedTemplateSummaries();
+  const secondarySlots = selectRegionASecondarySlots(visibleDeals, primaryDeal, reviewedSeedTemplates);
   const tabLinks = [
     ["For you", buildMarketplaceHref({ query: surface.query })],
     ["Offers", "/offers?tab=live"],
@@ -1778,19 +2013,32 @@ export function MarketplaceHome({
                 </div>
               )}
               <div className="mt-v75-secondary-grid" data-marketplace-secondary-grid>
-                {secondaryDeals.map((deal, index) => {
+                {secondarySlots.map((slot, index) => {
+                  if (slot.kind === "template") {
+                    return <TemplateMiniTile key={`template:${slot.template.id}`} template={slot.template} />;
+                  }
+
                   const publicGoodsIndex =
-                    deal.mechanismType === "public_goods_round"
-                      ? secondaryDeals
+                    slot.deal.mechanismType === "public_goods_round"
+                      ? secondarySlots
                           .slice(0, index + 1)
-                          .filter((candidate) => candidate.mechanismType === "public_goods_round").length - 1
+                          .filter(
+                            (candidate) =>
+                              candidate.kind === "deal" &&
+                              candidate.deal.mechanismType === "public_goods_round",
+                          ).length - 1
                       : -1;
 
                   return (
                     <MiniDealTile
-                      deal={deal}
-                      key={deal.id}
-                      publicGoodsVariant={publicGoodsIndex > 0 ? "repeat" : "default"}
+                      deal={slot.deal}
+                      key={slot.deal.id}
+                      publicGoodsVariant={
+                        slot.slotType === "recipient_public_good" || publicGoodsIndex > 0
+                          ? "repeat"
+                          : "default"
+                      }
+                      slotType={slot.slotType}
                     />
                   );
                 })}

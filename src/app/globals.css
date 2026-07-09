@@ -15087,6 +15087,11 @@ pre,
     background: linear-gradient(180deg, #f7f3ff 0%, #ffffff 75%);
   }
 
+  .marketplace-app-shell .mt-v75-mini-tile-template {
+    border-color: #e1daf7;
+    background: linear-gradient(180deg, #f7f3ff 0%, #ffffff 76%);
+  }
+
   .marketplace-app-shell .mt-v75-mini-tile-pledge-funding-round,
   .marketplace-app-shell .mt-v75-mini-tile-local-pledge,
   .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat {
@@ -15158,12 +15163,21 @@ pre,
     box-shadow: inset 0 0 0 1px rgba(24, 107, 145, 0.08);
   }
 
+  .marketplace-app-shell .mt-v75-mini-head .mt-v75-progress-ring {
+    width: 88px;
+    height: 88px;
+  }
+
   .mt-v75-progress-ring::before {
     position: absolute;
     inset: 7px;
     border-radius: inherit;
     background: #ffffff;
     content: "";
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .mt-v75-progress-ring::before {
+    inset: 13px;
   }
 
   .mt-v75-progress-ring strong {
@@ -15173,6 +15187,10 @@ pre,
     font-size: 12px;
     font-weight: 950;
     line-height: 1;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .mt-v75-progress-ring strong {
+    font-size: 22px;
   }
 
   .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat .moral-deal-visual-public-goods-round {
@@ -15200,6 +15218,11 @@ pre,
     color: #6852b8;
   }
 
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-template {
+    background: linear-gradient(135deg, #f0ebff 0%, #d4c7ff 100%);
+    color: #6852b8;
+  }
+
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-local-pledge {
     background: linear-gradient(135deg, #eef9e8 0%, #c9efbd 100%);
     color: #078c42;
@@ -15220,6 +15243,21 @@ pre,
     height: 78px;
   }
 
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-template .icon-mark {
+    width: 72px;
+    height: 72px;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-tile-cross-view-donation-swap .mt-v75-mini-head > .badge.badge-preview {
+    background: #ff7a18;
+    color: #ffffff;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head > .badge.badge-template {
+    background: #7658e8;
+    color: #ffffff;
+  }
+
   .mt-v75-mini-tile strong {
     display: -webkit-box;
     flex: 0 0 auto;
@@ -15230,6 +15268,34 @@ pre,
     line-height: 1.12;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+  }
+
+  .mt-v75-mini-chip-row {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-height: 23px;
+    overflow: hidden;
+  }
+
+  .mt-v75-mini-chip-row .source-pill {
+    min-height: 22px;
+    max-width: 110px;
+    padding: 4px 8px;
+    overflow: hidden;
+    background: #eef7ed;
+    color: #08733a;
+    font-size: 10.5px;
+    font-weight: 900;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mt-v75-mini-tile-template .mt-v75-mini-chip-row .source-pill {
+    background: #eef7ed;
+    color: #08733a;
   }
 
   .mt-v75-mini-tile > span {
