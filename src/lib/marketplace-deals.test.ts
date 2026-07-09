@@ -7,15 +7,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   CommitmentSheet,
+  DealDetailObject,
   MarketplaceHome,
   MoralDealCard,
 } from "@/components/marketplace/marketplace-components";
 import {
   MIN_PUBLIC_GROUP_COUNT,
   buildDealEconomics,
+  buildMarketplaceDisplayTitle,
   buildMarketplaceDeals,
   buildMarketplaceHref,
   buildMarketplaceSurface,
+  getMarketplaceRecipientDisplay,
   getCommitmentStatusLabel,
   mapAgreementToCommitmentStatus,
   marketplaceDealFromWorkedOffer,
@@ -53,6 +56,81 @@ function agreementFixture(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof mapAgreementToCommitmentStatus>[0];
 }
 
+test("marketplace display titles describe pledge-swap objects instead of creator cause pairs", () => {
+  assert.equal(
+    buildMarketplaceDisplayTitle(
+      requiredDealFields({
+        causeTags: ["Animal welfare", "Global health"],
+        donationTargetLabel: "Malaria treatment fund",
+        participantActionLabel: "Adopt vegetarian meals with light check-ins.",
+        title: "Paul: Animal welfare for Global poverty",
+      }),
+    ),
+    "Vegetarian meals pledge \u2192 Malaria treatment donation",
+  );
+
+  assert.equal(
+    buildMarketplaceDisplayTitle(
+      requiredDealFields({
+        causeTags: ["Animal welfare", "Global poverty"],
+        title: "Paul: Animal welfare for Global poverty",
+      }),
+    ),
+    "Animal-welfare pledge \u2192 Global poverty donation",
+  );
+
+  const paul = SEED_OFFERS.find((offer) => offer.id === "seed-paul");
+  assert.ok(paul);
+  const paulDeal = marketplaceDealFromWorkedOffer(paul);
+  assert.equal(paulDeal.title, "Vegetarian meals pledge \u2192 Effective poverty donation");
+  assert.doesNotMatch(paulDeal.title, /^Paul:/);
+
+  const christopher = SEED_OFFERS.find((offer) => offer.id === "seed-christopher");
+  assert.ok(christopher);
+  const christopherDeal = marketplaceDealFromWorkedOffer(christopher);
+  assert.equal(christopherDeal.title, "Gun-control pledge \u2192 Gun-rights donation");
+  assert.doesNotMatch(christopherDeal.title, /^Christopher:/);
+});
+
+test("marketplace display titles preserve non-swap object title classes and safe fallbacks", () => {
+  assert.equal(
+    buildMarketplaceDisplayTitle({
+      causeTags: ["Environment"],
+      mechanismType: "unknown",
+      title: "Rethink plastic use pledge template",
+    }),
+    "Rethink plastic use pledge template",
+  );
+
+  assert.equal(
+    buildMarketplaceDisplayTitle({
+      causeTags: ["Global health"],
+      mechanismType: "public_goods_round",
+      title: "Global malaria treatment fund",
+    }),
+    "Global malaria treatment fund",
+  );
+
+  assert.equal(
+    buildMarketplaceDisplayTitle({
+      causeTags: ["Animal welfare"],
+      mechanismType: "action_for_donation",
+      counterpartyActionLabel: "Adopt a vegetarian diet for 12 months.",
+      title: "Lina: Financial support for Animal welfare",
+    }),
+    "Vegetarian meals pledge",
+  );
+
+  assert.equal(
+    buildMarketplaceDisplayTitle({
+      causeTags: [],
+      mechanismType: "local_pledge",
+      title: "Paul: Animal welfare for Global poverty",
+    }),
+    "Conditional pledge swap",
+  );
+});
+
 test("marketplace adapter maps worked offers into bounded deal economics without fabricated metrics", () => {
   const offsetOffer = SEED_OFFERS.find((offer) => offer.mode === "offset");
   assert.ok(offsetOffer);
@@ -70,6 +148,87 @@ test("marketplace adapter maps worked offers into bounded deal economics without
   assert.equal(economics.totalMovedIfClearedLabel, "$2,000");
   assert.equal(economics.effectiveMultiplierLabel, "2.00x if cleared");
   assert.match(economics.chargeTiming, /do not charge/i);
+});
+
+test("featured Browse recipient fact uses backed fund text instead of verification copy", () => {
+  const pledgeSwapOffer = SEED_OFFERS.find((offer) => offer.id === "seed-paul");
+  assert.ok(pledgeSwapOffer);
+  const deal = marketplaceDealFromWorkedOffer(pledgeSwapOffer);
+  const query = parseMarketplaceQuery({});
+  const surface = buildMarketplaceSurface([deal], query);
+  const display = getMarketplaceRecipientDisplay(deal);
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query,
+      surface,
+    }),
+  );
+
+  assert.equal(display.browseLabel, "Effective poverty fund");
+  assert.match(markup, /Effective poverty fund/);
+  assert.match(markup, /Review required/);
+  assert.doesNotMatch(markup, /Donation to verified fund|Donation to fund|>Verified fund</);
+  assert.notEqual(display.browseLabel, "Review required");
+});
+
+test("marketplace recipient formatter degrades to cause-level, not generic verified fund", () => {
+  const deal = requiredDealFields({
+    causeTags: ["global health"],
+    fundingRoute: {
+      causeArea: "global health",
+      recipientVerificationStatus: "Verified recipient",
+    },
+    mechanismType: "public_goods_round",
+    reviewStatus: "verified_recipient",
+  });
+  const display = getMarketplaceRecipientDisplay(deal);
+
+  assert.equal(display.browseLabel, "Verified global-health fund");
+  assert.deepEqual(display.detailRows, [
+    { label: "Recipient", value: "Verified global-health fund" },
+    { label: "Verification", value: "Verified recipient" },
+  ]);
+});
+
+test("marketplace recipient formatter has truthful missing and unavailable fallbacks", () => {
+  assert.equal(
+    getMarketplaceRecipientDisplay(
+      requiredDealFields({
+        causeTags: [],
+        mechanismType: "local_pledge",
+      }),
+    ).browseLabel,
+    "Recipient not selected",
+  );
+  assert.equal(
+    getMarketplaceRecipientDisplay(
+      requiredDealFields({
+        fundingRoute: { unavailable: true },
+        mechanismType: "public_goods_round",
+      }),
+    ).browseLabel,
+    "Recipient unavailable",
+  );
+});
+
+test("detail explain keeps Every.org as payment route detail when backed", () => {
+  const offsetOffer = SEED_OFFERS.find((offer) => offer.id === "seed-rebecca");
+  assert.ok(offsetOffer);
+  const offsetDeal = marketplaceDealFromWorkedOffer(offsetOffer);
+  const pledgeSwapOffer = SEED_OFFERS.find((offer) => offer.id === "seed-paul");
+  assert.ok(pledgeSwapOffer);
+  const pledgeDeal = marketplaceDealFromWorkedOffer(pledgeSwapOffer);
+  const offsetMarkup = renderToStaticMarkup(createElement(DealDetailObject, { deal: offsetDeal }));
+  const pledgeMarkup = renderToStaticMarkup(createElement(DealDetailObject, { deal: pledgeDeal }));
+
+  assert.equal(getMarketplaceRecipientDisplay(offsetDeal).browseLabel, "GiveWell Top Charities Fund");
+  assert.match(offsetMarkup, /Verification &amp; funding/);
+  assert.match(offsetMarkup, /GiveWell Top Charities Fund/);
+  assert.match(offsetMarkup, /Payment route/);
+  assert.match(offsetMarkup, /Every\.org/);
+  assert.doesNotMatch(pledgeMarkup, /Every\.org/);
 });
 
 test("marketplace card surfaces optional fallback evidence without proof language", () => {
@@ -93,6 +252,116 @@ test("marketplace card surfaces optional fallback evidence without proof languag
 
   assert.match(markup, /Observed if no trade clears/);
   assert.doesNotMatch(markup, /Counterfactual verified|Natural baseline proven|Verified intent|Guaranteed counterfactual|Counterfactual proof|Public proof badge/);
+});
+
+test("browse cards use concrete backed evidence chips instead of generic evidence later", () => {
+  const donationReceiptDeal = requiredDealFields({
+    causeTags: ["Animal welfare", "Global poverty"],
+    donationTargetLabel: "Against Malaria Foundation",
+    fundingRoute: {
+      fundName: "Against Malaria Foundation",
+      paymentRouteName: "Every.org",
+      receiptAvailability: "Annual receipts",
+    },
+    id: "donation-receipt",
+    participantActionLabel: "Adopt vegetarian meals with light check-ins.",
+    reviewStatus: "review_pending",
+    sourceLabel: "Worked example",
+    title: "Vegetarian meals pledge -> Malaria treatment donation",
+    verificationSummary: "Receipts, donation records, and an annual review checkpoint.",
+  });
+  const donationSurface = buildMarketplaceSurface([donationReceiptDeal], parseMarketplaceQuery({}));
+  const donationMarkup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query: parseMarketplaceQuery({}),
+      surface: donationSurface,
+    }),
+  );
+  const donationFeaturedCard = donationMarkup.match(/<article class="mt-v75-featured-deal"[\s\S]*?<\/article>/)?.[0] ?? "";
+
+  const manualReviewDeal = requiredDealFields({
+    id: "manual-review",
+    reviewStatus: "review_pending",
+    sourceLabel: "Worked example",
+    title: "Manual review route",
+    verificationSummary: "Reviewer inspection of the named evidence before reliance.",
+  });
+  const manualSurface = buildMarketplaceSurface([manualReviewDeal], parseMarketplaceQuery({}));
+  const manualMarkup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query: parseMarketplaceQuery({}),
+      surface: manualSurface,
+    }),
+  );
+  const manualFeaturedCard = manualMarkup.match(/<article class="mt-v75-featured-deal"[\s\S]*?<\/article>/)?.[0] ?? "";
+
+  assert.match(donationFeaturedCard, /Donation receipt/);
+  assert.doesNotMatch(donationFeaturedCard, /Evidence later/);
+  assert.match(manualFeaturedCard, /Reviewer check/);
+  assert.doesNotMatch(manualFeaturedCard, /Evidence later/);
+});
+
+test("browse cards keep generic evidence copy only when the backed route is unknown", () => {
+  const unknownEvidenceDeal = requiredDealFields({
+    id: "unknown-evidence",
+    reviewStatus: "review_pending",
+    sourceLabel: "Worked example",
+    title: "Unknown evidence route",
+    verificationSummary: "Evidence method not yet specified.",
+  });
+  const noEvidenceDeal = requiredDealFields({
+    id: "no-evidence",
+    reviewStatus: "review_pending",
+    sourceLabel: "Worked example",
+    title: "No evidence route",
+  });
+
+  const unknownMarkup = renderToStaticMarkup(createElement(DealDetailObject, { deal: unknownEvidenceDeal }));
+  const noEvidenceMarkup = renderToStaticMarkup(createElement(DealDetailObject, { deal: noEvidenceDeal }));
+
+  assert.match(unknownMarkup, /Evidence later/);
+  assert.doesNotMatch(noEvidenceMarkup, /Evidence later/);
+  assert.doesNotMatch(noEvidenceMarkup, /Donation receipt|Reviewer check|Evidence configurable/);
+});
+
+test("detail page shows source-owned evidence rows where backed", () => {
+  const deal = requiredDealFields({
+    donationTargetLabel: "Against Malaria Foundation",
+    fundingRoute: {
+      fundName: "Against Malaria Foundation",
+      paymentRouteName: "Every.org",
+      receiptAvailability: "Annual receipts",
+    },
+    id: "detail-donation-receipt",
+    reviewStatus: "review_pending",
+    title: "Donation receipt route",
+    verificationSummary: "Receipts, donation records, and an annual review checkpoint.",
+  });
+  const markup = renderToStaticMarkup(createElement(DealDetailObject, { deal }));
+
+  assert.match(markup, /Donation evidence/);
+  assert.match(markup, /Receipt from Against Malaria Foundation/);
+  assert.match(markup, /Payment route/);
+  assert.match(markup, /Every\.org/);
+});
+
+test("template browse cards show configurable evidence state", () => {
+  const surface = buildMarketplaceSurface([], parseMarketplaceQuery({}));
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query: parseMarketplaceQuery({}),
+      surface,
+    }),
+  );
+  const templateCard = markup.match(/<a class="mt-v75-mini-tile mt-v75-mini-tile-template"[\s\S]*?<\/a>/)?.[0] ?? "";
+
+  assert.match(templateCard, /Evidence configurable/);
 });
 
 test("public-goods adapter keeps unavailable sponsor-match economics unavailable", () => {
@@ -230,6 +499,53 @@ test("compact browse cause filters use honest query state", () => {
   assert.match(markup, /href="\/offers\?marketplace_filter=cause_health"/);
   assert.match(markup, /aria-current="true" href="\/offers\?marketplace_filter=cause_health">Health/);
   assert.doesNotMatch(markup, /Health<\/a><a[^>]+requires_evidence/);
+});
+
+test("browse cards avoid default charge-state copy while preserving safety and sheet copy", () => {
+  const query = parseMarketplaceQuery({});
+  const deals = buildMarketplaceDeals({
+    liveOffers: [],
+    publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
+    publicGoodsMatchPool: demoMpgfMatchPool,
+    publicGoodsRound: demoMpgfAssuranceRound,
+    workedOffers: SEED_OFFERS,
+  });
+  const surface = buildMarketplaceSurface(deals, query);
+  const markup = renderToStaticMarkup(
+    createElement(MarketplaceHome, {
+      createHref: "/offers/new",
+      liveOfferCount: 0,
+      query,
+      surface,
+    }),
+  );
+  const seedPaulDeal = surface.deals.find((deal) => deal.id === "seed-paul");
+  assert.ok(seedPaulDeal);
+  const sheetMarkup = renderToStaticMarkup(
+    createElement(CommitmentSheet, {
+      commitHref: "/offers/examples/seed-paul",
+      deal: seedPaulDeal,
+      paymentSupportAvailable: false,
+    }),
+  );
+
+  assert.match(markup, /data-marketplace-featured/);
+  assert.match(markup, /Preview only until you confirm/);
+  assert.match(markup, /Review details before any authorization/);
+  assert.match(markup, /12-month pledge/);
+  assert.match(markup, /Effective poverty fund/);
+  assert.match(markup, /Your action: vegetarian meals/);
+  assert.match(markup, /Conditional/);
+  assert.match(markup, /Exposure unknown/);
+  assert.doesNotMatch(markup, /No charge now/);
+  assert.doesNotMatch(markup, /No commitment yet/);
+  assert.doesNotMatch(markup, /<small>No commitment<\/small>/);
+  assert.doesNotMatch(markup, /No commitment will be created/);
+  assert.doesNotMatch(markup, /No commitment · No charge · You review every detail/);
+  assert.doesNotMatch(markup, /Against Malaria Foundation|Every\.org/);
+  assert.match(sheetMarkup, /No commitment was created\./);
+  assert.match(sheetMarkup, /No commitment will be created/);
+  assert.match(sheetMarkup, /Preview only/);
 });
 
 test("non-MVP labs inventory is omitted from Region A marketplace browse", () => {
@@ -406,49 +722,6 @@ test("DealScout recommendations are deterministic and bounded to explicit prefer
     "Reviewer-approved",
     "No personal exposure",
   ]);
-});
-
-test("browse cards avoid default charge-state copy while preserving safety and sheet copy", () => {
-  const query = parseMarketplaceQuery({});
-  const deals = buildMarketplaceDeals({
-    liveOffers: [],
-    publicGoodsCampaigns: demoMpgfPublicGoodsCampaigns.slice(0, 1),
-    publicGoodsMatchPool: demoMpgfMatchPool,
-    publicGoodsRound: demoMpgfAssuranceRound,
-    workedOffers: SEED_OFFERS,
-  });
-  const surface = buildMarketplaceSurface(deals, query);
-  const markup = renderToStaticMarkup(
-    createElement(MarketplaceHome, {
-      createHref: "/offers/new",
-      liveOfferCount: 0,
-      query,
-      surface,
-    }),
-  );
-  const seedPaulDeal = surface.deals.find((deal) => deal.id === "seed-paul");
-  assert.ok(seedPaulDeal);
-  const sheetMarkup = renderToStaticMarkup(
-    createElement(CommitmentSheet, {
-      commitHref: "/offers/examples/seed-paul",
-      deal: seedPaulDeal,
-      paymentSupportAvailable: false,
-    }),
-  );
-
-  assert.match(markup, /data-marketplace-featured/);
-  assert.match(markup, /Preview only until you confirm/);
-  assert.match(markup, /No commitment · No charge · You review every detail/);
-  assert.match(markup, /12-month pledge/);
-  assert.match(markup, /Effective poverty fund/);
-  assert.match(markup, /Your action: vegetarian meals/);
-  assert.match(markup, /No charge now/);
-  assert.doesNotMatch(markup, /No commitment yet/);
-  assert.doesNotMatch(markup, /<small>No commitment<\/small>/);
-  assert.doesNotMatch(markup, /No commitment will be created/);
-  assert.match(sheetMarkup, /No commitment was created\./);
-  assert.match(sheetMarkup, /No commitment will be created/);
-  assert.match(sheetMarkup, /Preview only/);
 });
 
 test("deal card and commitment sheet render missing optional fields as unavailable and conditional", () => {

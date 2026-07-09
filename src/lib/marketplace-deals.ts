@@ -1,4 +1,5 @@
 import type { AgreementRecord, OfferRecord } from "@/lib/app-data";
+import { findRegisteredCharityById } from "@/lib/donation-offsets";
 import { formatMode, type Offer } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -114,6 +115,9 @@ export interface MarketplaceDeal {
   subtitle?: string;
   mechanismType: MarketplaceDealMechanismType;
   causeTags: string[];
+  participantActionLabel?: string;
+  counterpartyActionLabel?: string;
+  donationTargetLabel?: string;
   status?: MarketplaceDealStatus;
   userMaxExposureCents?: number;
   pledgeAmountCents?: number;
@@ -136,10 +140,47 @@ export interface MarketplaceDeal {
   executionCondition?: string;
   failureRule?: string;
   fallbackLivestreamEvidence?: FallbackLivestreamEvidenceDisplay | null;
+  fundingRoute?: MarketplaceFundingRoute;
   sourceLabel?: string;
   searchText?: string;
   filterTags?: MarketplaceFilterKey[];
   categoryKeys?: MarketplaceCategoryKey[];
+}
+
+export type MarketplaceDisplayTitleInput = Pick<
+  MarketplaceDeal,
+  "causeTags" | "mechanismType" | "title"
+> &
+  Partial<
+    Pick<
+      MarketplaceDeal,
+      | "counterpartyActionLabel"
+      | "donationTargetLabel"
+      | "fundingRoute"
+      | "participantActionLabel"
+      | "sourceLabel"
+    >
+  >;
+
+export interface MarketplaceFundingRoute {
+  causeArea?: string;
+  charityName?: string;
+  fiscalSponsorName?: string;
+  fundName?: string;
+  lastChecked?: string;
+  paymentRailName?: string;
+  paymentRouteName?: string;
+  receiptAvailability?: string;
+  recipientDisplayName?: string;
+  recipientLabel?: string;
+  recipientName?: string;
+  recipientVerificationStatus?: string;
+  unavailable?: boolean;
+}
+
+export interface MarketplaceRecipientDisplay {
+  browseLabel: string;
+  detailRows: Array<{ label: string; value: string }>;
 }
 
 export interface FallbackLivestreamEvidenceDisplay {
@@ -370,8 +411,261 @@ function addIfDefined(values: string[], value: string | null | undefined) {
   }
 }
 
+function firstTextValue(values: Array<string | null | undefined>) {
+  return values.find((value): value is string => Boolean(value && value.trim()))?.trim();
+}
+
 function uniqueStrings(values: readonly string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function displayFundPhrase(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ").replace(/^an?\s+/i, "");
+  return normalized ? `${normalized[0].toUpperCase()}${normalized.slice(1)}` : "";
+}
+
+function extractFundLabelFromActionText(value: string) {
+  const match = value.match(
+    /\b(?:to|toward|towards|into)\s+(?:an?\s+|the\s+)?((?:effective|evidence-backed|global|poverty|climate|animal|public health|global health)[a-z -]*(?:fund|charity|foundation))\b/i,
+  );
+
+  return match?.[1] ? displayFundPhrase(match[1]) : undefined;
+}
+
+function paymentRouteFromUrl(value: string | null | undefined) {
+  if (!value) return undefined;
+  return /every\.org/i.test(value) ? "Every.org" : undefined;
+}
+
+function causeAreaForDisplay(value: string | null | undefined) {
+  if (!value?.trim()) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (/global health/.test(normalized)) return "global-health";
+  if (/public health/.test(normalized)) return "public-health";
+  if (/global poverty|poverty/.test(normalized)) return "poverty";
+  if (/animal welfare|animal/.test(normalized)) return "animal-welfare";
+  if (/climate|environment/.test(normalized)) return "climate";
+  if (/basic needs/.test(normalized)) return "basic-needs";
+  if (/future|existential|resilience/.test(normalized)) return "resilience";
+
+  return normalized
+    .replace(/[^a-z0-9\s-]/g, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .join("-");
+}
+
+function primaryFundingObject(route: MarketplaceFundingRoute | undefined) {
+  if (!route) return undefined;
+
+  return firstTextValue([
+    route.recipientName,
+    route.fundName,
+    route.recipientLabel,
+    route.recipientDisplayName,
+    route.charityName,
+  ]);
+}
+
+function fundingCauseArea(deal: MarketplaceDeal, route: MarketplaceFundingRoute | undefined) {
+  return firstTextValue([
+    route?.causeArea,
+    ...deal.causeTags.filter((tag) => !/not needed|consensus good|hybrid good/i.test(tag)),
+  ]);
+}
+
+function fundingFallbackLabel(deal: MarketplaceDeal, route: MarketplaceFundingRoute | undefined) {
+  if (route?.unavailable) return "Recipient unavailable";
+
+  const causeArea = causeAreaForDisplay(fundingCauseArea(deal, route));
+  if (causeArea && route) return `Verified ${causeArea} fund`;
+
+  return "Recipient not selected";
+}
+
+export function getMarketplaceRecipientDisplay(deal: MarketplaceDeal): MarketplaceRecipientDisplay {
+  const route = deal.fundingRoute;
+  const primaryLabel = primaryFundingObject(route);
+  const browseLabel = primaryLabel ?? fundingFallbackLabel(deal, route);
+  const detailRows: Array<{ label: string; value: string }> = [];
+
+  if (route?.recipientName) {
+    detailRows.push({ label: "Recipient", value: route.recipientName });
+  } else if (route?.fundName) {
+    detailRows.push({ label: "Fund", value: route.fundName });
+  } else if (route?.recipientLabel || route?.recipientDisplayName || route?.charityName || browseLabel.startsWith("Verified ")) {
+    detailRows.push({ label: "Recipient", value: browseLabel });
+  }
+
+  const paymentRoute = firstTextValue([route?.paymentRouteName, route?.paymentRailName]);
+  if (paymentRoute) {
+    detailRows.push({ label: "Payment route", value: paymentRoute });
+  }
+  if (route?.fiscalSponsorName) {
+    detailRows.push({ label: "Fiscal sponsor / platform", value: route.fiscalSponsorName });
+  }
+  if (route?.recipientVerificationStatus) {
+    detailRows.push({ label: "Verification", value: route.recipientVerificationStatus });
+  }
+  if (route?.receiptAvailability) {
+    detailRows.push({ label: "Receipt", value: route.receiptAvailability });
+  }
+  if (route?.lastChecked) {
+    detailRows.push({ label: "Last checked", value: route.lastChecked });
+  }
+
+  return {
+    browseLabel,
+    detailRows,
+  };
+}
+
+function cleanDisplayLabel(value: string | null | undefined) {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
+function upperFirst(value: string) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function causePledgeLabel(value: string | null | undefined) {
+  const normalized = cleanDisplayLabel(value);
+  const lower = normalized.toLowerCase();
+
+  if (!normalized || /not needed/i.test(normalized)) return "";
+  if (/animal welfare/.test(lower)) return "Animal-welfare pledge";
+  if (/gun control/.test(lower)) return "Gun-control pledge";
+  if (/gun rights/.test(lower)) return "Gun-rights pledge";
+  if (/plastic/.test(lower)) return "Plastic reduction pledge";
+
+  return `${upperFirst(normalized)} pledge`;
+}
+
+function causeActionLabel(value: string | null | undefined) {
+  const pledgeLabel = causePledgeLabel(value);
+
+  return pledgeLabel || "Action pledge";
+}
+
+function causeDonationLabel(value: string | null | undefined) {
+  const normalized = cleanDisplayLabel(value);
+  const lower = normalized.toLowerCase();
+
+  if (!normalized || /not needed/i.test(normalized)) return "";
+  if (/animal welfare/.test(lower)) return "Animal-welfare donation";
+  if (/gun control/.test(lower)) return "Gun-control donation";
+  if (/gun rights/.test(lower)) return "Gun-rights donation";
+
+  return `${upperFirst(normalized)} donation`;
+}
+
+function donationTargetActionLabel(value: string | null | undefined) {
+  const normalized = cleanDisplayLabel(value)
+    .replace(/\btop charities\b/i, "top charity")
+    .replace(/\bcharities fund\b/i, "charity fund")
+    .replace(/\b(?:fund|charity|foundation)\b$/i, "")
+    .trim();
+
+  return normalized ? `${upperFirst(normalized)} donation` : "";
+}
+
+function actionTextToPledgeLabel(value: string | null | undefined, fallbackCause?: string) {
+  const text = cleanDisplayLabel(value);
+  const lower = text.toLowerCase();
+
+  if (!text) return causeActionLabel(fallbackCause);
+  if (/vegetarian|vegan|food[- ]?abstention|meat|meal|diet/.test(lower)) {
+    return "Vegetarian meals pledge";
+  }
+  if (/plastic/.test(lower)) return "Plastic reduction pledge";
+  if (/gun[- ]?control/.test(lower)) return "Gun-control pledge";
+  if (/gun[- ]?rights?/.test(lower)) return "Gun-rights pledge";
+  if (/climate|car trips?|transit|carbon/.test(lower)) return "Climate action pledge";
+  if (/public health|vaccination|clinic|health campaign/.test(lower)) return "Public-health action pledge";
+  if (/donat|charit|fund|redirect/.test(lower)) {
+    return donationTargetActionLabel(extractFundLabelFromActionText(text)) || causeDonationLabel(fallbackCause);
+  }
+
+  return causeActionLabel(fallbackCause);
+}
+
+function actionTextToDonationLabel(value: string | null | undefined, fallbackCause?: string) {
+  const text = cleanDisplayLabel(value);
+  const lower = text.toLowerCase();
+
+  if (/gun[- ]?control/.test(lower)) return "Gun-control donation";
+  if (/gun[- ]?rights?/.test(lower)) return "Gun-rights donation";
+  if (/donat|charit|fund|redirect/.test(lower)) {
+    return donationTargetActionLabel(extractFundLabelFromActionText(text)) || causeDonationLabel(fallbackCause);
+  }
+
+  return actionTextToPledgeLabel(text, fallbackCause).replace(/\bpledge\b$/i, "donation");
+}
+
+function safeExistingTitle(value: string | null | undefined, fallback: string) {
+  const title = cleanDisplayLabel(value);
+
+  if (!title) return fallback;
+  if (/^[A-Z][A-Za-z' -]{1,40}:\s+.+\s+for\s+.+$/i.test(title)) return fallback;
+
+  return title;
+}
+
+function isPledgeSwapTitleInput(deal: MarketplaceDisplayTitleInput) {
+  return deal.mechanismType === "local_pledge" || deal.mechanismType === "cross_view_donation_swap";
+}
+
+export function buildMarketplaceDisplayTitle(deal: MarketplaceDisplayTitleInput): string {
+  const [primaryCause, secondaryCause] = deal.causeTags.filter(
+    (tag) => tag && !/not needed/i.test(tag),
+  );
+
+  if (isPledgeSwapTitleInput(deal)) {
+    if (deal.mechanismType === "cross_view_donation_swap") {
+      const participant = causePledgeLabel(primaryCause);
+      const counterparty = causeDonationLabel(secondaryCause);
+
+      if (participant && counterparty) return `${participant} \u2192 ${counterparty}`;
+    }
+
+    const fundingTarget = cleanDisplayLabel(
+      deal.donationTargetLabel ?? (deal.fundingRoute ? primaryFundingObject(deal.fundingRoute) : undefined),
+    );
+    const participant =
+      deal.participantActionLabel || primaryCause
+        ? actionTextToPledgeLabel(deal.participantActionLabel, primaryCause)
+        : "";
+    const counterparty =
+      donationTargetActionLabel(fundingTarget) ||
+      (deal.counterpartyActionLabel
+        ? actionTextToDonationLabel(deal.counterpartyActionLabel, secondaryCause)
+        : causeDonationLabel(secondaryCause));
+
+    if (participant && counterparty && counterparty !== "donation") {
+      return `${participant} \u2192 ${counterparty}`;
+    }
+
+    if (primaryCause && secondaryCause) {
+      return `${causePledgeLabel(primaryCause)} \u2192 ${causeDonationLabel(secondaryCause)}`;
+    }
+
+    return "Conditional pledge swap";
+  }
+
+  if (deal.mechanismType === "action_for_donation") {
+    return actionTextToPledgeLabel(deal.counterpartyActionLabel ?? deal.participantActionLabel, primaryCause);
+  }
+
+  if (deal.mechanismType === "public_goods_round") {
+    return safeExistingTitle(deal.title, "Public-good fund");
+  }
+
+  if (deal.mechanismType === "pledge_funding_round") {
+    return safeExistingTitle(deal.title, "Threshold pledge round");
+  }
+
+  return safeExistingTitle(deal.title, "Marketplace listing");
 }
 
 function normalizeBaselineConfidence(value: string): MarketplaceBaselineConfidence {
@@ -556,11 +850,15 @@ function withDerivedDealFields(deal: MarketplaceDeal): MarketplaceDeal {
       : reliableTotal && deal.pledgeAmountCents && deal.pledgeAmountCents > 0
         ? Number((totalMovedIfClearedCents / deal.pledgeAmountCents).toFixed(2))
         : undefined;
-  const baseDeal = {
+  const baseDealWithoutTitle = {
     ...deal,
     totalMovedIfClearedCents: reliableTotal ? totalMovedIfClearedCents : undefined,
     effectiveMultiplier,
     proximityLabels: deal.proximityLabels?.length ? deal.proximityLabels : [...DEFAULT_SAFE_PROXIMITY],
+  };
+  const baseDeal = {
+    ...baseDealWithoutTitle,
+    title: buildMarketplaceDisplayTitle(baseDealWithoutTitle),
   };
   const categoryKeys = deal.categoryKeys ?? buildOfferCategoryKeys(baseDeal);
   const filterTags = deal.filterTags ?? buildFilterTags({ ...baseDeal, categoryKeys });
@@ -578,6 +876,8 @@ function withDerivedDealFields(deal: MarketplaceDeal): MarketplaceDeal {
     baseDeal.fallbackLivestreamEvidence?.statusLabel,
     baseDeal.proximityLabels?.join(" "),
     baseDeal.actionDescription,
+    baseDeal.participantActionLabel,
+    baseDeal.counterpartyActionLabel,
     baseDeal.executionCondition,
   ]
     .filter(Boolean)
@@ -628,6 +928,7 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
     offer.donationOffset?.participation_mode === "pool"
       ? offer.donationOffset.pool?.matchedCompromiseCents
       : undefined;
+  const compromiseCharity = offer.donationOffset?.compromiseCharity;
   return withDerivedDealFields({
     actionDescription: offer.offer_action,
     baselineConfidence: normalizeBaselineConfidence(getBaselineConfidence(reviewInput)),
@@ -648,9 +949,22 @@ export function marketplaceDealFromOfferRecord(offer: OfferRecord): MarketplaceD
       offer.mode === "offset"
         ? "If matching or review fails, no new donation is implied by this marketplace card."
         : "If terms are not accepted or evidence fails, the agreement path records release, cancellation, or dispute state.",
+    counterpartyActionLabel: offer.request_action,
+    donationTargetLabel: compromiseCharity?.name,
+    fundingRoute: compromiseCharity
+      ? {
+          causeArea: compromiseCharity.cause_area,
+          charityName: compromiseCharity.name,
+          fundName: compromiseCharity.name,
+          paymentRouteName: paymentRouteFromUrl(compromiseCharity.website_url),
+          receiptAvailability: offer.verification,
+          recipientVerificationStatus: "Registered destination selected; review required before reliance",
+        }
+      : undefined,
     href: `/offers/${offer.id}`,
     id: offer.id,
     mechanismType: mapOfferModeToMechanismType(offer),
+    participantActionLabel: offer.offer_action,
     pledgeAmountCents: userMaxExposureCents,
     privacyNotes: [
       "Private messages, exact wishes, raw evidence, and contact details stay sign-in or reviewer gated.",
@@ -700,6 +1014,34 @@ export function marketplaceDealFromWorkedOffer(offer: Offer): MarketplaceDeal {
     offer.mode === "offset" && typeof offer.baselineAmountUsd === "number"
       ? Math.round(offer.baselineAmountUsd * 100)
       : undefined;
+  const compromiseCharity = findRegisteredCharityById(offer.compromiseDestinationId);
+  const textBackedFundLabel = extractFundLabelFromActionText(
+    [offer.requestAction, offer.offerAction, offer.notes].join(" "),
+  );
+  const fundingRoute =
+    compromiseCharity
+      ? {
+          causeArea: compromiseCharity.causeArea,
+          charityName: compromiseCharity.name,
+          fundName: compromiseCharity.name,
+          paymentRouteName: paymentRouteFromUrl(compromiseCharity.websiteUrl),
+          receiptAvailability: offer.verification,
+          recipientVerificationStatus: "Registered destination selected; review required before reliance",
+        }
+      : textBackedFundLabel
+        ? {
+            causeArea: offer.requestedCause,
+            fundName: textBackedFundLabel,
+            receiptAvailability: offer.verification,
+            recipientVerificationStatus: "Review required",
+          }
+        : /donat|charit|fund/i.test([offer.requestAction, offer.offerAction].join(" "))
+          ? {
+              causeArea: offer.requestedCause,
+              receiptAvailability: offer.verification,
+              recipientVerificationStatus: "Review required",
+            }
+          : undefined;
 
   return withDerivedDealFields({
     actionDescription: offer.offerAction,
@@ -710,9 +1052,13 @@ export function marketplaceDealFromWorkedOffer(offer: Offer): MarketplaceDeal {
     ctaLabel: "View details",
     executionCondition: "Example only. Create a reviewed draft before anyone can rely on it.",
     failureRule: "No live obligation exists in the worked-example lane.",
+    counterpartyActionLabel: offer.requestAction,
+    donationTargetLabel: compromiseCharity?.name ?? textBackedFundLabel,
+    fundingRoute,
     href: `/offers/examples/${offer.id}`,
     id: offer.id,
     mechanismType: offer.mode === "offset" ? "cross_view_donation_swap" : mapOfferModeToMechanismType(offer),
+    participantActionLabel: offer.offerAction,
     pledgeAmountCents: userMaxExposureCents,
     privacyNotes: [
       "Worked examples are illustrative and do not expose private participants.",
@@ -754,6 +1100,14 @@ export function marketplaceDealsFromPublicGoodsCampaigns({
       deadline: campaign.deadlineAt || round.endsAt,
       executionCondition: "Pledge moves only if threshold, review, identity, payment, and authorization gates pass.",
       failureRule: campaign.exitRule,
+      fundingRoute: {
+        causeArea: campaign.causeTags[0],
+        receiptAvailability: campaign.verificationMethod,
+        recipientVerificationStatus:
+          campaign.reviewStatus === "approved" || campaign.reviewStatus === "challenge_window"
+            ? "Verified recipient"
+            : "Review required",
+      },
       href: `/mpgf/rounds/${round.id}#${campaign.slug}`,
       id: campaign.id,
       mechanismType: "public_goods_round",
