@@ -1055,7 +1055,10 @@ export function DealDetailObject({
   headingId?: string;
 }) {
   const receipt = getDealReceiptAtom(deal);
+  const recipientDisplay = getMarketplaceRecipientDisplay(deal);
   const statusChips = getDealStatusChips(deal);
+  const explainRows = recipientDisplay.detailRows;
+  const explainSummary = explainRows.length ? "Verification & funding" : "Requirements & rules";
 
   return (
     <article className="mt-v75-detail-object" aria-labelledby={headingId}>
@@ -1150,16 +1153,21 @@ export function DealDetailObject({
             </div>
             <div>
               <dt>Recipient</dt>
-              <dd>{receipt.source}</dd>
+              <dd>{recipientDisplay.browseLabel}</dd>
             </div>
           </dl>
         </section>
         <FallbackLivestreamEvidenceSummary deal={deal} />
         <details className="v72-explain-row mt-v75-unified-explain">
-          <summary>Requirements & rules</summary>
+          <summary>{explainSummary}</summary>
           <p>
             Effect on this action: Requires adapter recheck. This is context, not a verdict.
           </p>
+          {explainRows.map((row) => (
+            <p key={`${row.label}:${row.value}`}>
+              {row.label}: {row.value}
+            </p>
+          ))}
           {deal.fallbackLivestreamEvidence ? (
             <>
               <p>
