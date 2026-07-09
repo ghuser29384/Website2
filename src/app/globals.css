@@ -14179,9 +14179,14 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-desktop-board {
+    --mt-v76-nav-width: clamp(218px, 14.3vw, 240px);
+    --mt-v76-board-gap: clamp(20px, 1.45vw, 24px);
+    --mt-v76-page-gutter: clamp(16px, 1.2vw, 22px);
+    --mt-v76-rail-width: clamp(244px, 16.8vw, 282px);
+    --mt-v76-main-rail-gap: clamp(20px, 1.35vw, 24px);
     display: grid;
-    grid-template-columns: 142px minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: var(--mt-v76-nav-width) minmax(0, 1fr);
+    gap: var(--mt-v76-board-gap);
     align-items: stretch;
     width: 100%;
     min-height: 100dvh;
@@ -14228,9 +14233,9 @@ pre,
     display: grid;
     grid-template-rows: auto auto auto;
     align-content: start;
-    gap: 10px;
+    gap: 28px;
     min-height: 100dvh;
-    padding: 12px 8px;
+    padding: 28px 20px;
     border-width: 0 1px 0 0;
     border-radius: 0;
     box-shadow: none;
@@ -14246,16 +14251,16 @@ pre,
   }
 
   .mt-v75-side-brand {
-    min-height: 28px;
+    min-height: 32px;
     font-weight: 900;
-    font-size: 10px;
+    font-size: 20px;
     letter-spacing: 0;
     white-space: nowrap;
   }
 
   .mt-v75-side-brand .icon-mark {
-    width: 14px;
-    height: 14px;
+    width: 26px;
+    height: 26px;
     border: 0;
     background: transparent;
     color: #078c42;
@@ -14264,21 +14269,21 @@ pre,
   .mt-v75-side-nav nav {
     display: grid;
     align-content: start;
-    gap: 5px;
+    gap: 10px;
   }
 
   .mt-v75-side-link {
-    min-height: 30px;
-    padding: 5px 7px;
-    border-radius: 6px;
+    min-height: 48px;
+    padding: 8px 12px;
+    border-radius: 8px;
     color: #203047;
-    font-size: 10px;
+    font-size: 15px;
     font-weight: 800;
   }
 
   .mt-v75-side-link .icon-mark {
-    width: 13px;
-    height: 13px;
+    width: 21px;
+    height: 21px;
     border: 0;
     background: transparent;
     color: #344257;
@@ -14297,29 +14302,29 @@ pre,
 
   .mt-v75-side-plan {
     display: grid;
-    gap: 5px;
-    margin-top: 112px;
-    min-height: 148px;
-    padding: 7px 8px;
+    gap: 14px;
+    margin-top: 126px;
+    min-height: 246px;
+    padding: 16px;
     border: 1px solid #e4ebe5;
-    border-radius: 7px;
+    border-radius: 9px;
     background: #ffffff;
     box-shadow: 0 5px 14px rgba(25, 34, 46, 0.035);
-    font-size: 11px;
+    font-size: 14px;
   }
 
   .mt-v75-side-plan strong {
     color: #111b2b;
-    font-size: 11px;
+    font-size: 18px;
   }
 
   .mt-v75-side-plan span {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 4px;
+    gap: 8px;
     color: #5b6878;
-    font-size: 10px;
+    font-size: 14px;
     line-height: 1.2;
   }
 
@@ -14331,26 +14336,26 @@ pre,
 
   .mt-v75-side-plan em {
     color: #5b6878;
-    font-size: 9.5px;
+    font-size: 13px;
     font-weight: 750;
   }
 
   .mt-v75-side-plan b {
     color: #26364b;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 900;
     text-align: right;
   }
 
   .mt-v75-side-plan .button {
     display: inline-flex;
-    min-height: 27px;
-    height: 27px;
+    min-height: 46px;
+    height: 46px;
     justify-content: center;
-    margin-top: 2px;
-    padding: 0 8px;
-    border-radius: 6px;
-    font-size: 10px;
+    margin-top: 4px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 15px;
     line-height: 1;
     white-space: nowrap;
   }
@@ -14359,10 +14364,10 @@ pre,
     display: grid;
     grid-template-rows: auto auto auto;
     align-content: start;
-    gap: 12px;
+    gap: 14px;
     min-width: 0;
     min-height: 100dvh;
-    padding: 14px 0 0 6px;
+    padding: 16px var(--mt-v76-page-gutter) 0 0;
     border: 0;
     border-radius: 0;
     background: #ffffff;
@@ -14371,19 +14376,19 @@ pre,
 
   .mt-v75-toolbar {
     display: grid;
-    grid-template-columns: minmax(320px, 430px) minmax(0, 1fr) 30px;
-    gap: 8px;
+    grid-template-columns: minmax(640px, clamp(720px, 52.5vw, 890px)) minmax(0, 1fr) 42px;
+    gap: 12px;
     align-items: center;
-    min-height: 34px;
+    min-height: 54px;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search {
     position: relative;
     top: auto;
     grid-template-columns: minmax(0, 1fr);
-    min-height: 34px;
-    height: 34px;
-    border-radius: 8px;
+    min-height: 54px;
+    height: 54px;
+    border-radius: 10px;
     box-shadow: none;
   }
 
@@ -14407,26 +14412,26 @@ pre,
     z-index: 1;
     display: grid;
     place-items: center;
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    height: 24px;
     transform: translateY(-50%);
     pointer-events: none;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon {
-    left: 13px;
+    left: 18px;
     color: #566474;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune {
-    right: 13px;
+    right: 18px;
     color: #078c42;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-icon .icon-mark,
   .marketplace-app-shell .mt-v75-toolbar .mt-v75-search-tune .icon-mark {
-    width: 16px;
-    height: 16px;
+    width: 21px;
+    height: 21px;
     border: 0;
     background: transparent;
     color: currentColor;
@@ -14440,10 +14445,10 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search input {
-    min-height: 28px;
-    padding-right: 31px;
-    padding-left: 31px;
-    font-size: 11px;
+    min-height: 48px;
+    padding-right: 50px;
+    padding-left: 56px;
+    font-size: 18px;
   }
 
   .marketplace-app-shell .mt-v75-toolbar .moral-marketplace-search-button {
@@ -14487,21 +14492,21 @@ pre,
 
   .mt-v75-tabs {
     display: flex;
-    gap: 4px;
+    gap: 12px;
     align-items: center;
-    min-height: 25px;
+    min-height: 40px;
   }
 
   .mt-v75-tabs a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 22px;
-    padding: 3px 8px;
+    min-height: 39px;
+    padding: 6px 18px;
     border: 1px solid #dfe5ec;
     border-radius: 999px;
     color: #203047;
-    font-size: 9px;
+    font-size: 14px;
     font-weight: 850;
     text-decoration: none;
   }
@@ -14516,19 +14521,19 @@ pre,
 
   .mt-v75-browse-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 160px;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) var(--mt-v76-rail-width);
+    gap: var(--mt-v76-main-rail-gap);
     align-items: start;
     width: 100%;
     max-width: none;
-    margin-top: 8px;
+    margin-top: 0;
     min-width: 0;
-    min-height: calc(100dvh - 105px);
+    min-height: calc(100dvh - 140px);
   }
 
   .mt-v75-browse-main {
     display: grid;
-    gap: 10px;
+    gap: 16px;
     min-width: 0;
     width: 100%;
   }
@@ -14538,18 +14543,18 @@ pre,
     top: 0;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 8px;
+    gap: 18px;
     align-items: center;
-    min-height: 44px;
-    padding: 6px 10px;
+    min-height: 76px;
+    padding: 14px 24px;
     border: 1px solid #e6ebf2;
-    border-radius: 8px;
+    border-radius: 9px;
     background: #f7f9fd;
   }
 
   .mt-v75-safety-strip .icon-mark {
-    width: 20px;
-    height: 20px;
+    width: 33px;
+    height: 33px;
     border: 0;
     background: transparent;
     color: #1d2c44;
@@ -14562,27 +14567,27 @@ pre,
 
   .mt-v75-safety-strip strong {
     color: #152033;
-    font-size: 11.5px;
+    font-size: 20px;
     line-height: 1.15;
   }
 
   .mt-v75-safety-strip span {
-    margin-top: 2px;
+    margin-top: 4px;
     color: #526070;
-    font-size: 10.5px;
+    font-size: 15px;
   }
 
   .mt-v75-safety-strip a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 28px;
-    padding: 0 12px;
+    min-height: 42px;
+    padding: 0 20px;
     border: 1px solid #dfe5ec;
-    border-radius: 7px;
+    border-radius: 9px;
     background: #ffffff;
     color: #203047;
-    font-size: 9.5px;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1;
     text-decoration: none;
@@ -14591,7 +14596,7 @@ pre,
 
   .mt-v75-filter-row {
     display: flex;
-    gap: 5px;
+    gap: 14px;
     align-items: center;
     overflow-x: auto;
     padding-bottom: 1px;
@@ -14601,13 +14606,13 @@ pre,
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 25px;
-    padding: 4px 13px;
+    min-height: 41px;
+    padding: 6px 28px;
     border: 1px solid #dfe5ec;
-    border-radius: 7px;
+    border-radius: 8px;
     background: #ffffff;
     color: #26364b;
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 800;
     text-decoration: none;
     white-space: nowrap;
@@ -14623,26 +14628,26 @@ pre,
 
   .mt-v75-filter-more {
     margin-left: auto;
-    gap: 6px;
+    gap: 8px;
   }
 
   .mt-v75-filter-more .icon-mark {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     color: #26364b;
   }
 
   .mt-v75-featured-deal {
     display: grid;
-    grid-template-columns: minmax(250px, 330px) minmax(0, 1fr) minmax(148px, 170px);
-    grid-template-rows: auto 38px;
+    grid-template-columns: minmax(330px, 350px) minmax(0, 1fr) minmax(155px, 170px);
+    grid-template-rows: minmax(178px, auto) 54px;
     align-content: start;
     justify-content: stretch;
-    gap: 6px;
+    gap: 16px 18px;
     align-items: stretch;
-    min-height: 180px;
-    margin-bottom: 2px;
-    padding: 6px;
+    min-height: 292px;
+    margin-bottom: 0;
+    padding: 14px;
   }
 
   .marketplace-app-shell .marketplace-detail-section {
@@ -14719,7 +14724,7 @@ pre,
     position: relative;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 16px;
     align-items: center;
     align-content: center;
     justify-content: start;
@@ -14727,13 +14732,13 @@ pre,
 
   .mt-v75-featured-visuals > .badge {
     position: absolute;
-    top: 5px;
-    left: 5px;
+    top: -2px;
+    left: 0;
     z-index: 2;
-    min-height: 16px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    font-size: 7px;
+    min-height: 24px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
     line-height: 1;
     letter-spacing: 0;
   }
@@ -14748,20 +14753,20 @@ pre,
     position: relative;
     width: 100%;
     min-width: 0;
-    min-height: 104px;
+    min-height: 158px;
     height: auto;
     aspect-ratio: 1;
     overflow: hidden;
     border: 0;
-    border-radius: 7px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #ecfae6 0%, #d7f2cc 100%);
     color: #05873d;
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual .icon-mark {
     position: relative;
-    width: 68px;
-    height: 68px;
+    width: 90px;
+    height: 90px;
     border: 0;
     background: transparent;
     color: currentColor;
@@ -14777,13 +14782,13 @@ pre,
 
   .mt-v75-pair-arrow {
     position: absolute;
-    left: calc(50% - 14px);
-    top: 49px;
+    left: calc(50% - 20px);
+    top: calc(50% - 20px);
     z-index: 3;
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 40px;
+    height: 40px;
     border: 2px solid #ffffff;
     border-radius: 999px;
     background: #078c42;
@@ -14792,8 +14797,8 @@ pre,
   }
 
   .mt-v75-pair-arrow .icon-mark {
-    width: 15px;
-    height: 15px;
+    width: 22px;
+    height: 22px;
   }
 
   .mt-v75-pair-arrow .icon-mark svg {
@@ -14807,8 +14812,8 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark {
-    width: 48px;
-    height: 48px;
+    width: 74px;
+    height: 74px;
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark svg {
@@ -14817,25 +14822,25 @@ pre,
 
   .mt-v75-featured-copy {
     display: grid;
-    gap: 4px;
+    gap: 10px;
     align-content: start;
     min-width: 0;
-    padding-top: 3px;
+    padding-top: 2px;
   }
 
   .mt-v75-featured-copy .moral-deal-chip-row {
     flex-wrap: nowrap;
-    gap: 4px;
+    gap: 7px;
     min-width: 0;
     overflow: hidden;
   }
 
   .mt-v75-featured-copy .source-pill {
-    min-height: 16px;
-    max-width: 82px;
-    padding: 2px 5px;
+    min-height: 28px;
+    max-width: 120px;
+    padding: 5px 10px;
     overflow: hidden;
-    font-size: 8px;
+    font-size: 13px;
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -14849,10 +14854,10 @@ pre,
   .mt-v75-featured-copy h2 {
     display: -webkit-box;
     margin: 0;
-    max-width: 46ch;
+    max-width: 34ch;
     overflow: hidden;
     color: #111b2b;
-    font-size: 13.5px;
+    font-size: 24px;
     font-weight: 950;
     line-height: 1.1;
     letter-spacing: 0;
@@ -14863,23 +14868,23 @@ pre,
   .mt-v75-featured-copy p {
     display: -webkit-box;
     margin: 0;
-    max-width: 50ch;
+    max-width: 36ch;
     overflow: hidden;
     color: #526070;
-    font-size: 9.5px;
-    line-height: 1.22;
+    font-size: 15.5px;
+    line-height: 1.28;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
 
   .mt-v75-featured-copy .mt-v75-status-row {
-    margin-top: 4px;
+    margin-top: 6px;
   }
 
   .mt-v75-status-row {
     display: flex;
     flex-wrap: nowrap;
-    gap: 3px;
+    gap: 7px;
     align-items: center;
     min-width: 0;
   }
@@ -14887,22 +14892,22 @@ pre,
   .mt-v75-status-chip {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
-    min-height: 15px;
-    padding: 2px 4px;
+    gap: 4px;
+    min-height: 24px;
+    padding: 4px 9px;
     border-radius: 999px;
     background: #f0f3f6;
     color: #526070;
-    font-size: 7px;
+    font-size: 11px;
     font-weight: 850;
     line-height: 1;
     white-space: nowrap;
   }
 
   .mt-v75-status-chip .icon-mark {
-    width: 8px;
-    height: 8px;
-    min-width: 8px;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
     border: 0;
     background: transparent;
     color: currentColor;
@@ -14926,14 +14931,16 @@ pre,
   .mt-v75-featured-decision {
     display: grid;
     align-content: start;
-    gap: 8px;
+    gap: 14px;
     min-width: 0;
-    padding-top: 20px;
+    padding-top: 22px;
+    padding-left: 20px;
+    border-left: 1px solid #e7ecf2;
   }
 
   .mt-v75-featured-exposure {
     display: grid;
-    gap: 2px;
+    gap: 5px;
     align-content: start;
     padding: 4px 0 2px;
     color: #111b2b;
@@ -14942,10 +14949,10 @@ pre,
   .mt-v75-featured-exposure span,
   .mt-v75-featured-exposure small {
     color: #526070;
-    font-size: 8.5px;
+    font-size: 14px;
     font-weight: 800;
     line-height: 1.1;
-    max-width: 82px;
+    max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -14953,7 +14960,7 @@ pre,
 
   .mt-v75-featured-exposure strong {
     color: #111b2b;
-    font-size: 13px;
+    font-size: 29px;
     font-weight: 950;
     line-height: 1.05;
     white-space: nowrap;
@@ -14963,18 +14970,18 @@ pre,
     display: grid;
     grid-template-columns: 1fr;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
   }
 
   .mt-v75-featured-actions .button {
-    min-height: 29px;
-    height: 29px;
+    min-height: 52px;
+    height: 52px;
     justify-content: center;
-    border-radius: 7px;
-    padding: 0 9px;
+    border-radius: 9px;
+    padding: 0 16px;
     line-height: 1;
     white-space: nowrap;
-    font-size: 9.5px;
+    font-size: 15px;
   }
 
   .mt-v75-featured-actions .button-primary {
@@ -14991,13 +14998,13 @@ pre,
     gap: 5px;
     justify-self: start;
     color: #526070;
-    font-size: 9.5px;
+    font-size: 14px;
     font-weight: 850;
   }
 
   .mt-v75-save-hint .icon-mark {
-    width: 13px;
-    height: 13px;
+    width: 18px;
+    height: 18px;
     border: 0;
     background: transparent;
     color: currentColor;
@@ -15016,10 +15023,10 @@ pre,
   .mt-v75-featured-facts div {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
+    gap: 10px;
     align-items: center;
-    min-height: 36px;
-    padding: 4px 7px;
+    min-height: 54px;
+    padding: 7px 18px;
   }
 
   .mt-v75-featured-facts div + div {
@@ -15027,8 +15034,8 @@ pre,
   }
 
   .mt-v75-featured-facts .icon-mark {
-    width: 12px;
-    height: 12px;
+    width: 22px;
+    height: 22px;
     border: 0;
     background: transparent;
     color: #26364b;
@@ -15039,7 +15046,7 @@ pre,
     margin: 0;
     overflow: hidden;
     color: #111b2b;
-    font-size: 8.5px;
+    font-size: 13px;
     font-weight: 850;
     line-height: 1.12;
     -webkit-box-orient: vertical;
@@ -15049,18 +15056,18 @@ pre,
   .mt-v75-secondary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 28px;
     width: 100%;
   }
 
   .mt-v75-mini-tile {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    height: 190px;
+    gap: 8px;
+    height: 322px;
     min-height: 0;
     overflow: hidden;
-    padding: 6px;
+    padding: 12px;
     color: #111b2b;
     text-decoration: none;
   }
@@ -15091,9 +15098,9 @@ pre,
     position: relative;
     display: grid;
     place-items: center;
-    gap: 5px;
-    flex: 0 0 88px;
-    min-height: 88px;
+    gap: 8px;
+    flex: 0 0 140px;
+    min-height: 140px;
   }
 
   .mt-v75-mini-head > .badge {
@@ -15102,10 +15109,10 @@ pre,
     right: auto;
     left: 0;
     z-index: 2;
-    min-height: 15px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 6px;
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
     line-height: 1;
     letter-spacing: 0;
   }
@@ -15121,8 +15128,8 @@ pre,
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual {
     width: 100%;
     min-width: 0;
-    height: 88px;
-    min-height: 88px;
+    height: 140px;
+    min-height: 140px;
     aspect-ratio: auto;
     border: 0;
     background: linear-gradient(135deg, #e6f8df 0%, #c8edbf 100%);
@@ -15184,8 +15191,8 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap .icon-mark {
-    width: 40px;
-    height: 40px;
+    width: 74px;
+    height: 74px;
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-action-for-donation {
@@ -15209,8 +15216,8 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual .icon-mark {
-    width: 50px;
-    height: 50px;
+    width: 78px;
+    height: 78px;
   }
 
   .mt-v75-mini-tile strong {
@@ -15218,9 +15225,9 @@ pre,
     flex: 0 0 auto;
     overflow: hidden;
     color: #111b2b;
-    font-size: 11px;
+    font-size: 19px;
     font-weight: 950;
-    line-height: 1.1;
+    line-height: 1.12;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
@@ -15229,15 +15236,15 @@ pre,
     flex: 0 0 auto;
     overflow: hidden;
     color: #526070;
-    font-size: 9.5px;
-    line-height: 1.2;
+    font-size: 14px;
+    line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .mt-v75-mini-tile .mt-v75-mini-amount {
     color: #111b2b;
-    font-size: 10.5px;
+    font-size: 16px;
     font-weight: 900;
   }
 
@@ -15247,9 +15254,9 @@ pre,
   }
 
   .mt-v75-mini-tile .mt-v75-status-chip {
-    min-height: 16px;
-    padding-inline: 5px;
-    font-size: 7px;
+    min-height: 23px;
+    padding-inline: 8px;
+    font-size: 10.5px;
     font-weight: 900;
   }
 
@@ -15257,32 +15264,32 @@ pre,
     display: grid;
     position: sticky;
     grid-column: 2;
-    top: 8px;
-    gap: 3px;
+    top: 16px;
+    gap: 6px;
     align-content: start;
     grid-auto-rows: max-content;
-    height: calc(100dvh - 112px);
+    height: calc(100dvh - 144px);
     min-height: 0;
     overflow: hidden;
-    padding: 8px 7px;
+    padding: 22px 18px;
     color: #344257;
   }
 
   .mt-v75-rail-head {
     display: flex;
     justify-content: space-between;
-    gap: 6px;
+    gap: 10px;
   }
 
   .mt-v75-rail-head strong {
     color: #111b2b;
-    font-size: 10px;
+    font-size: 16px;
   }
 
   .mt-v75-rail-head a,
   .mt-v75-rail-sort span {
     color: #078c42;
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 800;
     text-decoration: none;
   }
@@ -15295,18 +15302,18 @@ pre,
   .mt-v75-quick-link {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 6px;
+    gap: 12px;
     align-items: center;
-    min-height: 25px;
-    padding: 3px 0;
+    min-height: 42px;
+    padding: 5px 0;
     border-bottom: 1px solid #e6ebf0;
     color: #203047;
     text-decoration: none;
   }
 
   .mt-v75-quick-link .icon-mark {
-    width: 13px;
-    height: 13px;
+    width: 18px;
+    height: 18px;
     border: 0;
     background: transparent;
     color: #078c42;
@@ -15327,7 +15334,7 @@ pre,
 
   .mt-v75-quick-link span {
     overflow: hidden;
-    font-size: 9px;
+    font-size: 14px;
     font-weight: 850;
     line-height: 1.15;
     text-overflow: clip;
@@ -15337,12 +15344,12 @@ pre,
   .mt-v75-quick-link strong {
     display: grid;
     place-items: center;
-    min-width: 15px;
-    height: 15px;
+    min-width: 24px;
+    height: 24px;
     border-radius: 999px;
     background: #eef7f0;
     color: #047638;
-    font-size: 8px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -15352,38 +15359,38 @@ pre,
 
   .mt-v75-rail-sort {
     display: grid;
-    gap: 4px;
-    min-height: 38px;
-    margin-top: 6px;
-    padding: 7px 8px;
+    gap: 8px;
+    min-height: 64px;
+    margin-top: 14px;
+    padding: 12px 14px;
     border: 1px solid #e3e8ee;
-    border-radius: 6px;
+    border-radius: 8px;
   }
 
   .mt-v75-rail-sort strong {
-    font-size: 12px;
+    font-size: 16px;
   }
 
   .mt-v75-rail-section {
     display: grid;
-    gap: 3px;
-    margin-top: 14px;
-    padding: 6px 0 2px;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 14px 0 4px;
     border-top: 1px solid #e6ebf0;
   }
 
   .mt-v75-rail-section > strong {
     color: #111b2b;
-    font-size: 10px;
+    font-size: 15px;
     line-height: 1.1;
   }
 
   .mt-v75-rail-category {
     display: grid;
-    grid-template-columns: minmax(84px, 1fr) auto;
-    gap: 5px;
+    grid-template-columns: minmax(120px, 1fr) auto;
+    gap: 8px;
     align-items: center;
-    min-height: 19px;
+    min-height: 31px;
     color: #203047;
     text-decoration: none;
   }
@@ -15391,7 +15398,7 @@ pre,
   .mt-v75-rail-category span {
     overflow: hidden;
     color: #314056;
-    font-size: 8px;
+    font-size: 13px;
     font-weight: 750;
     line-height: 1.1;
     text-overflow: ellipsis;
@@ -15400,15 +15407,15 @@ pre,
 
   .mt-v75-rail-category strong {
     color: #526070;
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 850;
-    transform: translateX(42px);
+    transform: none;
   }
 
   .mt-v75-rail-show {
-    margin-top: 2px;
+    margin-top: 4px;
     color: #078c42;
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 800;
     text-decoration: none;
   }
@@ -15523,6 +15530,41 @@ pre,
 
   .marketplace-app-shell .marketplace-bottom-nav {
     display: none;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1320px) {
+  .marketplace-app-shell .mt-v75-desktop-board {
+    --mt-v76-nav-width: 198px;
+    --mt-v76-board-gap: 20px;
+    --mt-v76-page-gutter: 16px;
+    --mt-v76-rail-width: 232px;
+    --mt-v76-main-rail-gap: 20px;
+  }
+
+  .mt-v75-featured-deal {
+    grid-template-columns: minmax(250px, 0.38fr) minmax(0, 1fr) minmax(148px, 160px);
+  }
+
+  .mt-v75-featured-visuals {
+    gap: 12px;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual {
+    min-height: 128px;
+  }
+
+  .mt-v75-featured-copy h2 {
+    font-size: 20px;
+  }
+
+  .mt-v75-featured-copy p {
+    font-size: 14px;
+  }
+
+  .mt-v75-featured-copy .mt-v75-status-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
 }
 
