@@ -12859,6 +12859,19 @@ pre,
   --accent: #0a8f45;
   --accent-deep: #056b32;
   --accent-soft: #e7f7ed;
+  --mt-target-ink: #111b2b;
+  --mt-target-line: #e6e9ef;
+  --mt-target-green: #009040;
+  --mt-target-green-deep: #006810;
+  --mt-target-green-soft: #e8f0e8;
+  --mt-target-green-tile: #e8f0e0;
+  --mt-target-blue: #1268d8;
+  --mt-target-blue-soft: #e8f0f8;
+  --mt-target-orange: #e87830;
+  --mt-target-orange-soft: #f8f0e8;
+  --mt-target-purple: #7868e0;
+  --mt-target-purple-soft: #f0f0f8;
+  --mt-target-beige: #f8f0e0;
   --success-soft: #e9f7ee;
   --success-ink: #167245;
   --danger-soft: #fff0e7;
@@ -14258,6 +14271,12 @@ pre,
     white-space: nowrap;
   }
 
+  .mt-v75-side-brand .mt-v75-target-icon {
+    width: 26px;
+    height: 26px;
+    color: var(--mt-target-green);
+  }
+
   .mt-v75-side-brand .icon-mark {
     width: 26px;
     height: 26px;
@@ -14289,6 +14308,12 @@ pre,
     color: #344257;
   }
 
+  .mt-v75-side-link .mt-v75-nav-icon {
+    width: 21px;
+    height: 21px;
+    color: #24354d;
+  }
+
   .mt-v75-side-link.is-active,
   .mt-v75-side-link:hover,
   .mt-v75-side-link:focus-visible {
@@ -14297,6 +14322,12 @@ pre,
   }
 
   .mt-v75-side-link.is-active .icon-mark {
+    color: #047638;
+  }
+
+  .mt-v75-side-link.is-active .mt-v75-nav-icon,
+  .mt-v75-side-link:hover .mt-v75-nav-icon,
+  .mt-v75-side-link:focus-visible .mt-v75-nav-icon {
     color: #047638;
   }
 
@@ -14514,9 +14545,10 @@ pre,
   .mt-v75-tabs a[aria-current="page"],
   .mt-v75-tabs a:hover,
   .mt-v75-tabs a:focus-visible {
-    border-color: #078c42;
-    background: #078c42;
+    border-color: var(--mt-target-green);
+    background: linear-gradient(180deg, #069e49 0%, var(--mt-target-green) 100%);
     color: #ffffff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 5px 12px rgba(0, 144, 64, 0.16);
   }
 
   .mt-v75-browse-grid {
@@ -14743,10 +14775,22 @@ pre,
     letter-spacing: 0;
   }
 
+  .marketplace-app-shell .mt-v75-featured-visuals > .badge.badge-live,
+  .marketplace-app-shell .mt-v75-mini-head > .badge.badge-live {
+    background: var(--mt-target-green);
+    color: #ffffff;
+  }
+
   .marketplace-app-shell .mt-v75-featured-visuals > .badge.badge-preview,
   .marketplace-app-shell .mt-v75-mini-head > .badge.badge-preview {
-    background: #078c42;
+    background: var(--mt-target-orange);
     color: #ffffff;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals > .badge.badge-example,
+  .marketplace-app-shell .mt-v75-mini-head > .badge.badge-example {
+    background: var(--mt-target-blue-soft);
+    color: #2365b8;
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual {
@@ -14759,8 +14803,8 @@ pre,
     overflow: hidden;
     border: 0;
     border-radius: 8px;
-    background: linear-gradient(135deg, #ecfae6 0%, #d7f2cc 100%);
-    color: #05873d;
+    background: linear-gradient(135deg, var(--mt-target-green-tile) 0%, var(--mt-target-green-soft) 100%);
+    color: var(--mt-target-green);
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual .icon-mark {
@@ -14780,20 +14824,27 @@ pre,
     stroke-width: 2.35px;
   }
 
+  .marketplace-app-shell .mt-v75-featured-visuals .moral-deal-visual.has-target-icon .mt-v75-target-icon {
+    width: 126px;
+    height: 126px;
+    color: var(--mt-target-green);
+    filter: drop-shadow(0 2px 0 rgba(0, 104, 16, 0.06));
+  }
+
   .mt-v75-pair-arrow {
     position: absolute;
-    left: calc(50% - 20px);
-    top: calc(50% - 20px);
+    left: calc(50% - 23px);
+    top: calc(50% - 23px);
     z-index: 3;
     display: grid;
     place-items: center;
-    width: 40px;
-    height: 40px;
-    border: 2px solid #ffffff;
+    width: 46px;
+    height: 46px;
+    border: 3px solid #ffffff;
     border-radius: 999px;
-    background: #078c42;
+    background: var(--mt-target-green);
     color: #ffffff;
-    box-shadow: 0 5px 13px rgba(12, 120, 61, 0.2);
+    box-shadow: 0 5px 13px rgba(12, 120, 61, 0.22);
   }
 
   .mt-v75-pair-arrow .icon-mark {
@@ -14806,9 +14857,14 @@ pre,
     height: 100%;
   }
 
+  .mt-v75-pair-arrow .mt-v75-target-icon {
+    width: 27px;
+    height: 27px;
+  }
+
   .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual {
-    background: linear-gradient(135deg, #fff8ec, #feeccf);
-    color: #111111;
+    background: linear-gradient(135deg, var(--mt-target-beige), #f8f0e8);
+    color: #050505;
   }
 
   .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark {
@@ -14818,6 +14874,12 @@ pre,
 
   .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .icon-mark svg {
     stroke-width: 1.75px;
+  }
+
+  .marketplace-app-shell .mt-v75-featured-visuals .mt-v75-counter-visual .mt-v75-target-icon {
+    width: 118px;
+    height: 118px;
+    color: #050505;
   }
 
   .mt-v75-featured-copy {
@@ -14846,9 +14908,25 @@ pre,
     white-space: nowrap;
   }
 
-  .mt-v75-featured-copy .source-pill:first-of-type {
-    background: #e8f1ff;
-    color: #1c63a2;
+  .mt-v75-category-chip {
+    border: 0;
+    background: #eef4ee;
+    color: #526070;
+  }
+
+  .mt-v75-category-chip.is-health {
+    background: var(--mt-target-blue-soft);
+    color: var(--mt-target-blue);
+  }
+
+  .mt-v75-category-chip.is-green {
+    background: var(--mt-target-green-soft);
+    color: #07843e;
+  }
+
+  .mt-v75-category-chip.is-ai {
+    background: #edf2fd;
+    color: #285fbb;
   }
 
   .mt-v75-featured-copy h2 {
@@ -14913,19 +14991,31 @@ pre,
     color: currentColor;
   }
 
+  .mt-v75-status-chip .mt-v75-status-glyph {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    color: currentColor;
+  }
+
   .mt-v75-status-chip.is-good {
-    background: #e8f7ee;
+    background: var(--mt-target-green-soft);
     color: #047638;
   }
 
   .mt-v75-status-chip.is-warn {
-    background: #fff1e6;
-    color: #b55307;
+    background: var(--mt-target-orange-soft);
+    color: #e06000;
   }
 
   .mt-v75-status-chip.is-info {
-    background: #e8f1ff;
-    color: #1c63a2;
+    background: var(--mt-target-blue-soft);
+    color: var(--mt-target-blue);
+  }
+
+  .mt-v75-status-chip.is-neutral {
+    background: #f0f3f6;
+    color: #526070;
   }
 
   .mt-v75-featured-decision {
@@ -15137,12 +15227,12 @@ pre,
     min-height: 140px;
     aspect-ratio: auto;
     border: 0;
-    background: linear-gradient(135deg, #e6f8df 0%, #c8edbf 100%);
-    color: #078c42;
+    background: linear-gradient(135deg, var(--mt-target-green-tile) 0%, var(--mt-target-green-soft) 100%);
+    color: var(--mt-target-green);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-public-goods-round {
-    background: linear-gradient(135deg, #edf7ff 0%, #cfe7f7 100%);
+    background: linear-gradient(135deg, #f4fbff 0%, #e6f3fb 100%);
     color: #1f7c95;
   }
 
@@ -15194,18 +15284,18 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat .moral-deal-visual-public-goods-round {
-    background: linear-gradient(135deg, #e8f8e2 0%, #c9efbd 100%);
-    color: #078c42;
+    background: linear-gradient(135deg, var(--mt-target-green-soft) 0%, #f4fbf4 100%);
+    color: #307840;
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-pledge-funding-round {
-    background: linear-gradient(135deg, #eef9e8 0%, #c9efbd 100%);
-    color: #078c42;
+    background: linear-gradient(135deg, var(--mt-target-green-tile) 0%, var(--mt-target-green-soft) 100%);
+    color: var(--mt-target-green);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap {
-    background: linear-gradient(135deg, #fff8ef 0%, #ffe9cf 100%);
-    color: #d15d00;
+    background: linear-gradient(135deg, var(--mt-target-orange-soft) 0%, #fff8ef 100%);
+    color: var(--mt-target-orange);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap .icon-mark {
@@ -15214,18 +15304,18 @@ pre,
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-action-for-donation {
-    background: linear-gradient(135deg, #f0ebff 0%, #d3c6ff 100%);
-    color: #6852b8;
+    background: linear-gradient(135deg, var(--mt-target-purple-soft) 0%, #e4dcff 100%);
+    color: var(--mt-target-purple);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-template {
-    background: linear-gradient(135deg, #f0ebff 0%, #d4c7ff 100%);
-    color: #6852b8;
+    background: linear-gradient(135deg, #fbfaff 0%, var(--mt-target-purple-soft) 100%);
+    color: var(--mt-target-purple);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-local-pledge {
-    background: linear-gradient(135deg, #eef9e8 0%, #c9efbd 100%);
-    color: #078c42;
+    background: linear-gradient(135deg, var(--mt-target-green-tile) 0%, var(--mt-target-green-soft) 100%);
+    color: var(--mt-target-green);
   }
 
   .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual .icon-mark,
@@ -15248,13 +15338,33 @@ pre,
     height: 72px;
   }
 
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual.has-target-icon .mt-v75-target-icon {
+    width: 92px;
+    height: 92px;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-cross-view-donation-swap.has-target-icon .mt-v75-target-icon {
+    width: 94px;
+    height: 94px;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-head .moral-deal-visual-template.has-target-icon .mt-v75-target-icon {
+    width: 88px;
+    height: 88px;
+  }
+
+  .marketplace-app-shell .mt-v75-mini-tile.is-public-good-repeat .moral-deal-visual-public-goods-round.has-target-icon .mt-v75-target-icon {
+    width: 96px;
+    height: 96px;
+  }
+
   .marketplace-app-shell .mt-v75-mini-tile-cross-view-donation-swap .mt-v75-mini-head > .badge.badge-preview {
-    background: #ff7a18;
+    background: var(--mt-target-orange);
     color: #ffffff;
   }
 
   .marketplace-app-shell .mt-v75-mini-head > .badge.badge-template {
-    background: #7658e8;
+    background: var(--mt-target-purple);
     color: #ffffff;
   }
 
@@ -15284,18 +15394,11 @@ pre,
     max-width: 110px;
     padding: 4px 8px;
     overflow: hidden;
-    background: #eef7ed;
-    color: #08733a;
     font-size: 10.5px;
     font-weight: 900;
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .mt-v75-mini-tile-template .mt-v75-mini-chip-row .source-pill {
-    background: #eef7ed;
-    color: #08733a;
   }
 
   .mt-v75-mini-tile > span {

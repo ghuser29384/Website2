@@ -51,24 +51,6 @@ function mechanismIcon(value: MarketplaceDeal["mechanismType"]): IconName {
   return "marketplace";
 }
 
-function counterVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
-  if (
-    value === "pledge_funding_round" ||
-    value === "cross_view_donation_swap" ||
-    value === "local_pledge"
-  ) {
-    return "vector";
-  }
-  if (
-    value === "public_goods_round" ||
-    value === "action_for_donation"
-  ) {
-    return "fund";
-  }
-
-  return "evidence";
-}
-
 function browseVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
   if (value === "public_goods_round") return "progress";
   if (value === "pledge_funding_round") return "meal";
@@ -80,6 +62,174 @@ function browseVisualIcon(value: MarketplaceDeal["mechanismType"]): IconName {
 
 function joinClassName(values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+type RegionAVisualName = "bowlLeaf" | "mosquito" | "scale" | "template" | "globeHeart" | "swap";
+
+function RegionAVisualIcon({ name }: { name: RegionAVisualName }) {
+  if (name === "bowlLeaf") {
+    return (
+      <svg className="mt-v75-target-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path
+          d="M27.5 56.2h54.8c5.5 0 9.7 4.9 8.7 10.3C88.3 82 74.7 92.8 55.4 92.8c-19 0-32.7-10.7-35.8-26.1-1.1-5.5 2.9-10.5 7.9-10.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M36.2 58.6c2.3-24 20.4-38.4 43.7-43.1 1.8 21.3-10.8 38.3-33.2 45.4"
+          fill="currentColor"
+        />
+        <path
+          d="M67.5 51.9c7-18 19.5-27.7 36.5-29.5 2.4 17.4-8.9 32.4-28.5 37.7"
+          fill="currentColor"
+        />
+        <path d="M45.6 71.2h.1M57.8 72.6h.1M70 69.8h.1" stroke="#fff" strokeLinecap="round" strokeWidth="6.8" />
+        <path
+          d="M42.5 98.4h28"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="7.5"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "mosquito") {
+    return (
+      <svg className="mt-v75-target-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path d="M61 46c8.2 4.8 13.4 15.1 13.4 27.1S69.2 95.3 61 100c-8.3-4.8-13.5-14.9-13.5-26.9S52.7 50.8 61 46Z" fill="currentColor" />
+        <path d="M56 39.8c0-5.5 10-5.5 10 0v8.6H56v-8.6Z" fill="currentColor" />
+        <path d="M42.8 55.3C27.1 49.8 15.5 38.5 11.8 24.4c16.3-.3 32.5 9.6 42.8 26.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4.5" />
+        <path d="M79.2 55.3c15.7-5.5 27.3-16.8 31-30.9-16.3-.3-32.5 9.6-42.8 26.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4.5" />
+        <path d="M61 46V19.8M50.8 34.6 34.6 17.8M71.2 34.6l16.2-16.8M50 64.5 23.4 58.2M72 64.5l26.6-6.3M49.8 76.2 22.1 92.4M72.2 76.2l27.7 16.2M55 48.4 43.8 38.2M67 48.4l11.2-10.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4.4" />
+        <path d="M55.2 59.8h11.6M53.6 72.4h14.8M55.7 85h10.6" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="3.2" opacity=".55" />
+      </svg>
+    );
+  }
+
+  if (name === "scale") {
+    return (
+      <svg className="mt-v75-target-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <path d="M60 20v72M28 93h64M43 105h34" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="7" />
+        <path d="M31 35h58M60 20c8.4 0 13.5 4.4 13.5 10.8S68.4 42 60 42s-13.5-4.8-13.5-11.2S51.6 20 60 20Z" fill="currentColor" />
+        <path d="m30 38-16 31h32L30 38ZM90 38 74 69h32L90 38Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="5.8" />
+        <path d="M13 70c3.5 8.5 9.2 12.7 17 12.7S43.5 78.5 47 70M73 70c3.5 8.5 9.2 12.7 17 12.7s13.5-4.2 17-12.7" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "template") {
+    return (
+      <svg className="mt-v75-target-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <rect x="26" y="18" width="68" height="84" rx="9" fill="currentColor" />
+        <path d="M42 45.5 48.5 52 60 39M42 65.5 48.5 72 60 59M42 85.5 48.5 92 60 79" fill="none" stroke="#fff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="6" />
+        <path d="M67 47h13M67 67h13M67 87h13" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="6" opacity=".72" />
+        <path d="M34 18h52c4.4 0 8 3.6 8 8v6H26v-6c0-4.4 3.6-8 8-8Z" fill="#fff" opacity=".18" />
+      </svg>
+    );
+  }
+
+  if (name === "globeHeart") {
+    return (
+      <svg className="mt-v75-target-icon" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+        <circle cx="56" cy="54" r="38" fill="currentColor" />
+        <path d="M25 54h62M56 17c-12 12.3-18 24.6-18 37s6 24.7 18 37M56 17c12 12.3 18 24.6 18 37s-6 24.7-18 37" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="5" opacity=".9" />
+        <path d="M31.5 31.8c7.8 4.9 16 7.3 24.5 7.3s16.7-2.4 24.5-7.3M31.5 76.2c7.8-4.9 16-7.3 24.5-7.3s16.7 2.4 24.5 7.3" fill="none" stroke="#fff" strokeLinecap="round" strokeWidth="5" opacity=".9" />
+        <path d="M84.1 80.2c-5.3-6.4-15.5-3.1-15.5 5.9 0 10.1 14.5 17.8 15.5 18.3 1-.5 15.5-8.2 15.5-18.3 0-9-10.2-12.3-15.5-5.9Z" fill="currentColor" stroke="#fff" strokeWidth="5" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="mt-v75-target-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <path d="M30 11h8v8M18 37h-8v-8" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+      <path d="M37 11 12 36M11 17c3.1-3.6 7.6-5.9 12.6-5.9 4.9 0 9.4 2.1 12.4 5.5M37 31c-3.1 3.6-7.6 5.9-12.6 5.9-4.9 0-9.4-2.1-12.4-5.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" />
+    </svg>
+  );
+}
+
+type MarketplaceNavIconName = "browse" | "planner" | "track" | "messages" | "profile";
+
+function MarketplaceNavIcon({ name }: { name: MarketplaceNavIconName }) {
+  if (name === "planner") {
+    return (
+      <svg className="mt-v75-nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="4" y="5.5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8 3.5v4M16 3.5v4M4.5 10h15M8 14h3M13 14h3" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  if (name === "track") {
+    return (
+      <svg className="mt-v75-nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="m8.4 12.1 2.3 2.4 4.9-5.1" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+      </svg>
+    );
+  }
+
+  if (name === "messages") {
+    return (
+      <svg className="mt-v75-nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4.5 6.5c0-1.1.9-2 2-2h11c1.1 0 2 .9 2 2v8.3c0 1.1-.9 2-2 2H11l-4.3 3v-3h-.2c-1.1 0-2-.9-2-2V6.5Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+        <path d="M8.2 10.4h7.6M8.2 13.2h5.1" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  if (name === "profile") {
+    return (
+      <svg className="mt-v75-nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8.5" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M5.5 20c.8-3.5 3-5.3 6.5-5.3s5.7 1.8 6.5 5.3" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.4" opacity=".65" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="mt-v75-nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="10.5" cy="10.5" r="5.6" fill="none" stroke="currentColor" strokeWidth="1.9" />
+      <path d="m15 15 4.6 4.6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+type StatusChipKind = "good" | "info" | "warn" | "neutral";
+
+function StatusChipGlyph({ kind }: { kind: StatusChipKind }) {
+  if (kind === "good") {
+    return (
+      <svg className="mt-v75-status-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+        <path d="m5.1 8.1 1.8 1.8 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  if (kind === "info") {
+    return (
+      <svg className="mt-v75-status-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="M4.3 2.8h7.4v10.4L8 11.2l-3.7 2V2.8Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" />
+      </svg>
+    );
+  }
+
+  if (kind === "warn") {
+    return (
+      <svg className="mt-v75-status-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <path d="M8 2.2 14 13H2L8 2.2Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" />
+        <path d="M8 6.1v3.2M8 11.7h.1" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="mt-v75-status-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="5.7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
 }
 
 function receiptStateClass(value: string) {
@@ -102,6 +252,20 @@ function badgeClassName(value: string, role: "state" | "source" = "source") {
   ]);
 }
 
+function categoryChipClassName(value: string) {
+  const normalized = value.toLowerCase();
+
+  return joinClassName([
+    "source-pill",
+    "mt-v75-category-chip",
+    /health|poverty|malaria|treatment|medical|basic needs/.test(normalized) && "is-health",
+    /animal|welfare|vegetarian|vegan|food-abstention|meal|environment|climate|carbon|plastic|public good/.test(
+      normalized,
+    ) && "is-green",
+    /ai|alignment|x-risk|existential|future/.test(normalized) && "is-ai",
+  ]);
+}
+
 function reviewStatusLabel(value: MarketplaceDeal["reviewStatus"]) {
   if (value === "verified_recipient") return "Verified recipient";
   if (value === "reviewer_approved") return "Reviewer approved";
@@ -111,19 +275,15 @@ function reviewStatusLabel(value: MarketplaceDeal["reviewStatus"]) {
 }
 
 function statusChipTone(value: string) {
-  const normalized = value.toLowerCase();
-  if (normalized.includes("verified") || normalized.includes("no charge")) return "is-good";
-  if (normalized.includes("review") || normalized.includes("preview")) return "is-warn";
-  if (normalized.includes("evidence")) return "is-info";
-  return "";
+  return `is-${statusChipKind(value)}`;
 }
 
-function statusChipIcon(value: string): IconName {
+function statusChipKind(value: string): StatusChipKind {
   const normalized = value.toLowerCase();
-  if (normalized.includes("verified") || normalized.includes("no charge")) return "safety";
-  if (normalized.includes("evidence")) return "evidence";
-  if (normalized.includes("review") || normalized.includes("preview")) return "review";
-  return "source";
+  if (normalized.includes("verified") || normalized.includes("no charge")) return "good";
+  if (normalized.includes("review") || normalized.includes("preview")) return "warn";
+  if (normalized.includes("evidence")) return "info";
+  return "neutral";
 }
 
 function getDealStatusChips(deal: MarketplaceDeal) {
@@ -323,17 +483,17 @@ function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: bo
 
 function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" | "track" | "messages" | "profile" }) {
   const items = [
-    { key: "browse", href: "/offers", label: "Browse", icon: "search" },
-    { key: "plan", href: "/saved-offers", label: "Planner", icon: "example" },
-    { key: "track", href: "/commitments", label: "Track", icon: "evidence" },
-    { key: "messages", href: "/messages", label: "Messages", icon: "review" },
+    { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
+    { key: "plan", href: "/saved-offers", label: "Planner", icon: "planner" },
+    { key: "track", href: "/commitments", label: "Track", icon: "track" },
+    { key: "messages", href: "/messages", label: "Messages", icon: "messages" },
     { key: "profile", href: "/profile", label: "Profile", icon: "profile" },
   ] as const;
 
   return (
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
       <Link className="mt-v75-side-brand" href="/offers">
-        <IconMark name="meal" />
+        <RegionAVisualIcon name="bowlLeaf" />
         <span>Moral Trade</span>
       </Link>
       <nav>
@@ -344,7 +504,7 @@ function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" 
             href={item.href}
             key={item.key}
           >
-            <IconMark name={item.icon} />
+            <MarketplaceNavIcon name={item.icon} />
             <span>{item.label}</span>
           </Link>
         ))}
@@ -386,20 +546,22 @@ function DealSemanticVisual({
   deal,
   icon,
   label,
+  targetIcon,
 }: {
   deal: MarketplaceDeal;
   icon?: IconName;
   label?: string;
+  targetIcon?: RegionAVisualName;
 }) {
   const receipt = getDealReceiptAtom(deal);
 
   return (
     <span
       aria-label={label ?? `${mechanismLabel(deal.mechanismType)} visual`}
-      className={dealVisualClassName(deal, receipt.state)}
+      className={joinClassName([dealVisualClassName(deal, receipt.state), targetIcon && "has-target-icon"])}
       role="img"
     >
-      <IconMark name={icon ?? mechanismIcon(deal.mechanismType)} />
+      {targetIcon ? <RegionAVisualIcon name={targetIcon} /> : <IconMark name={icon ?? mechanismIcon(deal.mechanismType)} />}
     </span>
   );
 }
@@ -407,7 +569,7 @@ function DealSemanticVisual({
 function StatusChip({ label }: { label: string }) {
   return (
     <span className={joinClassName(["mt-v75-status-chip", statusChipTone(label)])}>
-      <IconMark name={statusChipIcon(label)} />
+      <StatusChipGlyph kind={statusChipKind(label)} />
       {label}
     </span>
   );
@@ -420,7 +582,7 @@ function FallbackLivestreamEvidencePill({ deal }: { deal: MarketplaceDeal }) {
     return null;
   }
 
-  return <span className="source-pill">{evidence.observationLabel}</span>;
+  return <span className={categoryChipClassName(evidence.observationLabel)}>{evidence.observationLabel}</span>;
 }
 
 function FallbackLivestreamEvidenceSummary({ deal }: { deal: MarketplaceDeal }) {
@@ -474,23 +636,23 @@ function FeaturedDealCard({ deal }: { deal: MarketplaceDeal }) {
     <article className="mt-v75-featured-deal" data-marketplace-featured>
       <div className="mt-v75-featured-visuals">
         <span className={badgeClassName(receipt.state, "state")}>{receipt.state}</span>
-        <DealSemanticVisual deal={deal} icon={browseVisualIcon(deal.mechanismType)} />
+        <DealSemanticVisual deal={deal} icon={browseVisualIcon(deal.mechanismType)} targetIcon="bowlLeaf" />
         <span className="mt-v75-pair-arrow" aria-hidden="true">
-          <IconMark name="swap" />
+          <RegionAVisualIcon name="swap" />
         </span>
         <span
           aria-label="Counterparty side visual"
           className="moral-deal-visual mt-v75-counter-visual"
           role="img"
         >
-          <IconMark name={counterVisualIcon(deal.mechanismType)} />
+          <RegionAVisualIcon name="mosquito" />
         </span>
       </div>
       <div className="mt-v75-featured-copy">
         <div className="moral-deal-chip-row">
           <FallbackLivestreamEvidencePill deal={deal} />
           {deal.causeTags.slice(0, 2).map((tag) => (
-            <span className="source-pill" key={tag}>
+            <span className={categoryChipClassName(tag)} key={tag}>
               {tag}
             </span>
           ))}
@@ -675,6 +837,14 @@ function MiniDealTile({
       : deal.mechanismType === "public_goods_round" && publicGoodsVariant === "repeat"
       ? "publicGoods"
       : browseVisualIcon(deal.mechanismType);
+  const targetIcon: RegionAVisualName | null =
+    slotType === "preview_match"
+      ? "scale"
+      : deal.mechanismType === "public_goods_round" && publicGoodsVariant === "repeat"
+      ? "globeHeart"
+      : deal.mechanismType === "local_pledge"
+      ? "bowlLeaf"
+      : null;
   const badgeLabel = getMiniDealBadgeLabel(deal, receipt, slotType);
   const categoryChips = getMiniDealCategoryChips(deal, slotType);
   const chips = getMiniDealStatusChips(deal, slotType, publicGoodsVariant);
@@ -694,13 +864,13 @@ function MiniDealTile({
         {deal.mechanismType === "public_goods_round" && publicGoodsVariant === "default" ? (
           <PublicGoodsProgressVisual deal={deal} />
         ) : (
-          <DealSemanticVisual deal={deal} icon={visualIcon} />
+          <DealSemanticVisual deal={deal} icon={visualIcon} targetIcon={targetIcon ?? undefined} />
         )}
       </div>
       <strong>{deal.title}</strong>
       <div className="moral-deal-chip-row mt-v75-mini-chip-row">
         {categoryChips.map((chip) => (
-          <span className="source-pill" key={chip}>
+          <span className={categoryChipClassName(chip)} key={chip}>
             {chip}
           </span>
         ))}
@@ -742,10 +912,10 @@ function TemplateSemanticVisual() {
   return (
     <span
       aria-label="Reusable template checklist visual"
-      className="moral-deal-visual moral-deal-visual-template mt-v75-template-visual"
+      className="moral-deal-visual moral-deal-visual-template mt-v75-template-visual has-target-icon"
       role="img"
     >
-      <IconMark name="checklist" />
+      <RegionAVisualIcon name="template" />
     </span>
   );
 }
@@ -767,7 +937,7 @@ function TemplateMiniTile({ template }: { template: PublicReviewedSeedTemplateSu
       <strong>{templateCardTitle(template)}</strong>
       <div className="moral-deal-chip-row mt-v75-mini-chip-row">
         {(categoryChips.length ? categoryChips : ["Template"]).map((chip) => (
-          <span className="source-pill" key={chip}>
+          <span className={categoryChipClassName(chip)} key={chip}>
             {chip}
           </span>
         ))}
