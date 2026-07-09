@@ -287,6 +287,76 @@ function statusChipKind(value: string): StatusChipKind {
   return "neutral";
 }
 
+function getBrowseEvidenceChipLabel(deal: MarketplaceDeal) {
+  const verificationText = [
+    deal.verificationSummary,
+    deal.fundingRoute?.receiptAvailability,
+    deal.fundingRound?.evidenceReviewStatus,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (!verificationText && !deal.fallbackLivestreamEvidence) {
+    return null;
+  }
+
+  if (/configurable|not connected|preview|review status/i.test(verificationText)) {
+    return "Evidence configurable";
+  }
+
+  if (/manual review|reviewer|review required|inspection/i.test(verificationText)) {
+    return "Reviewer check";
+  }
+
+  if (/receipt|donation record|payment record|external payment|payment pending/i.test(verificationText)) {
+    return "Donation receipt";
+  }
+
+  if (/photo|image|receipt-photo/i.test(verificationText)) {
+    return "Receipts/photos later";
+  }
+
+  if (deal.fallbackLivestreamEvidence) {
+    return "Evidence required";
+  }
+
+  return "Evidence later";
+}
+
+function getEvidenceDetailRows(deal: MarketplaceDeal) {
+  const chipLabel = getBrowseEvidenceChipLabel(deal);
+
+  if (!chipLabel) {
+    return [];
+  }
+
+  if (chipLabel === "Donation receipt") {
+    const routeLabel =
+      deal.fundingRoute?.recipientName ??
+      deal.fundingRoute?.recipientDisplayName ??
+      deal.fundingRoute?.fundName ??
+      deal.fundingRoute?.charityName ??
+      deal.donationTargetLabel ??
+      "recipient route";
+
+    return [{ label: "Donation evidence", value: `Receipt from ${routeLabel}` }];
+  }
+
+  if (chipLabel === "Reviewer check") {
+    return [{ label: "Review", value: deal.verificationSummary ?? "Reviewer inspection required" }];
+  }
+
+  if (chipLabel === "Evidence configurable") {
+    return [{ label: "Evidence", value: "Configurable before review" }];
+  }
+
+  if (chipLabel === "Evidence required") {
+    return [{ label: "Evidence", value: "Required before clearance" }];
+  }
+
+  return [{ label: "Evidence", value: deal.verificationSummary ?? chipLabel }];
+}
+
 function getDealStatusChips(deal: MarketplaceDeal) {
   const receipt = getDealReceiptAtom(deal);
   const currentChargeState =
@@ -297,7 +367,7 @@ function getDealStatusChips(deal: MarketplaceDeal) {
       : receipt.exposure;
   const chips = [
     currentChargeState,
-    deal.verificationSummary ? "Evidence later" : null,
+    getBrowseEvidenceChipLabel(deal),
     reviewStatusLabel(deal.reviewStatus),
     deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
   ];
@@ -898,7 +968,7 @@ function getMiniDealStatusChips(
 
   if (slotType === "threshold_public_goods") {
     return uniqueVisibleStrings([
-      deal.verificationSummary ? "Evidence later" : null,
+      getBrowseEvidenceChipLabel(deal),
       deal.reviewStatus === "verified_recipient" ? "Verified recipient" : reviewStatusLabel(deal.reviewStatus),
     ]).slice(0, 2);
   }
@@ -1041,6 +1111,7 @@ function TemplateMiniTile({ template }: { template: PublicReviewedSeedTemplateSu
       </div>
       <span>Template · Add your terms</span>
       <div className="mt-v75-status-row">
+        <StatusChip label="Evidence configurable" />
         <StatusChip label="Review required" />
       </div>
     </Link>
@@ -1057,7 +1128,8 @@ export function DealDetailObject({
   const receipt = getDealReceiptAtom(deal);
   const recipientDisplay = getMarketplaceRecipientDisplay(deal);
   const statusChips = getDealStatusChips(deal);
-  const explainRows = recipientDisplay.detailRows;
+  const evidenceDetailRows = getEvidenceDetailRows(deal);
+  const explainRows = [...recipientDisplay.detailRows, ...evidenceDetailRows];
   const explainSummary = explainRows.length ? "Verification & funding" : "Requirements & rules";
 
   return (
