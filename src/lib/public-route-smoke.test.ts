@@ -48,6 +48,7 @@ test("public navigation exposes professional marketplace routes", () => {
   const tradeMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trade");
   const publicGoodsMenu = getPrimaryNavLinks(false).find((link) => link.label === "Moral Public Goods");
   const groupBuyingSearchResults = filterSiteSearchItems("group buying", 6);
+  const donationCancellationSearchResults = filterSiteSearchItems("donation cancellation", 6);
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
@@ -65,6 +66,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.section)));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Create donation offset" && item.section === "Participate"));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Group buying" && item.section === "Trade lanes"));
+  assert.equal(tradeMenu?.items?.some((item) => item.label === "Cancel opposed donations"), false);
   assert.equal(
     tradeMenu?.items?.find((item) => item.label === "Group buying")?.href,
     "/moral-goods-group-buying",
@@ -74,12 +76,14 @@ test("public navigation exposes professional marketplace routes", () => {
     false,
   );
   assert.ok(groupBuyingSearchResults.some((item) => item.href === "/moral-goods-group-buying"));
+  assert.equal(donationCancellationSearchResults.some((item) => item.href === "/donation-cancellation"), false);
   assert.ok(hrefs.includes("/projects"));
   assert.ok(hrefs.includes("/start"));
   assert.ok(hrefs.includes("/how-it-works"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/pledge-swaps"));
   assert.ok(hrefs.includes("/moral-goods-group-buying"));
+  assert.equal(hrefs.includes("/donation-cancellation"), false);
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/validation"));
@@ -125,6 +129,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/projects/);
   assert.match(siteSource, /\/start/);
   assert.match(siteSource, /\/pilot-updates/);
+  assert.doesNotMatch(siteSource, /\/donation-cancellation/);
   assert.match(siteSource, /\/measurement/);
   assert.match(siteSource, /\/accessibility/);
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
@@ -5638,7 +5643,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Public offer count/);
   assert.match(offersPage, /cannot count as\s+live offers/);
   assert.match(marketplaceComponents, /<h1 id="moral-marketplace-heading">Browse offers<\/h1>/);
-  assert.match(marketplaceComponents, /Search causes, templates, rounds/);
+  assert.match(marketplaceComponents, /Search offers, funds, templates, rounds/);
   assert.match(marketplaceComponents, /No live offers yet · Showing examples and templates/);
   assert.match(marketplaceComponents, /Templates/);
   assert.match(marketplaceComponents, /Examples/);

@@ -25,6 +25,8 @@ import { createClient } from "@/lib/supabase/server";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
+type FallbackLivestreamEvidenceRouteRow =
+  Database["public"]["Tables"]["fallback_livestream_evidence_routes"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
 type DonationOffsetPoolRow = Database["public"]["Tables"]["donation_offset_pools"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
@@ -118,7 +120,15 @@ export type PublicLocationGranularity = "hidden" | "country" | "region" | "city"
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
 export const DASHBOARD_PAGE_SIZE = 50;
-const AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
+const DEFAULT_AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
+const configuredAuthResolutionTimeoutMs = Number.parseInt(
+  process.env.AUTH_RESOLUTION_TIMEOUT_MS ?? "",
+  10,
+);
+const AUTH_RESOLUTION_TIMEOUT_MS =
+  Number.isFinite(configuredAuthResolutionTimeoutMs) && configuredAuthResolutionTimeoutMs > 0
+    ? configuredAuthResolutionTimeoutMs
+    : DEFAULT_AUTH_RESOLUTION_TIMEOUT_MS;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -173,11 +183,14 @@ export interface OfferRecord extends OfferRow {
   commentCount: number;
   isInCart: boolean;
   performanceBonds: PerformanceBondRow[];
+  fallbackLivestreamEvidenceRoutes: FallbackLivestreamEvidenceRouteRow[];
   donationOffset: (DonationOffsetOfferRow & {
     compromiseCharity: RegisteredCharityRow | null;
     pool: DonationOffsetPoolRecord | null;
   }) | null;
 }
+
+export type FallbackLivestreamEvidenceRouteRecord = FallbackLivestreamEvidenceRouteRow;
 
 export interface InterestRecord extends InterestRow {
   offer: OfferRecord | null;
@@ -818,6 +831,7 @@ async function hydrateOffers(
     { data: offsetPools, error: offsetPoolsError },
     { data: charities, error: charitiesError },
     { data: performanceBonds, error: performanceBondsError },
+    { data: fallbackLivestreamEvidenceRoutes, error: fallbackLivestreamEvidenceRoutesError },
   ] =
     await Promise.all([
       getProfileSummaryMap(viewerId, ownerIds),
@@ -830,6 +844,11 @@ async function hydrateOffers(
       supabase.from("donation_offset_pools").select("*"),
       supabase.from("registered_charities").select("*"),
       supabase.from("performance_bonds").select("*").in("offer_id", offerIds),
+      supabase
+        .from("fallback_livestream_evidence_routes")
+        .select("*")
+        .in("offer_id", offerIds)
+        .order("created_at", { ascending: false }),
     ]);
 
   if (recommendationsError) {
@@ -852,6 +871,9 @@ async function hydrateOffers(
   }
   if (performanceBondsError) {
     throw new Error(performanceBondsError.message);
+  }
+  if (fallbackLivestreamEvidenceRoutesError) {
+    throw new Error(fallbackLivestreamEvidenceRoutesError.message);
   }
 
   const recommendationCounts = new Map<string, number>();
@@ -883,6 +905,8 @@ async function hydrateOffers(
     }
   >();
   const performanceBondsByOffer = new Map<string, PerformanceBondRow[]>();
+  const fallbackLivestreamEvidenceRoutesByOffer =
+    new Map<string, FallbackLivestreamEvidenceRouteRow[]>();
 
   for (const row of (offsetOffers ?? []) as DonationOffsetOfferRow[]) {
     offsetOfferMap.set(row.offer_id, {
@@ -898,6 +922,13 @@ async function hydrateOffers(
     performanceBondsByOffer.set(row.offer_id, bucket);
   }
 
+  for (const row of (fallbackLivestreamEvidenceRoutes ?? []) as FallbackLivestreamEvidenceRouteRow[]) {
+    if (!row.offer_id) continue;
+    const bucket = fallbackLivestreamEvidenceRoutesByOffer.get(row.offer_id) ?? [];
+    bucket.push(row);
+    fallbackLivestreamEvidenceRoutesByOffer.set(row.offer_id, bucket);
+  }
+
   return offers.map((offer) => ({
     ...offer,
     ownerProfile: profileMap.get(offer.owner_id) ?? null,
@@ -905,6 +936,7 @@ async function hydrateOffers(
     commentCount: commentCounts.get(offer.id) ?? 0,
     isInCart: cartSet.has(offer.id),
     performanceBonds: performanceBondsByOffer.get(offer.id) ?? [],
+    fallbackLivestreamEvidenceRoutes: fallbackLivestreamEvidenceRoutesByOffer.get(offer.id) ?? [],
     donationOffset: offsetOfferMap.get(offer.id) ?? null,
   }));
 }
@@ -1278,6 +1310,47 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
       .slice(0, 6),
     pools: activePools,
   };
+}
+
+export async function listFallbackLivestreamEvidenceForUser(userId: string) {
+  if (!hasSupabaseEnv()) {
+    return [] as FallbackLivestreamEvidenceRouteRecord[];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .select("*")
+    .or(`creator_id.eq.${userId},subject_user_id.eq.${userId}`)
+    .order("scheduled_start_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as FallbackLivestreamEvidenceRouteRecord[];
+}
+
+export async function getFallbackLivestreamEvidenceRouteForViewer(
+  id: string,
+) {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as FallbackLivestreamEvidenceRouteRecord | null;
 }
 
 export async function getMarketplaceOverview(): Promise<MarketplaceOverview> {

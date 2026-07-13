@@ -150,6 +150,169 @@ export interface Database {
         };
         Relationships: [];
       };
+      fallback_livestream_evidence_routes: {
+        Row: {
+          id: string;
+          offer_id: string | null;
+          commitment_id: string | null;
+          creator_id: string;
+          subject_user_id: string;
+          baseline_claim: string;
+          fallback_action_statement: string;
+          fallback_event_label: string;
+          clearing_deadline_at: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          recording_due_at: string | null;
+          stream_provider: "external_url" | "youtube" | "twitch" | "zoom" | "other";
+          stream_url: string;
+          recording_url: string;
+          challenge_code: string;
+          challenge_issued_at: string;
+          visibility: "private_review" | "participants" | "public_link";
+          status:
+            | "draft"
+            | "scheduled"
+            | "armed"
+            | "cancelled_trade_cleared"
+            | "due"
+            | "live_window"
+            | "recording_due"
+            | "submitted"
+            | "reviewed_observed"
+            | "reviewed_unclear"
+            | "missed"
+            | "cancelled";
+          review_decision: "observed" | "unclear" | "missed" | null;
+          reviewer_id: string | null;
+          reviewed_at: string | null;
+          review_notes: string;
+          review_checklist: Json;
+          cancel_reason: string;
+          submitted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          offer_id?: string | null;
+          commitment_id?: string | null;
+          creator_id: string;
+          subject_user_id: string;
+          baseline_claim: string;
+          fallback_action_statement: string;
+          fallback_event_label?: string;
+          clearing_deadline_at?: string | null;
+          scheduled_start_at: string;
+          scheduled_end_at: string;
+          recording_due_at?: string | null;
+          stream_provider?: "external_url" | "youtube" | "twitch" | "zoom" | "other";
+          stream_url?: string;
+          recording_url?: string;
+          challenge_code: string;
+          challenge_issued_at?: string;
+          visibility?: "private_review" | "participants" | "public_link";
+          status?:
+            | "draft"
+            | "scheduled"
+            | "armed"
+            | "cancelled_trade_cleared"
+            | "due"
+            | "live_window"
+            | "recording_due"
+            | "submitted"
+            | "reviewed_observed"
+            | "reviewed_unclear"
+            | "missed"
+            | "cancelled";
+          review_decision?: "observed" | "unclear" | "missed" | null;
+          reviewer_id?: string | null;
+          reviewed_at?: string | null;
+          review_notes?: string;
+          review_checklist?: Json;
+          cancel_reason?: string;
+          submitted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          offer_id?: string | null;
+          commitment_id?: string | null;
+          creator_id?: string;
+          subject_user_id?: string;
+          baseline_claim?: string;
+          fallback_action_statement?: string;
+          fallback_event_label?: string;
+          clearing_deadline_at?: string | null;
+          scheduled_start_at?: string;
+          scheduled_end_at?: string;
+          recording_due_at?: string | null;
+          stream_provider?: "external_url" | "youtube" | "twitch" | "zoom" | "other";
+          stream_url?: string;
+          recording_url?: string;
+          challenge_code?: string;
+          challenge_issued_at?: string;
+          visibility?: "private_review" | "participants" | "public_link";
+          status?:
+            | "draft"
+            | "scheduled"
+            | "armed"
+            | "cancelled_trade_cleared"
+            | "due"
+            | "live_window"
+            | "recording_due"
+            | "submitted"
+            | "reviewed_observed"
+            | "reviewed_unclear"
+            | "missed"
+            | "cancelled";
+          review_decision?: "observed" | "unclear" | "missed" | null;
+          reviewer_id?: string | null;
+          reviewed_at?: string | null;
+          review_notes?: string;
+          review_checklist?: Json;
+          cancel_reason?: string;
+          submitted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fallback_livestream_evidence_routes_offer_id_fkey";
+            columns: ["offer_id"];
+            isOneToOne: false;
+            referencedRelation: "offers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fallback_livestream_evidence_routes_commitment_id_fkey";
+            columns: ["commitment_id"];
+            isOneToOne: false;
+            referencedRelation: "agreements";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fallback_livestream_evidence_routes_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fallback_livestream_evidence_routes_subject_user_id_fkey";
+            columns: ["subject_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fallback_livestream_evidence_routes_reviewer_id_fkey";
+            columns: ["reviewer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       registered_charities: {
         Row: {
           id: string;

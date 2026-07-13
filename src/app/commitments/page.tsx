@@ -8,11 +8,16 @@ import {
   MarketplaceBottomNav,
   MarketplaceRouteShell,
 } from "@/components/marketplace/marketplace-components";
-import { getViewer, listAgreementsForUser } from "@/lib/app-data";
+import {
+  getViewer,
+  listAgreementsForUser,
+  listFallbackLivestreamEvidenceForUser,
+} from "@/lib/app-data";
 import {
   getCommitmentStatusLabel,
   mapAgreementToCommitmentStatus,
 } from "@/lib/marketplace-deals";
+import { buildFallbackLivestreamEvidenceDisplay } from "@/lib/moral-trade/fallback-livestream-evidence";
 import { formatMode } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -59,10 +64,16 @@ export default async function CommitmentsPage() {
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await getViewer() : null;
   const agreements = viewer ? await listAgreementsForUser(viewer.authUser.id) : [];
+  const fallbackLivestreamEvidenceRoutes = viewer
+    ? await listFallbackLivestreamEvidenceForUser(viewer.authUser.id)
+    : [];
   const summaries = agreements.map((agreement) => ({
     agreement,
     summary: summarizeAgreement(agreement),
   }));
+  const fallbackLivestreamEvidenceDisplays = fallbackLivestreamEvidenceRoutes.map((route) =>
+    buildFallbackLivestreamEvidenceDisplay(route),
+  );
 
   return (
     <div className="page-shell marketplace-app-shell">
@@ -85,8 +96,46 @@ export default async function CommitmentsPage() {
             </div>
 
             {supabaseReady ? (
-              summaries.length ? (
+              summaries.length || fallbackLivestreamEvidenceDisplays.length ? (
                 <div className="commitment-list">
+                  {fallbackLivestreamEvidenceDisplays.map((evidence) => (
+                    <article className="commitment-row panel" key={evidence.id}>
+                      <div className="commitment-row-main">
+                        <CommitmentStatusBadge status="evidence_due" />
+                        <div>
+                          <h3>{evidence.title}</h3>
+                          <p>
+                            {evidence.branchLabel}
+                            {" · "}
+                            {evidence.observationLabel}
+                          </p>
+                        </div>
+                      </div>
+                      <dl className="deal-economics-grid">
+                        <div>
+                          <dt>Status</dt>
+                          <dd>{evidence.statusLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Window</dt>
+                          <dd>{evidence.scheduleLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Recording</dt>
+                          <dd>{evidence.submittedLabel ?? evidence.recordingDueLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Review</dt>
+                          <dd>{evidence.reviewSummary ?? "Not reviewed"}</dd>
+                        </div>
+                      </dl>
+                      <div className="offer-actions">
+                        <Link className="button button-secondary button-mini" href={evidence.href}>
+                          View evidence
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
                   {summaries.map(({ agreement, summary }) => (
                     <article className="commitment-row panel" key={agreement.id}>
                     <div className="commitment-row-main">

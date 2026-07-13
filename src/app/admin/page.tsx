@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import {
   adjudicatePerformanceBondChallengeAction,
+  reviewFallbackLivestreamEvidenceAction,
   reviewBaselineBondEvidenceAction,
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
@@ -25,6 +26,7 @@ import {
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
+import { buildFallbackLivestreamEvidenceDisplay } from "@/lib/moral-trade/fallback-livestream-evidence";
 import {
   evidenceSchemaFromJson,
   formatPerformanceBondAmount,
@@ -68,6 +70,8 @@ type ProfileDataRightRequestRow =
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
+type FallbackLivestreamEvidenceRouteRow =
+  Database["public"]["Tables"]["fallback_livestream_evidence_routes"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
 type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
@@ -120,6 +124,10 @@ interface BaselineWitnessReviewRecord {
   assessment: BaselineWitnessQualityAssessmentRow | null;
   externalAccount: ExternalWitnessAccountRow | null;
   riskReports: BaselineWitnessRiskReportRow[];
+}
+
+interface FallbackLivestreamEvidenceReviewRecord {
+  route: FallbackLivestreamEvidenceRouteRow;
 }
 
 function formatPaymentAmount(amountCents: number, currency: string) {
@@ -186,6 +194,18 @@ function getJsonString(value: Json, key: string) {
 
   const field = value[key];
   return typeof field === "string" ? field : "";
+}
+
+function isMissingOptionalQueueSchemaError(error: { code?: string; message?: string } | null) {
+  const message = error?.message ?? "";
+
+  return (
+    error?.code === "PGRST205" ||
+    error?.code === "PGRST204" ||
+    message.includes("Could not find the table") ||
+    message.includes("Could not find the column") ||
+    message.includes("does not exist")
+  );
 }
 
 async function loadAdminQueues() {
@@ -310,8 +330,14 @@ async function loadAdminQueues() {
     .in("review_status", ["open", "under_review", "escalated"])
     .order("created_at", { ascending: false })
     .limit(50);
+  const fallbackLivestreamReviewsResult = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .select("*")
+    .in("status", ["due", "live_window", "recording_due", "submitted"])
+    .order("recording_due_at", { ascending: true, nullsFirst: false })
+    .limit(50);
 
-  const errors = [
+  const optionalQueueErrors = [
     reports.error,
     payments.error,
     events.error,
@@ -329,6 +355,11 @@ async function loadAdminQueues() {
     performanceBondReviewsResult.error,
     baselineWitnessReviewsResult.error,
     baselineWitnessRiskReportsResult.error,
+  ].filter((error) => error && !isMissingOptionalQueueSchemaError(error));
+
+  const errors = [
+    ...optionalQueueErrors,
+    fallbackLivestreamReviewsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
@@ -345,6 +376,8 @@ async function loadAdminQueues() {
     (baselineWitnessReviewsResult.data ?? []) as BaselineWitnessTestimonialRow[];
   const baselineWitnessRiskRows =
     (baselineWitnessRiskReportsResult.data ?? []) as BaselineWitnessRiskReportRow[];
+  const fallbackLivestreamRows =
+    (fallbackLivestreamReviewsResult.data ?? []) as FallbackLivestreamEvidenceRouteRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
   const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
@@ -369,7 +402,10 @@ async function loadAdminQueues() {
       : Promise.resolve({ data: [] as AgreementEvidenceItemRow[], error: null }),
   ]);
 
-  if (conciergeEventsResult.error) {
+  if (
+    conciergeEventsResult.error &&
+    !isMissingOptionalQueueSchemaError(conciergeEventsResult.error)
+  ) {
     throw new Error(conciergeEventsResult.error.message);
   }
   if (reviewAgreementsResult.error || reviewEvidenceItemsResult.error) {
@@ -450,21 +486,28 @@ async function loadAdminQueues() {
       : Promise.resolve({ data: [] as AgreementRow[], error: null }),
   ]);
 
-  if (flaggedOffersResult.error || flaggedCharitiesResult.error) {
+  const donationOffsetRelatedError =
+    flaggedOffersResult.error && !isMissingOptionalQueueSchemaError(flaggedOffersResult.error)
+      ? flaggedOffersResult.error
+      : flaggedCharitiesResult.error &&
+          !isMissingOptionalQueueSchemaError(flaggedCharitiesResult.error)
+        ? flaggedCharitiesResult.error
+        : null;
+
+  if (donationOffsetRelatedError) {
     throw new Error(
-      flaggedOffersResult.error?.message ??
-        flaggedCharitiesResult.error?.message ??
-        "Unable to load donation offset review records.",
+      donationOffsetRelatedError.message ?? "Unable to load donation offset review records.",
     );
   }
 
-  const performanceBondRelatedError =
-    performanceBondEvidenceResult.error ??
-    performanceBondChallengesResult.error ??
-    performanceBondLedgerResult.error ??
-    performanceBondAuditResult.error ??
-    performanceBondOffersResult.error ??
-    performanceBondAgreementsResult.error;
+  const performanceBondRelatedError = [
+    performanceBondEvidenceResult.error,
+    performanceBondChallengesResult.error,
+    performanceBondLedgerResult.error,
+    performanceBondAuditResult.error,
+    performanceBondOffersResult.error,
+    performanceBondAgreementsResult.error,
+  ].find((error) => error && !isMissingOptionalQueueSchemaError(error));
 
   if (performanceBondRelatedError) {
     throw new Error(performanceBondRelatedError.message);
@@ -506,10 +549,11 @@ async function loadAdminQueues() {
       : Promise.resolve({ data: [] as ExternalWitnessAccountRow[], error: null }),
   ]);
 
-  const baselineWitnessRelatedError =
-    baselineWitnessAssessmentsResult.error ??
-    baselineWitnessInvitesResult.error ??
-    baselineWitnessExternalAccountsResult.error;
+  const baselineWitnessRelatedError = [
+    baselineWitnessAssessmentsResult.error,
+    baselineWitnessInvitesResult.error,
+    baselineWitnessExternalAccountsResult.error,
+  ].find((error) => error && !isMissingOptionalQueueSchemaError(error));
 
   if (baselineWitnessRelatedError) {
     throw new Error(baselineWitnessRelatedError.message);
@@ -646,6 +690,9 @@ async function loadAdminQueues() {
       ],
       testimonial,
     })) satisfies BaselineWitnessReviewRecord[],
+    fallbackLivestreamEvidenceReviews: fallbackLivestreamRows.map((route) => ({
+      route,
+    })) satisfies FallbackLivestreamEvidenceReviewRecord[],
     baselineWitnessRiskReports: baselineWitnessRiskRows,
   };
 }
@@ -777,8 +824,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">07</span>
                 <div>
-                  <strong>{queues?.agreementEvidenceReviews.length ?? 0} evidence review item(s)</strong>
-                  <p>Agreement evidence, challenge windows, and appeals.</p>
+                  <strong>
+                    {(queues?.agreementEvidenceReviews.length ?? 0) +
+                      (queues?.fallbackLivestreamEvidenceReviews.length ?? 0)}{" "}
+                    evidence review item(s)
+                  </strong>
+                  <p>Agreement evidence, fallback livestream routes, challenge windows, and appeals.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -1191,6 +1242,110 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No agreement evidence reviews.</strong>
                       <p>Evidence submitted from agreement rooms will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Fallback livestream evidence</p>
+                <h2>No-trade branch evidence queue</h2>
+                <p>
+                  Review submitted external streams or recordings for the scheduled fallback route.
+                  Decisions describe observed route evidence only.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.fallbackLivestreamEvidenceReviews.length ? (
+                  queues.fallbackLivestreamEvidenceReviews.map(({ route }) => {
+                    const evidence = buildFallbackLivestreamEvidenceDisplay(route);
+
+                    return (
+                      <article className="review-card panel" key={route.id}>
+                        <div className="review-card-head">
+                          <div>
+                            <p className="detail-kicker">{evidence.branchLabel}</p>
+                            <h3>{evidence.observationLabel}</h3>
+                          </div>
+                          <span className="badge badge-secondary">{evidence.statusLabel}</span>
+                        </div>
+                        <dl className="deal-economics-grid">
+                          <div>
+                            <dt>Window</dt>
+                            <dd>{evidence.scheduleLabel}</dd>
+                          </div>
+                          <div>
+                            <dt>Recording due</dt>
+                            <dd>{evidence.recordingDueLabel}</dd>
+                          </div>
+                          <div>
+                            <dt>Provider</dt>
+                            <dd>{evidence.providerLabel}</dd>
+                          </div>
+                          <div>
+                            <dt>Visibility</dt>
+                            <dd>{evidence.visibilityLabel}</dd>
+                          </div>
+                        </dl>
+                        <p className="route-text">{evidence.actionStatement}</p>
+                        <div className="mini-list">
+                          <span>Challenge code: {evidence.challengeCode}</span>
+                          <span>
+                            Recording:{" "}
+                            {evidence.recordingUrl ? (
+                              <a href={evidence.recordingUrl} rel="noreferrer" target="_blank">
+                                open
+                              </a>
+                            ) : (
+                              "not submitted"
+                            )}
+                          </span>
+                          <Link href={evidence.href}>Open evidence route</Link>
+                        </div>
+                        <form action={reviewFallbackLivestreamEvidenceAction} className="compact-form">
+                          <input name="fallback_livestream_route_id" type="hidden" value={route.id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <label className="field">
+                            <span>Decision</span>
+                            <select name="fallback_livestream_review_decision" defaultValue="unclear">
+                              <option value="observed">Observed</option>
+                              <option value="unclear">Unclear</option>
+                              <option value="missed">Missed</option>
+                            </select>
+                          </label>
+                          <fieldset className="review-readiness-fieldset">
+                            <legend>Evidence checks</legend>
+                            <label className="checkbox-label">
+                              <input name="fallback_livestream_challenge_code_displayed" type="checkbox" />
+                              <span>Challenge code appeared in the artifact.</span>
+                            </label>
+                            <label className="checkbox-label">
+                              <input name="fallback_livestream_no_trade_branch_window_reviewed" type="checkbox" />
+                              <span>Scheduled no-trade branch window was reviewed.</span>
+                            </label>
+                            <label className="checkbox-label">
+                              <input name="fallback_livestream_recording_matches_schedule" type="checkbox" />
+                              <span>Recording timestamp and route schedule were compared.</span>
+                            </label>
+                          </fieldset>
+                          <label className="field">
+                            <span>Reviewer notes</span>
+                            <textarea name="fallback_livestream_review_notes" rows={3} />
+                          </label>
+                          <button className="button button-primary button-mini" type="submit">
+                            Save review
+                          </button>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No fallback livestream evidence reviews.</strong>
+                      <p>Submitted fallback livestream recordings will appear here.</p>
                     </div>
                   </div>
                 )}

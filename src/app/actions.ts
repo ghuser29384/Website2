@@ -138,6 +138,14 @@ import {
   type PerformanceBondStatus,
   type PerformanceBondTermsInput,
 } from "@/lib/performance-bonds";
+import {
+  createFallbackLivestreamChallengeCode,
+  fallbackLivestreamReviewStatus,
+  normalizeFallbackLivestreamReviewDecision,
+  normalizeFallbackLivestreamStreamProvider,
+  normalizeFallbackLivestreamVisibility,
+  validateFallbackLivestreamEvidenceDraft,
+} from "@/lib/moral-trade/fallback-livestream-evidence";
 import { buildAgreementPaymentAuthorizationPreview } from "@/lib/agreement-payment-authorization";
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
@@ -299,6 +307,8 @@ type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row
 type PerformanceBondUpdate = Database["public"]["Tables"]["performance_bonds"]["Update"];
 type ProfileVerificationBadgeInsert =
   Database["public"]["Tables"]["profile_verification_badges"]["Insert"];
+type FallbackLivestreamEvidenceRouteInsert =
+  Database["public"]["Tables"]["fallback_livestream_evidence_routes"]["Insert"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
@@ -3981,6 +3991,33 @@ export async function createOfferAction(formData: FormData) {
           prefix: "performance_bond",
         })
       : null;
+  const fallbackLivestreamEnabled = readBoolean(formData, "fallback_livestream_enabled");
+  const fallbackLivestreamBaselineClaim =
+    readOptional(formData, "fallback_livestream_baseline_claim") || baselineStatement;
+  const fallbackLivestreamActionStatement = readOptional(
+    formData,
+    "fallback_livestream_action_statement",
+  );
+  const fallbackLivestreamClearingDeadlineAt = readOptional(
+    formData,
+    "fallback_livestream_clearing_deadline_at",
+  );
+  const fallbackLivestreamScheduledStartAt = readOptional(
+    formData,
+    "fallback_livestream_scheduled_start_at",
+  );
+  const fallbackLivestreamScheduledEndAt = readOptional(
+    formData,
+    "fallback_livestream_scheduled_end_at",
+  );
+  const fallbackLivestreamStreamProvider = normalizeFallbackLivestreamStreamProvider(
+    readOptional(formData, "fallback_livestream_stream_provider"),
+  );
+  const fallbackLivestreamVisibility = normalizeFallbackLivestreamVisibility(
+    readOptional(formData, "fallback_livestream_visibility"),
+  );
+  const fallbackLivestreamStreamUrl = readOptional(formData, "fallback_livestream_stream_url");
+  const fallbackLivestreamRecordingUrl = readOptional(formData, "fallback_livestream_recording_url");
   const pledgeSwapManualReviewInput: PledgeSwapManualReviewInput | null =
     normalizedMode === "pledge"
       ? {
@@ -4050,6 +4087,18 @@ export async function createOfferAction(formData: FormData) {
   const pledgeSwapManualReviewPreview = pledgeSwapManualReviewInput
     ? buildPledgeSwapManualReviewPreview(pledgeSwapManualReviewInput)
     : null;
+  const fallbackLivestreamValidationErrors = validateFallbackLivestreamEvidenceDraft({
+    baselineClaim: fallbackLivestreamBaselineClaim,
+    enabled: fallbackLivestreamEnabled,
+    fallbackActionStatement: fallbackLivestreamActionStatement,
+    clearingDeadlineAt: fallbackLivestreamClearingDeadlineAt,
+    scheduledStartAt: fallbackLivestreamScheduledStartAt,
+    scheduledEndAt: fallbackLivestreamScheduledEndAt,
+    streamProvider: fallbackLivestreamStreamProvider,
+    streamUrl: fallbackLivestreamStreamUrl,
+    recordingUrl: fallbackLivestreamRecordingUrl,
+    visibility: fallbackLivestreamVisibility,
+  });
 
   if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
@@ -4075,6 +4124,15 @@ export async function createOfferAction(formData: FormData) {
         pledgeSwapValidationErrors[0] ?? "Complete the pledge-swap manual-review terms.",
       );
     }
+  }
+
+  if (fallbackLivestreamValidationErrors.length) {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      fallbackLivestreamValidationErrors[0] ??
+        "Complete the fallback livestream evidence fields.",
+    );
   }
 
   if (donationOffsetDonorOfRecordInput) {
@@ -4236,6 +4294,14 @@ export async function createOfferAction(formData: FormData) {
     `No-trade baseline / default: ${baselineStatement}`,
     additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    fallbackLivestreamEnabled
+      ? [
+          "Fallback livestream evidence:",
+          `Observed branch: ${fallbackLivestreamBaselineClaim}`,
+          `Fallback action: ${fallbackLivestreamActionStatement}`,
+          `Scheduled window: ${fallbackLivestreamScheduledStartAt} to ${fallbackLivestreamScheduledEndAt}`,
+        ].join("\n")
+      : "",
     pledgeSwapManualReviewPreview
       ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
       : "",
@@ -4539,6 +4605,70 @@ export async function createOfferAction(formData: FormData) {
     redirectWithMessage(newOfferReturnPath, "error", error?.message ?? "Unable to create offer.");
   }
 
+  if (fallbackLivestreamEnabled) {
+    const scheduledStartAt = parseOptionalTimestamp(fallbackLivestreamScheduledStartAt);
+    const scheduledEndAt = parseOptionalTimestamp(fallbackLivestreamScheduledEndAt);
+    const clearingDeadlineAt = parseOptionalTimestamp(fallbackLivestreamClearingDeadlineAt);
+    const recordingDueAt = scheduledEndAt
+      ? new Date(Date.parse(scheduledEndAt) + 24 * 60 * 60 * 1000).toISOString()
+      : null;
+
+    if (!scheduledStartAt || !scheduledEndAt) {
+      redirectWithMessage(
+        `/offers/${data.id}`,
+        "error",
+        "Offer saved but fallback livestream evidence was not recorded because the schedule was invalid.",
+      );
+    }
+
+    const fallbackLivestreamInsert: FallbackLivestreamEvidenceRouteInsert = {
+      offer_id: data.id,
+      commitment_id: null,
+      creator_id: viewer.authUser.id,
+      subject_user_id: viewer.authUser.id,
+      baseline_claim: fallbackLivestreamBaselineClaim,
+      fallback_action_statement: fallbackLivestreamActionStatement,
+      fallback_event_label: "No-trade branch evidence",
+      clearing_deadline_at: clearingDeadlineAt,
+      scheduled_start_at: scheduledStartAt,
+      scheduled_end_at: scheduledEndAt,
+      recording_due_at: recordingDueAt,
+      stream_provider: fallbackLivestreamStreamProvider,
+      stream_url: fallbackLivestreamStreamUrl,
+      recording_url: fallbackLivestreamRecordingUrl,
+      challenge_code: createFallbackLivestreamChallengeCode(),
+      challenge_issued_at: protocolTransitionRecordedAt,
+      visibility: fallbackLivestreamVisibility,
+      status: "scheduled",
+      review_notes: "",
+      review_checklist: {
+        challengeCodeDisplayed: false,
+        noTradeBranchWindowReviewed: false,
+        recordingMatchesSchedule: false,
+      },
+    };
+
+    const { error: fallbackLivestreamError } = await supabase
+      .from("fallback_livestream_evidence_routes")
+      .insert(fallbackLivestreamInsert);
+
+    if (fallbackLivestreamError) {
+      logSupabaseActionError(
+        "Failed to create fallback livestream evidence route",
+        fallbackLivestreamError,
+        {
+          offerId: data.id,
+          ownerId: viewer.authUser.id,
+        },
+      );
+      redirectWithMessage(
+        `/offers/${data.id}`,
+        "error",
+        "Offer saved but fallback livestream evidence could not be recorded.",
+      );
+    }
+  }
+
   if (normalizedMode === "offset" && donationOffsetFields) {
     const baselineBondStatus: BaselineBondStatus = baselineBondEnabled ? "pending_payment" : "none";
     const baselineBondNotes = [
@@ -4729,6 +4859,14 @@ export async function createOfferAction(formData: FormData) {
     `No-trade baseline / default: ${baselineStatement}`,
     additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    fallbackLivestreamEnabled
+      ? [
+          "Fallback livestream evidence:",
+          `Observed branch: ${fallbackLivestreamBaselineClaim}`,
+          `Fallback action: ${fallbackLivestreamActionStatement}`,
+          `Scheduled window: ${fallbackLivestreamScheduledStartAt} to ${fallbackLivestreamScheduledEndAt}`,
+        ].join("\n")
+      : "",
     pledgeSwapManualReviewPreview
       ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
       : "",
@@ -9887,6 +10025,143 @@ export async function reviewDonationOffsetOfferAction(formData: FormData) {
   revalidatePath("/donation-offsets");
   revalidatePath(`/offers/${offerId}`);
   redirectWithMessage(returnTo, "message", "Donation offset review updated.");
+}
+
+export async function submitFallbackLivestreamRecordingAction(formData: FormData) {
+  const routeId = readRequired(formData, "fallback_livestream_route_id");
+  const recordingUrl = readRequired(formData, "fallback_livestream_recording_url");
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to") || `/evidence/fallback-livestream/${routeId}`,
+    `/evidence/fallback-livestream/${routeId}`,
+  );
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
+  }
+
+  let parsedRecordingUrl: URL;
+  try {
+    parsedRecordingUrl = new URL(recordingUrl);
+  } catch {
+    redirectWithMessage(returnTo, "error", "Use an http or https recording URL.");
+  }
+
+  if (parsedRecordingUrl.protocol !== "http:" && parsedRecordingUrl.protocol !== "https:") {
+    redirectWithMessage(returnTo, "error", "Use an http or https recording URL.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: route, error: routeError } = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .select("*")
+    .eq("id", routeId)
+    .maybeSingle();
+
+  if (routeError || !route) {
+    logSupabaseActionError("Failed to load fallback livestream evidence route", routeError, {
+      routeId,
+      viewerId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      routeError?.message ?? "Fallback livestream evidence was not found.",
+    );
+  }
+
+  if (route.creator_id !== viewer.authUser.id && route.subject_user_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You cannot update this fallback livestream evidence route.");
+  }
+
+  if (
+    route.status === "reviewed_observed" ||
+    route.status === "reviewed_unclear" ||
+    route.status === "missed" ||
+    route.status === "cancelled_trade_cleared" ||
+    route.status === "cancelled"
+  ) {
+    redirectWithMessage(returnTo, "error", "This fallback livestream evidence route is closed.");
+  }
+
+  const submittedAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .update({
+      recording_url: parsedRecordingUrl.toString(),
+      status: "submitted",
+      submitted_at: submittedAt,
+    })
+    .eq("id", routeId);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to submit fallback livestream recording", updateError, {
+      routeId,
+      viewerId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  revalidatePath(returnTo);
+  revalidatePath(`/evidence/fallback-livestream/${routeId}`);
+  revalidatePath("/commitments");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Fallback livestream recording submitted for review.");
+}
+
+export async function reviewFallbackLivestreamEvidenceAction(formData: FormData) {
+  const routeId = readRequired(formData, "fallback_livestream_route_id");
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to") || "/admin",
+    "/admin",
+  );
+  const decision = normalizeFallbackLivestreamReviewDecision(
+    readOptional(formData, "fallback_livestream_review_decision"),
+  );
+
+  if (!decision) {
+    redirectWithMessage(returnTo, "error", "Choose a fallback livestream evidence review decision.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const reviewedAt = new Date().toISOString();
+  const reviewChecklist = {
+    challengeCodeDisplayed: readBoolean(formData, "fallback_livestream_challenge_code_displayed"),
+    noTradeBranchWindowReviewed: readBoolean(
+      formData,
+      "fallback_livestream_no_trade_branch_window_reviewed",
+    ),
+    recordingMatchesSchedule: readBoolean(
+      formData,
+      "fallback_livestream_recording_matches_schedule",
+    ),
+  };
+  const { error } = await supabase
+    .from("fallback_livestream_evidence_routes")
+    .update({
+      review_decision: decision,
+      reviewed_at: reviewedAt,
+      reviewer_id: admin.authUser.id,
+      review_notes: readOptional(formData, "fallback_livestream_review_notes"),
+      review_checklist: reviewChecklist,
+      status: fallbackLivestreamReviewStatus(decision),
+    })
+    .eq("id", routeId);
+
+  if (error) {
+    logSupabaseActionError("Failed to review fallback livestream evidence", error, {
+      routeId,
+      reviewerId: admin.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath(returnTo);
+  revalidatePath(`/evidence/fallback-livestream/${routeId}`);
+  revalidatePath("/admin");
+  revalidatePath("/commitments");
+  redirectWithMessage(returnTo, "message", "Fallback livestream evidence review saved.");
 }
 
 export async function submitBaselineBondEvidenceAction(formData: FormData) {

@@ -1,0 +1,89 @@
+name: Vercel Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production-main
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.9.0"
+          cache: npm
+
+      - name: Verify Vercel deployment secrets
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "${VERCEL_TOKEN}" ]] || missing+=("VERCEL_TOKEN")
+          [[ -n "${VERCEL_ORG_ID}" ]] || missing+=("VERCEL_ORG_ID")
+          [[ -n "${VERCEL_PROJECT_ID}" ]] || missing+=("VERCEL_PROJECT_ID")
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required GitHub secret(s): %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel production environment
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel production output
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel Production
+        id: deploy
+        shell: bash
+        run: |
+          deploy_output="$(vercel deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")"
+          printf '%s\n' "$deploy_output"
+
+          clean_output="$(printf '%s\n' "$deploy_output" | sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g')"
+          deployment_url="$(printf '%s\n' "$clean_output" | sed -n 's/.*\(https:\/\/[^[:space:]]*\.vercel\.app[^[:space:]]*\).*/\1/p' | tail -n 1)"
+          if [[ -z "$deployment_url" ]]; then
+            deployment_url="$(printf '%s\n' "$clean_output" | sed -n '/vercel\.com\//!s/.*\(https:\/\/[^[:space:]]*\).*/\1/p' | tail -n 1)"
+          fi
+
+          if [[ -z "$deployment_url" ]]; then
+            echo "Could not capture a deployment URL from Vercel deploy output." >&2
+            exit 1
+          fi
+
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment Check
+        run: vercel inspect "${{ steps.deploy.outputs.url }}" --token="$VERCEL_TOKEN"

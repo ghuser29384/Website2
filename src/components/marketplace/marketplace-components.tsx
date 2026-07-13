@@ -294,7 +294,8 @@ function getBrowseEvidenceChipLabel(deal: MarketplaceDeal) {
     deal.fundingRound?.evidenceReviewStatus,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join(" ")
+    .toLowerCase();
 
   if (!verificationText && !deal.fallbackLivestreamEvidence) {
     return null;
@@ -312,7 +313,7 @@ function getBrowseEvidenceChipLabel(deal: MarketplaceDeal) {
     return "Donation receipt";
   }
 
-  if (/photo|image|receipt-photo/i.test(verificationText)) {
+  if (/photo|image|receipt.*photo|photo.*receipt/i.test(verificationText)) {
     return "Receipts/photos later";
   }
 
@@ -381,12 +382,13 @@ function uniqueVisibleStrings(values: Array<string | null | undefined>) {
 
 function getDealAmountLabel(deal: MarketplaceDeal) {
   const receipt = getDealReceiptAtom(deal);
-  if (receipt.exposure.startsWith("Max ")) return receipt.exposure.replace("Max ", "");
+  const browseExposure = getBrowseExposureFact(receipt);
+  if (browseExposure.startsWith("Max ")) return browseExposure.replace("Max ", "");
   if (typeof deal.pledgeAmountCents === "number") {
     return centsToV72Exposure(deal.pledgeAmountCents).replace("Max ", "");
   }
 
-  return getBrowseExposureFact(receipt);
+  return browseExposure;
 }
 
 function getDealSubline(deal: MarketplaceDeal) {
@@ -404,7 +406,7 @@ function getDealActionFact(deal: MarketplaceDeal) {
 }
 
 function compactReceiptFact(value: string) {
-  if (/no durable state changed|no commitment/i.test(value)) return "No commitment";
+  if (/no durable state changed|no commitment/i.test(value)) return "Conditional";
   if (/review/i.test(value)) return "Review required";
   if (/private/i.test(value)) return "Private planning";
   if (/not connected/i.test(value)) return "Not connected";
@@ -423,7 +425,7 @@ function getBrowsePledgeFact(deal: MarketplaceDeal) {
   const durationMatch = text.match(/\b(\d+)\s*(day|week|month|year)s?\b/i);
 
   if (durationMatch) {
-    return String(durationMatch[1]) + "-" + durationMatch[2].toLowerCase() + " pledge";
+    return `${durationMatch[1]}-${durationMatch[2].toLowerCase()} pledge`;
   }
 
   if (/vegetarian|vegan|meal/i.test(text)) return "Vegetarian pledge";
@@ -444,14 +446,15 @@ function getBrowseChargeFact(receipt: BrowseCardReceiptAtom) {
   const text = [receipt.state, receipt.source, receipt.conditionOrProtection, receipt.protection].join(" ");
 
   if (/preview|example|no durable state changed|no commitment|no charge|not connected/i.test(text)) {
-    return "No charge now";
+    return "Conditional";
   }
 
   return "Review required";
 }
 
 function getBrowseExposureFact(receipt: BrowseCardReceiptAtom) {
-  return receipt.exposure;
+  if (/preview only/i.test(receipt.exposure)) return "Exposure unknown";
+  return /no charge now/i.test(receipt.exposure) ? "Conditional" : receipt.exposure;
 }
 
 function getBrowseConditionFact(receipt: BrowseCardReceiptAtom) {
@@ -504,7 +507,6 @@ function getBrowseCardReceiptLine(deal: MarketplaceDeal, receipt: BrowseCardRece
     getBrowseChargeFact(receipt),
   ].map((value) => (/no commitment/i.test(value) ? getBrowseActionObjectFact(deal) : value));
 }
-
 
 type BrowseDealSecondarySlotType =
   | "preview_match"
@@ -975,7 +977,7 @@ function getMiniDealStatusChips(
 
   if (slotType === "recipient_public_good" || publicGoodsVariant === "repeat") {
     return uniqueVisibleStrings([
-      "No charge now",
+      "Conditional",
       deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
     ]).slice(0, 2);
   }
@@ -1130,7 +1132,7 @@ export function DealDetailObject({
   const statusChips = getDealStatusChips(deal);
   const evidenceDetailRows = getEvidenceDetailRows(deal);
   const explainRows = [...recipientDisplay.detailRows, ...evidenceDetailRows];
-  const explainSummary = explainRows.length ? "Verification & funding" : "Requirements & rules";
+  const explainSummary = recipientDisplay.detailRows.length ? "Verification & funding" : "Requirements & rules";
 
   return (
     <article className="mt-v75-detail-object" aria-labelledby={headingId}>
@@ -1232,14 +1234,19 @@ export function DealDetailObject({
         <FallbackLivestreamEvidenceSummary deal={deal} />
         <details className="v72-explain-row mt-v75-unified-explain">
           <summary>{explainSummary}</summary>
+          {explainRows.length ? (
+            <dl>
+              {explainRows.map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
           <p>
             Effect on this action: Requires adapter recheck. This is context, not a verdict.
           </p>
-          {explainRows.map((row) => (
-            <p key={`${row.label}:${row.value}`}>
-              {row.label}: {row.value}
-            </p>
-          ))}
           {deal.fallbackLivestreamEvidence ? (
             <>
               <p>
@@ -1260,7 +1267,7 @@ function QuickFilterRail({ deals }: { deals: readonly MarketplaceDeal[] }) {
     {
       count: deals.filter((deal) => getDealReceiptAtom(deal).exposure === "No charge now").length,
       icon: "source",
-      label: "No charge now",
+      label: "Conditional",
       tone: "good",
     },
     {
@@ -2303,9 +2310,10 @@ export function MarketplaceHome({
       label: "AI Safety",
     },
   ] as const;
+  const renderLegacyBrowseSurface = false;
 
   return (
-    <section className="moral-marketplace-home" aria-labelledby="moral-marketplace-heading">
+    <section className="moral-marketplace-home" aria-label="Moral Trade marketplace browse">
       <div className="mt-v75-desktop-board" aria-label="Moral Trade marketplace desktop">
         <MarketplaceSideNav active="browse" />
         <div className="mt-v75-workspace">
@@ -2333,7 +2341,7 @@ export function MarketplaceHome({
                 <IconMark name="lock" />
                 <div>
                   <strong>Preview only until you confirm</strong>
-                  <span>No commitment · No charge · You review every detail</span>
+                  <span>Review details before any authorization</span>
                 </div>
                 <Link href="/what-is-moral-trade">Learn how &gt;</Link>
               </div>
@@ -2396,84 +2404,89 @@ export function MarketplaceHome({
           </div>
         </div>
       </div>
-      <div className="moral-marketplace-app-header">
-        <div className="moral-marketplace-title-block">
-          <span className="moral-marketplace-brand">Moral Trade</span>
-          <h1 id="moral-marketplace-heading">Browse offers</h1>
-        </div>
-        <div className="moral-marketplace-header-actions" aria-label="Marketplace shortcuts">
-          <Link className="moral-marketplace-icon-action" href="/dashboard" aria-label="Account">
-            <IconMark name="profile" />
-          </Link>
-          <Link className="button button-primary button-mini" href={createHref}>
-            Create
-          </Link>
-        </div>
-      </div>
-      <MarketplaceSearch query={surface.query} />
-      <nav className="v72-marketplace-tabs" aria-label="Marketplace tabs">
-        {(zeroLive
-          ? [
-              ["Templates", "/offers?tab=templates"],
-              ["Examples", "/offers?tab=worked_examples"],
-              ["Public goods", "/mpgf"],
-              ["Guides", "/worked-examples"],
-            ]
-          : [
-              ["Live", "/offers?tab=live"],
-              ["Preview", "/offers"],
-              ["Templates", "/offers?tab=templates"],
-              ["Examples", "/offers?tab=worked_examples"],
-              ["Guides", "/worked-examples"],
-            ]
-        ).map(([label, href]) => (
-          <Link href={href} key={label}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <p className="v72-marketplace-context">
-        {zeroLive
-          ? "No live offers yet · Showing examples and templates"
-          : "Live offers available · Review current terms before continuing"}
-      </p>
-      <span id="browse-controls" className="v72-filter-anchor" aria-hidden="true" />
-      <div className="moral-marketplace-filter-chips v72-control-rail" aria-label="Marketplace controls">
-        {railLinks.map((link) => (
-          <Link className="source-pill source-pill-link" href={link.href} key={link.label}>
-            {link.label}
-          </Link>
-        ))}
-        <Link className="source-pill source-pill-link v72-filter-trigger" href={openFilterHref}>
-          Filter
-        </Link>
-        {compactRailLabels.map((label) => (
-          <span className="source-pill v72-active-filter-chip" key={label}>
-            {label}
-          </span>
-        ))}
-      </div>
-
-      <div className="moral-marketplace-feed">
-        {visibleDeals.length ? (
-          visibleDeals.slice(0, 8).map((deal) => <MoralDealCard deal={deal} key={deal.id} />)
-        ) : (
-          <div className="empty-state marketplace-empty-state">
-            <div>
-              <strong>No reliable public listings match.</strong>
-              <p>{surface.emptyState ?? "No live offers yet. Reviewed templates and examples remain available."}</p>
-              <Link className="button button-primary" href={buildMarketplaceHref({})}>
-                Browse offers
+      {renderLegacyBrowseSurface ? (
+        <>
+          <div className="moral-marketplace-app-header">
+            <div className="moral-marketplace-title-block">
+              <span className="moral-marketplace-brand">Moral Trade</span>
+              <h1 id="moral-marketplace-heading">Browse offers</h1>
+            </div>
+            <div className="moral-marketplace-header-actions" aria-label="Marketplace shortcuts">
+              <Link className="moral-marketplace-icon-action" href="/dashboard" aria-label="Account">
+                <IconMark name="profile" />
+              </Link>
+              <Link className="button button-primary button-mini" href={createHref}>
+                Create
               </Link>
             </div>
           </div>
-        )}
-        </div>
-      <section
-        aria-labelledby="browse-filter-title"
-        className={joinClassName(["v72-filter-sheet-root", query.filterSheetOpen && "is-open"])}
-        id="browse-filter-sheet"
-      >
+          <MarketplaceSearch query={surface.query} />
+          <nav className="v72-marketplace-tabs" aria-label="Marketplace tabs">
+            {(zeroLive
+              ? [
+                  ["Templates", "/offers?tab=templates"],
+                  ["Examples", "/offers?tab=worked_examples"],
+                  ["Public goods", "/mpgf"],
+                  ["Guides", "/worked-examples"],
+                ]
+              : [
+                  ["Live", "/offers?tab=live"],
+                  ["Preview", "/offers"],
+                  ["Templates", "/offers?tab=templates"],
+                  ["Examples", "/offers?tab=worked_examples"],
+                  ["Guides", "/worked-examples"],
+                ]
+            ).map(([label, href]) => (
+              <Link href={href} key={label}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <p className="v72-marketplace-context">
+            {zeroLive
+              ? "No live offers yet · Showing examples and templates"
+              : "Live offers available · Review current terms before continuing"}
+          </p>
+          <span id="browse-controls" className="v72-filter-anchor" aria-hidden="true" />
+          <div className="moral-marketplace-filter-chips v72-control-rail" aria-label="Marketplace controls">
+            {railLinks.map((link) => (
+              <Link className="source-pill source-pill-link" href={link.href} key={link.label}>
+                {link.label}
+              </Link>
+            ))}
+            <Link className="source-pill source-pill-link v72-filter-trigger" href={openFilterHref}>
+              Filter
+            </Link>
+            {compactRailLabels.map((label) => (
+              <span className="source-pill v72-active-filter-chip" key={label}>
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <div className="moral-marketplace-feed">
+            {visibleDeals.length ? (
+              visibleDeals.slice(0, 8).map((deal) => <MoralDealCard deal={deal} key={deal.id} />)
+            ) : (
+              <div className="empty-state marketplace-empty-state">
+                <div>
+                  <strong>No reliable public listings match.</strong>
+                  <p>{surface.emptyState ?? "No live offers yet. Reviewed templates and examples remain available."}</p>
+                  <Link className="button button-primary" href={buildMarketplaceHref({})}>
+                    Browse offers
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+      {query.filterSheetOpen ? (
+        <section
+          aria-labelledby="browse-filter-title"
+          className="v72-filter-sheet-root is-open"
+          id="browse-filter-sheet"
+        >
         <Link
           aria-label="Close filters"
           className="v72-filter-scrim"
@@ -2556,7 +2569,8 @@ export function MarketplaceHome({
             </button>
           </div>
         </form>
-      </section>
+        </section>
+      ) : null}
     </section>
   );
 }

@@ -122,6 +122,11 @@ import {
   type PledgeSwapRepresentativeAuthority,
   type PledgeSwapThirdPartyObligation,
 } from "@/lib/pledge-swaps";
+import {
+  FALLBACK_LIVESTREAM_STREAM_PROVIDERS,
+  FALLBACK_LIVESTREAM_VISIBILITIES,
+  validateFallbackLivestreamEvidenceDraft,
+} from "@/lib/moral-trade/fallback-livestream-evidence";
 
 interface DonationOffsetPoolOption {
   id: string;
@@ -1143,6 +1148,16 @@ export function OfferCreateForm({
   );
   const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [fallbackLivestreamEnabled, setFallbackLivestreamEnabled] = useState(false);
+  const [fallbackLivestreamBaselineClaim, setFallbackLivestreamBaselineClaim] = useState("");
+  const [fallbackLivestreamActionStatement, setFallbackLivestreamActionStatement] = useState("");
+  const [fallbackLivestreamClearingDeadlineAt, setFallbackLivestreamClearingDeadlineAt] = useState("");
+  const [fallbackLivestreamScheduledStartAt, setFallbackLivestreamScheduledStartAt] = useState("");
+  const [fallbackLivestreamScheduledEndAt, setFallbackLivestreamScheduledEndAt] = useState("");
+  const [fallbackLivestreamStreamProvider, setFallbackLivestreamStreamProvider] = useState("external_url");
+  const [fallbackLivestreamStreamUrl, setFallbackLivestreamStreamUrl] = useState("");
+  const [fallbackLivestreamRecordingUrl, setFallbackLivestreamRecordingUrl] = useState("");
+  const [fallbackLivestreamVisibility, setFallbackLivestreamVisibility] = useState("private_review");
   const [offsetDonationPlatform, setOffsetDonationPlatform] = useState("External charity payment page");
   const [offsetDonorOfRecordRole, setOffsetDonorOfRecordRole] =
     useState<DonationOffsetDonorOfRecordRole>("participant_direct_donor");
@@ -1968,6 +1983,34 @@ export function OfferCreateForm({
         : [],
     [isPledge, pledgeSwapManualReviewInput],
   );
+  const fallbackLivestreamEvidenceErrors = useMemo(
+    () =>
+      validateFallbackLivestreamEvidenceDraft({
+        baselineClaim: fallbackLivestreamBaselineClaim || baselineStatement,
+        enabled: fallbackLivestreamEnabled,
+        fallbackActionStatement: fallbackLivestreamActionStatement,
+        clearingDeadlineAt: fallbackLivestreamClearingDeadlineAt,
+        scheduledStartAt: fallbackLivestreamScheduledStartAt,
+        scheduledEndAt: fallbackLivestreamScheduledEndAt,
+        streamProvider: fallbackLivestreamStreamProvider,
+        streamUrl: fallbackLivestreamStreamUrl,
+        recordingUrl: fallbackLivestreamRecordingUrl,
+        visibility: fallbackLivestreamVisibility,
+      }),
+    [
+      baselineStatement,
+      fallbackLivestreamActionStatement,
+      fallbackLivestreamBaselineClaim,
+      fallbackLivestreamClearingDeadlineAt,
+      fallbackLivestreamEnabled,
+      fallbackLivestreamRecordingUrl,
+      fallbackLivestreamScheduledEndAt,
+      fallbackLivestreamScheduledStartAt,
+      fallbackLivestreamStreamProvider,
+      fallbackLivestreamStreamUrl,
+      fallbackLivestreamVisibility,
+    ],
+  );
 
   const liveOffsetErrors = useMemo(
     () =>
@@ -2065,8 +2108,15 @@ export function OfferCreateForm({
       ...liveOffsetErrors,
       ...performanceBondValidation.errors,
       ...pledgeSwapManualReviewErrors,
+      ...fallbackLivestreamEvidenceErrors,
     ],
-    [liveCoreOfferErrors, liveOffsetErrors, performanceBondValidation.errors, pledgeSwapManualReviewErrors],
+    [
+      fallbackLivestreamEvidenceErrors,
+      liveCoreOfferErrors,
+      liveOffsetErrors,
+      performanceBondValidation.errors,
+      pledgeSwapManualReviewErrors,
+    ],
   );
   const reviewVerificationMethod = isOffset
     ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
@@ -2189,7 +2239,8 @@ export function OfferCreateForm({
         complete: isOffset
           ? liveOffsetErrors.length === 0
           : isPledge
-            ? pledgeSwapManualReviewErrors.length === 0
+            ? pledgeSwapManualReviewErrors.length === 0 &&
+              fallbackLivestreamEvidenceErrors.length === 0
             : Boolean(verificationPreference && reviewPeriod),
       },
       {
@@ -2205,6 +2256,7 @@ export function OfferCreateForm({
       additionalityStatement,
       canPublishOffer,
       exitCondition,
+      fallbackLivestreamEvidenceErrors.length,
       isOffset,
       isPayment,
       isPledge,
@@ -6689,6 +6741,152 @@ export function OfferCreateForm({
             ) : null}
           </label>
         </div>
+
+        <section className="panel subtle-panel" aria-labelledby="fallback-livestream-heading">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Fallback livestream evidence</p>
+              <h3 id="fallback-livestream-heading">Observed if no trade clears</h3>
+              <p>No-trade branch evidence can be scheduled with an external stream or recording URL.</p>
+            </div>
+            <label className="field checkbox-field">
+              <input
+                checked={fallbackLivestreamEnabled}
+                name="fallback_livestream_enabled"
+                type="checkbox"
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked;
+                  setFallbackLivestreamEnabled(checked);
+
+                  if (checked && !fallbackLivestreamBaselineClaim.trim()) {
+                    setFallbackLivestreamBaselineClaim(baselineStatement);
+                  }
+
+                  if (checked && !fallbackLivestreamActionStatement.trim()) {
+                    setFallbackLivestreamActionStatement(offerAction);
+                  }
+                }}
+              />
+              <span>Attach route</span>
+            </label>
+          </div>
+
+          {fallbackLivestreamEnabled ? (
+            <>
+              <div className="field-grid">
+                <label className="field">
+                  <span>No-trade branch claim</span>
+                  <textarea
+                    name="fallback_livestream_baseline_claim"
+                    onChange={(event) => setFallbackLivestreamBaselineClaim(readFormControlValue(event))}
+                    rows={3}
+                    value={fallbackLivestreamBaselineClaim}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Fallback action statement</span>
+                  <textarea
+                    name="fallback_livestream_action_statement"
+                    onChange={(event) => setFallbackLivestreamActionStatement(readFormControlValue(event))}
+                    rows={3}
+                    value={fallbackLivestreamActionStatement}
+                  />
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Trade-clearance deadline</span>
+                  <input
+                    name="fallback_livestream_clearing_deadline_at"
+                    type="datetime-local"
+                    value={fallbackLivestreamClearingDeadlineAt}
+                    onChange={(event) => setFallbackLivestreamClearingDeadlineAt(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Livestream starts</span>
+                  <input
+                    name="fallback_livestream_scheduled_start_at"
+                    type="datetime-local"
+                    value={fallbackLivestreamScheduledStartAt}
+                    onChange={(event) => setFallbackLivestreamScheduledStartAt(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Livestream ends</span>
+                  <input
+                    name="fallback_livestream_scheduled_end_at"
+                    type="datetime-local"
+                    value={fallbackLivestreamScheduledEndAt}
+                    onChange={(event) => setFallbackLivestreamScheduledEndAt(readFormControlValue(event))}
+                  />
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Provider</span>
+                  <select
+                    name="fallback_livestream_stream_provider"
+                    value={fallbackLivestreamStreamProvider}
+                    onChange={(event) => setFallbackLivestreamStreamProvider(readFormControlValue(event))}
+                  >
+                    {FALLBACK_LIVESTREAM_STREAM_PROVIDERS.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {provider.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field">
+                  <span>Visibility</span>
+                  <select
+                    name="fallback_livestream_visibility"
+                    value={fallbackLivestreamVisibility}
+                    onChange={(event) => setFallbackLivestreamVisibility(readFormControlValue(event))}
+                  >
+                    {FALLBACK_LIVESTREAM_VISIBILITIES.map((visibility) => (
+                      <option key={visibility} value={visibility}>
+                        {visibility.replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Stream URL</span>
+                  <input
+                    name="fallback_livestream_stream_url"
+                    type="url"
+                    value={fallbackLivestreamStreamUrl}
+                    onChange={(event) => setFallbackLivestreamStreamUrl(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Recording URL</span>
+                  <input
+                    name="fallback_livestream_recording_url"
+                    type="url"
+                    value={fallbackLivestreamRecordingUrl}
+                    onChange={(event) => setFallbackLivestreamRecordingUrl(readFormControlValue(event))}
+                  />
+                </label>
+              </div>
+
+              <p className="panel-note">
+                Challenge code is generated after save and review stays private unless a later public-safe surface is added.
+              </p>
+            </>
+          ) : null}
+        </section>
 
         {isPayment ? (
           <>

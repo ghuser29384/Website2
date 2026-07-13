@@ -30,6 +30,8 @@ import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace
 import {
   buildMarketplaceDeals,
   buildMarketplaceSurface,
+  marketplaceDealFromOfferRecord,
+  marketplaceDealFromWorkedOffer,
   parseMarketplaceQuery,
 } from "@/lib/marketplace-deals";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
@@ -52,24 +54,24 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Browse Moral Trade Offers and Worked Examples",
+  title: "Moral Trade Offers",
   description:
-    "Browse live moral trade offers and worked examples by cause area, format, evidence method, and review state.",
+    "Review moral trade offers by cause area, format, evidence method, and review state before you confirm.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Browse Moral Trade Offers and Worked Examples",
+    title: "Moral Trade Offers",
     description:
-      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
+      "Review offers with explicit terms, evidence rules, and safety boundaries before you confirm.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Browse Moral Trade Offers and Worked Examples",
+    title: "Moral Trade Offers",
     description:
-      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
+      "Review offers with explicit terms, evidence rules, and safety boundaries before you confirm.",
   },
 };
 
@@ -347,6 +349,7 @@ function formatListingMode(mode: MarketplaceListing["mode"]) {
 
 function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]): MarketplaceListing {
   const baselineConfidence = getBaselineConfidence(offer);
+  const displayDeal = marketplaceDealFromWorkedOffer(offer);
   const reviewInstrumentation = getOfferReviewCardInstrumentation({
     ...offer,
     currentStatus: "Worked example; manual review required before reliance",
@@ -378,12 +381,13 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     scoreConfidence: getScoreConfidence(offer),
     source: "example",
     summary: `A ${offer.duration.toLowerCase()} ${formatMode(offer.mode).toLowerCase()} with ${offer.verification.toLowerCase()} evidence and ${baselineConfidence.toLowerCase()} baseline confidence.`,
-    title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
+    title: displayDeal.title,
     verification: offer.verification,
   };
 }
 
 function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
+  const displayDeal = marketplaceDealFromOfferRecord(offer);
   const reviewInput = {
     mode: offer.mode,
     verification: offer.verification,
@@ -437,7 +441,7 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     scoreConfidence: getScoreConfidence(reviewInput),
     source: "live",
     summary: truncateDescription(offer.notes || `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules and ${baselineConfidence.toLowerCase()} baseline confidence.`, 150),
-    title: `${offer.offered_cause} for ${offer.requested_cause}`,
+    title: displayDeal.title,
     verification: offer.verification,
   };
 }
@@ -1011,10 +1015,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Browse Moral Trade Offers and Worked Examples",
+    name: "Moral Trade Offers",
     url: getAbsoluteUrl("/offers"),
     description:
-      "Live offers and worked examples that state actions, reciprocal requests, evidence, and baseline confidence.",
+      "Offers that state actions, reciprocal requests, evidence, and review state before confirmation.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: filteredListings.slice(0, 20).map((listing, index) => ({
@@ -1044,6 +1048,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       },
     ],
   };
+  const renderLegacyDirectorySurface = false;
 
   return (
     <div className="page-shell page-shell-focused marketplace-app-shell">
@@ -1059,16 +1064,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         }}
         type="application/ld+json"
       />
-      <header className="collection-header offers-collection-header">
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showSearch={false}
-          showLogout={Boolean(viewer)}
-        />
-        <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
-      </header>
+      {renderLegacyDirectorySurface ? (
+        <header className="collection-header offers-collection-header">
+          <SiteTopbar
+            brandHref="/"
+            links={getPrimaryNavLinks(Boolean(viewer))}
+            {...getTopbarActions(Boolean(viewer))}
+            showSearch={false}
+            showLogout={Boolean(viewer)}
+          />
+          <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
+        </header>
+      ) : null}
 
       <main id="main-content" tabIndex={-1}>
         {formMessage ? (
@@ -1335,6 +1342,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </section>
         ) : null}
 
+        {renderLegacyDirectorySurface ? (
         <section
           className={`marketplace-shell ${showPublicGoodsEntryCard ? "" : "marketplace-shell-demoted"}`}
           aria-label="Offer marketplace"
@@ -2103,11 +2111,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </aside>
           </div>
         </section>
+        ) : null}
 
       </main>
 
       <MarketplaceBottomNav active="browse" />
-      <SiteFooter />
+      {renderLegacyDirectorySurface ? <SiteFooter /> : null}
     </div>
   );
 }
