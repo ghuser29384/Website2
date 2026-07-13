@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties, FormHTMLAttributes, ReactNode } from "react";
 
+import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import {
   buildCompatibleAdditions,
@@ -665,9 +666,8 @@ function MarketplaceSideNav({
   return (
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
       <Link className="mt-v75-side-brand" href="/offers">
-        <RegionAVisualIcon name="bowlLeaf" />
         <span className="mt-v77-brand-wordmark">
-          Moral Trade
+          <MoralTradeWordmark />
           <small>Coordination network</small>
         </span>
       </Link>
@@ -2456,7 +2456,9 @@ export function MarketplaceHome({
       </div>
       <div className="moral-marketplace-app-header">
         <div className="moral-marketplace-title-block">
-          <span className="moral-marketplace-brand">Moral Trade</span>
+          <span className="moral-marketplace-brand">
+            <MoralTradeWordmark />
+          </span>
           <h1 id="moral-marketplace-heading">Browse offers</h1>
         </div>
         <div className="moral-marketplace-header-actions" aria-label="Marketplace shortcuts">

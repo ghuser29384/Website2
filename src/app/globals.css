@@ -17470,6 +17470,9 @@ pre,
 
 .mt-site-topbar .topbar-menu-panel {
   top: calc(100% + 0.9rem);
+  max-height: calc(100dvh - 6.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.55rem;
   border-color: var(--ink);
   border-radius: 0;
@@ -18348,11 +18351,13 @@ pre,
 
 /* Shared footer */
 .mt-site-footer {
-  width: 100vw;
-  margin: 0 0 0 calc(50% - 50vw);
-  padding: clamp(3.5rem, 7vw, 6.5rem) max(1.5rem, calc((100vw - 1340px) / 2));
+  width: 100%;
+  margin: 0;
+  padding: clamp(3.5rem, 7vw, 6.5rem) 0;
   border: 0;
   background: var(--ink);
+  box-shadow: 0 0 0 100vmax var(--ink);
+  clip-path: inset(0 -100vmax);
   color: var(--bg);
 }
 
@@ -18469,6 +18474,35 @@ pre,
   --mt-v77-green: #3158ff;
   --mt-v77-green-deep: #213fd1;
   --mt-v77-green-soft: #e4e8ff;
+}
+
+@media (min-width: 980px) {
+  .marketplace-app-shell {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .marketplace-app-shell .mt-v75-side-brand {
+    padding-inline: 8px;
+  }
+
+  .marketplace-app-shell .mt-v77-brand-wordmark > .mt-wordmark {
+    font-family: var(--font-heading);
+    font-size: 1.45rem;
+    font-weight: 500;
+  }
+
+  .marketplace-app-shell .moral-marketplace-brand > .mt-wordmark {
+    font-family: var(--font-heading);
+    font-size: 1.55rem;
+    font-weight: 500;
+  }
+
+  .marketplace-app-shell .mt-v77-intro-card {
+    background:
+      radial-gradient(circle at 84% 16%, rgba(49, 88, 255, 0.32), transparent 34%),
+      linear-gradient(145deg, #171815 0%, #202333 100%);
+  }
 }
 
 .marketplace-app-shell .mt-v77-endorsement {
