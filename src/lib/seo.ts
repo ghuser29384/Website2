@@ -8,7 +8,7 @@ export const SITE_DESCRIPTION =
   "A pilot for small, voluntary, evidence-reviewed commitments across moral disagreement with explicit baselines and no custody or escrow.";
 export const SITE_URL = "https://www.moraltrade.org";
 export const SITE_LOCALE = "en_US";
-export const SITE_IMAGE_PATH = "/O%20(8).png";
+export const SITE_IMAGE_PATH = "/brand/moral-trade-mark.png";
 
 export function getAbsoluteUrl(path = "/") {
   return new URL(path, `${SITE_URL}/`).toString();

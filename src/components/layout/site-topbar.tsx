@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useId, useMemo, useState, useTransition, type FormEvent } from "react";
 
+import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { createClient } from "@/lib/supabase/browser";
 import { filterSiteSearchItems } from "@/lib/site-search";
 
@@ -173,10 +174,12 @@ export function SiteTopbar({
   }
 
   return (
-    <nav aria-label="Primary" className={showSearch ? "topbar topbar-with-search" : "topbar"}>
-      <Link aria-label="Moral Trade" className="brand" href={brandHref}>
-        <span aria-hidden="true" className="brand-logo" />
-        <span className="brand-name">Moral Trade</span>
+    <nav
+      aria-label="Primary"
+      className={showSearch ? "topbar mt-site-topbar topbar-with-search" : "topbar mt-site-topbar"}
+    >
+      <Link aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
+        <MoralTradeWordmark />
       </Link>
       <div className="topbar-links">
         {links.map((link) =>

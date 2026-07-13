@@ -444,14 +444,14 @@ function getBrowseChargeFact(receipt: BrowseCardReceiptAtom) {
   const text = [receipt.state, receipt.source, receipt.conditionOrProtection, receipt.protection].join(" ");
 
   if (/preview|example|no durable state changed|no commitment|no charge|not connected/i.test(text)) {
-    return "No charge now";
+    return "Conditional";
   }
 
   return "Review required";
 }
 
 function getBrowseExposureFact(receipt: BrowseCardReceiptAtom) {
-  return receipt.exposure;
+  return receipt.exposure === "No charge now" ? "Exposure unknown" : receipt.exposure;
 }
 
 function getBrowseConditionFact(receipt: BrowseCardReceiptAtom) {
@@ -647,7 +647,13 @@ function selectPrimaryBrowseDeal(deals: readonly MarketplaceDeal[], zeroLive: bo
   );
 }
 
-function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" | "track" | "messages" | "profile" }) {
+function MarketplaceSideNav({
+  active = "browse",
+  createHref,
+}: {
+  active?: "browse" | "plan" | "track" | "messages" | "profile";
+  createHref?: string;
+}) {
   const items = [
     { key: "browse", href: "/offers", label: "Browse", icon: "browse" },
     { key: "plan", href: "/saved-offers", label: "Planner", icon: "planner" },
@@ -660,7 +666,10 @@ function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" 
     <aside className="mt-v75-side-nav" data-marketplace-left-nav aria-label="Marketplace sections">
       <Link className="mt-v75-side-brand" href="/offers">
         <RegionAVisualIcon name="bowlLeaf" />
-        <span>Moral Trade</span>
+        <span className="mt-v77-brand-wordmark">
+          Moral Trade
+          <small>Coordination network</small>
+        </span>
       </Link>
       <nav>
         {items.map((item) => (
@@ -675,6 +684,12 @@ function MarketplaceSideNav({ active = "browse" }: { active?: "browse" | "plan" 
           </Link>
         ))}
       </nav>
+      {createHref ? (
+        <Link className="mt-v77-create-offer" href={createHref}>
+          <span aria-hidden="true">+</span>
+          Create offer
+        </Link>
+      ) : null}
       <div className="mt-v75-side-plan">
         <strong>0 in planner</strong>
         <span>
@@ -944,7 +959,9 @@ function getMiniDealAmount(deal: MarketplaceDeal, slotType: BrowseDealSecondaryS
 
   if (slotType === "threshold_public_goods") {
     const economics = buildDealEconomics(deal);
-    return economics.thresholdLabel === "Unavailable" ? receipt.exposure : economics.thresholdLabel;
+    return economics.thresholdLabel === "Unavailable"
+      ? getBrowseExposureFact(receipt)
+      : economics.thresholdLabel;
   }
 
   if (slotType === "preview_match") {
@@ -975,7 +992,7 @@ function getMiniDealStatusChips(
 
   if (slotType === "recipient_public_good" || publicGoodsVariant === "repeat") {
     return uniqueVisibleStrings([
-      "No charge now",
+      "Exposure unknown",
       deal.reviewStatus === "verified_recipient" ? "Verified recipient" : null,
     ]).slice(0, 2);
   }
@@ -1260,7 +1277,7 @@ function QuickFilterRail({ deals }: { deals: readonly MarketplaceDeal[] }) {
     {
       count: deals.filter((deal) => getDealReceiptAtom(deal).exposure === "No charge now").length,
       icon: "source",
-      label: "No charge now",
+      label: "Exposure unknown",
       tone: "good",
     },
     {
@@ -1314,46 +1331,80 @@ function QuickFilterRail({ deals }: { deals: readonly MarketplaceDeal[] }) {
 
   return (
     <aside className="mt-v75-quick-rail" data-marketplace-quick-rail aria-label="Quick filters">
-      <div className="mt-v75-rail-head">
-        <strong>Quick filters</strong>
-        <Link href="/offers">Clear all</Link>
-      </div>
-      {quickFilters.map(({ count, icon, label, tone }) => (
-        <Link
-          className={joinClassName([
-            "mt-v75-quick-link",
-            `is-${tone}`,
-            count === 0 && "is-muted",
-          ])}
-          href="/offers"
-          key={label}
-        >
-          <IconMark name={icon} />
-          <span>{label}</span>
-          <strong>{count}</strong>
-        </Link>
-      ))}
-      <div className="mt-v75-rail-section" aria-label="Categories">
-        <strong>Categories</strong>
-        {categories.map(({ count, label }) => (
+      <section className="mt-v77-intro-card" aria-labelledby="mt-v77-intro-heading">
+        <span className="mt-v77-intro-kicker">Moral cooperation, made legible</span>
+        <h2 id="mt-v77-intro-heading">Find gains from moral disagreement.</h2>
+        <p>
+          Explore arrangements each participant can judge better, with terms, evidence, and
+          exposure visible before anyone commits.
+        </p>
+        <div className="mt-v77-intro-trust" aria-label="Marketplace safeguards">
+          <span>Reviewable terms</span>
+          <span>Consent-gated disclosure</span>
+          <span>No custody or escrow</span>
+        </div>
+        <Link href="/what-is-moral-trade">How Moral Trade works</Link>
+      </section>
+      <MacAskillQuote />
+      <div className="mt-v77-filter-card">
+        <div className="mt-v75-rail-head">
+          <strong>Quick filters</strong>
+          <Link href="/offers">Clear all</Link>
+        </div>
+        {quickFilters.map(({ count, icon, label, tone }) => (
           <Link
-            className={joinClassName(["mt-v75-rail-category", count === 0 && "is-muted"])}
+            className={joinClassName([
+              "mt-v75-quick-link",
+              `is-${tone}`,
+              count === 0 && "is-muted",
+            ])}
             href="/offers"
             key={label}
           >
+            <IconMark name={icon} />
             <span>{label}</span>
             <strong>{count}</strong>
           </Link>
         ))}
-        <Link className="mt-v75-rail-show" href="/offers">
-          Show more
-        </Link>
-      </div>
-      <div className="mt-v75-rail-sort">
-        <span>Sort by</span>
-        <strong>Relevance</strong>
+        <div className="mt-v75-rail-section" aria-label="Categories">
+          <strong>Cause areas</strong>
+          {categories.map(({ count, label }) => (
+            <Link
+              className={joinClassName(["mt-v75-rail-category", count === 0 && "is-muted"])}
+              href="/offers"
+              key={label}
+            >
+              <span>{label}</span>
+              <strong>{count}</strong>
+            </Link>
+          ))}
+          <Link className="mt-v75-rail-show" href="/offers">
+            Show more
+          </Link>
+        </div>
+        <div className="mt-v75-rail-sort">
+          <span>Sort by</span>
+          <strong>Relevance</strong>
+        </div>
       </div>
     </aside>
+  );
+}
+
+function MacAskillQuote({ mobile = false }: { mobile?: boolean }) {
+  return (
+    <figure className={joinClassName(["mt-v77-endorsement", mobile && "is-mobile"])}>
+      <span className="mt-v77-endorsement-label">A vision for moral trade</span>
+      <blockquote>
+        “If we had better coordination technology, people concerned about animal suffering can
+        just trade with people who like eating meat, then, I think, it could eliminate factory
+        farming.”
+      </blockquote>
+      <figcaption>
+        <span aria-hidden="true">WM</span>
+        <strong>William MacAskill</strong>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -1814,7 +1865,7 @@ export function MarketplaceSearch({
         defaultValue={query}
         id={inputId}
         name="search"
-        placeholder="Search offers, funds, templates, rounds"
+        placeholder="Search causes, templates, rounds"
         type="search"
       />
       {showButton ? (
@@ -2307,9 +2358,16 @@ export function MarketplaceHome({
   return (
     <section className="moral-marketplace-home" aria-labelledby="moral-marketplace-heading">
       <div className="mt-v75-desktop-board" aria-label="Moral Trade marketplace desktop">
-        <MarketplaceSideNav active="browse" />
+        <MarketplaceSideNav active="browse" createHref={createHref} />
         <div className="mt-v75-workspace">
           <div className="mt-v75-toolbar">
+            <div className="mt-v77-feed-heading">
+              <div>
+                <span>Coordination feed</span>
+                <strong>Discover</strong>
+              </div>
+              <Link href="/what-is-moral-trade">How it works</Link>
+            </div>
             <MarketplaceSearch
               data-marketplace-search
               inputId="marketplace-desktop-search-input"
@@ -2333,7 +2391,7 @@ export function MarketplaceHome({
                 <IconMark name="lock" />
                 <div>
                   <strong>Preview only until you confirm</strong>
-                  <span>No commitment · No charge · You review every detail</span>
+                  <span>Conditional · Exposure unknown · Review details before any authorization</span>
                 </div>
                 <Link href="/what-is-moral-trade">Learn how &gt;</Link>
               </div>
@@ -2437,6 +2495,7 @@ export function MarketplaceHome({
           ? "No live offers yet · Showing examples and templates"
           : "Live offers available · Review current terms before continuing"}
       </p>
+      <MacAskillQuote mobile />
       <span id="browse-controls" className="v72-filter-anchor" aria-hidden="true" />
       <div className="moral-marketplace-filter-chips v72-control-rail" aria-label="Marketplace controls">
         {railLinks.map((link) => (

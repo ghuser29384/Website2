@@ -524,55 +524,57 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("home page is a marketplace-first pilot landing page with explicit trust context", () => {
+test("home page is an editorial pilot landing page with a separate marketplace destination", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const pageSource = readRepoFile("src/app/page.tsx");
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
-  const marketplaceIndex = homeSource.indexOf("<MarketplaceHome");
-  const heroIndex = homeSource.indexOf("Moral trade could enable a mostly-great future.");
-  const metricsIndex = homeSource.indexOf("growth-progress-card");
-  const animationIndex = homeSource.indexOf("<MoralTradeAnimations");
-  const routeIndex = homeSource.indexOf("Choose the right first path");
-  const activationIndex = homeSource.indexOf("Start with one low-risk action");
-  const previewIndex = homeSource.indexOf("Marketplace preview");
+  const heroIndex = homeSource.indexOf("Cooperate");
+  const thesisIndex = homeSource.indexOf("Disagreement can create gains.");
+  const mechanismIndex = homeSource.indexOf("A small protocol for a hard problem.");
+  const laneIndex = homeSource.indexOf("Start with something bounded.");
+  const pilotIndex = homeSource.indexOf("See the institution as it is.");
+  const examplesIndex = homeSource.indexOf("Read the terms before the theory.");
+  const relianceIndex = homeSource.indexOf("Trust comes from legible limits.");
+  const startIndex = homeSource.indexOf("Enter at the right depth.");
+  const finalIndex = homeSource.indexOf("Bring one real disagreement.");
 
-  assert.ok(marketplaceIndex > -1);
   assert.ok(heroIndex > -1);
-  assert.ok(marketplaceIndex < heroIndex);
-  assert.ok(metricsIndex > heroIndex);
-  assert.ok(animationIndex > metricsIndex);
-  assert.ok(routeIndex > animationIndex);
-  assert.ok(activationIndex > routeIndex);
-  assert.ok(previewIndex > activationIndex);
-  assert.match(homeSource, /MarketplaceBottomNav/);
-  assert.match(homeSource, /marketplaceSurface/);
-  assert.match(pageSource, /buildMarketplaceDeals/);
-  assert.match(pageSource, /buildMarketplaceSurface/);
-  assert.match(pageSource, /listOpenOffersPage/);
-  assert.match(pageSource, /demoMpgfPublicGoodsCampaigns/);
-  assert.match(homeSource, /See a worked example/);
-  assert.match(homeSource, /Join the pilot/);
-  assert.match(homeSource, /Start with one pledge swap, donation offset, or public-good commitment/);
+  assert.ok(thesisIndex > heroIndex);
+  assert.ok(mechanismIndex > thesisIndex);
+  assert.ok(laneIndex > mechanismIndex);
+  assert.ok(pilotIndex > laneIndex);
+  assert.ok(examplesIndex > pilotIndex);
+  assert.ok(relianceIndex > examplesIndex);
+  assert.ok(startIndex > relianceIndex);
+  assert.ok(finalIndex > startIndex);
+  assert.equal(homeSource.includes("<MarketplaceHome"), false);
+  assert.equal(homeSource.includes("MarketplaceBottomNav"), false);
+  assert.equal(homeSource.includes("marketplaceSurface"), false);
+  assert.equal(pageSource.includes("buildMarketplaceDeals"), false);
+  assert.equal(pageSource.includes("buildMarketplaceSurface"), false);
+  assert.equal(pageSource.includes("listOpenOffersPage"), false);
+  assert.equal(pageSource.includes("demoMpgfPublicGoodsCampaigns"), false);
+  assert.match(homeSource, /See how it works/);
+  assert.match(homeSource, /Browse worked examples/);
+  assert.match(homeSource, /Open the coordination feed/);
+  assert.match(homeSource, /Join the founding cohort/);
+  assert.match(homeSource, /Moral Trade helps people with different values exchange small, reviewable/);
   assert.match(homeSource, /VISITOR_PATHS/);
   assert.match(visitorPathsSource, /Learn the idea/);
   assert.match(visitorPathsSource, /Test an example/);
   assert.match(visitorPathsSource, /Donate through a vetted route/);
   assert.match(visitorPathsSource, /Join the founding cohort/);
   assert.match(visitorPathsSource, /Open worked examples/);
-  assert.match(homeSource, /Invite one serious counterparty/);
-  assert.match(homeSource, /Submit one reviewable proof artifact/);
-  assert.match(homeSource, /No autonomous outreach/);
   assert.match(homeSource, /marketplaceOverview/);
   assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
-  assert.match(homeSource, /worked examples/);
+  assert.match(homeSource, /Worked examples/);
   assert.match(homeSource, /No custody or escrow/);
   assert.match(homeSource, /Completed agreements/);
   assert.match(homeSource, /IconMark/);
-  assert.match(homeSource, /OfferCard/);
-  assert.match(homeSource, /getOfferReviewCardInstrumentation/);
-  assert.match(homeSource, /reviewFactorCodes/);
-  assert.match(homeSource, /reviewNextStep/);
-  assert.match(homeSource, /reviewStatusReason/);
+  assert.match(homeSource, /MutualStepFigure/);
+  assert.match(homeSource, /Explicit baselines/);
+  assert.match(homeSource, /Consent-gated disclosure/);
+  assert.match(homeSource, /no liquidity or impact total is implied/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
@@ -615,12 +617,10 @@ test("visitor router exposes four intent paths before deeper marketplace mechani
   assert.match(sitemapSource, /\/start/);
 });
 
-test("home page includes the accessible moral trade animation typology", () => {
-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+test("moral trade animation typology remains accessible as a reference surface", () => {
   const animationSource = readRepoFile("src/components/home/moral-trade-animations.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
 
-  assert.match(homeSource, /MoralTradeAnimations/);
   assert.match(animationSource, /Eight moral trade types, in motion/);
   assert.match(animationSource, /role="img"/);
   assert.match(animationSource, /aria-label=\{card\.alt\}/);
@@ -1593,8 +1593,8 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   assert.match(seoSource, /buildFaqPageJsonLd/);
   assert.match(seoSource, /"@type": "FAQPage"/);
   assert.match(seoSource, /acceptedAnswer/);
-  assert.match(homePage, /Reviewable moral cooperation pilot/);
-  assert.match(homePage, /Moral Trade: reviewable moral cooperation pilot/);
+  assert.match(homePage, /Cooperate without agreeing/);
+  assert.match(homePage, /Moral Trade: cooperate without agreeing/);
   assert.match(faqPage, /buildFaqPageJsonLd/);
   assert.match(faqPage, /buildBreadcrumbJsonLd/);
   assert.match(faqPage, /Breadcrumbs items/);

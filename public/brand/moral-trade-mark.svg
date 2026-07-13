@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Moral Trade</title>
+  <desc id="description">A short diagonal step from an ink square to a blue square.</desc>
+  <rect width="512" height="512" rx="92" fill="#F3EFE7"/>
+  <path d="M118 394 394 118" stroke="#171815" stroke-width="42"/>
+  <rect x="86" y="362" width="64" height="64" fill="#171815"/>
+  <rect x="362" y="86" width="64" height="64" fill="#3158FF"/>
+</svg>
