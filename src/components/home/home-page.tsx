@@ -26,6 +26,7 @@ const productModes = [
     description: "Exchange actions or commitments that each side values differently.",
     href: "/create?mode=trade",
     status: "Available",
+    later: false,
   },
   {
     index: "02",
@@ -33,6 +34,7 @@ const productModes = [
     description: "Redirect matched opposed donations into a shared destination.",
     href: "/offsets",
     status: "Available",
+    later: false,
   },
   {
     index: "03",
@@ -40,6 +42,7 @@ const productModes = [
     description: "Pledge up to a maximum and fund only when the published condition passes.",
     href: "/pools",
     status: "Available",
+    later: false,
   },
   {
     index: "04",
