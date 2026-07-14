@@ -21,20 +21,21 @@ import {
   getMoralTradeIncidentResponseProfile,
   validateMoralTradeIncidentResponseProfile,
 } from "@/lib/moral-trade/incident-response";
+import { getActiveCredibilityModel } from "@/lib/credibility-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "What You Can Rely On",
   description:
-    "A plain-language trust explainer for Moral Trade: operating commitments, review states, non-guarantees, and recourse routes.",
+    "A plain-language trust explainer for Moral Trade: contextual credibility, operating commitments, review states, non-guarantees, and recourse routes.",
   alternates: {
     canonical: "/trust",
   },
   openGraph: {
     title: "What you can rely on today",
     description:
-      "Understand Moral Trade's operating commitments, non-guarantees, review states, and recourse routes.",
+      "Understand Moral Trade's contextual credibility model, operating commitments, non-guarantees, review states, and recourse routes.",
     url: getAbsoluteUrl("/trust"),
     type: "website",
   },
@@ -68,7 +69,10 @@ function formatTrustToken(value: string) {
 }
 
 export default async function TrustPage() {
-  const viewer = await getViewer();
+  const [viewer, credibilityModel] = await Promise.all([
+    getViewer(),
+    getActiveCredibilityModel(),
+  ]);
   const challengeAppealContract = getMoralTradeChallengeAppealContract();
   const challengeAppealValidation =
     validateMoralTradeChallengeAppealContract(challengeAppealContract);
@@ -129,12 +133,15 @@ export default async function TrustPage() {
             <p className="eyebrow">Trust explainer</p>
             <h1>What you can rely on today.</h1>
             <p className="hero-text">
-              Moral Trade makes proposal terms, evidence expectations, safety boundaries, and
-              review status legible. It does not make moral rankings, hold funds, automate
-              outreach, or promise legal enforceability.
+              Moral Trade makes proposal terms, evidence expectations, contextual reliability,
+              safety boundaries, and review status legible. It does not rank moral views, hold funds,
+              automate outreach, or promise legal enforceability.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/safety">
+              <Link className="button button-primary" href="/credibility">
+                Inspect credibility model
+              </Link>
+              <Link className="button button-secondary" href="/safety">
                 Review safety policy
               </Link>
               <Link className="button button-secondary" href="/contact">
@@ -156,12 +163,19 @@ export default async function TrustPage() {
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
+                  <strong>Contextual credibility</strong>
+                  <p>How reliable is this participant for this role and this kind of commitment?</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">03</span>
+                <div>
                   <strong>Baseline confidence</strong>
                   <p>Would they have done it anyway? This stays separate from factual proof.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">03</span>
+                <span className="flow-number">04</span>
                 <div>
                   <strong>Externality review</strong>
                   <p>Who might object, and could the trade harm values not represented by the parties?</p>
@@ -209,6 +223,52 @@ export default async function TrustPage() {
         </section>
 
         <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Credibility model</p>
+            <h2>Reliability evidence without moral or social ranking</h2>
+            <p>
+              Model {credibilityModel.version} is active. It combines verified outcomes with Bayesian
+              uncertainty and discounts old, repeated, weakly verified, or contextually unrelated
+              evidence.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <h3>Context-specific</h3>
+              <p className="route-text">
+                Paying, performing, verifying, and resolving disputes are distinct. Donation history
+                does not automatically establish reliability for a long behavioural commitment.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Uncertainty-first</h3>
+              <p className="route-text">
+                Fewer than {credibilityModel.minimumEffectiveObservations} effective observations
+                displays “Unproven.” Public scores use the lower{" "}
+                {Math.round(credibilityModel.lowerQuantile * 100)}th percentile, not the optimistic
+                mean.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Safety is non-compensatory</h3>
+              <p className="route-text">
+                Fraud, forged evidence, coercion, threats, duplicate identity, and account compromise
+                enter a separate eligibility system that successful micro-transactions cannot erase.
+              </p>
+            </article>
+          </div>
+          <div className="hero-actions">
+            <Link className="button button-secondary" href="/credibility">
+              Read full methodology
+            </Link>
+            <Link className="button button-secondary" href="/api/credibility/model">
+              View model JSON
+            </Link>
+          </div>
+        </section>
+
+        <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Review states</p>
             <h2>How to read proposal status</h2>
@@ -266,7 +326,8 @@ export default async function TrustPage() {
 
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
-              <li>No objective platform ranking of moral value.</li>
+              <li>No objective platform ranking of moral value, virtue, popularity, or social worth.</li>
+              <li>No claim that version-one deal probabilities are statistically calibrated yet.</li>
               <li>No custody, escrow, tax, legal, investment, or payment-protection service.</li>
               <li>No autonomous scraping, private-feed mining, or surprise counterparty exposure.</li>
               <li>No claim that bilateral gains eliminate third-party moral externalities.</li>
