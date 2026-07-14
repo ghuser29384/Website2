@@ -27,7 +27,9 @@ The connected Vercel Preview environments do not currently provide:
 
 A protected-preview readiness probe therefore reports conditional payments disabled and no database or Stripe runtime connectivity. GitHub Actions also has no copies of those secrets, so it cannot substitute as the end-to-end payment runner.
 
-Until those values are configured in one canonical Vercel Preview project, the following evidence cannot be produced honestly:
+Configure those five values in one canonical Vercel Preview project, redeploy the feature branch, and then reactivate the dormant fixture (`offer=matched`, `match=matched`) only for the sandbox exercise.
+
+Until that handoff is complete, the following evidence cannot be produced honestly:
 
 - a processed signed Stripe test webhook;
 - two participant SetupIntents and ready mandates;
