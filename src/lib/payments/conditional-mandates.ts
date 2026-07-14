@@ -14,7 +14,7 @@ import {
   loadDonationOffsetPaymentContext,
 } from "@/lib/payments/donation-offset-context";
 
-export const CONDITIONAL_PAYMENT_TERMS_VERSION = "conditional-payments-test-v1-2026-07-14";
+export const CONDITIONAL_PAYMENT_TERMS_VERSION = "conditional-payments-v1-2026-07-14";
 
 export interface ConditionalMandateCheckoutResult {
   mandateId: string;
@@ -127,6 +127,7 @@ function buildMandateMetadata(input: {
   matchId: string;
   participantRole: "owner" | "counterparty";
   conditionHash: string;
+  consentedAt: string;
 }) {
   return {
     system: "conditional_payments",
@@ -136,7 +137,21 @@ function buildMandateMetadata(input: {
     subject_id: input.matchId,
     participant_role: input.participantRole,
     condition_hash: input.conditionHash,
+    consented_at: input.consentedAt,
   };
+}
+
+function setupIntentMatchesCurrentMandate(
+  setupIntent: Stripe.SetupIntent,
+  mandate: Record<string, any>,
+) {
+  return (
+    setupIntent.metadata?.mandate_id === String(mandate.id) &&
+    setupIntent.metadata?.condition_hash === String(mandate.condition_hash) &&
+    setupIntent.metadata?.consented_at === String(mandate.consented_at) &&
+    setupIntent.metadata?.participant_role === String(mandate.participant_role) &&
+    setupIntent.metadata?.subject_id === String(mandate.subject_id)
+  );
 }
 
 export async function createDonationOffsetMandateCheckout(input: {
@@ -166,7 +181,7 @@ export async function createDonationOffsetMandateCheckout(input: {
     input.consentTermsVersion?.trim() || CONDITIONAL_PAYMENT_TERMS_VERSION;
   const supabase = getDb();
 
-  await supabase
+  const { error: staleMandateError } = await supabase
     .from("conditional_payment_mandates")
     .update({
       status: "cancelled",
@@ -181,7 +196,11 @@ export async function createDonationOffsetMandateCheckout(input: {
     .eq("participant_role", participantRole)
     .eq("livemode", environment.livemode)
     .neq("condition_hash", context.conditionHash)
-    .in("status", ["setup_pending", "ready", "charge_pending", "requires_action"]);
+    .in("status", ["setup_pending", "ready", "requires_action", "failed"]);
+
+  if (staleMandateError) {
+    throw new Error(`Unable to invalidate stale payment terms: ${staleMandateError.message}`);
+  }
 
   const { data: existing, error: existingError } = await supabase
     .from("conditional_payment_mandates")
@@ -211,6 +230,13 @@ export async function createDonationOffsetMandateCheckout(input: {
     };
   }
 
+  if (existing?.status === "charge_pending") {
+    throw new Error("This mandate is currently being captured and cannot be replaced.");
+  }
+  if (existing?.status === "disputed") {
+    throw new Error("This mandate is attached to a disputed charge and requires operator review.");
+  }
+
   if (existing?.stripe_checkout_session_id && existing.status === "setup_pending") {
     try {
       const session = await getStripe().checkout.sessions.retrieve(
@@ -230,6 +256,7 @@ export async function createDonationOffsetMandateCheckout(input: {
     }
   }
 
+  const consentedAt = new Date().toISOString();
   let mandate = existing;
   if (mandate) {
     const { data: updated, error: updateError } = await supabase
@@ -244,18 +271,21 @@ export async function createDonationOffsetMandateCheckout(input: {
         stripe_payment_method_id: null,
         status: "setup_pending",
         consent_terms_version: consentTermsVersion,
-        consented_at: new Date().toISOString(),
+        consented_at: consentedAt,
         ready_at: null,
         cancelled_at: null,
         failure_code: null,
         failure_message: null,
       })
       .eq("id", mandate.id)
+      .in("status", ["setup_pending", "failed", "requires_action", "cancelled", "refunded"])
       .select("*")
       .single();
 
     if (updateError || !updated) {
-      throw new Error(`Unable to reset the payment mandate: ${updateError?.message ?? "unknown error"}`);
+      throw new Error(
+        `Unable to reset the payment mandate: ${updateError?.message ?? "unknown error"}`,
+      );
     }
     mandate = updated;
   } else {
@@ -275,13 +305,15 @@ export async function createDonationOffsetMandateCheckout(input: {
         status: "setup_pending",
         stripe_customer_id: stripeCustomerId,
         consent_terms_version: consentTermsVersion,
-        consented_at: new Date().toISOString(),
+        consented_at: consentedAt,
       })
       .select("*")
       .single();
 
     if (insertError || !inserted) {
-      throw new Error(`Unable to create the payment mandate: ${insertError?.message ?? "unknown error"}`);
+      throw new Error(
+        `Unable to create the payment mandate: ${insertError?.message ?? "unknown error"}`,
+      );
     }
     mandate = inserted;
   }
@@ -293,12 +325,14 @@ export async function createDonationOffsetMandateCheckout(input: {
     matchId: context.snapshot.matchId,
     participantRole,
     conditionHash: context.conditionHash,
+    consentedAt: String(mandate.consented_at),
   });
   const sessionIdempotencyKey = makeConditionalIdempotencyKey([
     "setup-session",
     mandate.id,
     context.conditionHash,
     consentTermsVersion,
+    mandate.consented_at,
   ]);
   const session = await getStripe().checkout.sessions.create(
     {
@@ -317,7 +351,7 @@ export async function createDonationOffsetMandateCheckout(input: {
         submit: {
           message:
             environment.livemode
-              ? `Your card will not be charged now. Moral Trade may charge exactly ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} off-session only if the frozen offset condition clears. Failed atomic settlement is reversed or refunded.`
+              ? `Your card will not be charged now. Moral Trade may later charge exactly ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} off-session only if the frozen offset condition clears. If paired settlement cannot complete, successful charges are reversed or refunded.`
               : `TEST MODE — no real money moves. This saves a test payment method for a ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} conditional offset authorization.`,
         },
       },
@@ -337,7 +371,8 @@ export async function createDonationOffsetMandateCheckout(input: {
       expires_at: new Date(expiresAt * 1000).toISOString(),
     })
     .eq("id", mandate.id)
-    .eq("status", "setup_pending");
+    .eq("status", "setup_pending")
+    .eq("consented_at", mandate.consented_at);
 
   if (sessionStoreError) {
     throw new Error(`Unable to store the Checkout Session: ${sessionStoreError.message}`);
@@ -358,6 +393,7 @@ export async function createDonationOffsetMandateCheckout(input: {
       livemode: environment.livemode,
       checkoutSessionId: session.id,
       consentTermsVersion,
+      consentedAt: mandate.consented_at,
     },
   });
 
@@ -387,7 +423,9 @@ export async function markConditionalMandateReadyFromSetupIntent(
       ? setupIntent.payment_method
       : setupIntent.payment_method?.id ?? null;
   const customerId =
-    typeof setupIntent.customer === "string" ? setupIntent.customer : setupIntent.customer?.id ?? null;
+    typeof setupIntent.customer === "string"
+      ? setupIntent.customer
+      : setupIntent.customer?.id ?? null;
 
   if (setupIntent.status !== "succeeded" || !paymentMethodId || !customerId) {
     return { handled: true as const, ready: false as const };
@@ -401,13 +439,30 @@ export async function markConditionalMandateReadyFromSetupIntent(
     .maybeSingle();
 
   if (mandateError || !mandate) {
-    throw new Error(`SetupIntent references an unknown payment mandate: ${mandateError?.message ?? mandateId}`);
+    throw new Error(
+      `SetupIntent references an unknown payment mandate: ${mandateError?.message ?? mandateId}`,
+    );
   }
   if (Boolean(mandate.livemode) !== setupIntent.livemode) {
     throw new Error("SetupIntent environment does not match the payment mandate.");
   }
   if (mandate.stripe_customer_id && mandate.stripe_customer_id !== customerId) {
     throw new Error("SetupIntent customer does not match the payment mandate.");
+  }
+  if (!setupIntentMatchesCurrentMandate(setupIntent, mandate)) {
+    await recordAuditEvent({
+      actorProfileId: mandate.profile_id,
+      actorKind: "stripe",
+      eventType: "stale_setup_intent_ignored",
+      objectType: "conditional_payment_mandate",
+      objectId: String(mandate.id),
+      details: {
+        setupIntentId: setupIntent.id,
+        setupConsentedAt: setupIntent.metadata?.consented_at ?? null,
+        currentConsentedAt: mandate.consented_at,
+      },
+    });
+    return { handled: true as const, ready: false as const };
   }
   if (mandate.status === "cancelled") {
     return { handled: true as const, ready: false as const };
@@ -426,6 +481,7 @@ export async function markConditionalMandateReadyFromSetupIntent(
       failure_message: null,
     })
     .eq("id", mandate.id)
+    .eq("consented_at", mandate.consented_at)
     .in("status", ["setup_pending", "ready", "failed", "requires_action"]);
 
   if (updateError) {
@@ -463,6 +519,7 @@ export async function markConditionalMandateReadyFromSetupIntent(
       subjectId: mandate.subject_id,
       participantRole: mandate.participant_role,
       conditionHash: mandate.condition_hash,
+      consentedAt: mandate.consented_at,
       readyAt,
     },
   });
@@ -484,8 +541,23 @@ export async function markConditionalMandateSetupFailed(
     return { handled: false as const };
   }
 
+  const supabase = getDb();
+  const { data: mandate, error: mandateError } = await supabase
+    .from("conditional_payment_mandates")
+    .select("*")
+    .eq("id", mandateId)
+    .maybeSingle();
+  if (mandateError || !mandate) {
+    throw new Error(
+      `Failed SetupIntent references an unknown mandate: ${mandateError?.message ?? mandateId}`,
+    );
+  }
+  if (!setupIntentMatchesCurrentMandate(setupIntent, mandate)) {
+    return { handled: true as const };
+  }
+
   const lastError = setupIntent.last_setup_error;
-  const { error } = await getDb()
+  const { error } = await supabase
     .from("conditional_payment_mandates")
     .update({
       status: "failed",
@@ -494,7 +566,8 @@ export async function markConditionalMandateSetupFailed(
       failure_message: lastError?.message ?? "Stripe could not save the payment method.",
     })
     .eq("id", mandateId)
-    .neq("status", "charged");
+    .eq("consented_at", mandate.consented_at)
+    .in("status", ["setup_pending", "failed"]);
 
   if (error) {
     throw new Error(`Unable to record payment-method setup failure: ${error.message}`);
