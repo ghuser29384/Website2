@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { EmptyState, IconMark, StatusBadge } from "@/components/ui/page-primitives";
+import { EmptyState } from "@/components/ui/page-primitives";
 import {
   getViewer,
   listOpenOffersPage,
@@ -19,16 +19,14 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Explore Moral Trade",
+  title: "Explore",
   description:
-    "Explore live Moral Trade proposals, inspect complete worked examples, adapt reviewed templates, or open the moral public-goods workflow.",
-  alternates: {
-    canonical: "/offers",
-  },
+    "Explore live Moral Trade proposals, worked examples, reviewed templates, donation offsets, and conditional funding pools without mixing their states.",
+  alternates: { canonical: "/offers" },
   openGraph: {
     title: "Explore Moral Trade",
     description:
-      "Live proposals, complete examples, reviewed templates, and moral public-good coordination routes with explicit terms and review boundaries.",
+      "Browse a marketplace of live proposals and inspect complete examples, templates, offsets, and pools with explicit terms and states.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
@@ -40,14 +38,11 @@ interface OffersPageProps {
 
 type DirectoryView = "live" | "examples" | "templates" | "public-goods";
 
-const directoryTabs: ReadonlyArray<{
-  label: string;
-  value: DirectoryView;
-}> = [
-  { label: "Live proposals", value: "live" },
-  { label: "Worked examples", value: "examples" },
-  { label: "Reviewed templates", value: "templates" },
-  { label: "Moral public goods", value: "public-goods" },
+const directoryTabs: ReadonlyArray<{ label: string; value: DirectoryView }> = [
+  { label: "Live", value: "live" },
+  { label: "Examples", value: "examples" },
+  { label: "Templates", value: "templates" },
+  { label: "Pools", value: "public-goods" },
 ];
 
 function readParam(
@@ -111,21 +106,20 @@ function buildDirectoryHref({
 
 function LiveProposalCard({ offer }: { offer: OfferRecord }) {
   return (
-    <article className="panel data-card listing-card">
-      <div className="protocol-workflow-card-head">
-        <div className="listing-card-head">
-          <IconMark name={offer.mode === "offset" ? "offset" : offer.mode === "payment" ? "payment" : "swap"} />
-          <div>
-            <p className="detail-kicker">{formatMode(offer.mode)}</p>
-            <h3>
-              {offer.offered_cause} <span aria-hidden="true">↔</span> {offer.requested_cause}
-            </h3>
-          </div>
-        </div>
-        <StatusBadge>Live proposal</StatusBadge>
+    <article className="mt-market-card">
+      <div className="mt-market-card-head">
+        <span className="mt-market-eyebrow">{formatMode(offer.mode)}</span>
+        <span className="mt-market-state is-live">Live proposal</span>
       </div>
-      <p className="listing-alias">By {offer.owner_alias || offer.ownerProfile?.resolvedName || "Participant"}</p>
-      <dl className="listing-terms">
+      <h3>
+        {offer.offered_cause}
+        <span aria-hidden="true">↔</span>
+        {offer.requested_cause}
+      </h3>
+      <p className="listing-alias">
+        By {offer.owner_alias || offer.ownerProfile?.resolvedName || "Participant"}
+      </p>
+      <dl>
         <div>
           <dt>Offers</dt>
           <dd>{offer.offer_action}</dd>
@@ -134,15 +128,15 @@ function LiveProposalCard({ offer }: { offer: OfferRecord }) {
           <dt>Requests</dt>
           <dd>{offer.request_action}</dd>
         </div>
+        <div>
+          <dt>Evidence</dt>
+          <dd>{offer.verification}</dd>
+        </div>
       </dl>
-      <div className="listing-meta">
+      <div className="mt-market-card-foot">
         <span>{offer.duration}</span>
-        <span>{offer.verification}</span>
-        <span>Manual review before reliance</span>
+        <Link href={`/offers/${offer.id}`}>Inspect Deal Receipt ↗</Link>
       </div>
-      <Link className="button button-primary button-mini" href={`/offers/${offer.id}`}>
-        Inspect terms
-      </Link>
     </article>
   );
 }
@@ -153,23 +147,17 @@ function WorkedExampleCard({
   example: (typeof CANONICAL_WORKED_CASE_OFFERS)[number];
 }) {
   return (
-    <article className="panel data-card listing-card">
-      <div className="protocol-workflow-card-head">
-        <div className="listing-card-head">
-          <IconMark name={example.mode === "offset" ? "offset" : example.mode === "payment" ? "payment" : "swap"} />
-          <div>
-            <p className="detail-kicker">{formatMode(example.mode)}</p>
-            <h3>
-              {example.offeredCause} <span aria-hidden="true">↔</span> {example.requestedCause}
-            </h3>
-          </div>
-        </div>
-        <StatusBadge tone="secondary">Worked example</StatusBadge>
+    <article className="mt-market-card">
+      <div className="mt-market-card-head">
+        <span className="mt-market-eyebrow">{formatMode(example.mode)}</span>
+        <span className="mt-market-state">Worked example</span>
       </div>
-      <p className="listing-summary">
-        A complete instructional record. It is not a live participant proposal.
-      </p>
-      <dl className="listing-terms">
+      <h3>
+        {example.offeredCause}
+        <span aria-hidden="true">↔</span>
+        {example.requestedCause}
+      </h3>
+      <dl>
         <div>
           <dt>Offers</dt>
           <dd>{example.offerAction}</dd>
@@ -178,15 +166,15 @@ function WorkedExampleCard({
           <dt>Requests</dt>
           <dd>{example.requestAction}</dd>
         </div>
+        <div>
+          <dt>Evidence</dt>
+          <dd>{example.verification}</dd>
+        </div>
       </dl>
-      <div className="listing-meta">
+      <div className="mt-market-card-foot">
         <span>{example.duration}</span>
-        <span>{example.verification}</span>
-        <span>Example only</span>
+        <Link href={`/offers/examples/${example.id}`}>Inspect example ↗</Link>
       </div>
-      <Link className="button button-primary button-mini" href={`/offers/examples/${example.id}`}>
-        Inspect example
-      </Link>
     </article>
   );
 }
@@ -207,9 +195,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           hasPreviousPage: page > 1,
         }),
   ]);
+  const isAuthenticated = Boolean(viewer);
   const view = parseView(readParam(resolvedSearchParams, "view"), livePage.items.length > 0);
   const formMessage = getFormMessage(resolvedSearchParams);
-  const createHref = viewer ? "/offers/new" : "/signup?returnTo=/offers/new";
+  const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
 
   const workedExamples = CANONICAL_WORKED_CASE_OFFERS.filter((example) =>
     matchesSearch(
@@ -246,43 +235,48 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   };
 
   return (
-    <div className="page-shell">
-      <header className="hero">
+    <div className="page-shell marketplace-product-shell">
+      <div className="mt-beta-strip">
+        <span>Explore</span>
+        <span>Live proposals, examples, templates, and pools are separate record types.</span>
+        <Link href="/status">Current status</Link>
+      </div>
+
+      <header>
         <SiteTopbar
           brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
         />
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Explore</p>
-            <h1>Find a live proposal or start from complete terms.</h1>
-            <p className="hero-text">
-              Live proposals, worked examples, and reviewed templates are deliberately separated.
-              Start with the route that matches what you are trying to do.
+      </header>
+
+      <main className="mt-product-main" id="main-content" tabIndex={-1}>
+        <section className="mt-explore-hero" aria-labelledby="explore-heading">
+          <div className="mt-explore-copy">
+            <p className="mt-product-kicker">Marketplace</p>
+            <h1 id="explore-heading">Find a deal, offset, or pool you can understand quickly.</h1>
+            <p>
+              Browse by current state, inspect the no-deal default and maximum exposure, then open
+              the complete terms before expressing interest or authorizing anything.
             </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href={createHref}>
-                Create a trade
-              </Link>
+            <div className="mt-product-actions">
+              <Link className="button button-primary" href={createHref}>Create</Link>
               <Link className="button button-secondary" href="/background-networking">
                 Request private matching
               </Link>
             </div>
-          </section>
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Directory rule</p>
-            <h2>Examples are not liquidity.</h2>
+          </div>
+          <aside className="mt-explore-side">
+            <p className="mt-product-kicker">Directory rule</p>
+            <strong>Examples are not liquidity.</strong>
             <p>
-              A worked example or reviewed template can be inspected and adapted, but it is never
-              counted or presented as a live participant proposal.
+              Worked examples and reviewed templates make the mechanism legible. They are never
+              presented as live counterparty demand, completed trade volume, or participant inventory.
             </p>
           </aside>
-        </div>
-      </header>
+        </section>
 
-      <main id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${
@@ -293,58 +287,66 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         ) : null}
 
-        <section className="section section-white offers-directory-shell" aria-labelledby="directory-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Directory</p>
-            <h2 id="directory-heading">Choose a record type</h2>
+        <section className="mt-product-section is-white" aria-labelledby="directory-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">Directory</p>
+              <h2 id="directory-heading">Choose the record state you need.</h2>
+            </div>
+            <p>
+              Search within one state at a time. The marketplace does not blend demos, templates,
+              open participant proposals, and public-good coordination into one activity number.
+            </p>
           </div>
 
-          <nav className="hub-tabs" aria-label="Offer directory views">
-            {directoryTabs.map((tab) => (
-              <Link
-                aria-current={view === tab.value ? "page" : undefined}
-                className={view === tab.value ? "is-active" : undefined}
-                href={buildDirectoryHref({ search, view: tab.value })}
-                key={tab.value}
-              >
-                {tab.label}
-                {tabCounts[tab.value] !== null ? ` (${tabCounts[tab.value]})` : ""}
-              </Link>
-            ))}
-          </nav>
+          <div className="mt-directory-toolbar">
+            <nav className="mt-directory-tabs" aria-label="Marketplace record types">
+              {directoryTabs.map((tab) => (
+                <Link
+                  aria-current={view === tab.value ? "page" : undefined}
+                  href={buildDirectoryHref({ search, view: tab.value })}
+                  key={tab.value}
+                >
+                  <span>{tab.label}</span>
+                  <span>{tabCounts[tab.value] !== null ? tabCounts[tab.value] : "→"}</span>
+                </Link>
+              ))}
+            </nav>
 
-          <form action="/offers" className="marketplace-search marketplace-search-wide" method="get" role="search">
-            <input name="view" type="hidden" value={view} />
-            <label className="field marketplace-search-field">
-              <span>Search this view</span>
-              <input
-                defaultValue={search}
-                name="search"
-                placeholder="Cause, action, evidence, or template"
-                type="search"
-              />
-            </label>
-            <button className="button button-primary" type="submit">
-              Search
-            </button>
-            {search ? (
-              <Link className="button button-secondary" href={buildDirectoryHref({ view })}>
-                Clear
-              </Link>
-            ) : null}
-          </form>
+            <form action="/offers" className="mt-directory-search" method="get" role="search">
+              <input name="view" type="hidden" value={view} />
+              <label>
+                <span>Search</span>
+                <input
+                  defaultValue={search}
+                  name="search"
+                  placeholder="Cause, action, evidence, or template"
+                  type="search"
+                />
+              </label>
+              <button className="button button-primary" type="submit">Search</button>
+              {search ? (
+                <Link className="button button-secondary" href={buildDirectoryHref({ view })}>
+                  Clear
+                </Link>
+              ) : null}
+            </form>
+          </div>
 
           {view === "live" ? (
-            <div className="directory-view-stack">
-              <div className="section-head section-head-compact">
-                <h2>Live participant proposals</h2>
+            <div className="mt-directory-view">
+              <div className="mt-directory-view-head">
+                <div>
+                  <p className="mt-market-eyebrow">Live participant records</p>
+                  <h2>Open proposals</h2>
+                </div>
                 <p>
-                  These records were submitted by participants. Inspect the baseline, terms,
-                  evidence, privacy, and review state before expressing interest.
+                  Inspect the baseline, terms, evidence, privacy, externality, review, and settlement
+                  state before expressing interest.
                 </p>
               </div>
               {livePage.items.length ? (
-                <div className="listing-grid">
+                <div className="mt-market-grid">
                   {livePage.items.map((offer) => (
                     <LiveProposalCard key={offer.id} offer={offer} />
                   ))}
@@ -353,13 +355,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <EmptyState
                   actions={
                     <>
-                      <Link className="button button-primary" href={createHref}>
-                        Create the first proposal
-                      </Link>
-                      <Link
-                        className="button button-secondary"
-                        href={buildDirectoryHref({ search, view: "examples" })}
-                      >
+                      <Link className="button button-primary" href={createHref}>Create the first proposal</Link>
+                      <Link className="button button-secondary" href={buildDirectoryHref({ search, view: "examples" })}>
                         Inspect examples
                       </Link>
                     </>
@@ -367,26 +364,20 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   icon="marketplace"
                   title={search ? "No live proposals match this search" : "No live proposals are open"}
                 >
-                  The service does not substitute examples or demo records when no participant
-                  proposal exists.
+                  The marketplace does not substitute examples or demo records when participant
+                  inventory is empty.
                 </EmptyState>
               )}
               {livePage.hasPreviousPage || livePage.hasNextPage ? (
                 <nav className="pagination" aria-label="Live proposal pages">
                   {livePage.hasPreviousPage ? (
-                    <Link
-                      className="button button-secondary button-mini"
-                      href={buildDirectoryHref({ page: page - 1, search, view })}
-                    >
+                    <Link className="button button-secondary button-mini" href={buildDirectoryHref({ page: page - 1, search, view })}>
                       Previous
                     </Link>
                   ) : null}
                   <span>Page {page}</span>
                   {livePage.hasNextPage ? (
-                    <Link
-                      className="button button-secondary button-mini"
-                      href={buildDirectoryHref({ page: page + 1, search, view })}
-                    >
+                    <Link className="button button-secondary button-mini" href={buildDirectoryHref({ page: page + 1, search, view })}>
                       Next
                     </Link>
                   ) : null}
@@ -396,16 +387,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           ) : null}
 
           {view === "examples" ? (
-            <div className="directory-view-stack">
-              <div className="section-head section-head-compact">
-                <h2>Complete worked examples</h2>
+            <div className="mt-directory-view">
+              <div className="mt-directory-view-head">
+                <div>
+                  <p className="mt-market-eyebrow">Instructional records</p>
+                  <h2>Worked examples</h2>
+                </div>
                 <p>
-                  Examples show the full shape of a trade without implying a real counterparty or
-                  active demand.
+                  Complete sample terms show the shape of a proposal without implying a real
+                  counterparty, current demand, or completed transaction.
                 </p>
               </div>
               {workedExamples.length ? (
-                <div className="listing-grid">
+                <div className="mt-market-grid">
                   {workedExamples.map((example) => (
                     <WorkedExampleCard example={example} key={example.id} />
                   ))}
@@ -419,45 +413,37 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           ) : null}
 
           {view === "templates" ? (
-            <div className="directory-view-stack">
-              <div className="section-head section-head-compact">
-                <h2>Reviewed templates</h2>
+            <div className="mt-directory-view">
+              <div className="mt-directory-view-head">
+                <div>
+                  <p className="mt-market-eyebrow">Drafting aids</p>
+                  <h2>Reviewed templates</h2>
+                </div>
                 <p>
-                  Templates provide prefilled structure. They remain drafts until a participant
-                  supplies a real baseline, accepts the terms, and submits the resulting record.
+                  A template supplies structure only. It remains a draft until a participant provides
+                  a real baseline, edits the terms, and submits the resulting proposal.
                 </p>
               </div>
               {templates.length ? (
-                <div className="data-grid">
+                <div className="mt-template-grid">
                   {templates.map((template) => {
                     const target = template.templateHref;
-                    const href = viewer
+                    const href = isAuthenticated
                       ? target
                       : `/signup?returnTo=${encodeURIComponent(target)}`;
 
                     return (
-                      <article className="panel data-card" key={template.id}>
-                        <div className="protocol-workflow-card-head">
-                          <div>
-                            <p className="detail-kicker">{template.formatLabel}</p>
-                            <h3>{template.prefill.title}</h3>
-                          </div>
-                          <StatusBadge tone="secondary">Reviewed template</StatusBadge>
+                      <article className="mt-template-card" key={template.id}>
+                        <div>
+                          <p className="mt-market-eyebrow">{template.formatLabel}</p>
+                          <h3>{template.prefill.title}</h3>
                         </div>
-                        <p className="route-text">{template.publicSummary}</p>
-                        <dl className="listing-terms">
-                          <div>
-                            <dt>Baseline prompt</dt>
-                            <dd>{template.prefill.baselineStatement}</dd>
-                          </div>
-                          <div>
-                            <dt>Exit rule</dt>
-                            <dd>{template.prefill.exitCondition}</dd>
-                          </div>
-                        </dl>
-                        <Link className="button button-primary button-mini" href={href}>
-                          Adapt template
-                        </Link>
+                        <p>{template.publicSummary}</p>
+                        <div>
+                          <p><strong>Baseline prompt:</strong> {template.prefill.baselineStatement}</p>
+                          <p><strong>Exit rule:</strong> {template.prefill.exitCondition}</p>
+                        </div>
+                        <Link className="button button-primary" href={href}>Adapt template</Link>
                       </article>
                     );
                   })}
@@ -471,42 +457,41 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           ) : null}
 
           {view === "public-goods" ? (
-            <div className="directory-view-stack">
-              <div className="section-head section-head-compact">
-                <h2>Moral public-good coordination</h2>
+            <div className="mt-directory-view">
+              <div className="mt-directory-view-head">
+                <div>
+                  <p className="mt-market-eyebrow">Conditional coordination</p>
+                  <h2>Pools and public goods</h2>
+                </div>
                 <p>
-                  Public-good rounds use their own threshold, evidence, governance, authorization,
-                  and settlement rules. They are linked here but are not mixed into bilateral offer
-                  counts.
+                  Pools use their own threshold, authorization, evidence, governance, settlement,
+                  and failure rules. They are linked here without being mixed into bilateral offer counts.
                 </p>
               </div>
-              <div className="data-grid">
-                <Link className="panel data-card" href="/mpgf">
-                  <IconMark name="publicGoods" />
-                  <h3>Common Ground Budget</h3>
-                  <p className="route-text">
-                    Build a bounded budget, state project preferences, inspect frozen terms, and
-                    count contributions only after the relevant gates pass.
-                  </p>
-                  <span className="inline-link">Open Public Goods Fund</span>
+              <div className="mt-pool-link-grid">
+                <Link className="mt-pool-link-card" href="/pools">
+                  <div>
+                    <p className="mt-market-eyebrow">Consumer route</p>
+                    <h3>Conditional pools</h3>
+                  </div>
+                  <p>Review maximum exposure, threshold, deadline, recipient, progress, and failure behavior.</p>
+                  <span>Explore pools ↗</span>
                 </Link>
-                <Link className="panel data-card" href="/mpgf/pools">
-                  <IconMark name="fund" />
-                  <h3>Candidate pools</h3>
-                  <p className="route-text">
-                    Inspect public reasoning, destination types, evidence requirements, and review
-                    states for candidate public-good pools.
-                  </p>
-                  <span className="inline-link">Browse candidate pools</span>
+                <Link className="mt-pool-link-card" href="/mpgf">
+                  <div>
+                    <p className="mt-market-eyebrow">Allocation tools</p>
+                    <h3>Common Ground Budget</h3>
+                  </div>
+                  <p>Build a bounded budget and inspect frozen contribution and allocation rules.</p>
+                  <span>Open budget tools ↗</span>
                 </Link>
-                <Link className="panel data-card" href="/moral-goods-group-buying">
-                  <IconMark name="hands" />
-                  <h3>Group buying</h3>
-                  <p className="route-text">
-                    Coordinate thresholded moral actions through rounds, lots, baskets, or standing
-                    budgets with explicit evidence and exit rules.
-                  </p>
-                  <span className="inline-link">Open group-buying tools</span>
+                <Link className="mt-pool-link-card" href="/moral-goods-group-buying">
+                  <div>
+                    <p className="mt-market-eyebrow">Advanced mechanism</p>
+                    <h3>Group buying</h3>
+                  </div>
+                  <p>Open reviewed rounds, lots, baskets, standing budgets, and settlement detail.</p>
+                  <span>Open advanced tools ↗</span>
                 </Link>
               </div>
             </div>
