@@ -5,24 +5,24 @@ import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade turns moral disagreement into voluntary, bounded exchanges and shared public-good commitments with explicit baselines and reviewable evidence.",
+  "Moral Trade is a marketplace and coordination mechanism for swapping commitments, redirecting offsetting donations, and joining conditional funding pools.",
 );
 
 export const metadata: Metadata = {
-  title: "Cooperate without agreeing",
+  title: "Do more good without agreeing",
   description: homeDescription,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Moral Trade: cooperate without agreeing",
+    title: "Moral Trade: do more good without agreeing",
     description: homeDescription,
     url: getAbsoluteUrl("/"),
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Moral Trade: cooperate without agreeing",
+    title: "Moral Trade: do more good without agreeing",
     description: homeDescription,
   },
 };
