@@ -24,6 +24,8 @@ export interface DonationOffsetConditionSnapshot {
   matchedBaselineCents: number;
   matchedCounterpartyCents: number;
   compromiseTotalCents: number;
+  unmatchedBaselineCents: number;
+  unmatchedCounterpartyCents: number;
   currency: "usd";
   compromiseCharityId: string;
   compromiseCharityName: string;
@@ -31,11 +33,19 @@ export interface DonationOffsetConditionSnapshot {
   destinationDisplayName: string;
   destinationConnectedAccountId: string;
   destinationLivemode: boolean;
+  baselineAmountCents: number;
+  requestedMatchingAmountCents: number;
   baselineOpposedCause: string;
   requestedOpposedCause: string;
+  offsetRatio: string;
+  timeHorizon: string;
+  participationMode: string;
+  poolId: string | null;
+  poolSide: string | null;
   verificationMethod: string;
   moderationStatus: string;
   unmatchedSurplusRule: string;
+  assuranceMinimumCents: number;
   assuranceDeadlineAt: string | null;
   matchStatus: string;
   offerStatus: string;
@@ -186,7 +196,7 @@ export function donationOffsetSnapshotIsInternallyConsistent(
     snapshot.matchedCounterpartyCents >= 50 &&
     snapshot.compromiseTotalCents ===
       snapshot.matchedBaselineCents + snapshot.matchedCounterpartyCents &&
-    snapshot.destinationLivemode === false === snapshot.destinationConnectedAccountId.startsWith("acct_")
+    snapshot.destinationConnectedAccountId.startsWith("acct_")
   );
 }
 
