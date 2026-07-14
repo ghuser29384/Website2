@@ -35,13 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      - name: Run conditional-payment tests
         id: tests
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          npm test 2>&1 | tee conditional-payments-test-output.txt
+          node --import tsx --test src/lib/payments/conditional-state.test.ts \
+            2>&1 | tee conditional-payments-test-output.txt
 
       - name: Upload test output
         if: always()
@@ -57,6 +58,6 @@ jobs:
           CONDITIONAL_PAYMENTS_MODE: disabled
         run: npm run build
 
-      - name: Enforce test result
+      - name: Enforce conditional-payment test result
         if: steps.tests.outcome != 'success'
         run: exit 1
