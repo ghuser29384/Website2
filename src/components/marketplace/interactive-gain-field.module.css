@@ -1,0 +1,674 @@
+.field {
+  display: grid;
+  margin: 0;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.headerCopy {
+  display: grid;
+  gap: 0.24rem;
+  min-width: 0;
+}
+
+.kicker,
+.noScore,
+.statusChip,
+.optionButton,
+.axisControl span,
+.partyResult span,
+.explainer summary,
+.explainerGrid strong {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.kicker {
+  color: var(--accent-deep);
+}
+
+.header h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.45rem, 2.8vw, 2.15rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.headerMeta {
+  display: grid;
+  justify-items: end;
+  gap: 0.42rem;
+}
+
+.noScore,
+.statusChip {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  padding: 0.2rem 0.42rem;
+  white-space: nowrap;
+}
+
+.noScore {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.statusChip {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.statusMutual {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.statusCaution {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.statusBlocked {
+  border-color: var(--danger-ink);
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+.statusNeutral {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 25rem;
+  touch-action: none;
+  user-select: none;
+}
+
+.paper {
+  fill: var(--surface);
+}
+
+.grid {
+  color: var(--ink);
+}
+
+.mutualWash {
+  fill: var(--accent-soft);
+}
+
+.mutualHatch {
+  color: var(--accent);
+  opacity: 0.62;
+}
+
+.axis {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.defaultGuide {
+  stroke: var(--line-strong);
+  stroke-dasharray: 5 6;
+  stroke-width: 1.4;
+}
+
+.quadrantRule {
+  fill: none;
+  stroke: var(--line);
+  stroke-dasharray: 2 8;
+  stroke-width: 1;
+}
+
+.frontier {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 8 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  opacity: 0.9;
+  animation: drawFrontier 900ms ease both;
+}
+
+.frontierHalo {
+  fill: none;
+  stroke: var(--accent-soft);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 12;
+}
+
+.vector {
+  fill: none;
+  stroke: var(--accent-deep);
+  stroke-linecap: round;
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+  animation: flowVector 2.1s linear infinite;
+}
+
+.projection {
+  stroke: var(--line-strong);
+  stroke-dasharray: 4 5;
+  stroke-width: 1.4;
+}
+
+.defaultPoint rect {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.defaultPoint path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.candidate {
+  cursor: pointer;
+  outline: none;
+}
+
+.candidateDot {
+  fill: var(--surface);
+  stroke: var(--ink-soft);
+  stroke-width: 1.6;
+  transition:
+    fill 120ms ease,
+    r 120ms ease,
+    stroke 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.candidateFrontier {
+  fill: var(--accent-soft);
+  stroke: var(--accent-deep);
+  stroke-width: 2;
+}
+
+.candidate:hover .candidateDot,
+.candidate:focus .candidateDot {
+  fill: var(--signal);
+  stroke: var(--ink);
+  stroke-width: 2.2;
+  r: 8px;
+}
+
+.candidateLabel {
+  fill: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  opacity: 0;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  stroke-width: 5px;
+  transition: opacity 120ms ease;
+}
+
+.candidate:hover .candidateLabel,
+.candidate:focus .candidateLabel {
+  opacity: 1;
+}
+
+.selected {
+  cursor: grab;
+  outline: none;
+}
+
+.selected:active {
+  cursor: grabbing;
+}
+
+.selectedOuter {
+  fill: var(--signal);
+  stroke: var(--ink);
+  stroke-width: 2.4;
+}
+
+.selectedInner {
+  fill: var(--accent);
+}
+
+.selectedPulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulsePoint 1.9s ease-out infinite;
+}
+
+.selectedBlocked .selectedOuter {
+  fill: var(--danger-soft);
+  stroke: var(--danger-ink);
+}
+
+.selectedBlocked .selectedInner {
+  fill: var(--danger-ink);
+}
+
+.selectedBlocked .selectedPulse {
+  stroke: var(--danger-ink);
+}
+
+.selectedLabel,
+.axisLabel,
+.defaultLabel,
+.frontierLabel,
+.quadrantLabel {
+  fill: var(--ink-soft);
+  font-family: var(--font-mono);
+  letter-spacing: 0.025em;
+}
+
+.selectedLabel {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  stroke-width: 5px;
+}
+
+.axisLabel {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.defaultLabel {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.frontierLabel {
+  fill: var(--accent-deep);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.quadrantLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+
+.quadrantLabelMutual {
+  fill: var(--accent-deep);
+  opacity: 1;
+}
+
+.inspector {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  border-bottom: 1px solid var(--ink);
+}
+
+.readout {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+  padding: 1rem;
+  border-right: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.readoutTitle {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.readoutTitle span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.readoutTitle strong {
+  font-family: var(--font-heading);
+  font-size: 1.42rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.readout p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.partyResults {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.partyResult {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.58rem 0.65rem;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.partyResult span {
+  color: var(--ink-muted);
+}
+
+.partyResult strong {
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-align: right;
+}
+
+.isPositive {
+  color: var(--signal-ink);
+}
+
+.isNegative {
+  color: var(--danger-ink);
+}
+
+.isDefault {
+  color: var(--ink-muted);
+}
+
+.controls {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  padding: 1rem;
+  background: var(--surface-muted);
+}
+
+.controlsIntro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.controlsIntro strong {
+  font-size: 0.84rem;
+}
+
+.controlsIntro span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.axisControl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.38rem 0.75rem;
+  align-items: center;
+}
+
+.axisControl span {
+  color: var(--ink-soft);
+}
+
+.axisControl output {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.axisControl input {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 1.4rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: ew-resize;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  padding: 0.72rem 1rem;
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.optionButton {
+  min-height: 2rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  padding: 0.38rem 0.52rem;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.optionButton:hover,
+.optionButton:focus-visible {
+  border-color: var(--ink);
+  background: var(--accent-soft);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.optionButtonActive {
+  border-color: var(--ink);
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.explainer {
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface-muted);
+}
+
+.explainer summary {
+  display: flex;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.62rem 1rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+}
+
+.explainer summary::-webkit-details-marker {
+  display: none;
+}
+
+.explainer summary::after {
+  color: var(--accent-deep);
+  content: "+";
+  font-size: 1rem;
+}
+
+.explainer[open] summary::after {
+  content: "−";
+}
+
+.explainerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+
+.explainerGrid div {
+  display: grid;
+  gap: 0.42rem;
+  padding: 0.85rem 1rem 1rem;
+  border-right: 1px solid var(--line);
+}
+
+.explainerGrid div:last-child {
+  border-right: 0;
+}
+
+.explainerGrid strong {
+  color: var(--accent-deep);
+}
+
+.explainerGrid p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.caption {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.72rem 1rem 0.82rem;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.caption strong {
+  color: var(--ink-soft);
+}
+
+.dragging .selectedPulse {
+  animation: none;
+  opacity: 0.3;
+}
+
+@keyframes pulsePoint {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.75);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(1.65);
+  }
+}
+
+@keyframes flowVector {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes drawFrontier {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 80;
+  }
+  to {
+    opacity: 0.9;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .header,
+  .inspector {
+    grid-template-columns: 1fr;
+  }
+
+  .headerMeta {
+    justify-items: start;
+  }
+
+  .canvas {
+    min-height: 21rem;
+  }
+
+  .readout {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .explainerGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .explainerGrid div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .explainerGrid div:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frontier,
+  .vector,
+  .selectedPulse {
+    animation: none;
+  }
+
+  .candidateDot,
+  .candidateLabel,
+  .optionButton {
+    transition: none;
+  }
+
+  .optionButton:hover,
+  .optionButton:focus-visible {
+    transform: none;
+  }
+}
