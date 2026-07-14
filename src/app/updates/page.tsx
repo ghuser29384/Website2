@@ -8,45 +8,45 @@ import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pilot Updates",
+  title: "Service Updates",
   description:
-    "Public Moral Trade pilot updates, transparency notes, governance logs, and case-study placeholders.",
+    "Public Moral Trade service updates, transparency notes, governance changes, and case studies.",
   alternates: {
-    canonical: "/pilot-updates",
+    canonical: "/updates",
   },
   openGraph: {
-    title: "Moral Trade pilot updates",
+    title: "Moral Trade service updates",
     description:
-      "A public archive for pilot logs, governance updates, case studies, and transparency notes.",
-    url: getAbsoluteUrl("/pilot-updates"),
+      "A public archive for product changes, governance updates, case studies, and transparency notes.",
+    url: getAbsoluteUrl("/updates"),
     type: "website",
   },
 };
 
 const updates = [
   {
+    date: "July 14, 2026",
+    tag: "Launch readiness",
+    title: "Network onboarding and activation records are backed",
+    summary:
+      "The service now stores guided onboarding, referral attribution, working-session requests, email follow-up state, and privacy-safe funnel events in backed database tables.",
+    href: "/cohort",
+  },
+  {
+    date: "July 14, 2026",
+    tag: "Information architecture",
+    title: "Primary navigation and landing routes simplified",
+    summary:
+      "The public experience now centers on how Moral Trade works, complete examples, live records, moral public goods, research, and a direct join path.",
+    href: "/",
+  },
+  {
     date: "May 31, 2026",
     tag: "Transparency",
-    title: "First aggregate transparency report route",
+    title: "Aggregate transparency report route",
     summary:
-      "The pilot now publishes thresholded counts for review outcomes, disclosure grants, reports, appeals, and operator timing without exposing private case files.",
+      "The service publishes thresholded counts for review outcomes, disclosure grants, reports, appeals, and operator timing without exposing private case files.",
     href: "/transparency",
-  },
-  {
-    date: "May 27, 2026",
-    tag: "Pilot log",
-    title: "Audit response: make the pilot easier to understand",
-    summary:
-      "The public site now foregrounds a plain-English first action, a Projects hub, donation handoff clarity, and visible trust/governance routes.",
-    href: "/projects",
-  },
-  {
-    date: "May 26, 2026",
-    tag: "Public goods",
-    title: "Public Goods Fund surfaces gathered for inspection",
-    summary:
-      "Candidate pools, contribution evidence, real-money terms, and technical notes are grouped so reviewers can inspect the pilot without treating it as custody or escrow.",
-    href: "/mpgf",
   },
   {
     date: "May 19, 2026",
@@ -59,8 +59,9 @@ const updates = [
 ] as const;
 
 const upcomingReports = [
-  "First case study: one low-risk pledge swap or donation offset from draft through review.",
-  "Governance roster update: named operators, advisors, reviewers, and conflicts once roles are formal.",
+  "First complete case study: one low-risk pledge swap or donation offset from draft through review.",
+  "Governance roster update: named operators, advisors, reviewers, decision rights, and conflicts.",
+  "Activation report: account creation, onboarding completion, first action, and serious invitation rates.",
 ] as const;
 
 export default async function UpdatesPage() {
@@ -69,9 +70,9 @@ export default async function UpdatesPage() {
   const updatesStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Moral Trade pilot updates",
-    url: getAbsoluteUrl("/pilot-updates"),
-    description: "Public pilot logs, governance updates, case studies, and transparency notes.",
+    name: "Moral Trade service updates",
+    url: getAbsoluteUrl("/updates"),
+    description: "Public product changes, governance updates, case studies, and transparency notes.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: updates.map((update, index) => ({
@@ -87,9 +88,7 @@ export default async function UpdatesPage() {
   return (
     <div className="page-shell">
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(updatesStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(updatesStructuredData) }}
         type="application/ld+json"
       />
       <header className="hero">
@@ -102,37 +101,37 @@ export default async function UpdatesPage() {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Pilot updates</p>
-            <h1>A public archive for what changed and what was learned.</h1>
+            <p className="eyebrow">Service updates</p>
+            <h1>A public archive of product and governance changes.</h1>
             <p className="hero-text">
-              Moral Trade is early, so trust depends on visible iteration. This archive collects
-              pilot logs, governance updates, case studies, and short transparency notes.
+              Trust requires visible change control. This archive separates shipped capabilities,
+              operating-rule changes, reviewed outcomes, and planned work.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/status">
-                Check pilot status
+                Check service status
               </Link>
-              <a className="button button-secondary" href="mailto:support@moraltrade.org?subject=Pilot%20updates">
+              <a className="button button-secondary" href="mailto:support@moraltrade.org?subject=Service%20updates">
                 Subscribe by email
               </a>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Archive promise</p>
+            <p className="eyebrow">Archive rules</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Short notes are enough</strong>
-                  <p>Monthly logs should be public even before there are polished case studies.</p>
+                  <strong>Publish shipped changes</strong>
+                  <p>Record material product, data, privacy, safety, and governance changes.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>No fake proof</strong>
-                  <p>Updates should label plans, active pilots, and reviewed outcomes separately.</p>
+                  <strong>Separate plans from records</strong>
+                  <p>Planned work, active experiments, and reviewed outcomes must remain distinct.</p>
                 </div>
               </div>
             </div>
@@ -144,10 +143,10 @@ export default async function UpdatesPage() {
         <section className="section section-white" aria-labelledby="updates-archive-heading">
           <div className="section-head">
             <p className="eyebrow">Archive</p>
-            <h2 id="updates-archive-heading">Recent pilot notes</h2>
+            <h2 id="updates-archive-heading">Recent service notes</h2>
             <p>
-              These are intentionally concise. The point is to make progress and uncertainty
-              visible before the pilot has mature social proof.
+              Entries are intentionally concise and link to the affected surface so claims can be
+              inspected directly.
             </p>
           </div>
 
@@ -171,7 +170,7 @@ export default async function UpdatesPage() {
         <section className="section section-subtle" aria-labelledby="upcoming-updates-heading">
           <div className="section-head">
             <p className="eyebrow">Next to publish</p>
-            <h2 id="upcoming-updates-heading">Transparency work that would build trust</h2>
+            <h2 id="upcoming-updates-heading">Evidence that would materially improve trust</h2>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
