@@ -19,7 +19,7 @@ jobs:
       - name: Fetch protected preview readiness
         shell: bash
         env:
-          READINESS_URL: "https://website2-b1jta3xp3-ellen-s.vercel.app/api/payments/conditional/readiness?_vercel_share=Q6SrXnoKbGQKFn8FASVz9lSFow3yyJhD"
+          READINESS_URL: "https://moraltrade-site-k4kw1un21-ellen-s.vercel.app/api/payments/conditional/readiness?_vercel_share=KHIDeZdT1UKQtLZxwh3AYAPnFEqgQjP7"
         run: |
           set -euo pipefail
           status="$({
