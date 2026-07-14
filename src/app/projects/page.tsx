@@ -11,14 +11,14 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Projects",
   description:
-    "Browse Moral Trade's current project surfaces: worked examples, the Public Goods Fund pilot, and upcoming cohort-mediated workflows.",
+    "Browse Moral Trade's operating surfaces: worked examples, live trade records, private matching, moral public goods, and public service controls.",
   alternates: {
     canonical: "/projects",
   },
   openGraph: {
     title: "Moral Trade projects",
     description:
-      "A plain-language hub for what Moral Trade is actually operating, testing, and preparing next.",
+      "A plain-language hub for the workflows Moral Trade operates and the controls that govern them.",
     url: getAbsoluteUrl("/projects"),
     type: "website",
   },
@@ -34,38 +34,47 @@ const projectCards: ReadonlyArray<{
 }> = [
   {
     title: "Worked examples",
-    status: "Live learning surface",
+    status: "Public learning surface",
     description:
-      "Review seeded examples with terms, baselines, evidence rules, and manual-review notes before anyone relies on a real proposal.",
+      "Review complete examples with terms, baselines, evidence rules, and review notes before drafting or relying on a participant record.",
     href: "/worked-examples",
     icon: "example",
     actionLabel: "Browse examples",
   },
   {
-    title: "Public Goods Fund",
-    status: "Pilot mechanism",
+    title: "Trade and matching workflows",
+    status: "Backed participant records",
     description:
-      "Inspect candidate pools, contribution evidence, allocation rules, and the non-custodial public-good coordination workflow.",
-    href: "/mpgf",
-    icon: "fund",
-    actionLabel: "Open the fund",
+      "Create pledge swaps or donation offsets, express interest, manage private wish previews, and use consent-gated introduction paths.",
+    href: "/offers",
+    icon: "marketplace",
+    actionLabel: "Explore trades",
   },
   {
-    title: "In pilot / upcoming",
-    status: "Cohort first",
+    title: "Moral public goods",
+    status: "Operating coordination tools",
     description:
-      "Track donation offsets, private matching, and paid-action formats that need more review, governance, and live evidence before scaling.",
+      "Inspect group-buying structures, contribution evidence, candidate pools, governance rules, and non-custodial donation routes.",
+    href: "/moral-goods-group-buying",
+    icon: "fund",
+    actionLabel: "Open public-good tools",
+  },
+  {
+    title: "Service controls",
+    status: "Public and auditable",
+    description:
+      "Review service status, trust commitments, validation rules, safety boundaries, transparency reports, and machine-readable health endpoints.",
     href: "/status",
-    icon: "pilot",
-    actionLabel: "Read pilot status",
+    icon: "review",
+    actionLabel: "Read service status",
   },
 ] as const;
 
 const projectBoundaries = [
   "Worked examples are instructional records, not live demand.",
-  "External payment routes stay outside Moral Trade; the site does not hold funds.",
-  "Private matching remains consent-gated and manually reviewed.",
-  "Inactive mechanisms stay clearly marked until there is real operating evidence.",
+  "External payment routes stay outside Moral Trade; the service does not hold funds.",
+  "Private matching remains consent-gated and disclosure-limited.",
+  "Capabilities and activity counts come from backed records rather than promotional estimates.",
 ] as const;
 
 export default async function ProjectsPage() {
@@ -77,7 +86,7 @@ export default async function ProjectsPage() {
     name: "Moral Trade projects",
     url: getAbsoluteUrl("/projects"),
     description:
-      "Current Moral Trade project surfaces across worked examples, public-good coordination, and pilot workflows.",
+      "Operating Moral Trade surfaces across examples, trade records, private matching, public-good coordination, and service controls.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: projectCards.map((project, index) => ({
@@ -93,9 +102,7 @@ export default async function ProjectsPage() {
   return (
     <div className="page-shell">
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(projectsStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(projectsStructuredData) }}
         type="application/ld+json"
       />
       <header className="hero">
@@ -109,17 +116,18 @@ export default async function ProjectsPage() {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Projects</p>
-            <h1>What Moral Trade is actually doing.</h1>
+            <h1>What Moral Trade operates.</h1>
             <p className="hero-text">
-              This hub gives visitors a conventional place to start: current examples, the public
-              goods pilot, and the workflows that are still cohort-mediated or upcoming.
+              This hub groups the service by user outcome: learn from complete examples, create or
+              find a trade, coordinate a moral public good, and inspect the controls governing the
+              system.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/worked-examples">
                 See a worked example
               </Link>
-              <Link className="button button-secondary" href="/mpgf">
-                Public Goods Fund
+              <Link className="button button-secondary" href="/offers">
+                Explore trades
               </Link>
             </div>
           </section>
@@ -130,15 +138,15 @@ export default async function ProjectsPage() {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Show status plainly</strong>
-                  <p>Every surface should say whether it is live, illustrative, or planned.</p>
+                  <strong>State status plainly</strong>
+                  <p>Every surface distinguishes worked examples, participant records, and public controls.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
                   <strong>Prefer evidence to claims</strong>
-                  <p>Projects earn more prominence as they accumulate reviewed public records.</p>
+                  <p>Prominence follows backed records, public contracts, and reviewed outcomes.</p>
                 </div>
               </div>
             </div>
@@ -149,11 +157,11 @@ export default async function ProjectsPage() {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-labelledby="project-hub-heading">
           <div className="section-head">
-            <p className="eyebrow">Current surfaces</p>
-            <h2 id="project-hub-heading">Browse by what is live enough to inspect</h2>
+            <p className="eyebrow">Service surfaces</p>
+            <h2 id="project-hub-heading">Browse by what you need to accomplish</h2>
             <p>
-              These labels are intentionally plain. They help donors, partners, and participants
-              understand the work without decoding internal mechanism names first.
+              These labels are deliberately user-facing. They help participants, partners, donors,
+              and reviewers find the relevant workflow without decoding internal mechanism names.
             </p>
           </div>
 
@@ -175,7 +183,7 @@ export default async function ProjectsPage() {
         <section className="section section-subtle" aria-labelledby="project-boundaries-heading">
           <div className="section-head">
             <p className="eyebrow">Boundaries</p>
-            <h2 id="project-boundaries-heading">How to read project status</h2>
+            <h2 id="project-boundaries-heading">How to read service status</h2>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
