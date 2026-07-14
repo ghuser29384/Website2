@@ -1,0 +1,44 @@
+name: Conditional payments CI
+
+on:
+  push:
+    branches:
+      - payments/conditional-offset-settlement
+  pull_request:
+    paths:
+      - "src/lib/payments/**"
+      - "src/app/api/payments/conditional/**"
+      - "src/app/donation-offsets/payments/**"
+      - "supabase/migrations/*conditional_payment*"
+      - "supabase/migrations/*conditional_payments*"
+      - ".github/workflows/conditional-payments-ci.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        env:
+          CONDITIONAL_PAYMENTS_MODE: disabled
+        run: npm run build
