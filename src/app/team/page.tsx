@@ -10,14 +10,14 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Team and Governance",
   description:
-    "Current public accountability surface for Moral Trade operators, reviewer responsibilities, advisor roles, conflicts, and publication commitments.",
+    "Public accountability for Moral Trade operators, reviewer responsibilities, advisor roles, conflicts, decision rights, and publication commitments.",
   alternates: {
     canonical: "/team-and-governance",
   },
   openGraph: {
     title: "Moral Trade team and governance",
     description:
-      "See what is public about Moral Trade's pilot operators, governance responsibilities, reviewer roles, and publication commitments.",
+      "See what is public about Moral Trade's operators, governance responsibilities, reviewer roles, conflicts, and publication commitments.",
     url: getAbsoluteUrl("/team-and-governance"),
     type: "website",
   },
@@ -25,30 +25,30 @@ export const metadata: Metadata = {
 
 const governanceRows = [
   {
-    title: "Pilot operators",
+    title: "Service operators",
     status: "Public route active",
     detail:
-      "The current public operator route is support@moraltrade.org for safety, evidence, partnership, and cohort questions.",
+      "The public operator route is support@moraltrade.org for safety, evidence, partnership, account, and network questions.",
   },
   {
     title: "Reviewer responsibilities",
     status: "Rulebook public",
     detail:
-      "Reviewer roles, conflict rules, appeal paths, and evidence states are published in the validation rulebook.",
+      "Reviewer roles, conflict rules, appeal paths, evidence states, and externality review are published in the validation rulebook.",
   },
   {
-    title: "Named advisors and reviewers",
-    status: "Not public yet",
+    title: "Named external advisors and reviewers",
+    status: "Not represented as active",
     detail:
-      "No named advisor or external reviewer roster should be implied until those roles are formal, consented, and listed here.",
+      "No named external advisor or reviewer roster is implied until those roles are formal, consented, scoped, and listed here.",
   },
 ] as const;
 
 const publicationCommitments = [
-  "List named operators, advisors, and reviewers before marketing mature reviewer governance.",
+  "List named operators, advisors, and reviewers as soon as those roles are formal and consented.",
   "Publish what each role can approve, what it cannot approve, and how conflicts are handled.",
-  "Keep the public member directory separate from team and governance accountability.",
-  "Use transparency reports for reviewed outcomes instead of generic endorsements.",
+  "Keep the public member directory separate from operator and governance accountability.",
+  "Use backed transparency reports for reviewed outcomes instead of generic endorsements.",
 ] as const;
 
 export default async function TeamPage() {
@@ -67,11 +67,11 @@ export default async function TeamPage() {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Team and governance</p>
-            <h1>Who is publicly accountable for the pilot.</h1>
+            <h1>Who is accountable for Moral Trade.</h1>
             <p className="hero-text">
               Moral Trade should not ask for trust through abstraction alone. This page separates
-              operator routes, reviewer responsibilities, and the still-missing named governance
-              roster.
+              operator routes, reviewer responsibilities, decision rights, and roles that are not yet
+              represented as active.
             </p>
             <div className="hero-actions">
               <a className="button button-primary" href="mailto:support@moraltrade.org?subject=Governance%20question">
@@ -90,14 +90,14 @@ export default async function TeamPage() {
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Do not invent social proof</strong>
-                  <p>Unpublished advisors, reviewers, or endorsements should not be implied.</p>
+                  <p>Unpublished advisors, reviewers, affiliations, or endorsements are not implied.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Name roles before reliance</strong>
-                  <p>Accountability improves when people can see who owns which decision.</p>
+                  <strong>Name decision ownership</strong>
+                  <p>People should be able to see who owns a review, correction, disclosure, or incident decision.</p>
                 </div>
               </div>
             </div>
@@ -108,11 +108,11 @@ export default async function TeamPage() {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-labelledby="governance-now-heading">
           <div className="section-head">
-            <p className="eyebrow">Current status</p>
+            <p className="eyebrow">Current accountability</p>
             <h2 id="governance-now-heading">What is public now</h2>
             <p>
-              This is intentionally candid: it gives visitors a trust surface today without
-              pretending the full governance roster already exists.
+              This surface states the current operating reality without implying roles, endorsements,
+              or review capacity that have not been formalized.
             </p>
           </div>
 
@@ -130,7 +130,7 @@ export default async function TeamPage() {
         <section className="section section-subtle" aria-labelledby="governance-commitments-heading">
           <div className="section-head">
             <p className="eyebrow">Publication commitments</p>
-            <h2 id="governance-commitments-heading">What this page should publish next</h2>
+            <h2 id="governance-commitments-heading">What this page will add next</h2>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">

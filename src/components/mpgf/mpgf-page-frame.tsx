@@ -48,12 +48,12 @@ export function MpgfPageFrame({
               <span>Every.org fast route</span>
               <span>Webhook before counting</span>
               <span>Reviewer verification</span>
-              <span>{realMoneyReady ? "Integrated checkout available" : "Integrated checkout planned, not active"}</span>
+              <span>{realMoneyReady ? "Integrated checkout available" : "External-payment route active"}</span>
             </div>
             {actions ? <div className="hero-actions">{actions}</div> : null}
           </section>
 
-          <aside className="mpgf-status-panel" aria-label="Current MPGF pilot status">
+          <aside className="mpgf-status-panel" aria-label="Public Goods Fund participation status">
             <p className="eyebrow">How participation works</p>
             <dl>
               <div>
@@ -66,11 +66,15 @@ export function MpgfPageFrame({
               </div>
               <div>
                 <dt>3. Review before counting</dt>
-                <dd>The fund only counts reviewed evidence in contribution state.</dd>
+                <dd>The fund counts a contribution only after the relevant evidence state is reviewed.</dd>
               </div>
               <div>
-                <dt>Integrated checkout</dt>
-                <dd>{realMoneyReady ? "Available for eligible signed-in participants" : "Planned after provider approval"}</dd>
+                <dt>Payment route</dt>
+                <dd>
+                  {realMoneyReady
+                    ? "Integrated checkout is available for eligible signed-in participants"
+                    : "External provider payment and reviewed evidence remain available"}
+                </dd>
               </div>
             </dl>
             <Link className="inline-link" href="/mpgf/technical-spec">
@@ -80,7 +84,9 @@ export function MpgfPageFrame({
         </div>
       </header>
 
-      <main id="main-content" tabIndex={-1}>{children}</main>
+      <main id="main-content" tabIndex={-1}>
+        {children}
+      </main>
       <SiteFooter />
     </div>
   );

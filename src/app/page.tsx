@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 import { HomePage } from "@/components/home/home-page";
-import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade helps people with different values exchange small, reviewable commitments so each prefers the result to the status quo.",
+  "Moral Trade turns moral disagreement into voluntary, bounded exchanges and shared public-good commitments with explicit baselines and reviewable evidence.",
 );
 
 export const metadata: Metadata = {
@@ -28,15 +28,7 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const [viewer, marketplaceOverview] = await Promise.all([
-    getViewer(),
-    getMarketplaceOverview(),
-  ]);
+  const viewer = await getViewer();
 
-  return (
-    <HomePage
-      isAuthenticated={Boolean(viewer)}
-      marketplaceOverview={marketplaceOverview}
-    />
-  );
+  return <HomePage isAuthenticated={Boolean(viewer)} />;
 }

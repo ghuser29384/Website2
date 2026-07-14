@@ -86,7 +86,7 @@ const organizationStructuredData = {
   contactPoint: [
     {
       "@type": "ContactPoint",
-      contactType: "safety and pilot support",
+      contactType: "safety and participant support",
       email: "support@moraltrade.org",
       url: getAbsoluteUrl("/contact"),
     },

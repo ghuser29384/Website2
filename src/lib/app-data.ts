@@ -1224,7 +1224,7 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
   let moralPublicGoodsMatchCount = 0;
 
   for (const match of matchRows) {
-    if (match.status === "cancelled") {
+    if (match.status !== "completed") {
       continue;
     }
 

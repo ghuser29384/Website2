@@ -10,14 +10,14 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "What Moral Trade is, what exists today, what does not exist yet, who is publicly accountable, and what the pilot will publish next.",
+    "What Moral Trade is, what the service supports, what it does not claim, who is accountable, and what will be published next.",
   alternates: {
     canonical: "/about",
   },
   openGraph: {
     title: "About Moral Trade",
     description:
-      "A concise overview of Moral Trade's pilot status, boundaries, operators, and next publication commitments.",
+      "A concise overview of Moral Trade's operating model, service boundaries, accountability, and publication commitments.",
     url: getAbsoluteUrl("/about"),
     type: "website",
   },
@@ -27,17 +27,17 @@ const aboutCards = [
   {
     title: "What exists today",
     detail:
-      "A public primer, worked examples, donation routes, validation standards, safety rules, and the Public Goods Fund pilot.",
+      "Accounts, guided onboarding, worked examples, live offer records, private matching, evidence and review workflows, donation routes, and moral public-good tools.",
   },
   {
-    title: "What does not exist yet",
+    title: "What the service does not do",
     detail:
-      "A liquid marketplace, escrow, custody, automated outreach, legal enforceability, mature reviewer governance, or broad social proof.",
+      "Moral Trade does not hold funds, provide escrow, guarantee legal enforceability, autonomously disclose private data, or claim that marketplace liquidity already exists.",
   },
   {
-    title: "What we will publish next",
+    title: "What we publish",
     detail:
-      "Named governance roles, transparency reports, pilot case studies, and measurement of where visitors drop out or get confused.",
+      "Operating boundaries, governance roles, public health contracts, transparency reports, service updates, and backed activity metrics rather than promotional estimates.",
   },
 ] as const;
 
@@ -57,18 +57,18 @@ export default async function AboutPage() {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">About</p>
-            <h1>What exists today, and what does not.</h1>
+            <h1>A service for cooperation across moral disagreement.</h1>
             <p className="hero-text">
-              Moral Trade is a pilot for small, voluntary, evidence-reviewed commitments across
-              moral disagreement. The current job is to make the mechanism legible, trustworthy,
-              and measurable before claiming marketplace maturity.
+              Moral Trade helps people structure voluntary exchanges and shared public-good
+              commitments without requiring agreement on a common moral theory. The operating
+              model separates baselines, terms, evidence, privacy, review, and recourse.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/projects">
                 Browse projects
               </Link>
               <Link className="button button-secondary" href="/team-and-governance">
-                Meet the operators
+                Review accountability
               </Link>
             </div>
           </section>
@@ -76,8 +76,8 @@ export default async function AboutPage() {
           <aside className="hero-panel panel">
             <p className="eyebrow">One sentence</p>
             <p className="hero-followup">
-              Moral Trade helps serious participants test one reviewable commitment at a time,
-              with explicit baselines, evidence rules, and no custody or escrow claim.
+              Moral Trade turns one concrete disagreement into bounded, reviewable terms that each
+              participant can evaluate by their own lights.
             </p>
           </aside>
         </div>
@@ -86,7 +86,7 @@ export default async function AboutPage() {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-labelledby="about-overview-heading">
           <div className="section-head">
-            <p className="eyebrow">Pilot clarity</p>
+            <p className="eyebrow">Service clarity</p>
             <h2 id="about-overview-heading">A short operating overview</h2>
           </div>
 
@@ -107,19 +107,19 @@ export default async function AboutPage() {
           </div>
           <div className="data-grid">
             <Link className="panel data-card" href="/projects">
-              <h3>What are you doing?</h3>
-              <p className="route-text">See worked examples, the Public Goods Fund, and upcoming pilot surfaces.</p>
-              <span className="inline-link">Open Projects</span>
+              <h3>What can I use?</h3>
+              <p className="route-text">See trade workflows, worked examples, moral public goods, and supported actions.</p>
+              <span className="inline-link">Open projects</span>
             </Link>
             <Link className="panel data-card" href="/team-and-governance">
-              <h3>Who runs this?</h3>
-              <p className="route-text">Review current operator routes, reviewer responsibilities, and governance gaps.</p>
-              <span className="inline-link">Open Team and Governance</span>
+              <h3>Who is accountable?</h3>
+              <p className="route-text">Review operator routes, reviewer responsibilities, decision rights, and governance gaps.</p>
+              <span className="inline-link">Open team and governance</span>
             </Link>
-            <Link className="panel data-card" href="/pilot-updates">
+            <Link className="panel data-card" href="/updates">
               <h3>What changed recently?</h3>
-              <p className="route-text">Read pilot logs, governance updates, and planned transparency reports.</p>
-              <span className="inline-link">Open Updates</span>
+              <p className="route-text">Read service changes, governance updates, and publication notes.</p>
+              <span className="inline-link">Open updates</span>
             </Link>
           </div>
         </section>

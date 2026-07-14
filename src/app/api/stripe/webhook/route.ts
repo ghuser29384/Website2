@@ -5,6 +5,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { isAgreementPaymentCapturePermitted } from "@/lib/agreement-payment-authorization";
 import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
+import { handleConditionalStripeWebhookEvent } from "@/lib/payments/conditional-webhook";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 
@@ -162,26 +163,42 @@ export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
   const rawBodyHash = hashStripeWebhookBody(rawBody);
 
-  let event: Stripe.Event;
-  let signatureVerified = false;
+  if (!webhookSecret) {
+    return NextResponse.json(
+      { error: "Stripe webhook processing is disabled until STRIPE_WEBHOOK_SECRET is configured." },
+      { status: 503 },
+    );
+  }
+  if (!signature) {
+    return NextResponse.json({ error: "Missing Stripe-Signature header." }, { status: 400 });
+  }
 
+  let event: Stripe.Event;
   try {
-    if (webhookSecret && signature) {
-      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-      signatureVerified = true;
-    } else {
-      event = JSON.parse(rawBody);
-    }
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid Stripe webhook.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const conditionalResult = await handleConditionalStripeWebhookEvent({
+    event,
+    rawBodyHash,
+    signatureVerified: true,
+  });
+  if (conditionalResult.handled) {
+    return NextResponse.json({
+      received: true,
+      conditionalPayments: conditionalResult.status,
+      duplicate: conditionalResult.duplicate,
+    });
   }
 
   if (isPotentialMpgfStripeEvent(event)) {
     const mpgfResult = await handleMpgfStripeWebhookEvent({
       event,
       rawBodyHash,
-      signatureVerified,
+      signatureVerified: true,
     });
 
     if (mpgfResult.handled) {

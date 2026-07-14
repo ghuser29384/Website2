@@ -4,30 +4,31 @@ import { MoralTradeWordmark, MutualStepMark } from "@/components/brand/moral-tra
 
 const footerLinkGroups = [
   {
-    title: "Explore",
+    title: "Use",
     links: [
-      { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
-      { href: "/offers", label: "Browse trades" },
+      { href: "/offers", label: "Explore trades" },
       { href: "/worked-examples", label: "Worked examples" },
-      { href: "/cohort", label: "Founding cohort" },
+      { href: "/background-networking", label: "Private matching" },
+      { href: "/cohort", label: "Join the network" },
     ],
   },
   {
-    title: "Standards",
+    title: "Trust",
     links: [
-      { href: "/safety", label: "Safety" },
+      { href: "/trust", label: "What you can rely on" },
+      { href: "/credibility", label: "Contextual credibility" },
+      { href: "/status", label: "Service status" },
       { href: "/validation", label: "Validation" },
-      { href: "/transparency", label: "Transparency" },
-      { href: "/status", label: "Pilot status" },
+      { href: "/safety", label: "Safety" },
     ],
   },
   {
     title: "Research",
     links: [
-      { href: "/research", label: "Research & governance" },
+      { href: "/research", label: "Research and governance" },
       { href: "/sources", label: "Sources" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
-      { href: "/mpgf", label: "Moral public goods" },
+      { href: "/moral-goods-group-buying", label: "Moral public goods" },
     ],
   },
 ] as const;
@@ -46,8 +47,8 @@ export function SiteFooter() {
         <div className="footer-intro mt-footer-intro">
           <h2>Cooperation does not require agreement.</h2>
           <p>
-            A pilot for small, voluntary, evidence-reviewed commitments across moral
-            disagreement.
+            A coordination platform for voluntary, bounded, evidence-reviewed commitments across
+            moral disagreement.
           </p>
         </div>
 
@@ -69,8 +70,8 @@ export function SiteFooter() {
 
       <div className="footer-meta mt-footer-meta">
         <p>
-          Moral Trade does not provide legal, tax, escrow, custody, or investment services.
-          Terms remain voluntary and reviewable before reliance.
+          Moral Trade does not provide legal, tax, escrow, custody, or investment services. Terms
+          remain voluntary and reviewable before reliance.
         </p>
         <p>© 2026 Moral Trade</p>
         <div className="mt-footer-legal">
