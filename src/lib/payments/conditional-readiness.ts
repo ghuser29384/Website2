@@ -1,4 +1,9 @@
-import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
+import {
+  getStripe,
+  getStripePlatformAccountId,
+  getStripeWebhookSecret,
+  hasStripeEnv,
+} from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getConditionalPaymentsEnvironment } from "@/lib/payments/conditional-state";
 
@@ -101,7 +106,7 @@ export async function getConditionalPaymentReadiness(): Promise<ConditionalPayme
 
   if (environment.enabled && hasStripeEnv()) {
     try {
-      const account = await getStripe().accounts.retrieve();
+      const account = await getStripe().accounts.retrieve(getStripePlatformAccountId());
       accountReachable = true;
       chargesEnabled = account.charges_enabled === true;
       payoutsEnabled = account.payouts_enabled === true;
