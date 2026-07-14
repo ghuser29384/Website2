@@ -1,0 +1,50 @@
+name: Conditional readiness probe
+
+on:
+  push:
+    branches:
+      - payments/conditional-offset-settlement
+  pull_request:
+    paths:
+      - ".github/workflows/conditional-readiness-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch protected preview readiness
+        shell: bash
+        env:
+          READINESS_URL: "https://website2-b1jta3xp3-ellen-s.vercel.app/api/payments/conditional/readiness?_vercel_share=Q6SrXnoKbGQKFn8FASVz9lSFow3yyJhD"
+        run: |
+          set -euo pipefail
+          status="$({
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --cookie-jar /tmp/vercel-cookies \
+              --cookie /tmp/vercel-cookies \
+              --dump-header readiness-headers.txt \
+              --output readiness.json \
+              --write-out '%{http_code}' \
+              "$READINESS_URL"
+          })"
+          printf '%s\n' "$status" > readiness-status.txt
+          cat readiness.json
+
+      - name: Upload readiness result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conditional-readiness-probe
+          path: |
+            readiness.json
+            readiness-status.txt
+            readiness-headers.txt
+          if-no-files-found: error
+          retention-days: 1
