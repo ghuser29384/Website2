@@ -1,0 +1,60 @@
+name: Conditional payments runtime preflight
+
+on:
+  push:
+    branches:
+      - payments/conditional-offset-settlement
+    paths:
+      - ".github/workflows/conditional-payments-runtime-preflight.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/conditional-payments-runtime-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-presence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Record secret-presence booleans
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > conditional-payments-runtime-preflight.txt
+          for name in \
+            STRIPE_SECRET_KEY \
+            STRIPE_WEBHOOK_SECRET \
+            SUPABASE_SERVICE_ROLE_KEY \
+            NEXT_PUBLIC_SUPABASE_URL \
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            VERCEL_TOKEN \
+            VERCEL_ORG_ID \
+            VERCEL_PROJECT_ID
+          do
+            if [[ -n "${!name:-}" ]]; then
+              printf '%s=configured\n' "$name" >> conditional-payments-runtime-preflight.txt
+            else
+              printf '%s=missing\n' "$name" >> conditional-payments-runtime-preflight.txt
+            fi
+          done
+          cat conditional-payments-runtime-preflight.txt
+
+      - name: Upload preflight result
+        uses: actions/upload-artifact@v4
+        with:
+          name: conditional-payments-runtime-preflight
+          path: conditional-payments-runtime-preflight.txt
+          if-no-files-found: error
+          retention-days: 7
