@@ -7,23 +7,17 @@ declare
   constraint_record record;
 begin
   for constraint_record in
-    select constraint_name
-    from information_schema.table_constraints
-    where table_schema = 'public'
-      and table_name = 'conditional_settlement_transfers'
-      and constraint_type = 'UNIQUE'
-      and constraint_name in (
-        select tc.constraint_name
-        from information_schema.table_constraints tc
-        join information_schema.constraint_column_usage ccu
-          on ccu.constraint_schema = tc.constraint_schema
-         and ccu.constraint_name = tc.constraint_name
-        where tc.table_schema = 'public'
-          and tc.table_name = 'conditional_settlement_transfers'
-        group by tc.constraint_name
-        having array_agg(ccu.column_name order by ccu.column_name)
-          = array['mandate_id', 'settlement_batch_id']::text[]
-      )
+    select tc.constraint_name
+    from information_schema.table_constraints tc
+    join information_schema.constraint_column_usage ccu
+      on ccu.constraint_schema = tc.constraint_schema
+     and ccu.constraint_name = tc.constraint_name
+    where tc.table_schema = 'public'
+      and tc.table_name = 'conditional_settlement_transfers'
+      and tc.constraint_type = 'UNIQUE'
+    group by tc.constraint_name
+    having array_agg(ccu.column_name::text order by ccu.column_name::text)
+      = array['mandate_id', 'settlement_batch_id']::text[]
   loop
     execute format(
       'alter table public.conditional_settlement_transfers drop constraint %I',
@@ -35,6 +29,9 @@ $$;
 
 alter table public.conditional_settlement_transfers
   drop constraint if exists conditional_settlement_transfers_settlement_batch_id_payment_attempt_id_key;
+
+alter table public.conditional_settlement_transfers
+  drop constraint if exists conditional_settlement_transfers_batch_attempt_key;
 
 alter table public.conditional_settlement_transfers
   add constraint conditional_settlement_transfers_batch_attempt_key
