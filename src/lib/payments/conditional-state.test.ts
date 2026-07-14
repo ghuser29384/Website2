@@ -119,26 +119,25 @@ test("participant amounts are derived from the frozen role", () => {
   assert.equal(participantAmountForDonationOffset(snapshot, "counterparty"), 750);
 });
 
-test("production fails closed even when a test key is present", () => {
-  const environment = getConditionalPaymentsEnvironment({
+test("a test key safely enables sandbox mode in every deployment environment", () => {
+  const productionSandbox = getConditionalPaymentsEnvironment({
     NODE_ENV: "production",
     VERCEL_ENV: "production",
     STRIPE_SECRET_KEY: "sk_test_example",
   } as NodeJS.ProcessEnv);
 
-  assert.equal(environment.enabled, false);
-  assert.equal(environment.mode, "disabled");
-  assert.equal(environment.livemode, false);
+  assert.equal(productionSandbox.enabled, true);
+  assert.equal(productionSandbox.mode, "test");
+  assert.equal(productionSandbox.livemode, false);
 });
 
-test("preview can infer test mode but live mode requires a live key", () => {
-  const preview = getConditionalPaymentsEnvironment({
-    NODE_ENV: "production",
-    VERCEL_ENV: "preview",
+test("explicit disable wins and live mode requires a live key", () => {
+  const disabled = getConditionalPaymentsEnvironment({
+    CONDITIONAL_PAYMENTS_MODE: "disabled",
     STRIPE_SECRET_KEY: "sk_test_example",
   } as NodeJS.ProcessEnv);
-  assert.equal(preview.enabled, true);
-  assert.equal(preview.mode, "test");
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.mode, "disabled");
 
   const invalidLive = getConditionalPaymentsEnvironment({
     CONDITIONAL_PAYMENTS_MODE: "live",
