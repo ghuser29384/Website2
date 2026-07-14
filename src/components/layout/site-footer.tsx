@@ -16,6 +16,7 @@ const footerLinkGroups = [
     title: "Trust",
     links: [
       { href: "/trust", label: "What you can rely on" },
+      { href: "/credibility", label: "Contextual credibility" },
       { href: "/status", label: "Service status" },
       { href: "/validation", label: "Validation" },
       { href: "/safety", label: "Safety" },
