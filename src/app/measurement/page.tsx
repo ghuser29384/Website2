@@ -3,48 +3,27 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { StatusBadge } from "@/components/ui/page-primitives";
-import { getViewer, listOpenOffersPreview } from "@/lib/app-data";
+import { getViewer } from "@/lib/app-data";
 import {
-  buildMarketplaceKpiSnapshot,
-  getMarketplaceMeasurementContract,
-  validateMarketplaceKpiSnapshot,
-  validateMarketplaceMeasurementContract,
-  type MarketplaceKpiKey,
-} from "@/lib/marketplace-measurement";
-import {
-  MEASUREMENT_BASELINE_ROUTES,
   MEASUREMENT_EVENT_SPECS,
   MEASUREMENT_GUARDRAILS,
   MEASUREMENT_PERFORMANCE_BASELINE,
-  MEASUREMENT_ROADMAP,
   type MeasurementStage,
 } from "@/lib/measurement-plan";
-import {
-  getMoralTradeEvaluationProfile,
-  getMoralTradeEvaluationSampleAudits,
-  validateMoralTradeEvaluationProfile,
-} from "@/lib/moral-trade/evaluation";
-import {
-  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
-  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
-} from "@/lib/background-public-pages";
-import { buildPublicOffersCollectionPayload } from "@/lib/public-offers";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Measurement Plan",
+  title: "Measurement",
   description:
-    "The privacy-safe Moral Trade measurement plan: public funnel events, performance baselines, forbidden analytics data, and aggregate reporting roadmap.",
+    "How Moral Trade measures activation, trust, safety, performance, and public-good use without ranking moral worth or storing raw private content.",
   alternates: {
     canonical: "/measurement",
   },
   openGraph: {
-    title: "Moral Trade measurement plan",
+    title: "Moral Trade measurement",
     description:
-      "How Moral Trade measures pilot clarity, trust, and performance without scoring moral worth or storing raw private content.",
+      "Privacy-safe service metrics for activation, trust, safety, performance, and public-good coordination.",
     url: getAbsoluteUrl("/measurement"),
     type: "article",
   },
@@ -58,7 +37,7 @@ const stageLabels: Record<MeasurementStage, string> = {
   public_goods: "Public goods",
 };
 
-const stageOrder: MeasurementStage[] = [
+const stages: MeasurementStage[] = [
   "orientation",
   "activation",
   "trust",
@@ -66,106 +45,68 @@ const stageOrder: MeasurementStage[] = [
   "public_goods",
 ];
 
-const structuredData = {
-  "@context": "https://schema.org",
-  "@type": "TechArticle",
-  name: "Moral Trade measurement plan",
-  url: getAbsoluteUrl("/measurement"),
-  description: metadata.description,
-  about: [
-    "privacy-safe analytics",
-    "pilot measurement",
-    "Lighthouse",
-    "Search Console",
-    "Web Vitals",
-  ],
-};
-
-function getSpecsForStage(stage: MeasurementStage) {
-  return MEASUREMENT_EVENT_SPECS.filter((spec) => spec.stage === stage);
-}
-
-const evaluationMetricGroups = [
+const outcomeMetrics = [
   {
-    title: "Draft and review quality",
-    summary:
-      "Tracks whether structured drafts become valid faster while reviewers still overrule weak suggestions.",
-    metricKeys: [
-      "draft_completion_rate",
-      "time_to_valid_draft",
-      "explanation_helpfulness",
-      "reviewer_efficiency_minutes",
-      "human_overrule_rate",
-    ],
+    title: "Activated users",
+    detail:
+      "Accounts that complete onboarding and perform a concrete first action, not merely registered emails.",
   },
   {
-    title: "Safety precision",
-    summary:
-      "Keeps blocking, privacy, and false-match checks visible before expanding any assisted workflow.",
-    metricKeys: [
-      "blocked_proposal_precision",
-      "privacy_leakage_incidents",
-      "false_match_rate",
-    ],
+    title: "Reviewable records",
+    detail:
+      "Offers, previews, invitations, public-good actions, evidence items, and agreements that create inspectable state.",
   },
   {
-    title: "Surfacing parity",
-    summary:
-      "Looks for material preview gaps across privacy-thresholded slices before broader rollout.",
-    metricKeys: ["subgroup_surfacing_parity"],
+    title: "Safe progression",
+    detail:
+      "The share of users who reach a next step without a privacy, coercion, evidence, or externality blocker.",
   },
   {
-    title: "Dispute health",
-    summary:
-      "Reports whether evidence, appeals, duplicate-proof issues, and unresolved disputes are improving.",
-    metricKeys: [
-      "appeal_overturn_rate",
-      "evidence_review_sla",
-      "duplicate_proof_miss_rate",
-      "unresolved_dispute_share",
-    ],
+    title: "Serious invitations",
+    detail:
+      "Invitations to plausible counterparties, researchers, organizers, donors, or builders rather than undifferentiated referrals.",
+  },
+  {
+    title: "Review quality",
+    detail:
+      "Evidence-review timing, challenge outcomes, appeal reversals, unresolved disputes, and human-overrule rates.",
+  },
+  {
+    title: "Service reliability",
+    detail:
+      "Route health, error rates, performance budgets, email delivery, job execution, and recovery behavior.",
   },
 ] as const;
 
-const marketplaceKpiKeys: MarketplaceKpiKey[] = [
-  "live_offer_count",
-  "reviewable_offer_count",
-  "completed_agreement_count",
-  "common_ground_budget_activation_rate",
-  "threshold_clear_rate",
-  "sponsor_leverage_ratio",
-  "public_receipt_preview_count",
-  "claim_correction_resolution_count",
-  "demo_data_live_mix_block_count",
-  "privacy_leakage_incidents_target_zero",
-];
+const forbiddenData = [
+  "Raw private wishes, asks, constraints, messages, or source notes in analytics events.",
+  "Email addresses, phone numbers, contact details, receipts, or evidence bodies in public reports.",
+  "A platform score purporting to rank people, causes, moral views, or overall moral worth.",
+  "Small-sample public metrics that make private participants or cases easy to infer.",
+  "Engagement metrics used as a substitute for mutually preferred outcomes or reviewed completion.",
+] as const;
 
-function formatContractToken(value: string) {
-  return value.replaceAll("_", " ");
+function specsFor(stage: MeasurementStage) {
+  return MEASUREMENT_EVENT_SPECS.filter((spec) => spec.stage === stage);
 }
 
 export default async function MeasurementPage() {
   const viewer = await getViewer();
-  const marketplaceLiveOffers = hasSupabaseEnv()
-    ? await listOpenOffersPreview(120, "all")
-    : [];
-  const publicOffersPayload = buildPublicOffersCollectionPayload({
-    liveOffers: marketplaceLiveOffers,
-    searchParams: new URLSearchParams("tab=all"),
-  });
-  const marketplaceContract = getMarketplaceMeasurementContract();
-  const marketplaceContractValidation = validateMarketplaceMeasurementContract();
-  const marketplaceKpiSnapshot = buildMarketplaceKpiSnapshot({ publicOffersPayload });
-  const marketplaceKpiValidation = validateMarketplaceKpiSnapshot(marketplaceKpiSnapshot);
-  const marketplaceKpisByKey = new Map(
-    marketplaceKpiSnapshot.kpis.map((kpi) => [kpi.key, kpi]),
-  );
-  const evaluationProfile = getMoralTradeEvaluationProfile();
-  const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
-  const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
-  const evaluationMetricsByKey = new Map(
-    evaluationProfile.metrics.map((metric) => [metric.key, metric]),
-  );
+
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    name: "Moral Trade measurement",
+    url: getAbsoluteUrl("/measurement"),
+    description: metadata.description,
+    about: [
+      "privacy-safe analytics",
+      "activation measurement",
+      "trust and safety metrics",
+      "service performance",
+      "moral public goods",
+    ],
+  };
 
   return (
     <div className="page-shell">
@@ -179,202 +120,67 @@ export default async function MeasurementPage() {
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
+
       <main className="legal-page" id="main-content" tabIndex={-1}>
-        <p className="eyebrow">Measurement plan</p>
-        <h1>Measure pilot clarity, not moral worth.</h1>
+        <p className="eyebrow">Measurement</p>
+        <h1>Measure useful cooperation, not moral worth.</h1>
         <p>
-          Moral Trade needs enough instrumentation to learn whether visitors understand the pilot,
-          reach a safe first action, and trust the review workflow. It does not need analytics that
-          rank moral views, expose exact wishes, or optimize for engagement.
+          Moral Trade measures whether people understand the service, complete a concrete first
+          action, create reviewable records, progress safely, and return to meaningful work. It does
+          not optimize for time-on-site or rank moral views.
         </p>
 
         <section className="panel data-card data-card-wide">
-          <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.eyebrow}</p>
-          <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.heading}</h2>
-          <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.summary}</p>
-          <ul className="compact-list">
-            {BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.cards.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-          <details className="details-panel">
-            <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.measurement.technicalDetailsLabel}</summary>
-            <div className="details-content">
-              <div className="hero-actions">
-                {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
-                  <Link className="button button-secondary" href={link.href} key={link.href}>
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </details>
-        </section>
-
-        <section>
-          <details className="details-panel">
-            <summary>Measurement event taxonomy</summary>
-            <div className="details-content">
-              <h2>What we measure now</h2>
-              <p>
-                The current event taxonomy follows the same privacy limits as the product: public
-                route paths, coarse stage labels, consent state, and bucketed performance signals.
-                Query strings, hashes, raw search text, source notes, receipts, and private
-                messages stay out of funnel events.
-              </p>
-          {stageOrder.map((stage) => (
-            <div key={stage}>
-              <h3>{stageLabels[stage]}</h3>
-              <div className="data-grid">
-                {getSpecsForStage(stage).map((spec) => (
-                  <div className="panel data-card" key={spec.eventType}>
-                    <h4>
-                      <code>{spec.eventType}</code>
-                    </h4>
-                    <p className="route-text">{spec.question}</p>
-                    <p className="route-text">
-                      <strong>Allowed metadata:</strong> {spec.allowedMetadata.join(", ")}
-                    </p>
-                    <p className="route-text">
-                      <strong>Used for:</strong> {spec.decisionUse}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-            </div>
-          </details>
-        </section>
-
-        <section aria-labelledby="marketplace-kpis-heading">
-          <div className="protocol-workflow-card-head">
-            <div>
-              <p className="eyebrow">Marketplace KPIs</p>
-              <h2 id="marketplace-kpis-heading">Public marketplace metrics are thresholded.</h2>
-            </div>
-            <StatusBadge
-              tone={
-                marketplaceContractValidation.status === "pass" &&
-                marketplaceKpiValidation.status === "pass"
-                  ? "default"
-                  : "warning"
-              }
-            >
-              {marketplaceContractValidation.status}
-            </StatusBadge>
-          </div>
-          <p>
-            The marketplace KPI contract covers live inventory, reviewable activity, agreement
-            completion, moral public goods activation, support conversion, threshold clearing,
-            sponsor leverage, safety blockers, deployment blockers, and privacy failures. Public
-            release uses small-cell suppression and never treats seed templates, worked examples,
-            rounds, or demo records as live agreement volume.
-          </p>
-          <p className="route-text">
-            Contract: {marketplaceContract.version}. Minimum public count:{" "}
-            {marketplaceContract.minimumPublicCount}. KPI definitions:{" "}
-            {marketplaceContract.kpiDefinitions.length}. Event specs:{" "}
-            {marketplaceContract.eventSpecs.map((spec) => spec.eventType).join(", ")}.
-          </p>
+          <h2>Primary outcome metrics</h2>
           <div className="data-grid">
-            {marketplaceKpiKeys.map((key) => {
-              const kpi = marketplaceKpisByKey.get(key);
-
-              return (
-                <article className="panel data-card" key={key}>
-                  <p className="eyebrow">{kpi?.status ?? "contract_only"}</p>
-                  <h3>{kpi?.label ?? formatContractToken(key)}</h3>
-                  <p className="route-text">
-                    <strong>{kpi?.displayValue ?? "Not yet instrumented"}</strong>
-                  </p>
-                  <p className="route-text">
-                    Sample size: {kpi?.sampleSize ?? 0}. Source:{" "}
-                    {kpi?.source ?? "contract_only"}.
-                  </p>
-                </article>
-              );
-            })}
-            <article className="panel data-card">
-              <h3>Live-metric exclusions</h3>
-              <ul className="compact-list">
-                {marketplaceKpiSnapshot.excludedNonLiveInputs.map((entry) => (
-                  <li key={entry.source}>
-                    <strong>{formatContractToken(entry.source)}:</strong> {entry.count} excluded.
-                  </li>
-                ))}
-              </ul>
-            </article>
-          </div>
-          <p className="route-text">
-            {marketplaceKpiSnapshot.privacyNote}{" "}
-            <Link className="text-button" href="/api/moral-trade/health">
-              Open health JSON
-            </Link>
-          </p>
-        </section>
-
-        <section aria-labelledby="quality-audits-heading">
-          <div className="protocol-workflow-card-head">
-            <div>
-              <p className="eyebrow">Protocol-quality audits</p>
-              <h2 id="quality-audits-heading">Copilot and review metrics stay public.</h2>
-            </div>
-            <StatusBadge tone={evaluationValidation.status === "pass" ? "default" : "warning"}>
-              {evaluationValidation.status}
-            </StatusBadge>
-          </div>
-          <p>
-            The evaluation contract measures whether assistance improves clarity without replacing
-            human review, leaking private content, hiding false matches, or under-surfacing
-            thresholded groups.
-          </p>
-          <p className="route-text">
-            Cadence: {formatContractToken(evaluationProfile.cadence)}. Privacy boundaries:{" "}
-            {evaluationProfile.privacyBoundaries.map(formatContractToken).join(", ")}.
-          </p>
-          <div className="data-grid">
-            {evaluationMetricGroups.map((group) => (
-              <article className="panel data-card" key={group.title}>
-                <h3>{group.title}</h3>
-                <p className="route-text">{group.summary}</p>
-                <ul className="compact-list">
-                  {group.metricKeys.map((metricKey) => {
-                    const metric = evaluationMetricsByKey.get(metricKey);
-
-                    return (
-                      <li key={metricKey}>
-                        <strong>{metric?.label ?? formatContractToken(metricKey)}:</strong>{" "}
-                        {metric?.target ?? "required by evaluation profile"}
-                      </li>
-                    );
-                  })}
-                </ul>
+            {outcomeMetrics.map((metric) => (
+              <article className="panel data-card" key={metric.title}>
+                <h3>{metric.title}</h3>
+                <p className="route-text">{metric.detail}</p>
               </article>
             ))}
-            <article className="panel data-card">
-              <h3>Sample audit evidence</h3>
-              <p className="route-text">
-                Surfacing parity sample:{" "}
-                {evaluationSampleAudits.surfacingParityAudit.status} across{" "}
-                {evaluationSampleAudits.surfacingParityAudit.eligibleCount} eligible previews, with{" "}
-                {evaluationSampleAudits.surfacingParityAudit.reviewedDeviationCount} reviewed
-                deviation log(s) and{" "}
-                {evaluationSampleAudits.surfacingParityAudit.unreviewedDeviationCount} unreviewed.
-              </p>
-              <p className="route-text">
-                UX readiness sample: {evaluationSampleAudits.uxReadinessAudit.status}; blockers:{" "}
-                {evaluationSampleAudits.uxReadinessAudit.blockers.length}.
-              </p>
-              <Link className="text-button" href="/api/moral-trade/evaluation/health">
-                Open evaluation JSON
-              </Link>
-            </article>
           </div>
         </section>
 
         <section className="panel data-card data-card-wide">
-          <h2>Guardrails</h2>
+          <h2>Privacy-safe event taxonomy</h2>
+          <p>
+            Events use route paths, coarse stages, bounded labels, booleans, counts, and buckets.
+            Sensitive text is excluded or redacted before persistence.
+          </p>
+          {stages.map((stage) => (
+            <details className="details-panel" key={stage}>
+              <summary>{stageLabels[stage]}</summary>
+              <div className="details-content">
+                <div className="data-grid">
+                  {specsFor(stage).map((spec) => (
+                    <article className="panel data-card" key={spec.eventType}>
+                      <h3>
+                        <code>{spec.eventType}</code>
+                      </h3>
+                      <p className="route-text">{spec.question}</p>
+                      <p className="route-text">
+                        <strong>Allowed metadata:</strong> {spec.allowedMetadata.join(", ") || "none"}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ))}
+        </section>
+
+        <section className="panel data-card data-card-wide">
+          <h2>Data the service refuses to use</h2>
+          <ul className="trust-check-list">
+            {forbiddenData.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="panel data-card data-card-wide">
+          <h2>Measurement guardrails</h2>
           <ul className="trust-check-list">
             {MEASUREMENT_GUARDRAILS.map((guardrail) => (
               <li key={guardrail.title}>
@@ -384,89 +190,43 @@ export default async function MeasurementPage() {
           </ul>
         </section>
 
-        <section>
+        <section className="panel data-card data-card-wide">
           <h2>Performance baseline</h2>
           <p>
-            The first performance baseline should cover the routes people use before trusting the
-            pilot. Web Vitals may be recorded as LCP, INP, and CLS buckets; Lighthouse or
-            PageSpeed-style runs should stay aggregate and route-level.
+            Route health is checked on mobile and desktop against explicit loading, content, and
+            script budgets. The executable baseline command is{" "}
+            <code>{MEASUREMENT_PERFORMANCE_BASELINE.command}</code>.
           </p>
-          <div className="panel data-card data-card-wide">
-            <h3>Executable baseline command</h3>
-            <p className="route-text">
-              Run <code>{MEASUREMENT_PERFORMANCE_BASELINE.command}</code> against a production
-              build to capture local mobile and desktop route-health evidence before optimizing.
-              The output path defaults to{" "}
-              <code>{MEASUREMENT_PERFORMANCE_BASELINE.defaultOutputPath}</code>.
-            </p>
-            <p className="route-text">
-              Devices:{" "}
-              {MEASUREMENT_PERFORMANCE_BASELINE.devices
-                .map((device) => `${device.label} ${device.viewport.width}x${device.viewport.height}`)
-                .join("; ")}
-              .
-            </p>
-            <p className="route-text">
-              Budgets: DOM content loaded under{" "}
-              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxDomContentLoadedMs}ms, load under{" "}
-              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxLoadMs}ms, at least{" "}
-              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.minBodyTextCharacters} body-text
-              characters, and no more than{" "}
-              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxScriptTags} script tags.
-            </p>
-            <ul className="compact-list">
-              {MEASUREMENT_PERFORMANCE_BASELINE.publicNonClaims.map((nonClaim) => (
-                <li key={nonClaim}>{nonClaim}</li>
-              ))}
-            </ul>
-          </div>
-          <div className="data-grid">
-            {MEASUREMENT_BASELINE_ROUTES.map((route) => (
-              <article className="panel data-card" key={route}>
-                <h3>
-                  <code>{route}</code>
-                </h3>
-                <p className="route-text">Mobile and desktop route-level baseline.</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <h2>Roadmap</h2>
-          <div className="data-grid">
-            {MEASUREMENT_ROADMAP.map((item) => (
-              <article className="panel data-card" key={item.title}>
-                <p className="eyebrow">{item.status}</p>
-                <h3>{item.title}</h3>
-                <p className="route-text">{item.detail}</p>
-              </article>
-            ))}
-          </div>
+          <p className="route-text">
+            DOM content loaded target: {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxDomContentLoadedMs}ms.
+            Load target: {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxLoadMs}ms. Minimum body text:{" "}
+            {MEASUREMENT_PERFORMANCE_BASELINE.budgets.minBodyTextCharacters} characters.
+          </p>
         </section>
 
         <section className="panel data-card data-card-wide">
-          <h2>Accountability links</h2>
+          <h2>Accountability</h2>
           <p>
-            Measurement is useful only if visitors can inspect the surrounding promises: privacy,
-            pilot status, trust boundaries, validation, and public updates.
+            Measurement is useful only when participants can inspect the surrounding privacy,
+            reliability, validation, transparency, and update commitments.
           </p>
           <div className="hero-actions">
             <Link className="button button-secondary" href="/privacy">
               Privacy
             </Link>
             <Link className="button button-secondary" href="/status">
-              Pilot status
+              Service status
             </Link>
             <Link className="button button-secondary" href="/trust">
               Trust boundaries
             </Link>
-            <Link className="button button-primary" href="/pilot-updates">
-              Pilot updates
+            <Link className="button button-primary" href="/updates">
+              Service updates
             </Link>
           </div>
         </section>
       </main>
+
       <SiteFooter />
     </div>
   );
