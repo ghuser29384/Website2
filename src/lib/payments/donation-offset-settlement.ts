@@ -13,6 +13,7 @@ import { loadDonationOffsetPaymentContext } from "@/lib/payments/donation-offset
 
 interface ChargeResult {
   ok: boolean;
+  captured: boolean;
   mandate: Record<string, any>;
   attempt: Record<string, any>;
   paymentIntentId: string | null;
@@ -118,7 +119,9 @@ async function getOrCreateSettlementBatch(input: {
     .single();
 
   if (batchError || !batch) {
-    throw new Error(`Unable to read the settlement batch: ${batchError?.message ?? "not found"}`);
+    throw new Error(
+      `Unable to read the settlement batch: ${batchError?.message ?? "not found"}`,
+    );
   }
 
   if (
@@ -187,67 +190,61 @@ function paymentIntentIdentifiers(paymentIntent: Stripe.PaymentIntent | null | u
   };
 }
 
-function stripeFailure(error: unknown) {
-  const stripeError = error as any;
-  const paymentIntent = stripeError?.payment_intent as Stripe.PaymentIntent | undefined;
-  const requiresAction = paymentIntent?.status === "requires_action";
+function paymentIntentFailure(paymentIntent: Stripe.PaymentIntent) {
+  const lastError = paymentIntent.last_payment_error;
   return {
-    paymentIntent: paymentIntent ?? null,
-    status: requiresAction ? "requires_action" : "failed",
-    failureCode: String(stripeError?.code ?? paymentIntent?.last_payment_error?.code ?? "payment_failed"),
-    declineCode: stripeError?.decline_code
-      ? String(stripeError.decline_code)
-      : paymentIntent?.last_payment_error?.decline_code
-        ? String(paymentIntent.last_payment_error.decline_code)
-        : null,
+    failureCode: String(lastError?.code ?? paymentIntent.status),
+    declineCode: lastError?.decline_code ?? null,
+    failureMessage: lastError?.message ?? `PaymentIntent ended in ${paymentIntent.status}.`,
+  };
+}
+
+function stripeRequestFailure(error: unknown) {
+  const stripeError = error as any;
+  return {
+    paymentIntent: (stripeError?.payment_intent as Stripe.PaymentIntent | undefined) ?? null,
+    failureCode: String(stripeError?.code ?? "stripe_request_uncertain"),
+    declineCode: stripeError?.decline_code ? String(stripeError.decline_code) : null,
     failureMessage: String(
-      stripeError?.message ?? paymentIntent?.last_payment_error?.message ?? "Stripe could not charge the saved payment method.",
+      stripeError?.message ?? "Stripe did not return a conclusive payment result.",
     ),
   };
 }
 
-async function createOffSessionCharge(input: {
+async function getOrCreateChargeAttempt(input: {
   mandate: Record<string, any>;
   batch: Record<string, any>;
-  matchId: string;
-}) : Promise<ChargeResult> {
+}) {
   const supabase = getDb();
-  const existingAttemptResult = await supabase
-    .from("conditional_payment_attempts")
-    .select("*")
-    .eq("mandate_id", input.mandate.id)
-    .eq("settlement_batch_id", input.batch.id)
-    .eq("status", "succeeded")
-    .order("attempt_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existingAttemptResult.error) {
-    throw new Error(`Unable to read the previous charge attempt: ${existingAttemptResult.error.message}`);
-  }
-  if (existingAttemptResult.data) {
-    return {
-      ok: true,
-      mandate: input.mandate,
-      attempt: existingAttemptResult.data,
-      paymentIntentId: existingAttemptResult.data.stripe_payment_intent_id,
-      chargeId: existingAttemptResult.data.stripe_charge_id,
-      status: "succeeded",
-    };
-  }
-
-  if (!input.mandate.stripe_customer_id || !input.mandate.stripe_payment_method_id) {
-    throw new Error("The payment mandate is missing its Stripe customer or payment method.");
-  }
-
-  const attemptNumber = await nextAttemptNumber(String(input.mandate.id));
   const idempotencyKey = makeConditionalIdempotencyKey([
     "offset-charge",
     input.batch.id,
     input.mandate.id,
-    attemptNumber,
+    input.mandate.stripe_payment_method_id,
   ]);
-  const { data: attempt, error: attemptError } = await supabase
+  const { data: existing, error: existingError } = await supabase
+    .from("conditional_payment_attempts")
+    .select("*")
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`Unable to read the previous charge attempt: ${existingError.message}`);
+  }
+  if (existing) {
+    if (
+      String(existing.mandate_id) !== String(input.mandate.id) ||
+      String(existing.settlement_batch_id) !== String(input.batch.id) ||
+      Number(existing.amount_cents) !== Number(input.mandate.amount_cents) ||
+      String(existing.currency) !== String(input.mandate.currency)
+    ) {
+      throw new Error("The replay-safe charge attempt does not match the current mandate.");
+    }
+    return existing as Record<string, any>;
+  }
+
+  const attemptNumber = await nextAttemptNumber(String(input.mandate.id));
+  const { data: inserted, error: insertError } = await supabase
     .from("conditional_payment_attempts")
     .insert({
       mandate_id: input.mandate.id,
@@ -261,19 +258,231 @@ async function createOffSessionCharge(input: {
     .select("*")
     .single();
 
-  if (attemptError || !attempt) {
-    throw new Error(`Unable to create the charge attempt: ${attemptError?.message ?? "unknown error"}`);
+  if (!insertError && inserted) {
+    return inserted as Record<string, any>;
+  }
+  if (insertError?.code === "23505") {
+    const { data: raced, error: racedError } = await supabase
+      .from("conditional_payment_attempts")
+      .select("*")
+      .eq("idempotency_key", idempotencyKey)
+      .single();
+    if (!racedError && raced) {
+      return raced as Record<string, any>;
+    }
+  }
+
+  throw new Error(
+    `Unable to create the charge attempt: ${insertError?.message ?? "unknown error"}`,
+  );
+}
+
+async function updateAttemptAndMandateForPaymentIntent(input: {
+  paymentIntent: Stripe.PaymentIntent;
+  attempt: Record<string, any>;
+  mandate: Record<string, any>;
+}): Promise<ChargeResult> {
+  const { paymentIntent, attempt, mandate } = input;
+  const identifiers = paymentIntentIdentifiers(paymentIntent);
+  const supabase = getDb();
+
+  if (paymentIntent.status === "succeeded" && identifiers.chargeId) {
+    let receiptUrl: string | null = null;
+    try {
+      const charge = await getStripe().charges.retrieve(identifiers.chargeId);
+      receiptUrl = charge.receipt_url ?? null;
+    } catch {
+      // Receipt retrieval is non-critical; the charge and signed webhook remain authoritative.
+    }
+
+    const { data: updatedAttempt, error: attemptError } = await supabase
+      .from("conditional_payment_attempts")
+      .update({
+        stripe_payment_intent_id: paymentIntent.id,
+        stripe_charge_id: identifiers.chargeId,
+        status: "succeeded",
+        receipt_url: receiptUrl,
+        failure_code: null,
+        decline_code: null,
+        failure_message: null,
+      })
+      .eq("id", attempt.id)
+      .select("*")
+      .single();
+    const { error: mandateError } = await supabase
+      .from("conditional_payment_mandates")
+      .update({ status: "charged", failure_code: null, failure_message: null })
+      .eq("id", mandate.id)
+      .in("status", ["ready", "charge_pending", "charged"]);
+
+    if (attemptError || !updatedAttempt || mandateError) {
+      return {
+        ok: false,
+        captured: true,
+        mandate,
+        attempt,
+        ...identifiers,
+        status: "ledger_error",
+        failureCode: "captured_ledger_update_failed",
+        failureMessage: `Stripe captured the charge but the local ledger update failed: ${
+          attemptError?.message ?? mandateError?.message ?? "unknown database error"
+        }`,
+      };
+    }
+
+    await recordAudit({
+      eventType: "offset_participant_charged",
+      objectType: "conditional_payment_attempt",
+      objectId: String(updatedAttempt.id),
+      actorProfileId: mandate.profile_id,
+      actorKind: "system",
+      details: {
+        batchId: attempt.settlement_batch_id,
+        mandateId: mandate.id,
+        participantRole: mandate.participant_role,
+        amountCents: mandate.amount_cents,
+        paymentIntentId: paymentIntent.id,
+        chargeId: identifiers.chargeId,
+      },
+    });
+
+    return {
+      ok: true,
+      captured: true,
+      mandate,
+      attempt: updatedAttempt,
+      ...identifiers,
+      status: "succeeded",
+    };
+  }
+
+  const failure = paymentIntentFailure(paymentIntent);
+  const status =
+    paymentIntent.status === "requires_action"
+      ? "requires_action"
+      : paymentIntent.status === "processing"
+        ? "processing"
+        : "failed";
+  const { error: attemptError } = await supabase
+    .from("conditional_payment_attempts")
+    .update({
+      stripe_payment_intent_id: paymentIntent.id,
+      stripe_charge_id: identifiers.chargeId,
+      status,
+      failure_code: failure.failureCode,
+      decline_code: failure.declineCode,
+      failure_message: failure.failureMessage,
+    })
+    .eq("id", attempt.id);
+  const { error: mandateError } = await supabase
+    .from("conditional_payment_mandates")
+    .update({
+      status: status === "processing" ? "charge_pending" : status,
+      failure_code: failure.failureCode,
+      failure_message: failure.failureMessage,
+    })
+    .eq("id", mandate.id)
+    .neq("status", "refunded")
+    .neq("status", "disputed");
+
+  if (attemptError || mandateError) {
+    throw new Error(
+      `Unable to record the Stripe payment result: ${
+        attemptError?.message ?? mandateError?.message ?? "unknown database error"
+      }`,
+    );
+  }
+
+  return {
+    ok: false,
+    captured: false,
+    mandate,
+    attempt,
+    ...identifiers,
+    status,
+    failureCode: failure.failureCode,
+    failureMessage: failure.failureMessage,
+  };
+}
+
+async function createOffSessionCharge(input: {
+  mandate: Record<string, any>;
+  batch: Record<string, any>;
+  matchId: string;
+}): Promise<ChargeResult> {
+  if (!input.mandate.stripe_customer_id || !input.mandate.stripe_payment_method_id) {
+    throw new Error("The payment mandate is missing its Stripe customer or payment method.");
+  }
+
+  const supabase = getDb();
+  const attempt = await getOrCreateChargeAttempt(input);
+
+  if (
+    attempt.status === "succeeded" &&
+    attempt.stripe_payment_intent_id &&
+    attempt.stripe_charge_id
+  ) {
+    return {
+      ok: true,
+      captured: true,
+      mandate: input.mandate,
+      attempt,
+      paymentIntentId: String(attempt.stripe_payment_intent_id),
+      chargeId: String(attempt.stripe_charge_id),
+      status: "succeeded",
+    };
+  }
+  if (["refunded", "disputed"].includes(String(attempt.status))) {
+    return {
+      ok: false,
+      captured: false,
+      mandate: input.mandate,
+      attempt,
+      paymentIntentId: attempt.stripe_payment_intent_id
+        ? String(attempt.stripe_payment_intent_id)
+        : null,
+      chargeId: attempt.stripe_charge_id ? String(attempt.stripe_charge_id) : null,
+      status: String(attempt.status),
+      failureCode: String(attempt.failure_code ?? attempt.status),
+      failureMessage: String(
+        attempt.failure_message ?? "This charge attempt is already final.",
+      ),
+    };
   }
 
   await supabase
     .from("conditional_payment_mandates")
     .update({ status: "charge_pending", failure_code: null, failure_message: null })
     .eq("id", input.mandate.id)
-    .in("status", ["ready", "charge_pending"]);
+    .in("status", ["ready", "charge_pending", "charged"]);
   await supabase
     .from("conditional_payment_attempts")
     .update({ status: "processing" })
-    .eq("id", attempt.id);
+    .eq("id", attempt.id)
+    .in("status", ["created", "processing", "failed", "requires_action"]);
+
+  if (attempt.stripe_payment_intent_id) {
+    try {
+      const existingPaymentIntent = await getStripe().paymentIntents.retrieve(
+        String(attempt.stripe_payment_intent_id),
+      );
+      return updateAttemptAndMandateForPaymentIntent({
+        paymentIntent: existingPaymentIntent,
+        attempt,
+        mandate: input.mandate,
+      });
+    } catch (error) {
+      const failure = stripeRequestFailure(error);
+      if (failure.paymentIntent) {
+        return updateAttemptAndMandateForPaymentIntent({
+          paymentIntent: failure.paymentIntent,
+          attempt,
+          mandate: input.mandate,
+        });
+      }
+      throw error;
+    }
+  }
 
   try {
     const paymentIntent = await getStripe().paymentIntents.create(
@@ -294,119 +503,35 @@ async function createOffSessionCharge(input: {
           system: "conditional_payments",
           purpose: "donation_offset_charge",
           settlement_batch_id: String(input.batch.id),
+          payment_attempt_id: String(attempt.id),
           mandate_id: String(input.mandate.id),
           subject_id: input.matchId,
           participant_role: String(input.mandate.participant_role),
           condition_hash: String(input.mandate.condition_hash),
         },
       },
-      { idempotencyKey },
+      { idempotencyKey: String(attempt.idempotency_key) },
     );
 
-    const identifiers = paymentIntentIdentifiers(paymentIntent);
-    if (paymentIntent.status !== "succeeded" || !identifiers.chargeId) {
-      const status = paymentIntent.status === "requires_action" ? "requires_action" : "failed";
-      const lastError = paymentIntent.last_payment_error;
-      await supabase
-        .from("conditional_payment_attempts")
-        .update({
-          stripe_payment_intent_id: paymentIntent.id,
-          stripe_charge_id: identifiers.chargeId,
-          status,
-          failure_code: lastError?.code ?? paymentIntent.status,
-          decline_code: lastError?.decline_code ?? null,
-          failure_message:
-            lastError?.message ?? `PaymentIntent ended in ${paymentIntent.status}.`,
-        })
-        .eq("id", attempt.id);
-      await supabase
-        .from("conditional_payment_mandates")
-        .update({
-          status,
-          failure_code: lastError?.code ?? paymentIntent.status,
-          failure_message:
-            lastError?.message ?? `PaymentIntent ended in ${paymentIntent.status}.`,
-        })
-        .eq("id", input.mandate.id);
-      return {
-        ok: false,
-        mandate: input.mandate,
-        attempt,
-        ...identifiers,
-        status,
-        failureCode: lastError?.code ?? paymentIntent.status,
-        failureMessage: lastError?.message ?? `PaymentIntent ended in ${paymentIntent.status}.`,
-      };
-    }
-
-    let receiptUrl: string | null = null;
-    try {
-      const charge = await getStripe().charges.retrieve(identifiers.chargeId);
-      receiptUrl = charge.receipt_url ?? null;
-    } catch {
-      // Receipt retrieval is non-critical; the charge and webhook remain authoritative.
-    }
-
-    const { data: updatedAttempt, error: updateAttemptError } = await supabase
-      .from("conditional_payment_attempts")
-      .update({
-        stripe_payment_intent_id: paymentIntent.id,
-        stripe_charge_id: identifiers.chargeId,
-        status: "succeeded",
-        receipt_url: receiptUrl,
-        failure_code: null,
-        decline_code: null,
-        failure_message: null,
-      })
-      .eq("id", attempt.id)
-      .select("*")
-      .single();
-
-    if (updateAttemptError || !updatedAttempt) {
-      throw new Error(
-        `Stripe charged the participant but the ledger update failed: ${
-          updateAttemptError?.message ?? "unknown database error"
-        }`,
-      );
-    }
-
-    await supabase
-      .from("conditional_payment_mandates")
-      .update({ status: "charged", failure_code: null, failure_message: null })
-      .eq("id", input.mandate.id);
-
-    await recordAudit({
-      eventType: "offset_participant_charged",
-      objectType: "conditional_payment_attempt",
-      objectId: String(updatedAttempt.id),
-      actorProfileId: input.mandate.profile_id,
-      actorKind: "system",
-      details: {
-        batchId: input.batch.id,
-        mandateId: input.mandate.id,
-        participantRole: input.mandate.participant_role,
-        amountCents: input.mandate.amount_cents,
-        paymentIntentId: paymentIntent.id,
-        chargeId: identifiers.chargeId,
-      },
-    });
-
-    return {
-      ok: true,
+    return updateAttemptAndMandateForPaymentIntent({
+      paymentIntent,
+      attempt,
       mandate: input.mandate,
-      attempt: updatedAttempt,
-      ...identifiers,
-      status: "succeeded",
-    };
+    });
   } catch (error) {
-    const failure = stripeFailure(error);
-    const identifiers = paymentIntentIdentifiers(failure.paymentIntent);
+    const failure = stripeRequestFailure(error);
+    if (failure.paymentIntent) {
+      return updateAttemptAndMandateForPaymentIntent({
+        paymentIntent: failure.paymentIntent,
+        attempt,
+        mandate: input.mandate,
+      });
+    }
+
     await supabase
       .from("conditional_payment_attempts")
       .update({
-        stripe_payment_intent_id: identifiers.paymentIntentId,
-        stripe_charge_id: identifiers.chargeId,
-        status: failure.status,
+        status: "processing",
         failure_code: failure.failureCode,
         decline_code: failure.declineCode,
         failure_message: failure.failureMessage,
@@ -415,33 +540,34 @@ async function createOffSessionCharge(input: {
     await supabase
       .from("conditional_payment_mandates")
       .update({
-        status: failure.status,
+        status: "charge_pending",
         failure_code: failure.failureCode,
-        failure_message: failure.failureMessage,
+        failure_message:
+          "Stripe returned an uncertain network result. The same idempotency key will be reused before any new charge is attempted.",
       })
       .eq("id", input.mandate.id);
 
     await recordAudit({
-      eventType: "offset_participant_charge_failed",
+      eventType: "offset_participant_charge_uncertain",
       objectType: "conditional_payment_attempt",
       objectId: String(attempt.id),
       actorProfileId: input.mandate.profile_id,
-      actorKind: "system",
       details: {
         batchId: input.batch.id,
         mandateId: input.mandate.id,
         participantRole: input.mandate.participant_role,
-        status: failure.status,
         failureCode: failure.failureCode,
       },
     });
 
     return {
       ok: false,
+      captured: false,
       mandate: input.mandate,
       attempt,
-      ...identifiers,
-      status: failure.status,
+      paymentIntentId: null,
+      chargeId: null,
+      status: "processing",
       failureCode: failure.failureCode,
       failureMessage: failure.failureMessage,
     };
@@ -462,10 +588,6 @@ async function reverseTransferForAttempt(attemptId: string, reasonCode: string) 
     return;
   }
   if (!transferRow.stripe_transfer_id) {
-    await supabase
-      .from("conditional_settlement_transfers")
-      .update({ status: "failed", failure_code: reasonCode })
-      .eq("id", transferRow.id);
     return;
   }
 
@@ -488,26 +610,48 @@ async function reverseTransferForAttempt(attemptId: string, reasonCode: string) 
       idempotencyKey: makeConditionalIdempotencyKey([
         "transfer-reversal",
         transferRow.id,
-        reasonCode,
       ]),
     },
   );
-  await supabase
+  const { error: updateError } = await supabase
     .from("conditional_settlement_transfers")
     .update({
       status: "reversed",
       stripe_transfer_reversal_id: reversal.id,
       failure_code: reasonCode,
+      failure_message: null,
     })
     .eq("id", transferRow.id);
+  if (updateError) {
+    throw new Error(
+      `Stripe reversed transfer ${transferRow.stripe_transfer_id}, but the ledger update failed: ${updateError.message}`,
+    );
+  }
 }
 
 async function refundChargeResult(charge: ChargeResult, reasonCode: string) {
-  if (!charge.ok || !charge.paymentIntentId) {
+  if (!charge.captured || !charge.paymentIntentId) {
     return;
   }
   const supabase = getDb();
-  await reverseTransferForAttempt(String(charge.attempt.id), reasonCode);
+  const { data: currentAttempt } = await supabase
+    .from("conditional_payment_attempts")
+    .select("*")
+    .eq("id", charge.attempt.id)
+    .maybeSingle();
+  if (
+    currentAttempt?.status === "refunded" &&
+    Number(currentAttempt.refunded_amount_cents ?? 0) >= Number(charge.mandate.amount_cents)
+  ) {
+    return;
+  }
+
+  let reversalError: string | null = null;
+  try {
+    await reverseTransferForAttempt(String(charge.attempt.id), reasonCode);
+  } catch (error) {
+    reversalError = error instanceof Error ? error.message : "Unknown transfer-reversal error";
+  }
 
   const refund = await getStripe().refunds.create(
     {
@@ -522,31 +666,49 @@ async function refundChargeResult(charge: ChargeResult, reasonCode: string) {
       },
     },
     {
-      idempotencyKey: makeConditionalIdempotencyKey([
-        "refund",
-        charge.attempt.id,
-        reasonCode,
-      ]),
+      idempotencyKey: makeConditionalIdempotencyKey(["refund", charge.attempt.id]),
     },
   );
 
-  await supabase
+  if (refund.status !== "succeeded") {
+    throw new Error(
+      `Stripe accepted compensating refund ${refund.id}, but its status is ${refund.status}.`,
+    );
+  }
+
+  const { error: attemptError } = await supabase
     .from("conditional_payment_attempts")
     .update({
       status: "refunded",
       refunded_amount_cents: charge.mandate.amount_cents,
       failure_code: reasonCode,
-      failure_message: `Compensating refund ${refund.id} created.`,
+      failure_message: reversalError
+        ? `Refund ${refund.id} succeeded; transfer reversal needs attention: ${reversalError}`
+        : `Compensating refund ${refund.id} succeeded.`,
     })
     .eq("id", charge.attempt.id);
-  await supabase
+  const { error: mandateError } = await supabase
     .from("conditional_payment_mandates")
     .update({
       status: "refunded",
       failure_code: reasonCode,
-      failure_message: "The paired donation-offset settlement did not complete, so this charge was refunded.",
+      failure_message:
+        "The paired donation-offset settlement did not complete, so this charge was refunded.",
     })
-    .eq("id", charge.mandate.id);
+    .eq("id", charge.mandate.id)
+    .neq("status", "disputed");
+
+  if (attemptError || mandateError || reversalError) {
+    throw new Error(
+      [
+        reversalError,
+        attemptError?.message,
+        mandateError?.message,
+      ]
+        .filter(Boolean)
+        .join(" ") || "Compensation completed with an unknown ledger error.",
+    );
+  }
 }
 
 async function compensateSuccessfulCharges(
@@ -554,9 +716,11 @@ async function compensateSuccessfulCharges(
   charges: ChargeResult[],
   reasonCode: string,
 ) {
-  const successful = charges.filter((charge) => charge.ok && charge.paymentIntentId);
-  if (!successful.length) {
-    return;
+  const captured = charges.filter(
+    (charge) => charge.captured && Boolean(charge.paymentIntentId),
+  );
+  if (!captured.length) {
+    return { complete: true, failures: [] as string[] };
   }
 
   const supabase = getDb();
@@ -566,7 +730,7 @@ async function compensateSuccessfulCharges(
     .eq("id", batch.id);
 
   const failures: string[] = [];
-  for (const charge of successful) {
+  for (const charge of captured) {
     try {
       await refundChargeResult(charge, reasonCode);
     } catch (error) {
@@ -581,7 +745,7 @@ async function compensateSuccessfulCharges(
       failure_code: reasonCode,
       failure_message: failures.length
         ? `Compensation requires operator attention: ${failures.join(" ")}`
-        : "Every successful participant charge was refunded after paired settlement failed.",
+        : "Every captured participant charge was refunded after paired settlement failed.",
       completed_at: failures.length ? null : new Date().toISOString(),
       processing_token: null,
       processing_started_at: null,
@@ -589,11 +753,15 @@ async function compensateSuccessfulCharges(
     .eq("id", batch.id);
 
   await recordAudit({
-    eventType: failures.length ? "offset_compensation_incomplete" : "offset_compensation_completed",
+    eventType: failures.length
+      ? "offset_compensation_incomplete"
+      : "offset_compensation_completed",
     objectType: "conditional_settlement_batch",
     objectId: String(batch.id),
-    details: { reasonCode, refundedChargeCount: successful.length, failures },
+    details: { reasonCode, refundedChargeCount: captured.length, failures },
   });
+
+  return { complete: failures.length === 0, failures };
 }
 
 async function transferCharge(input: {
@@ -601,21 +769,21 @@ async function transferCharge(input: {
   charge: ChargeResult;
   destination: Record<string, any>;
 }) {
-  if (!input.charge.ok || !input.charge.chargeId) {
-    throw new Error("Only a succeeded platform charge can be transferred.");
+  if (!input.charge.ok || !input.charge.captured || !input.charge.chargeId) {
+    throw new Error("Only a recorded, succeeded platform charge can be transferred.");
   }
 
   const supabase = getDb();
   const idempotencyKey = makeConditionalIdempotencyKey([
     "offset-transfer",
     input.batch.id,
-    input.charge.mandate.id,
+    input.charge.attempt.id,
   ]);
   const { data: existing, error: existingError } = await supabase
     .from("conditional_settlement_transfers")
     .select("*")
     .eq("settlement_batch_id", input.batch.id)
-    .eq("mandate_id", input.charge.mandate.id)
+    .eq("payment_attempt_id", input.charge.attempt.id)
     .maybeSingle();
 
   if (existingError) {
@@ -623,6 +791,9 @@ async function transferCharge(input: {
   }
   if (existing?.status === "transferred" && existing.stripe_transfer_id) {
     return existing;
+  }
+  if (existing?.status === "reversed") {
+    throw new Error("This payment attempt was already transferred and reversed.");
   }
 
   let transferRow = existing;
@@ -642,59 +813,130 @@ async function transferCharge(input: {
       .select("*")
       .single();
     if (insertError || !inserted) {
-      throw new Error(`Unable to create the settlement transfer: ${insertError?.message ?? "unknown error"}`);
+      throw new Error(
+        `Unable to create the settlement transfer: ${insertError?.message ?? "unknown error"}`,
+      );
     }
     transferRow = inserted;
   }
 
+  if (
+    Number(transferRow.amount_cents) !== Number(input.charge.mandate.amount_cents) ||
+    String(transferRow.destination_id) !== String(input.destination.id)
+  ) {
+    throw new Error("The replay-safe transfer row does not match the captured charge.");
+  }
+
+  let transfer: Stripe.Transfer;
   try {
-    const transfer = await getStripe().transfers.create(
-      {
-        amount: Number(input.charge.mandate.amount_cents),
-        currency: String(input.charge.mandate.currency),
-        destination: String(input.destination.stripe_connected_account_id),
-        source_transaction: input.charge.chargeId,
-        transfer_group: String(input.batch.transfer_group),
-        metadata: {
-          system: "conditional_payments",
-          purpose: "donation_offset_settlement",
-          settlement_batch_id: String(input.batch.id),
-          settlement_transfer_id: String(transferRow.id),
-          mandate_id: String(input.charge.mandate.id),
-          participant_role: String(input.charge.mandate.participant_role),
-          condition_hash: String(input.charge.mandate.condition_hash),
-        },
-      },
-      { idempotencyKey },
-    );
-
-    const { data: updated, error: updateError } = await supabase
-      .from("conditional_settlement_transfers")
-      .update({
-        stripe_transfer_id: transfer.id,
-        status: "transferred",
-        failure_code: null,
-        failure_message: null,
-      })
-      .eq("id", transferRow.id)
-      .select("*")
-      .single();
-
-    if (updateError || !updated) {
-      throw new Error(`Stripe transferred funds but the ledger update failed: ${updateError?.message ?? "unknown error"}`);
-    }
-    return updated;
+    transfer = transferRow.stripe_transfer_id
+      ? await getStripe().transfers.retrieve(String(transferRow.stripe_transfer_id))
+      : await getStripe().transfers.create(
+          {
+            amount: Number(input.charge.mandate.amount_cents),
+            currency: String(input.charge.mandate.currency),
+            destination: String(input.destination.stripe_connected_account_id),
+            source_transaction: input.charge.chargeId,
+            transfer_group: String(input.batch.transfer_group),
+            metadata: {
+              system: "conditional_payments",
+              purpose: "donation_offset_settlement",
+              settlement_batch_id: String(input.batch.id),
+              settlement_transfer_id: String(transferRow.id),
+              payment_attempt_id: String(input.charge.attempt.id),
+              mandate_id: String(input.charge.mandate.id),
+              participant_role: String(input.charge.mandate.participant_role),
+              condition_hash: String(input.charge.mandate.condition_hash),
+            },
+          },
+          { idempotencyKey },
+        );
   } catch (error) {
     await supabase
       .from("conditional_settlement_transfers")
       .update({
         status: "failed",
-        failure_code: "transfer_failed",
-        failure_message: error instanceof Error ? error.message : "Unknown Stripe transfer error",
+        failure_code: "transfer_request_failed",
+        failure_message:
+          error instanceof Error ? error.message : "Unknown Stripe transfer error",
       })
       .eq("id", transferRow.id);
     throw error;
   }
+
+  if (transfer.reversed) {
+    await supabase
+      .from("conditional_settlement_transfers")
+      .update({ stripe_transfer_id: transfer.id, status: "reversed" })
+      .eq("id", transferRow.id);
+    throw new Error("Stripe reports that the settlement transfer is already reversed.");
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from("conditional_settlement_transfers")
+    .update({
+      stripe_transfer_id: transfer.id,
+      status: "transferred",
+      failure_code: null,
+      failure_message: null,
+    })
+    .eq("id", transferRow.id)
+    .select("*")
+    .single();
+
+  if (updateError || !updated) {
+    let reversalMessage = "";
+    try {
+      const reversal = await getStripe().transfers.createReversal(
+        transfer.id,
+        {
+          amount: Number(input.charge.mandate.amount_cents),
+          metadata: {
+            system: "conditional_payments",
+            purpose: "donation_offset_ledger_failure_compensation",
+            settlement_transfer_id: String(transferRow.id),
+          },
+        },
+        {
+          idempotencyKey: makeConditionalIdempotencyKey([
+            "transfer-reversal",
+            transferRow.id,
+          ]),
+        },
+      );
+      reversalMessage = ` Stripe reversal ${reversal.id} was created.`;
+      await supabase
+        .from("conditional_settlement_transfers")
+        .update({
+          stripe_transfer_id: transfer.id,
+          stripe_transfer_reversal_id: reversal.id,
+          status: "reversed",
+          failure_code: "transfer_ledger_update_failed",
+        })
+        .eq("id", transferRow.id);
+    } catch (reversalError) {
+      reversalMessage = ` Immediate transfer reversal failed: ${
+        reversalError instanceof Error ? reversalError.message : "unknown reversal error"
+      }`;
+    }
+    throw new Error(
+      `Stripe transferred funds but the ledger update failed: ${
+        updateError?.message ?? "unknown database error"
+      }.${reversalMessage}`,
+    );
+  }
+
+  return updated;
+}
+
+function settlementFailureStatus(charge: ChargeResult) {
+  if (charge.status === "requires_action") {
+    return "requires_action" as const;
+  }
+  if (charge.status === "processing") {
+    return "failed" as const;
+  }
+  return "failed" as const;
 }
 
 export async function attemptDonationOffsetSettlement(
@@ -729,12 +971,20 @@ export async function attemptDonationOffsetSettlement(
       message: "The donation offset has already settled to the approved destination.",
     };
   }
-  if (["refunded", "cancelled", "disputed"].includes(String(batch.status))) {
+  if (["cancelled", "disputed"].includes(String(batch.status))) {
     return {
-      status: batch.status === "refunded" ? "refunded" : "failed",
+      status: "failed",
       matchId,
       batchId: String(batch.id),
       message: `The settlement batch is ${batch.status} and cannot be captured again.`,
+    };
+  }
+  if (batch.status === "refunding") {
+    return {
+      status: "failed",
+      matchId,
+      batchId: String(batch.id),
+      message: "A compensating refund or transfer reversal still requires operator attention.",
     };
   }
 
@@ -746,14 +996,30 @@ export async function attemptDonationOffsetSettlement(
   if (!mandates.owner || !mandates.counterparty) {
     await getDb()
       .from("conditional_settlement_batches")
-      .update({ status: "pending_authorizations", processing_token: null, processing_started_at: null })
+      .update({
+        status: "pending_authorizations",
+        processing_token: null,
+        processing_started_at: null,
+      })
       .eq("id", batch.id)
-      .neq("status", "transferred");
+      .not("status", "in", "(transferred,disputed,refunding)");
     return {
       status: "waiting_for_authorizations",
       matchId,
       batchId: String(batch.id),
       message: "Both participants must save valid conditional payment mandates before capture.",
+    };
+  }
+  if (
+    batch.status === "refunded" &&
+    (mandates.owner.status !== "ready" || mandates.counterparty.status !== "ready")
+  ) {
+    return {
+      status: "waiting_for_authorizations",
+      matchId,
+      batchId: String(batch.id),
+      message:
+        "The previous attempt was fully compensated. Both participants must authorize fresh payment methods before retrying.",
     };
   }
 
@@ -762,7 +1028,10 @@ export async function attemptDonationOffsetSettlement(
     [mandates.counterparty, "counterparty"],
   ] as const;
   for (const [mandate, role] of expected) {
-    if (mandate.profile_id !== context.snapshot[role === "owner" ? "ownerProfileId" : "counterpartyProfileId"]) {
+    if (
+      mandate.profile_id !==
+      context.snapshot[role === "owner" ? "ownerProfileId" : "counterpartyProfileId"]
+    ) {
       throw new Error(`The ${role} payment mandate belongs to the wrong profile.`);
     }
     const expectedAmount = participantAmountForDonationOffset(context.snapshot, role);
@@ -771,7 +1040,9 @@ export async function attemptDonationOffsetSettlement(
       String(mandate.currency) !== context.snapshot.currency ||
       String(mandate.condition_hash) !== context.conditionHash
     ) {
-      throw new Error(`The ${role} payment mandate does not match the frozen settlement condition.`);
+      throw new Error(
+        `The ${role} payment mandate does not match the frozen settlement condition.`,
+      );
     }
   }
 
@@ -804,10 +1075,21 @@ export async function attemptDonationOffsetSettlement(
     });
     charges.push(ownerCharge);
     if (!ownerCharge.ok) {
+      if (ownerCharge.captured) {
+        await compensateSuccessfulCharges(batch, charges, "owner_charge_ledger_failure");
+        return {
+          status: "refunded",
+          matchId,
+          batchId: String(batch.id),
+          message:
+            "The owner charge could not be recorded safely and was reversed or refunded.",
+        };
+      }
+      const failureStatus = settlementFailureStatus(ownerCharge);
       await getDb()
         .from("conditional_settlement_batches")
         .update({
-          status: ownerCharge.status === "requires_action" ? "requires_action" : "failed",
+          status: failureStatus,
           failure_code: ownerCharge.failureCode ?? "owner_charge_failed",
           failure_message: ownerCharge.failureMessage ?? "The owner charge did not succeed.",
           processing_token: null,
@@ -819,8 +1101,10 @@ export async function attemptDonationOffsetSettlement(
         matchId,
         batchId: String(batch.id),
         message:
-          ownerCharge.failureMessage ??
-          "The owner payment method must be updated before the offset can settle.",
+          ownerCharge.status === "processing"
+            ? "Stripe returned an uncertain result. The same charge key will be retried; no new charge key will be created."
+            : ownerCharge.failureMessage ??
+              "The owner payment method must be updated before the offset can settle.",
       };
     }
 
@@ -847,14 +1131,27 @@ export async function attemptDonationOffsetSettlement(
         charges,
         counterpartyCharge.status === "requires_action"
           ? "counterparty_requires_action"
-          : "counterparty_charge_failed",
+          : counterpartyCharge.status === "processing"
+            ? "counterparty_charge_uncertain"
+            : "counterparty_charge_failed",
       );
       return {
         status: "refunded",
         matchId,
         batchId: String(batch.id),
         message:
-          "The paired charge did not complete. Every successful participant charge was reversed or refunded.",
+          "The paired charge did not complete. Every captured participant charge was reversed or refunded.",
+      };
+    }
+
+    const conditionBeforeTransfer = await loadDonationOffsetPaymentContext(matchId);
+    if (conditionBeforeTransfer.conditionHash !== context.conditionHash) {
+      await compensateSuccessfulCharges(batch, charges, "condition_changed_before_transfer");
+      return {
+        status: "refunded",
+        matchId,
+        batchId: String(batch.id),
+        message: "The offset terms changed after capture, so both charges were refunded.",
       };
     }
 
@@ -874,14 +1171,14 @@ export async function attemptDonationOffsetSettlement(
         });
         completedTransfers.push(transfer);
       }
-    } catch (error) {
+    } catch {
       await compensateSuccessfulCharges(batch, charges, "destination_transfer_failed");
       return {
         status: "refunded",
         matchId,
         batchId: String(batch.id),
         message:
-          "The destination transfer failed. Successful transfers were reversed and participant charges were refunded.",
+          "Destination settlement failed. Successful transfers were reversed and participant charges were refunded.",
       };
     }
 
@@ -928,7 +1225,7 @@ export async function attemptDonationOffsetSettlement(
         : "TEST MODE: both test charges succeeded and were transferred to the mapped test account.",
     };
   } catch (error) {
-    if (charges.some((charge) => charge.ok)) {
+    if (charges.some((charge) => charge.captured)) {
       await compensateSuccessfulCharges(batch, charges, "unexpected_settlement_error");
     } else {
       await getDb()
@@ -936,7 +1233,8 @@ export async function attemptDonationOffsetSettlement(
         .update({
           status: "failed",
           failure_code: "unexpected_settlement_error",
-          failure_message: error instanceof Error ? error.message : "Unknown settlement error",
+          failure_message:
+            error instanceof Error ? error.message : "Unknown settlement error",
           processing_token: null,
           processing_started_at: null,
         })
@@ -953,7 +1251,17 @@ export async function reconcileConditionalPaymentIntent(paymentIntent: Stripe.Pa
 
   const mandateId = paymentIntent.metadata?.mandate_id;
   const batchId = paymentIntent.metadata?.settlement_batch_id;
+  const paymentAttemptId = paymentIntent.metadata?.payment_attempt_id;
   if (!mandateId || !batchId) {
+    return { handled: true as const };
+  }
+
+  const supabase = getDb();
+  const attemptQuery = supabase.from("conditional_payment_attempts").select("*");
+  const { data: attempt } = paymentAttemptId
+    ? await attemptQuery.eq("id", paymentAttemptId).maybeSingle()
+    : await attemptQuery.eq("stripe_payment_intent_id", paymentIntent.id).maybeSingle();
+  if (!attempt) {
     return { handled: true as const };
   }
 
@@ -966,27 +1274,77 @@ export async function reconcileConditionalPaymentIntent(paymentIntent: Stripe.Pa
         : paymentIntent.status === "processing"
           ? "processing"
           : "failed";
-  const lastError = paymentIntent.last_payment_error;
-  const supabase = getDb();
+  const failure = paymentIntentFailure(paymentIntent);
   await supabase
     .from("conditional_payment_attempts")
     .update({
+      stripe_payment_intent_id: paymentIntent.id,
       stripe_charge_id: identifiers.chargeId,
       status,
-      failure_code: lastError?.code ?? null,
-      decline_code: lastError?.decline_code ?? null,
-      failure_message: lastError?.message ?? null,
+      failure_code: status === "succeeded" ? null : failure.failureCode,
+      decline_code: status === "succeeded" ? null : failure.declineCode,
+      failure_message: status === "succeeded" ? null : failure.failureMessage,
     })
-    .eq("stripe_payment_intent_id", paymentIntent.id);
+    .eq("id", attempt.id);
+
+  const { data: mandate } = await supabase
+    .from("conditional_payment_mandates")
+    .select("*")
+    .eq("id", mandateId)
+    .maybeSingle();
+  const { data: batch } = await supabase
+    .from("conditional_settlement_batches")
+    .select("*")
+    .eq("id", batchId)
+    .maybeSingle();
+
+  if (
+    status === "succeeded" &&
+    identifiers.chargeId &&
+    mandate &&
+    batch &&
+    ["refunding", "refunded", "cancelled", "disputed"].includes(String(batch.status))
+  ) {
+    await refundChargeResult(
+      {
+        ok: true,
+        captured: true,
+        mandate,
+        attempt: {
+          ...attempt,
+          stripe_payment_intent_id: paymentIntent.id,
+          stripe_charge_id: identifiers.chargeId,
+          status: "succeeded",
+        },
+        paymentIntentId: paymentIntent.id,
+        chargeId: identifiers.chargeId,
+        status: "succeeded",
+      },
+      "late_success_after_compensation",
+    );
+    return {
+      handled: true as const,
+      subjectId: paymentIntent.metadata?.subject_id ?? null,
+      batchId,
+      status: "refunded",
+    };
+  }
+
   await supabase
     .from("conditional_payment_mandates")
     .update({
-      status: status === "succeeded" ? "charged" : status,
-      failure_code: lastError?.code ?? null,
-      failure_message: lastError?.message ?? null,
+      status:
+        status === "succeeded"
+          ? "charged"
+          : status === "processing"
+            ? "charge_pending"
+            : status,
+      failure_code: status === "succeeded" ? null : failure.failureCode,
+      failure_message: status === "succeeded" ? null : failure.failureMessage,
     })
     .eq("id", mandateId)
-    .neq("status", "refunded");
+    .neq("status", "refunded")
+    .neq("status", "disputed");
 
   return {
     handled: true as const,
@@ -998,16 +1356,19 @@ export async function reconcileConditionalPaymentIntent(paymentIntent: Stripe.Pa
 
 export async function reconcileConditionalRefund(refund: Stripe.Refund) {
   const paymentIntentId =
-    typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id ?? null;
-  if (!paymentIntentId) {
+    typeof refund.payment_intent === "string"
+      ? refund.payment_intent
+      : refund.payment_intent?.id ?? null;
+  const paymentAttemptId = refund.metadata?.payment_attempt_id;
+  if (!paymentIntentId && !paymentAttemptId) {
     return { handled: false as const };
   }
+
   const supabase = getDb();
-  const { data: attempt } = await supabase
-    .from("conditional_payment_attempts")
-    .select("*")
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .maybeSingle();
+  const attemptQuery = supabase.from("conditional_payment_attempts").select("*");
+  const { data: attempt } = paymentAttemptId
+    ? await attemptQuery.eq("id", paymentAttemptId).maybeSingle()
+    : await attemptQuery.eq("stripe_payment_intent_id", paymentIntentId).maybeSingle();
   if (!attempt) {
     return { handled: false as const };
   }
@@ -1016,7 +1377,10 @@ export async function reconcileConditionalRefund(refund: Stripe.Refund) {
     .from("conditional_payment_attempts")
     .update({
       status: refund.status === "succeeded" ? "refunded" : attempt.status,
-      refunded_amount_cents: Math.max(Number(attempt.refunded_amount_cents ?? 0), Number(refund.amount)),
+      refunded_amount_cents: Math.max(
+        Number(attempt.refunded_amount_cents ?? 0),
+        Number(refund.amount),
+      ),
     })
     .eq("id", attempt.id);
   if (refund.status === "succeeded") {
@@ -1030,7 +1394,8 @@ export async function reconcileConditionalRefund(refund: Stripe.Refund) {
 }
 
 export async function reconcileConditionalDispute(dispute: Stripe.Dispute) {
-  const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id ?? null;
+  const chargeId =
+    typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id ?? null;
   if (!chargeId) {
     return { handled: false as const };
   }
