@@ -201,13 +201,13 @@ async function reconcileTransfer(transfer: Stripe.Transfer, eventType: string) {
   return { handled: true as const };
 }
 
-async function reconcileDestinationAccount(account: Stripe.Account) {
+async function reconcileDestinationAccount(account: Stripe.Account, livemode: boolean) {
   const supabase = getDb();
   const { data: destination } = await supabase
     .from("conditional_payment_destinations")
     .select("*")
     .eq("stripe_connected_account_id", account.id)
-    .eq("livemode", account.livemode)
+    .eq("livemode", livemode)
     .maybeSingle();
   if (!destination) {
     return { handled: false as const };
@@ -339,7 +339,7 @@ async function processConditionalEvent(event: Stripe.Event) {
   }
 
   if (event.type === "account.updated") {
-    return reconcileDestinationAccount(object as Stripe.Account);
+    return reconcileDestinationAccount(object as Stripe.Account, event.livemode);
   }
 
   if (isConditionalMetadata(metadata)) {

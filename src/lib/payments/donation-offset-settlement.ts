@@ -939,6 +939,26 @@ function settlementFailureStatus(charge: ChargeResult) {
   return "failed" as const;
 }
 
+async function findTerminalSettlementBatch(matchId: string, livemode: boolean) {
+  const { data, error } = await getDb()
+    .from("conditional_settlement_batches")
+    .select("id, status, created_at")
+    .eq("purpose", "donation_offset")
+    .eq("subject_type", "donation_offset_match")
+    .eq("subject_id", matchId)
+    .eq("livemode", livemode)
+    .in("status", ["transferred", "refunding", "disputed", "cancelled"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw new Error(`Unable to inspect prior settlement batches: ${error.message}`);
+  }
+
+  const rows = (data ?? []) as Array<Record<string, any>>;
+  return rows.find((row) => row.status === "transferred") ?? rows[0] ?? null;
+}
+
 export async function attemptDonationOffsetSettlement(
   matchId: string,
 ): Promise<DonationOffsetSettlementResult> {
@@ -953,6 +973,24 @@ export async function attemptDonationOffsetSettlement(
   }
 
   const environment = getConditionalPaymentsEnvironment();
+  const terminalBatch = await findTerminalSettlementBatch(matchId, environment.livemode);
+  if (terminalBatch?.status === "transferred") {
+    return {
+      status: "transferred",
+      matchId,
+      batchId: String(terminalBatch.id),
+      message: "The donation offset has already settled to the approved destination.",
+    };
+  }
+  if (terminalBatch) {
+    return {
+      status: "failed",
+      matchId,
+      batchId: String(terminalBatch.id),
+      message: `The settlement batch is ${terminalBatch.status} and requires operator resolution.`,
+    };
+  }
+
   const context = await loadDonationOffsetPaymentContext(matchId);
   const batch = await getOrCreateSettlementBatch({
     matchId: context.snapshot.matchId,
@@ -1182,23 +1220,22 @@ export async function attemptDonationOffsetSettlement(
       };
     }
 
-    const { error: completeError } = await getDb()
-      .from("conditional_settlement_batches")
-      .update({
-        status: "transferred",
-        completed_at: new Date().toISOString(),
-        processing_token: null,
-        processing_started_at: null,
-        failure_code: null,
-        failure_message: null,
-      })
-      .eq("id", batch.id)
-      .eq("processing_token", processingToken);
-    if (completeError) {
-      throw new Error(
-        `Funds transferred but the settlement batch could not be finalized: ${completeError.message}`,
-      );
-    }
+    const { data: finalized, error: completeError } = await getDb().rpc(
+    "finalize_donation_offset_settlement",
+    {
+      p_batch_id: batch.id,
+      p_processing_token: processingToken,
+      p_match_id: context.snapshot.matchId,
+      p_offer_id: context.snapshot.offerId,
+    },
+  );
+  if (completeError || !finalized) {
+    throw new Error(
+      `Funds transferred but the settlement ledger could not be finalized atomically: ${
+        completeError?.message ?? "the settlement claim no longer matched"
+      }`,
+    );
+  }
 
     await recordAudit({
       eventType: "donation_offset_settled",

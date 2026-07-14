@@ -196,7 +196,10 @@ export function donationOffsetSnapshotIsInternallyConsistent(
     snapshot.matchedCounterpartyCents >= 50 &&
     snapshot.compromiseTotalCents ===
       snapshot.matchedBaselineCents + snapshot.matchedCounterpartyCents &&
-    snapshot.destinationConnectedAccountId.startsWith("acct_")
+    snapshot.destinationConnectedAccountId.startsWith("acct_") &&
+    snapshot.moderationStatus === "clear" &&
+    snapshot.matchStatus === "matched" &&
+    (snapshot.offerStatus === "open" || snapshot.offerStatus === "matched")
   );
 }
 

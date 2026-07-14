@@ -142,11 +142,15 @@ export async function getConditionalPaymentReadiness(): Promise<ConditionalPayme
 
   const canSettle =
     canCreateMandates &&
-    chargesEnabled &&
-    (environment.livemode ? payoutsEnabled && detailsSubmitted : true);
+    signedWebhookSeen &&
+    (environment.livemode ? chargesEnabled && payoutsEnabled && detailsSubmitted : true);
 
-  if (canCreateMandates && !chargesEnabled) {
-    blockers.push("Stripe reports that platform charges are not enabled.");
+  if (canCreateMandates && !signedWebhookSeen) {
+    blockers.push("No signed Stripe webhook has been processed in this payment environment.");
+  }
+
+  if (environment.livemode && canCreateMandates && !chargesEnabled) {
+    blockers.push("Stripe reports that live platform charges are not enabled.");
   }
 
   if (environment.livemode && chargesEnabled && (!payoutsEnabled || !detailsSubmitted)) {

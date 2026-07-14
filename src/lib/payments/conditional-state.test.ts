@@ -37,16 +37,16 @@ function makeSnapshot(
     baselineOpposedCause: "Cause A",
     requestedOpposedCause: "Cause B",
     offsetRatio: "1.5",
-    timeHorizon: "2026",
+    timeHorizon: "one_off",
     participationMode: "direct",
     poolId: null,
     poolSide: null,
-    verificationMethod: "reviewed payment evidence",
+    verificationMethod: "receipts_uploaded",
     moderationStatus: "clear",
-    unmatchedSurplusRule: "return_unmatched",
+    unmatchedSurplusRule: "return_to_donors",
     assuranceMinimumCents: 0,
     assuranceDeadlineAt: null,
-    matchStatus: "completed",
+    matchStatus: "matched",
     offerStatus: "matched",
     ...overrides,
   };
@@ -97,6 +97,18 @@ test("donation-offset snapshots reject self-trades and inconsistent totals", () 
   );
   assert.equal(
     donationOffsetSnapshotIsInternallyConsistent(makeSnapshot({ matchedBaselineCents: 49 })),
+    false,
+  );
+  assert.equal(
+    donationOffsetSnapshotIsInternallyConsistent(makeSnapshot({ moderationStatus: "flagged" })),
+    false,
+  );
+  assert.equal(
+    donationOffsetSnapshotIsInternallyConsistent(makeSnapshot({ matchStatus: "completed" })),
+    false,
+  );
+  assert.equal(
+    donationOffsetSnapshotIsInternallyConsistent(makeSnapshot({ offerStatus: "paused" })),
     false,
   );
 });

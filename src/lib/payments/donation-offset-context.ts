@@ -17,8 +17,22 @@ export interface DonationOffsetPaymentContext {
   conditionHash: string;
 }
 
-const BLOCKED_MATCH_STATUSES = new Set(["blocked", "cancelled", "failed", "refunded", "disputed"]);
-const BLOCKED_OFFER_STATUSES = new Set(["blocked", "cancelled", "withdrawn", "expired"]);
+const BLOCKED_MATCH_STATUSES = new Set([
+  "blocked",
+  "cancelled",
+  "completed",
+  "failed",
+  "refunded",
+  "disputed",
+]);
+const BLOCKED_OFFER_STATUSES = new Set([
+  "blocked",
+  "cancelled",
+  "withdrawn",
+  "expired",
+  "paused",
+  "closed",
+]);
 
 function requireInteger(value: unknown, label: string) {
   const parsed = typeof value === "number" ? value : Number(value);
