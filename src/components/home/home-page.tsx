@@ -1,292 +1,355 @@
 import Link from "next/link";
 
-import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
-import { MutualStepFigure } from "@/components/home/mutual-step-figure";
+import {
+  DealReceipt,
+  VICTORIA_PAUL_RECEIPT_ROWS,
+} from "@/components/marketplace/deal-receipt";
+import {
+  GainField,
+  OffsetFlowFigure,
+  ThresholdField,
+} from "@/components/marketplace/gain-field";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import { formatMode } from "@/lib/offers";
-import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
+import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface HomePageProps {
   isAuthenticated: boolean;
 }
 
-const mechanismSteps = [
+const productModes = [
+  {
+    index: "01",
+    label: "Trade",
+    description: "Exchange actions or commitments that each side values differently.",
+    href: "/create?mode=trade",
+    status: "Available",
+    later: false,
+  },
+  {
+    index: "02",
+    label: "Offset",
+    description: "Redirect matched opposed donations into a shared destination.",
+    href: "/offsets",
+    status: "Available",
+    later: false,
+  },
+  {
+    index: "03",
+    label: "Pool",
+    description: "Pledge up to a maximum and fund only when the published condition passes.",
+    href: "/pools",
+    status: "Available",
+    later: false,
+  },
+  {
+    index: "04",
+    label: "Back",
+    description: "Help close a compensation gap for a more impactful path.",
+    href: "/create?mode=back",
+    status: "Later lane",
+    later: true,
+  },
+] as const;
+
+const processSteps = [
   {
     number: "01",
-    title: "Name the default.",
-    description:
-      "Record what each person would otherwise do. The baseline prevents manufactured threats from becoming bargaining leverage.",
+    title: "Name the no-deal default.",
+    description: "Record what each side would otherwise do before a proposal creates new leverage.",
   },
   {
     number: "02",
-    title: "Specify bounded terms.",
-    description:
-      "Define the actions, timing, evidence, privacy level, exit conditions, and challenge process before anyone relies on the agreement.",
+    title: "Set bounded terms.",
+    description: "State the exact action, maximum exposure, deadline, evidence, settlement, and exit rule.",
   },
   {
     number: "03",
-    title: "Move only if both prefer it.",
-    description:
-      "Each participant evaluates the change by their own values. Moral Trade does not require a shared moral ranking.",
+    title: "Match only on mutual gain.",
+    description: "Each side judges the proposal by their own priorities. No shared moral score is required.",
+  },
+  {
+    number: "04",
+    title: "Authorize, evidence, settle.",
+    description: "The record moves through explicit states and produces a Deal Receipt rather than a vague success claim.",
   },
 ] as const;
 
-const tradeLanes: ReadonlyArray<{
-  description: string;
-  href: string;
-  icon: IconName;
-  label: string;
-  title: string;
-}> = [
+const trustCards = [
   {
-    label: "01 / RECIPROCAL",
-    title: "Pledge swaps",
-    description: "Exchange small commitments that each participant values differently.",
-    href: "/pledge-swaps",
-    icon: "swap",
+    number: "01",
+    title: "The default is visible",
+    description: "A proposal is compared with a stated no-deal alternative, not an invented threat or undefined status quo.",
   },
   {
-    label: "02 / REDIRECTION",
-    title: "Donation offsets",
-    description: "Redirect opposed giving toward a reciprocal or mutually preferred destination.",
-    href: "/donation-offsets",
-    icon: "offset",
+    number: "02",
+    title: "Exposure is capped",
+    description: "Money, time, action burden, deadlines, and cancellation rules are inspectable before authorization.",
   },
   {
-    label: "03 / SHARED",
-    title: "Moral public goods",
-    description: "Coordinate funding for goods that many people value for different reasons.",
-    href: "/moral-goods-group-buying",
-    icon: "publicGoods",
+    number: "03",
+    title: "Safety is non-compensatory",
+    description: "Threats, coercion, fraud, forged evidence, and identity abuse are eligibility blockers, not low points in a score.",
   },
-  {
-    label: "04 / PRIVATE",
-    title: "Consent-gated matching",
-    description: "Find broad compatibility before identities, exact asks, or contact details are disclosed.",
-    href: "/background-networking",
-    icon: "lock",
-  },
-] as const;
-
-const relianceRules = [
-  ["Explicit baselines", "The no-trade alternative is recorded before terms are compared."],
-  ["Reviewable evidence", "Receipts, logs, attestations, or public records support completion claims."],
-  ["Consent-gated disclosure", "Private wishes and identities remain private until both sides approve disclosure."],
-  ["Clear exits and challenges", "Participants can see withdrawal, review, dispute, and appeal paths before relying on terms."],
 ] as const;
 
 export function HomePage({ isAuthenticated }: HomePageProps) {
-  const primaryHref = isAuthenticated ? "/dashboard" : "/signup?returnTo=/onboarding";
-  const primaryLabel = isAuthenticated ? "Open your workspace" : "Join the network";
-  const createHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/onboarding";
+  const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
 
   return (
-    <div className="page-shell mt-site-shell mt-home-shell">
-      <header className="mt-home-header">
+    <div className="page-shell marketplace-product-shell">
+      <div className="mt-beta-strip">
+        <span>Beta</span>
+        <span>Review current payment and settlement capabilities before relying on a record.</span>
+        <Link href="/status">Status</Link>
+      </div>
+
+      <header>
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
           {...getTopbarActions(isAuthenticated)}
-          showSearch={false}
           showLogout={isAuthenticated}
         />
       </header>
 
-      <main className="mt-home-main" id="main-content" tabIndex={-1}>
-        <section className="mt-home-hero" aria-labelledby="home-hero-heading">
-          <div className="mt-home-hero-copy">
-            <p className="mt-home-kicker">
-              <span aria-hidden="true" />
-              A coordination platform for moral disagreement
-            </p>
+      <main className="mt-product-main" id="main-content" tabIndex={-1}>
+        <section className="mt-product-hero" aria-labelledby="home-hero-heading">
+          <div className="mt-product-hero-copy">
+            <p className="mt-product-kicker">A marketplace for productive difference</p>
             <h1 id="home-hero-heading">
-              Cooperate
+              Do more good
               <span>without agreeing.</span>
             </h1>
-            <p className="mt-home-hero-text">
-              Moral Trade turns value disagreement into voluntary, bounded exchanges and shared
-              public-good commitments. Each participant judges the result by their own lights.
+            <p className="mt-product-hero-text">
+              Swap commitments, redirect offsetting donations, or join a conditional funding pool.
+              Every proposal keeps the no-deal default and the complete terms visible before anyone
+              relies on it.
             </p>
-            <div className="mt-home-hero-actions">
-              <Link className="button button-primary" href={primaryHref}>
-                {primaryLabel}
-                <span aria-hidden="true">↗</span>
+            <div className="mt-product-actions">
+              <Link className="button button-primary" href="/offers">
+                Explore the marketplace
               </Link>
-              <Link className="mt-text-link" href="/offers/examples/seed-victoria">
-                See a complete example
-                <span aria-hidden="true">→</span>
+              <Link className="button button-secondary" href={createHref}>
+                Create a proposal
               </Link>
             </div>
-            <ul className="mt-home-assurances" aria-label="Core operating principles">
-              <li>Voluntary</li>
-              <li>Explicit baselines</li>
-              <li>Evidence-reviewed</li>
+            <ul className="mt-product-proof-line" aria-label="Core operating principles">
+              <li>Clear terms</li>
+              <li>Conditional settlement</li>
+              <li>Reviewable evidence</li>
+              <li>No moral ranking</li>
             </ul>
           </div>
-
-          <MutualStepFigure />
+          <div className="mt-product-hero-visual">
+            <GainField />
+          </div>
         </section>
 
-        <section className="mt-home-thesis" aria-labelledby="home-thesis-heading">
-          <p className="mt-home-section-index">01 / THE PREMISE</p>
-          <div>
-            <h2 id="home-thesis-heading">Different values can support the same better outcome.</h2>
+        <nav className="mt-mode-rail" aria-label="Ways to use Moral Trade">
+          {productModes.map((mode) => (
+            <Link
+              className={["mt-mode-card", mode.later ? "is-later" : ""].filter(Boolean).join(" ")}
+              href={mode.href}
+              key={mode.label}
+            >
+              <span className="mt-mode-card-index">
+                <span>{mode.index}</span>
+                <span>{mode.status}</span>
+              </span>
+              <div>
+                <h2>{mode.label}</h2>
+                <p>{mode.description}</p>
+              </div>
+              <span className="mt-mode-card-arrow" aria-hidden="true">↗</span>
+            </Link>
+          ))}
+        </nav>
+
+        <section className="mt-product-section is-white" aria-labelledby="marketplace-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">Explore</p>
+              <h2 id="marketplace-heading">Understand one complete deal in under a minute.</h2>
+            </div>
             <p>
-              When people care differently about two outcomes, each may be able to give up less
-              and create more value for the other. The objective is not moral convergence. It is a
-              Pareto improvement relative to an explicit default.
+              Live participant proposals remain separate from worked examples. These examples show
+              the shape of the terms without pretending that a counterparty or liquidity exists.
             </p>
           </div>
-          <MutualStepMark className="mt-home-thesis-mark" />
+
+          <div className="mt-market-grid">
+            {featuredExamples.map((example) => (
+              <article className="mt-market-card" key={example.id}>
+                <div className="mt-market-card-head">
+                  <span className="mt-market-eyebrow">{formatMode(example.mode)}</span>
+                  <span className="mt-market-state">Worked example</span>
+                </div>
+                <h3>
+                  {example.offeredCause}
+                  <span aria-hidden="true">↔</span>
+                  {example.requestedCause}
+                </h3>
+                <dl>
+                  <div>
+                    <dt>Offers</dt>
+                    <dd>{example.offerAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Requests</dt>
+                    <dd>{example.requestAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Evidence</dt>
+                    <dd>{example.verification}</dd>
+                  </div>
+                </dl>
+                <div className="mt-market-card-foot">
+                  <span>{example.duration}</span>
+                  <Link href={`/offers/examples/${example.id}`}>Inspect terms ↗</Link>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-product-actions">
+            <Link className="button button-primary" href="/offers">
+              Explore all records
+            </Link>
+            <Link className="button button-secondary" href="/worked-examples">
+              View worked examples
+            </Link>
+          </div>
         </section>
 
-        <section className="mt-home-process" aria-labelledby="home-process-heading">
-          <div className="mt-home-section-head">
-            <p className="mt-home-section-index">02 / THE PROTOCOL</p>
-            <h2 id="home-process-heading">A legible process for a difficult coordination problem.</h2>
+        <section className="mt-product-section" aria-labelledby="process-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">How it works</p>
+              <h2 id="process-heading">Agree on the deal, not the values.</h2>
+            </div>
+            <p>
+              The interface uses plain actions first. Mechanism detail, evidence scope, and limits
+              remain available before authorization and settlement.
+            </p>
           </div>
-          <ol className="mt-home-process-grid">
-            {mechanismSteps.map((step) => (
-              <li key={step.number}>
-                <span className="mt-home-step-number">{step.number}</span>
+          <ol className="mt-how-grid">
+            {processSteps.map((step) => (
+              <li className="mt-how-step" key={step.number}>
+                <span>{step.number}</span>
                 <h3>{step.title}</h3>
                 <p>{step.description}</p>
               </li>
             ))}
           </ol>
-          <div className="mt-home-process-action">
-            <Link className="mt-text-link" href="/how-it-works">
-              Read the full protocol
-              <span aria-hidden="true">→</span>
-            </Link>
+          <Link className="button button-secondary" href="/how-it-works">
+            Review the full process
+          </Link>
+        </section>
+
+        <section className="mt-product-section is-white" aria-labelledby="offset-heading">
+          <div className="mt-feature-split">
+            <div className="mt-feature-copy">
+              <p className="mt-product-kicker">Offset</p>
+              <h2 id="offset-heading">Turn a zero-sum donation into a shared gain.</h2>
+              <p>
+                Two opposed planned donations can stop at a matched amount and redirect that amount
+                into a named destination both donors prefer to the original pair of donations.
+              </p>
+              <div className="mt-product-actions">
+                <Link className="button button-primary" href="/offsets">Open offsets</Link>
+                <Link className="button button-secondary" href="/offers?view=examples&search=offset">
+                  Inspect an example
+                </Link>
+              </div>
+            </div>
+            <div className="mt-feature-visual">
+              <OffsetFlowFigure />
+            </div>
           </div>
         </section>
 
-        <section className="mt-home-lanes" aria-labelledby="home-lanes-heading">
-          <div className="mt-home-section-head mt-home-section-head-split">
+        <section className="mt-product-section" aria-labelledby="pool-heading">
+          <div className="mt-feature-split">
+            <div className="mt-feature-copy">
+              <p className="mt-product-kicker">Pool</p>
+              <h2 id="pool-heading">Pledge a little. Fund it only when enough people join.</h2>
+              <p>
+                A pool shows each person&apos;s maximum exposure, the funding condition, deadline,
+                recipient, settlement rule, progress visibility, and failure behavior.
+              </p>
+              <div className="mt-product-actions">
+                <Link className="button button-primary" href="/pools">Explore pools</Link>
+                <Link className="button button-secondary" href="/mpgf">Open public-goods tools</Link>
+              </div>
+            </div>
+            <div className="mt-feature-visual">
+              <ThresholdField progress={64} />
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-product-section is-white" aria-labelledby="receipt-heading">
+          <div className="mt-receipt-layout">
+            <div className="mt-receipt-copy">
+              <p className="mt-product-kicker">The trust object</p>
+              <h2 id="receipt-heading">Every proposal becomes a Deal Receipt.</h2>
+              <p>
+                The receipt is the stable interface across trades, offsets, and pools. It separates
+                the default, commitments, condition, maximum exposure, evidence, settlement, exit,
+                externalities, and state.
+              </p>
+              <Link className="button button-secondary" href="/trust">
+                Review trust boundaries
+              </Link>
+            </div>
+            <DealReceipt
+              note="Illustrative worked example. It is not a live proposal or completed transaction."
+              rows={VICTORIA_PAUL_RECEIPT_ROWS}
+              state="Draft"
+              title="Victoria ↔ Paul"
+            />
+          </div>
+        </section>
+
+        <section className="mt-product-section is-dark" aria-labelledby="trust-heading">
+          <div className="mt-product-section-head">
             <div>
-              <p className="mt-home-section-index">03 / WAYS TO COORDINATE</p>
-              <h2 id="home-lanes-heading">Choose a concrete route.</h2>
+              <p className="mt-product-kicker">Trust infrastructure</p>
+              <h2 id="trust-heading">The mechanism is the ornament.</h2>
             </div>
             <p>
-              Every route starts with a baseline, bounded terms, evidence requirements, privacy
-              controls, and a clear exit.
+              Safety, evidence, payment, dispute, and exit states are part of the product surface—not
+              a compliance appendix hidden after the conversion.
             </p>
           </div>
-          <div className="mt-home-lane-grid">
-            {tradeLanes.map((lane) => (
-              <Link className="mt-home-lane-card" href={lane.href} key={lane.title}>
-                <div className="mt-home-lane-card-head">
-                  <span>{lane.label}</span>
-                  <IconMark name={lane.icon} />
-                </div>
-                <h3>{lane.title}</h3>
-                <p>{lane.description}</p>
-                <span className="mt-home-card-arrow" aria-hidden="true">
-                  ↗
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-home-examples" aria-labelledby="home-examples-heading">
-          <div className="mt-home-section-head mt-home-section-head-split">
-            <div>
-              <p className="mt-home-section-index">04 / COMPLETE EXAMPLES</p>
-              <h2 id="home-examples-heading">Inspect the terms before creating anything.</h2>
-            </div>
-            <Link className="mt-text-link" href="/worked-examples">
-              All {CANONICAL_WORKED_CASE_COUNT} examples
-              <span aria-hidden="true">→</span>
-            </Link>
-          </div>
-          <div className="mt-home-example-grid">
-            {featuredExamples.map((offer, index) => (
-              <article className="mt-home-example-card" key={offer.id}>
-                <div className="mt-home-example-meta">
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <span>{formatMode(offer.mode)}</span>
-                  <span>Worked example</span>
-                </div>
-                <h3>
-                  {offer.offeredCause}
-                  <span aria-hidden="true">↔</span>
-                  {offer.requestedCause}
-                </h3>
-                <dl>
-                  <div>
-                    <dt>Offers</dt>
-                    <dd>{offer.offerAction}</dd>
-                  </div>
-                  <div>
-                    <dt>Requests</dt>
-                    <dd>{offer.requestAction}</dd>
-                  </div>
-                </dl>
-                <div className="mt-home-example-footer">
-                  <span>{offer.verification}</span>
-                  <Link
-                    aria-label={`View ${offer.offeredCause} and ${offer.requestedCause} example`}
-                    href={`/offers/examples/${offer.id}`}
-                  >
-                    View terms <span aria-hidden="true">↗</span>
-                  </Link>
-                </div>
+          <div className="mt-trust-grid">
+            {trustCards.map((card) => (
+              <article className="mt-trust-card" key={card.number}>
+                <span>{card.number}</span>
+                <h3>{card.title}</h3>
+                <p>{card.description}</p>
               </article>
             ))}
           </div>
+          <div className="mt-product-actions">
+            <Link className="button button-primary" href="/trust">What you can rely on</Link>
+            <Link className="button button-secondary" href="/safety">Safety and anti-threat rules</Link>
+          </div>
         </section>
 
-        <section className="mt-home-reliance" aria-labelledby="home-reliance-heading">
-          <div className="mt-home-reliance-copy">
-            <p className="mt-home-section-index">05 / RELIABILITY</p>
-            <h2 id="home-reliance-heading">Built for serious, reviewable use.</h2>
+        <section className="mt-product-section is-white" aria-label="Research role">
+          <div className="mt-research-footnote">
+            <strong>5%</strong>
             <p>
-              The service exposes its operating rules and limits instead of asking participants to
-              rely on hidden judgment or implied guarantees.
+              Research supplies the theory, tests mechanism claims, and records uncertainty. The
+              other 95% of the public experience is marketplace discovery, coordination, terms,
+              authorization, evidence, settlement, and recourse.
             </p>
-            <Link className="mt-text-link mt-text-link-light" href="/trust">
-              What you can rely on
-              <span aria-hidden="true">→</span>
-            </Link>
-          </div>
-          <ol className="mt-home-reliance-list">
-            {relianceRules.map(([title, description], index) => (
-              <li key={title}>
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <div>
-                  <h3>{title}</h3>
-                  <p>{description}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="mt-home-final" aria-labelledby="home-final-heading">
-          <MutualStepMark className="mt-home-final-mark" />
-          <div>
-            <p className="mt-home-section-index">YOUR FIRST MOVE</p>
-            <h2 id="home-final-heading">Bring one real disagreement.</h2>
-            <p>
-              Start with one serious counterparty, one bounded commitment, and terms both sides
-              can inspect before relying on them.
-            </p>
-          </div>
-          <div className="mt-home-final-actions">
-            <Link className="button button-primary" href={createHref}>
-              {isAuthenticated ? "Create a trade" : "Join the network"}
-              <span aria-hidden="true">↗</span>
-            </Link>
-            <Link className="mt-text-link" href="/how-it-works">
-              Review the protocol
-              <span aria-hidden="true">→</span>
-            </Link>
+            <Link href="/research">Research layer →</Link>
           </div>
         </section>
       </main>

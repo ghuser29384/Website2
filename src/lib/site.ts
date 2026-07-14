@@ -1,17 +1,11 @@
-export function getPrimaryNavLinks(isAuthenticated = false) {
-  const links = [
-    { href: "/how-it-works", label: "How it works" },
-    { href: "/worked-examples", label: "Examples" },
+export function getPrimaryNavLinks(_isAuthenticated = false) {
+  return [
     { href: "/offers", label: "Explore" },
-    { href: "/moral-goods-group-buying", label: "Public goods" },
-    { href: "/research", label: "Research" },
+    { href: "/create", label: "Create" },
+    { href: "/pools", label: "Pools" },
+    { href: "/how-it-works", label: "How it works" },
+    { href: "/trust", label: "Trust" },
   ];
-
-  if (isAuthenticated) {
-    links.push({ href: "/dashboard", label: "Workspace" });
-  }
-
-  return links;
 }
 
 export function getTopbarActions(isAuthenticated = false) {
@@ -19,25 +13,25 @@ export function getTopbarActions(isAuthenticated = false) {
     authLink: isAuthenticated ? undefined : { href: "/login", label: "Sign in" },
     primaryAction: isAuthenticated
       ? {
-          href: "/offers/new",
-          label: "Create trade",
+          href: "/create",
+          label: "Create",
         }
       : {
           href: "/signup?returnTo=/onboarding",
-          label: "Join network",
+          label: "Get started",
         },
   };
 }
 
 export const FOOTER_LINK_GROUPS = [
   {
-    title: "Use Moral Trade",
+    title: "Marketplace",
     links: [
       { href: "/offers", label: "Explore trades" },
-      { href: "/worked-examples", label: "Worked examples" },
-      { href: "/offers/new", label: "Create a trade" },
+      { href: "/create", label: "Create" },
+      { href: "/offsets", label: "Donation offsets" },
+      { href: "/pools", label: "Conditional pools" },
       { href: "/background-networking", label: "Private matching" },
-      { href: "/moral-goods-group-buying", label: "Moral public goods" },
     ],
   },
   {
@@ -46,18 +40,17 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/trust", label: "What you can rely on" },
       { href: "/credibility", label: "Contextual credibility" },
       { href: "/status", label: "Service status" },
-      { href: "/validation", label: "Validation" },
-      { href: "/safety", label: "Safety" },
+      { href: "/safety", label: "Safety and anti-threat rules" },
       { href: "/transparency", label: "Transparency" },
     ],
   },
   {
     title: "Learn",
     links: [
-      { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
       { href: "/how-it-works", label: "How it works" },
-      { href: "/research", label: "Research and governance" },
-      { href: "/sources", label: "Sources" },
+      { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
+      { href: "/worked-examples", label: "Worked examples" },
+      { href: "/research", label: "Research" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
     ],
   },

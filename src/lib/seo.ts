@@ -5,7 +5,7 @@ import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const SITE_NAME = "Moral Trade";
 export const SITE_DESCRIPTION =
-  "A coordination platform for voluntary, evidence-reviewed commitments across moral disagreement, with explicit baselines and consent-gated disclosure.";
+  "A marketplace and coordination mechanism for trading commitments, redirecting offsetting donations, and funding conditional pools across different moral priorities.";
 export const SITE_URL = "https://www.moraltrade.org";
 export const SITE_LOCALE = "en_US";
 export const SITE_IMAGE_PATH = "/brand/moral-trade-mark.png";

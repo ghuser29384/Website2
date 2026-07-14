@@ -5,6 +5,7 @@ import { FunnelTracker } from "@/components/analytics/funnel-tracker";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
+import "./marketplace-ui.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
