@@ -1,37 +1,7 @@
 import Link from "next/link";
 
 import { MoralTradeWordmark, MutualStepMark } from "@/components/brand/moral-trade-wordmark";
-
-const footerLinkGroups = [
-  {
-    title: "Use",
-    links: [
-      { href: "/offers", label: "Explore trades" },
-      { href: "/worked-examples", label: "Worked examples" },
-      { href: "/background-networking", label: "Private matching" },
-      { href: "/cohort", label: "Join the network" },
-    ],
-  },
-  {
-    title: "Trust",
-    links: [
-      { href: "/trust", label: "What you can rely on" },
-      { href: "/credibility", label: "Contextual credibility" },
-      { href: "/status", label: "Service status" },
-      { href: "/validation", label: "Validation" },
-      { href: "/safety", label: "Safety" },
-    ],
-  },
-  {
-    title: "Research",
-    links: [
-      { href: "/research", label: "Research and governance" },
-      { href: "/sources", label: "Sources" },
-      { href: "/moral-trade/technical-spec", label: "Technical specification" },
-      { href: "/moral-goods-group-buying", label: "Moral public goods" },
-    ],
-  },
-] as const;
+import { FOOTER_LINK_GROUPS } from "@/lib/site";
 
 export function SiteFooter() {
   return (
@@ -45,15 +15,20 @@ export function SiteFooter() {
 
       <div className="footer-grid mt-footer-grid">
         <div className="footer-intro mt-footer-intro">
-          <h2>Cooperation does not require agreement.</h2>
+          <h2>A marketplace for productive difference.</h2>
           <p>
-            A coordination platform for voluntary, bounded, evidence-reviewed commitments across
-            moral disagreement.
+            Trade commitments, redirect offsetting donations, and join conditional funding pools.
+            Moral Trade keeps the no-deal default, maximum exposure, evidence, settlement, and exit
+            terms visible before reliance.
+          </p>
+          <p>
+            Research supports the mechanism. The public product is the marketplace and coordination
+            infrastructure.
           </p>
         </div>
 
         <nav aria-label="Footer" className="mt-footer-links">
-          {footerLinkGroups.map((group) => (
+          {FOOTER_LINK_GROUPS.map((group) => (
             <div className="footer-column" key={group.title}>
               <h3>{group.title}</h3>
               <ul className="footer-links">
@@ -70,8 +45,9 @@ export function SiteFooter() {
 
       <div className="footer-meta mt-footer-meta">
         <p>
-          Moral Trade does not provide legal, tax, escrow, custody, or investment services. Terms
-          remain voluntary and reviewable before reliance.
+          Moral Trade does not provide legal, tax, investment, or blanket impact certification.
+          Payment, custody, authorization, settlement, and refund capabilities are disclosed at the
+          point where a user could rely on them.
         </p>
         <p>© 2026 Moral Trade</p>
         <div className="mt-footer-legal">
