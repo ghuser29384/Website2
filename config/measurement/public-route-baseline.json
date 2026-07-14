@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-public-route-baseline-v0.1-2026-05",
-  "purpose": "Executable public-route performance and resilience baseline for the first pages visitors use before trusting the Moral Trade pilot.",
+  "version": "moral-trade-public-route-baseline-v0.2-2026-07",
+  "purpose": "Executable public-route performance and resilience baseline for the marketplace, creation, offset, pool, and trust pages visitors use before relying on Moral Trade.",
   "command": "MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes",
   "baseUrlEnv": "MORALTRADE_BASE_URL",
   "outputPathEnv": "MORALTRADE_BASELINE_OUTPUT",
@@ -16,21 +16,23 @@
       "key": "desktop",
       "label": "Desktop baseline",
       "viewport": { "width": 1440, "height": 1000 },
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0 like Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
   ],
   "routes": [
     { "path": "/", "family": "home", "stage": "orientation" },
-    { "path": "/what-is-moral-trade", "family": "primer", "stage": "orientation" },
-    { "path": "/offers", "family": "marketplace", "stage": "orientation" },
+    { "path": "/offers", "family": "marketplace", "stage": "discovery" },
+    { "path": "/create", "family": "creation", "stage": "activation" },
+    { "path": "/offsets", "family": "donation_offsets", "stage": "coordination" },
+    { "path": "/pools", "family": "conditional_pools", "stage": "coordination" },
+    { "path": "/how-it-works", "family": "mechanism", "stage": "orientation" },
+    { "path": "/trust", "family": "trust", "stage": "trust" },
     { "path": "/worked-examples", "family": "worked_examples", "stage": "orientation" },
-    { "path": "/cohort", "family": "cohort", "stage": "activation" },
     { "path": "/signup", "family": "account", "stage": "activation" },
     { "path": "/login", "family": "account", "stage": "activation" },
-    { "path": "/background-networking", "family": "private_matching", "stage": "trust" },
-    { "path": "/wish-registry", "family": "private_matching", "stage": "trust" },
-    { "path": "/mpgf", "family": "public_goods", "stage": "public_goods" },
-    { "path": "/measurement", "family": "measurement", "stage": "performance" }
+    { "path": "/background-networking", "family": "private_matching", "stage": "coordination" },
+    { "path": "/mpgf", "family": "public_goods", "stage": "coordination" },
+    { "path": "/status", "family": "status", "stage": "trust" }
   ],
   "budgets": {
     "maxDomContentLoadedMs": 10000,
