@@ -36,9 +36,27 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee conditional-payments-test-output.txt
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conditional-payments-test-output
+          path: conditional-payments-test-output.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build application
         env:
           CONDITIONAL_PAYMENTS_MODE: disabled
         run: npm run build
+
+      - name: Enforce test result
+        if: steps.tests.outcome != 'success'
+        run: exit 1
