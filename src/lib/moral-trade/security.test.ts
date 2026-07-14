@@ -35,9 +35,22 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     profile.controls.find((control) => control.key === "background_field_encryption_keyring")?.status,
     "implemented",
   );
+  assert.ok(
+    profile.controls
+      .find((control) => control.key === "private_no_store_cache")
+      ?.publicClaim.includes("password-update"),
+  );
   assert.ok(profile.publicNonClaims.some((entry) => /MFA|2FA/i.test(entry)));
   assert.equal(
     profile.controls.find((control) => control.key === "two_factor_admin_gate")?.status,
+    "implemented",
+  );
+  assert.equal(
+    profile.controls.find((control) => control.key === "participant_session_review_revocation")?.status,
+    "implemented",
+  );
+  assert.equal(
+    profile.controls.find((control) => control.key === "contact_disclosure_mfa_step_up")?.status,
     "implemented",
   );
   assert.equal(
@@ -53,6 +66,11 @@ test("security implementation source keeps headers, cache, and sessions aligned"
   const validation = validateMoralTradeSecurityImplementation({
     actionsSource: readRepoFile("src/app/actions.ts"),
     adminSource: readRepoFile("src/lib/admin.ts"),
+    backgroundDisclosureSource: readRepoFile("src/lib/background-disclosure.ts"),
+    backgroundAccountSecuritySource: readRepoFile("src/lib/background-account-security.ts"),
+    backgroundAccountSecurityPanelSource: readRepoFile(
+      "src/components/dashboard/background-account-security-panel.tsx",
+    ),
     backgroundActionsSource: readRepoFile("src/app/background-networking/actions.ts"),
     backgroundFieldEncryptionSource: readRepoFile("src/lib/background-field-encryption.ts"),
     mpgfAdminActionsSource: readRepoFile("src/app/mpgf/admin/actions.ts"),
@@ -65,7 +83,21 @@ test("security implementation source keeps headers, cache, and sessions aligned"
   assert.equal(validation.blockers.length, 0);
   assert.ok(
     validation.checks.some(
+      (check) =>
+        check.id === "private-no-store-source" &&
+        check.status === "pass" &&
+        /background-networking/.test(check.evidence) &&
+        /password-update/.test(check.evidence),
+    ),
+  );
+  assert.ok(
+    validation.checks.some(
       (check) => check.id === "supabase-session-refresh-source" && check.status === "pass",
+    ),
+  );
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "contact-disclosure-step-up-source" && check.status === "pass",
     ),
   );
 });
@@ -106,7 +138,14 @@ test("security scale readiness passes when a gate's required controls are implem
   const readyProfile: MoralTradeSecurityProfile = {
     ...profile,
     controls: profile.controls.map((control) =>
-      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate", "incident_response_reporting"].includes(
+      [
+        "two_factor_admin_gate",
+        "participant_session_review_revocation",
+        "contact_disclosure_mfa_step_up",
+        "device_session_review_gate",
+        "key_rotation_gate",
+        "incident_response_reporting",
+      ].includes(
         control.key,
       )
         ? { ...control, status: "implemented" }

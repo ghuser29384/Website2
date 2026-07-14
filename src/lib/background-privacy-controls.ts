@@ -14,10 +14,14 @@ export type ProfileDataRightScope = "background_networking" | "profile" | "full_
 
 export interface BackgroundNotificationPreferenceDraft {
   channel: BackgroundNotificationChannel;
+  dailyCap?: number | null;
   digestCadence: BackgroundNotificationDigestCadence;
   enabled: boolean;
   eventKind: BackgroundNotificationEventKind;
   profileId: string;
+  quietHoursEnd?: number | null;
+  quietHoursStart?: number | null;
+  sourceCooldownHours?: number | null;
 }
 
 export interface ProfileDataRightValidationInput {
@@ -130,10 +134,11 @@ export const BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION = "DELETE BACKGROUND NE
 
 export const BACKGROUND_SELF_SERVE_DELETION_SURFACES = [
   "Private wish profile and wish entries",
+  "Deterministic intent claims and profile synthesis",
   "Broad preview and discoverability surface",
   "Manual source summaries and connector permissions",
   "Saved searches, delegate strategy records, and helper runs",
-  "Match suggestions, consent records, notifications, privacy grants, and access requests",
+  "Match suggestions, opportunity feedback, consent records, notifications, privacy grants, and access requests",
   "Introduction planning records, network invites, bounties, and collectives",
   "Queued background-networking emails",
   "Safety, budget, and operator audit rows retained only as redacted or anonymized records",
@@ -159,22 +164,31 @@ export const BACKGROUND_DATA_INVENTORY = [
     use: "Deterministic synthesis and owner-reviewed matching.",
   },
   {
+    classification: "private-profile",
+    control: "Owner-scoped under RLS; regenerated from explicit fields and reviewed permissions instead of imported as authority.",
+    label: "Intent claims",
+    processor: "Supabase Postgres",
+    retention: "Until regenerated, superseded, corrected, or deleted with background-networking data.",
+    surface: "background_intent_claims",
+    use: "Dashboard explanation of what deterministic matching thinks the user wants.",
+  },
+  {
     classification: "consent-ledger",
     control: "Purpose, audience stage, expiry, and revocation are recorded per grant; participant-facing grants are removed during self-serve deletion.",
     label: "Disclosure grants and access requests",
     processor: "Supabase Postgres",
     retention: "For the active introduction plus audit retention after expiry or revocation.",
-    surface: "privacy_grants and privacy_access_requests",
+    surface: "privacy_grants, privacy_access_requests, and background_grant_receipts",
     use: "Staged disclosure and mutual-consent review.",
   },
   {
     classification: "manual-source-summary",
-    control: "Manual summaries only; source connectors require field permissions, retention expiry, and no raw ingestion; source rows are removed during self-serve deletion.",
+    control: "Manual and review-approved summaries only; source notes and connectors require field permissions, retention expiry, and no raw ingestion; expired or inactive source notes and derived signals stop influencing deterministic synthesis.",
     label: "Source notes and connection permissions",
     processor: "Supabase Postgres with app-level field encryption for notes and approved summaries.",
-    retention: "Until source removal, deletion request, or safety/legal hold.",
-    surface: "profile_sources and source_connections",
-    use: "Optional deterministic context for owner-reviewed matching.",
+    retention: "Until the source-level retention timer expires, source removal, deletion request, or safety/legal hold.",
+    surface: "profile_sources, source_connections, background_source_summaries, background_profile_signals, and background_shadow_runs",
+    use: "Optional deterministic context for owner-reviewed matching after approval.",
   },
   {
     classification: "operations",
@@ -182,8 +196,9 @@ export const BACKGROUND_DATA_INVENTORY = [
     label: "Budgets, snapshots, reports, appeals, and operator queues",
     processor: "Supabase Postgres and configured email provider for safe digests.",
     retention: "Operational window plus abuse-prevention audit retention.",
-    surface: "background_query_events, match_explanation_snapshots, risk_signals, match_concierge_requests",
-    use: "Anti-enumeration, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
+    surface:
+      "background_query_events, match_explanation_snapshots, background_opportunity_briefs, background_match_feedback, background_intro_packets, background_mute_rules, risk_signals, match_concierge_requests",
+    use: "Anti-enumeration, opportunity packaging, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
   },
 ] as const;
 
@@ -195,6 +210,7 @@ export const PRIVATE_NO_STORE_ROUTE_PREFIXES = [
   "/mpgf/admin",
   "/mpgf/account",
   "/api/profile",
+  "/api/background",
   "/api/jobs",
   "/api/saved-searches",
   "/api/wish-registry/search",
@@ -243,10 +259,14 @@ export function createDefaultBackgroundNotificationPreferences(profileId: string
     });
     rows.push({
       channel: "email_digest",
-      digestCadence: "daily",
+      dailyCap: eventKind === "match_suggestions" ? 1 : null,
+      digestCadence: eventKind === "match_suggestions" ? "daily" : "immediate",
       enabled: true,
       eventKind,
       profileId,
+      quietHoursEnd: 8,
+      quietHoursStart: 22,
+      sourceCooldownHours: eventKind === "match_suggestions" ? 24 : null,
     });
     rows.push({
       channel: "web_push",
@@ -262,10 +282,14 @@ export function createDefaultBackgroundNotificationPreferences(profileId: string
 
 export function normalizeBackgroundNotificationPreferenceDraft({
   channel,
+  dailyCap,
   digestCadence,
   enabled,
   eventKind,
   profileId,
+  quietHoursEnd,
+  quietHoursStart,
+  sourceCooldownHours,
 }: BackgroundNotificationPreferenceDraft): BackgroundNotificationPreferenceDraft | null {
   if (!EVENT_KIND_VALUES.has(eventKind) || !CHANNEL_VALUES.has(channel)) {
     return null;
@@ -275,10 +299,14 @@ export function normalizeBackgroundNotificationPreferenceDraft({
 
   return {
     channel,
+    dailyCap,
     digestCadence: channel === "web_push" && !enabled ? "none" : normalizedCadence,
     enabled,
     eventKind,
     profileId,
+    quietHoursEnd,
+    quietHoursStart,
+    sourceCooldownHours,
   };
 }
 

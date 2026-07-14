@@ -131,6 +131,10 @@ const ledgerTransactionTemplates: LedgerTransactionTemplate[] = [
   { transactionType: "demo_allocation_reserved", debitAccount: "demo_allocation_pool", creditAccount: "demo_allocation_reserved" },
 ];
 
+export const MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION = "cg_vqaf_capital_constrained_qf_v1";
+export const MPGF_PUBLIC_GOODS_QF_ALLOCATION_POLICY =
+  "capital_constrained_lambda_bisection_with_per_campaign_cap";
+
 export function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -195,6 +199,83 @@ function distributeIntegerBudget<T extends { id: string }>(
   }
 
   return result;
+}
+
+export function solveMpgfCapitalConstrainedQfLambda(
+  items: Array<{ qfScore: number; qfBonusCapCents: number }>,
+  budgetCents: number,
+) {
+  const budget = clampNonNegativeInteger(budgetCents);
+  const active = items
+    .map((item) => ({
+      qfScore: Number.isFinite(item.qfScore) ? Math.max(0, item.qfScore) : 0,
+      qfBonusCapCents: clampNonNegativeInteger(item.qfBonusCapCents),
+    }))
+    .filter((item) => item.qfScore > 0 && item.qfBonusCapCents > 0);
+
+  if (!active.length || budget <= 0) {
+    return 0;
+  }
+
+  const totalCapCents = active.reduce((sum, item) => sum + item.qfBonusCapCents, 0);
+
+  if (totalCapCents <= budget) {
+    return Math.max(...active.map((item) => item.qfBonusCapCents / item.qfScore));
+  }
+
+  const allocationAt = (lambda: number) =>
+    active.reduce((sum, item) => sum + Math.min(item.qfBonusCapCents, lambda * item.qfScore), 0);
+  let low = 0;
+  let high = 1;
+
+  while (allocationAt(high) < budget) {
+    high *= 2;
+  }
+
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const mid = (low + high) / 2;
+
+    if (allocationAt(mid) > budget) {
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+
+  return low;
+}
+
+function allocateMpgfCapitalConstrainedQfBonus(
+  items: Array<{ campaignId: string; qfScore: number; qfBonusCapCents: number }>,
+  budgetCents: number,
+  lambda: number,
+) {
+  const budget = clampNonNegativeInteger(budgetCents);
+  const rows = items.map((item) => {
+    const qfScore = Number.isFinite(item.qfScore) ? Math.max(0, item.qfScore) : 0;
+    const qfBonusCapCents = clampNonNegativeInteger(item.qfBonusCapCents);
+    const exact = qfScore > 0 && lambda > 0 ? Math.min(qfBonusCapCents, lambda * qfScore) : 0;
+    const floor = Math.floor(exact);
+
+    return {
+      campaignId: item.campaignId,
+      qfBonusCapCents,
+      floor,
+      remainder: exact - floor,
+    };
+  });
+  const allocations = new Map(rows.map((row) => [row.campaignId, row.floor]));
+  const assignedFloor = rows.reduce((sum, row) => sum + row.floor, 0);
+  const remaining = Math.max(0, budget - assignedFloor);
+
+  for (const row of [...rows]
+    .filter((candidate) => candidate.floor < candidate.qfBonusCapCents)
+    .sort((left, right) => right.remainder - left.remainder || left.campaignId.localeCompare(right.campaignId))
+    .slice(0, remaining)) {
+    allocations.set(row.campaignId, (allocations.get(row.campaignId) ?? 0) + 1);
+  }
+
+  return allocations;
 }
 
 function isActiveAssurancePledge(pledge: MpgfPublicGoodsPledge) {
@@ -596,10 +677,36 @@ export function createMpgfPublicGoodsIdentityAttestation(input: {
   };
 }
 
+function normalizeMpgfCounterpartBuckets(value: string[] | string | undefined, campaign: MpgfPublicGoodsCampaign) {
+  const campaignBuckets = new Set(
+    campaign.causeTags.map((tag) =>
+      tag.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+    ),
+  );
+  const sourceItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]/)
+      : [];
+  const buckets = sourceItems
+    .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .filter((item) => !campaignBuckets.has(item));
+  const uniqueBuckets = [...new Set(buckets)].slice(0, 12);
+
+  return uniqueBuckets.length > 0 ? uniqueBuckets : ["any-pre-vetted-distinct-moral-bucket"];
+}
+
+function defaultMpgfCounterpartyClearedCents(amountCents: number, campaign: MpgfPublicGoodsCampaign) {
+  return Math.max(100, Math.min(amountCents, campaign.thresholdAmountCents));
+}
+
 export function createMpgfPublicGoodsPledge(input: {
   campaign: MpgfPublicGoodsCampaign;
   userId: string;
   amountCents: number;
+  acceptableCounterpartBuckets?: string[] | string;
+  minimumCounterpartyClearedCents?: number;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
   captureMode?: MpgfPublicGoodsCaptureMode;
   identityAttestation?: MpgfPublicGoodsIdentityAttestation;
@@ -658,14 +765,39 @@ export function createMpgfPublicGoodsPledge(input: {
     : input.amountCents < 100
       ? "below_minimum"
       : attestationActive
-        ? "eligible"
-        : "pending_review";
+      ? "eligible"
+      : "pending_review";
+  const acceptableCounterpartBuckets = normalizeMpgfCounterpartBuckets(input.acceptableCounterpartBuckets, input.campaign);
+  const minimumCounterpartyClearedCents = Math.max(
+    100,
+    Math.floor(input.minimumCounterpartyClearedCents ?? defaultMpgfCounterpartyClearedCents(input.amountCents, input.campaign)),
+  );
 
   return {
     id: `pledge-public-goods-${input.campaign.slug}-${input.userId}-${input.amountCents}`,
     campaignId: input.campaign.id,
     userId: input.userId,
     amountCents: input.amountCents,
+    acceptableCounterpartBuckets,
+    minimumCounterpartyClearedCents,
+    counterpartDistinctBucketRequired: true,
+    maxExposureCents: input.amountCents,
+    donorExposureDisclosure: {
+      maxExposureCents: input.amountCents,
+      exactClearanceConditions: [
+        "fixed round rulebook is published before the round opens",
+        "campaign amount and verified-supporter thresholds clear",
+        `at least ${minimumCounterpartyClearedCents} cents clears from accepted distinct counterpart buckets`,
+        "identity, anti-sybil, anti-threat, baseline, recipient-review, and challenge gates pass",
+      ],
+      roundFailureBehavior: input.campaign.exitRule || "Pledge expires without charge if the round fails to clear.",
+      recipientVerificationFailureBehavior:
+        "Release authorization or reroute only under the donor fallback rule after recipient verification fails.",
+      authorizationTiming:
+        "Authorize or capture only near clearing after threshold, review, and challenge gates; do not place a long-lived round-open hold.",
+      authorizationExpiryBehavior:
+        "If authorization expires before capture, re-confirm clearance and reauthorize instead of silently charging later.",
+    },
     visibilityMode,
     isRecurring: input.isRecurring ?? false,
     captureMode,
@@ -901,11 +1033,13 @@ export function summarizeMpgfPublicGoodsReviewConsole({
   paymentProofs?: MpgfPublicGoodsPaymentProof[];
   now?: Date;
 } = {}) {
+  const allocation = allocateMpgfAssuranceRound({ now });
   const queue = campaigns.map((campaign) => {
     const latestCase = [...reviewCases]
       .filter((reviewCase) => reviewCase.campaignId === campaign.id)
       .sort((left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt))[0];
     const assuranceStatus = getMpgfCampaignAssuranceStatus(campaign, demoMpgfAssurancePledges, now);
+    const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
 
     return {
       campaignId: campaign.id,
@@ -915,13 +1049,132 @@ export function summarizeMpgfPublicGoodsReviewConsole({
       latestReasonCode: latestCase?.reasonCode ?? null,
       appealStatus: latestCase?.appealStatus ?? "none",
       allowedNextActions: latestCase?.allowedNextActions ?? allowedNextReviewActions(campaign.reviewStatus),
+      conflictCheckStatus: "clear" as const,
+      conflictCheckMessage:
+        "Reviewer must not be a campaign party, beneficiary, sponsor, or active recusal record before assignment.",
+      directEligibleCents: assuranceStatus.directEligibleCents,
+      approvedMatchCents: line ? line.baseMatchCents + line.qfBonusCents : 0,
       blockers: assuranceStatus.blockers,
     };
   });
+  const rubric = [
+    {
+      key: "eligibility_queue",
+      label: "Eligibility and destination proof",
+      reviewerRole: "eligibility_reviewer",
+      requiredEvidence: "Reviewed destination reference, public summary, and allowed destination type.",
+    },
+    {
+      key: "anti_threat_externality",
+      label: "Anti-threat and externality screen",
+      reviewerRole: "safety_reviewer",
+      requiredEvidence: "No threat baseline, no perverse incentive, and publishable dissent lane.",
+    },
+    {
+      key: "identity_threshold",
+      label: "Identity-weighted donor threshold",
+      reviewerRole: "integrity_reviewer",
+      requiredEvidence: "Unique counted identities, donor cap, and reduced weight for low-confidence accounts.",
+    },
+    {
+      key: "milestone_release",
+      label: "Milestone release readiness",
+      reviewerRole: "payout_reviewer",
+      requiredEvidence:
+        "Milestone evidence, review-state confirmation, distinct second approver, no active appeal, and partner execution only.",
+    },
+    {
+      key: "appeals_and_audit",
+      label: "Appeal and audit trail",
+      reviewerRole: "appeals_reviewer",
+      requiredEvidence: "Public reason code, appeal status, append-only event hash, and private evidence redaction.",
+    },
+  ];
+  const disputeQueue = reviewCases
+    .filter(
+      (reviewCase) =>
+        reviewCase.appealStatus === "appeal_requested" ||
+        reviewCase.state === "challenge_window" ||
+        (reviewCase.action === "challenge" && !reviewCase.closedAt),
+    )
+    .map((reviewCase) => {
+      const campaign = campaigns.find((candidate) => candidate.id === reviewCase.campaignId);
+
+      return {
+        id: reviewCase.id,
+        campaignId: reviewCase.campaignId,
+        title: campaign?.title ?? reviewCase.campaignId,
+        state: reviewCase.state,
+        appealStatus: reviewCase.appealStatus,
+        reasonCode: reviewCase.reasonCode,
+        openedAt: reviewCase.openedAt,
+        challengeWindowEndsAt: reviewCase.challengeWindowEndsAt ?? null,
+      };
+    });
+  const milestoneReleaseQueue = campaigns.map((campaign) => {
+    const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+    const relevantDisputes = disputeQueue.filter((dispute) => dispute.campaignId === campaign.id);
+    const approvedMatchCents = line ? line.baseMatchCents + line.qfBonusCents : 0;
+    const blockers = [...(line?.blockers ?? [])];
+
+    if (relevantDisputes.length > 0) {
+      blockers.push("open_dispute_or_challenge_window");
+    }
+
+    return {
+      campaignId: campaign.id,
+      title: campaign.title,
+      nextMilestoneOrdinal: 1,
+      releasePct: 40,
+      approvedMatchCents,
+      releaseAmountCents: Math.floor((approvedMatchCents * 40) / 100),
+      status:
+        relevantDisputes.length > 0
+          ? ("paused_by_dispute" as const)
+          : line?.status === "payable"
+            ? ("review_required" as const)
+            : ("not_payable" as const),
+      reviewStateConfirmedRequired: true,
+      dualControlApproverRequired: true,
+      webhookCanAuthorizeFinalPayout: false as const,
+      blockers,
+    };
+  });
+  const auditTrail = [
+    ...reviewCases.map((reviewCase) => ({
+      id: reviewCase.id,
+      objectType: "review_case",
+      objectId: reviewCase.campaignId,
+      eventType: `review_${reviewCase.action}`,
+      eventHash: `demo-audit:${stablePublicGoodsHash(`${reviewCase.id}:${reviewCase.reasonCode}`).toString(16)}`,
+      publicSummary: reviewCase.publicNotes,
+      createdAt: reviewCase.openedAt,
+      privacyClass: "public_reason_no_private_evidence_url",
+    })),
+    ...paymentProofs.map((proof) => ({
+      id: proof.id,
+      objectType: "payment_proof",
+      objectId: proof.campaignId,
+      eventType: `payment_proof_${proof.status}`,
+      eventHash: `demo-audit:${stablePublicGoodsHash(`${proof.id}:${proof.status}`).toString(16)}`,
+      publicSummary: `${proof.reconciliationSource.replaceAll("_", " ")} ${proof.status.replaceAll("_", " ")}`,
+      createdAt: proof.createdAt,
+      privacyClass: "aggregate_only_no_receipt_url",
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 
   return {
     reasonCodes: MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
     queue,
+    conflictCheckBanner: {
+      status: queue.some((item) => item.conflictCheckStatus !== "clear") ? "blocked" : "clear",
+      message:
+        "Conflict check banner: reviewer assignment is blocked by party, beneficiary, sponsor, or recusal conflicts.",
+    },
+    rubric,
+    milestoneReleaseQueue,
+    disputeQueue,
+    auditTrail,
     openCaseCount: reviewCases.filter((reviewCase) => !reviewCase.closedAt).length,
     challengedCampaignCount: campaigns.filter((campaign) => campaign.reviewStatus === "challenge_window").length,
     activeSponsorSubscriptionCount: subscriptions.filter((subscription) => subscription.status === "active").length,
@@ -1127,6 +1380,7 @@ export function allocateMpgfAssuranceRound({
   const statuses = new Map(campaigns.map((campaign) => [campaign.id, getMpgfCampaignAssuranceStatus(campaign, pledges, now)]));
   const payableCampaigns = campaigns.filter((campaign) => statuses.get(campaign.id)?.status === "payable");
   const baseMatchBudgetCents = Math.max(0, matchPool.budgetCents - matchPool.qfBonusCents);
+  const qfBonusBudgetCents = round.qfEnabled ? clampNonNegativeInteger(matchPool.qfBonusCents) : 0;
   const baseMatchRawByCampaign = new Map(
     payableCampaigns.map((campaign) => {
       const status = statuses.get(campaign.id);
@@ -1144,19 +1398,17 @@ export function allocateMpgfAssuranceRound({
       round.qfEnabled ? computeMpgfCampaignQfScore(campaign, pledges, getMpgfPerDonorQfCapCents(campaign, matchPool)) : 0,
     ]),
   );
-  const uncappedQfByCampaign = distributeIntegerBudget(
-    payableCampaigns,
-    round.qfEnabled ? matchPool.qfBonusCents : 0,
-    (campaign) => qfScoresByCampaign.get(campaign.id) ?? 0,
-  );
-  const qfByCampaign = new Map(
-    payableCampaigns.map((campaign) => {
-      const status = statuses.get(campaign.id);
-      const qfBonusCapCents = Math.floor((status?.directEligibleCents ?? 0) * round.qfCapMultiple);
+  const qfBonusInputs = payableCampaigns.map((campaign) => {
+    const status = statuses.get(campaign.id);
 
-      return [campaign.id, Math.min(uncappedQfByCampaign.get(campaign.id) ?? 0, qfBonusCapCents)];
-    }),
-  );
+    return {
+      campaignId: campaign.id,
+      qfScore: qfScoresByCampaign.get(campaign.id) ?? 0,
+      qfBonusCapCents: Math.floor((status?.directEligibleCents ?? 0) * round.qfCapMultiple),
+    };
+  });
+  const qfLambda = solveMpgfCapitalConstrainedQfLambda(qfBonusInputs, qfBonusBudgetCents);
+  const qfByCampaign = allocateMpgfCapitalConstrainedQfBonus(qfBonusInputs, qfBonusBudgetCents, qfLambda);
 
   const lines: MpgfPublicGoodsAllocationLine[] = campaigns.map((campaign) => {
     const status = statuses.get(campaign.id) ?? getMpgfCampaignAssuranceStatus(campaign, pledges, now);
@@ -1189,8 +1441,11 @@ export function allocateMpgfAssuranceRound({
   return {
     roundId: round.id,
     matchPoolId: matchPool.id,
+    formulaVersion: MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION,
+    qfAllocationPolicy: MPGF_PUBLIC_GOODS_QF_ALLOCATION_POLICY,
+    qfLambda: Number(qfLambda.toFixed(12)),
     baseMatchBudgetCents,
-    qfBonusBudgetCents: round.qfEnabled ? matchPool.qfBonusCents : 0,
+    qfBonusBudgetCents,
     baseMatchAllocatedCents,
     qfBonusAllocatedCents,
     totalDirectEligibleCents: lines.reduce((sum, line) => sum + (line.status === "payable" ? line.directEligibleCents : 0), 0),

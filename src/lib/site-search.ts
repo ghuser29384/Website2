@@ -47,7 +47,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["about", "mission", "what exists", "what is live", "boundaries", "operator"],
   },
   {
-    href: "/moral-trade",
+    href: "/what-is-moral-trade",
     label: "What is moral trade?",
     summary: "A short primer on voluntary cooperation across moral disagreement.",
     kind: "learn",
@@ -75,7 +75,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["how it works", "steps", "baseline", "proof", "review", "first action"],
   },
   {
-    href: "/anti-threat-baseline",
+    href: "/anti-threat-rules",
     label: "Anti-threat and baseline integrity",
     summary: "Rules for threat rejection, no-trade baselines, cooling-off periods, and externality review.",
     kind: "learn",
@@ -172,7 +172,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     ],
   },
   {
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     label: "Worked examples",
     summary: "Clone or inspect seeded examples before publishing a live trade.",
     kind: "trade",
@@ -193,7 +193,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
   },
   {
-    href: "/updates",
+    href: "/pilot-updates",
     label: "Pilot updates",
     summary: "Read public pilot logs, governance updates, transparency notes, and case-study plans.",
     kind: "learn",
@@ -214,7 +214,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["contact", "support", "safety concern", "operator", "partnership", "recourse"],
   },
   {
-    href: "/team",
+    href: "/team-and-governance",
     label: "Team and governance",
     summary: "Review operator routes, reviewer responsibilities, governance gaps, and publication commitments.",
     kind: "learn",
@@ -242,6 +242,25 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["pledge", "swap", "reciprocal", "commitment", "vegetarian"],
   },
   {
+    href: "/moral-goods-group-buying",
+    label: "Group buying",
+    summary:
+      "Fund verified moral actions together through rounds, pledge-swap lots, baskets, and standing budgets.",
+    kind: "fund",
+    keywords: [
+      "group buying",
+      "moral goods",
+      "group buy",
+      "crowdfund",
+      "microfund",
+      "standing budget",
+      "basket",
+      "pledge swap lot",
+      "animal welfare",
+      "vegetarian",
+    ],
+  },
+  {
     href: "/donation-offsets",
     label: "Donation offsets",
     summary: "Redirect opposed donations toward a named compromise destination.",
@@ -257,17 +276,32 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/mpgf",
-    label: "Public Goods Fund",
-    summary: "Review external-payment evidence submission, candidate pools, and allocation workflow.",
+    label: "Common Ground Budget",
+    summary:
+      "Preview the Public Goods Fund path for moral public goods: no charge now, sealed progress before close, and final review before any binding contribution.",
     kind: "fund",
-    keywords: ["mpgf", "fund", "public goods", "evidence", "contribution", "pool"],
+    keywords: [
+      "common ground budget",
+      "public goods fund",
+      "moral public goods",
+      "mpgf",
+      "crecm",
+      "cross-view",
+      "different-view",
+      "manual evidence",
+      "evidence",
+      "contribution",
+      "pool",
+      "no charge now",
+      "sealed progress",
+    ],
   },
   {
     href: "/donate",
     label: "Donation routes",
-    summary: "Choose a cause, complete payment on Every.org, and optionally record the gift afterward.",
+    summary: "Choose a cause, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
     kind: "fund",
-    keywords: ["donate", "donation", "every.org", "gift", "route", "record gift", "reconciliation"],
+    keywords: ["donate", "donation", "every.org", "gift", "route", "webhook import", "reconciliation"],
   },
   {
     href: "/priority-correction-fund",

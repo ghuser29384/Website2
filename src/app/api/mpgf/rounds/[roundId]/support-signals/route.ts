@@ -1,0 +1,367 @@
+import { NextResponse } from "next/server";
+
+import { getViewer } from "@/lib/app-data";
+import { recordMpgfPublicGoodsAnalyticsEvent } from "@/lib/mpgf/public-goods-analytics";
+import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
+import { loadMpgfPublicGoodsAllocationContext } from "@/lib/mpgf/public-goods-allocation-results";
+import {
+  buildMpgfPublicGoodsSupportSignalContractApi,
+  createMpgfPublicGoodsSupportSignal,
+  defaultMpgfPublicGoodsSupportStrengthBps,
+  getMpgfPublicGoodsSupportSignalContractApi,
+  hashMpgfPublicGoodsMoralCluster,
+  isMpgfPublicGoodsMoralCluster,
+  isMpgfPublicGoodsSupportSignalType,
+  type MpgfPublicGoodsSupportSignal,
+} from "@/lib/mpgf/public-goods-cg-vqaf";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+type MpgfSupportSignalInsert = Database["public"]["Tables"]["mpgf_support_signals"]["Insert"];
+type MpgfDissentNoteInsert = Database["public"]["Tables"]["mpgf_dissent_notes"]["Insert"];
+type MpgfDissentReasonCode = MpgfDissentNoteInsert["reason_code"];
+type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
+  from: (table: string) => any;
+};
+
+interface DbErrorLike {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}
+
+function stringField(record: Record<string, unknown>, key: string, fallback = "") {
+  const value = record[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function summarizeDbError(error: DbErrorLike) {
+  return [error.code, error.message || error.details].filter(Boolean).join(": ") || "unknown database error";
+}
+
+function isMissingRelationError(error: DbErrorLike) {
+  return error.code === "42P01" || /relation .* does not exist/i.test(error.message ?? "");
+}
+
+function isUniqueViolationError(error: DbErrorLike) {
+  return error.code === "23505";
+}
+
+function hasServiceRoleEnv() {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function loadSupportSignalRoundState(roundId: string) {
+  const demoContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+
+  if (demoContract) {
+    return {
+      contract: demoContract,
+      round: undefined,
+      campaigns: undefined,
+      source: "demo_fixture" as const,
+      warnings: [],
+    };
+  }
+
+  const contextLoad = await loadMpgfPublicGoodsAllocationContext({ roundId });
+
+  if (contextLoad.source === "demo_fixture") {
+    return null;
+  }
+
+  return {
+    contract: buildMpgfPublicGoodsSupportSignalContractApi(roundId),
+    round: contextLoad.round,
+    campaigns: contextLoad.campaigns,
+    source: contextLoad.source,
+    warnings: contextLoad.warnings,
+  };
+}
+
+function strengthBpsField(
+  record: Record<string, unknown>,
+  signalType: MpgfPublicGoodsSupportSignal["signalType"],
+) {
+  const value = Number(record.strengthBps);
+
+  if (Number.isFinite(value)) {
+    return Math.max(0, Math.min(10_000, Math.floor(value)));
+  }
+
+  return defaultMpgfPublicGoodsSupportStrengthBps(signalType);
+}
+
+function dissentReasonCodeField(record: Record<string, unknown>): MpgfDissentReasonCode {
+  const value = stringField(record, "dissentReasonCode");
+
+  if (
+    value === "externality_review" ||
+    value === "threat_baseline_review" ||
+    value === "destination_review" ||
+    value === "collusion_review"
+  ) {
+    return value;
+  }
+
+  return "other_reviewable_claim";
+}
+
+function publicSummaryField(record: Record<string, unknown>, campaignId: string) {
+  const value = stringField(record, "publicSummary")
+    .replace(/\s+/g, " ")
+    .slice(0, 240);
+
+  return value || `Participant requested MPGF dissent review for ${campaignId}.`;
+}
+
+async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profileId: string) {
+  if (!hasSupabaseEnv()) {
+    return {
+      status: "not_configured" as const,
+      message: "Supabase is not configured; support signal was validated but not persisted.",
+    };
+  }
+
+  const supabase = await createClient();
+  const row: MpgfSupportSignalInsert = {
+    id: signal.id,
+    round_id: signal.roundId,
+    campaign_id: signal.campaignId,
+    profile_id: profileId,
+    user_ref_hash: signal.userRefHash,
+    moral_cluster_hash: hashMpgfPublicGoodsMoralCluster(signal.moralCluster),
+    signal_type: signal.signalType,
+    strength_bps: signal.strengthBps,
+    private_by_default: true,
+    counts_for_common_ground: signal.countsForCommonGround,
+    no_global_moral_ranking: true,
+    calc_hash: signal.calcHash,
+    created_at: signal.createdAt,
+  };
+  const inserted = await supabase
+    .from("mpgf_support_signals")
+    .insert(row)
+    .select("id, created_at")
+    .single();
+
+  if (!inserted.error) {
+    return {
+      status: "inserted" as const,
+      id: String(inserted.data.id),
+      createdAt: String(inserted.data.created_at),
+    };
+  }
+
+  if (isUniqueViolationError(inserted.error)) {
+    const existing = await supabase
+      .from("mpgf_support_signals")
+      .select("id, created_at")
+      .eq("round_id", signal.roundId)
+      .eq("campaign_id", signal.campaignId)
+      .eq("user_ref_hash", signal.userRefHash)
+      .single();
+
+    if (existing.error) {
+      throw new Error(`Could not replay MPGF support signal: ${summarizeDbError(existing.error)}`);
+    }
+
+    return {
+      status: "already_recorded" as const,
+      id: String(existing.data.id),
+      createdAt: String(existing.data.created_at),
+    };
+  }
+
+  if (isMissingRelationError(inserted.error)) {
+    throw new Error(
+      `MPGF support-signal table is unavailable: ${summarizeDbError(inserted.error)}. Apply 20260601_mpgf_cg_vqaf_core.sql.`,
+    );
+  }
+
+  throw new Error(`Could not persist MPGF support signal: ${summarizeDbError(inserted.error)}`);
+}
+
+async function persistDissentNote(input: {
+  profileId: string;
+  record: Record<string, unknown>;
+  signal: MpgfPublicGoodsSupportSignal;
+}) {
+  if (input.signal.signalType !== "dissent_review_requested") {
+    return {
+      status: "not_applicable" as const,
+    };
+  }
+
+  if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+    return {
+      status: "not_configured" as const,
+      message: "Supabase service-role persistence is required before an MPGF dissent note can be opened.",
+    };
+  }
+
+  const row: MpgfDissentNoteInsert = {
+    id: `mpgf-dissent-note-${input.signal.calcHash.slice(7, 19)}`,
+    campaign_id: input.signal.campaignId,
+    filed_by_profile_id: input.profileId,
+    filer_ref_hash: input.signal.userRefHash,
+    reason_code: dissentReasonCodeField(input.record),
+    public_summary: publicSummaryField(input.record, input.signal.campaignId),
+    status: "opened",
+    pauses_unreleased_milestones: true,
+    created_at: input.signal.createdAt,
+  };
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const write = await supabase
+    .from("mpgf_dissent_notes")
+    .upsert(row, { onConflict: "id" })
+    .select("id, created_at")
+    .single();
+
+  if (write.error) {
+    throw new Error(`Could not persist MPGF dissent note: ${summarizeDbError(write.error)}`);
+  }
+
+  return {
+    status: "opened" as const,
+    id: String(write.data.id),
+    createdAt: String(write.data.created_at),
+    reasonCode: row.reason_code,
+  };
+}
+
+async function recordSupportSignalAnalytics(signal: MpgfPublicGoodsSupportSignal, userId: string) {
+  try {
+    const result = await recordMpgfPublicGoodsAnalyticsEvent({
+      eventType: "support_signal_recorded",
+      userId,
+      campaignId: signal.campaignId,
+      eventJson: {
+        surface: "mpgf_participant_action",
+        supportSignalMode: signal.countsForCommonGround ? "common_ground_support" : "dissent_review_requested",
+        supportSignalState: "signal_only",
+        privateByDefault: true,
+        publicAggregationOnly: true,
+      },
+    });
+
+    return {
+      status: result.status,
+      warning: result.warning,
+    };
+  } catch (error) {
+    return {
+      status: "not_configured" as const,
+      warning: error instanceof Error ? error.message : "Could not record privacy-safe support-signal analytics.",
+    };
+  }
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ roundId: string }> }) {
+  const { roundId } = await params;
+  const roundState = await loadSupportSignalRoundState(roundId);
+
+  if (!roundState) {
+    return NextResponse.json(
+      { ok: false, error: "MPGF support-signal contract not found." },
+      { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      ...roundState.contract,
+      roundSource: roundState.source,
+      loadedCampaignCount: roundState.campaigns?.length ?? null,
+      warnings: roundState.warnings,
+    },
+    { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+  );
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ roundId: string }> }) {
+  const viewer = await getViewer();
+
+  if (!viewer) {
+    return NextResponse.json({ ok: false, error: "Sign in to record an MPGF support signal." }, { status: 401 });
+  }
+
+  try {
+    const { roundId } = await params;
+    const roundState = await loadSupportSignalRoundState(roundId);
+
+    if (!roundState) {
+      return NextResponse.json(
+        { ok: false, error: "MPGF support-signal contract not found." },
+        { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
+    const payload = await request.json();
+
+    if (!payload || typeof payload !== "object") {
+      throw new Error("MPGF support signals expect a JSON object.");
+    }
+
+    const record = payload as Record<string, unknown>;
+    const signalType = stringField(record, "signalType");
+    const moralCluster = stringField(record, "moralCluster");
+
+    if (!isMpgfPublicGoodsSupportSignalType(signalType)) {
+      throw new Error("MPGF support signal type is not supported.");
+    }
+
+    if (!isMpgfPublicGoodsMoralCluster(moralCluster)) {
+      throw new Error("MPGF support signal moral cluster is not supported.");
+    }
+
+    const supportSignal = createMpgfPublicGoodsSupportSignal({
+      ...(roundState.round ? { round: roundState.round } : {}),
+      ...(roundState.campaigns ? { campaigns: roundState.campaigns } : {}),
+      campaignId: stringField(record, "campaignId"),
+      userRef: viewer.authUser.id,
+      moralCluster,
+      signalType,
+      strengthBps: strengthBpsField(record, signalType),
+      createdAt: new Date().toISOString(),
+    });
+    const persistence = await persistSupportSignal(supportSignal, viewer.authUser.id);
+    const dissentNote = await persistDissentNote({
+      profileId: viewer.authUser.id,
+      record,
+      signal: supportSignal,
+    });
+    const analytics = await recordSupportSignalAnalytics(supportSignal, viewer.authUser.id);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        supportSignal,
+        persistence,
+        dissentNote,
+        analytics,
+        currentState: "signal_only",
+        nextStates: roundState.contract.collectiveActionStates,
+        privacyPolicy: roundState.contract.privacyPolicy,
+        privateByDefault: true,
+        publicAggregationOnly: true,
+        rawSupportReasonsExcluded: true,
+        noGlobalMoralRanking: true,
+        cgVqafReportPath: roundState.contract.cgVqafReportPath,
+        roundSource: roundState.source,
+        pledgeIntentPath: `/api/mpgf/rounds/${roundId}/pledge-intents`,
+      },
+      { status: 202, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Could not record MPGF support signal." },
+      { status: 400, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+    );
+  }
+}

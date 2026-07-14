@@ -4,8 +4,12 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import {
+  MarketplaceBottomNav,
+  MarketplaceRouteShell,
+} from "@/components/marketplace/marketplace-components";
 import { getFormMessage } from "@/lib/form-state";
-import { listCartItems, requireViewer } from "@/lib/app-data";
+import { getViewer, listCartItems } from "@/lib/app-data";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -25,49 +29,19 @@ interface SavedOffersPageProps {
 export default async function SavedOffersPage({ searchParams }: SavedOffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const viewer = hasSupabaseEnv() ? await requireViewer("/saved-offers") : null;
+  const viewer = hasSupabaseEnv() ? await getViewer() : null;
   const cartItems = viewer ? await listCartItems(viewer.authUser.id) : [];
 
   return (
-    <div className="page-shell">
-      <header className="hero">
+    <div className="page-shell marketplace-app-shell">
+      <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Saved offers</p>
-            <h1>Offers you are actively tracking.</h1>
-            <p className="hero-text">
-              Saving an offer keeps a candidate trade in view without signaling public endorsement.
-              If an owner reduces the cost or commitment, the updated discount note appears here.
-            </p>
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">What belongs here</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Offers under consideration</strong>
-                  <p>Save public commitments you may want to evaluate more carefully.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Visible discounts</strong>
-                  <p>Offer owners can publish reduced burdens or costs, and those updates appear here.</p>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -81,41 +55,29 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
           </div>
         ) : null}
 
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Tracked offers</p>
-            <h2>Your saved offers</h2>
-            <p>
-              These entries are private to you. Each one links back to the live offer dossier and
-              carries any current discount note from the owner.
-            </p>
-          </div>
+        <MarketplaceRouteShell active="plan">
+          <section className="v72-private-surface mt-v75-route-card" aria-labelledby="plan-heading">
+            <div className="v72-owner-strip">
+              <h1 id="plan-heading">Planner</h1>
+              <p>Plan — private selected items. No commitment created.</p>
+            </div>
 
-          <div className="cart-grid">
-            {cartItems.length ? (
-              cartItems.map((item) =>
-                item.offer ? (
-                  <article key={item.offer.id} className="panel cart-card">
+            <div className="cart-grid">
+              {cartItems.length ? (
+                cartItems.map((item) =>
+                  item.offer ? (
+                    <article key={item.offer.id} className="panel cart-card">
                     <div className="profile-card-head">
                       <div>
-                        <p className="detail-kicker">{formatMode(item.offer.mode)}</p>
+                        <p className="detail-kicker">Planner · {formatMode(item.offer.mode)}</p>
                         <h3>{item.offer.offered_cause} for {item.offer.requested_cause}</h3>
                       </div>
-                      <span className="badge">{item.offer.ownerProfile?.resolvedName ?? item.offer.owner_alias}</span>
+                      <span className="badge">Preview</span>
                     </div>
 
-                    <p className="route-text">{item.offer.offer_action}</p>
-                    <p className="route-text">Requests in return: {item.offer.request_action}</p>
-
-                    <div className="tag-row">
-                      <span className="impact-pill">{item.offer.commentCount} comments</span>
-                      <span className="impact-pill">{item.offer.recommendationCount} recommendations</span>
-                    </div>
-
-                    <div className="discount-banner">
-                      <strong>Current discount</strong>
-                      <p>{item.offer.discount_note || "No discount or reduced burden is currently listed."}</p>
-                    </div>
+                    <p className="route-text">
+                      Preview only · Private planning only · No commitment created.
+                    </p>
 
                     <div className="offer-footer">
                       <div className="tag-row">
@@ -128,7 +90,7 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
                       </div>
                       <div className="offer-actions">
                         <Link className="text-button" href={`/offers/${item.offer.id}`}>
-                          View offer
+                          View details
                         </Link>
                         <form action={toggleCartAction}>
                           <input name="offer_id" type="hidden" value={item.offer.id} />
@@ -139,21 +101,30 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
                         </form>
                       </div>
                     </div>
-                  </article>
-                ) : null,
-              )
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>You have no saved offers yet.</strong>
-                  <p>Save offers from the public directory when you want to track them closely.</p>
+                    </article>
+                  ) : null,
+                )
+              ) : (
+                <div className="empty-state">
+                  <div>
+                    <strong>{viewer ? "You have no saved offers yet." : "Sign in to view your planner."}</strong>
+                    <p>
+                      {viewer
+                        ? "Browse examples, templates, and pledge-funding previews. Nothing here creates a commitment. Pledge-funding contribution rows are not connected yet."
+                        : "Saved offers are private. This preview shell does not create demo planner rows, commitments, or pledge-funding contribution state."}
+                    </p>
+                    <Link className="button button-primary" href={viewer ? "/offers" : "/login?returnTo=/saved-offers"}>
+                      {viewer ? "Browse offers" : "Sign in to continue"}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        </MarketplaceRouteShell>
       </main>
 
+      <MarketplaceBottomNav active="plan" />
       <SiteFooter />
     </div>
   );

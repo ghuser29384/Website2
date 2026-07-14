@@ -1,13 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/supabase/database.types";
-import { getSiteUrl, getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/config";
+import { getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const SITE_NAME = "Moral Trade";
 export const SITE_DESCRIPTION =
-  "A pilot for small, voluntary, evidence-reviewed commitments across moral disagreement with explicit baselines and no custody or escrow.";
-export const SITE_URL = getSiteUrl().replace(/\/$/, "");
+  "A coordination platform for voluntary, evidence-reviewed commitments across moral disagreement, with explicit baselines and consent-gated disclosure.";
+export const SITE_URL = "https://www.moraltrade.org";
 export const SITE_LOCALE = "en_US";
+export const SITE_IMAGE_PATH = "/brand/moral-trade-mark.png";
 
 export function getAbsoluteUrl(path = "/") {
   return new URL(path, `${SITE_URL}/`).toString();
@@ -69,6 +70,55 @@ export function buildFaqPageJsonLd({
         text: item.answer,
       },
     })),
+  };
+}
+
+export function buildWebPageJsonLd({
+  description,
+  name,
+  path,
+}: {
+  description: string;
+  name: string;
+  path: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name,
+    url: getAbsoluteUrl(path),
+    description,
+    isPartOf: {
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+  };
+}
+
+export function buildArticleJsonLd({
+  description,
+  headline,
+  path,
+}: {
+  description: string;
+  headline: string;
+  path: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline,
+    name: headline,
+    url: getAbsoluteUrl(path),
+    mainEntityOfPage: getAbsoluteUrl(path),
+    description,
+    publisher: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: getAbsoluteUrl(SITE_IMAGE_PATH),
+    },
   };
 }
 

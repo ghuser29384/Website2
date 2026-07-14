@@ -1,27 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import localFont from "next/font/local";
 
 import { FunnelTracker } from "@/components/analytics/funnel-tracker";
-import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
+import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
-
-const larken = localFont({
-  src: "../../Larken Serif/Larken-Medium.otf",
-  variable: "--font-heading-loaded",
-  weight: "500",
-  style: "normal",
-  display: "swap",
-});
-
-const metropolis = localFont({
-  src: "../../metropolis.regular.otf",
-  variable: "--font-body-loaded",
-  weight: "400",
-  style: "normal",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -52,11 +35,20 @@ export const metadata: Metadata = {
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
     locale: "en_US",
+    images: [
+      {
+        url: getAbsoluteUrl(SITE_IMAGE_PATH),
+        width: 512,
+        height: 512,
+        alt: "Moral Trade",
+      },
+    ],
   },
   twitter: {
     card: "summary",
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
+    images: [getAbsoluteUrl(SITE_IMAGE_PATH)],
   },
   appleWebApp: {
     capable: true,
@@ -64,9 +56,9 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/O%20(8).png",
-    shortcut: "/O%20(8).png",
-    apple: "/O%20(8).png",
+    icon: SITE_IMAGE_PATH,
+    shortcut: SITE_IMAGE_PATH,
+    apple: SITE_IMAGE_PATH,
   },
 };
 
@@ -89,12 +81,12 @@ const organizationStructuredData = {
   "@type": "Organization",
   name: SITE_NAME,
   url: SITE_URL,
-  logo: getAbsoluteUrl("/O%20(8).png"),
+  logo: getAbsoluteUrl(SITE_IMAGE_PATH),
   description: SITE_DESCRIPTION,
   contactPoint: [
     {
       "@type": "ContactPoint",
-      contactType: "safety and pilot support",
+      contactType: "safety and participant support",
       email: "support@moraltrade.org",
       url: getAbsoluteUrl("/contact"),
     },
@@ -108,7 +100,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${larken.variable} ${metropolis.variable}`}>
+      <body>
         <script
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(websiteStructuredData),

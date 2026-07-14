@@ -3,11 +3,18 @@ import { createHash } from "node:crypto";
 import type Stripe from "stripe";
 
 import { getViewer } from "@/lib/app-data";
+import type { Database } from "@/lib/supabase/database.types";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
 
 import { demoCycle } from "./data";
+import { normalizeMpgfManualEvidenceSecurity } from "./public-goods-evidence-security";
+import {
+  isMpgfStripeSavedCommitmentEvent,
+  type MpgfStripeSavedCommitmentWebhookEvent,
+  recordMpgfStripeSavedCommitmentWebhook,
+} from "./public-goods-stripe-commitments";
 import type {
   MpgfManualEvidenceActionResult,
   MpgfManualEvidenceProvider,
@@ -20,6 +27,12 @@ import type {
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
 };
+type MpgfPublicGoodsPaymentProofInsert =
+  Database["public"]["Tables"]["mpgf_public_goods_payment_proofs"]["Insert"];
+type MpgfPaymentMethodTokenInsert = Database["public"]["Tables"]["mpgf_payment_method_tokens"]["Insert"];
+type MpgfPaymentEventInsert = Database["public"]["Tables"]["mpgf_payment_events"]["Insert"];
+type MpgfStripeSavedCommitmentEventInsert =
+  Database["public"]["Tables"]["mpgf_stripe_saved_commitment_events"]["Insert"];
 
 type GateStatus = MpgfRealMoneyReadiness["requiredGates"][number]["status"];
 
@@ -52,24 +65,18 @@ function optionalTrimmed(value: string | null | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
-function parseEvidenceUrl(value: string | null | undefined) {
+function checkoutMetadataText(value: string | null | undefined) {
   const trimmed = optionalTrimmed(value);
 
   if (!trimmed) {
-    return null;
+    return "";
   }
 
-  try {
-    const parsed = new URL(trimmed);
+  return trimmed.replace(/[^a-zA-Z0-9:._-]/g, "").slice(0, 100);
+}
 
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new Error("Evidence URL must use http or https.");
-    }
-
-    return parsed.toString();
-  } catch {
-    throw new Error("Evidence URL must be a valid URL.");
-  }
+function checkoutMetadataCents(value: number | null | undefined) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? String(value) : "";
 }
 
 function normalizeManualEvidenceProvider(value: string): MpgfManualEvidenceProvider {
@@ -213,6 +220,11 @@ export async function createMpgfRealMoneyCheckout(input: {
   email?: string | null;
   amountDollars: number;
   cadence: "one_time" | "monthly";
+  publicGoodsCampaignId?: string | null;
+  publicGoodsRoundId?: string | null;
+  publicGoodsSponsorPoolContribution?: boolean;
+  publicGoodsCountForMatching?: boolean;
+  publicGoodsPerDonorCapCents?: number;
 }): Promise<MpgfRealMoneyCheckoutResult> {
   const readiness = await loadMpgfRealMoneyReadiness();
 
@@ -282,6 +294,11 @@ export async function createMpgfRealMoneyCheckout(input: {
     mpgf_user_id: input.userId,
     mpgf_cadence: cadence,
     mpgf_mode: mode,
+    mpgf_public_goods_round_id: checkoutMetadataText(input.publicGoodsRoundId),
+    mpgf_public_goods_campaign_id: checkoutMetadataText(input.publicGoodsCampaignId),
+    mpgf_public_goods_count_for_matching: input.publicGoodsCountForMatching === false ? "false" : "true",
+    mpgf_public_goods_per_donor_cap_cents: checkoutMetadataCents(input.publicGoodsPerDonorCapCents),
+    mpgf_public_goods_sponsor_pool: input.publicGoodsSponsorPoolContribution ? "true" : "false",
   };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: cadence === "monthly" ? "subscription" : "payment",
@@ -352,6 +369,156 @@ function stripeObjectId(value: unknown) {
   }
 
   return null;
+}
+
+export function canRecordMpgfSponsorPoolInvoice(commitment: { status?: string | null }) {
+  return commitment.status === "active";
+}
+
+export function buildMpgfSubscriptionCancellationUpdate(subscription: {
+  id?: unknown;
+  status?: unknown;
+  canceled_at?: unknown;
+  ended_at?: unknown;
+}) {
+  const providerSubscriptionId = stripeObjectId(subscription.id);
+  const cancelledAtSeconds =
+    typeof subscription.canceled_at === "number"
+      ? subscription.canceled_at
+      : typeof subscription.ended_at === "number"
+        ? subscription.ended_at
+        : null;
+
+  if (!providerSubscriptionId || subscription.status !== "canceled") {
+    return null;
+  }
+
+  return {
+    providerSubscriptionId,
+    update: {
+      status: "cancelled" as const,
+      cancelled_at: new Date((cancelledAtSeconds ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+      next_scheduled_at: null,
+    },
+  };
+}
+
+type MpgfPublicGoodsRefundRoundStatus =
+  | "draft"
+  | "scheduled"
+  | "open"
+  | "allocation_pending"
+  | "published"
+  | "closed"
+  | "emergency_suspended";
+
+type MpgfPublicGoodsRefundReconciliationPlan =
+  | {
+      action: "back_out_counted_contribution_before_round_close";
+      roundId: string;
+      campaignId: string;
+      sourceEventRef: string;
+      pledgeUpdate: {
+        status: "voided" | "pledged";
+        eligibilityState: "blocked" | "pending_review";
+      };
+      paymentProofRow: MpgfPublicGoodsPaymentProofInsert;
+    }
+  | {
+      action: "create_post_close_reconciliation_task";
+      roundId: string;
+      campaignId: string;
+      sourceEventRef: string;
+      reviewCaseRow: Record<string, unknown>;
+    };
+
+function readRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function metadataText(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function isPreCloseRoundStatus(status: MpgfPublicGoodsRefundRoundStatus) {
+  return status === "draft" || status === "scheduled" || status === "open";
+}
+
+export function buildMpgfPublicGoodsRefundReconciliationPlan(input: {
+  paymentIntentId: string;
+  metadata?: Record<string, unknown> | null;
+  roundStatus?: MpgfPublicGoodsRefundRoundStatus | string | null;
+  fullyRefunded: boolean;
+  amountRefundedCents: number;
+  providerRefundId?: string | null;
+  providerChargeId?: string | null;
+  refundedAt: string;
+}): MpgfPublicGoodsRefundReconciliationPlan | null {
+  const metadata = input.metadata ?? null;
+  const roundId = metadataText(metadata, "mpgf_public_goods_round_id");
+  const campaignId = metadataText(metadata, "mpgf_public_goods_campaign_id");
+
+  if (!roundId || !campaignId) {
+    return null;
+  }
+
+  const roundStatus =
+    input.roundStatus === "draft" ||
+    input.roundStatus === "scheduled" ||
+    input.roundStatus === "open" ||
+    input.roundStatus === "allocation_pending" ||
+    input.roundStatus === "published" ||
+    input.roundStatus === "closed" ||
+    input.roundStatus === "emergency_suspended"
+      ? input.roundStatus
+      : "open";
+  const sourceEventRef = `stripe_refund:${input.providerRefundId ?? input.providerChargeId ?? input.paymentIntentId}`;
+  const refundSummary = input.fullyRefunded ? "Full refund" : "Partial refund";
+
+  if (isPreCloseRoundStatus(roundStatus)) {
+    return {
+      action: "back_out_counted_contribution_before_round_close",
+      roundId,
+      campaignId,
+      sourceEventRef,
+      pledgeUpdate: {
+        status: input.fullyRefunded ? "voided" : "pledged",
+        eligibilityState: input.fullyRefunded ? "blocked" : "pending_review",
+      },
+      paymentProofRow: {
+        pledge_id: null,
+        campaign_id: campaignId,
+        amount_verified_cents: 0,
+        status: "superseded",
+        reason_code: "external_handoff_failed",
+        reconciliation_source: "fiscal_host_webhook",
+        source_event_ref: sourceEventRef,
+        created_at: input.refundedAt,
+      },
+    };
+  }
+
+  return {
+    action: "create_post_close_reconciliation_task",
+    roundId,
+    campaignId,
+    sourceEventRef,
+    reviewCaseRow: {
+      campaign_id: campaignId,
+      state: "needs_evidence",
+      action: "needs_evidence",
+      reason_code: "external_handoff_failed",
+      reviewer_id: null,
+      opened_at: input.refundedAt,
+      closed_at: null,
+      appeal_status: "none",
+      challenge_window_ends_at: null,
+      public_notes: `${refundSummary} after round close requires MPGF reconciliation before any milestone release changes.`,
+      allowed_next_actions: ["needs_evidence", "challenge", "finalize"],
+    },
+  };
 }
 
 export async function createMpgfBillingPortal(input: { userId: string }): Promise<MpgfRealMoneyCheckoutResult> {
@@ -436,7 +603,6 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
   const amountCents = toCents(input.amountDollars, "External payment evidence amount");
   const externalPaymentReference = optionalTrimmed(input.externalPaymentReference);
   const evidenceDescription = optionalTrimmed(input.evidenceDescription);
-  const evidenceUrl = parseEvidenceUrl(input.evidenceUrl);
   const paidAt = optionalTrimmed(input.paidAt);
 
   if (!externalPaymentReference) {
@@ -454,6 +620,13 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
       readiness,
     };
   }
+
+  const securedEvidence = normalizeMpgfManualEvidenceSecurity({
+    evidenceDescription,
+    evidenceUrl: input.evidenceUrl,
+    externalPaymentReference,
+    siteUrl: getSiteUrl(),
+  });
 
   let supabase: SupabaseServiceAny;
 
@@ -476,8 +649,12 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
       currency: "usd",
       provider: input.provider,
       external_payment_reference: externalPaymentReference,
-      evidence_url: evidenceUrl,
+      evidence_url: securedEvidence.signedEvidenceUrl,
       evidence_description: evidenceDescription,
+      evidence_access_scope: securedEvidence.accessScope,
+      evidence_signed_url_expires_at: securedEvidence.signedUrlExpiresAt,
+      evidence_malware_scan_status: securedEvidence.malwareScanStatus,
+      evidence_normalized_json: securedEvidence.normalizedEvidenceJson,
       paid_at: paidAt || null,
       status: "submitted",
     })
@@ -731,11 +908,11 @@ async function recordMpgfSubscriptionInvoice(invoice: Stripe.Invoice) {
   const supabase = createServiceClient() as SupabaseServiceAny;
   const { data: commitment } = await supabase
     .from("mpgf_recurring_contribution_commitments")
-    .select("id, user_id, amount_cents, mode, provider_customer_id")
+    .select("id, user_id, amount_cents, mode, status, provider_customer_id")
     .eq("provider_subscription_id", subscriptionId)
     .maybeSingle();
 
-  if (!commitment) {
+  if (!commitment || !canRecordMpgfSponsorPoolInvoice(commitment)) {
     return false;
   }
 
@@ -786,6 +963,105 @@ async function recordMpgfSubscriptionInvoice(invoice: Stripe.Invoice) {
   return true;
 }
 
+async function recordMpgfSubscriptionCancellation(subscription: Stripe.Subscription) {
+  const cancellation = buildMpgfSubscriptionCancellationUpdate(subscription as unknown as Record<string, unknown>);
+
+  if (!cancellation) {
+    return false;
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const { data, error } = await supabase
+    .from("mpgf_recurring_contribution_commitments")
+    .update(cancellation.update)
+    .eq("provider_subscription_id", cancellation.providerSubscriptionId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return Boolean(data);
+}
+
+async function loadMpgfPublicGoodsRoundStatus(supabase: SupabaseServiceAny, roundId: string) {
+  const result = await supabase
+    .from("mpgf_public_goods_rounds")
+    .select("status")
+    .eq("id", roundId)
+    .maybeSingle();
+
+  if (result.error) {
+    throw new Error(`Could not load MPGF public-goods round for refund reconciliation: ${result.error.message}`);
+  }
+
+  const status = (result.data as Record<string, unknown> | null)?.status;
+
+  return typeof status === "string" ? status : "open";
+}
+
+async function reconcileMpgfPublicGoodsRefund(input: {
+  supabase: SupabaseServiceAny;
+  paymentIntentId: string;
+  metadata: Record<string, unknown> | null;
+  fullyRefunded: boolean;
+  amountRefundedCents: number;
+  providerRefundId?: string | null;
+  providerChargeId?: string | null;
+  refundedAt: string;
+}) {
+  const roundId = metadataText(input.metadata, "mpgf_public_goods_round_id");
+  const roundStatus = roundId ? await loadMpgfPublicGoodsRoundStatus(input.supabase, roundId) : null;
+  const plan = buildMpgfPublicGoodsRefundReconciliationPlan({
+    paymentIntentId: input.paymentIntentId,
+    metadata: input.metadata,
+    roundStatus,
+    fullyRefunded: input.fullyRefunded,
+    amountRefundedCents: input.amountRefundedCents,
+    providerRefundId: input.providerRefundId,
+    providerChargeId: input.providerChargeId,
+    refundedAt: input.refundedAt,
+  });
+
+  if (!plan) {
+    return false;
+  }
+
+  if (plan.action === "back_out_counted_contribution_before_round_close") {
+    const pledgeUpdate = await input.supabase
+      .from("mpgf_public_goods_pledges")
+      .update({
+        status: plan.pledgeUpdate.status,
+        eligibility_state: plan.pledgeUpdate.eligibilityState,
+      })
+      .eq("payment_intent_ref", input.paymentIntentId)
+      .eq("campaign_id", plan.campaignId);
+
+    if (pledgeUpdate.error) {
+      throw new Error(`Could not back out MPGF public-goods pledge after refund: ${pledgeUpdate.error.message}`);
+    }
+
+    const proofUpsert = await input.supabase
+      .from("mpgf_public_goods_payment_proofs")
+      .upsert(plan.paymentProofRow, { onConflict: "reconciliation_source,source_event_ref" });
+
+    if (proofUpsert.error) {
+      throw new Error(`Could not record MPGF public-goods refund proof: ${proofUpsert.error.message}`);
+    }
+
+    return true;
+  }
+
+  const reviewCaseInsert = await input.supabase.from("mpgf_public_goods_review_cases").insert(plan.reviewCaseRow);
+
+  if (reviewCaseInsert.error) {
+    throw new Error(`Could not create MPGF public-goods post-close refund reconciliation task: ${reviewCaseInsert.error.message}`);
+  }
+
+  return true;
+}
+
 async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
   const stripePaymentIntentId = stripeObjectId(charge.payment_intent);
 
@@ -796,7 +1072,7 @@ async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
   const supabase = createServiceClient() as SupabaseServiceAny;
   const { data: paymentIntent } = await supabase
     .from("mpgf_payment_intents")
-    .select("id, amount_cents")
+    .select("id, amount_cents, metadata_json")
     .eq("stripe_payment_intent_id", stripePaymentIntentId)
     .maybeSingle();
 
@@ -804,7 +1080,12 @@ async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
     return false;
   }
 
-  const fullyRefunded = Number(charge.amount_refunded ?? 0) >= Number(paymentIntent.amount_cents ?? 0);
+  const amountRefundedCents = Number(charge.amount_refunded ?? 0);
+  const fullyRefunded = amountRefundedCents >= Number(paymentIntent.amount_cents ?? 0);
+  const latestRefund = charge.refunds?.data?.[0];
+  const refundedAt = new Date(
+    ((latestRefund?.created ?? Math.floor(Date.now() / 1000)) as number) * 1000,
+  ).toISOString();
 
   await supabase
     .from("mpgf_contributions")
@@ -815,8 +1096,7 @@ async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
     })
     .eq("payment_intent_id", paymentIntent.id);
 
-  if (charge.refunds?.data?.length) {
-    const latestRefund = charge.refunds.data[0];
+  if (latestRefund) {
     await supabase.from("mpgf_refunds").upsert(
       {
         payment_intent_id: paymentIntent.id,
@@ -824,12 +1104,35 @@ async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
         currency: latestRefund.currency,
         status: latestRefund.status === "succeeded" ? "succeeded" : "submitted_to_provider",
         provider_refund_id: latestRefund.id,
-        provider_submitted_at: new Date((latestRefund.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+        provider_submitted_at: refundedAt,
         processed_at: latestRefund.status === "succeeded" ? new Date().toISOString() : null,
-        evidence_json: { stripeChargeId: charge.id },
+        evidence_json: {
+          stripeChargeId: charge.id,
+          publicGoodsReconciliation:
+            await reconcileMpgfPublicGoodsRefund({
+              supabase,
+              paymentIntentId: String(paymentIntent.id),
+              metadata: readRecord((paymentIntent as Record<string, unknown>).metadata_json),
+              fullyRefunded,
+              amountRefundedCents,
+              providerRefundId: latestRefund.id,
+              providerChargeId: charge.id,
+              refundedAt,
+            }),
+        },
       },
       { onConflict: "provider_refund_id" },
     );
+  } else {
+    await reconcileMpgfPublicGoodsRefund({
+      supabase,
+      paymentIntentId: String(paymentIntent.id),
+      metadata: readRecord((paymentIntent as Record<string, unknown>).metadata_json),
+      fullyRefunded,
+      amountRefundedCents,
+      providerChargeId: charge.id,
+      refundedAt,
+    });
   }
 
   return true;
@@ -837,6 +1140,110 @@ async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
 
 export function hashStripeWebhookBody(rawBody: string) {
   return createHash("sha256").update(rawBody).digest("hex");
+}
+
+function toStripeSavedCommitmentEventRow(
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+): MpgfStripeSavedCommitmentEventInsert {
+  return {
+    id: event.id,
+    saved_commitment_id: null,
+    conditional_pledge_id: event.conditionalPledgeId ?? null,
+    pledge_intent_id: event.pledgeIntentId ?? null,
+    provider_event_id_hash: event.providerEventIdHash,
+    provider_object_id_hash: event.providerObjectIdHash ?? null,
+    provider_customer_id_hash: event.providerCustomerIdHash ?? null,
+    provider_payment_method_id_hash: event.providerPaymentMethodIdHash ?? null,
+    event_type: event.eventType,
+    event_state: event.eventState,
+    status: event.status,
+    signature_verified: event.signatureVerified,
+    structure_verified: event.structureVerified,
+    payload_hash: event.payloadHash,
+    append_only_hash: event.appendOnlyHash,
+    review_required_before_counting: true,
+    final_payout_authorized: false,
+    received_at: event.receivedAt,
+  };
+}
+
+function toPaymentMethodTokenRow(
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+): MpgfPaymentMethodTokenInsert | null {
+  if (!event.paymentMethodToken || !event.stateChangeAllowed) {
+    return null;
+  }
+
+  return {
+    id: event.paymentMethodToken.id,
+    profile_id: null,
+    provider: "stripe",
+    provider_customer_id_hash: event.paymentMethodToken.providerCustomerIdHash,
+    provider_payment_method_id_hash: event.paymentMethodToken.providerPaymentMethodIdHash,
+    setup_status: event.paymentMethodToken.setupStatus,
+    future_use_consent_at: event.receivedAt,
+    raw_card_data_stored: false,
+    updated_at: event.receivedAt,
+  };
+}
+
+function toStripePaymentEventRow(event: MpgfStripeSavedCommitmentWebhookEvent): MpgfPaymentEventInsert | null {
+  if (!event.stateChangeAllowed) {
+    return null;
+  }
+
+  return {
+    id: `mpgf-stripe-payment-event-${event.providerEventIdHash.slice(7, 19)}`,
+    conditional_pledge_id: event.conditionalPledgeId ?? null,
+    provider: "stripe",
+    provider_event_id_hash: event.providerEventIdHash,
+    provider_status: event.eventState,
+    amount_cents: event.amountCents ?? 0,
+    signature_verified: event.signatureVerified,
+    payload_hash: event.payloadHash,
+    verified_at: event.status === "recorded" ? event.receivedAt : null,
+    final_payout_authorized: false,
+    append_only_hash: event.appendOnlyHash,
+    created_at: event.receivedAt,
+  };
+}
+
+async function persistMpgfStripeSavedCommitmentWebhookEvent(
+  supabase: SupabaseServiceAny,
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+) {
+  const eventRow = toStripeSavedCommitmentEventRow(event);
+  const eventWrite = await supabase
+    .from("mpgf_stripe_saved_commitment_events")
+    .upsert(eventRow, { onConflict: "provider_event_id_hash" });
+
+  if (eventWrite.error) {
+    throw new Error(eventWrite.error.message);
+  }
+
+  const tokenRow = toPaymentMethodTokenRow(event);
+
+  if (tokenRow) {
+    const tokenWrite = await supabase
+      .from("mpgf_payment_method_tokens")
+      .upsert(tokenRow, { onConflict: "id" });
+
+    if (tokenWrite.error) {
+      throw new Error(tokenWrite.error.message);
+    }
+  }
+
+  const paymentEventRow = toStripePaymentEventRow(event);
+
+  if (paymentEventRow) {
+    const paymentEventWrite = await supabase
+      .from("mpgf_payment_events")
+      .upsert(paymentEventRow, { onConflict: "provider_event_id_hash" });
+
+    if (paymentEventWrite.error) {
+      throw new Error(paymentEventWrite.error.message);
+    }
+  }
 }
 
 export async function handleMpgfStripeWebhookEvent(input: {
@@ -869,6 +1276,14 @@ export async function handleMpgfStripeWebhookEvent(input: {
   }
 
   if (eventRecord.data.processed) {
+    await supabase
+      .from("mpgf_payment_webhook_events")
+      .update({
+        replay_attempt_count: 1,
+        last_replayed_at: new Date().toISOString(),
+      })
+      .eq("id", eventRecord.data.id);
+
     return { handled: true, status: "already_processed" as const };
   }
 
@@ -886,8 +1301,24 @@ export async function handleMpgfStripeWebhookEvent(input: {
       handled = await recordMpgfCheckoutSession(input.event.data.object as Stripe.Checkout.Session, "cancelled");
     } else if (input.event.type === "invoice.paid") {
       handled = await recordMpgfSubscriptionInvoice(input.event.data.object as Stripe.Invoice);
+    } else if (
+      input.event.type === "customer.subscription.deleted" ||
+      input.event.type === "customer.subscription.updated"
+    ) {
+      handled = await recordMpgfSubscriptionCancellation(input.event.data.object as Stripe.Subscription);
     } else if (input.event.type === "charge.refunded") {
       handled = await recordMpgfRefundFromCharge(input.event.data.object as Stripe.Charge);
+    } else if (
+      isMpgfStripeSavedCommitmentEvent(
+        input.event.type,
+        readRecord((input.event.data.object as unknown as Record<string, unknown> | undefined)?.metadata) ?? {},
+      )
+    ) {
+      const savedCommitmentEvent = recordMpgfStripeSavedCommitmentWebhook(input.event as unknown as Record<string, unknown>, {
+        signatureVerified: input.signatureVerified,
+      });
+      await persistMpgfStripeSavedCommitmentWebhookEvent(supabase, savedCommitmentEvent);
+      handled = true;
     }
 
     await supabase

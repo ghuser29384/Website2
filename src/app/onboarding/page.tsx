@@ -58,17 +58,17 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
-            Supabase is not configured yet. Add environment variables before saving onboarding.
+            Account storage is unavailable. Contact support before continuing.
           </div>
         ) : null}
 
         <section className="cohort-hero onboarding-hero" aria-labelledby="onboarding-heading">
           <div className="cohort-hero-copy">
-            <p className="eyebrow">Founding cohort onboarding</p>
+            <p className="eyebrow">Network onboarding</p>
             <h1 id="onboarding-heading">Pick one role, one cause, and one first action.</h1>
             <p className="hero-text">
-              This keeps the founding cohort focused on activation instead of a vague profile.
-              The record is saved so the next page can point you at a concrete action.
+              A useful account starts with a concrete next step rather than a vague profile. Your
+              choices are saved so Moral Trade can route you directly to the action you selected.
             </p>
           </div>
 
@@ -76,8 +76,8 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             <IconMark name="review" />
             <h2>What gets saved</h2>
             <p>
-              Role, cause areas, attribution, and your chosen first action. No public identity or
-              exact wish is published from this step.
+              Role, cause areas, referral context, and your chosen first action. This step does not
+              publish your identity, exact wishes, or contact details.
             </p>
           </aside>
         </section>
@@ -88,10 +88,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               <article className="panel auth-card">
                 <div className="section-head auth-head">
                   <p className="eyebrow">Activation wizard</p>
-                  <h2 id="onboarding-form-heading">Save your cohort starting point</h2>
+                  <h2 id="onboarding-form-heading">Choose your starting point</h2>
                   <p>
-                    Signed in as <strong>{viewer.displayName}</strong>. Choose the path you are
-                    willing to complete first.
+                    Signed in as <strong>{viewer.displayName}</strong>. Select the action you are
+                    prepared to complete first.
                   </p>
                 </div>
 
@@ -119,7 +119,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   </fieldset>
 
                   <fieldset className="field onboarding-fieldset">
-                    <legend>Role</legend>
+                    <legend>Your role</legend>
                     <div className="onboarding-inline-grid">
                       {PARTICIPANT_KINDS.map((kind, index) => (
                         <label className="onboarding-radio" key={kind.value}>
@@ -165,7 +165,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                           />
                           <span>
                             <strong>{action.label}</strong>
-                            <small>{action.href}</small>
+                            <small>{action.actionLabel}</small>
                           </span>
                         </label>
                       ))}
@@ -173,10 +173,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   </fieldset>
 
                   <label className="field">
-                    <span>Invite target or community</span>
+                    <span>Counterparty, collaborator, or community</span>
                     <input
                       name="invite_target"
-                      placeholder="Optional: one person, list, meetup, or partner group"
+                      placeholder="Optional: one person, team, meetup, or partner group"
                     />
                   </label>
 
@@ -184,7 +184,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                     <span>Referral source</span>
                     <input
                       name="referral_source"
-                      placeholder="Optional: who invited you or where you heard about this"
+                      placeholder="Optional: who invited you or where you heard about Moral Trade"
                     />
                   </label>
 
@@ -198,8 +198,8 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                 <p className="eyebrow">Account required</p>
                 <h2>Create an account to save onboarding.</h2>
                 <p>
-                  The wizard is persisted to your account so attribution, cohort role, and next
-                  action stay connected.
+                  The wizard is persisted to your account so referral context, role, and next action
+                  stay connected.
                 </p>
                 <div className="hero-actions">
                   <Link className="button button-primary" href="/signup?returnTo=/onboarding">
@@ -217,15 +217,15 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               <div className="clean-stack">
                 <div>
                   <h3>It is persisted</h3>
-                  <p>Selections are saved to the cohort onboarding table, not just held in state.</p>
+                  <p>Your selections are stored as an onboarding record, not just held in browser state.</p>
                 </div>
                 <div>
                   <h3>It is attributable</h3>
-                  <p>UTM, referral, and partner context are tied to the account when present.</p>
+                  <p>Referral and partner context remain connected to the account when provided.</p>
                 </div>
                 <div>
                   <h3>It points to action</h3>
-                  <p>The submit button redirects to the selected first-action route.</p>
+                  <p>Submitting routes you directly to the first action you selected.</p>
                 </div>
               </div>
             </article>

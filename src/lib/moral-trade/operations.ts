@@ -1,7 +1,7 @@
 import operationsProfileJson from "../../../config/moral-trade/operations-profile.json";
 
 export const MORAL_TRADE_OPERATIONS_VALIDATOR_VERSION =
-  "moral-trade-operations-validator-v0.1";
+  "moral-trade-operations-validator-v0.2";
 
 type OperationsEntry = {
   key?: string;
@@ -126,10 +126,66 @@ const REQUIRED_RATE_LIMITS = [
   "saved_search_write",
   "copilot_draft_review",
   "match_signal_evaluate",
+  "matching_clearing_execute",
+  "clearing_preview_execute",
+  "release_gate_enforce",
+  "baseline_integrity_enforce",
+  "agreement_amendment_enforce",
+  "production_readiness_enforce",
+  "side_agreement_enforce",
+  "trade_classification_enforce",
+  "template_conformance_enforce",
+  "review_capacity_enforce",
+  "participant_term_sheet_enforce",
+  "participant_confirmation_enforce",
+  "participant_eligibility_enforce",
+  "account_security_enforce",
+  "reviewer_quality_enforce",
+  "protective_assessment_enforce",
+  "user_safety_content_moderation_enforce",
+  "financial_settlement_controls_enforce",
+  "recipient_acceptance_enforce",
+  "ai_preference_elicitation_enforce",
+  "post_clear_audit_enforce",
+  "non_public_goods_subsidy_enforce",
+  "non_public_goods_tier_enforce",
+  "risk_control_matrix_enforce",
+  "preference_integrity_enforce",
+  "commitment_settlement_enforce",
+  "group_buying_enforce",
+  "participant_credibility_enforce",
+  "opportunity_meal_evidence_enforce",
+  "guest_witness_invite_write",
+  "guest_witness_testimony_write",
+  "guest_witness_review_write",
+  "pledge_performance_bond_enforce",
+  "pledge_swap_performance_schedule_enforce",
+  "negative_commitment_scope_enforce",
+  "donor_of_record_tax_enforce",
+  "action_reversibility_enforce",
+  "authority_obligation_enforce",
+  "direct_pair_clearing_enforce",
+  "cause_bucket_taxonomy_enforce",
+  "resource_compatibility_enforce",
+  "net_offset_accounting_enforce",
+  "offer_validity_enforce",
+  "private_exchange_rate_enforce",
+  "noncompensable_blocker_enforce",
+  "batch_clearing_objective_enforce",
+  "sensitive_evidence_attestation_enforce",
+  "pilot_evidence_enforce",
   "challenge_appeal_evaluate",
+  "challenge_appeal_enforce",
   "disclosure_evaluate",
   "review_workflow_evaluate",
   "profile_portability",
+  "background_opportunity_brief_read",
+  "background_opportunity_feedback_write",
+  "background_helper_run_write",
+  "background_wish_interview_write",
+  "background_source_summary_write",
+  "background_intro_packet_write",
+  "background_private_overlap_check",
   "wish_registry_search",
   "analytics_ingest",
 ] as const;
@@ -139,6 +195,7 @@ const REQUIRED_PRIVACY_CONTROLS = [
   "private_route_cache_control",
   "data_right_requests",
   "field_level_disclosure_grants",
+  "email_outbox_safety_gate",
   "audit_events",
 ] as const;
 
@@ -157,6 +214,7 @@ const REQUIRED_OBSERVABILITY_METRICS = [
   "route_error_rate",
   "api_latency_p95",
   "web_vitals",
+  "email_outbox_suppression_count",
   "privacy_incident_count",
   "copilot_fallback_rate",
   "evidence_review_sla",
@@ -166,6 +224,7 @@ const REQUIRED_FALLBACK_CONTROLS = [
   "deterministic_manual_fallback",
   "invalid_copilot_output_no_state_change",
   "provider_timeout_no_state_change",
+  "unsafe_email_no_provider_send",
   "replay_safe_state_transitions",
 ] as const;
 
@@ -356,6 +415,7 @@ export function validateMoralTradeOperationsProfile(
       "Operational test hooks",
       profile.operationalTests.includes("security_header_source_smoke") &&
         profile.operationalTests.includes("production_build") &&
+        profile.operationalTests.includes("email_outbox_safety_gate_smoke") &&
         profile.operationalTests.includes("resilience_fallback_audit") &&
         profile.operationalTests.includes("health_route_contract_smoke"),
       profile.operationalTests.join(", "),

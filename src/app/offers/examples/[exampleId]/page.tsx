@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, IconMark } from "@/components/ui/page-primitives";
+import {
+  CommitmentSheet,
+  DealDetailObject,
+  MarketplaceBottomNav,
+  ReviewPlanPanel,
+} from "@/components/marketplace/marketplace-components";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { marketplaceDealFromWorkedOffer } from "@/lib/marketplace-deals";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import {
@@ -72,7 +78,43 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   const viewer = await getViewer();
 
   if (!offer) {
-    notFound();
+    return (
+      <div className="page-shell page-shell-focused marketplace-app-shell">
+        <header className="v72-route-header">
+          <SiteTopbar
+            brandHref="/"
+            links={getPrimaryNavLinks(Boolean(viewer))}
+            {...getTopbarActions(Boolean(viewer))}
+            showSearch={false}
+            showLogout={Boolean(viewer)}
+          />
+        </header>
+
+        <main id="main-content" tabIndex={-1}>
+          <section className="v72-safe-state" aria-labelledby="worked-example-unavailable-heading">
+            <div>
+              <p className="detail-kicker">Direct route safety</p>
+              <h1 id="worked-example-unavailable-heading">Unavailable</h1>
+              <p>
+                This worked example is not available as a backed Moral Trade record.
+              </p>
+              <p className="v72-receipt-fragment">Unavailable · Preview only · No commitment</p>
+              <div className="offer-actions">
+                <Link className="button button-primary" href="/offers">
+                  Browse offers
+                </Link>
+                <Link className="button button-secondary" href="/worked-examples">
+                  View examples
+                </Link>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <MarketplaceBottomNav active="browse" />
+        <SiteFooter />
+      </div>
+    );
   }
 
   const canonicalPath = `/offers/examples/${offer.id}`;
@@ -81,6 +123,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   const createHref = viewer
     ? cloneTarget
     : `/signup?returnTo=${encodeURIComponent(cloneTarget)}`;
+  const marketplaceDeal = marketplaceDealFromWorkedOffer(offer);
   const actionEvidence = getActionEvidenceSummary(offer);
   const baselineConfidence = getBaselineConfidence(offer);
   const baselineEvidence = getBaselineEvidenceSummary(offer);
@@ -126,7 +169,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   };
 
   return (
-    <div className="page-shell page-shell-focused">
+    <div className="page-shell page-shell-focused marketplace-app-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(structuredData),
@@ -139,53 +182,53 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
         }}
         type="application/ld+json"
       />
-      <header className="hero">
+      <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
         <Breadcrumbs
           items={[
-            { href: "/offers?view=examples", label: "Worked examples" },
+            { href: "/worked-examples", label: "Worked examples" },
             { href: canonicalPath, label: title },
           ]}
         />
 
-        <div className="page-hero-content">
-          <section className="hero-copy">
-            <p className="eyebrow">Worked example</p>
-            <h1>{title}</h1>
-            <p className="hero-text">
-              A non-live example showing the term structure, evidence rule, and review state a
-              public Moral Trade listing should expose before anyone relies on it.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href={createHref}>
-                Create similar
-              </Link>
-              <Link className="button button-secondary" href="/offers?view=examples">
-                Back to examples
-              </Link>
-              <Link className="button button-secondary" href="/moral-trade">
-                Read primer
-              </Link>
-            </div>
-          </section>
-
-          <aside className="panel pilot-status-card">
-            <IconMark name={offer.mode === "offset" ? "offset" : offer.mode === "payment" ? "payment" : "swap"} />
-            <span>Status</span>
-            <strong>Worked example; manual review required before reliance</strong>
-            <p>
-              This page is a canonical example record, not live liquidity or a matched agreement.
-            </p>
-          </aside>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="v72-detail-screen" aria-labelledby="worked-example-decision-heading">
+          <div className="v72-top-controls">
+            <Link className="text-button" href="/offers">
+              Back to offers
+            </Link>
+          </div>
+          <div className="marketplace-detail-grid">
+            <DealDetailObject deal={marketplaceDeal} headingId="worked-example-decision-heading" />
+            <div className="marketplace-detail-side">
+              <ReviewPlanPanel deal={marketplaceDeal} />
+            </div>
+          </div>
+          <div className="v72-sticky-footer panel">
+            <span>Example · Preview only · No commitment</span>
+            <CommitmentSheet
+              commitHref={createHref}
+              deal={marketplaceDeal}
+              paymentSupportAvailable={false}
+            />
+          </div>
+          <details className="v72-explain-row">
+            <summary>Requirements & rules</summary>
+            <p>
+              A real listing still needs identity checks, evidence review, challenge windows, and
+              a reviewed agreement room before anyone can rely on it.
+            </p>
+          </details>
+        </section>
+
         <section className="section section-white" aria-labelledby="terms-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Structured terms</p>
@@ -245,6 +288,9 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
+                <p className="review-status-reason">
+                  <strong>Why this status:</strong> {card.statusReason}
+                </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
                     <span key={factorCode}>{factorCode}</span>
@@ -309,6 +355,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
         </section>
       </main>
 
+      <MarketplaceBottomNav active="browse" />
       <SiteFooter />
     </div>
   );

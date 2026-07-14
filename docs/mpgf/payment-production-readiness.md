@@ -1,16 +1,25 @@
 # MPGF Payment Production Readiness
 
-Status: not ready for production real money.
+Status: framework published. Production real money remains blocked until payment and legal gates pass.
 
-The current site supports pledge-only non-real-money MPGF behavior. It must not create live payment-provider objects, charge users, treat pledges as donations, issue payment receipts, or enable real-money ledger effects.
+## Interim Non-Custodial Path
 
-## Required Before Real Money
+- Every.org donate links include round, campaign, and partner donation metadata.
+- Redirect-back pages show pending state only.
+- Every.org partner webhook ingestion is the authority for structured completion data.
+- Webhook imports are deduped by hashed charge or partner donation identifiers and mapped to round, campaign, conditional pledge, and pledge intent where available.
+- Webhook data may auto-create reviewable contribution evidence, but it never authorizes final payout by itself.
 
-1. Approved `real_money_complete` completion profile.
-2. Approved payment-provider live-mode profile.
-3. Approved refund and chargeback workflows.
-4. Approved receipt templates.
-5. Approved privacy and retention policy.
-6. Production smoke tests and health monitor passing at `https://www.moraltrade.org`.
+## Conditional Commitment Path
 
-Conformance rows: AC-PAYMENT-019, AC-COMPLETION-008.
+- Stripe SetupIntent is the default way to save a payment method with future-use consent.
+- PaymentIntent only after threshold, verified supporter, review, challenge-window, and parameter-lock gates pass.
+- Long-lived manual card holds are not the default round mechanism.
+- Raw card data is never stored by Moral Trade.
+
+## Webhook and Ledger Controls
+
+- Stripe-Signature verification is required before Stripe webhook events can update payment state.
+- Idempotency is required for setup intent, payment intent, and provider event processing.
+- Provider identifiers are stored as hashes where possible.
+- Manual proof fallback remains available for bank transfer, fiscal-host payment, or provider outage cases, with manual external evidence pending review before counting.

@@ -3,13 +3,12 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, StatusBadge } from "@/components/ui/page-primitives";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
   auditMoralTradeSecurityScaleReadiness,
   getMoralTradeSecurityProfile,
   validateMoralTradeSecurityProfile,
-  type MoralTradeSecurityControlStatus,
 } from "@/lib/moral-trade/security";
 import {
   getMoralTradeOperationsProfile,
@@ -19,7 +18,7 @@ import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const safetyDescription =
-  "Safety standards for Moral Trade proposals, background networking, payments, consent-gated introductions, and validator-backed review.";
+  "Safety standards for Moral Trade proposals, private matching, payments, consent-gated introductions, evidence review, and incident response.";
 
 export const metadata: Metadata = {
   title: "Safety",
@@ -33,41 +32,62 @@ export const metadata: Metadata = {
     url: getAbsoluteUrl("/safety"),
     type: "article",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Safety | Moral Trade",
-    description: safetyDescription,
-  },
 };
 
-function formatSafetyToken(value: string) {
+const safetyRules = [
+  {
+    title: "No manufactured threats",
+    detail:
+      "A proposal must not reward newly escalated harm, coercive leverage, extortion, harassment, or a worse baseline created to extract concessions.",
+  },
+  {
+    title: "No surprise disclosure",
+    detail:
+      "Exact wishes, identities, sensitive constraints, evidence bodies, and contact details remain private until the relevant person approves a scoped disclosure.",
+  },
+  {
+    title: "No autonomous outreach",
+    detail:
+      "Private matching does not scrape private feeds, mass-message candidates, or contact a possible counterparty without an accountable human request and review.",
+  },
+  {
+    title: "Third-party harms count",
+    detail:
+      "A deal can be mutually preferred by its direct parties and still require externality review, affected-party standing, correction, or rejection.",
+  },
+  {
+    title: "Evidence stays scoped",
+    detail:
+      "A receipt or log may show that an action occurred. It does not automatically prove the no-trade baseline, causation, impact, or absence of externalities.",
+  },
+  {
+    title: "Recourse remains available",
+    detail:
+      "Participants and affected parties can challenge evidence, request correction, appeal decisions, report incidents, revoke grants, or freeze private matching state.",
+  },
+] as const;
+
+const blockedClasses = [
+  "Violence, threats, extortion, coercion, harassment, doxxing, or stalking.",
+  "Fraud, impersonation, illegal acts, deceptive evidence, or attempts to evade provider rules.",
+  "Pressure on vulnerable people or demands that create unsafe personal, medical, legal, or financial exposure.",
+  "Political campaign contribution offsets or other regulated activity outside the service boundary.",
+  "Proposals that require unrestricted private-data access or unconsented contact disclosure.",
+] as const;
+
+function formatToken(value: string) {
   return value.replaceAll("_", " ");
-}
-
-function securityTone(status: MoralTradeSecurityControlStatus) {
-  if (status === "implemented") {
-    return "default";
-  }
-
-  if (status === "provider_boundary") {
-    return "secondary";
-  }
-
-  return "warning";
 }
 
 export default async function SafetyPage() {
   const viewer = await getViewer();
   const securityProfile = getMoralTradeSecurityProfile();
-  const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
   const operationsProfile = getMoralTradeOperationsProfile();
+  const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
-  const securityScaleGateReadiness = securityProfile.scaleGates.map((gate) => ({
+  const scaleGates = securityProfile.scaleGates.map((gate) => ({
     ...gate,
-    readiness: auditMoralTradeSecurityScaleReadiness({
-      gateKey: gate.key,
-      profile: securityProfile,
-    }),
+    readiness: auditMoralTradeSecurityScaleReadiness({ gateKey: gate.key, profile: securityProfile }),
   }));
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
     { href: "/safety", label: "Safety" },
@@ -76,197 +96,125 @@ export default async function SafetyPage() {
   return (
     <div className="page-shell">
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
         type="application/ld+json"
       />
-      <SiteTopbar
-        brandHref="/"
-        links={getPrimaryNavLinks(Boolean(viewer))}
-        {...getTopbarActions(Boolean(viewer))}
-        showLogout={Boolean(viewer)}
-      />
-      <Breadcrumbs items={[{ href: "/safety", label: "Safety" }]} />
-      <main className="legal-page" id="main-content" tabIndex={-1}>
-        <p className="eyebrow">Safety</p>
-        <h1>Safety rules for voluntary moral trade</h1>
-        <p>
-          Moral Trade should make serious cooperation easier without rewarding coercion, harassment,
-          manipulation, or unsafe background networking.
-        </p>
-        <section className="panel data-card data-card-wide">
-          <h2>Anti-threat and baseline integrity</h2>
-          <p>
-            Safety review starts with the no-trade baseline: what would each participant do absent
-            the trade? Proposals involving threat creation, newly escalated harmful behavior, or
-            coercive compensation requests should be rejected or sent to challenge review.
-          </p>
-          <Link className="text-button" href="/anti-threat-baseline">
-            Read anti-threat baseline rules
-          </Link>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Blocked proposal classes</h2>
-          <p>
-            The platform should reject or review proposals involving violence, illegal acts, fraud,
-            extortion, doxxing, harassment, exploitation, or pressure on vulnerable people.
-          </p>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Validator-backed safety evidence</h2>
-          <p>
-            Public health endpoints expose whether the security, disclosure, challenge-appeal,
-            incident-response, performance, and AI-governance contracts pass their current
-            validators. Safety claims should stay tied to these checks rather than implying hidden
-            automation, escrow, or unrestricted reviewer authority.
-          </p>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/api/moral-trade/security/health">
-              View security health
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
-              View disclosure contract
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
-              View appeal contract
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
-              View incident response
-            </Link>
-            <Link className="button button-secondary" href="/api/moral-trade/operations/health">
-              View operations health
-            </Link>
-          </div>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <div className="protocol-workflow-card-head">
-            <div>
-              <p className="eyebrow">Security posture contract</p>
-              <h2>Controls, scale gates, and non-claims are public.</h2>
+      <header className="hero">
+        <SiteTopbar
+          brandHref="/"
+          links={getPrimaryNavLinks(Boolean(viewer))}
+          {...getTopbarActions(Boolean(viewer))}
+          showLogout={Boolean(viewer)}
+        />
+        <div className="hero-grid">
+          <section className="hero-copy">
+            <p className="eyebrow">Safety</p>
+            <h1>Safety rules for voluntary moral trade.</h1>
+            <p className="hero-text">
+              Moral Trade should make serious cooperation easier without rewarding coercion,
+              exposing private moral preferences, weakening evidence standards, or ignoring harms to
+              people outside the deal.
+            </p>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/anti-threat-rules">
+                Read anti-threat rules
+              </Link>
+              <Link className="button button-secondary" href="/trust">
+                Review recourse routes
+              </Link>
+              <Link className="button button-secondary" href="/contact">
+                Report a concern
+              </Link>
             </div>
-            <StatusBadge tone={securityValidation.status === "pass" ? "default" : "warning"}>
-              {securityValidation.status}
-            </StatusBadge>
+          </section>
+          <aside className="hero-panel panel">
+            <p className="eyebrow">Current contract health</p>
+            <dl className="profile-stats profile-stats-hero">
+              <div>
+                <dt>Security</dt>
+                <dd>{securityValidation.status}</dd>
+              </div>
+              <div>
+                <dt>Operations</dt>
+                <dd>{operationsValidation.status}</dd>
+              </div>
+              <div>
+                <dt>Scale gates</dt>
+                <dd>{scaleGates.length}</dd>
+              </div>
+              <div>
+                <dt>Incident route</dt>
+                <dd>Public</dd>
+              </div>
+            </dl>
+          </aside>
+        </div>
+      </header>
+
+      <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="safety-rules-heading">
+          <div className="section-head">
+            <p className="eyebrow">Core rules</p>
+            <h2 id="safety-rules-heading">What every workflow must preserve</h2>
           </div>
-          <p>
-            The security profile names browser headers, private cache rules, Supabase session
-            boundaries, provider encryption assumptions, admin-scale gates, key-rotation gates,
-            abuse throttles, and incident reporting. It also says what the pilot does not yet claim.
-          </p>
           <div className="data-grid">
-            {securityProfile.controls.map((control) => (
-              <article className="panel data-card" key={control.key}>
-                <div className="protocol-workflow-card-head">
-                  <h3>{control.label}</h3>
-                  <StatusBadge tone={securityTone(control.status)}>
-                    {formatSafetyToken(control.status)}
-                  </StatusBadge>
-                </div>
-                <p className="route-text">{control.publicClaim}</p>
+            {safetyRules.map((rule) => (
+              <article className="panel data-card" key={rule.title}>
+                <h3>{rule.title}</h3>
+                <p className="route-text">{rule.detail}</p>
               </article>
             ))}
           </div>
         </section>
-        <section className="panel data-card data-card-wide">
-          <div className="protocol-workflow-card-head">
-            <div>
-              <p className="eyebrow">Operations contract</p>
-              <h2>Headers, sessions, retention, and fallback controls are inspectable.</h2>
-            </div>
-            <StatusBadge tone={operationsValidation.status === "pass" ? "default" : "warning"}>
-              {operationsValidation.status}
-            </StatusBadge>
+
+        <section className="section section-subtle" aria-labelledby="blocked-classes-heading">
+          <div className="section-head">
+            <p className="eyebrow">Blocked or escalated</p>
+            <h2 id="blocked-classes-heading">Proposal classes outside the service boundary</h2>
           </div>
-          <p>
-            The operations profile names the platform controls that were previously unspecified in
-            public materials: HTTP security headers, private no-store routes, rate-limit surfaces,
-            session/privacy controls, retention lifecycles, observability metrics, and safe
-            fallback behavior.
-          </p>
-          <div className="protocol-review-grid">
-            <article className="panel data-card">
-              <h3>Header and cache evidence</h3>
-              <ul className="clean-list">
-                {operationsProfile.securityHeaders.map((header) => (
-                  <li key={header.code}>
-                    <strong>{header.label}:</strong> {header.evidence}
-                  </li>
-                ))}
-              </ul>
-            </article>
-            <article className="panel data-card">
-              <h3>Privacy and session controls</h3>
-              <ul className="clean-list">
-                {operationsProfile.privacyAndSessionControls.map((control) => (
-                  <li key={control.key}>
-                    <strong>{control.label}:</strong> {control.evidence}
-                  </li>
-                ))}
-              </ul>
-            </article>
-            <article className="panel data-card">
-              <h3>Observability without private text</h3>
-              <ul className="clean-list">
-                {operationsProfile.observabilityMetrics.map((metric) => (
-                  <li key={metric}>{formatSafetyToken(metric)}</li>
-                ))}
-              </ul>
-              <p className="panel-note">
-                Operational telemetry is framed as counts, route health, latency, Web Vitals,
-                privacy incidents, fallbacks, and review SLAs rather than raw wishes or source
-                notes.
-              </p>
-            </article>
-          </div>
-          <div className="protocol-review-grid">
-            <article className="panel data-card">
-              <h3>Rate-limit surfaces</h3>
-              <p className="route-text">
-                {operationsProfile.rateLimitSurfaces.length} surfaces, including{" "}
-                {operationsProfile.rateLimitSurfaces
-                  .slice(0, 8)
-                  .map((surface) => `${formatSafetyToken(surface.key)} (${surface.limit}/${surface.window})`)
-                  .join(", ")}
-                .
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Retention lifecycle controls</h3>
-              <p className="route-text">
-                {operationsProfile.retentionControls
-                  .map((control) => formatSafetyToken(control.key))
-                  .join(", ")}
-                .
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Fallback and rollout gates</h3>
-              <ul className="clean-list">
-                {operationsProfile.fallbackControls.map((control) => (
-                  <li key={control.key}>{control.rule}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/api/moral-trade/operations/health">
-              Open operations JSON
-            </Link>
-            <Link className="button button-secondary" href="/moral-trade/technical-spec">
-              Inspect technical spec
-            </Link>
+          <div className="panel data-card data-card-wide">
+            <ul className="trust-check-list">
+              {blockedClasses.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
         </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Security scale gates</h2>
-          <p>
-            Expansion is blocked unless the named controls are implemented or consciously held at a
-            provider boundary. This keeps sensitive admin, paid-action, and trust-badge scale from
-            outrunning the current security evidence.
-          </p>
+
+        <section className="section section-white" aria-labelledby="safety-contracts-heading">
+          <div className="section-head">
+            <p className="eyebrow">Public contracts</p>
+            <h2 id="safety-contracts-heading">Inspect the controls behind the claims</h2>
+            <p>
+              Machine-readable endpoints expose security, operations, disclosure, appeal, incident,
+              and externality rules. Public copy should remain tied to those checks.
+            </p>
+          </div>
           <div className="data-grid">
-            {securityScaleGateReadiness.map((gate) => (
+            {[
+              ["Security health", "/api/moral-trade/security/health"],
+              ["Operations health", "/api/moral-trade/operations/health"],
+              ["Disclosure contract", "/api/moral-trade/disclosure/contract"],
+              ["Challenge and appeal", "/api/moral-trade/challenge-appeal/contract"],
+              ["Incident response", "/api/moral-trade/incident-response/health"],
+              ["Externality review", "/api/moral-trade/externality/health"],
+            ].map(([label, href]) => (
+              <Link className="panel data-card" href={href} key={href}>
+                <h3>{label}</h3>
+                <p className="route-text">Open the current public contract and validator result.</p>
+                <span className="inline-link">Open JSON</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="scale-gates-heading">
+          <div className="section-head">
+            <p className="eyebrow">Scale gates</p>
+            <h2 id="scale-gates-heading">Sensitive capabilities do not expand without named controls</h2>
+          </div>
+          <div className="data-grid">
+            {scaleGates.map((gate) => (
               <article className="panel data-card" key={gate.key}>
                 <div className="protocol-workflow-card-head">
                   <h3>{gate.label}</h3>
@@ -276,62 +224,28 @@ export default async function SafetyPage() {
                 </div>
                 <p className="route-text">{gate.rule}</p>
                 <p className="panel-note">
-                  Requires {gate.requires.map(formatSafetyToken).join(", ")}.
+                  Requires {gate.requires.map(formatToken).join(", ")}.
                 </p>
               </article>
             ))}
           </div>
         </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Public security non-claims</h2>
-          <ul className="trust-check-list">
-            {securityProfile.publicNonClaims.map((nonClaim) => (
-              <li key={nonClaim}>{nonClaim}</li>
-            ))}
-          </ul>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Background networking boundaries</h2>
-          <p>
-            The current prototype does not run autonomous AI outreach, mass profile ingestion, or
-            private-feed search. Matching is limited to explicit fields, broad previews, saved
-            searches, and manual source notes so the first version stays legible enough to audit.
-          </p>
-          <p>No surprise exposure. No autonomous outreach. No private-feed mining.</p>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Collusion, secrecy, and review</h2>
-          <p>
-            The safety problem is not solved by either full openness or total opacity. Broad
-            previews, review queues, match reports, and risk signals try to preserve enough
-            oversight to investigate suspicious activity without exposing every participant&apos;s exact
-            wishes to the public by default.
-          </p>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Dispute handling</h2>
-          <p>
-            Participants can record verification evidence, counterproposals, cancellation requests,
-            and disputes on agreements. These records make review possible but do not replace
-            professional legal or financial advice.
-          </p>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Review queues</h2>
-          <p>
-            Reports, payment-review requests, failed notifications, and blocked wish profiles are
-            routed to an admin console so operators can inspect problems before they become public
-            or affect counterparties.
-          </p>
-        </section>
-        <section className="panel data-card data-card-wide">
-          <h2>Privacy gates</h2>
-          <p>
-            Match suggestions should reveal broad reasons first. Exact asks, identities, and contact
-            details should be shared only after both sides consent.
-          </p>
+
+        <section className="section section-white" aria-labelledby="nonclaims-heading">
+          <div className="section-head">
+            <p className="eyebrow">Non-claims</p>
+            <h2 id="nonclaims-heading">What the service does not promise</h2>
+          </div>
+          <div className="panel data-card data-card-wide">
+            <ul className="trust-check-list">
+              {securityProfile.publicNonClaims.map((nonClaim) => (
+                <li key={nonClaim}>{nonClaim}</li>
+              ))}
+            </ul>
+          </div>
         </section>
       </main>
+
       <SiteFooter />
     </div>
   );

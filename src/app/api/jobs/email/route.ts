@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isCronRequestAuthorized } from "@/lib/cron";
 import { hasEmailEnv, sendEmail } from "@/lib/email";
+import { evaluateMoralTradeEmailOutboxSafety } from "@/lib/moral-trade/email-copy";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -36,8 +37,35 @@ async function processEmailOutbox(request: Request) {
 
   let sent = 0;
   let failed = 0;
+  let suppressed = 0;
 
   for (const email of (data ?? []) as EmailOutboxRow[]) {
+    const safety = evaluateMoralTradeEmailOutboxSafety({
+      body: email.body,
+      provider: email.provider,
+      subject: email.subject,
+    });
+
+    if (safety.status === "suppress") {
+      const { error: updateError } = await supabase
+        .from("email_outbox")
+        .update({
+          status: "suppressed",
+          provider: "resend_safety_gate",
+          attempt_count: email.attempt_count + 1,
+          last_error: safety.blockers.join("; ").slice(0, 500),
+        })
+        .eq("id", email.id);
+
+      if (updateError) {
+        failed += 1;
+      } else {
+        suppressed += 1;
+      }
+
+      continue;
+    }
+
     try {
       await sendEmail({
         to: email.recipient_email,
@@ -77,9 +105,10 @@ async function processEmailOutbox(request: Request) {
   }
 
   return NextResponse.json({
-    processed: sent + failed,
+    processed: sent + failed + suppressed,
     sent,
     failed,
+    suppressed,
   });
 }
 

@@ -91,6 +91,36 @@ export default async function MpgfRealMoneyTermsPage() {
           </article>
 
           <article className="mpgf-panel">
+            <p className="eyebrow">Compliance screening</p>
+            <h2>AML/KYC and sanctions checks are production gates</h2>
+            <p>
+              Before real-money MPGF payout or sponsor-pool release, the custody, receipt, and
+              payout partner must complete AML/KYC or KYB screening, sanctions screening, recipient
+              accreditation, and any required charitable-solicitation review.
+            </p>
+            <p>
+              Moral Trade records aggregate readiness and provider event state only. Screening
+              outcomes are not donor moral reputation signals and cannot alter the current round
+              allocation formula.
+            </p>
+          </article>
+
+          <article className="mpgf-panel">
+            <p className="eyebrow">Partner legal readiness</p>
+            <h2>External approval is required before money movement</h2>
+            <p>
+              Production real-money mode remains blocked until partner-held custody, receipt
+              wording, refund terms, Stripe webhook controls, Every.org or fiscal-sponsor routing,
+              and jurisdiction-specific legal review are approved.
+            </p>
+            <p>
+              The default architecture is non-custodial: Every.org or fiscal-sponsor fast routes
+              for donations, Stripe SetupIntent saved commitments for conditional participation,
+              and PaymentIntents only after threshold, review, and challenge gates clear.
+            </p>
+          </article>
+
+          <article className="mpgf-panel">
             <p className="eyebrow">Monthly billing</p>
             <h2>Subscriptions are managed through Stripe Billing</h2>
             <p>

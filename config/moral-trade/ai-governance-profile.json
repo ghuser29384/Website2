@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-ai-governance-v0.1-2026-05",
+  "version": "moral-trade-ai-governance-v0.3-2026-06",
   "purpose": "Public governance contract for keeping Moral Trade decisioning deterministic, schema-bound, documented, and human-controlled before any ML-assisted ranking or scoring is introduced.",
   "decisioningMode": "deterministic_rules_with_schema_bound_copilot",
   "mlEnabledForMatching": false,
@@ -200,6 +200,136 @@
       "reviewRule": "A reviewer or operator must approve material model, dataset, prompt, metric, or template changes before promotion and keep a rollback note."
     }
   ],
+  "sampleDocumentationPackets": [
+    {
+      "key": "model_card",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "intended_use": "Render reviewer-facing summaries from deterministic factor codes in shadow mode.",
+        "non_use_cases": ["global moral ranking", "autonomous matching", "safety blocking", "counterparty disclosure"],
+        "decision_boundaries": "Cannot publish, match, disclose, complete, dispute, or mutate proposal state.",
+        "training_data_summary": "No raw private wishes, source notes, contact details, or private feeds are used.",
+        "evaluation_slices": ["trade_format", "cause_area_pair", "privacy_stage"],
+        "known_failure_modes": ["overconfident wording", "missing evidence context", "unclear redaction notice"],
+        "human_control_points": ["reviewer approval before reliance", "operator rollback before promotion"],
+        "rollback_plan": "Disable assisted rendering and fall back to deterministic/manual review."
+      },
+      "publicSummary": {
+        "intended_use": "Render reviewer-facing summaries from deterministic factor codes in shadow mode.",
+        "non_use_cases": ["global moral ranking", "autonomous matching", "safety blocking", "counterparty disclosure"],
+        "evaluation_slices": ["trade_format", "cause_area_pair", "privacy_stage"],
+        "known_failure_modes": ["overconfident wording", "missing evidence context", "unclear redaction notice"],
+        "human_control_points": ["reviewer approval before reliance", "operator rollback before promotion"]
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld"]
+    },
+    {
+      "key": "dataset_datasheet",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "collection_purpose": "Evaluate whether deterministic factor-code summaries remain faithful to reviewed fields.",
+        "consent_basis": "Only synthetic worked examples and consented, redacted metadata may be used.",
+        "composition_summary": "Small pilot slices by trade format, cause-area pair, and privacy stage.",
+        "exclusion_rules": ["raw source notes", "contact details", "exact private wishes", "unreviewed private feeds"],
+        "retention_policy": "Aggregate summaries only; raw private text is not retained for ML evaluation.",
+        "known_limitations": "Pilot-scale samples are not representative of production liquidity.",
+        "sensitive_attribute_handling": "Optional governed attributes require separate review and small-cell suppression.",
+        "deletion_or_correction_path": "Participant data-right requests remove or correct any consented row before future evaluation."
+      },
+      "publicSummary": {
+        "collection_purpose": "Evaluate whether deterministic factor-code summaries remain faithful to reviewed fields.",
+        "composition_summary": "Small pilot slices by trade format, cause-area pair, and privacy stage.",
+        "exclusion_rules": ["raw source notes", "contact details", "exact private wishes", "unreviewed private feeds"],
+        "retention_policy": "Aggregate summaries only; raw private text is not retained for ML evaluation.",
+        "known_limitations": "Pilot-scale samples are not representative of production liquidity."
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld"]
+    },
+    {
+      "key": "benchmark_slices",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "slice_key": "worked_examples_by_trade_format",
+        "sample_count": "8 worked examples; no production readiness claim.",
+        "trade_format": "pledge_swap, donation_offset, public_good_commitment",
+        "cause_area_pair": "redacted broad cause-area pairs only.",
+        "geography_bucket": "broad region or not collected.",
+        "privacy_stage": "broad_preview",
+        "metric_values": ["false_match_rate: not enough live data", "human_overrule_rate: shadow only"],
+        "confidence_notes": "Insufficient live sample size; use only for validator shape and redaction checks."
+      },
+      "publicSummary": {
+        "slice_key": "worked_examples_by_trade_format",
+        "sample_count": "8 worked examples; no production readiness claim.",
+        "trade_format": "pledge_swap, donation_offset, public_good_commitment",
+        "cause_area_pair": "redacted broad cause-area pairs only.",
+        "metric_values": ["false_match_rate: not enough live data", "human_overrule_rate: shadow only"]
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld", "small_cell_identifiers withheld"]
+    },
+    {
+      "key": "intended_use_limits",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "permitted_tasks": ["missing-field detection", "factor-code explanation rendering", "evidence-checklist drafting"],
+        "prohibited_tasks": ["global moral ranking", "autonomous outreach", "state mutation", "safety blocking"],
+        "human_review_boundary": "All reliance, disclosure, completion, and dispute outcomes require human control.",
+        "state_mutation_boundary": "AI output cannot directly write proposal status or agreement completion.",
+        "disclosure_boundary": "Exact wishes, contacts, and counterparties remain consent-gated.",
+        "appeal_or_override_path": "Participants and reviewers can challenge the specific claim, evidence row, disclosure decision, or policy flag."
+      },
+      "publicSummary": {
+        "permitted_tasks": ["missing-field detection", "factor-code explanation rendering", "evidence-checklist drafting"],
+        "prohibited_tasks": ["global moral ranking", "autonomous outreach", "state mutation", "safety blocking"],
+        "human_review_boundary": "All reliance, disclosure, completion, and dispute outcomes require human control.",
+        "state_mutation_boundary": "AI output cannot directly write proposal status or agreement completion."
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld"]
+    },
+    {
+      "key": "fairness_audit_report",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "metrics": ["subgroup_surfacing_parity", "false_match_rate", "human_overrule_rate", "privacy_leakage_incidents"],
+        "slices": ["trade_format", "cause_area_pair", "geography_bucket", "privacy_stage"],
+        "thresholds": "Material slice gaps require review before promotion.",
+        "observed_deviations": "No live ML deployment; sample is validator-only.",
+        "reviewed_tradeoffs": "Fairness metrics may conflict and must be documented before rollout.",
+        "remediation_plan": "Keep ML in shadow mode until deviations are reviewed and remediated.",
+        "promotion_decision": "Blocked for live ranking or matching; shadow documentation only."
+      },
+      "publicSummary": {
+        "metrics": ["subgroup_surfacing_parity", "false_match_rate", "human_overrule_rate", "privacy_leakage_incidents"],
+        "slices": ["trade_format", "cause_area_pair", "geography_bucket", "privacy_stage"],
+        "thresholds": "Material slice gaps require review before promotion.",
+        "observed_deviations": "No live ML deployment; sample is validator-only.",
+        "remediation_plan": "Keep ML in shadow mode until deviations are reviewed and remediated.",
+        "promotion_decision": "Blocked for live ranking or matching; shadow documentation only."
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld", "small_cell_identifiers withheld"]
+    },
+    {
+      "key": "change_log",
+      "reviewerStatus": "shadow_only",
+      "fields": {
+        "change_id": "ai-governance-shadow-sample-001",
+        "changed_artifact": "sample documentation packet contract",
+        "reason_for_change": "Make model-card, datasheet, benchmark, fairness, limits, and change-log requirements executable.",
+        "risk_assessment": "No ML behavior enabled; validates public documentation shape only.",
+        "validation_run_ids": ["ai_governance_profile_validator", "health_route_contract_smoke"],
+        "operator_approval": "Required before any live promotion.",
+        "rollback_note": "Remove sample packet promotion and retain deterministic/manual fallback."
+      },
+      "publicSummary": {
+        "change_id": "ai-governance-shadow-sample-001",
+        "changed_artifact": "sample documentation packet contract",
+        "reason_for_change": "Make model-card, datasheet, benchmark, fairness, limits, and change-log requirements executable.",
+        "risk_assessment": "No ML behavior enabled; validates public documentation shape only.",
+        "rollback_note": "Remove sample packet promotion and retain deterministic/manual fallback."
+      },
+      "redactionNotes": ["raw_private_wish_text withheld", "contact_details withheld"]
+    }
+  ],
   "permittedAutomation": [
     {
       "key": "schema_bound_drafting",
@@ -307,6 +437,11 @@
       "key": "reversible_interaction",
       "label": "Reversible interaction",
       "rule": "Explanations must support correction, resubmission, or human override before state changes; users can correct fields without automatic disclosure or reliance."
+    },
+    {
+      "key": "local_explanation_methods_gated",
+      "label": "Local explanation methods are gated",
+      "rule": "LIME, SHAP, or similar local feature-attribution explanations are inactive unless actual ML ranking or risk scoring is introduced with model governance, fairness audits, and reviewer-only diagnostics."
     }
   ],
   "externalStandards": [
@@ -334,6 +469,11 @@
       "key": "fairness_tradeoff_literature",
       "label": "Fairness trade-off literature",
       "use": "Avoid pretending one fairness metric is universally correct; publish trade-offs and review decisions."
+    },
+    {
+      "key": "lime_shap_diagnostics",
+      "label": "LIME and SHAP diagnostics",
+      "use": "Use only as governed internal diagnostics if model-based ranking or risk scoring is introduced; do not present feature attribution as deterministic Moral Trade reasoning."
     }
   ],
   "humanControlledDecisions": [
@@ -348,6 +488,7 @@
     "no_undocumented_ml_gate",
     "model_card_datasheet_required",
     "fairness_documentation_contract",
+    "sample_documentation_packet_contract",
     "technical_spec_ai_governance_smoke",
     "health_route_contract_smoke"
   ]

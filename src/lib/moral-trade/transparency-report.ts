@@ -62,18 +62,33 @@ export interface MoralTradeTransparencyReportValidation {
   validatorVersion: typeof MORAL_TRADE_TRANSPARENCY_REPORT_VALIDATOR_VERSION;
 }
 
+export interface MoralTradeTransparencySourceTableAudit {
+  checkedTables: string[];
+  missingTables: string[];
+  status: "pass" | "fail";
+  validatorName: "moral-trade-transparency-source-tables";
+}
+
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
 };
 
 const REQUIRED_METRIC_KEYS = [
   "reviewed_match_suggestions",
+  "opportunity_briefs_delivered",
+  "opportunity_briefs_opened",
+  "opportunity_feedback_submitted",
+  "opportunity_briefs_dismissed",
+  "opportunity_briefs_deferred",
+  "opportunity_interest_marked",
+  "intro_packets_created",
   "declined_intro_requests",
   "blocked_safety_records",
   "disclosure_grants_created",
   "participant_reports_submitted",
   "concierge_appeals_requested",
   "agreement_evidence_reviewed",
+  "reviewed_baseline_witness_statements",
   "unresolved_disputes_current",
   "median_concierge_review_hours",
   "median_agreement_review_hours",
@@ -84,6 +99,7 @@ const CONTRACT_TESTS = [
   "transparency_report_contract_smoke",
   "transparency_report_threshold_suppression",
   "transparency_report_no_private_fields",
+  "transparency_report_metric_source_schema_audit",
   "transparency_report_public_route_smoke",
 ] as const;
 
@@ -94,6 +110,55 @@ const METRIC_DEFINITIONS: MoralTradeTransparencyMetricDefinition[] = [
     kind: "count",
     label: "Reviewed match suggestions",
     sourceTables: ["match_suggestions"],
+  },
+  {
+    description: "Privacy-safe opportunity briefs created during the report period.",
+    key: "opportunity_briefs_delivered",
+    kind: "count",
+    label: "Opportunity briefs delivered",
+    sourceTables: ["background_opportunity_briefs"],
+  },
+  {
+    description: "Opportunity briefs marked seen during the report period.",
+    key: "opportunity_briefs_opened",
+    kind: "count",
+    label: "Opportunity briefs opened",
+    sourceTables: ["background_opportunity_briefs"],
+  },
+  {
+    description: "Closed-code relevance feedback updates recorded during the report period.",
+    key: "opportunity_feedback_submitted",
+    kind: "count",
+    label: "Opportunity feedback submitted",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Opportunity feedback rows marked dismissed during the report period.",
+    key: "opportunity_briefs_dismissed",
+    kind: "count",
+    label: "Opportunity briefs dismissed",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Opportunity feedback rows marked maybe-later during the report period.",
+    key: "opportunity_briefs_deferred",
+    kind: "count",
+    label: "Opportunity briefs deferred",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Opportunity feedback rows marked interested during the report period.",
+    key: "opportunity_interest_marked",
+    kind: "count",
+    label: "Opportunity interest marks",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Reviewed introduction packets requested during the report period.",
+    key: "intro_packets_created",
+    kind: "count",
+    label: "Intro packets created",
+    sourceTables: ["background_intro_packets"],
   },
   {
     description: "Introduction requests declined by operator review during the report period.",
@@ -138,6 +203,13 @@ const METRIC_DEFINITIONS: MoralTradeTransparencyMetricDefinition[] = [
     sourceTables: ["agreement_evidence_items"],
   },
   {
+    description: "Guest baseline witness statements reaching a reviewed outcome during the report period.",
+    key: "reviewed_baseline_witness_statements",
+    kind: "count",
+    label: "Reviewed baseline witness statements",
+    sourceTables: ["baseline_witness_testimonials"],
+  },
+  {
     description: "Open unresolved agreement disputes at report generation time.",
     key: "unresolved_disputes_current",
     kind: "count",
@@ -172,6 +244,7 @@ const PRIVACY_RULES = [
   "Suppress nonzero counts and derived metrics when the sample is below the minimum public count.",
   "Keep the report useful for trust and operations, not for ranking users, counterparties, or moral views.",
   "When live aggregate data is unavailable, publish the contract and fallback status rather than inventing numbers.",
+  "For guest witness testimony, publish only aggregate reviewed-statement counts; never expose witness identity, provider, relationship, raw testimony, concern text, or private reviewer fields.",
 ] as const;
 
 function formatQuarterLabel(start: Date) {
@@ -302,12 +375,47 @@ export function validateMoralTradeTransparencyReportContract(
     blockers.push("threshold_suppression_test_missing");
   }
 
+  if (!contract.contractTests.includes("transparency_report_metric_source_schema_audit")) {
+    blockers.push("metric_source_schema_audit_test_missing");
+  }
+
   return {
     blockers,
     contractVersion: MORAL_TRADE_TRANSPARENCY_REPORT_VERSION,
     status: blockers.length ? "fail" : "pass",
     validatorName: "moral-trade-transparency-report",
     validatorVersion: MORAL_TRADE_TRANSPARENCY_REPORT_VALIDATOR_VERSION,
+  };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function auditMoralTradeTransparencyMetricSourceTables({
+  contract = getMoralTradeTransparencyReportContract(),
+  schemaSql,
+}: {
+  contract?: MoralTradeTransparencyReportContract;
+  schemaSql: string;
+}): MoralTradeTransparencySourceTableAudit {
+  const checkedTables = Array.from(
+    new Set(contract.metricDefinitions.flatMap((metric) => metric.sourceTables)),
+  ).sort();
+  const missingTables = checkedTables.filter((table) => {
+    const tablePattern = new RegExp(
+      `create table(?: if not exists)? public\\.${escapeRegExp(table)}\\b`,
+      "i",
+    );
+
+    return !tablePattern.test(schemaSql);
+  });
+
+  return {
+    checkedTables,
+    missingTables,
+    status: missingTables.length ? "fail" : "pass",
+    validatorName: "moral-trade-transparency-source-tables",
   };
 }
 
@@ -483,7 +591,15 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     disclosureGrants,
     reportsSubmitted,
     appealsRequested,
+    opportunityBriefs,
+    opportunityBriefOpens,
+    opportunityFeedback,
+    opportunityDismissals,
+    opportunityDeferrals,
+    opportunityInterest,
+    introPackets,
     evidenceReviewed,
+    baselineWitnessStatementsReviewed,
     unresolvedDisputes,
     reviewHourMetrics,
   ] = await Promise.all([
@@ -532,12 +648,59 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       supabase,
     }),
     safeCount({
+      apply: periodFilter(period),
+      label: "background_opportunity_briefs",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) =>
+        periodFilter(period, "seen_at")(query).not("seen_at", "is", null),
+      label: "background_opportunity_briefs",
+      supabase,
+    }),
+    safeCount({
+      apply: periodFilter(period, "updated_at"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) => periodFilter(period, "updated_at")(query).eq("outcome", "dismissed"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) => periodFilter(period, "updated_at")(query).eq("outcome", "maybe_later"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) => periodFilter(period, "updated_at")(query).eq("outcome", "interested"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: periodFilter(period),
+      label: "background_intro_packets",
+      supabase,
+    }),
+    safeCount({
       apply: (query) =>
         periodFilter(period, "updated_at")(query).in("status", [
           "reviewed_complete",
           "disputed_unresolved",
         ]),
       label: "agreement_evidence_items",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) =>
+        periodFilter(period, "updated_at")(query).in("testimonial_status", [
+          "accepted",
+          "partially_accepted",
+          "rejected",
+          "disputed",
+        ]),
+      label: "baseline_witness_testimonials",
       supabase,
     }),
     safeCount({
@@ -562,6 +725,13 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     metricErrors,
     metricInputs: [
       { key: "reviewed_match_suggestions", value: reviewedMatches },
+      { key: "opportunity_briefs_delivered", value: opportunityBriefs },
+      { key: "opportunity_briefs_opened", value: opportunityBriefOpens },
+      { key: "opportunity_feedback_submitted", value: opportunityFeedback },
+      { key: "opportunity_briefs_dismissed", value: opportunityDismissals },
+      { key: "opportunity_briefs_deferred", value: opportunityDeferrals },
+      { key: "opportunity_interest_marked", value: opportunityInterest },
+      { key: "intro_packets_created", value: introPackets },
       { key: "declined_intro_requests", value: declinedIntros },
       {
         key: "blocked_safety_records",
@@ -571,6 +741,7 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       { key: "participant_reports_submitted", value: reportsSubmitted },
       { key: "concierge_appeals_requested", value: appealsRequested },
       { key: "agreement_evidence_reviewed", value: evidenceReviewed },
+      { key: "reviewed_baseline_witness_statements", value: baselineWitnessStatementsReviewed },
       { key: "unresolved_disputes_current", value: unresolvedDisputes },
       {
         key: "median_concierge_review_hours",

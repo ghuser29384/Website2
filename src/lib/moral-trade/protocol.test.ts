@@ -8,6 +8,7 @@ import {
   validateMoralTradeStateTransitionEventRecord,
   validateMoralTradeProposalStateTransition,
   validateMoralTradeProtocolProfile,
+  type MoralTradeProtocolProfile,
 } from "./protocol";
 
 test("core moral trade protocol profile publishes validator-backed contracts", () => {
@@ -42,11 +43,32 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
     ),
   );
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "external_entity_reference"));
-  assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "match_signal"));
+  assert.ok(
+    profile.provenanceObjectSchemas.some(
+      (schema) =>
+        schema.key === "match_signal" &&
+        schema.required.includes("privacyPolicyId") &&
+        schema.required.includes("disclosureStage"),
+    ),
+  );
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "traceability_event"));
   assert.ok(
     profile.provenanceObjectSchemas.some(
       (schema) => schema.key === "state_transition_event_record",
+    ),
+  );
+  assert.ok(
+    profile.provenanceObjectSchemas.some(
+      (schema) =>
+        schema.key === "traceability_event" &&
+        schema.required.includes("auditQuestionAnswers"),
+    ),
+  );
+  assert.ok(
+    profile.provenanceObjectSchemas.some(
+      (schema) =>
+        schema.key === "state_transition_event_record" &&
+        schema.required.includes("auditQuestionAnswers"),
     ),
   );
   assert.ok(
@@ -60,6 +82,13 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
     ),
   );
   assert.ok(
+    profile.provenancePersistence.tables.some(
+      (table) =>
+        table.table === "moral_trade_state_transition_events" &&
+        table.requiredColumns.includes("audit_question_answers"),
+    ),
+  );
+  assert.ok(
     profile.provenancePersistence.accessRules.some((rule) =>
       /No update or delete policies/.test(rule),
     ),
@@ -67,6 +96,19 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.qualityMetrics.includes("privacy_leakage_incidents"));
   assert.ok(profile.statusValues.includes("completion_reviewed"));
   assert.ok(profile.statusValues.includes("disputed_unresolved"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "schema_completeness"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "anti_threat_policy"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "factual_evidence_readiness"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "counterfactual_baseline"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "externality_review"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "privacy_redaction"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "match_explanation"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "human_review_routing"));
+  assert.ok(
+    profile.decisionPipeline
+      .filter((step) => step.blocksMatchable)
+      .every((step) => profile.statusValues.includes(step.failureStatus)),
+  );
   assert.ok(profile.stateTransitionRules.some((rule) => rule.from === "draft"));
   assert.ok(
     profile.stateTransitionRules
@@ -81,6 +123,36 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
           rule.requires.includes("match_explanation_before_matchable") &&
           rule.requires.includes("human_review_before_matchable"),
       ),
+  );
+});
+
+test("protocol profile validation fails when proposed decision logic is weakened", () => {
+  const profile = getMoralTradeProtocolProfile();
+  const weakened: MoralTradeProtocolProfile = {
+    ...profile,
+    decisionPipeline: profile.decisionPipeline
+      .filter((step) => step.key !== "anti_threat_policy")
+      .map((step) =>
+        step.key === "schema_completeness"
+          ? {
+              ...step,
+              failureStatus: "silent_pass",
+              requiredSignals: ["unknown_decision_signal"],
+            }
+          : step,
+      ),
+  };
+  const validation = validateMoralTradeProtocolProfile(weakened);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("decision-pipeline")));
+  assert.ok(
+    validation.checks.some(
+      (check) =>
+        check.id === "decision-pipeline" &&
+        check.status === "fail" &&
+        check.evidence.includes("unknown_decision_signal"),
+    ),
   );
 });
 
@@ -295,6 +367,12 @@ test("state transition event records are immutable and bound to the expected edg
   );
   assert.equal(event.eventHash.length, 64);
   assert.match(event.id, /^moral-trade-transition-event:/);
+  assert.equal(
+    event.auditQuestionAnswers.whatHappened,
+    "proposal_record:proposal_record:protocol-test moved submitted->matchable via risk_screened.",
+  );
+  assert.deepEqual(event.auditQuestionAnswers.whoTouchedIt, ["operator:protocol-test"]);
+  assert.equal(event.auditQuestionAnswers.whenRecorded, "2026-05-29T00:00:00.000Z");
 
   const mismatchedEdge = validateMoralTradeProposalStateTransition({
     from: "submitted",
@@ -327,4 +405,23 @@ test("state transition event records are immutable and bound to the expected edg
   });
 
   assert.ok(tamperedValidation.includes("transition_event_record_hash_mismatch"));
+
+  const incompleteAuditEvent = {
+    ...event,
+    auditQuestionAnswers: {
+      whatHappened: "",
+      whoTouchedIt: [],
+      whenRecorded: "2026-05-29T00:00:01.000Z",
+    },
+  };
+  const incompleteAuditValidation = validateMoralTradeStateTransitionEventRecord({
+    expectedFrom: "submitted",
+    expectedTo: "matchable",
+    expectedProvenanceActivity: "risk_screened",
+    record: incompleteAuditEvent,
+  });
+
+  assert.ok(
+    incompleteAuditValidation.includes("transition_event_record_audit_questions_invalid"),
+  );
 });

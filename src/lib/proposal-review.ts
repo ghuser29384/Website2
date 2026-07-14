@@ -46,6 +46,8 @@ export interface OfferReviewWorkflowCard {
     | "appeal_scope";
   label: string;
   status: MoralTradeVerificationStepStatus;
+  statusReasonCode: string;
+  statusReason: string;
   factorCodes: string[];
   summary: string;
   nextStep: string;
@@ -56,6 +58,8 @@ export interface OfferReviewCardInstrumentation {
   label: string;
   nextStep: string;
   status: MoralTradeVerificationStepStatus;
+  statusReasonCode: string;
+  statusReason: string;
 }
 
 export interface OfferReviewWorkflowCardContract {
@@ -63,6 +67,7 @@ export interface OfferReviewWorkflowCardContract {
   label: string;
   requiredFactorCodes: string[];
   purpose: string;
+  statusReasonRule: string;
   nextStepRule: string;
 }
 
@@ -74,13 +79,50 @@ export interface OfferReviewWorkflowCopyTemplates {
   appealCopy: string;
 }
 
+export type MoralTradeUserFacingBlockerKey =
+  | "needs_evidence"
+  | "baseline_review"
+  | "privacy_review"
+  | "safety_review"
+  | "account_security"
+  | "reviewer_or_neutral_review"
+  | "recipient_destination"
+  | "clearing_confirmation"
+  | "agreement_change"
+  | "appeal_correction"
+  | "production_payout"
+  | "general_review_pending";
+
+export interface MoralTradeUserFacingBlockerExplanation {
+  key: MoralTradeUserFacingBlockerKey;
+  reasonCategory: string;
+  plainLanguageStatus: string;
+  nextAction: string;
+  moneyEffect: string;
+  obligationEffect: string;
+  appealOrCorrectionPath: string;
+  privacyBoundary: string;
+}
+
+export interface OfferReviewWorkflowPathStep {
+  key: string;
+  label: string;
+  contractSurface: string;
+  enforcement: "structured_input" | "deterministic_policy" | "human_review" | "provenance";
+}
+
 export interface OfferReviewWorkflowContract {
   version: string;
   purpose: string;
   statuses: MoralTradeVerificationStepStatus[];
   detailWorkflowCards: OfferReviewWorkflowCardContract[];
+  policyEnforcedWorkflow: OfferReviewWorkflowPathStep[];
+  reviewStateOutcomes: string[];
   marketplaceFactorPriority: string[];
   participantCopyTemplates: OfferReviewWorkflowCopyTemplates;
+  userFacingBlockerExplanations: MoralTradeUserFacingBlockerExplanation[];
+  sampleUserFacingBlockerExplanations: MoralTradeUserFacingBlockerExplanation[];
+  forbiddenUserFacingExplanationTerms: string[];
   invariants: string[];
   sampleDetailCards: OfferReviewWorkflowCard[];
   sampleMarketplaceCard: OfferReviewCardInstrumentation;
@@ -154,6 +196,7 @@ export interface MoralTradeProtocolDraftReview {
   }>;
   verificationLoop: MoralTradeVerificationLoopStep[];
   uncertaintyFlags: string[];
+  userFacingBlockerExplanations: MoralTradeUserFacingBlockerExplanation[];
   nextStepChecklist: string[];
   citedEvidenceTable: MoralTradeCitedEvidenceRow[];
   reviewerSummary: string;
@@ -199,10 +242,10 @@ export const WORKED_EXAMPLE_LAUNCH_ORDER = [
 ] as const;
 
 export const MORAL_TRADE_REVIEW_WORKFLOW_CONTRACT_VERSION =
-  "moral-trade-review-workflow-v0.1-2026-05";
+  "moral-trade-review-workflow-v0.2-2026-06";
 
 export const MORAL_TRADE_REVIEW_WORKFLOW_VALIDATOR_VERSION =
-  "moral-trade-review-workflow-validator-v0.1";
+  "moral-trade-review-workflow-validator-v0.2";
 
 export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContract[] = [
   {
@@ -210,6 +253,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Status card",
     requiredFactorCodes: ["status_visible", "human_review_required"],
     purpose: "Expose whether a record is live, example-only, blocked, or still under review.",
+    statusReasonRule: "Explain why the visible status is pass, needs-input, human-review, or blocked without implying completion.",
     nextStepRule: "Never imply completion, custody, enforceability, or moral endorsement from a visible status.",
   },
   {
@@ -217,6 +261,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Action evidence",
     requiredFactorCodes: ["evidence_rule_named", "evidence_sufficiency"],
     purpose: "Show whether each factual action claim has a named reviewable proof method.",
+    statusReasonRule: "Explain whether a proof method and locator exist, or which evidence boundary keeps the card out of pass.",
     nextStepRule: "Ask for scoped artifacts before anyone relies on a factual action claim.",
   },
   {
@@ -224,6 +269,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Counterfactual baseline",
     requiredFactorCodes: ["baseline_stated", "baseline_credibility"],
     purpose: "Keep factual proof separate from the no-trade baseline and counterfactual trust problem.",
+    statusReasonRule: "Explain why the no-trade baseline is credible enough, weak, or still review-bound.",
     nextStepRule: "Ask what would happen without the trade and what dated evidence supports that claim.",
   },
   {
@@ -231,6 +277,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Externality review",
     requiredFactorCodes: ["externality_review_required", "human_review_required"],
     purpose: "Name third-party harm, perverse-incentive, and unrepresented-value review before reliance.",
+    statusReasonRule: "Explain which mode or cause trigger requires human review, or why no obvious trigger was detected.",
     nextStepRule: "Route affected-party standing, remedy, and challenge-window questions to human review.",
   },
   {
@@ -238,6 +285,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Participant-relative scores",
     requiredFactorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
     purpose: "Display stated priorities without turning them into an objective platform ranking.",
+    statusReasonRule: "Explain that pass only means scores are bounded as participant-stated context.",
     nextStepRule: "Use scores only as participant-stated context and preserve the no-global-ranking notice.",
   },
   {
@@ -245,6 +293,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Appeal scope",
     requiredFactorCodes: ["appealable_review_scope", "reviewer_summary"],
     purpose: "Limit appeals to the claim, evidence row, baseline concern, disclosure decision, or policy flag under review.",
+    statusReasonRule: "Explain that appeal handling remains human-reviewed and scoped to the reviewed issue.",
     nextStepRule: "Do not reopen unrelated moral disagreements by default.",
   },
 ];
@@ -261,6 +310,356 @@ export const REVIEW_WORKFLOW_PARTICIPANT_COPY: OfferReviewWorkflowCopyTemplates 
   appealCopy:
     "If you think this review decision is wrong, appeal the specific claim that was reviewed. Appeals do not reopen unrelated moral disagreements by default.",
 };
+
+const USER_FACING_BLOCKER_EXPLANATIONS: readonly MoralTradeUserFacingBlockerExplanation[] = [
+  {
+    key: "needs_evidence",
+    reasonCategory: "Evidence is incomplete",
+    plainLanguageStatus: "A reviewable proof artifact is still needed for the exact claim.",
+    nextAction: "Attach or request one scoped artifact for the claim being reviewed.",
+    moneyEffect: "No payment capture or payout should proceed from this record.",
+    obligationEffect: "No new locked obligation should be created from this record.",
+    appealOrCorrectionPath:
+      "If evidence was rejected, use the appeal path for the specific evidence row.",
+    privacyBoundary:
+      "Show only the claim scope and safe artifact type; keep private records hidden.",
+  },
+  {
+    key: "baseline_review",
+    reasonCategory: "Baseline needs review",
+    plainLanguageStatus: "The no-trade baseline needs dated support before anyone relies on it.",
+    nextAction: "Add prior-intent, past-behavior, or dated baseline support.",
+    moneyEffect: "Money movement stays blocked for reliance-bearing use.",
+    obligationEffect: "Completion, clearing, and public count claims stay paused.",
+    appealOrCorrectionPath:
+      "Appeal only the reviewed baseline concern or submit a corrected baseline packet.",
+    privacyBoundary:
+      "Show the baseline category only; keep private timing and counterparty facts hidden.",
+  },
+  {
+    key: "privacy_review",
+    reasonCategory: "Privacy review is incomplete",
+    plainLanguageStatus: "Private details need a narrower disclosure grant or redaction first.",
+    nextAction: "Redact exact wishes, contact details, and sensitive constraints before routing.",
+    moneyEffect: "Money is not affected unless the private detail is needed for payment review.",
+    obligationEffect: "No contact introduction or privacy disclosure should proceed yet.",
+    appealOrCorrectionPath:
+      "Use the correction path for the specific disclosure decision or privacy grant.",
+    privacyBoundary:
+      "Show only the safe category; keep detailed personal facts and contact details hidden.",
+  },
+  {
+    key: "safety_review",
+    reasonCategory: "Safety or legality review is needed",
+    plainLanguageStatus: "This proposal cannot move forward until a safety reviewer clears it.",
+    nextAction: "Pause publication and ask for a narrow safety review of the reviewed issue.",
+    moneyEffect: "No payment, payout, or public money claim should proceed.",
+    obligationEffect: "No new obligation, lock, or completion claim should be created.",
+    appealOrCorrectionPath:
+      "Use the appeal path for the specific safety decision; do not broaden the dispute.",
+    privacyBoundary:
+      "Show only a safe reason category; keep sensitive facts and affected-party details hidden.",
+  },
+  {
+    key: "account_security",
+    reasonCategory: "Account security check is pending",
+    plainLanguageStatus: "A recent account-risk event requires step-up or manual review.",
+    nextAction: "Complete the requested account check or wait for manual review.",
+    moneyEffect: "Payment capture and payout release stay blocked.",
+    obligationEffect: "High-risk confirmations, privacy grants, and contact introductions stay paused.",
+    appealOrCorrectionPath:
+      "Use account recovery or correction if the account-security decision is wrong.",
+    privacyBoundary:
+      "Show the account-check category only; keep device and session details hidden.",
+  },
+  {
+    key: "reviewer_or_neutral_review",
+    reasonCategory: "Reviewer check is incomplete",
+    plainLanguageStatus: "A qualified or neutral reviewer still needs to decide this issue.",
+    nextAction: "Route the narrow issue to the required reviewer or neutral panel.",
+    moneyEffect: "Money movement stays blocked for the affected release stage.",
+    obligationEffect: "Reliance, clearing, and blocker overrides stay paused.",
+    appealOrCorrectionPath:
+      "If the review decision is adverse, appeal the specific reviewed issue.",
+    privacyBoundary:
+      "Show reviewer status only; keep private review evidence hidden.",
+  },
+  {
+    key: "recipient_destination",
+    reasonCategory: "Recipient or destination is not verified",
+    plainLanguageStatus: "The recipient or payment destination is not ready for money movement.",
+    nextAction: "Use a verified recipient and destination record, or request destination review.",
+    moneyEffect: "Capture, payout, reuse, and public money metrics stay blocked.",
+    obligationEffect: "No locked agreement should rely on this destination yet.",
+    appealOrCorrectionPath:
+      "Use the correction path for the specific recipient or destination rejection.",
+    privacyBoundary:
+      "Show destination readiness only; keep bank, wallet, and raw donation-link details hidden.",
+  },
+  {
+    key: "clearing_confirmation",
+    reasonCategory: "Clearing or confirmation is incomplete",
+    plainLanguageStatus: "The trade is still a preview until frozen matching and confirmations pass.",
+    nextAction: "Create or refresh the lock proposal and collect fresh confirmations.",
+    moneyEffect: "Payable and public-completion states stay blocked.",
+    obligationEffect: "No participant has a new locked obligation from this preview.",
+    appealOrCorrectionPath:
+      "Use the correction path for the specific clearing or confirmation defect.",
+    privacyBoundary:
+      "Show only the stage and safe reason; keep individual participant terms hidden.",
+  },
+  {
+    key: "agreement_change",
+    reasonCategory: "Agreement change needs review",
+    plainLanguageStatus: "A post-lock change needs an explicit amendment record first.",
+    nextAction: "Create an amendment with before/after terms and renewed confirmations.",
+    moneyEffect: "Payment or payout tied to the changed terms stays blocked.",
+    obligationEffect: "Existing obligations are not silently changed by this record.",
+    appealOrCorrectionPath:
+      "Use the correction path for the specific amendment decision or changed term.",
+    privacyBoundary:
+      "Show the changed-term category only; keep private terms and counterparties hidden.",
+  },
+  {
+    key: "appeal_correction",
+    reasonCategory: "Appeal or correction case is incomplete",
+    plainLanguageStatus: "The correction path needs notice, deadline, scope, or neutral review.",
+    nextAction: "File or complete the bounded appeal case for the reviewed issue.",
+    moneyEffect: "No release, payout, or public reliance should proceed from the disputed decision.",
+    obligationEffect: "The appeal does not reopen settled obligations or waive safety blockers.",
+    appealOrCorrectionPath:
+      "Use the existing appeal case; keep it limited to the adverse decision under review.",
+    privacyBoundary:
+      "Show only appeal status; keep appeal narratives and evidence details hidden.",
+  },
+  {
+    key: "production_payout",
+    reasonCategory: "Production or payout gate is not ready",
+    plainLanguageStatus: "Operational checks are not complete enough for release or payout.",
+    nextAction: "Wait for the required operational review before publishing money or impact claims.",
+    moneyEffect: "Payout release, public totals, and sponsor-leverage claims stay blocked.",
+    obligationEffect: "No new operational override should be created from this state.",
+    appealOrCorrectionPath:
+      "Use the correction path for the specific operational check if a record is wrong.",
+    privacyBoundary:
+      "Show readiness category only; keep internal operational details hidden.",
+  },
+  {
+    key: "general_review_pending",
+    reasonCategory: "Review is not complete",
+    plainLanguageStatus: "This record cannot move forward until the reviewed issue is resolved.",
+    nextAction: "Ask for reviewer triage or submit a correction for the specific issue.",
+    moneyEffect: "No money movement should proceed from this record.",
+    obligationEffect: "No new locked obligation should be created from this record.",
+    appealOrCorrectionPath:
+      "Use the appeal or correction path only for the issue that was reviewed.",
+    privacyBoundary:
+      "Show a safe reason category; keep private facts and internal records hidden.",
+  },
+] as const;
+
+const USER_FACING_BLOCKER_MATCHERS: ReadonlyArray<{
+  key: MoralTradeUserFacingBlockerKey;
+  patterns: readonly RegExp[];
+}> = [
+  {
+    key: "needs_evidence",
+    patterns: [/evidence|proof|artifact|receipt|synthetic|duplicate|authenticity/i],
+  },
+  {
+    key: "safety_review",
+    patterns: [
+      /threat|coerc|civil_rights|discrimination|hazard|cyber|corruption|fraud|sanction|unsafe|prohibited|abuse|reporting_integrity|duress|vulnerab/i,
+    ],
+  },
+  {
+    key: "baseline_review",
+    patterns: [/baseline|additionality|counterfactual|manufactur/i],
+  },
+  {
+    key: "privacy_review",
+    patterns: [/privacy|disclos|redact|contact|private|confidential/i],
+  },
+  {
+    key: "appeal_correction",
+    patterns: [/appeal|challenge|deadline|notice|standing|non_retaliation|settled_obligation|correction/i],
+  },
+  {
+    key: "agreement_change",
+    patterns: [/amendment|renewed_confirmation|post_lock|retroactive|parent_record|changed_term/i],
+  },
+  {
+    key: "clearing_confirmation",
+    patterns: [/matching|clearing|lock|confirmation|ratio|settlement|reservation|atomic/i],
+  },
+  {
+    key: "recipient_destination",
+    patterns: [/recipient|destination|payment_destination|impersonation|wallet|bank/i],
+  },
+  {
+    key: "reviewer_or_neutral_review",
+    patterns: [/reviewer|neutral|conflict|calibration|audit|second_review|quality/i],
+  },
+  {
+    key: "account_security",
+    patterns: [/account|step_up|cooldown|session|mfa|recovery|device/i],
+  },
+  {
+    key: "production_payout",
+    patterns: [/payout|backup|deployment|configuration|migration|reconciliation|integrity|key|provider|ledger|restore/i],
+  },
+];
+
+export const MORAL_TRADE_USER_FACING_EXPLANATION_FORBIDDEN_TERMS = [
+  "sha256",
+  "policy_hash",
+  "source hash",
+  "provider payload",
+  "reviewer notes",
+  "risk signal",
+  "session anomaly",
+  "exact private",
+  "counterparty-specific",
+] as const;
+
+function getUserFacingExplanationByKey(
+  key: MoralTradeUserFacingBlockerKey,
+): MoralTradeUserFacingBlockerExplanation {
+  return (
+    USER_FACING_BLOCKER_EXPLANATIONS.find((entry) => entry.key === key) ??
+    USER_FACING_BLOCKER_EXPLANATIONS[USER_FACING_BLOCKER_EXPLANATIONS.length - 1]
+  );
+}
+
+export function getMoralTradeUserFacingBlockerExplanations() {
+  return [...USER_FACING_BLOCKER_EXPLANATIONS];
+}
+
+export function explainMoralTradeUserFacingBlocker(
+  blocker: string | null | undefined,
+): MoralTradeUserFacingBlockerExplanation {
+  const normalized = blocker?.trim() ?? "";
+  const match = USER_FACING_BLOCKER_MATCHERS.find((entry) =>
+    entry.patterns.some((pattern) => pattern.test(normalized)),
+  );
+
+  return getUserFacingExplanationByKey(match?.key ?? "general_review_pending");
+}
+
+function explainMoralTradeUserFacingBlockers(
+  blockers: readonly string[],
+): MoralTradeUserFacingBlockerExplanation[] {
+  const explanations = blockers.length
+    ? blockers.map((blocker) => explainMoralTradeUserFacingBlocker(blocker))
+    : [getUserFacingExplanationByKey("general_review_pending")];
+  const seen = new Set<MoralTradeUserFacingBlockerKey>();
+
+  return explanations.filter((entry) => {
+    if (seen.has(entry.key)) {
+      return false;
+    }
+
+    seen.add(entry.key);
+    return true;
+  });
+}
+
+export const OFFER_REVIEW_POLICY_ENFORCED_WORKFLOW: OfferReviewWorkflowPathStep[] = [
+  {
+    key: "user_draft",
+    label: "User draft",
+    contractSurface: "structured_review_input",
+    enforcement: "structured_input",
+  },
+  {
+    key: "schema_normalizer",
+    label: "Schema normalizer",
+    contractSurface: "normalizeReviewInput",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "completeness_check",
+    label: "Completeness check",
+    contractSurface: "current_status_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "anti_threat_policy_engine",
+    label: "Anti-threat / prohibited-content engine",
+    contractSurface: "current_status_blocked_reason_codes",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "baseline_credibility_assessment",
+    label: "Baseline credibility assessment",
+    contractSurface: "baseline_confidence_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "evidence_checklist_generator",
+    label: "Evidence checklist generator",
+    contractSurface: "action_evidence_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "privacy_redaction_engine",
+    label: "Privacy / redaction engine",
+    contractSurface: "disclosure_contract",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "rule_based_match_engine",
+    label: "Rule-based match engine",
+    contractSurface: "match_signal_contract",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "match_card_factor_codes",
+    label: "Match card with factor codes and confidence band",
+    contractSurface: "marketplace_factor_priority",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "human_review",
+    label: "Human review",
+    contractSurface: "human_review_required",
+    enforcement: "human_review",
+  },
+  {
+    key: "agreement_room",
+    label: "Agreement room",
+    contractSurface: "agreement_review_workflow",
+    enforcement: "human_review",
+  },
+  {
+    key: "evidence_submission",
+    label: "Evidence submission",
+    contractSurface: "provenance_evidence_artifact",
+    enforcement: "provenance",
+  },
+  {
+    key: "reviewer_decision",
+    label: "Reviewer decision",
+    contractSurface: "review_decision",
+    enforcement: "human_review",
+  },
+  {
+    key: "audit_log_provenance_record",
+    label: "Audit log / provenance record",
+    contractSurface: "state_transition_event_record",
+    enforcement: "provenance",
+  },
+];
+
+export const OFFER_REVIEW_STATE_OUTCOMES = [
+  "needs_clarification",
+  "blocked",
+  "needs_evidence",
+  "challenge_window",
+  "disputed_unresolved",
+  "matchable",
+  "completion_reviewed",
+] as const;
 
 const WORKED_EXAMPLE_ORDER_MAP = new Map<string, number>(
   WORKED_EXAMPLE_LAUNCH_ORDER.map((id, index) => [id, index]),
@@ -904,6 +1303,10 @@ function buildVerificationLoop({
   privacyRedaction: { rating: ProtocolTrustRating };
   status: ProtocolReviewStatus;
 }) {
+  const primaryBlockerExplanation = policyConflicts.length
+    ? explainMoralTradeUserFacingBlocker(policyConflicts[0])
+    : null;
+
   return [
     verificationStep(
       "schema_completeness",
@@ -916,7 +1319,7 @@ function buildVerificationLoop({
       "anti_threat",
       policyConflicts.length ? "blocked" : "pass",
       policyConflicts.length
-        ? `Policy conflict codes: ${policyConflicts.join(", ")}.`
+        ? `${primaryBlockerExplanation?.reasonCategory}: ${primaryBlockerExplanation?.plainLanguageStatus}`
         : "No deterministic prohibited-pattern conflict was detected.",
     ),
     verificationStep(
@@ -955,7 +1358,7 @@ function buildVerificationLoop({
           ? "pass"
           : "needs_input",
       policyConflicts.length
-        ? "Policy conflicts block any match explanation from authorizing a preview."
+        ? `${primaryBlockerExplanation?.reasonCategory} blocks any match explanation from authorizing a preview.`
         : factorCodes.length && privacyRedaction.rating === "high"
           ? "Factor codes and redactions are available for reviewer-facing explanation."
           : "A privacy-safe factor-code explanation is not ready yet.",
@@ -998,7 +1401,8 @@ function getNextStepChecklist({
   const steps: string[] = [];
 
   if (policyConflicts.length) {
-    steps.push("Do not publish or match this draft; route it to human safety review with the policy conflict codes.");
+    const explanation = explainMoralTradeUserFacingBlocker(policyConflicts[0]);
+    steps.push(`${explanation.nextAction} ${explanation.moneyEffect}`);
   }
 
   if (missingRequiredFields.length) {
@@ -1029,12 +1433,12 @@ function getNextStepChecklist({
 function buildReviewerSummary({
   input,
   artifactsToRequest,
-  policyConflicts,
+  userFacingBlockerExplanations,
   uncertaintyFlags,
 }: {
   input: MoralTradeProtocolDraftInput;
   artifactsToRequest: readonly string[];
-  policyConflicts: readonly string[];
+  userFacingBlockerExplanations: readonly MoralTradeUserFacingBlockerExplanation[];
   uncertaintyFlags: readonly string[];
 }) {
   const offered = truncateText(input.offeredAction, 120) || "Not specified";
@@ -1044,9 +1448,16 @@ function buildReviewerSummary({
     truncateText(input.verificationMethod, 80) ||
     artifactsToRequest[0] ||
     "No evidence method specified";
-  const policy = policyConflicts.length ? policyConflicts.join(", ") : "none from deterministic preview";
+  const reviewBlockers = userFacingBlockerExplanations.length
+    ? userFacingBlockerExplanations.map((entry) => entry.reasonCategory).join(", ")
+    : "none from deterministic preview";
+  const safeUnverifiedCategories = userFacingBlockerExplanations.length
+    ? userFacingBlockerExplanations
+        .map((entry) => entry.reasonCategory.toLowerCase())
+        .slice(0, 4)
+    : ["completion", "scope alignment", "artifact uniqueness"];
   const unverified = uncertaintyFlags.length
-    ? uncertaintyFlags.slice(0, 4).join(", ")
+    ? safeUnverifiedCategories.join(", ")
     : "completion, scope alignment, and artifact uniqueness remain unverified until review";
 
   return [
@@ -1054,7 +1465,7 @@ function buildReviewerSummary({
     `What is being requested: ${requested}.`,
     `Baseline claim: ${baseline}.`,
     `What evidence would count: ${evidence}.`,
-    `Main policy flags: ${policy}.`,
+    `Main policy flags: ${reviewBlockers}.`,
     `What remains unverified: ${unverified}.`,
     "This is not escrow, legal advice, tax advice, custody, or objective moral endorsement.",
   ].join(" ");
@@ -1164,13 +1575,15 @@ function buildCitedEvidenceTable({
   }
 
   for (const conflict of policyConflicts) {
+    const explanation = explainMoralTradeUserFacingBlocker(conflict);
+
     rows.push(
       evidenceRow({
-        claim: conflict,
+        claim: explanation.reasonCategory,
         evidenceType: "policy_registry",
         citation: `policy_registry.${conflict}`,
         status: "policy_flag",
-        reviewerNote: "Policy flag blocks publishing or matching until safety review resolves it.",
+        reviewerNote: `${conflict}: ${explanation.plainLanguageStatus} ${explanation.nextAction}`,
       }),
     );
   }
@@ -1310,6 +1723,17 @@ export function evaluateMoralTradeProtocolDraft(
     partyRelativeBenefit,
     privacyRedaction,
   });
+  const userFacingBlockerSignals = [
+    ...policyConflicts,
+    ...(factualTrust.rating === "low" ? ["evidence_missing"] : []),
+    ...(counterfactualBaseline.rating !== "high" ? ["baseline_review_needed"] : []),
+    ...(privacyRedaction.rating === "low" ? ["privacy_disclosure_review"] : []),
+    ...(externalityReview.required ? ["challenge_window_required"] : []),
+    ...(missingRequiredFields.length ? ["required_fields_incomplete"] : []),
+  ];
+  const userFacingBlockerExplanations = userFacingBlockerSignals.length
+    ? explainMoralTradeUserFacingBlockers(userFacingBlockerSignals)
+    : [];
   const nextStepChecklist = getNextStepChecklist({
     missingRequiredFields,
     policyConflicts,
@@ -1339,6 +1763,7 @@ export function evaluateMoralTradeProtocolDraft(
     clarificationQuestions,
     verificationLoop,
     uncertaintyFlags,
+    userFacingBlockerExplanations,
     nextStepChecklist,
     citedEvidenceTable: buildCitedEvidenceTable({
       artifactsToRequest: uniqueArtifactsToRequest,
@@ -1350,7 +1775,7 @@ export function evaluateMoralTradeProtocolDraft(
     reviewerSummary: buildReviewerSummary({
       input,
       artifactsToRequest: uniqueArtifactsToRequest,
-      policyConflicts,
+      userFacingBlockerExplanations,
       uncertaintyFlags,
     }),
     trustAssessment: {
@@ -1539,37 +1964,83 @@ function workflowStatusFromExternality(input: ProposalReviewInput): MoralTradeVe
   return "pass";
 }
 
+function workflowStatusReason(
+  key: OfferReviewWorkflowCard["key"],
+  status: MoralTradeVerificationStepStatus,
+  reason: string,
+) {
+  return {
+    statusReasonCode: `${key}.${status}`,
+    statusReason: `${status.replaceAll("_", " ")}: ${reason}`,
+  };
+}
+
 export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): OfferReviewWorkflowCard[] {
   const currentStatus = input.currentStatus?.trim() || "Manual review required before reliance";
   const actionEvidence = getActionEvidenceSummary(input);
   const evidenceStatus = workflowStatusFromEvidence(input);
   const baselineConfidence = getBaselineConfidence(input);
   const baselineEvidence = getBaselineEvidenceSummary(input);
+  const baselineStatus = workflowStatusFromBaseline(baselineConfidence);
   const externalityReview = getExternalityReviewSummary(input);
+  const externalityStatus = workflowStatusFromExternality(input);
   const scoreConfidence = getScoreConfidence(input);
   const currentStatusWorkflowStatus = workflowStatusFromCurrentStatus(currentStatus);
+  const currentStatusBlockerExplanation =
+    currentStatusWorkflowStatus === "blocked"
+      ? explainMoralTradeUserFacingBlocker(currentStatus)
+      : null;
   const scoreSummary =
     input.offerImpact && input.minCounterpartyImpact
       ? `Participant-stated importance ${input.offerImpact}/10; counterparty minimum ${input.minCounterpartyImpact}/10. Confidence: ${scoreConfidence}.`
       : `Participant-stated scores are review context only. Confidence: ${scoreConfidence}.`;
+  const currentStatusReason =
+    currentStatusWorkflowStatus === "blocked"
+      ? (currentStatusBlockerExplanation?.plainLanguageStatus ??
+        "this record cannot move forward until the reviewed issue is resolved.")
+      : currentStatusWorkflowStatus === "needs_input"
+        ? "the visible status says required review information is missing or unresolved."
+        : "the visible status is still a review state, not completion, custody, enforceability, or moral endorsement.";
+  const evidenceStatusReason =
+    evidenceStatus === "pass"
+      ? "a named proof method and clear evidence locator are present for reviewer inspection."
+      : evidenceStatus === "human_review"
+        ? "a proof method is named, but the artifact still needs reviewer inspection before reliance."
+        : "no reviewable proof method or evidence locator is attached yet.";
+  const baselineStatusReason =
+    baselineStatus === "pass"
+      ? "the baseline is stated with enough support to enter counterfactual review."
+      : baselineStatus === "needs_input"
+        ? "the baseline is weak and needs dated no-trade evidence."
+        : "the baseline has not been assessed enough to clear counterfactual review.";
+  const externalityStatusReason =
+    externalityStatus === "pass"
+      ? "no offset, payment, or political-adjacent trigger was detected."
+      : "the mode or causes can affect third parties, incentives, or unrepresented values.";
 
   return [
     {
       key: "current_status",
       label: "Status card",
       status: currentStatusWorkflowStatus,
+      ...workflowStatusReason("current_status", currentStatusWorkflowStatus, currentStatusReason),
       factorCodes: ["status_visible", "human_review_required"],
       summary:
         currentStatusWorkflowStatus === "blocked"
-          ? REVIEW_WORKFLOW_PARTICIPANT_COPY.safetyWarningCopy
+          ? `${currentStatusBlockerExplanation?.reasonCategory ?? "Review is not complete"}. ${
+              currentStatusBlockerExplanation?.obligationEffect ??
+              "No new locked obligation should be created from this record."
+            }`
           : `Status: ${currentStatus}.`,
       nextStep:
+        currentStatusBlockerExplanation?.nextAction ??
         "Treat this as a review state, not a claim of completion, legal enforceability, custody, or moral endorsement.",
     },
     {
       key: "action_evidence",
       label: "Action evidence",
       status: evidenceStatus,
+      ...workflowStatusReason("action_evidence", evidenceStatus, evidenceStatusReason),
       factorCodes: ["evidence_rule_named", "evidence_sufficiency"],
       summary:
         evidenceStatus === "needs_input"
@@ -1581,7 +2052,8 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
     {
       key: "baseline_confidence",
       label: "Counterfactual baseline",
-      status: workflowStatusFromBaseline(baselineConfidence),
+      status: baselineStatus,
+      ...workflowStatusReason("baseline_confidence", baselineStatus, baselineStatusReason),
       factorCodes: ["baseline_stated", "baseline_credibility"],
       summary: `${baselineConfidence}: ${baselineEvidence}`,
       nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.baselineHelperText,
@@ -1589,7 +2061,8 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
     {
       key: "externality_review",
       label: "Externality review",
-      status: workflowStatusFromExternality(input),
+      status: externalityStatus,
+      ...workflowStatusReason("externality_review", externalityStatus, externalityStatusReason),
       factorCodes: ["externality_review_required", "human_review_required"],
       summary: externalityReview,
       nextStep:
@@ -1599,6 +2072,11 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       key: "participant_relative_scores",
       label: "Participant-relative scores",
       status: "pass",
+      ...workflowStatusReason(
+        "participant_relative_scores",
+        "pass",
+        "scores are bounded as participant-stated context, not platform ranking.",
+      ),
       factorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
       summary: scoreSummary,
       nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.importanceScoreNote,
@@ -1607,6 +2085,11 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       key: "appeal_scope",
       label: "Appeal scope",
       status: "human_review",
+      ...workflowStatusReason(
+        "appeal_scope",
+        "human_review",
+        "appeals require reviewer handling and must stay within the reviewed issue.",
+      ),
       factorCodes: ["appealable_review_scope", "reviewer_summary"],
       summary:
         "Appeals should target the specific reviewed claim, evidence row, baseline concern, disclosure decision, or policy flag.",
@@ -1645,6 +2128,8 @@ export function getOfferReviewCardInstrumentation(
     label: nextActionCard.label,
     nextStep: nextActionCard.nextStep,
     status: nextActionCard.status,
+    statusReasonCode: nextActionCard.statusReasonCode,
+    statusReason: nextActionCard.statusReason,
   };
 }
 
@@ -1682,6 +2167,11 @@ function workflowContractCheck(
 export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
   const sampleDetailCards = getOfferReviewWorkflowCards(REVIEW_WORKFLOW_SAMPLE_INPUT);
   const sampleMarketplaceCard = getOfferReviewCardInstrumentation(REVIEW_WORKFLOW_SAMPLE_INPUT);
+  const sampleUserFacingBlockerExplanations = [
+    explainMoralTradeUserFacingBlocker("anti_threat_baseline"),
+    explainMoralTradeUserFacingBlocker("evidence_scope_missing"),
+    explainMoralTradeUserFacingBlocker("payout_release_variance_unresolved"),
+  ];
 
   return {
     version: MORAL_TRADE_REVIEW_WORKFLOW_CONTRACT_VERSION,
@@ -1689,11 +2179,21 @@ export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
       "Public contract for the review workflow cards shown on offer detail pages, worked examples, marketplace cards, and homepage preview cards.",
     statuses: ["pass", "needs_input", "human_review", "blocked"],
     detailWorkflowCards: OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS,
+    policyEnforcedWorkflow: OFFER_REVIEW_POLICY_ENFORCED_WORKFLOW,
+    reviewStateOutcomes: [...OFFER_REVIEW_STATE_OUTCOMES],
     marketplaceFactorPriority: [...MARKETPLACE_REVIEW_FACTOR_PRIORITY],
     participantCopyTemplates: REVIEW_WORKFLOW_PARTICIPANT_COPY,
+    userFacingBlockerExplanations: getMoralTradeUserFacingBlockerExplanations(),
+    sampleUserFacingBlockerExplanations,
+    forbiddenUserFacingExplanationTerms: [
+      ...MORAL_TRADE_USER_FACING_EXPLANATION_FORBIDDEN_TERMS,
+    ],
     invariants: [
-      "Every detail workflow card must expose at least one factor code and one next-step instruction.",
+      "Every detail workflow card must expose at least one factor code, one status-reason code, one status reason, and one next-step instruction.",
       "Marketplace cards must show prioritized factor codes derived from the same workflow contract.",
+      "Marketplace cards must inherit the selected detail card status reason.",
+      "Every participant-facing block, pause, rejection, or manual-review state maps to a plain-language reason category, next action, money effect, obligation effect, and appeal or correction path where applicable.",
+      "User-facing blocker explanations do not expose private facts, source hashes, provider payloads, raw review evidence, account-security details, or sensitive counterparty facts.",
       "Participant-relative scores must preserve no_global_moral_ranking.",
       "Appeals must preserve appealable_review_scope and reviewer_summary factor codes.",
       "Action evidence, baseline confidence, and externality review must remain separate cards.",
@@ -1703,6 +2203,7 @@ export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
     contractTests: [
       "review_workflow_contract_validator",
       "offer_review_workflow_card_smoke",
+      "user_facing_blocker_explanation_smoke",
       "marketplace_factor_card_smoke",
       "technical_spec_review_workflow_smoke",
     ],
@@ -1714,12 +2215,43 @@ export function validateOfferReviewWorkflowContract(
 ): OfferReviewWorkflowContractValidation {
   const contractKeys = contract.detailWorkflowCards.map((card) => card.key);
   const sampleKeys = contract.sampleDetailCards.map((card) => card.key);
+  const workflowStepKeys = contract.policyEnforcedWorkflow.map((step) => step.key);
   const contractFactorCodes = new Set(
     contract.detailWorkflowCards.flatMap((card) => card.requiredFactorCodes),
   );
   const sampleFactorCodes = new Set(
     contract.sampleDetailCards.flatMap((card) => card.factorCodes),
   );
+  const explanationKeys = contract.userFacingBlockerExplanations.map(
+    (entry) => entry.key,
+  );
+  const requiredExplanationKeys: MoralTradeUserFacingBlockerKey[] = [
+    "needs_evidence",
+    "baseline_review",
+    "privacy_review",
+    "safety_review",
+    "account_security",
+    "reviewer_or_neutral_review",
+    "recipient_destination",
+    "clearing_confirmation",
+    "agreement_change",
+    "appeal_correction",
+    "production_payout",
+    "general_review_pending",
+  ];
+  const explanationText = contract.userFacingBlockerExplanations
+    .map((entry) =>
+      [
+        entry.reasonCategory,
+        entry.plainLanguageStatus,
+        entry.nextAction,
+        entry.moneyEffect,
+        entry.obligationEffect,
+        entry.appealOrCorrectionPath,
+        entry.privacyBoundary,
+      ].join(" "),
+    )
+    .join(" ");
   const checks = [
     workflowContractCheck(
       "card-key-coverage",
@@ -1728,6 +2260,23 @@ export function validateOfferReviewWorkflowContract(
         sampleKeys.length === contractKeys.length &&
         contractKeys.every((key, index) => sampleKeys[index] === key),
       `${contractKeys.join(", ")} -> ${sampleKeys.join(", ")}`,
+    ),
+    workflowContractCheck(
+      "status-reason-coverage",
+      "Every detail and marketplace card exposes a structured status reason",
+      contract.detailWorkflowCards.every((card) => card.statusReasonRule.trim().length > 0) &&
+        contract.sampleDetailCards.every(
+          (card) =>
+            card.statusReasonCode === `${card.key}.${card.status}` &&
+            card.statusReason.startsWith(`${card.status.replaceAll("_", " ")}:`),
+        ) &&
+        contract.sampleMarketplaceCard.statusReasonCode.length > 0 &&
+        contract.sampleMarketplaceCard.statusReason.startsWith(
+          `${contract.sampleMarketplaceCard.status.replaceAll("_", " ")}:`,
+        ),
+      contract.sampleDetailCards
+        .map((card) => `${card.statusReasonCode}=${card.statusReason}`)
+        .join(" | "),
     ),
     workflowContractCheck(
       "factor-code-coverage",
@@ -1778,11 +2327,94 @@ export function validateOfferReviewWorkflowContract(
       Object.values(contract.participantCopyTemplates).join(" | "),
     ),
     workflowContractCheck(
+      "user-facing-blocker-explanation-coverage",
+      "User-facing blocker explanations cover review, money, obligation, and appeal/correction effects",
+      requiredExplanationKeys.every((key) => explanationKeys.includes(key)) &&
+        contract.userFacingBlockerExplanations.every(
+          (entry) =>
+            entry.reasonCategory &&
+            entry.plainLanguageStatus &&
+            entry.nextAction &&
+            entry.moneyEffect &&
+            entry.obligationEffect &&
+            entry.appealOrCorrectionPath &&
+            entry.privacyBoundary,
+        ),
+      explanationKeys.join(", "),
+    ),
+    workflowContractCheck(
+      "user-facing-blocker-privacy-boundary",
+      "User-facing blocker explanations avoid raw internal and private-detail terms",
+      contract.forbiddenUserFacingExplanationTerms.every(
+        (term) => !explanationText.toLowerCase().includes(term.toLowerCase()),
+      ) &&
+        contract.invariants.some((entry) => /plain-language reason category/i.test(entry)) &&
+        contract.invariants.some((entry) => /do not expose private facts/i.test(entry)),
+      explanationText,
+    ),
+    workflowContractCheck(
+      "sample-blocker-explanations",
+      "Sample blocker explanations prove safety, evidence, and payout categories",
+      contract.sampleUserFacingBlockerExplanations.some(
+        (entry) => entry.key === "safety_review",
+      ) &&
+        contract.sampleUserFacingBlockerExplanations.some(
+          (entry) => entry.key === "needs_evidence",
+        ) &&
+        contract.sampleUserFacingBlockerExplanations.some(
+          (entry) => entry.key === "production_payout",
+        ),
+      contract.sampleUserFacingBlockerExplanations
+        .map((entry) => `${entry.key}:${entry.reasonCategory}`)
+        .join(", "),
+    ),
+    workflowContractCheck(
+      "policy-enforced-workflow-path",
+      "Source-document workflow diagram is represented as ordered contract steps",
+      [
+        "user_draft",
+        "schema_normalizer",
+        "completeness_check",
+        "anti_threat_policy_engine",
+        "baseline_credibility_assessment",
+        "evidence_checklist_generator",
+        "privacy_redaction_engine",
+        "rule_based_match_engine",
+        "match_card_factor_codes",
+        "human_review",
+        "agreement_room",
+        "evidence_submission",
+        "reviewer_decision",
+        "audit_log_provenance_record",
+      ].every((key, index) => workflowStepKeys[index] === key) &&
+        contract.policyEnforcedWorkflow.every(
+          (step) => step.label && step.contractSurface && step.enforcement,
+        ) &&
+        contract.policyEnforcedWorkflow[contract.policyEnforcedWorkflow.length - 1]?.enforcement ===
+          "provenance",
+      workflowStepKeys.join(" -> "),
+    ),
+    workflowContractCheck(
+      "review-state-outcome-coverage",
+      "Workflow outcomes cover clarification, block, evidence, challenge, dispute, matchable, and reviewed completion states",
+      [
+        "needs_clarification",
+        "blocked",
+        "needs_evidence",
+        "challenge_window",
+        "disputed_unresolved",
+        "matchable",
+        "completion_reviewed",
+      ].every((outcome) => contract.reviewStateOutcomes.includes(outcome)),
+      contract.reviewStateOutcomes.join(", "),
+    ),
+    workflowContractCheck(
       "contract-tests",
       "Review workflow contract test hooks are named",
       [
         "review_workflow_contract_validator",
         "offer_review_workflow_card_smoke",
+        "user_facing_blocker_explanation_smoke",
         "marketplace_factor_card_smoke",
         "technical_spec_review_workflow_smoke",
       ].every((hook) => contract.contractTests.includes(hook)),

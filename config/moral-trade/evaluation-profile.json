@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-evaluation-v0.2-2026-05",
+  "version": "moral-trade-evaluation-v0.3-2026-05",
   "purpose": "Public evaluation contract for Moral Trade protocol quality, copilot assistance, privacy safety, explanation usefulness, fairness slices, redacted deviation review logs, and human-review reliability.",
   "cadence": "monthly_public_aggregate",
   "metrics": [
@@ -173,6 +173,7 @@
   ],
   "evaluationTests": [
     "evaluation_profile_validator",
+    "workflow_quality_audit",
     "surfacing_parity_audit",
     "surfacing_deviation_review_log",
     "ux_readiness_audit",

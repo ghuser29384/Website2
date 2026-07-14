@@ -1,8 +1,91 @@
 import { expect, test } from "@playwright/test";
 
+const oauthProviderLabels = {
+  apple: "Apple",
+  azure: "Microsoft",
+  bitbucket: "Bitbucket",
+  discord: "Discord",
+  facebook: "Facebook",
+  figma: "Figma",
+  fly: "Fly.io",
+  github: "GitHub",
+  gitlab: "GitLab",
+  google: "Google",
+  kakao: "Kakao",
+  keycloak: "Keycloak",
+  linkedin: "LinkedIn",
+  linkedin_oidc: "LinkedIn OIDC",
+  notion: "Notion",
+  slack: "Slack",
+  slack_oidc: "Slack OIDC",
+  spotify: "Spotify",
+  twitch: "Twitch",
+  twitter: "Twitter",
+  workos: "WorkOS",
+  x: "X",
+  zoom: "Zoom",
+} as const;
+
+const oauthProviders = [
+  "google",
+  "apple",
+  "facebook",
+  "github",
+  "discord",
+  "x",
+  "twitter",
+  "linkedin_oidc",
+  "linkedin",
+  "azure",
+  "gitlab",
+  "bitbucket",
+  "figma",
+  "kakao",
+  "keycloak",
+  "notion",
+  "slack_oidc",
+  "slack",
+  "spotify",
+  "twitch",
+  "workos",
+  "zoom",
+  "fly",
+] as const;
+
+async function getEnabledOAuthProvidersForTest() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return [];
+  }
+
+  const response = await fetch(`${url}/auth/v1/settings`, {
+    headers: {
+      apikey: key,
+      authorization: `Bearer ${key}`,
+    },
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const settings = (await response.json()) as {
+    external?: Partial<Record<(typeof oauthProviders)[number], boolean>>;
+  };
+
+  return oauthProviders.filter((provider) => settings.external?.[provider] === true);
+}
+
 const publicRoutes = [
   "/",
   "/offers",
+  "/funding-rounds/vegetarian-week-micro-assurance-preview",
+  "/what-is-moral-trade",
+  "/worked-examples",
   "/cohort",
   "/offers/new",
   "/create",
@@ -27,6 +110,10 @@ const publicRoutes = [
   "/privacy",
   "/terms",
   "/safety",
+  "/anti-threat-rules",
+  "/status",
+  "/team-and-governance",
+  "/pilot-updates",
   "/faq",
   "/login",
   "/signup",
@@ -62,6 +149,7 @@ for (const route of publicRoutes) {
     await expect(page.locator("body")).not.toHaveText(
       /Loading Moral Trade\.\s*Opening the requested workflow\./,
     );
+    await expect(page.locator("body")).not.toContainText("Preparing route");
     await expect(page.locator("body")).not.toContainText("Internal Error");
     await expect(page.locator('nav[aria-label="Primary"]')).toHaveCount(1);
     await expect(page.locator("main")).toHaveCount(1);
@@ -98,6 +186,114 @@ for (const route of publicRoutes) {
     expect(consoleErrors).toEqual([]);
   });
 }
+
+test("/offers/new offset creation layout stays broad without mobile overflow", async ({ page }) => {
+  const route = "/offers/new?mode=offset#offer-boundaries";
+  const viewports = [375, 768, 1024, 1280, 1440] as const;
+
+  for (const width of viewports) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+
+    const horizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    const wizard = page.locator('section[aria-labelledby="offer-wizard-heading"]');
+    const wizardVisible = (await wizard.count()) > 0 && (await wizard.first().isVisible());
+
+    if (width === 1280 && wizardVisible) {
+      const wizardBox = await wizard.first().boundingBox();
+      expect(wizardBox?.width ?? 0).toBeGreaterThan(900);
+
+      const templateSection = page.locator('section[aria-labelledby="offer-template-heading"]');
+      await expect(templateSection).toBeVisible();
+
+      const templateBox = await templateSection.boundingBox();
+      expect(templateBox?.width ?? 0).toBeGreaterThan(900);
+      expect((templateBox?.x ?? 0) + (templateBox?.width ?? 0)).toBeLessThanOrEqual(width + 1);
+      await expect(page.locator(".offer-template-button")).toHaveCount(4);
+    }
+  }
+});
+
+test("/login renders unified auth options and preserves returnTo", async ({ page }) => {
+  const enabledOAuthProviders = await getEnabledOAuthProvidersForTest();
+  await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
+  await expect(page.getByRole("link", { name: "Continue with Email" })).toHaveAttribute(
+    "href",
+    "/login?mode=login&method=email&returnTo=%2Foffers%2Fnew",
+  );
+
+  for (const provider of oauthProviders) {
+    const buttonName = `Continue with ${oauthProviderLabels[provider]}`;
+    const expectedCount = enabledOAuthProviders.includes(provider) ? 1 : 0;
+    await expect(page.getByRole("button", { name: buttonName })).toHaveCount(expectedCount);
+
+    if (expectedCount === 1) {
+      const providerInput = page.locator(
+        `form:has(button:has-text("${buttonName}")) input[name="provider"]`,
+      );
+      await expect(providerInput).toHaveValue(provider);
+    }
+  }
+
+  await expect(page.getByRole("link", { name: "Create an account" })).toHaveAttribute(
+    "href",
+    "/signup?mode=signup&returnTo=%2Foffers%2Fnew",
+  );
+});
+
+test("/signup renders signup mode with legal text and mode switch", async ({ page }) => {
+  await page.goto("/signup?next=/wish-registry", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("h1")).toHaveText("Create your Moral Trade account");
+  await expect(page.getByText("Start with one low-risk action. You can add profile details later.")).toBeVisible();
+  await expect(page.getByText("By creating an account, you agree to the")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Log in" }).last()).toHaveAttribute(
+    "href",
+    "/login?mode=login&returnTo=%2Fwish-registry",
+  );
+});
+
+test("auth mode switch changes between login and signup while preserving returnTo", async ({ page }) => {
+  await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("link", { name: "Create account" }).first().click();
+  await expect(page).toHaveURL(/\/signup\?mode=signup&returnTo=%2Foffers%2Fnew$/);
+  await expect(page.locator("h1")).toHaveText("Create your Moral Trade account");
+
+  await page.getByRole("link", { name: "Log in" }).first().click();
+  await expect(page).toHaveURL(/\/login\?mode=login&returnTo=%2Foffers%2Fnew$/);
+  await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
+});
+
+test("auth email flow exposes compact required email/password form", async ({ page }) => {
+  await page.goto("/login?method=email&returnTo=/dashboard", { waitUntil: "domcontentloaded" });
+
+  const email = page.getByLabel("Email");
+  const password = page.getByLabel("Password");
+  await expect(email).toHaveAttribute("required", "");
+  await expect(password).toHaveAttribute("required", "");
+  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+    "href",
+    "/password-reset",
+  );
+  await expect(page.locator('input[name="next"]')).toHaveValue("/dashboard");
+});
+
+test("signup email flow asks only email and password before onboarding details", async ({ page }) => {
+  await page.goto("/signup?method=email&returnTo=/onboarding", { waitUntil: "domcontentloaded" });
+
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByLabel("Display name")).toHaveCount(0);
+  await expect(page.getByText("Optional location")).toHaveCount(0);
+  await expect(page.locator('#email-auth input[name="return_to"]')).toHaveValue("/onboarding");
+});
 
 for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology", "/safety", "/people", "/signup"] as const) {
   test(`public route ${route} uses canonical top-level navigation`, async ({ page }) => {

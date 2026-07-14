@@ -193,11 +193,59 @@ create table if not exists public.donation_offset_offers (
   pool_side text check (pool_side in ('side_a', 'side_b')),
   assurance_minimum_cents integer not null default 0 check (assurance_minimum_cents >= 0),
   assurance_deadline_at timestamptz,
+  offer_expires_at timestamptz,
   evidence_url text not null default '',
   moderation_status text not null default 'clear' check (moderation_status in ('clear', 'flagged', 'blocked')),
   moderation_notes text not null default '',
   moderation_reviewed_by uuid references public.profiles (id) on delete set null,
   moderation_reviewed_at timestamptz,
+  baseline_bond_enabled boolean not null default false,
+  baseline_bond_amount_cents integer not null default 0 check (baseline_bond_amount_cents >= 0),
+  baseline_bond_currency text not null default 'USD' check (baseline_bond_currency ~ '^[A-Z]{3}$'),
+  baseline_bond_forfeit_destination_id text references public.registered_charities (id) on delete restrict,
+  baseline_bond_evidence_due_at timestamptz,
+  baseline_bond_evidence_standard text not null default '',
+  baseline_bond_evidence_url text not null default '',
+  baseline_bond_status text not null default 'none' check (
+    baseline_bond_status in (
+      'none',
+      'pending_payment',
+      'posted',
+      'refunded_after_match',
+      'evidence_due',
+      'evidence_submitted',
+      'refunded_after_evidence',
+      'forfeited',
+      'cancelled_by_review'
+    )
+  ),
+  baseline_bond_review_notes text not null default '',
+  baseline_bond_reviewed_by uuid references public.profiles (id) on delete set null,
+  baseline_bond_reviewed_at timestamptz,
+  baseline_bond_appeal_window_ends_at timestamptz,
+  check (
+    baseline_bond_enabled = false
+    or (
+      baseline_bond_amount_cents > 0
+      and baseline_bond_forfeit_destination_id is not null
+      and baseline_bond_evidence_due_at is not null
+      and offer_expires_at is not null
+      and length(trim(baseline_bond_evidence_standard)) >= 20
+      and baseline_bond_status <> 'none'
+    )
+  ),
+  check (
+    baseline_bond_enabled = false
+    or baseline_bond_evidence_due_at > offer_expires_at
+  ),
+  check (
+    baseline_bond_forfeit_destination_id is null
+    or baseline_bond_forfeit_destination_id not in (
+      'platform-operating-account',
+      'moraltrade-operating-account',
+      'moral-trade-operating-account'
+    )
+  ),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -222,8 +270,78 @@ add constraint donation_offset_offers_assurance_minimum_cents_check
 check (assurance_minimum_cents >= 0);
 
 alter table public.donation_offset_offers add column if not exists assurance_deadline_at timestamptz;
+alter table public.donation_offset_offers add column if not exists offer_expires_at timestamptz;
 alter table public.donation_offset_offers add column if not exists moderation_reviewed_by uuid references public.profiles (id) on delete set null;
 alter table public.donation_offset_offers add column if not exists moderation_reviewed_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_enabled boolean not null default false;
+alter table public.donation_offset_offers add column if not exists baseline_bond_amount_cents integer not null default 0;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_amount_cents_check;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_amount_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_amount_check
+check (baseline_bond_amount_cents >= 0);
+alter table public.donation_offset_offers add column if not exists baseline_bond_currency text not null default 'USD';
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_currency_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_currency_check
+check (baseline_bond_currency ~ '^[A-Z]{3}$');
+alter table public.donation_offset_offers add column if not exists baseline_bond_forfeit_destination_id text references public.registered_charities (id) on delete restrict;
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_due_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_standard text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_url text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_status text not null default 'none';
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_status_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_status_check
+check (
+  baseline_bond_status in (
+    'none',
+    'pending_payment',
+    'posted',
+    'refunded_after_match',
+    'evidence_due',
+    'evidence_submitted',
+    'refunded_after_evidence',
+    'forfeited',
+    'cancelled_by_review'
+  )
+);
+alter table public.donation_offset_offers add column if not exists baseline_bond_review_notes text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_reviewed_by uuid references public.profiles (id) on delete set null;
+alter table public.donation_offset_offers add column if not exists baseline_bond_reviewed_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_appeal_window_ends_at timestamptz;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_enabled_fields_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_enabled_fields_check
+check (
+  baseline_bond_enabled = false
+  or (
+    baseline_bond_amount_cents > 0
+    and baseline_bond_forfeit_destination_id is not null
+    and baseline_bond_evidence_due_at is not null
+    and offer_expires_at is not null
+    and length(trim(baseline_bond_evidence_standard)) >= 20
+    and baseline_bond_status <> 'none'
+  )
+);
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_timing_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_timing_check
+check (
+  baseline_bond_enabled = false
+  or baseline_bond_evidence_due_at > offer_expires_at
+);
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_forfeit_destination_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_forfeit_destination_check
+check (
+  baseline_bond_forfeit_destination_id is null
+  or baseline_bond_forfeit_destination_id not in (
+    'platform-operating-account',
+    'moraltrade-operating-account',
+    'moral-trade-operating-account'
+  )
+);
 alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_verification_method_check;
 alter table public.donation_offset_offers
 add constraint donation_offset_offers_verification_method_check
@@ -439,6 +557,12 @@ create table if not exists public.agreement_payments (
   stripe_payment_intent_id text,
   stripe_charge_id text,
   receipt_url text,
+  authorization_mode text not null default 'direct_checkout' check (authorization_mode in ('direct_checkout', 'manual_review_stub', 'provider_managed_conditional_authorization')),
+  authorization_status text not null default 'not_required_for_stage' check (authorization_status in ('not_required_for_stage', 'stub_blocked', 'manual_review_required', 'authorization_pending', 'authorized', 'authorization_failed', 'expired', 'capture_blocked')),
+  capture_policy text not null default 'direct_checkout_after_participant_request' check (capture_policy in ('direct_checkout_after_participant_request', 'no_capture_until_matched_lock_confirmed')),
+  authorization_gate_snapshot text not null default '',
+  authorization_expires_at timestamptz,
+  authorized_at timestamptz,
   notes text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -552,7 +676,10 @@ create table if not exists public.agreement_review_cases (
   reviewer_role text not null default 'operator' check (reviewer_role in ('operator', 'validator', 'external_reviewer', 'admin')),
   review_scope text not null default '',
   status text not null default 'open' check (status in ('open', 'under_review', 'challenge_window_open', 'reviewed_complete', 'disputed_unresolved', 'appealed', 'closed')),
+  reviewer_conflict_state text not null default 'not_checked' check (reviewer_conflict_state in ('not_checked', 'no_conflict_declared', 'possible_conflict', 'conflict_disclosed', 'recused')),
+  neutral_review_assignment text not null default 'unassigned' check (neutral_review_assignment in ('unassigned', 'operator_review_only', 'neutral_reviewer_assigned', 'neutral_panel_assigned', 'not_required_for_stage')),
   conflict_of_interest_notes text not null default '',
+  review_panel_notes text not null default '',
   reviewer_notes text not null default '',
   public_reasoning_summary text not null default '',
   sla_due_at timestamptz not null default (timezone('utc', now()) + interval '72 hours'),
@@ -716,6 +843,7 @@ create table if not exists public.moral_trade_traceability_events (
   where_recorded jsonb not null default '{}'::jsonb,
   why jsonb not null default '{}'::jsonb,
   agent_ids uuid[] not null default '{}',
+  audit_question_answers jsonb not null default '{"whatHappened":"","whoTouchedIt":[],"whenRecorded":""}'::jsonb,
   external_entity_reference_id uuid references public.moral_trade_external_entity_references (id) on delete set null,
   redaction_level text not null default 'participant_private' check (redaction_level in ('public', 'participant_private', 'reviewer_only')),
   sha256 text not null check (sha256 ~ '^[a-f0-9]{64}$'),
@@ -739,6 +867,7 @@ create table if not exists public.moral_trade_state_transition_events (
   used_entity_ids text[] not null default '{}',
   generated_entity_ids text[] not null default '{}',
   idempotency_key text not null,
+  audit_question_answers jsonb not null default '{"whatHappened":"","whoTouchedIt":[],"whenRecorded":""}'::jsonb,
   previous_event_hash text check (previous_event_hash is null or previous_event_hash ~ '^[a-f0-9]{64}$'),
   event_hash text not null check (event_hash ~ '^[a-f0-9]{64}$'),
   redaction_level text not null default 'participant_private' check (redaction_level in ('public', 'participant_private', 'reviewer_only')),
@@ -759,12 +888,16 @@ create table if not exists public.email_outbox (
   provider text not null default 'manual',
   attempt_count integer not null default 0 check (attempt_count >= 0),
   last_error text not null default '',
+  source_kind text,
+  source_id text,
   created_at timestamptz not null default timezone('utc', now()),
   sent_at timestamptz
 );
 
 alter table public.email_outbox add column if not exists attempt_count integer not null default 0;
 alter table public.email_outbox add column if not exists last_error text not null default '';
+alter table public.email_outbox add column if not exists source_kind text;
+alter table public.email_outbox add column if not exists source_id text;
 
 create table if not exists public.saved_searches (
   id uuid primary key default gen_random_uuid(),
@@ -857,6 +990,18 @@ create table if not exists public.wish_profiles (
   privacy_stage text not null default 'broad' check (privacy_stage in ('strict', 'broad', 'limited')),
   brokerage_preference text not null default '',
   match_frequency text not null default 'weekly' check (match_frequency in ('manual', 'weekly', 'monthly')),
+  inbound_delegate_discovery text not null default 'off' check (inbound_delegate_discovery in ('off', 'cohort_only', 'partner_matchmaker', 'public_broad_preview')),
+  inbound_delegate_purpose_codes text[] not null default '{}' check (inbound_delegate_purpose_codes <@ array['moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro']::text[]),
+  inbound_delegate_purpose_bindings jsonb not null default '{}'::jsonb,
+  inbound_delegate_surfaces text[] not null default '{}' check (inbound_delegate_surfaces <@ array['broad_profile']::text[]),
+  inbound_delegate_surface_budget_per_window jsonb not null default '{}'::jsonb,
+  inbound_delegate_pending_intro_limit integer check (inbound_delegate_pending_intro_limit is null or inbound_delegate_pending_intro_limit between 0 and 50),
+  inbound_delegate_cooloff_until timestamptz,
+  inbound_delegate_confirmed_at timestamptz,
+  inbound_delegate_expires_at timestamptz,
+  candidate_inbound_budget_version text not null default 'candidate-budget-v1',
+  candidate_exposure_version text not null default 'candidate-exposure-v1',
+  allowed_cohort_ids text[] not null default '{}',
   is_discoverable boolean not null default true,
   share_public_preview boolean not null default true,
   share_location boolean not null default false,
@@ -899,6 +1044,7 @@ create table if not exists public.match_suggestions (
   suggested_first_step text not null default '',
   risk_notes text not null default '',
   generated_by text not null default 'rule-based',
+  background_owner_profile_id uuid references public.profiles (id) on delete set null,
   status public.match_suggestion_status not null default 'suggested',
   dedupe_key text not null default gen_random_uuid()::text,
   identity_revealed boolean not null default false,
@@ -931,6 +1077,7 @@ alter table public.match_suggestions add column if not exists shared_causes text
 alter table public.match_suggestions add column if not exists suggested_first_step text not null default '';
 alter table public.match_suggestions add column if not exists risk_notes text not null default '';
 alter table public.match_suggestions add column if not exists generated_by text not null default 'rule-based';
+alter table public.match_suggestions add column if not exists background_owner_profile_id uuid references public.profiles (id) on delete set null;
 alter table public.match_suggestions add column if not exists last_scored_at timestamptz not null default timezone('utc', now());
 
 do $$
@@ -979,6 +1126,7 @@ create table if not exists public.profile_sources (
   captured_tags text[] not null default '{}',
   needs_review boolean not null default true,
   imported_at timestamptz,
+  retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '90 days'),
   is_active boolean not null default true,
   sensitive_ciphertexts jsonb not null default '{}'::jsonb,
   sensitive_encryption_version text not null default '',
@@ -1062,6 +1210,7 @@ create table if not exists public.match_concierge_requests (
   offer_summary text not null default '',
   ask_summary text not null default '',
   constraints text not null default '',
+  no_trade_baseline text not null default '',
   desired_timeline text not null default '',
   risk_notes text not null default '',
   status text not null default 'open' check (status in ('open', 'triaged', 'waiting_on_requester', 'waiting_on_counterparty', 'introduced', 'declined', 'closed')),
@@ -1115,6 +1264,7 @@ create table if not exists public.personal_delegates (
   risk_tolerance text not null default 'conservative' check (risk_tolerance in ('conservative', 'moderate', 'exploratory')),
   introduction_policy text not null default 'ask_each_time' check (introduction_policy in ('ask_each_time', 'auto_draft_only')),
   max_weekly_suggestions smallint not null default 5 check (max_weekly_suggestions between 0 and 50),
+  allowed_purpose_bindings jsonb not null default '{}'::jsonb,
   status text not null default 'active' check (status in ('active', 'paused')),
   last_run_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
@@ -1127,7 +1277,7 @@ create table if not exists public.source_connections (
   provider text not null default 'manual' check (provider in ('manual', 'social', 'blog', 'email', 'calendar', 'chat_history', 'search_profile', 'other')),
   label text not null,
   url text not null default '',
-  access_status text not null default 'not_connected' check (access_status in ('not_connected', 'connected', 'revoked', 'needs_review')),
+  access_status text not null default 'not_connected' check (access_status in ('not_connected', 'connected', 'expired', 'revoked', 'needs_review')),
   access_scope text not null default '',
   consent_notes text not null default '',
   import_mode text not null default 'manual_review' check (import_mode in ('manual_review', 'manual_paste', 'rss_pull', 'forwarded_note')),
@@ -1169,6 +1319,25 @@ create table if not exists public.profile_syntheses (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.background_intent_claims (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  claim_key text not null,
+  claim_type text not null check (claim_type in ('ask_term', 'capability_tag', 'cause_priority', 'constraint_flag', 'missing_field', 'offer_term', 'profile_state', 'source_permission', 'trade_preference', 'uncertainty_item')),
+  claim_value text not null default '',
+  claim_version text not null default 'background-intent-claims-v1',
+  confidence_band text not null default 'medium' check (confidence_band in ('high', 'medium', 'low')),
+  source_kind text not null default 'wish_profile' check (source_kind in ('wish_profile', 'profile_synthesis', 'source_connection', 'source_summary', 'profile_interview')),
+  source_record_id uuid,
+  surface_label text not null default '',
+  preview_safe boolean not null default false,
+  explanation text not null default '',
+  status text not null default 'active' check (status in ('active', 'superseded', 'withdrawn')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, claim_key)
+);
+
 create table if not exists public.helper_strategies (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
@@ -1177,6 +1346,10 @@ create table if not exists public.helper_strategies (
   priority smallint not null default 3 check (priority between 1 and 5),
   min_score smallint not null default 55 check (min_score between 0 and 100),
   strategy_config jsonb not null default '{}'::jsonb,
+  purpose_code text not null default 'moral_trade_offer' check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro')),
+  purpose_policy_version text not null default 'background-purpose-policy-v1' check (purpose_policy_version = 'background-purpose-policy-v1'),
+  audience_scope text not null default 'cohort_only' check (audience_scope in ('cohort_only', 'partner_matchmaker', 'public_broad_preview')),
+  cohort_scope_id text not null default '',
   status text not null default 'active' check (status in ('active', 'paused')),
   last_run_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
@@ -1312,10 +1485,25 @@ create table if not exists public.background_notification_preferences (
   enabled boolean not null default true,
   digest_cadence text not null default 'daily' check (digest_cadence in ('immediate', 'daily', 'weekly', 'none')),
   quiet_until timestamptz,
+  quiet_hours_start smallint check (quiet_hours_start is null or quiet_hours_start between 0 and 23),
+  quiet_hours_end smallint check (quiet_hours_end is null or quiet_hours_end between 0 and 23),
+  daily_cap smallint check (daily_cap is null or daily_cap between 0 and 24),
+  source_cooldown_hours smallint check (source_cooldown_hours is null or source_cooldown_hours between 0 and 168),
+  last_discovery_sent_at timestamptz,
   last_digest_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   unique (profile_id, event_kind, channel)
+);
+
+alter table public.background_notification_preferences add column if not exists quiet_hours_start smallint;
+alter table public.background_notification_preferences add column if not exists quiet_hours_end smallint;
+alter table public.background_notification_preferences add column if not exists daily_cap smallint;
+alter table public.background_notification_preferences add column if not exists source_cooldown_hours smallint;
+alter table public.background_notification_preferences add column if not exists last_discovery_sent_at timestamptz;
+alter table public.background_notification_preferences drop constraint if exists background_notification_preferences_source_cooldown_check;
+alter table public.background_notification_preferences add constraint background_notification_preferences_source_cooldown_check check (
+  source_cooldown_hours is null or source_cooldown_hours between 0 and 168
 );
 
 create table if not exists public.profile_data_right_requests (
@@ -1373,6 +1561,7 @@ create table if not exists public.collective_members (
   can_approve_matches boolean not null default false,
   can_grant_privacy boolean not null default false,
   can_manage_bounties boolean not null default false,
+  permissions text[] not null default '{}',
   created_at timestamptz not null default timezone('utc', now()),
   primary key (collective_id, profile_id)
 );
@@ -1544,6 +1733,17 @@ alter table public.profile_sources add column if not exists captured_tags text[]
 alter table public.profile_sources add column if not exists needs_review boolean not null default true;
 alter table public.profile_sources add column if not exists imported_at timestamptz;
 alter table public.profile_sources add column if not exists source_connection_id uuid references public.source_connections (id) on delete set null;
+alter table public.profile_sources add column if not exists retention_expires_at timestamptz;
+update public.profile_sources
+set retention_expires_at = coalesce(
+  retention_expires_at,
+  imported_at + interval '90 days',
+  created_at + interval '90 days',
+  timezone('utc', now()) + interval '90 days'
+)
+where retention_expires_at is null;
+alter table public.profile_sources alter column retention_expires_at set default (timezone('utc', now()) + interval '90 days');
+alter table public.profile_sources alter column retention_expires_at set not null;
 alter table public.profile_sources add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
 alter table public.profile_sources add column if not exists sensitive_encryption_version text not null default '';
 
@@ -1563,6 +1763,10 @@ alter table public.source_connections add column if not exists ai_shadow_mode_al
 alter table public.source_connections add column if not exists raw_ingestion_allowed boolean not null default false;
 alter table public.source_connections add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
 alter table public.source_connections add column if not exists sensitive_encryption_version text not null default '';
+alter table public.source_connections drop constraint if exists source_connections_access_status_check;
+alter table public.source_connections
+add constraint source_connections_access_status_check
+check (access_status in ('not_connected', 'connected', 'expired', 'revoked', 'needs_review'));
 
 do $$
 begin
@@ -1656,6 +1860,22 @@ alter table public.collective_members add column if not exists delegation_scope 
 alter table public.collective_members add column if not exists can_approve_matches boolean not null default false;
 alter table public.collective_members add column if not exists can_grant_privacy boolean not null default false;
 alter table public.collective_members add column if not exists can_manage_bounties boolean not null default false;
+alter table public.collective_members add column if not exists permissions text[] not null default '{}';
+alter table public.collective_members drop constraint if exists collective_members_role_check;
+alter table public.collective_members add constraint collective_members_role_check
+check (role in ('owner', 'admin', 'delegate', 'reviewer', 'member', 'viewer'));
+alter table public.collective_members drop constraint if exists collective_members_permissions_check;
+alter table public.collective_members add constraint collective_members_permissions_check
+check (
+  permissions <@ array[
+    'edit_broad_preview',
+    'approve_source_summary',
+    'request_intro',
+    'approve_contact_disclosure',
+    'revoke_grants',
+    'change_discoverability'
+  ]::text[]
+);
 
 create or replace view public.wish_profile_previews as
 select
@@ -1685,6 +1905,7 @@ create index if not exists donation_offset_pools_charity_idx on public.donation_
 create index if not exists donation_offset_offers_charity_idx on public.donation_offset_offers (compromise_charity_id);
 create index if not exists donation_offset_offers_moderation_idx on public.donation_offset_offers (moderation_status, created_at desc);
 create index if not exists donation_offset_offers_pool_idx on public.donation_offset_offers (pool_id, participation_mode, created_at desc);
+create index if not exists donation_offset_offers_baseline_bond_status_idx on public.donation_offset_offers (baseline_bond_status, offer_expires_at) where baseline_bond_enabled = true;
 create index if not exists donation_offset_matches_offer_idx on public.donation_offset_matches (offer_id, created_at desc);
 create index if not exists donation_offset_matches_owner_idx on public.donation_offset_matches (owner_profile_id, created_at desc);
 create index if not exists donation_offset_matches_counterparty_idx on public.donation_offset_matches (counterparty_profile_id, created_at desc);
@@ -1704,6 +1925,7 @@ create index if not exists agreement_payments_agreement_id_idx on public.agreeme
 create index if not exists agreement_payments_payer_id_idx on public.agreement_payments (payer_id, created_at desc);
 create index if not exists agreement_payments_payee_id_idx on public.agreement_payments (payee_id, created_at desc);
 create index if not exists agreement_payments_session_idx on public.agreement_payments (stripe_checkout_session_id);
+create index if not exists agreement_payments_authorization_idx on public.agreement_payments (agreement_id, authorization_mode, authorization_status, capture_policy, created_at desc);
 create index if not exists agreement_payment_schedules_agreement_id_idx on public.agreement_payment_schedules (agreement_id, next_due_at asc);
 create index if not exists agreement_payment_schedules_due_idx on public.agreement_payment_schedules (status, next_due_at asc);
 create index if not exists agreement_events_agreement_id_idx on public.agreement_events (agreement_id, created_at desc);
@@ -1711,6 +1933,7 @@ create index if not exists agreement_evidence_items_agreement_idx on public.agre
 create index if not exists agreement_evidence_items_status_idx on public.agreement_evidence_items (status, updated_at desc);
 create index if not exists agreement_review_cases_status_sla_idx on public.agreement_review_cases (status, sla_due_at asc, created_at desc);
 create index if not exists agreement_review_cases_agreement_idx on public.agreement_review_cases (agreement_id, created_at desc);
+create index if not exists agreement_review_cases_reviewer_console_idx on public.agreement_review_cases (reviewer_conflict_state, neutral_review_assignment, status, sla_due_at asc);
 create index if not exists profile_verification_badges_profile_idx on public.profile_verification_badges (profile_id, badge_type);
 create index if not exists moral_trade_provenance_agents_owner_idx on public.moral_trade_provenance_agents (owner_profile_id, created_at desc);
 create index if not exists moral_trade_evidence_artifacts_owner_subject_idx on public.moral_trade_evidence_artifacts (owner_profile_id, subject_kind, subject_id, created_at desc);
@@ -1724,6 +1947,7 @@ create index if not exists moral_trade_provenance_activities_owner_subject_idx o
 create index if not exists moral_trade_traceability_events_owner_subject_idx on public.moral_trade_traceability_events (owner_profile_id, subject_kind, subject_id, recorded_at desc);
 create index if not exists moral_trade_state_transition_events_owner_subject_idx on public.moral_trade_state_transition_events (owner_profile_id, subject_kind, subject_id, recorded_at desc);
 create index if not exists email_outbox_status_created_idx on public.email_outbox (status, created_at asc);
+create unique index if not exists email_outbox_source_dedupe_idx on public.email_outbox (source_kind, source_id);
 create index if not exists saved_searches_profile_status_idx on public.saved_searches (profile_id, status, updated_at desc);
 create index if not exists saved_searches_scan_idx on public.saved_searches (status, cadence, last_scanned_at asc nulls first);
 create index if not exists offers_text_search_idx on public.offers using gin (
@@ -1758,6 +1982,19 @@ create index if not exists profiles_follower_sort_idx on public.profiles (follow
 create index if not exists profiles_karma_sort_idx on public.profiles (karma desc, offer_count desc, id);
 create index if not exists profiles_comment_sort_idx on public.profiles (comment_count desc, offer_count desc, id);
 create index if not exists wish_profiles_discoverable_idx on public.wish_profiles (is_discoverable, share_public_preview, safety_status, updated_at desc);
+create index if not exists wish_profiles_broad_preview_text_search_idx on public.wish_profiles using gin (
+  to_tsvector(
+    'english',
+    coalesce(public_preview, '') || ' ' ||
+    array_to_string(causes, ' ') || ' ' ||
+    coalesce(collective_name, '') || ' ' ||
+    coalesce(participant_kind, '') || ' ' ||
+    case
+      when share_location then coalesce(location_city, '') || ' ' || coalesce(location_region, '')
+      else ''
+    end
+  )
+) where is_discoverable = true and share_public_preview = true and background_search_enabled = true and safety_status = 'clear';
 create index if not exists wish_profiles_sensitive_encryption_idx on public.wish_profiles (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists wish_entries_profile_type_idx on public.wish_entries (profile_id, entry_type, updated_at desc);
 create index if not exists wish_entries_preview_idx on public.wish_entries (visibility, safety_status, entry_type, updated_at desc);
@@ -1765,10 +2002,12 @@ create index if not exists wish_entries_body_encryption_idx on public.wish_entri
 create index if not exists match_suggestions_profile_a_idx on public.match_suggestions (profile_a_id, status, updated_at desc);
 create index if not exists match_suggestions_profile_b_idx on public.match_suggestions (profile_b_id, status, updated_at desc);
 create index if not exists match_suggestions_score_idx on public.match_suggestions (status, score desc, updated_at desc);
+create index if not exists match_suggestions_background_owner_idx on public.match_suggestions (background_owner_profile_id, generated_by, status, updated_at desc);
 create index if not exists match_consents_profile_id_idx on public.match_consents (profile_id);
 create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
 create index if not exists profile_sources_profile_active_idx on public.profile_sources (profile_id, is_active, updated_at desc);
 create index if not exists profile_sources_profile_review_idx on public.profile_sources (profile_id, needs_review, updated_at desc);
+create index if not exists profile_sources_retention_expires_idx on public.profile_sources (profile_id, retention_expires_at asc);
 create index if not exists profile_sources_sensitive_encryption_idx on public.profile_sources (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
 create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);
@@ -1808,6 +2047,8 @@ create index if not exists source_connections_sensitive_encryption_idx on public
 create index if not exists source_connections_retention_expires_idx on public.source_connections (retention_expires_at asc) where retention_expires_at is not null;
 create index if not exists source_connections_ai_shadow_idx on public.source_connections (profile_id, ai_shadow_mode_allowed, updated_at desc);
 create index if not exists profile_syntheses_sensitive_encryption_idx on public.profile_syntheses (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
+create index if not exists background_intent_claims_profile_status_idx on public.background_intent_claims (profile_id, status, claim_type, updated_at desc);
+create index if not exists background_intent_claims_preview_idx on public.background_intent_claims (preview_safe, claim_type, updated_at desc) where status = 'active';
 create index if not exists helper_strategies_profile_status_idx on public.helper_strategies (profile_id, status, priority asc, updated_at desc);
 create index if not exists helper_runs_profile_created_idx on public.helper_runs (profile_id, created_at desc);
 create index if not exists helper_runs_strategy_created_idx on public.helper_runs (strategy_id, created_at desc);
@@ -2446,6 +2687,11 @@ where auth.uid() is not null
     match_suggestions.profile_a_id = auth.uid()
     or match_suggestions.profile_b_id = auth.uid()
   )
+  and (
+    match_suggestions.background_owner_profile_id is null
+    or match_suggestions.background_owner_profile_id = auth.uid()
+    or public.viewer_can_see_match_identity(match_suggestions.id)
+  )
   and match_suggestions.status <> 'dismissed';
 
 grant select on public.match_suggestion_previews to authenticated;
@@ -2687,6 +2933,11 @@ for each row execute procedure public.set_updated_at();
 drop trigger if exists profile_syntheses_set_updated_at on public.profile_syntheses;
 create trigger profile_syntheses_set_updated_at
 before update on public.profile_syntheses
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists background_intent_claims_set_updated_at on public.background_intent_claims;
+create trigger background_intent_claims_set_updated_at
+before update on public.background_intent_claims
 for each row execute procedure public.set_updated_at();
 
 drop trigger if exists helper_strategies_set_updated_at on public.helper_strategies;
@@ -2956,6 +3207,7 @@ alter table public.network_invites enable row level security;
 alter table public.personal_delegates enable row level security;
 alter table public.source_connections enable row level security;
 alter table public.profile_syntheses enable row level security;
+alter table public.background_intent_claims enable row level security;
 alter table public.helper_strategies enable row level security;
 alter table public.helper_runs enable row level security;
 alter table public.match_introduction_plans enable row level security;
@@ -4487,6 +4739,35 @@ to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
 
+drop policy if exists "background_intent_claims_select_own" on public.background_intent_claims;
+create policy "background_intent_claims_select_own"
+on public.background_intent_claims
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_insert_own" on public.background_intent_claims;
+create policy "background_intent_claims_insert_own"
+on public.background_intent_claims
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_update_own" on public.background_intent_claims;
+create policy "background_intent_claims_update_own"
+on public.background_intent_claims
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_delete_own" on public.background_intent_claims;
+create policy "background_intent_claims_delete_own"
+on public.background_intent_claims
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
 drop policy if exists "helper_strategies_select_own" on public.helper_strategies;
 create policy "helper_strategies_select_own"
 on public.helper_strategies
@@ -5153,3 +5434,15430 @@ for update
 to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
+
+create table if not exists public.background_opportunity_briefs (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  candidate_profile_id uuid references public.profiles (id) on delete set null,
+  match_id uuid references public.match_suggestions (id) on delete set null,
+  title text not null default 'Opportunity brief',
+  confidence_band text not null default 'Exploratory' check (confidence_band in ('High', 'Moderate', 'Tentative', 'Exploratory')),
+  delivery_state text not null default 'pending' check (delivery_state in ('pending', 'delivered', 'opened', 'interested', 'maybe_later', 'dismissed', 'expired')),
+  factor_codes text[] not null default '{}',
+  shared_counts jsonb not null default '{}'::jsonb,
+  safe_summary text not null default '',
+  redacted_fields text[] not null default '{}',
+  why_text text not null default '',
+  next_step_type text not null default 'review_profile' check (next_step_type in ('answer_questions', 'request_intro_packet', 'request_detail', 'review_profile', 'mute_or_dismiss')),
+  hidden_fields_notice text not null default 'Exact wishes, private asks, contact details, raw source notes, and sensitive constraints stay hidden until a purpose-bound grant or mutual consent.',
+  human_review_required boolean not null default true,
+  reveal_consequence_notice text not null default 'Requesting more detail queues a reviewed, field-bound step; it does not send contact details or introduce anyone automatically.',
+  review_status text not null default 'human_review_required' check (review_status in ('human_review_required', 'review_cleared', 'blocked')),
+  status text not null default 'open' check (status in ('open', 'opened', 'dismissed', 'interested', 'maybe_later', 'muted', 'packet_requested', 'expired')),
+  expires_at timestamptz not null default (timezone('utc', now()) + interval '14 days'),
+  seen_at timestamptz,
+  feedback_reason text constraint background_opportunity_briefs_feedback_reason_check check (
+    feedback_reason is null
+    or feedback_reason in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, match_id)
+);
+
+alter table public.background_opportunity_briefs add column if not exists shared_counts jsonb not null default '{}'::jsonb;
+alter table public.background_opportunity_briefs add column if not exists safe_summary text not null default '';
+alter table public.background_opportunity_briefs add column if not exists redacted_fields text[] not null default '{}';
+alter table public.background_opportunity_briefs add column if not exists delivery_state text not null default 'pending';
+alter table public.background_opportunity_briefs add column if not exists review_status text not null default 'human_review_required';
+alter table public.background_opportunity_briefs add column if not exists human_review_required boolean not null default true;
+alter table public.background_opportunity_briefs add column if not exists seen_at timestamptz;
+alter table public.background_opportunity_briefs add column if not exists feedback_reason text;
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_delivery_state_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_delivery_state_check
+check (delivery_state in ('pending', 'delivered', 'opened', 'interested', 'maybe_later', 'dismissed', 'expired'));
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_review_status_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_review_status_check
+check (review_status in ('human_review_required', 'review_cleared', 'blocked'));
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_status_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_status_check
+check (status in ('open', 'opened', 'dismissed', 'interested', 'maybe_later', 'muted', 'packet_requested', 'expired'));
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_feedback_reason_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_feedback_reason_check
+check (
+  feedback_reason is null
+  or feedback_reason in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
+);
+
+create table if not exists public.background_match_feedback (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  opportunity_brief_id uuid not null references public.background_opportunity_briefs (id) on delete cascade,
+  match_id uuid references public.match_suggestions (id) on delete set null,
+  outcome text not null check (outcome in ('dismissed', 'maybe_later', 'interested')),
+  reason_code text not null check (reason_code in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')),
+  constraint background_match_feedback_reason_outcome_check check (
+    (outcome = 'interested' and reason_code = 'interested')
+    or (outcome = 'maybe_later' and reason_code = 'maybe_later')
+    or (outcome = 'dismissed' and reason_code not in ('interested', 'maybe_later'))
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, opportunity_brief_id)
+);
+
+alter table public.background_match_feedback drop constraint if exists background_match_feedback_reason_outcome_check;
+alter table public.background_match_feedback drop constraint if exists background_match_feedback_outcome_check;
+alter table public.background_match_feedback add constraint background_match_feedback_outcome_check check (
+  outcome in ('dismissed', 'maybe_later', 'interested')
+);
+alter table public.background_match_feedback drop constraint if exists background_match_feedback_reason_code_check;
+alter table public.background_match_feedback add constraint background_match_feedback_reason_code_check check (
+  reason_code in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
+);
+alter table public.background_match_feedback add constraint background_match_feedback_reason_outcome_check check (
+  (outcome = 'interested' and reason_code = 'interested')
+  or (outcome = 'maybe_later' and reason_code = 'maybe_later')
+  or (outcome = 'dismissed' and reason_code not in ('interested', 'maybe_later'))
+);
+
+create table if not exists public.background_intro_packets (
+  id uuid primary key default gen_random_uuid(),
+  opportunity_brief_id uuid references public.background_opportunity_briefs (id) on delete set null,
+  match_id uuid references public.match_suggestions (id) on delete set null,
+  requester_profile_id uuid not null references public.profiles (id) on delete cascade,
+  counterparty_profile_id uuid references public.profiles (id) on delete set null,
+  purpose text not null default '',
+  requester_answers jsonb not null default '{}'::jsonb,
+  mutual_questions text[] not null default '{}',
+  requested_field_keys text[] not null default '{}',
+  reveal_capsule text not null default '',
+  review_state text not null default 'requested' check (review_state in ('draft', 'requested', 'under_review', 'approved', 'changes_requested', 'declined', 'sent')),
+  reviewer_notes text not null default '',
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed')),
+  appeal_reason text not null default '',
+  appealed_at timestamptz,
+  appeal_resolved_at timestamptz,
+  appeal_resolution_note text not null default '',
+  requester_contact_approved_at timestamptz,
+  counterparty_contact_approved_at timestamptz,
+  contact_approval_status text not null default 'not_requested' check (
+    contact_approval_status in ('not_requested', 'requester_approved', 'counterparty_approved', 'mutual_approved', 'withdrawn')
+  ),
+  contact_approval_requires_fresh_mfa boolean not null default true,
+  sla_due_at timestamptz not null default (timezone('utc', now()) + interval '24 hours'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (counterparty_profile_id is null or requester_profile_id <> counterparty_profile_id)
+);
+
+alter table public.background_intro_packets add column if not exists appeal_status text not null default 'none';
+alter table public.background_intro_packets add column if not exists appeal_reason text not null default '';
+alter table public.background_intro_packets add column if not exists appealed_at timestamptz;
+alter table public.background_intro_packets add column if not exists appeal_resolved_at timestamptz;
+alter table public.background_intro_packets add column if not exists appeal_resolution_note text not null default '';
+alter table public.background_intro_packets add column if not exists requester_contact_approved_at timestamptz;
+alter table public.background_intro_packets add column if not exists counterparty_contact_approved_at timestamptz;
+alter table public.background_intro_packets add column if not exists contact_approval_status text not null default 'not_requested';
+alter table public.background_intro_packets add column if not exists contact_approval_requires_fresh_mfa boolean not null default true;
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_appeal_status_check;
+alter table public.background_intro_packets add constraint background_intro_packets_appeal_status_check check (
+  appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed')
+);
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_contact_approval_status_check;
+alter table public.background_intro_packets add constraint background_intro_packets_contact_approval_status_check check (
+  contact_approval_status in ('not_requested', 'requester_approved', 'counterparty_approved', 'mutual_approved', 'withdrawn')
+);
+
+create table if not exists public.background_grant_receipts (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  counterparty_id uuid references public.profiles (id) on delete set null,
+  grant_id uuid references public.privacy_grants (id) on delete set null,
+  receipt_kind text not null default 'disclosure_grant' check (receipt_kind in ('disclosure_grant', 'source_summary', 'connector_consent')),
+  purpose text not null default '',
+  field_keys text[] not null default '{}',
+  audience_stage text not null default 'consent' check (audience_stage in ('registry', 'consent', 'introduced')),
+  status text not null default 'active' check (status in ('active', 'revoked', 'expired')),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_source_summaries (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  source_connection_id uuid references public.source_connections (id) on delete set null,
+  consent_receipt_id uuid references public.background_grant_receipts (id) on delete set null,
+  source_type text not null default 'manual' check (source_type in ('manual', 'social', 'blog', 'email', 'calendar', 'chat_history', 'search_profile', 'other')),
+  label text not null,
+  summary_text text not null default '',
+  allowed_field_keys text[] not null default '{}',
+  purpose text not null default '',
+  retention_expires_at timestamptz not null,
+  status text not null default 'active' check (status in ('draft', 'reviewed', 'active', 'expired', 'revoked')),
+  raw_ingestion_allowed boolean not null default false check (raw_ingestion_allowed = false),
+  redaction_report jsonb not null default '{}'::jsonb,
+  summary_version integer not null default 1 check (summary_version > 0),
+  approved_at timestamptz,
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.background_source_summaries add column if not exists redaction_report jsonb not null default '{}'::jsonb;
+alter table public.background_source_summaries add column if not exists summary_version integer not null default 1;
+alter table public.background_source_summaries add column if not exists approved_at timestamptz;
+alter table public.background_source_summaries drop constraint if exists background_source_summaries_summary_version_check;
+alter table public.background_source_summaries
+add constraint background_source_summaries_summary_version_check check (summary_version > 0);
+
+create table if not exists public.background_profile_signals (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  source text not null check (source in ('manual', 'approved_source_summary', 'interview')),
+  source_connection_id uuid references public.source_connections (id) on delete set null,
+  source_summary_id uuid references public.background_source_summaries (id) on delete set null,
+  signal_key text not null,
+  signal_value text not null,
+  allowed_field_key text not null check (
+    allowed_field_key in (
+      'cause_priorities',
+      'capability_tags',
+      'offer_ask_terms',
+      'verification_preferences',
+      'availability_context',
+      'safety_constraints'
+    )
+  ),
+  sensitivity text not null check (sensitivity in ('broad', 'specific')),
+  confidence_band text not null check (confidence_band in ('low', 'medium', 'high')),
+  signal_fingerprint text check (
+    signal_fingerprint is null
+    or signal_fingerprint ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  source_summary_version integer,
+  confirmation_kind text check (
+    confirmation_kind is null
+    or confirmation_kind in (
+      'explicit_participant_confirmation',
+      'profile_apply',
+      'interview_apply',
+      'wish_dialogue_apply'
+    )
+  ),
+  confirmation_actor_profile_id uuid references public.profiles (id) on delete set null,
+  confirmed_at timestamptz,
+  confirmation_policy_version text,
+  lineage_status text not null default 'active' check (lineage_status in ('active', 'stale', 'revoked', 'expired')),
+  purpose_code text,
+  purpose_policy_version text,
+  status text not null default 'active' check (status in ('active', 'stale', 'expired', 'revoked')),
+  expires_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_shadow_runs (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  source_connection_id uuid references public.source_connections (id) on delete set null,
+  source_summary_id uuid references public.background_source_summaries (id) on delete set null,
+  model_name text not null default 'deterministic-redaction-v1',
+  purpose text not null check (purpose in ('signal_extraction', 'clarification_draft')),
+  output_json jsonb not null,
+  was_promoted boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_profile_interview_answers (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  question_key text not null,
+  question_text text not null default '',
+  answer text not null default '',
+  uncertainty_flags text[] not null default '{}',
+  broad_preview_update text not null default '',
+  private_intent_update text not null default '',
+  status text not null default 'saved' check (status in ('draft', 'saved', 'dismissed')),
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, question_key)
+);
+
+create table if not exists public.background_collective_policies (
+  id uuid primary key default gen_random_uuid(),
+  collective_id uuid not null unique references public.collectives (id) on delete cascade,
+  approval_threshold smallint not null default 1 check (approval_threshold between 1 and 20),
+  approver_roles text[] not null default array['owner', 'admin']::text[],
+  max_auto_grant_stage text not null default 'consent' check (max_auto_grant_stage in ('registry', 'consent', 'introduced')),
+  group_public_preview text not null default '',
+  default_retention_days smallint not null default 90 check (default_retention_days in (30, 90, 180, 365)),
+  contact_disclosure_requires_owner_step_up boolean not null default true,
+  disclosure_rules jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.background_collective_policies
+  add column if not exists contact_disclosure_requires_owner_step_up boolean not null default true;
+
+create table if not exists public.background_mute_rules (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  candidate_profile_id uuid references public.profiles (id) on delete set null,
+  factor_code_pattern text not null default '',
+  cause_pair text[] not null default '{}',
+  status text not null default 'active' check (status in ('active', 'expired', 'revoked')),
+  muted_until timestamptz not null default (timezone('utc', now()) + interval '30 days'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, candidate_profile_id, factor_code_pattern)
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'background_source_summaries_allowed_field_keys_check'
+  ) then
+    alter table public.background_source_summaries
+      add constraint background_source_summaries_allowed_field_keys_check
+      check (
+        allowed_field_keys <@ array[
+          'cause_priorities',
+          'capability_tags',
+          'offer_ask_terms',
+          'verification_preferences',
+          'availability_context',
+          'safety_constraints'
+        ]::text[]
+      );
+  end if;
+end
+$$;
+
+create index if not exists background_opportunity_briefs_profile_status_idx
+on public.background_opportunity_briefs (profile_id, status, expires_at asc, created_at desc);
+
+create index if not exists background_opportunity_briefs_match_idx
+on public.background_opportunity_briefs (match_id, profile_id);
+
+create index if not exists background_opportunity_briefs_delivery_state_idx
+on public.background_opportunity_briefs (profile_id, delivery_state, updated_at desc);
+
+create index if not exists background_match_feedback_profile_idx
+on public.background_match_feedback (profile_id, outcome, updated_at desc);
+
+create index if not exists background_match_feedback_brief_idx
+on public.background_match_feedback (opportunity_brief_id, profile_id);
+
+create index if not exists background_intro_packets_requester_idx
+on public.background_intro_packets (requester_profile_id, review_state, created_at desc);
+
+create index if not exists background_intro_packets_counterparty_idx
+on public.background_intro_packets (counterparty_profile_id, review_state, created_at desc)
+where counterparty_profile_id is not null;
+
+create index if not exists background_intro_packets_appeal_idx
+on public.background_intro_packets (appeal_status, sla_due_at asc, updated_at desc)
+where appeal_status <> 'none';
+
+create index if not exists background_intro_packets_contact_approval_idx
+on public.background_intro_packets (contact_approval_status, updated_at desc)
+where contact_approval_status <> 'not_requested';
+
+create index if not exists background_source_summaries_profile_status_idx
+on public.background_source_summaries (profile_id, status, retention_expires_at asc);
+
+create index if not exists background_profile_signals_profile_status_idx
+on public.background_profile_signals (profile_id, status, expires_at asc, updated_at desc);
+
+create index if not exists background_profile_signals_source_summary_idx
+on public.background_profile_signals (source_summary_id, profile_id)
+where source_summary_id is not null;
+
+create index if not exists background_profile_signals_source_connection_idx
+on public.background_profile_signals (source_connection_id, profile_id)
+where source_connection_id is not null;
+
+create unique index if not exists background_profile_signals_confirmed_source_tag_uidx
+on public.background_profile_signals (
+  profile_id,
+  source_summary_id,
+  source_summary_version,
+  signal_fingerprint
+)
+where source = 'approved_source_summary'
+  and status = 'active'
+  and signal_fingerprint is not null;
+
+create index if not exists background_shadow_runs_profile_created_idx
+on public.background_shadow_runs (profile_id, created_at desc);
+
+create index if not exists background_shadow_runs_source_connection_idx
+on public.background_shadow_runs (source_connection_id, profile_id, created_at desc)
+where source_connection_id is not null;
+
+create index if not exists background_profile_interview_answers_profile_status_idx
+on public.background_profile_interview_answers (profile_id, status, updated_at desc);
+
+create index if not exists background_grant_receipts_profile_status_idx
+on public.background_grant_receipts (profile_id, status, expires_at asc);
+
+create index if not exists background_collective_policies_collective_idx
+on public.background_collective_policies (collective_id);
+
+create index if not exists background_mute_rules_profile_status_idx
+on public.background_mute_rules (profile_id, status, muted_until asc);
+
+drop trigger if exists background_opportunity_briefs_set_updated_at on public.background_opportunity_briefs;
+create trigger background_opportunity_briefs_set_updated_at
+before update on public.background_opportunity_briefs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_match_feedback_set_updated_at on public.background_match_feedback;
+create trigger background_match_feedback_set_updated_at
+before update on public.background_match_feedback
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_intro_packets_set_updated_at on public.background_intro_packets;
+create trigger background_intro_packets_set_updated_at
+before update on public.background_intro_packets
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_source_summaries_set_updated_at on public.background_source_summaries;
+create trigger background_source_summaries_set_updated_at
+before update on public.background_source_summaries
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_profile_signals_set_updated_at on public.background_profile_signals;
+create trigger background_profile_signals_set_updated_at
+before update on public.background_profile_signals
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_profile_interview_answers_set_updated_at on public.background_profile_interview_answers;
+create trigger background_profile_interview_answers_set_updated_at
+before update on public.background_profile_interview_answers
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_collective_policies_set_updated_at on public.background_collective_policies;
+create trigger background_collective_policies_set_updated_at
+before update on public.background_collective_policies
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_mute_rules_set_updated_at on public.background_mute_rules;
+create trigger background_mute_rules_set_updated_at
+before update on public.background_mute_rules
+for each row execute function public.set_updated_at();
+
+alter table public.background_opportunity_briefs enable row level security;
+alter table public.background_match_feedback enable row level security;
+alter table public.background_intro_packets enable row level security;
+alter table public.background_grant_receipts enable row level security;
+alter table public.background_delegate_receipts enable row level security;
+alter table public.background_source_summaries enable row level security;
+alter table public.background_profile_signals enable row level security;
+alter table public.background_shadow_runs enable row level security;
+alter table public.background_profile_interview_answers enable row level security;
+alter table public.background_collective_policies enable row level security;
+alter table public.background_mute_rules enable row level security;
+
+drop policy if exists "background_opportunity_briefs_select_own" on public.background_opportunity_briefs;
+create policy "background_opportunity_briefs_select_own"
+on public.background_opportunity_briefs
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_opportunity_briefs_insert_own" on public.background_opportunity_briefs;
+create policy "background_opportunity_briefs_insert_own"
+on public.background_opportunity_briefs
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_opportunity_briefs_update_own" on public.background_opportunity_briefs;
+create policy "background_opportunity_briefs_update_own"
+on public.background_opportunity_briefs
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_opportunity_briefs_delete_own" on public.background_opportunity_briefs;
+create policy "background_opportunity_briefs_delete_own"
+on public.background_opportunity_briefs
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_feedback_select_own" on public.background_match_feedback;
+create policy "background_match_feedback_select_own"
+on public.background_match_feedback
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_feedback_insert_own" on public.background_match_feedback;
+create policy "background_match_feedback_insert_own"
+on public.background_match_feedback
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.background_opportunity_briefs
+    where background_opportunity_briefs.id = background_match_feedback.opportunity_brief_id
+      and background_opportunity_briefs.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "background_match_feedback_update_own" on public.background_match_feedback;
+create policy "background_match_feedback_update_own"
+on public.background_match_feedback
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intro_packets_select_relevant" on public.background_intro_packets;
+create policy "background_intro_packets_select_relevant"
+on public.background_intro_packets
+for select
+to authenticated
+using (
+  requester_profile_id = (select auth.uid())
+  or counterparty_profile_id = (select auth.uid())
+);
+
+drop policy if exists "background_intro_packets_insert_requester" on public.background_intro_packets;
+create policy "background_intro_packets_insert_requester"
+on public.background_intro_packets
+for insert
+to authenticated
+with check (
+  requester_profile_id = (select auth.uid())
+  and (
+    match_id is null
+    or public.profile_participates_in_match(match_id, (select auth.uid()))
+  )
+);
+
+drop policy if exists "background_intro_packets_update_relevant" on public.background_intro_packets;
+create policy "background_intro_packets_update_relevant"
+on public.background_intro_packets
+for update
+to authenticated
+using (
+  requester_profile_id = (select auth.uid())
+  or counterparty_profile_id = (select auth.uid())
+)
+with check (
+  requester_profile_id = (select auth.uid())
+  or counterparty_profile_id = (select auth.uid())
+);
+
+drop policy if exists "background_grant_receipts_select_relevant" on public.background_grant_receipts;
+create policy "background_grant_receipts_select_relevant"
+on public.background_grant_receipts
+for select
+to authenticated
+using (
+  profile_id = (select auth.uid())
+  or counterparty_id = (select auth.uid())
+);
+
+drop policy if exists "background_grant_receipts_insert_own" on public.background_grant_receipts;
+create policy "background_grant_receipts_insert_own"
+on public.background_grant_receipts
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_grant_receipts_update_own" on public.background_grant_receipts;
+create policy "background_grant_receipts_update_own"
+on public.background_grant_receipts
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_delegate_receipts_select_own" on public.background_delegate_receipts;
+create policy "background_delegate_receipts_select_own"
+on public.background_delegate_receipts
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_delegate_receipts_insert_own" on public.background_delegate_receipts;
+create policy "background_delegate_receipts_insert_own"
+on public.background_delegate_receipts
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_summaries_select_own" on public.background_source_summaries;
+create policy "background_source_summaries_select_own"
+on public.background_source_summaries
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_summaries_insert_own" on public.background_source_summaries;
+create policy "background_source_summaries_insert_own"
+on public.background_source_summaries
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_summaries_update_own" on public.background_source_summaries;
+create policy "background_source_summaries_update_own"
+on public.background_source_summaries
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_summaries_delete_own" on public.background_source_summaries;
+create policy "background_source_summaries_delete_own"
+on public.background_source_summaries
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_signals_select_own" on public.background_profile_signals;
+create policy "background_profile_signals_select_own"
+on public.background_profile_signals
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_signals_insert_own" on public.background_profile_signals;
+create policy "background_profile_signals_insert_own"
+on public.background_profile_signals
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_signals_update_own" on public.background_profile_signals;
+create policy "background_profile_signals_update_own"
+on public.background_profile_signals
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_signals_delete_own" on public.background_profile_signals;
+create policy "background_profile_signals_delete_own"
+on public.background_profile_signals
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_shadow_runs_select_own" on public.background_shadow_runs;
+create policy "background_shadow_runs_select_own"
+on public.background_shadow_runs
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_shadow_runs_insert_own" on public.background_shadow_runs;
+create policy "background_shadow_runs_insert_own"
+on public.background_shadow_runs
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_shadow_runs_update_own" on public.background_shadow_runs;
+create policy "background_shadow_runs_update_own"
+on public.background_shadow_runs
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_shadow_runs_delete_own" on public.background_shadow_runs;
+create policy "background_shadow_runs_delete_own"
+on public.background_shadow_runs
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_interview_answers_select_own" on public.background_profile_interview_answers;
+create policy "background_profile_interview_answers_select_own"
+on public.background_profile_interview_answers
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_interview_answers_insert_own" on public.background_profile_interview_answers;
+create policy "background_profile_interview_answers_insert_own"
+on public.background_profile_interview_answers
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_interview_answers_update_own" on public.background_profile_interview_answers;
+create policy "background_profile_interview_answers_update_own"
+on public.background_profile_interview_answers
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_profile_interview_answers_delete_own" on public.background_profile_interview_answers;
+create policy "background_profile_interview_answers_delete_own"
+on public.background_profile_interview_answers
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_collective_policies_select_accessible" on public.background_collective_policies;
+create policy "background_collective_policies_select_accessible"
+on public.background_collective_policies
+for select
+to authenticated
+using (public.viewer_can_access_collective(collective_id));
+
+drop policy if exists "background_collective_policies_insert_accessible" on public.background_collective_policies;
+create policy "background_collective_policies_insert_accessible"
+on public.background_collective_policies
+for insert
+to authenticated
+with check (public.viewer_can_access_collective(collective_id));
+
+drop policy if exists "background_collective_policies_update_accessible" on public.background_collective_policies;
+create policy "background_collective_policies_update_accessible"
+on public.background_collective_policies
+for update
+to authenticated
+using (public.viewer_can_access_collective(collective_id))
+with check (public.viewer_can_access_collective(collective_id));
+
+drop policy if exists "background_mute_rules_select_own" on public.background_mute_rules;
+create policy "background_mute_rules_select_own"
+on public.background_mute_rules
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_mute_rules_insert_own" on public.background_mute_rules;
+create policy "background_mute_rules_insert_own"
+on public.background_mute_rules
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_mute_rules_update_own" on public.background_mute_rules;
+create policy "background_mute_rules_update_own"
+on public.background_mute_rules
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+create table if not exists public.performance_bonds (
+  id uuid primary key default gen_random_uuid(),
+  offer_id uuid not null references public.offers (id) on delete cascade,
+  swap_id uuid references public.agreements (id) on delete set null,
+  interest_id uuid references public.interests (id) on delete set null,
+  party_id uuid not null references public.profiles (id) on delete cascade,
+  counterparty_id uuid references public.profiles (id) on delete set null,
+  side text not null check (side in ('offerer', 'taker')),
+  enabled boolean not null default true,
+  amount_cents integer not null check (amount_cents >= 0),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
+  evidence_due_at timestamptz,
+  challenge_window_days integer not null default 7 check (challenge_window_days in (7, 14, 30)),
+  challenge_window_ends_at timestamptz,
+  evidence_schema jsonb not null default '{}'::jsonb,
+  additionality_statement text not null default '',
+  no_trade_baseline text not null default '',
+  forfeiture_rule text not null default 'neutral_release' check (forfeiture_rule in ('neutral_release', 'counterparty_release', 'split_release')),
+  forfeiture_destination text not null default 'compromise_charity' check (forfeiture_destination in ('compromise_charity', 'mpgf', 'counterparty', 'split')),
+  forfeiture_destination_id text references public.registered_charities (id) on delete restrict,
+  split_config jsonb not null default '{"counterpartyPercent":0,"neutralCausePercent":50,"mpgfPercent":50}'::jsonb,
+  reviewer_policy text not null default 'Counterparty may accept or challenge; platform arbitration if disputed',
+  status text not null default 'draft' check (
+    status in (
+      'not_enabled',
+      'draft',
+      'awaiting_funding',
+      'funded',
+      'active',
+      'evidence_due',
+      'evidence_submitted',
+      'challenge_window_open',
+      'accepted_by_counterparty',
+      'auto_refund_pending',
+      'refunded',
+      'challenged',
+      'under_review',
+      'accepted_after_review',
+      'rejected_after_review',
+      'forfeited',
+      'split_disbursed',
+      'cancelled',
+      'expired'
+    )
+  ),
+  funding_status text not null default 'awaiting_funding' check (
+    funding_status in (
+      'not_required',
+      'awaiting_funding',
+      'payment_pending',
+      'funded',
+      'refund_pending',
+      'refunded',
+      'release_pending',
+      'released',
+      'failed'
+    )
+  ),
+  payment_provider text not null default 'manual_review',
+  payment_intent_id text,
+  counterparty_payout_consent boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  locked_at timestamptz,
+  resolved_at timestamptz,
+  check (
+    enabled = false
+    or (
+      amount_cents > 0
+      and evidence_due_at is not null
+      and challenge_window_days in (7, 14, 30)
+      and length(trim(additionality_statement)) > 0
+      and length(trim(no_trade_baseline)) > 0
+      and jsonb_typeof(evidence_schema) = 'object'
+      and length(coalesce(evidence_schema ->> 'actionToProve', '')) >= 12
+      and length(coalesce(evidence_schema ->> 'acceptedEvidenceTypes', '')) >= 12
+      and length(coalesce(evidence_schema ->> 'minimumDetail', '')) >= 12
+      and length(coalesce(evidence_schema ->> 'reviewStandard', '')) >= 12
+    )
+  ),
+  check (forfeiture_destination <> 'counterparty' or counterparty_payout_consent = true),
+  check (
+    forfeiture_destination <> 'split'
+    or (
+      ((split_config ->> 'counterpartyPercent')::integer)
+      + ((split_config ->> 'neutralCausePercent')::integer)
+      + ((split_config ->> 'mpgfPercent')::integer)
+    ) = 100
+  )
+);
+
+create table if not exists public.bond_evidence (
+  id uuid primary key default gen_random_uuid(),
+  bond_id uuid not null references public.performance_bonds (id) on delete cascade,
+  submitted_by uuid not null references public.profiles (id) on delete cascade,
+  submitted_at timestamptz not null default timezone('utc', now()),
+  evidence_text text not null default '',
+  evidence_urls text[] not null default '{}',
+  attachments jsonb not null default '[]'::jsonb,
+  visibility text not null default 'counterparty_only' check (visibility in ('counterparty_only', 'platform_reviewer_only', 'public_proof', 'mixed_redacted')),
+  redaction_notes text not null default '',
+  attestation boolean not null default false,
+  status text not null default 'submitted' check (status in ('submitted', 'accepted_by_counterparty', 'challenged', 'more_evidence_requested', 'accepted_after_review', 'rejected_after_review')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (attestation = true),
+  check (length(trim(evidence_text)) > 0 or cardinality(evidence_urls) > 0)
+);
+
+create table if not exists public.bond_challenges (
+  id uuid primary key default gen_random_uuid(),
+  bond_id uuid not null references public.performance_bonds (id) on delete cascade,
+  challenged_by uuid not null references public.profiles (id) on delete cascade,
+  challenged_at timestamptz not null default timezone('utc', now()),
+  reason text not null,
+  specific_objection text not null,
+  requested_outcome text not null default 'platform_review',
+  bad_faith_flag boolean not null default false,
+  status text not null default 'open' check (status in ('open', 'under_review', 'accepted', 'rejected', 'more_evidence_requested', 'closed', 'bad_faith_flagged')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.bond_adjudications (
+  id uuid primary key default gen_random_uuid(),
+  bond_id uuid not null references public.performance_bonds (id) on delete cascade,
+  challenge_id uuid references public.bond_challenges (id) on delete set null,
+  reviewer_id uuid not null references public.profiles (id) on delete restrict,
+  decision text not null check (decision in ('accept', 'reject', 'request_more_evidence')),
+  decision_reason text not null,
+  decided_at timestamptz not null default timezone('utc', now()),
+  appeal_allowed boolean not null default false,
+  appeal_deadline timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (length(trim(decision_reason)) > 0)
+);
+
+create table if not exists public.bond_ledger_entries (
+  id uuid primary key default gen_random_uuid(),
+  bond_id uuid not null references public.performance_bonds (id) on delete cascade,
+  type text not null check (type in ('fund', 'refund', 'release', 'split_release', 'adjustment')),
+  amount_cents integer not null check (amount_cents >= 0),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
+  destination_type text not null check (destination_type in ('party', 'counterparty', 'compromise_charity', 'mpgf', 'platform_manual_review')),
+  destination_id text,
+  status text not null default 'pending' check (status in ('pending', 'completed', 'not_required', 'awaiting_funding', 'payment_pending', 'funded', 'refund_pending', 'refunded', 'release_pending', 'released', 'failed')),
+  idempotency_key text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (bond_id, idempotency_key)
+);
+
+create table if not exists public.performance_bond_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  bond_id uuid not null references public.performance_bonds (id) on delete cascade,
+  actor_id uuid references public.profiles (id) on delete set null,
+  actor_role text not null check (actor_role in ('party', 'counterparty', 'reviewer', 'system')),
+  event_type text not null,
+  from_status text not null,
+  to_status text not null,
+  reason text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  idempotency_key text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (bond_id, idempotency_key)
+);
+
+drop trigger if exists performance_bonds_set_updated_at on public.performance_bonds;
+create trigger performance_bonds_set_updated_at
+before update on public.performance_bonds
+for each row execute procedure public.set_updated_at();
+drop trigger if exists bond_evidence_set_updated_at on public.bond_evidence;
+create trigger bond_evidence_set_updated_at
+before update on public.bond_evidence
+for each row execute procedure public.set_updated_at();
+drop trigger if exists bond_challenges_set_updated_at on public.bond_challenges;
+create trigger bond_challenges_set_updated_at
+before update on public.bond_challenges
+for each row execute procedure public.set_updated_at();
+
+create index if not exists performance_bonds_offer_id_idx on public.performance_bonds (offer_id);
+create index if not exists performance_bonds_swap_id_idx on public.performance_bonds (swap_id);
+create index if not exists performance_bonds_interest_id_idx on public.performance_bonds (interest_id);
+create index if not exists performance_bonds_party_id_idx on public.performance_bonds (party_id);
+create index if not exists performance_bonds_counterparty_id_idx on public.performance_bonds (counterparty_id);
+create index if not exists performance_bonds_status_idx on public.performance_bonds (status);
+create index if not exists performance_bonds_funding_status_idx on public.performance_bonds (funding_status);
+create index if not exists performance_bonds_evidence_due_idx on public.performance_bonds (evidence_due_at);
+create index if not exists performance_bonds_review_queue_idx on public.performance_bonds (status, evidence_due_at, updated_at) where status in ('challenged', 'under_review', 'rejected_after_review', 'evidence_due');
+create unique index if not exists performance_bonds_offerer_unique_idx on public.performance_bonds (offer_id, side) where side = 'offerer';
+create unique index if not exists performance_bonds_taker_interest_unique_idx on public.performance_bonds (interest_id, side) where interest_id is not null and side = 'taker';
+create index if not exists bond_evidence_bond_idx on public.bond_evidence (bond_id, submitted_at desc);
+create index if not exists bond_evidence_submitted_by_idx on public.bond_evidence (submitted_by, submitted_at desc);
+create index if not exists bond_challenges_bond_status_idx on public.bond_challenges (bond_id, status, challenged_at desc);
+create index if not exists bond_challenges_review_queue_idx on public.bond_challenges (status, challenged_at) where status in ('open', 'under_review');
+create index if not exists bond_adjudications_bond_idx on public.bond_adjudications (bond_id, decided_at desc);
+create index if not exists bond_ledger_entries_bond_idx on public.bond_ledger_entries (bond_id, created_at desc);
+create index if not exists performance_bond_audit_events_bond_idx on public.performance_bond_audit_events (bond_id, created_at desc);
+
+alter table public.performance_bonds enable row level security;
+alter table public.bond_evidence enable row level security;
+alter table public.bond_challenges enable row level security;
+alter table public.bond_adjudications enable row level security;
+alter table public.bond_ledger_entries enable row level security;
+alter table public.performance_bond_audit_events enable row level security;
+
+drop policy if exists "performance_bonds_select_visible" on public.performance_bonds;
+create policy "performance_bonds_select_visible"
+on public.performance_bonds
+for select
+to anon, authenticated
+using (
+  exists (select 1 from public.offers where offers.id = performance_bonds.offer_id and offers.status = 'open')
+  or party_id = (select auth.uid())
+  or counterparty_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.agreements
+    where agreements.id = performance_bonds.swap_id
+      and (agreements.proposer_id = (select auth.uid()) or agreements.responder_id = (select auth.uid()))
+  )
+);
+drop policy if exists "performance_bonds_insert_own_draft" on public.performance_bonds;
+create policy "performance_bonds_insert_own_draft"
+on public.performance_bonds
+for insert
+to authenticated
+with check (party_id = (select auth.uid()) and locked_at is null and status = 'draft');
+drop policy if exists "performance_bonds_update_own_unlocked_draft" on public.performance_bonds;
+create policy "performance_bonds_update_own_unlocked_draft"
+on public.performance_bonds
+for update
+to authenticated
+using (party_id = (select auth.uid()) and locked_at is null and status = 'draft')
+with check (party_id = (select auth.uid()) and locked_at is null and status = 'draft');
+
+drop policy if exists "bond_evidence_select_participants" on public.bond_evidence;
+create policy "bond_evidence_select_participants"
+on public.bond_evidence
+for select
+to authenticated
+using (exists (select 1 from public.performance_bonds where performance_bonds.id = bond_evidence.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+drop policy if exists "bond_evidence_insert_party" on public.bond_evidence;
+create policy "bond_evidence_insert_party"
+on public.bond_evidence
+for insert
+to authenticated
+with check (submitted_by = (select auth.uid()) and exists (select 1 from public.performance_bonds where performance_bonds.id = bond_evidence.bond_id and performance_bonds.party_id = (select auth.uid())));
+
+drop policy if exists "bond_challenges_select_participants" on public.bond_challenges;
+create policy "bond_challenges_select_participants"
+on public.bond_challenges
+for select
+to authenticated
+using (exists (select 1 from public.performance_bonds where performance_bonds.id = bond_challenges.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+drop policy if exists "bond_challenges_insert_counterparty" on public.bond_challenges;
+create policy "bond_challenges_insert_counterparty"
+on public.bond_challenges
+for insert
+to authenticated
+with check (challenged_by = (select auth.uid()) and exists (select 1 from public.performance_bonds where performance_bonds.id = bond_challenges.bond_id and performance_bonds.counterparty_id = (select auth.uid())));
+
+drop policy if exists "bond_adjudications_select_participants" on public.bond_adjudications;
+create policy "bond_adjudications_select_participants"
+on public.bond_adjudications
+for select
+to authenticated
+using (exists (select 1 from public.performance_bonds where performance_bonds.id = bond_adjudications.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+drop policy if exists "bond_ledger_entries_select_participants" on public.bond_ledger_entries;
+create policy "bond_ledger_entries_select_participants"
+on public.bond_ledger_entries
+for select
+to authenticated
+using (exists (select 1 from public.performance_bonds where performance_bonds.id = bond_ledger_entries.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+drop policy if exists "performance_bond_audit_events_select_participants" on public.performance_bond_audit_events;
+create policy "performance_bond_audit_events_select_participants"
+on public.performance_bond_audit_events
+for select
+to authenticated
+using (exists (select 1 from public.performance_bonds where performance_bonds.id = performance_bond_audit_events.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+
+create table if not exists public.mpgf_cycles (
+  id text primary key,
+  label text not null,
+  stage text not null check (stage in ('pilot', 'public_beta', 'mature')),
+  mode text not null check (mode in ('non_real_money_demo', 'pledge_only', 'test_mode', 'real_money')),
+  currency text not null default 'usd' check (currency = 'usd'),
+  budget_cents integer not null default 0 check (budget_cents >= 0),
+  protocol_parameter_version text not null,
+  terms_version text not null,
+  privacy_version text not null,
+  status text not null default 'draft',
+  proposal_opens_at timestamptz,
+  ballot_opens_at timestamptz,
+  ballot_closes_at timestamptz,
+  summary_published_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_candidate_alternatives (
+  id text primary key,
+  cycle_id text references public.mpgf_cycles (id) on delete cascade,
+  name text not null,
+  short_name text not null,
+  cause_area text not null,
+  recipient_name text not null,
+  description text not null,
+  moral_public_good_rationale text not null,
+  outcome_unit text not null,
+  status text not null check (status in ('approved_demo', 'carryover_only', 'draft', 'rejected')),
+  operational_reliability_bps integer not null check (operational_reliability_bps between 0 and 10000),
+  risk_bps integer not null check (risk_bps between 0 and 10000),
+  tail_loss_bps integer not null check (tail_loss_bps between 0 and 10000),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_match_pools (
+  id text primary key,
+  funder_type text not null check (
+    funder_type in ('demo_common_ground_pool', 'sponsor', 'subscription_pool', 'institution')
+  ),
+  budget_cents bigint not null check (budget_cents >= 0),
+  base_match_ratio numeric not null default 1 check (base_match_ratio >= 0),
+  qf_bonus_cents bigint not null default 0 check (qf_bonus_cents >= 0),
+  visible_commitment text not null,
+  restrictions_json jsonb not null default '{}'::jsonb,
+  status text not null default 'active' check (status in ('draft', 'active', 'paused', 'closed', 'voided')),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_rounds (
+  id text primary key,
+  name text not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  match_pool_id text not null references public.mpgf_public_goods_match_pools (id),
+  qf_enabled boolean not null default false,
+  qf_cap_multiple numeric not null default 1.5 check (qf_cap_multiple >= 0),
+  supporter_gate text not null check (
+    supporter_gate in ('demo_self_attestation', 'verified_human', 'repository_existing_verification')
+  ),
+  status text not null default 'scheduled' check (
+    status in ('draft', 'scheduled', 'open', 'allocation_pending', 'published', 'closed', 'emergency_suspended')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_rounds_valid_window check (ends_at > starts_at)
+);
+
+create table if not exists public.mpgf_public_goods_campaigns (
+  id text primary key,
+  round_id text references public.mpgf_public_goods_rounds (id) on delete set null,
+  slug text not null unique,
+  pool_alternative_id text references public.mpgf_candidate_alternatives (id) on delete set null,
+  title text not null,
+  destination_type text not null check (
+    destination_type in ('external_charity', 'fiscal_host', 'internal_demo_pool', 'signed_sponsor_route')
+  ),
+  destination_ref text not null,
+  cause_tags text[] not null default '{}',
+  public_summary text not null,
+  threshold_amount_cents bigint not null check (threshold_amount_cents > 0),
+  threshold_supporters integer not null check (threshold_supporters > 0),
+  deadline_at timestamptz not null,
+  verification_method text not null,
+  baseline_rule text not null,
+  exit_rule text not null,
+  review_status text not null default 'draft' check (
+    review_status in ('draft', 'submitted', 'needs_evidence', 'challenge_window', 'approved', 'blocked', 'finalized')
+  ),
+  challenge_window_ends_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_identity_attestations (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref text not null,
+  provider text not null check (
+    provider in ('demo_self_attestation', 'repository_profile', 'external_proof_of_personhood')
+  ),
+  human_score_bps integer not null check (human_score_bps between 0 and 10000),
+  expires_at timestamptz not null,
+  status text not null check (status in ('active', 'expired', 'revoked', 'pending_review')),
+  redacted_reference text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_pledges (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref text not null,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
+  donor_exposure_disclosure jsonb not null default '{}'::jsonb,
+  visibility_mode text not null check (
+    visibility_mode in ('private_amount', 'public_supporter', 'public_reason')
+  ),
+  is_recurring boolean not null default false,
+  capture_mode text not null check (
+    capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  ),
+  eligibility_state text not null default 'pending_review' check (
+    eligibility_state in ('eligible', 'pending_review', 'duplicate_identity', 'below_minimum', 'blocked')
+  ),
+  human_score_bps integer not null default 0 check (human_score_bps between 0 and 10000),
+  status text not null default 'pledged' check (status in ('pledged', 'captured', 'voided', 'expired')),
+  supporter_reason text,
+  payment_intent_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_no_custody_default check (
+    capture_mode <> 'stored_payment_method' or payment_intent_ref is not null
+  )
+);
+
+create table if not exists public.mpgf_public_goods_allocation_results (
+  id uuid primary key default gen_random_uuid(),
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  formula_version text not null default 'cg_vqaf_capital_constrained_qf_v1' check (
+    formula_version = 'cg_vqaf_capital_constrained_qf_v1'
+  ),
+  qf_allocation_policy text not null default 'capital_constrained_lambda_bisection_with_per_campaign_cap' check (
+    qf_allocation_policy = 'capital_constrained_lambda_bisection_with_per_campaign_cap'
+  ),
+  qf_lambda numeric not null default 0 check (qf_lambda >= 0),
+  direct_eligible_cents bigint not null check (direct_eligible_cents >= 0),
+  verified_supporter_count integer not null check (verified_supporter_count >= 0),
+  base_match_cents bigint not null check (base_match_cents >= 0),
+  qf_score numeric not null check (qf_score >= 0),
+  qf_bonus_cents bigint not null check (qf_bonus_cents >= 0),
+  qf_bonus_cap_cents bigint not null check (qf_bonus_cap_cents >= 0),
+  total_payout_cents bigint not null check (total_payout_cents >= 0),
+  status text not null check (
+    status in ('threshold_pending', 'threshold_met', 'review_pending', 'payable', 'expired', 'blocked')
+  ),
+  proof_required text not null check (
+    proof_required in ('external_destination_receipt', 'provider_webhook_and_review', 'signed_intent_review')
+  ),
+  custody_mode text not null check (
+    custody_mode in ('no_custody_external_handoff', 'provider_or_fiscal_host_required')
+  ),
+  source_contribution_digest text not null default 'sha256:pending-source-proof' check (
+    source_contribution_digest ~ '^sha256:[0-9a-f]{64}$' or source_contribution_digest = 'sha256:pending-source-proof'
+  ),
+  eligible_contribution_record_count integer not null default 0 check (eligible_contribution_record_count >= 0),
+  raw_payment_object_count integer not null default 0 check (raw_payment_object_count >= 0),
+  unique_counted_identity_count integer not null default 0 check (
+    unique_counted_identity_count >= 0 and unique_counted_identity_count <= eligible_contribution_record_count
+  ),
+  regenerated_from_contribution_records boolean not null default false,
+  locked_parameter_digest text not null default 'sha256:pending-parameter-proof' check (
+    locked_parameter_digest ~ '^sha256:[0-9a-f]{64}$' or locked_parameter_digest = 'sha256:pending-parameter-proof'
+  ),
+  allocation_calculation_hash text not null default 'sha256:pending-calculation-proof' check (
+    allocation_calculation_hash ~ '^sha256:[0-9a-f]{64}$' or allocation_calculation_hash = 'sha256:pending-calculation-proof'
+  ),
+  parameters_locked_before_round_open boolean not null default true check (parameters_locked_before_round_open = true),
+  finalized_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_allocation_eligible_rows_within_raw_rows
+    check (eligible_contribution_record_count <= raw_payment_object_count),
+  unique (round_id, campaign_id)
+);
+
+create table if not exists public.mpgf_public_goods_payment_proofs (
+  id uuid primary key default gen_random_uuid(),
+  pledge_id uuid references public.mpgf_public_goods_pledges (id) on delete set null,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  external_receipt_ref text,
+  charity_receipt_ref text,
+  amount_verified_cents bigint not null default 0 check (amount_verified_cents >= 0),
+  status text not null default 'pending_review' check (
+    status in ('pending_review', 'verified', 'rejected', 'superseded')
+  ),
+  reason_code text not null default 'needs_destination_evidence' check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reconciliation_source text not null default 'external_receipt' check (
+    reconciliation_source in (
+      'external_receipt',
+      'fiscal_host_webhook',
+      'sponsor_signed_intent',
+      'every_org_partner_webhook'
+    )
+  ),
+  source_event_ref text,
+  verified_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_review_cases (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  state text not null check (
+    state in ('draft', 'submitted', 'needs_evidence', 'challenge_window', 'approved', 'blocked', 'finalized')
+  ),
+  action text not null check (
+    action in ('approve', 'needs_evidence', 'block', 'challenge', 'finalize')
+  ),
+  reason_code text not null check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  opened_at timestamptz not null default timezone('utc', now()),
+  closed_at timestamptz,
+  appeal_status text not null default 'none' check (
+    appeal_status in ('none', 'appeal_requested', 'appeal_denied', 'appeal_upheld')
+  ),
+  challenge_window_ends_at timestamptz,
+  public_notes text not null default '',
+  allowed_next_actions text[] not null default '{}'
+);
+
+create table if not exists public.mpgf_public_goods_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref text not null,
+  pool_id text not null references public.mpgf_public_goods_match_pools (id) on delete cascade,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  interval text not null check (interval in ('monthly', 'annual')),
+  status text not null default 'active' check (
+    status in ('active', 'paused', 'cancelled', 'past_due', 'expired')
+  ),
+  capture_mode text not null default 'external_handoff' check (
+    capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  ),
+  mode text not null default 'pledge_only' check (mode in ('pledge_only', 'test_payment', 'real_money')),
+  provider_subscription_ref text,
+  next_charge_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_subscription_no_hidden_provider check (
+    mode = 'pledge_only' or provider_subscription_ref is not null
+  )
+);
+
+create table if not exists public.mpgf_public_goods_experiment_assignments (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref_hash text not null,
+  experiment_key text not null,
+  variant text not null,
+  analytics_policy text not null default 'privacy_safe_no_raw_private_text' check (
+    analytics_policy = 'privacy_safe_no_raw_private_text'
+  ),
+  assigned_at timestamptz not null default timezone('utc', now()),
+  unique (experiment_key, user_ref_hash)
+);
+
+create table if not exists public.mpgf_public_goods_analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  user_ref_hash text,
+  experiment_assignment_id uuid references public.mpgf_public_goods_experiment_assignments (id) on delete set null,
+  event_type text not null,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete set null,
+  event_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_analytics_no_raw_contact check (
+    not (event_json ? 'email') and
+    not (event_json ? 'phone') and
+    not (event_json ? 'private_wish') and
+    not (event_json ? 'raw_evidence_text')
+  )
+);
+
+create table if not exists public.mpgf_pledge_intents (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  idempotency_key_hash text not null unique check (idempotency_key_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
+  visibility_pref text not null default 'private_amount' check (
+    visibility_pref in ('private_amount', 'public_supporter', 'public_reason')
+  ),
+  payment_state text not null default 'intent_created' check (
+    payment_state in (
+      'intent_created',
+      'identity_verified',
+      'identity_pending_review',
+      'authorization_pending',
+      'authorized',
+      'manual_evidence_required',
+      'provider_event_received',
+      'captured',
+      'voided',
+      'expired'
+    )
+  ),
+  counting_state text not null default 'preview_only' check (
+    counting_state in ('not_counted', 'preview_only', 'eligible_pending_thresholds', 'counted_after_review', 'excluded')
+  ),
+  fallback_rule jsonb not null default jsonb_build_object(
+    'manualEvidencePath', '/api/mpgf/evidence/manual',
+    'providerUnavailableMode', 'manual_evidence_after_review',
+    'roundNotClearedMode', 'expire_without_charge',
+    'recipientVerificationFailedMode', 'release_authorization_or_reroute_to_next_eligible_common_ground_project',
+    'authorizationExpiredMode', 'reauthorize_only_after_clearance_reconfirmed'
+  ),
+  donor_exposure_disclosure jsonb not null default '{}'::jsonb,
+  cross_view_clearance_policy text not null default 'explicit_distinct_counterpart_bucket_conditions_before_moral_trade_counting',
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_identity_verifications (
+  id text primary key,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (
+    provider in ('demo_self_attestation', 'repository_profile', 'external_proof_of_personhood')
+  ),
+  status text not null check (status in ('verified', 'pending_review', 'duplicate_identity', 'blocked')),
+  human_score_bps integer not null check (human_score_bps between 0 and 10000),
+  redacted_reference text not null,
+  duplicate_proof_hash text check (duplicate_proof_hash is null or duplicate_proof_hash ~ '^sha256:[0-9a-f]{64}$'),
+  counts_for_matching boolean not null default false,
+  verified_at timestamptz,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (pledge_intent_id, provider)
+);
+
+create table if not exists public.mpgf_payment_authorizations (
+  id text primary key,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  provider_ref_hash text check (provider_ref_hash is null or provider_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  status text not null check (
+    status in (
+      'requires_identity',
+      'authorized',
+      'manual_fallback_required',
+      'provider_event_received',
+      'captured',
+      'failed',
+      'voided',
+      'expired'
+    )
+  ),
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  manual_evidence_path text,
+  authorized_at timestamptz,
+  captured_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_payment_authorizations_provider_or_manual check (
+    (provider = 'manual_evidence' and manual_evidence_path = '/api/mpgf/evidence/manual')
+    or (provider <> 'manual_evidence' and provider_ref_hash is not null)
+  )
+);
+
+create table if not exists public.mpgf_provider_payment_events (
+  id text primary key,
+  payment_authorization_id text not null references public.mpgf_payment_authorizations (id) on delete cascade,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  provider_event_ref_hash text not null unique check (provider_event_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  event_type text not null check (
+    event_type in (
+      'authorization_created',
+      'authorization_failed',
+      'capture_succeeded',
+      'capture_failed',
+      'refund_succeeded',
+      'payment_expired'
+    )
+  ),
+  amount_cents bigint not null check (amount_cents >= 0),
+  status text not null check (status in ('recorded', 'needs_review', 'rejected')),
+  signature_verified boolean not null default false,
+  payload_hash text check (payload_hash is null or payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  received_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_moral_profiles (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  primary_causes text[] not null default '{}',
+  secondary_common_ground_causes text[] not null default '{}',
+  privacy_stage text not null default 'private' check (privacy_stage in ('private', 'aggregate_only', 'public_opt_in')),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_support_signals (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  moral_cluster_hash text not null check (moral_cluster_hash ~ '^sha256:[0-9a-f]{64}$'),
+  signal_type text not null check (
+    signal_type in ('strong_support', 'weak_common_ground_support', 'dissent_review_requested')
+  ),
+  strength_bps integer not null check (strength_bps between 0 and 10000),
+  private_by_default boolean not null default true check (private_by_default = true),
+  counts_for_common_ground boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  calc_hash text not null check (calc_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id, user_ref_hash)
+);
+
+create table if not exists public.mpgf_user_budgets (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  budget_period text not null default 'monthly' check (budget_period in ('monthly', 'round_limited')),
+  monthly_budget_cents bigint check (monthly_budget_cents is null or monthly_budget_cents >= 0),
+  round_budget_cents bigint check (round_budget_cents is null or round_budget_cents >= 0),
+  total_budget_cents bigint not null check (total_budget_cents > 0),
+  per_project_cap_cents bigint not null default 0 check (per_project_cap_cents >= 0),
+  settlement_currency text not null default 'usd' check (settlement_currency = 'usd'),
+  currency text not null default 'usd' check (currency = 'usd'),
+  recurrence_rule text,
+  next_capture_at timestamptz,
+  next_capture_rule text not null default 'none_before_final_review' check (
+    next_capture_rule in ('none_before_final_review', 'monthly_after_final_review', 'manual_review_required')
+  ),
+  payment_profile_ref_hash text check (
+    payment_profile_ref_hash is null or payment_profile_ref_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  external_payment_evidence_mode text not null default 'reviewed_manual_evidence_only' check (
+    external_payment_evidence_mode = 'reviewed_manual_evidence_only'
+  ),
+  default_visibility text not null default 'private_aggregate_only' check (
+    default_visibility in ('private_aggregate_only', 'public_after_aggregation_review')
+  ),
+  default_allocation_baseline text not null default 'participant_default_allocation_or_non_participation',
+  baseline_confidence_level text not null default 'medium' check (
+    baseline_confidence_level in ('low', 'medium', 'high')
+  ),
+  baseline_confidence_rationale text,
+  participant_surplus_confirmation_required boolean not null default true check (
+    participant_surplus_confirmation_required = true
+  ),
+  participant_surplus_confirmed_at timestamptz,
+  eligible_project_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    eligible_project_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  eligible_pool_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    eligible_pool_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  project_set_change_policy text not null default 'require_reconfirmation' check (
+    project_set_change_policy in ('require_reconfirmation', 'allow_if_matches_preapproved_policy')
+  ),
+  fallback_reroute_policy_ref text not null default 'frozen_eligible_set_then_carry_forward_release_hold_or_manual_review_v1',
+  fallback_eligible_project_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    fallback_eligible_project_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  unroutable_budget_policy text not null default 'carry_forward' check (
+    unroutable_budget_policy in ('carry_forward', 'release_hold', 'manual_review')
+  ),
+  fallback_rule jsonb not null default jsonb_build_object(
+    'onProjectFailure', 'release_hold',
+    'onAuthorizationExpiry', 'reauthorize_near_capture',
+    'carryForwardAllowed', true
+  ),
+  round_lock_confirmation_required boolean not null default true check (
+    round_lock_confirmation_required = true
+  ),
+  cancel_until timestamptz,
+  terms_snapshot_hash text check (
+    terms_snapshot_hash is null or terms_snapshot_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  participant_confirmation_hash text check (
+    participant_confirmation_hash is null or participant_confirmation_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  status text not null default 'draft' check (
+    status in (
+      'draft',
+      'active',
+      'authorization_pending',
+      'authorized',
+      'partially_routed',
+      'settled',
+      'released',
+      'voided',
+      'expired'
+    )
+  ),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, user_ref_hash)
+);
+
+create table if not exists public.mpgf_support_stances (
+  id text primary key,
+  budget_id text references public.mpgf_user_budgets (id) on delete cascade,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  bucket_id text,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  stance text not null check (stance in ('strong', 'weak', 'dissent', 'abstain')),
+  max_alloc_amount_cents bigint check (max_alloc_amount_cents is null or max_alloc_amount_cents >= 0),
+  max_alloc_pct_bps integer check (max_alloc_pct_bps is null or max_alloc_pct_bps between 0 and 10000),
+  rank_order integer check (rank_order is null or rank_order > 0),
+  redacted_note_hash text check (
+    redacted_note_hash is null or redacted_note_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  review_signal_visibility text not null default 'aggregate_only' check (
+    review_signal_visibility in ('aggregate_only', 'pseudonymous', 'public')
+  ),
+  acceptable_counter_buckets text[] not null default '{}',
+  private_by_default boolean not null default true check (private_by_default = true),
+  counts_for_common_ground boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_support_stances_project_or_bucket check (
+    (campaign_id is not null and bucket_id is null) or (campaign_id is null and bucket_id is not null)
+  ),
+  unique (round_id, user_ref_hash, campaign_id, bucket_id)
+);
+
+create table if not exists public.mpgf_conditional_trade_intents (
+  id text primary key,
+  budget_id text not null references public.mpgf_user_budgets (id) on delete cascade,
+  support_stance_id text not null references public.mpgf_support_stances (id) on delete cascade,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  intent_state text not null default 'active' check (
+    intent_state in ('active', 'inactive_nonallocatable', 'canceled', 'captured', 'released', 'failed')
+  ),
+  authorization_state text not null default 'not_authorized_no_capture_preview' check (
+    authorization_state in (
+      'not_authorized_no_capture_preview',
+      'authorization_pending_after_clear',
+      'authorized_after_clear',
+      'captured',
+      'released',
+      'failed'
+    )
+  ),
+  amount_cents bigint not null check (amount_cents > 0),
+  max_exposure_cents bigint not null check (max_exposure_cents >= amount_cents),
+  min_counterparty_volume_cents bigint not null check (min_counterparty_volume_cents > 0),
+  acceptable_counter_bucket_ids text[] not null check (cardinality(acceptable_counter_bucket_ids) > 0),
+  condition_accepted boolean not null default false check (condition_accepted = true),
+  fallback_rule text not null check (fallback_rule in ('carry_forward', 'reroute', 'release_hold')),
+  rulebook_hash_at_consent text check (
+    rulebook_hash_at_consent is null or rulebook_hash_at_consent ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  terms_snapshot_hash text not null check (terms_snapshot_hash ~ '^sha256:[0-9a-f]{64}$'),
+  conditional_intent_policy text not null default 'simple_mode_canonical_conditional_trade_intents_no_capture_v1',
+  payment_capture_allowed boolean not null default false check (payment_capture_allowed = false),
+  final_review_disclosure_required boolean not null default true check (final_review_disclosure_required = true),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, budget_id, campaign_id)
+);
+
+create table if not exists public.mpgf_coalition_candidates (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  hard_gate_status text not null check (
+    hard_gate_status in ('passed', 'pending_review', 'challenge_open', 'blocked')
+  ),
+  candidate_status text not null check (
+    candidate_status in (
+      'threshold_feasible',
+      'amount_gap',
+      'supporter_gap',
+      'cluster_gap',
+      'hard_gate_pending',
+      'hard_gate_blocked'
+    )
+  ),
+  direct_eligible_cents bigint not null default 0 check (direct_eligible_cents >= 0),
+  eligible_weak_budget_cents bigint not null default 0 check (eligible_weak_budget_cents >= 0),
+  routed_weak_budget_cents bigint not null default 0 check (
+    routed_weak_budget_cents >= 0 and routed_weak_budget_cents <= eligible_weak_budget_cents
+  ),
+  threshold_amount_cents bigint not null check (threshold_amount_cents > 0),
+  threshold_supporters integer not null check (threshold_supporters > 0),
+  threshold_cluster_min integer not null default 2 check (threshold_cluster_min > 0),
+  active_supporter_count integer not null default 0 check (active_supporter_count >= 0),
+  active_cluster_count integer not null default 0 check (active_cluster_count >= 0),
+  threshold_feasible_flag boolean not null default false,
+  ecm_batch_clearing_eligible boolean not null default false,
+  failure_bonus_or_carry_forward_eligible boolean not null default false,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  calculation_hash text not null check (calculation_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id)
+);
+
+create table if not exists public.mpgf_round_rulebooks (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  policy text not null default 'ecm_core_supervised_custody_cross_view_batch_rulebook_v1',
+  ecm_plus_hybrid_policy text not null default 'ecm_core_plus_moral_trade_safeguards_preserve_capped_qf_and_review_stack_v1',
+  batch_cadence_policy text not null default 'recurring_batch_rounds_close_clear_jit_authorize_custody_verify_challenge_release_audit',
+  custody_policy text not null default 'partner_or_fiscal_host_supervised_custody_required_for_cleared_funds_no_platform_escrow_claim',
+  refund_reroute_policy text not null default 'donor_selected_refund_release_or_reroute_after_failed_cross_view_batch',
+  cross_view_subsidy_policy text not null default 'base_1_to_1_then_capped_qf_plus_simple_cross_view_premium_schedule',
+  batch_interval_min_days integer not null default 7 check (batch_interval_min_days = 7),
+  batch_interval_max_days integer not null default 14 check (batch_interval_max_days = 14),
+  cross_view_subsidy_schedule jsonb not null default '[]'::jsonb,
+  rulebook_json jsonb not null,
+  published_before_round_open boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  moral_reputation_can_increase_allocation_power boolean not null default false check (
+    moral_reputation_can_increase_allocation_power = false
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, policy)
+);
+
+create table if not exists public.mpgf_recipient_registry (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  legal_entity_or_fiscal_host text not null,
+  registry_status text not null check (
+    registry_status in (
+      'eligible_after_review_and_challenge',
+      'review_required_before_payable',
+      'demo_only_not_payable',
+      'blocked_not_payable'
+    )
+  ),
+  payout_rail text not null check (
+    payout_rail in ('partner_donation_route', 'fiscal_host_release', 'signed_sponsor_route', 'not_payable_demo_only')
+  ),
+  allowed_uses text[] not null default '{}',
+  receipt_or_milestone_rules text not null,
+  review_state text not null,
+  challenge_state text not null check (challenge_state in ('challenge_window_open', 'closed_or_not_open')),
+  challenge_window_ends_at timestamptz,
+  public_aggregation_only boolean not null default true check (public_aggregation_only = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (campaign_id)
+);
+
+create table if not exists public.mpgf_custody_holds (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  custodial_state text not null check (
+    custodial_state in (
+      'awaiting_partner_or_fiscal_host_custody_confirmation',
+      'custody_confirmed',
+      'release_ready_after_challenge_window',
+      'released',
+      'cancelled',
+      'expired'
+    )
+  ),
+  amount_cents bigint not null check (amount_cents >= 0),
+  max_exposure_cents bigint not null check (max_exposure_cents >= amount_cents),
+  escrow_claim_allowed boolean not null default false check (escrow_claim_allowed = false),
+  release_only_after_recipient_verification boolean not null default true check (
+    release_only_after_recipient_verification = true
+  ),
+  release_only_after_challenge_window_completion boolean not null default true check (
+    release_only_after_challenge_window_completion = true
+  ),
+  failure_rule jsonb not null default '{}'::jsonb,
+  provider_ref_hash text check (provider_ref_hash is null or provider_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_conditional_pledges (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  amount_cents bigint not null check (amount_cents > 0),
+  counted_cap_cents bigint not null check (counted_cap_cents > 0),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
+  visibility text not null default 'private_amount' check (visibility in ('private_amount', 'public_supporter', 'public_reason')),
+  payment_mode text not null check (payment_mode in ('every_org_fast_route', 'stripe_setup_intent_saved_commitment', 'manual_proof_fallback')),
+  status text not null default 'signal_only' check (
+    status in ('signal_only', 'pledge_saved', 'pending_verification', 'threshold_cleared', 'counted', 'voided', 'expired')
+  ),
+  deadline_at timestamptz not null,
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  failure_path_disclosure jsonb not null default '{}'::jsonb,
+  cross_view_clearance_policy text not null default 'explicit_distinct_counterpart_bucket_conditions_before_moral_trade_counting',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_every_org_partner_events (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete set null,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  contributor_ref_hash text check (contributor_ref_hash is null or contributor_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  partner_donation_id_hash text check (partner_donation_id_hash is null or partner_donation_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  charge_id_hash text not null unique check (charge_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  nonprofit_ref_hash text check (nonprofit_ref_hash is null or nonprofit_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents >= 0),
+  net_amount_cents bigint check (net_amount_cents is null or net_amount_cents >= 0),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
+  frequency text,
+  donation_date timestamptz,
+  status text not null check (status in ('recorded', 'needs_review', 'rejected')),
+  structure_verified boolean not null default false,
+  webhook_verified boolean not null default false,
+  auto_creates_contribution_evidence boolean not null default false,
+  evidence_review_state text not null check (evidence_review_state in ('pending_review', 'needs_review', 'rejected')),
+  review_required_before_counting boolean not null default true check (review_required_before_counting = true),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  payload_hash text not null check (payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  received_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_every_org_events_recorded_requires_verified check (
+    status <> 'recorded'
+    or (
+      structure_verified = true
+      and webhook_verified = true
+      and partner_donation_id_hash is not null
+      and campaign_id is not null
+      and amount_cents > 0
+    )
+  )
+);
+
+create table if not exists public.mpgf_payment_method_tokens (
+  id text primary key,
+  profile_id uuid references public.profiles (id) on delete set null,
+  provider text not null check (provider in ('stripe')),
+  provider_customer_id_hash text not null check (provider_customer_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_payment_method_id_hash text not null check (provider_payment_method_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  setup_status text not null check (setup_status in ('setup_intent_created', 'setup_succeeded', 'setup_failed', 'revoked')),
+  future_use_consent_at timestamptz,
+  raw_card_data_stored boolean not null default false check (raw_card_data_stored = false),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_payment_events (
+  id text primary key,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  provider text not null check (provider in ('stripe', 'every_org', 'fiscal_host', 'manual_evidence')),
+  provider_event_id_hash text not null unique check (provider_event_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_status text not null,
+  amount_cents bigint not null check (amount_cents >= 0),
+  signature_verified boolean not null default false,
+  payload_hash text check (payload_hash is null or payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  verified_at timestamptz,
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_stripe_saved_commitments (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  provider_customer_id_hash text check (provider_customer_id_hash is null or provider_customer_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_setup_intent_id_hash text unique check (provider_setup_intent_id_hash is null or provider_setup_intent_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_payment_method_id_hash text check (provider_payment_method_id_hash is null or provider_payment_method_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  setup_status text not null default 'setup_intent_created' check (
+    setup_status in ('setup_intent_created', 'setup_succeeded', 'setup_failed', 'revoked')
+  ),
+  setup_usage text not null default 'off_session' check (setup_usage = 'off_session'),
+  future_use_consent_at timestamptz,
+  explicit_future_use_consent_required boolean not null default true check (explicit_future_use_consent_required = true),
+  creates_charge_immediately boolean not null default false check (creates_charge_immediately = false),
+  long_lived_manual_card_hold boolean not null default false check (long_lived_manual_card_hold = false),
+  payment_intent_created_before_gates boolean not null default false check (payment_intent_created_before_gates = false),
+  raw_card_data_stored boolean not null default false check (raw_card_data_stored = false),
+  review_required_before_counting boolean not null default true check (review_required_before_counting = true),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  calc_hash text not null check (calc_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_stripe_saved_commitment_events (
+  id text primary key,
+  saved_commitment_id text references public.mpgf_stripe_saved_commitments (id) on delete set null,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  provider_event_id_hash text not null unique check (provider_event_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_object_id_hash text check (provider_object_id_hash is null or provider_object_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_customer_id_hash text check (provider_customer_id_hash is null or provider_customer_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_payment_method_id_hash text check (provider_payment_method_id_hash is null or provider_payment_method_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  event_type text not null check (
+    event_type in (
+      'setup_intent.created',
+      'setup_intent.succeeded',
+      'setup_intent.setup_failed',
+      'setup_intent.canceled',
+      'payment_intent.created',
+      'payment_intent.succeeded',
+      'payment_intent.payment_failed',
+      'payment_intent.canceled',
+      'payment_intent.requires_action'
+    )
+  ),
+  event_state text not null,
+  status text not null check (status in ('recorded', 'needs_review', 'rejected')),
+  signature_verified boolean not null default false,
+  structure_verified boolean not null default false,
+  payload_hash text not null check (payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  review_required_before_counting boolean not null default true check (review_required_before_counting = true),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  received_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_stripe_conditional_payment_intent_runs (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  provider_customer_id_hash text not null check (provider_customer_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_payment_method_id_hash text not null check (provider_payment_method_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_setup_intent_id_hash text not null check (provider_setup_intent_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  gate_state jsonb not null,
+  blocked_by text[] not null default '{}',
+  payment_intent_creation_allowed boolean not null,
+  setup_intent_first boolean not null default true check (setup_intent_first = true),
+  confirm_off_session boolean not null default true check (confirm_off_session = true),
+  capture_method text not null default 'automatic' check (capture_method = 'automatic'),
+  long_lived_manual_card_hold boolean not null default false check (long_lived_manual_card_hold = false),
+  requires_stripe_signature_webhook_before_counting boolean not null default true check (requires_stripe_signature_webhook_before_counting = true),
+  review_required_before_counting boolean not null default true check (review_required_before_counting = true),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  idempotency_key_hash text not null unique check (idempotency_key_hash ~ '^sha256:[0-9a-f]{64}$'),
+  calc_hash text not null check (calc_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_stripe_payment_intent_run_requires_clear_gates check (
+    payment_intent_creation_allowed = false
+    or (
+      gate_state ->> 'roundParametersLocked' = 'true'
+      and gate_state ->> 'thresholdAmountCleared' = 'true'
+      and gate_state ->> 'supporterCountCleared' = 'true'
+      and gate_state ->> 'reviewApproved' = 'true'
+      and gate_state ->> 'challengeWindowClosed' = 'true'
+    )
+  )
+);
+
+create table if not exists public.mpgf_sponsor_pool_entries (
+  id text primary key,
+  round_id text references public.mpgf_public_goods_rounds (id) on delete set null,
+  sponsor_pool_id text not null references public.mpgf_public_goods_match_pools (id) on delete cascade,
+  source_type text not null check (
+    source_type in ('direct_sponsor_deposit', 'recurring_member_tithe', 'donation_offset_surplus', 'trade_surplus_tithe')
+  ),
+  amount_cents bigint not null check (amount_cents > 0),
+  restricted_or_unrestricted text not null check (restricted_or_unrestricted in ('restricted_to_round', 'unrestricted_future_rounds')),
+  provenance_hash text not null check (provenance_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_allocation_results (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  eligible_direct_cents bigint not null check (eligible_direct_cents >= 0),
+  base_match_cents bigint not null check (base_match_cents >= 0),
+  q_signal_cents bigint not null check (q_signal_cents >= 0),
+  bonus_match_cents bigint not null check (bonus_match_cents >= 0),
+  final_allocated_cents bigint not null check (final_allocated_cents >= 0),
+  formula_version text not null check (formula_version = 'cg_vqaf_capital_constrained_qf_v1'),
+  lambda numeric not null check (lambda >= 0),
+  calculation_hash text not null check (calculation_hash ~ '^sha256:[0-9a-f]{64}$'),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id, formula_version)
+);
+
+create table if not exists public.mpgf_dissent_notes (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  filed_by_profile_id uuid references public.profiles (id) on delete set null,
+  filer_ref_hash text not null check (filer_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  reason_code text not null check (
+    reason_code in ('externality_review', 'threat_baseline_review', 'destination_review', 'collusion_review', 'other_reviewable_claim')
+  ),
+  public_summary text not null,
+  status text not null default 'opened' check (status in ('opened', 'under_review', 'resolved', 'dismissed')),
+  pauses_unreleased_milestones boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_milestones (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  percent_release integer not null check (percent_release between 0 and 100),
+  evidence_requirements jsonb not null default '{}'::jsonb,
+  release_status text not null default 'pending' check (
+    release_status in ('pending', 'partner_release_pending', 'released', 'paused', 'voided')
+  ),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create unique index if not exists mpgf_public_goods_payment_proofs_source_event_idx
+on public.mpgf_public_goods_payment_proofs (reconciliation_source, source_event_ref)
+where source_event_ref is not null;
+
+create index if not exists mpgf_pledge_intents_round_campaign_idx
+on public.mpgf_pledge_intents (round_id, campaign_id, payment_state, counting_state);
+
+create index if not exists mpgf_pledge_intents_profile_idx
+on public.mpgf_pledge_intents (profile_id, created_at desc);
+
+create index if not exists mpgf_identity_verifications_intent_idx
+on public.mpgf_identity_verifications (pledge_intent_id, status);
+
+create index if not exists mpgf_payment_authorizations_intent_idx
+on public.mpgf_payment_authorizations (pledge_intent_id, status);
+
+create index if not exists mpgf_provider_payment_events_intent_idx
+on public.mpgf_provider_payment_events (pledge_intent_id, received_at desc);
+
+create index if not exists mpgf_support_signals_round_campaign_idx
+on public.mpgf_support_signals (round_id, campaign_id, signal_type, created_at desc);
+
+create index if not exists mpgf_user_budgets_round_status_idx
+on public.mpgf_user_budgets (round_id, status);
+
+create index if not exists mpgf_support_stances_round_campaign_idx
+on public.mpgf_support_stances (round_id, campaign_id, stance);
+
+create index if not exists mpgf_conditional_trade_intents_round_campaign_idx
+on public.mpgf_conditional_trade_intents (round_id, campaign_id, intent_state, authorization_state);
+
+create index if not exists mpgf_conditional_trade_intents_profile_idx
+on public.mpgf_conditional_trade_intents (profile_id, created_at desc);
+
+create index if not exists mpgf_coalition_candidates_round_status_idx
+on public.mpgf_coalition_candidates (round_id, candidate_status, threshold_feasible_flag);
+
+create index if not exists mpgf_round_rulebooks_round_idx
+on public.mpgf_round_rulebooks (round_id, policy);
+
+create index if not exists mpgf_recipient_registry_status_idx
+on public.mpgf_recipient_registry (registry_status, payout_rail);
+
+create index if not exists mpgf_custody_holds_round_state_idx
+on public.mpgf_custody_holds (round_id, custodial_state, created_at desc);
+
+create index if not exists mpgf_conditional_pledges_round_campaign_idx
+on public.mpgf_conditional_pledges (round_id, campaign_id, status, payment_mode);
+
+create index if not exists mpgf_every_org_partner_events_round_campaign_idx
+on public.mpgf_every_org_partner_events (round_id, campaign_id, status, received_at desc);
+
+create index if not exists mpgf_every_org_partner_events_pledge_idx
+on public.mpgf_every_org_partner_events (conditional_pledge_id, pledge_intent_id, received_at desc);
+
+create index if not exists mpgf_payment_events_pledge_idx
+on public.mpgf_payment_events (conditional_pledge_id, provider, created_at desc);
+
+create index if not exists mpgf_stripe_saved_commitments_round_campaign_idx
+on public.mpgf_stripe_saved_commitments (round_id, campaign_id, setup_status, created_at desc);
+
+create index if not exists mpgf_stripe_saved_commitment_events_intent_idx
+on public.mpgf_stripe_saved_commitment_events (conditional_pledge_id, pledge_intent_id, received_at desc);
+
+create index if not exists mpgf_stripe_conditional_payment_runs_round_idx
+on public.mpgf_stripe_conditional_payment_intent_runs (round_id, campaign_id, payment_intent_creation_allowed, created_at desc);
+
+create index if not exists mpgf_allocation_results_round_idx
+on public.mpgf_allocation_results (round_id, formula_version, campaign_id);
+
+alter table public.mpgf_public_goods_pledges enable row level security;
+alter table public.mpgf_public_goods_identity_attestations enable row level security;
+alter table public.mpgf_public_goods_payment_proofs enable row level security;
+alter table public.mpgf_public_goods_review_cases enable row level security;
+alter table public.mpgf_public_goods_subscriptions enable row level security;
+alter table public.mpgf_public_goods_experiment_assignments enable row level security;
+alter table public.mpgf_public_goods_analytics_events enable row level security;
+alter table public.mpgf_pledge_intents enable row level security;
+alter table public.mpgf_identity_verifications enable row level security;
+alter table public.mpgf_payment_authorizations enable row level security;
+alter table public.mpgf_provider_payment_events enable row level security;
+alter table public.mpgf_moral_profiles enable row level security;
+alter table public.mpgf_support_signals enable row level security;
+alter table public.mpgf_user_budgets enable row level security;
+alter table public.mpgf_support_stances enable row level security;
+alter table public.mpgf_conditional_trade_intents enable row level security;
+alter table public.mpgf_coalition_candidates enable row level security;
+alter table public.mpgf_round_rulebooks enable row level security;
+alter table public.mpgf_recipient_registry enable row level security;
+alter table public.mpgf_custody_holds enable row level security;
+alter table public.mpgf_conditional_pledges enable row level security;
+alter table public.mpgf_every_org_partner_events enable row level security;
+alter table public.mpgf_payment_method_tokens enable row level security;
+alter table public.mpgf_payment_events enable row level security;
+alter table public.mpgf_stripe_saved_commitments enable row level security;
+alter table public.mpgf_stripe_saved_commitment_events enable row level security;
+alter table public.mpgf_stripe_conditional_payment_intent_runs enable row level security;
+alter table public.mpgf_sponsor_pool_entries enable row level security;
+alter table public.mpgf_allocation_results enable row level security;
+alter table public.mpgf_dissent_notes enable row level security;
+alter table public.mpgf_milestones enable row level security;
+
+drop policy if exists "mpgf_public_goods_pledges_select_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_select_own"
+on public.mpgf_public_goods_pledges
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_public_goods_pledges_insert_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_insert_own"
+on public.mpgf_public_goods_pledges
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_public_goods_review_cases_public_select" on public.mpgf_public_goods_review_cases;
+create policy "mpgf_public_goods_review_cases_public_select"
+on public.mpgf_public_goods_review_cases
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_pledge_intents_select_own" on public.mpgf_pledge_intents;
+create policy "mpgf_pledge_intents_select_own"
+on public.mpgf_pledge_intents
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_pledge_intents_insert_own" on public.mpgf_pledge_intents;
+create policy "mpgf_pledge_intents_insert_own"
+on public.mpgf_pledge_intents
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_identity_verifications_select_own" on public.mpgf_identity_verifications;
+create policy "mpgf_identity_verifications_select_own"
+on public.mpgf_identity_verifications
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.mpgf_pledge_intents
+    where mpgf_pledge_intents.id = mpgf_identity_verifications.pledge_intent_id
+      and mpgf_pledge_intents.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "mpgf_payment_authorizations_select_own" on public.mpgf_payment_authorizations;
+create policy "mpgf_payment_authorizations_select_own"
+on public.mpgf_payment_authorizations
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.mpgf_pledge_intents
+    where mpgf_pledge_intents.id = mpgf_payment_authorizations.pledge_intent_id
+      and mpgf_pledge_intents.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "mpgf_provider_payment_events_service_only" on public.mpgf_provider_payment_events;
+create policy "mpgf_provider_payment_events_service_only"
+on public.mpgf_provider_payment_events
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "mpgf_moral_profiles_select_own" on public.mpgf_moral_profiles;
+create policy "mpgf_moral_profiles_select_own"
+on public.mpgf_moral_profiles
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_moral_profiles_write_own" on public.mpgf_moral_profiles;
+create policy "mpgf_moral_profiles_write_own"
+on public.mpgf_moral_profiles
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_signals_select_own" on public.mpgf_support_signals;
+create policy "mpgf_support_signals_select_own"
+on public.mpgf_support_signals
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_signals_insert_own" on public.mpgf_support_signals;
+create policy "mpgf_support_signals_insert_own"
+on public.mpgf_support_signals
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_user_budgets_select_own" on public.mpgf_user_budgets;
+create policy "mpgf_user_budgets_select_own"
+on public.mpgf_user_budgets
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_user_budgets_write_own" on public.mpgf_user_budgets;
+create policy "mpgf_user_budgets_write_own"
+on public.mpgf_user_budgets
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_stances_select_own" on public.mpgf_support_stances;
+create policy "mpgf_support_stances_select_own"
+on public.mpgf_support_stances
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_stances_write_own" on public.mpgf_support_stances;
+create policy "mpgf_support_stances_write_own"
+on public.mpgf_support_stances
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_conditional_trade_intents_select_own" on public.mpgf_conditional_trade_intents;
+create policy "mpgf_conditional_trade_intents_select_own"
+on public.mpgf_conditional_trade_intents
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_conditional_trade_intents_write_own" on public.mpgf_conditional_trade_intents;
+create policy "mpgf_conditional_trade_intents_write_own"
+on public.mpgf_conditional_trade_intents
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_coalition_candidates_public_select" on public.mpgf_coalition_candidates;
+create policy "mpgf_coalition_candidates_public_select"
+on public.mpgf_coalition_candidates
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_round_rulebooks_public_select" on public.mpgf_round_rulebooks;
+create policy "mpgf_round_rulebooks_public_select"
+on public.mpgf_round_rulebooks
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_recipient_registry_public_select" on public.mpgf_recipient_registry;
+create policy "mpgf_recipient_registry_public_select"
+on public.mpgf_recipient_registry
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_custody_holds_service_only_select" on public.mpgf_custody_holds;
+create policy "mpgf_custody_holds_service_only_select"
+on public.mpgf_custody_holds
+for select
+to service_role
+using (true);
+
+drop policy if exists "mpgf_conditional_pledges_select_own" on public.mpgf_conditional_pledges;
+create policy "mpgf_conditional_pledges_select_own"
+on public.mpgf_conditional_pledges
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_conditional_pledges_insert_own" on public.mpgf_conditional_pledges;
+create policy "mpgf_conditional_pledges_insert_own"
+on public.mpgf_conditional_pledges
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_every_org_partner_events_service_only" on public.mpgf_every_org_partner_events;
+create policy "mpgf_every_org_partner_events_service_only"
+on public.mpgf_every_org_partner_events
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "mpgf_payment_method_tokens_select_own" on public.mpgf_payment_method_tokens;
+create policy "mpgf_payment_method_tokens_select_own"
+on public.mpgf_payment_method_tokens
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_stripe_saved_commitments_select_own" on public.mpgf_stripe_saved_commitments;
+create policy "mpgf_stripe_saved_commitments_select_own"
+on public.mpgf_stripe_saved_commitments
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_stripe_saved_commitments_insert_own" on public.mpgf_stripe_saved_commitments;
+create policy "mpgf_stripe_saved_commitments_insert_own"
+on public.mpgf_stripe_saved_commitments
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_stripe_saved_commitment_events_service_only" on public.mpgf_stripe_saved_commitment_events;
+create policy "mpgf_stripe_saved_commitment_events_service_only"
+on public.mpgf_stripe_saved_commitment_events
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "mpgf_stripe_conditional_payment_intent_runs_service_only" on public.mpgf_stripe_conditional_payment_intent_runs;
+create policy "mpgf_stripe_conditional_payment_intent_runs_service_only"
+on public.mpgf_stripe_conditional_payment_intent_runs
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "mpgf_sponsor_pool_entries_public_select" on public.mpgf_sponsor_pool_entries;
+create policy "mpgf_sponsor_pool_entries_public_select"
+on public.mpgf_sponsor_pool_entries
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_allocation_results_public_select" on public.mpgf_allocation_results;
+create policy "mpgf_allocation_results_public_select"
+on public.mpgf_allocation_results
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_dissent_notes_public_select" on public.mpgf_dissent_notes;
+create policy "mpgf_dissent_notes_public_select"
+on public.mpgf_dissent_notes
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_milestones_public_select" on public.mpgf_milestones;
+create policy "mpgf_milestones_public_select"
+on public.mpgf_milestones
+for select
+to anon, authenticated
+using (true);
+
+grant select on
+  public.mpgf_public_goods_match_pools,
+  public.mpgf_public_goods_rounds,
+  public.mpgf_public_goods_campaigns,
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_review_cases,
+  public.mpgf_sponsor_pool_entries,
+  public.mpgf_coalition_candidates,
+  public.mpgf_round_rulebooks,
+  public.mpgf_recipient_registry,
+  public.mpgf_allocation_results,
+  public.mpgf_dissent_notes,
+  public.mpgf_milestones
+to anon, authenticated;
+
+grant select, insert on
+  public.mpgf_support_signals,
+  public.mpgf_conditional_pledges
+to authenticated;
+
+grant select, insert, update on
+  public.mpgf_user_budgets,
+  public.mpgf_support_stances,
+  public.mpgf_conditional_trade_intents
+to authenticated;
+
+grant select, insert, update on public.mpgf_pledge_intents to authenticated;
+
+grant select on
+  public.mpgf_identity_verifications,
+  public.mpgf_payment_authorizations
+to authenticated;
+
+grant select on public.mpgf_payment_method_tokens to authenticated;
+
+grant select, insert on public.mpgf_stripe_saved_commitments to authenticated;
+
+grant all on
+  public.mpgf_public_goods_match_pools,
+  public.mpgf_public_goods_rounds,
+  public.mpgf_public_goods_campaigns,
+  public.mpgf_public_goods_identity_attestations,
+  public.mpgf_public_goods_pledges,
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_payment_proofs,
+  public.mpgf_public_goods_review_cases,
+  public.mpgf_public_goods_subscriptions,
+  public.mpgf_public_goods_experiment_assignments,
+  public.mpgf_public_goods_analytics_events,
+  public.mpgf_pledge_intents,
+  public.mpgf_identity_verifications,
+  public.mpgf_payment_authorizations,
+  public.mpgf_provider_payment_events,
+  public.mpgf_moral_profiles,
+  public.mpgf_support_signals,
+  public.mpgf_user_budgets,
+  public.mpgf_support_stances,
+  public.mpgf_conditional_trade_intents,
+  public.mpgf_coalition_candidates,
+  public.mpgf_round_rulebooks,
+  public.mpgf_recipient_registry,
+  public.mpgf_custody_holds,
+  public.mpgf_conditional_pledges,
+  public.mpgf_every_org_partner_events,
+  public.mpgf_payment_method_tokens,
+  public.mpgf_payment_events,
+  public.mpgf_stripe_saved_commitments,
+  public.mpgf_stripe_saved_commitment_events,
+  public.mpgf_stripe_conditional_payment_intent_runs,
+  public.mpgf_sponsor_pool_entries,
+  public.mpgf_allocation_results,
+  public.mpgf_dissent_notes,
+  public.mpgf_milestones
+to service_role;
+
+comment on table public.mpgf_pledge_intents is
+  'First-class MPGF pledge_intent records for the production flow: verify identity, authorize conditionally, fall back to manual evidence only when provider integration is unavailable.';
+
+comment on table public.mpgf_identity_verifications is
+  'First-class MPGF identity_verification records; public and participant surfaces store redacted references and duplicate-proof hashes, not raw identity evidence.';
+
+comment on table public.mpgf_payment_authorizations is
+  'First-class MPGF payment_authorization records. Provider authorizations are conditional and capture only after threshold, review, and challenge gates.';
+
+comment on table public.mpgf_provider_payment_events is
+  'Append-only MPGF provider_payment_event records. Webhooks provide evidence but cannot authorize final payout by themselves.';
+
+comment on table public.mpgf_support_signals is
+  'Private-by-default Common-Ground Verified Quadratic Assurance Funding support signals. Public outputs aggregate signal counts and moral-cluster breadth only; they do not create a global moral ranking.';
+
+comment on table public.mpgf_user_budgets is
+  'Per-round MPGF Common Ground Budget records. Budget records freeze baseline, participant surplus confirmation, eligible-set hashes, fallback policy, and no-capture preview terms; public outputs remain aggregate-only.';
+
+comment on table public.mpgf_support_stances is
+  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances include caps, rank order, redacted-note hashes, review-signal visibility, feed coalition feasibility, and never create global moral rankings.';
+
+comment on table public.mpgf_conditional_trade_intents is
+  'No-capture Common Ground Budget conditional intent setup records. Rows bind explicit caps, accepted counterparty buckets, min counterparty volume, fallback rule, terms hash, and final-review disclosure before any later authorization path can use them.';
+
+comment on table public.mpgf_coalition_candidates is
+  'Aggregate coalition-feasibility candidates for Coalition-Routed Escrowed Conditional Matching. Rows publish threshold feasibility, cluster breadth, and routed weak-support totals only.';
+
+comment on table public.mpgf_round_rulebooks is
+  'Published MPGF ECM-core round rulebooks: fixed match schedule, batch cadence, custody policy, donor disclosure rules, and preserved safety/privacy/provenance invariants.';
+
+comment on table public.mpgf_recipient_registry is
+  'Public MPGF recipient registry with legal entity or fiscal host, payout rail, allowed uses, receipt or milestone rules, review state, and challenge state.';
+
+comment on table public.mpgf_custody_holds is
+  'Private post-clear MPGF custody-hold records. These require partner or fiscal-host custody confirmation and do not create a platform escrow claim.';
+
+comment on table public.mpgf_conditional_pledges is
+  'CG-VQAF conditional pledge records for fast Every.org routes, Stripe SetupIntent saved commitments, and manual proof fallback.';
+
+comment on table public.mpgf_every_org_partner_events is
+  'Append-only MPGF Every.org partner webhook imports. Dedupe by hashed chargeId, map partner metadata to round/campaign/pledge when present, auto-create reviewable contribution evidence, and never authorize final payout by webhook alone.';
+
+comment on column public.mpgf_public_goods_payment_proofs.reconciliation_source is
+  'Evidence source for MPGF contribution verification. Every.org partner webhooks create pending review evidence without exposing raw donor or charge references.';
+
+comment on column public.mpgf_every_org_partner_events.charge_id_hash is
+  'Hashed Every.org chargeId used as the idempotency key. Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored in this table.';
+
+comment on column public.mpgf_every_org_partner_events.partner_donation_id_hash is
+  'Hashed Donate Link partnerDonationId used to connect redirect-pending state with partner webhook import without exposing private donor references.';
+
+comment on table public.mpgf_payment_method_tokens is
+  'Stripe SetupIntent-first saved payment-method tokens. Provider ids are stored only as hashes; raw card data is never stored.';
+
+comment on table public.mpgf_stripe_saved_commitments is
+  'Stripe SetupIntent-first MPGF saved commitments. These records store hashed provider refs, require explicit future-use consent, create no immediate charge, and prohibit long-lived manual card holds.';
+
+comment on table public.mpgf_stripe_saved_commitment_events is
+  'Append-only Stripe webhook events for SetupIntent-first MPGF saved commitments. Stripe-Signature verification is required before any state transition, and webhook events never authorize final payout by themselves.';
+
+comment on table public.mpgf_stripe_conditional_payment_intent_runs is
+  'Protected threshold-clear worker runs that may create Stripe PaymentIntents only after amount, supporter, review, challenge-window, and parameter-lock gates are true.';
+
+-- Bg17 Forethought-aligned background networking pilot surface.
+-- Reviewed summaries, schema-bound wish dialogue, helper runs, exact-tag overlap
+-- metadata, and append-only transparency receipts. Raw ingestion and autonomous
+-- outreach remain disabled.
+
+create table if not exists public.background_source_sync_jobs (
+  id uuid primary key default gen_random_uuid(),
+  source_connection_id uuid not null references public.source_connections (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  state text not null default 'queued' check (state in ('queued', 'running', 'retry', 'done', 'failed', 'cancelled')),
+  attempts integer not null default 0 check (attempts >= 0),
+  next_run_at timestamptz not null default timezone('utc', now()),
+  last_error_code text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_helper_runs (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  trigger_kind text not null check (trigger_kind in ('saved_search', 'new_summary', 'manual_scan', 'scheduled_digest')),
+  state text not null default 'queued' check (state in ('queued', 'running', 'retry', 'done', 'failed', 'cancelled')),
+  attempts integer not null default 0 check (attempts >= 0),
+  next_run_at timestamptz not null default timezone('utc', now()),
+  query_fingerprint text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, trigger_kind, query_fingerprint, state)
+);
+
+create table if not exists public.background_delegate_receipts (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  receipt_kind text not null check (receipt_kind in ('delegate_run', 'opportunity_brief', 'stale_transition', 'intro_request')),
+  purpose_code text not null default 'moral_trade_offer',
+  purpose_policy_version text not null default 'background-purpose-policy-v1',
+  subject_kind text not null check (subject_kind in ('helper_run', 'background_helper_run', 'opportunity_brief', 'intro_packet')),
+  subject_id uuid,
+  public_summary text not null default '',
+  factor_count_bucket text not null default 'withheld' check (factor_count_bucket in ('withheld', 'none', '1', '2_to_3', '4_plus')),
+  blocker_count_bucket text not null default 'withheld' check (blocker_count_bucket in ('withheld', 'none', '1', '2_to_3', '4_plus')),
+  redacted_payload jsonb not null default '{}'::jsonb,
+  status text not null default 'active' check (status in ('active', 'expired', 'anonymized', 'held')),
+  retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.background_delegate_receipts drop constraint if exists background_delegate_receipts_purpose_code_check;
+alter table public.background_delegate_receipts
+  add constraint background_delegate_receipts_purpose_code_check
+  check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro'));
+
+alter table public.background_delegate_receipts drop constraint if exists background_delegate_receipts_purpose_policy_version_check;
+alter table public.background_delegate_receipts
+  add constraint background_delegate_receipts_purpose_policy_version_check
+  check (purpose_policy_version = 'background-purpose-policy-v1');
+
+alter table public.background_opportunity_briefs
+  add column if not exists helper_run_id uuid references public.background_helper_runs (id) on delete set null,
+  add column if not exists cooloff_until timestamptz,
+  add column if not exists explanation_version text not null default 'background-explanation-v1',
+  add column if not exists source_scope_version text not null default 'reviewed-summary-v1',
+  add column if not exists purpose_code text not null default 'moral_trade_offer',
+  add column if not exists purpose_policy_version text not null default 'background-purpose-policy-v1',
+  add column if not exists output_schema_version text not null default 'background-opportunity-brief-card-v2',
+  add column if not exists redacted_receipt_id uuid references public.background_delegate_receipts (id) on delete set null,
+  add column if not exists retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days'),
+  add column if not exists anonymized_at timestamptz,
+  add column if not exists generic_dependency_label text not null default 'valid';
+
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_purpose_code_check;
+alter table public.background_opportunity_briefs
+  add constraint background_opportunity_briefs_purpose_code_check
+  check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro'));
+
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_purpose_policy_version_check;
+alter table public.background_opportunity_briefs
+  add constraint background_opportunity_briefs_purpose_policy_version_check
+  check (purpose_policy_version = 'background-purpose-policy-v1');
+
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_output_schema_version_check;
+alter table public.background_opportunity_briefs
+  add constraint background_opportunity_briefs_output_schema_version_check
+  check (output_schema_version = 'background-opportunity-brief-card-v2');
+
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_generic_dependency_label_check;
+alter table public.background_opportunity_briefs
+  add constraint background_opportunity_briefs_generic_dependency_label_check
+  check (generic_dependency_label in ('valid', 'stale_or_unavailable', 'review_required'));
+
+alter table public.background_intro_packets
+  add column if not exists purpose_code text not null default 'moral_trade_offer',
+  add column if not exists purpose_policy_version text not null default 'background-purpose-policy-v1',
+  add column if not exists redacted_receipt_id uuid references public.background_delegate_receipts (id) on delete set null,
+  add column if not exists retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days'),
+  add column if not exists anonymized_at timestamptz;
+
+alter table public.wish_profiles
+  add column if not exists inbound_delegate_discovery text not null default 'off',
+  add column if not exists inbound_delegate_purpose_codes text[] not null default '{}',
+  add column if not exists inbound_delegate_purpose_bindings jsonb not null default '{}'::jsonb,
+  add column if not exists inbound_delegate_surfaces text[] not null default '{}',
+  add column if not exists inbound_delegate_surface_budget_per_window jsonb not null default '{}'::jsonb,
+  add column if not exists inbound_delegate_pending_intro_limit integer,
+  add column if not exists inbound_delegate_cooloff_until timestamptz,
+  add column if not exists inbound_delegate_confirmed_at timestamptz,
+  add column if not exists inbound_delegate_expires_at timestamptz,
+  add column if not exists candidate_inbound_budget_version text not null default 'candidate-budget-v1',
+  add column if not exists candidate_exposure_version text not null default 'candidate-exposure-v1',
+  add column if not exists allowed_cohort_ids text[] not null default '{}';
+
+alter table public.wish_profiles drop constraint if exists wish_profiles_inbound_delegate_discovery_check;
+alter table public.wish_profiles
+  add constraint wish_profiles_inbound_delegate_discovery_check
+  check (inbound_delegate_discovery in ('off', 'cohort_only', 'partner_matchmaker', 'public_broad_preview'));
+
+alter table public.wish_profiles drop constraint if exists wish_profiles_inbound_delegate_purpose_codes_check;
+alter table public.wish_profiles
+  add constraint wish_profiles_inbound_delegate_purpose_codes_check
+  check (inbound_delegate_purpose_codes <@ array['moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro']::text[]);
+
+alter table public.wish_profiles drop constraint if exists wish_profiles_inbound_delegate_surfaces_check;
+alter table public.wish_profiles
+  add constraint wish_profiles_inbound_delegate_surfaces_check
+  check (inbound_delegate_surfaces <@ array['broad_profile']::text[]);
+
+alter table public.wish_profiles drop constraint if exists wish_profiles_inbound_delegate_pending_intro_limit_check;
+alter table public.wish_profiles
+  add constraint wish_profiles_inbound_delegate_pending_intro_limit_check
+  check (inbound_delegate_pending_intro_limit is null or inbound_delegate_pending_intro_limit between 0 and 50);
+
+alter table public.personal_delegates
+  add column if not exists allowed_purpose_bindings jsonb not null default '{}'::jsonb;
+
+alter table public.helper_strategies
+  add column if not exists purpose_code text not null default 'moral_trade_offer',
+  add column if not exists purpose_policy_version text not null default 'background-purpose-policy-v1',
+  add column if not exists audience_scope text not null default 'cohort_only',
+  add column if not exists cohort_scope_id text not null default '';
+
+alter table public.helper_strategies drop constraint if exists helper_strategies_purpose_code_check;
+alter table public.helper_strategies
+  add constraint helper_strategies_purpose_code_check
+  check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro'));
+
+alter table public.helper_strategies drop constraint if exists helper_strategies_purpose_policy_version_check;
+alter table public.helper_strategies
+  add constraint helper_strategies_purpose_policy_version_check
+  check (purpose_policy_version = 'background-purpose-policy-v1');
+
+alter table public.helper_strategies drop constraint if exists helper_strategies_audience_scope_check;
+alter table public.helper_strategies
+  add constraint helper_strategies_audience_scope_check
+  check (audience_scope in ('cohort_only', 'partner_matchmaker', 'public_broad_preview'));
+
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_purpose_code_check;
+alter table public.background_intro_packets
+  add constraint background_intro_packets_purpose_code_check
+  check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro'));
+
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_purpose_policy_version_check;
+alter table public.background_intro_packets
+  add constraint background_intro_packets_purpose_policy_version_check
+  check (purpose_policy_version = 'background-purpose-policy-v1');
+
+alter table public.helper_runs
+  add column if not exists purpose_code text not null default 'moral_trade_offer',
+  add column if not exists purpose_policy_version text not null default 'background-purpose-policy-v1',
+  add column if not exists redacted_receipt_id uuid references public.background_delegate_receipts (id) on delete set null,
+  add column if not exists retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days');
+
+alter table public.background_helper_runs
+  add column if not exists purpose_code text not null default 'moral_trade_offer',
+  add column if not exists purpose_policy_version text not null default 'background-purpose-policy-v1',
+  add column if not exists redacted_receipt_id uuid references public.background_delegate_receipts (id) on delete set null,
+  add column if not exists retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days');
+
+create table if not exists public.background_candidate_exposure_counters (
+  id uuid primary key default gen_random_uuid(),
+  candidate_profile_id uuid references public.profiles (id) on delete set null,
+  counter_reference_state text not null default 'active' check (counter_reference_state in ('active', 'redacted', 'anonymized')),
+  purpose_code text not null default 'moral_trade_offer',
+  purpose_policy_version text not null default 'background-purpose-policy-v1',
+  audience_scope text not null default 'cohort_only' check (audience_scope in ('cohort_only', 'partner_matchmaker', 'public_broad_preview')),
+  cohort_scope_id text not null default '',
+  window_start timestamptz not null,
+  window_end timestamptz not null,
+  surface_count integer not null default 0 check (surface_count >= 0),
+  pending_intro_count integer not null default 0 check (pending_intro_count >= 0),
+  suppressed_for_budget_count integer not null default 0 check (suppressed_for_budget_count >= 0),
+  budget_state text not null default 'clear' check (budget_state in ('clear', 'near_limit', 'exhausted', 'cooloff')),
+  candidate_inbound_budget_version_snapshot text not null default 'candidate-budget-v1',
+  last_surface_at timestamptz,
+  last_intro_request_at timestamptz,
+  retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '45 days'),
+  anonymized_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (counter_reference_state <> 'active' or candidate_profile_id is not null),
+  check (window_end > window_start)
+);
+
+alter table public.background_candidate_exposure_counters drop constraint if exists background_candidate_exposure_counters_purpose_code_check;
+alter table public.background_candidate_exposure_counters
+  add constraint background_candidate_exposure_counters_purpose_code_check
+  check (purpose_code in ('moral_trade_offer', 'donation_offset', 'pledge_swap', 'moral_public_good', 'research_collaboration', 'community_intro'));
+
+alter table public.background_candidate_exposure_counters drop constraint if exists background_candidate_exposure_counters_purpose_policy_version_check;
+alter table public.background_candidate_exposure_counters
+  add constraint background_candidate_exposure_counters_purpose_policy_version_check
+  check (purpose_policy_version = 'background-purpose-policy-v1');
+
+create unique index if not exists background_candidate_exposure_counters_window_idx
+on public.background_candidate_exposure_counters (
+  candidate_profile_id,
+  purpose_code,
+  purpose_policy_version,
+  audience_scope,
+  cohort_scope_id,
+  window_start
+)
+where counter_reference_state = 'active';
+
+create index if not exists background_candidate_exposure_counters_retention_idx
+on public.background_candidate_exposure_counters (counter_reference_state, retention_expires_at asc);
+
+create or replace function public.reserve_background_candidate_exposure(
+  target_candidate_profile_id uuid,
+  target_purpose_code text,
+  target_purpose_policy_version text,
+  target_audience_scope text,
+  target_cohort_scope_id text,
+  target_surface_limit integer,
+  target_window_days integer,
+  target_budget_version text
+)
+returns table (
+  allowed boolean,
+  budget_state text,
+  counter_id uuid,
+  remaining integer,
+  blocker_code text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_time_utc timestamptz := timezone('utc', now());
+  normalized_cohort text := coalesce(nullif(target_cohort_scope_id, ''), '');
+  normalized_window_days integer := greatest(1, least(coalesce(target_window_days, 30), 365));
+  normalized_surface_limit integer := greatest(0, least(coalesce(target_surface_limit, 0), 1000));
+  window_start_utc timestamptz := date_trunc('day', timezone('utc', now()));
+  window_end_utc timestamptz;
+  reserved_counter_id uuid;
+  reserved_surface_count integer;
+  reserved_budget_state text;
+begin
+  if target_candidate_profile_id is null or normalized_surface_limit <= 0 then
+    allowed := false;
+    budget_state := 'exhausted';
+    counter_id := null;
+    remaining := 0;
+    blocker_code := 'candidate_budget_missing';
+    return next;
+    return;
+  end if;
+
+  window_end_utc := window_start_utc + make_interval(days => normalized_window_days);
+
+  insert into public.background_candidate_exposure_counters (
+    candidate_profile_id,
+    purpose_code,
+    purpose_policy_version,
+    audience_scope,
+    cohort_scope_id,
+    window_start,
+    window_end,
+    candidate_inbound_budget_version_snapshot,
+    retention_expires_at
+  )
+  values (
+    target_candidate_profile_id,
+    target_purpose_code,
+    target_purpose_policy_version,
+    target_audience_scope,
+    normalized_cohort,
+    window_start_utc,
+    window_end_utc,
+    coalesce(nullif(target_budget_version, ''), 'candidate-budget-v1'),
+    window_end_utc + interval '45 days'
+  )
+  on conflict (candidate_profile_id, purpose_code, purpose_policy_version, audience_scope, cohort_scope_id, window_start)
+  where counter_reference_state = 'active'
+  do nothing;
+
+  update public.background_candidate_exposure_counters
+  set
+    surface_count = surface_count + 1,
+    budget_state = case
+      when surface_count + 1 >= normalized_surface_limit then 'exhausted'
+      when (surface_count + 1) * 5 >= normalized_surface_limit * 4 then 'near_limit'
+      else 'clear'
+    end,
+    last_surface_at = current_time_utc,
+    updated_at = current_time_utc
+  where candidate_profile_id = target_candidate_profile_id
+    and purpose_code = target_purpose_code
+    and purpose_policy_version = target_purpose_policy_version
+    and audience_scope = target_audience_scope
+    and cohort_scope_id = normalized_cohort
+    and window_start = window_start_utc
+    and counter_reference_state = 'active'
+    and budget_state <> 'cooloff'
+    and surface_count < normalized_surface_limit
+  returning id, surface_count, budget_state
+  into reserved_counter_id, reserved_surface_count, reserved_budget_state;
+
+  if reserved_counter_id is not null then
+    allowed := true;
+    budget_state := reserved_budget_state;
+    counter_id := reserved_counter_id;
+    remaining := greatest(0, normalized_surface_limit - reserved_surface_count);
+    blocker_code := '';
+    return next;
+    return;
+  end if;
+
+  update public.background_candidate_exposure_counters
+  set
+    suppressed_for_budget_count = suppressed_for_budget_count + 1,
+    budget_state = case when budget_state = 'cooloff' then 'cooloff' else 'exhausted' end,
+    updated_at = current_time_utc
+  where candidate_profile_id = target_candidate_profile_id
+    and purpose_code = target_purpose_code
+    and purpose_policy_version = target_purpose_policy_version
+    and audience_scope = target_audience_scope
+    and cohort_scope_id = normalized_cohort
+    and window_start = window_start_utc
+    and counter_reference_state = 'active'
+  returning id, budget_state
+  into reserved_counter_id, reserved_budget_state;
+
+  allowed := false;
+  budget_state := coalesce(reserved_budget_state, 'exhausted');
+  counter_id := reserved_counter_id;
+  remaining := 0;
+  blocker_code := case when reserved_budget_state = 'cooloff' then 'candidate_cooloff' else 'candidate_budget_exhausted' end;
+  return next;
+end;
+$$;
+
+alter table public.background_profile_signals
+  drop constraint if exists background_profile_signals_source_check;
+
+alter table public.background_profile_signals
+  add constraint background_profile_signals_source_check
+  check (source in ('manual', 'approved_source_summary', 'interview', 'wish_dialogue'));
+
+create table if not exists public.background_wish_dialogue_sessions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  state text not null default 'draft' check (state in ('draft', 'proposed', 'applied', 'abandoned')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_wish_dialogue_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.background_wish_dialogue_sessions (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  actor text not null check (actor in ('user', 'assistant')),
+  body text not null default '[encrypted private field]',
+  body_ciphertext text not null,
+  body_encryption_version text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_wish_field_proposals (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.background_wish_dialogue_sessions (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  proposal jsonb not null,
+  uncertainty_flags jsonb not null default '[]'::jsonb,
+  explanation jsonb not null default '[]'::jsonb,
+  approved boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.background_private_overlap_tags (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  tag_namespace text not null check (tag_namespace in ('exact_capability_tag', 'exact_constraint_tag', 'exact_verification_tag')),
+  blinded_token bytea not null,
+  token_version text not null default 'bg17-demo-blinded-token-v1',
+  expiry_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, tag_namespace, blinded_token)
+);
+
+create table if not exists public.background_private_overlap_checks (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references public.profiles (id) on delete cascade,
+  counterparty_id uuid not null references public.profiles (id) on delete cascade,
+  stage text not null check (stage in ('registry', 'consent', 'introduced')),
+  tag_namespace text not null check (tag_namespace in ('exact_capability_tag', 'exact_constraint_tag', 'exact_verification_tag')),
+  result_bucket text not null check (result_bucket in ('none', '1', '2_to_3', '4_plus')),
+  receipt_id uuid,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (requester_id <> counterparty_id)
+);
+
+create table if not exists public.transparency_receipts (
+  id uuid primary key default gen_random_uuid(),
+  seq bigint generated always as identity unique,
+  event_type text not null,
+  actor_scope text not null,
+  redacted_payload jsonb not null,
+  prev_hash text,
+  entry_hash text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'background_private_overlap_checks_receipt_id_fkey'
+  ) then
+    alter table public.background_private_overlap_checks
+      add constraint background_private_overlap_checks_receipt_id_fkey
+      foreign key (receipt_id) references public.transparency_receipts (id) on delete set null;
+  end if;
+end
+$$;
+
+create index if not exists background_source_sync_jobs_profile_state_idx
+on public.background_source_sync_jobs (profile_id, state, next_run_at asc, updated_at desc);
+
+create index if not exists background_source_sync_jobs_connection_idx
+on public.background_source_sync_jobs (source_connection_id, state, next_run_at asc);
+
+create index if not exists background_helper_runs_profile_state_idx
+on public.background_helper_runs (profile_id, state, next_run_at asc, updated_at desc);
+
+create index if not exists background_delegate_receipts_profile_kind_idx
+on public.background_delegate_receipts (profile_id, receipt_kind, created_at desc);
+
+create index if not exists background_delegate_receipts_retention_idx
+on public.background_delegate_receipts (status, retention_expires_at asc);
+
+create index if not exists background_opportunity_briefs_helper_run_idx
+on public.background_opportunity_briefs (helper_run_id, profile_id)
+where helper_run_id is not null;
+
+create index if not exists background_opportunity_briefs_purpose_idx
+on public.background_opportunity_briefs (profile_id, purpose_code, purpose_policy_version, status);
+
+create index if not exists background_intro_packets_purpose_idx
+on public.background_intro_packets (requester_profile_id, purpose_code, purpose_policy_version, review_state);
+
+create unique index if not exists background_intro_packets_active_brief_uidx
+on public.background_intro_packets (
+  requester_profile_id,
+  opportunity_brief_id,
+  purpose_code,
+  purpose_policy_version
+)
+where opportunity_brief_id is not null
+  and review_state in ('requested', 'under_review', 'approved', 'changes_requested', 'sent');
+
+create index if not exists helper_strategies_purpose_idx
+on public.helper_strategies (profile_id, purpose_code, purpose_policy_version, audience_scope, status);
+
+create index if not exists background_wish_dialogue_sessions_profile_state_idx
+on public.background_wish_dialogue_sessions (profile_id, state, updated_at desc);
+
+create index if not exists background_wish_dialogue_messages_session_idx
+on public.background_wish_dialogue_messages (session_id, created_at asc);
+
+create index if not exists background_wish_field_proposals_session_idx
+on public.background_wish_field_proposals (session_id, created_at desc);
+
+create index if not exists background_private_overlap_tags_profile_namespace_idx
+on public.background_private_overlap_tags (profile_id, tag_namespace, expiry_at asc);
+
+create index if not exists background_private_overlap_checks_requester_idx
+on public.background_private_overlap_checks (requester_id, created_at desc);
+
+create index if not exists background_private_overlap_checks_counterparty_idx
+on public.background_private_overlap_checks (counterparty_id, created_at desc);
+
+create index if not exists transparency_receipts_actor_scope_idx
+on public.transparency_receipts (actor_scope, created_at desc);
+
+drop trigger if exists background_source_sync_jobs_set_updated_at on public.background_source_sync_jobs;
+create trigger background_source_sync_jobs_set_updated_at
+before update on public.background_source_sync_jobs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_helper_runs_set_updated_at on public.background_helper_runs;
+create trigger background_helper_runs_set_updated_at
+before update on public.background_helper_runs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_delegate_receipts_set_updated_at on public.background_delegate_receipts;
+create trigger background_delegate_receipts_set_updated_at
+before update on public.background_delegate_receipts
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_candidate_exposure_counters_set_updated_at on public.background_candidate_exposure_counters;
+create trigger background_candidate_exposure_counters_set_updated_at
+before update on public.background_candidate_exposure_counters
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_wish_dialogue_sessions_set_updated_at on public.background_wish_dialogue_sessions;
+create trigger background_wish_dialogue_sessions_set_updated_at
+before update on public.background_wish_dialogue_sessions
+for each row execute function public.set_updated_at();
+
+alter table public.background_source_sync_jobs enable row level security;
+alter table public.background_helper_runs enable row level security;
+alter table public.background_delegate_receipts enable row level security;
+alter table public.background_candidate_exposure_counters enable row level security;
+alter table public.background_wish_dialogue_sessions enable row level security;
+alter table public.background_wish_dialogue_messages enable row level security;
+alter table public.background_wish_field_proposals enable row level security;
+alter table public.background_private_overlap_tags enable row level security;
+alter table public.background_private_overlap_checks enable row level security;
+alter table public.transparency_receipts enable row level security;
+
+grant select, insert, update on public.background_source_sync_jobs to authenticated;
+grant select, insert, update on public.background_helper_runs to authenticated;
+grant select, insert on public.background_delegate_receipts to authenticated;
+revoke all on public.background_candidate_exposure_counters from authenticated;
+grant select, insert, update on public.background_wish_dialogue_sessions to authenticated;
+grant select, insert on public.background_wish_dialogue_messages to authenticated;
+grant select, insert, update on public.background_wish_field_proposals to authenticated;
+grant select, insert, delete on public.background_private_overlap_tags to authenticated;
+grant select, insert on public.background_private_overlap_checks to authenticated;
+grant select, insert on public.transparency_receipts to authenticated;
+
+grant all on public.background_source_sync_jobs to service_role;
+grant all on public.background_helper_runs to service_role;
+grant all on public.background_delegate_receipts to service_role;
+grant all on public.background_candidate_exposure_counters to service_role;
+grant all on public.background_wish_dialogue_sessions to service_role;
+grant all on public.background_wish_dialogue_messages to service_role;
+grant all on public.background_wish_field_proposals to service_role;
+grant all on public.background_private_overlap_tags to service_role;
+grant all on public.background_private_overlap_checks to service_role;
+grant all on public.transparency_receipts to service_role;
+
+revoke all on function public.reserve_background_candidate_exposure(uuid, text, text, text, text, integer, integer, text) from public;
+revoke all on function public.reserve_background_candidate_exposure(uuid, text, text, text, text, integer, integer, text) from authenticated;
+grant execute on function public.reserve_background_candidate_exposure(uuid, text, text, text, text, integer, integer, text) to service_role;
+
+drop policy if exists "background_source_sync_jobs_select_own" on public.background_source_sync_jobs;
+create policy "background_source_sync_jobs_select_own"
+on public.background_source_sync_jobs
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_sync_jobs_insert_own" on public.background_source_sync_jobs;
+create policy "background_source_sync_jobs_insert_own"
+on public.background_source_sync_jobs
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_source_sync_jobs_update_own" on public.background_source_sync_jobs;
+create policy "background_source_sync_jobs_update_own"
+on public.background_source_sync_jobs
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_helper_runs_select_own" on public.background_helper_runs;
+create policy "background_helper_runs_select_own"
+on public.background_helper_runs
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_helper_runs_insert_own" on public.background_helper_runs;
+create policy "background_helper_runs_insert_own"
+on public.background_helper_runs
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_helper_runs_update_own" on public.background_helper_runs;
+create policy "background_helper_runs_update_own"
+on public.background_helper_runs
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_dialogue_sessions_select_own" on public.background_wish_dialogue_sessions;
+create policy "background_wish_dialogue_sessions_select_own"
+on public.background_wish_dialogue_sessions
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_dialogue_sessions_insert_own" on public.background_wish_dialogue_sessions;
+create policy "background_wish_dialogue_sessions_insert_own"
+on public.background_wish_dialogue_sessions
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_dialogue_sessions_update_own" on public.background_wish_dialogue_sessions;
+create policy "background_wish_dialogue_sessions_update_own"
+on public.background_wish_dialogue_sessions
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_dialogue_messages_select_own" on public.background_wish_dialogue_messages;
+create policy "background_wish_dialogue_messages_select_own"
+on public.background_wish_dialogue_messages
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_dialogue_messages_insert_own" on public.background_wish_dialogue_messages;
+create policy "background_wish_dialogue_messages_insert_own"
+on public.background_wish_dialogue_messages
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.background_wish_dialogue_sessions
+    where background_wish_dialogue_sessions.id = session_id
+      and background_wish_dialogue_sessions.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "background_wish_field_proposals_select_own" on public.background_wish_field_proposals;
+create policy "background_wish_field_proposals_select_own"
+on public.background_wish_field_proposals
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_wish_field_proposals_insert_own" on public.background_wish_field_proposals;
+create policy "background_wish_field_proposals_insert_own"
+on public.background_wish_field_proposals
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.background_wish_dialogue_sessions
+    where background_wish_dialogue_sessions.id = session_id
+      and background_wish_dialogue_sessions.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "background_wish_field_proposals_update_own" on public.background_wish_field_proposals;
+create policy "background_wish_field_proposals_update_own"
+on public.background_wish_field_proposals
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_private_overlap_tags_select_own" on public.background_private_overlap_tags;
+create policy "background_private_overlap_tags_select_own"
+on public.background_private_overlap_tags
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_private_overlap_tags_insert_own" on public.background_private_overlap_tags;
+create policy "background_private_overlap_tags_insert_own"
+on public.background_private_overlap_tags
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_private_overlap_tags_delete_own" on public.background_private_overlap_tags;
+create policy "background_private_overlap_tags_delete_own"
+on public.background_private_overlap_tags
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_private_overlap_checks_select_relevant" on public.background_private_overlap_checks;
+create policy "background_private_overlap_checks_select_relevant"
+on public.background_private_overlap_checks
+for select
+to authenticated
+using (requester_id = (select auth.uid()) or counterparty_id = (select auth.uid()));
+
+drop policy if exists "background_private_overlap_checks_insert_requester" on public.background_private_overlap_checks;
+create policy "background_private_overlap_checks_insert_requester"
+on public.background_private_overlap_checks
+for insert
+to authenticated
+with check (requester_id = (select auth.uid()));
+
+drop policy if exists "transparency_receipts_select_own_actor_scope" on public.transparency_receipts;
+create policy "transparency_receipts_select_own_actor_scope"
+on public.transparency_receipts
+for select
+to authenticated
+using (actor_scope = ('profile:' || (select auth.uid())::text));
+
+drop policy if exists "transparency_receipts_insert_own_actor_scope" on public.transparency_receipts;
+create policy "transparency_receipts_insert_own_actor_scope"
+on public.transparency_receipts
+for insert
+to authenticated
+with check (actor_scope = ('profile:' || (select auth.uid())::text));
+
+create table if not exists public.moral_trade_policy_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  subject_kind text not null check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security'
+    )
+  ),
+  subject_key text not null,
+  version_label text not null,
+  status text not null default 'draft' check (status in ('draft', 'approved', 'immutable', 'superseded', 'revoked')),
+  snapshot_hash text not null check (snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  snapshot_payload jsonb not null default '{}'::jsonb,
+  approved_by uuid references public.profiles (id) on delete set null,
+  approved_at timestamptz,
+  immutable_after timestamptz,
+  superseded_by uuid references public.moral_trade_policy_snapshots (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (subject_kind, subject_key, version_label)
+);
+
+comment on table public.moral_trade_policy_snapshots is
+  'Immutable policy snapshots for release gates, state interpretation, payment, notification, FX, fees, public metrics, retention, eligibility, and destination verification.';
+
+create table if not exists public.moral_trade_state_interpretation_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  state_family text not null,
+  missing_state_behavior text not null default 'block' check (missing_state_behavior in ('block', 'not_required_for_stage')),
+  unknown_state_behavior text not null default 'block' check (unknown_state_behavior in ('block', 'not_required_for_stage')),
+  stale_state_behavior text not null default 'block' check (stale_state_behavior in ('block', 'not_required_for_stage')),
+  under_review_state_behavior text not null default 'block' check (under_review_state_behavior in ('block', 'not_required_for_stage')),
+  unmapped_state_behavior text not null default 'block' check (unmapped_state_behavior in ('block', 'not_required_for_stage')),
+  superseded_state_behavior text not null default 'block' check (superseded_state_behavior in ('block', 'not_required_for_stage')),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, state_family)
+);
+
+comment on table public.moral_trade_state_interpretation_policies is
+  'Frozen state-interpretation policy rows: missing, unknown, stale, under-review, unmapped, and superseded states fail closed unless explicitly not required for stage.';
+
+create table if not exists public.moral_trade_privileged_action_records (
+  id uuid primary key default gen_random_uuid(),
+  subject_kind text not null check (
+    subject_kind in (
+      'release_gate',
+      'policy_snapshot',
+      'recipient_destination',
+      'privacy_grant',
+      'impact_claim',
+      'blocker_override',
+      'manual_capture',
+      'manual_payout_release',
+      'emergency_unpause',
+      'refund_cancellation'
+    )
+  ),
+  subject_id uuid,
+  action_key text not null check (
+    action_key in (
+      'release_gate_approval',
+      'policy_snapshot_approval',
+      'recipient_destination_verification',
+      'private_data_access_grant',
+      'impact_claim_publication',
+      'blocker_override',
+      'manual_capture',
+      'manual_payout_release',
+      'emergency_unpause',
+      'nonroutine_refund_cancellation'
+    )
+  ),
+  status text not null default 'requested' check (status in ('requested', 'approved', 'blocked', 'expired', 'superseded')),
+  requested_by uuid references public.profiles (id) on delete set null,
+  first_approver_id uuid references public.profiles (id) on delete set null,
+  second_approver_id uuid references public.profiles (id) on delete set null,
+  neutral_reviewer_id uuid references public.profiles (id) on delete set null,
+  reason_codes text[] not null default '{}',
+  emergency_pause_allowed boolean not null default false,
+  decided_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (
+    status <> 'approved'
+    or emergency_pause_allowed
+    or neutral_reviewer_id is not null
+    or (first_approver_id is not null and second_approver_id is not null and first_approver_id <> second_approver_id)
+  )
+);
+
+comment on table public.moral_trade_privileged_action_records is
+  'Dual-control or neutral-review records for high-risk actions such as gate approval, manual capture, private-data grants, emergency unpause, and non-routine refunds.';
+
+create table if not exists public.moral_trade_release_gates (
+  id uuid primary key default gen_random_uuid(),
+  stage text not null check (
+    stage in (
+      'public_goods_preview',
+      'donation_offset_payable',
+      'pledge_swap_reliance_manual_pilot',
+      'capped_real_money_release',
+      'public_metric_release'
+    )
+  ),
+  feature_flag_key text not null,
+  status text not null default 'draft' check (status in ('draft', 'under_review', 'approved', 'blocked', 'paused', 'superseded')),
+  policy_snapshot_bundle_hash text not null check (policy_snapshot_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  state_interpretation_policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  approval_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  emergency_paused boolean not null default false,
+  approved_by uuid references public.profiles (id) on delete set null,
+  approved_at timestamptz,
+  superseded_by uuid references public.moral_trade_release_gates (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_release_gates is
+  'First-class release-gate subjects. Gates cannot be represented only by editing a parent round or agreement field.';
+
+create table if not exists public.moral_trade_release_gate_requirement_results (
+  id uuid primary key default gen_random_uuid(),
+  release_gate_id uuid not null references public.moral_trade_release_gates (id) on delete cascade,
+  requirement_key text not null,
+  status text not null check (
+    status in (
+      'passed',
+      'not_required_for_stage',
+      'waived_by_neutral_review',
+      'failed',
+      'missing',
+      'stale',
+      'unknown',
+      'under_review'
+    )
+  ),
+  evidence_ref text not null default '',
+  policy_snapshot_id uuid references public.moral_trade_policy_snapshots (id) on delete restrict,
+  privileged_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  recorded_by uuid references public.profiles (id) on delete set null,
+  recorded_at timestamptz not null default timezone('utc', now()),
+  notes text not null default '',
+  unique (release_gate_id, requirement_key)
+);
+
+comment on table public.moral_trade_release_gate_requirement_results is
+  'Append-only-by-supersession release-gate requirement results; missing, stale, unknown, under-review, or unreviewed waivers fail closed in application validators.';
+
+create index if not exists moral_trade_policy_snapshots_subject_idx
+  on public.moral_trade_policy_snapshots (subject_kind, subject_key, status);
+create index if not exists moral_trade_release_gates_stage_status_idx
+  on public.moral_trade_release_gates (stage, status, created_at desc);
+create index if not exists moral_trade_release_gate_results_gate_status_idx
+  on public.moral_trade_release_gate_requirement_results (release_gate_id, status);
+create index if not exists moral_trade_privileged_actions_subject_idx
+  on public.moral_trade_privileged_action_records (subject_kind, action_key, status);
+
+alter table public.moral_trade_policy_snapshots enable row level security;
+alter table public.moral_trade_state_interpretation_policies enable row level security;
+alter table public.moral_trade_privileged_action_records enable row level security;
+alter table public.moral_trade_release_gates enable row level security;
+alter table public.moral_trade_release_gate_requirement_results enable row level security;
+
+create table if not exists public.moral_trade_release_gate_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  gate_id text not null,
+  stage text not null check (
+    stage in (
+      'public_goods_preview',
+      'donation_offset_payable',
+      'pledge_swap_reliance_manual_pilot',
+      'capped_real_money_release',
+      'public_metric_release'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  policy_snapshot_bundle_status text not null check (
+    policy_snapshot_bundle_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  state_interpretation_policy_status text not null check (
+    state_interpretation_policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  feature_flag_enabled_bool boolean not null default false,
+  emergency_paused_bool boolean not null default false,
+  required_requirement_count integer not null default 0 check (required_requirement_count >= 0),
+  inactive_requirement_count integer not null default 0 check (inactive_requirement_count >= 0),
+  passed_requirement_count integer not null default 0 check (passed_requirement_count >= 0),
+  not_required_requirement_count integer not null default 0 check (not_required_requirement_count >= 0),
+  waived_requirement_count integer not null default 0 check (waived_requirement_count >= 0),
+  result_count integer not null default 0 check (result_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  payable_allowed_bool boolean not null default false,
+  reliance_bearing_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_release_gate_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passed_requirement_count <= result_count),
+  check (not_required_requirement_count <= result_count),
+  check (waived_requirement_count <= result_count),
+  check (result_count <= 160),
+  check (payable_allowed_bool = false),
+  check (reliance_bearing_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_release_gate_enforcement_records is
+  'Append-only user-owned release-gate enforcement records. A record stores normalized gate input, requirement-result evaluation, blockers, and evaluation hash while enforcing that enforcement records cannot authorize payable, reliance-bearing, public-metric, or release-gate-promotion state.';
+
+create index if not exists mt_release_gate_enforce_owner_status_idx
+  on public.moral_trade_release_gate_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_release_gate_enforce_stage_status_idx
+  on public.moral_trade_release_gate_enforcement_records (stage, enforcement_status, created_at desc);
+
+create index if not exists mt_release_gate_enforce_hash_idx
+  on public.moral_trade_release_gate_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_release_gate_enforcement_records enable row level security;
+
+drop policy if exists "mt_release_gate_enforce_select_owner"
+  on public.moral_trade_release_gate_enforcement_records;
+create policy "mt_release_gate_enforce_select_owner"
+  on public.moral_trade_release_gate_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_release_gate_enforce_insert_owner"
+  on public.moral_trade_release_gate_enforcement_records;
+create policy "mt_release_gate_enforce_insert_owner"
+  on public.moral_trade_release_gate_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and payable_allowed_bool = false
+    and reliance_bearing_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_consent_quality_records (
+  id uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references public.profiles (id) on delete cascade,
+  subject_type text not null check (
+    subject_type in (
+      'common_ground_budget',
+      'marketplace_round',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'agreement_amendment_record',
+      'project_set_change',
+      'payment_capture',
+      'payout_release',
+      'privacy_grant',
+      'exposure_increase'
+    )
+  ),
+  subject_id text not null,
+  choice_architecture_policy_snapshot_id uuid references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  required_disclosures_shown boolean not null default false,
+  comprehension_check_status text not null default 'not_required_for_stage' check (
+    comprehension_check_status in ('passed', 'not_required_for_stage', 'missing', 'failed')
+  ),
+  preselected_paid_commitment boolean not null default false,
+  countdown_pressure_present boolean not null default false,
+  misleading_default_routing_present boolean not null default false,
+  dark_pattern_review_notes text not null default '',
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_consent_quality_records is
+  'Choice-architecture and consent-quality records for high-risk participant confirmations; failed, stale, missing, or under-review records block affected transitions.';
+
+create table if not exists public.moral_trade_participant_confirmation_records (
+  id uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references public.profiles (id) on delete cascade,
+  subject_type text not null check (
+    subject_type in (
+      'common_ground_budget',
+      'marketplace_round',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'agreement_amendment_record',
+      'project_set_change',
+      'payment_capture',
+      'payout_release',
+      'privacy_grant',
+      'exposure_increase'
+    )
+  ),
+  subject_id text not null,
+  confirmation_scope text not null check (
+    confirmation_scope in (
+      'budget_activation',
+      'round_lock',
+      'final_lock',
+      'cleared_agreement',
+      'renewed_material_change',
+      'project_set_change_approval',
+      'payment_capture',
+      'payout_release',
+      'privacy_disclosure',
+      'exposure_increase'
+    )
+  ),
+  status text not null default 'draft' check (
+    status in ('recorded', 'draft', 'missing', 'expired', 'revoked', 'superseded', 'stale')
+  ),
+  confirmation_hash text not null check (confirmation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  baseline_hash text not null check (baseline_hash ~ '^sha256:[a-f0-9]{64}$'),
+  terms_snapshot_hash text not null check (terms_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_bundle_hash text not null check (policy_snapshot_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  maximum_exposure_cents integer not null check (maximum_exposure_cents >= 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  notice_record_status text not null default 'missing' check (
+    notice_record_status in ('delivered', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  consent_quality_record_id uuid references public.moral_trade_consent_quality_records (id) on delete restrict,
+  consent_quality_status text not null default 'missing' check (
+    consent_quality_status in ('passed', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  consent_quality_required boolean not null default true,
+  eligible_set_hash text check (eligible_set_hash is null or eligible_set_hash ~ '^sha256:[a-f0-9]{64}$'),
+  fallback_policy_hash text check (fallback_policy_hash is null or fallback_policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  supersedes_confirmation_hash text check (
+    supersedes_confirmation_hash is null or supersedes_confirmation_hash ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  material_terms_changed_after_confirmation boolean not null default false,
+  recorded_at timestamptz not null default timezone('utc', now()),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  superseded_by uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (participant_id, subject_type, subject_id, confirmation_scope, confirmation_hash),
+  check (
+    confirmation_scope not in ('budget_activation', 'round_lock', 'project_set_change_approval')
+    or eligible_set_hash is not null
+  ),
+  check (
+    confirmation_scope <> 'renewed_material_change'
+    or supersedes_confirmation_hash is not null
+  ),
+  check (
+    confirmation_scope not in (
+      'final_lock',
+      'cleared_agreement',
+      'renewed_material_change',
+      'payment_capture',
+      'payout_release',
+      'privacy_disclosure',
+      'exposure_increase'
+    )
+    or consent_quality_required
+  )
+);
+
+comment on table public.moral_trade_participant_confirmation_records is
+  'First-class, versioned, hash-backed participant confirmations. Parent-object hashes or JSON summaries alone cannot authorize routing, clearing, capture, payout release, privacy disclosure, or material-term changes.';
+
+create index if not exists moral_trade_participant_confirmations_subject_idx
+  on public.moral_trade_participant_confirmation_records (subject_type, subject_id, confirmation_scope, status);
+create index if not exists moral_trade_participant_confirmations_participant_idx
+  on public.moral_trade_participant_confirmation_records (participant_id, recorded_at desc);
+create index if not exists moral_trade_consent_quality_subject_idx
+  on public.moral_trade_consent_quality_records (subject_type, subject_id, status);
+
+alter table public.moral_trade_consent_quality_records enable row level security;
+alter table public.moral_trade_participant_confirmation_records enable row level security;
+
+create table if not exists public.moral_trade_participant_confirmation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  subject_type text not null check (
+    subject_type in (
+      'common_ground_budget',
+      'marketplace_round',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'agreement_amendment_record',
+      'project_set_change',
+      'payment_capture',
+      'payout_release',
+      'privacy_grant',
+      'exposure_increase'
+    )
+  ),
+  subject_id_ref text not null,
+  participant_id_ref text not null,
+  confirmation_scope text not null check (
+    confirmation_scope in (
+      'budget_activation',
+      'round_lock',
+      'final_lock',
+      'cleared_agreement',
+      'renewed_material_change',
+      'project_set_change_approval',
+      'payment_capture',
+      'payout_release',
+      'privacy_disclosure',
+      'exposure_increase'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  routing_allowed_bool boolean not null default false,
+  clearing_allowed_bool boolean not null default false,
+  capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  privacy_disclosure_allowed_bool boolean not null default false,
+  public_metric_release_allowed_bool boolean not null default false,
+  material_change_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_participant_confirmation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (routing_allowed_bool = false),
+  check (clearing_allowed_bool = false),
+  check (capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (privacy_disclosure_allowed_bool = false),
+  check (public_metric_release_allowed_bool = false),
+  check (material_change_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_participant_confirmation_enforcement_records is
+  'Append-only user-owned participant-confirmation enforcement records. A record stores normalized private confirmation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize routing, clearing, capture, payout release, privacy disclosure, public metric publication, material-term changes, or release-gate promotion.';
+
+create index if not exists mt_participant_confirmation_enforce_owner_status_idx
+  on public.moral_trade_participant_confirmation_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_participant_confirmation_enforce_subject_idx
+  on public.moral_trade_participant_confirmation_enforcement_records (subject_type, subject_id_ref, confirmation_scope, enforcement_status, created_at desc);
+
+create index if not exists mt_participant_confirmation_enforce_hash_idx
+  on public.moral_trade_participant_confirmation_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_participant_confirmation_enforcement_records enable row level security;
+
+drop policy if exists "mt_participant_confirmation_enforce_select_owner"
+  on public.moral_trade_participant_confirmation_enforcement_records;
+create policy "mt_participant_confirmation_enforce_select_owner"
+  on public.moral_trade_participant_confirmation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_participant_confirmation_enforce_insert_owner"
+  on public.moral_trade_participant_confirmation_enforcement_records;
+create policy "mt_participant_confirmation_enforce_insert_owner"
+  on public.moral_trade_participant_confirmation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and routing_allowed_bool = false
+    and clearing_allowed_bool = false
+    and capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and privacy_disclosure_allowed_bool = false
+    and public_metric_release_allowed_bool = false
+    and material_change_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_account_security_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  step_up_required_actions text[] not null default '{}',
+  cooldown_required_actions text[] not null default '{}',
+  high_risk_event_window_hours integer not null default 72 check (high_risk_event_window_hours >= 0),
+  notice_required boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_account_security_events (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete set null,
+  event_type text not null check (
+    event_type in (
+      'password_change',
+      'email_change',
+      'mfa_change',
+      'new_device',
+      'session_anomaly',
+      'payment_method_change',
+      'participant_identity_change',
+      'account_recovery',
+      'manual_review'
+    )
+  ),
+  risk_status text not null default 'under_review' check (
+    risk_status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'high_risk_event_open')
+  ),
+  policy_snapshot_id uuid references public.moral_trade_policy_snapshots (id) on delete restrict,
+  notice_record_status text not null default 'missing' check (
+    notice_record_status in ('delivered', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  step_up_status text not null default 'missing' check (
+    step_up_status in ('passed', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  cooldown_until timestamptz,
+  event_hash text not null check (event_hash ~ '^sha256:[a-f0-9]{64}$'),
+  resolved_by uuid references public.profiles (id) on delete set null,
+  resolved_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_account_security_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  action text not null check (
+    action in (
+      'login',
+      'payment_method_change',
+      'participant_confirmation',
+      'payment_authorization',
+      'payment_capture',
+      'payout_release',
+      'privacy_grant',
+      'identity_artifact_change',
+      'contact_introduction',
+      'account_recovery',
+      'email_change',
+      'mfa_change',
+      'exposure_increase',
+      'reliance_bearing_agreement'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  policy_count integer not null default 0 check (policy_count >= 0),
+  event_count integer not null default 0 check (event_count >= 0),
+  high_risk_event_count integer not null default 0 check (high_risk_event_count >= 0),
+  remediated_high_risk_event_count integer not null default 0 check (remediated_high_risk_event_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  participant_confirmation_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  privacy_grant_allowed_bool boolean not null default false,
+  contact_introduction_allowed_bool boolean not null default false,
+  exposure_increase_allowed_bool boolean not null default false,
+  reliance_bearing_agreement_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_account_security_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (remediated_high_risk_event_count <= high_risk_event_count),
+  check (policy_count <= 32),
+  check (event_count <= 96),
+  check (participant_confirmation_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (privacy_grant_allowed_bool = false),
+  check (contact_introduction_allowed_bool = false),
+  check (exposure_increase_allowed_bool = false),
+  check (reliance_bearing_agreement_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_account_security_enforcement_records is
+  'Append-only user-owned account-security enforcement records. A record stores normalized private policy/event summaries, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize participant confirmation, payment authorization, payment capture, payout release, privacy grants, contact introductions, exposure increases, reliance-bearing agreements, or release-gate promotion.';
+
+create index if not exists mt_account_security_enforce_owner_status_idx
+  on public.moral_trade_account_security_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_account_security_enforce_action_status_idx
+  on public.moral_trade_account_security_enforcement_records (action, enforcement_status, created_at desc);
+
+create index if not exists mt_account_security_enforce_hash_idx
+  on public.moral_trade_account_security_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_account_security_enforcement_records enable row level security;
+
+drop policy if exists "mt_account_security_enforce_select_owner"
+  on public.moral_trade_account_security_enforcement_records;
+create policy "mt_account_security_enforce_select_owner"
+  on public.moral_trade_account_security_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_account_security_enforce_insert_owner"
+  on public.moral_trade_account_security_enforcement_records;
+create policy "mt_account_security_enforce_insert_owner"
+  on public.moral_trade_account_security_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and participant_confirmation_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and privacy_grant_allowed_bool = false
+    and contact_introduction_allowed_bool = false
+    and exposure_increase_allowed_bool = false
+    and reliance_bearing_agreement_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_backup_recovery_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  restore_test_required boolean not null default true,
+  preserves_hash_chains boolean not null default true,
+  preserves_key_versions boolean not null default true,
+  preserves_legal_holds boolean not null default true,
+  preserves_deletion_redaction_decisions boolean not null default true,
+  max_checkpoint_age_hours integer not null default 24 check (max_checkpoint_age_hours > 0),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_backup_recovery_checkpoints (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_backup_recovery_policies (id) on delete restrict,
+  checkpoint_kind text not null check (checkpoint_kind in ('backup_created', 'restore_test', 'integrity_verify')),
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'restore_failed', 'unverified')
+  ),
+  backup_ref_hash text not null check (backup_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  audit_chain_root_hash text not null check (audit_chain_root_hash ~ '^sha256:[a-f0-9]{64}$'),
+  key_version_bundle_hash text not null check (key_version_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  legal_hold_manifest_hash text not null check (legal_hold_manifest_hash ~ '^sha256:[a-f0-9]{64}$'),
+  redaction_manifest_hash text not null check (redaction_manifest_hash ~ '^sha256:[a-f0-9]{64}$'),
+  verified_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_deployment_release_records (
+  id uuid primary key default gen_random_uuid(),
+  release_stage text not null,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'drift_detected', 'unverified')
+  ),
+  code_artifact_hash text not null check (code_artifact_hash ~ '^sha256:[a-f0-9]{64}$'),
+  dependency_lockfile_hash text not null check (dependency_lockfile_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_bundle_hash text not null check (policy_snapshot_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  provider_account_binding_hash text not null check (provider_account_binding_hash ~ '^sha256:[a-f0-9]{64}$'),
+  payment_mode text not null check (payment_mode in ('none', 'sandbox', 'test', 'live')),
+  approved_by uuid references public.profiles (id) on delete set null,
+  approved_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_configuration_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  deployment_release_id uuid not null references public.moral_trade_deployment_release_records (id) on delete cascade,
+  environment text not null check (environment in ('demo', 'sandbox', 'test', 'staging', 'production')),
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'drift_detected', 'unverified')
+  ),
+  configuration_hash text not null check (configuration_hash ~ '^sha256:[a-f0-9]{64}$'),
+  feature_flag_hash text not null check (feature_flag_hash ~ '^sha256:[a-f0-9]{64}$'),
+  provider_binding_hash text not null check (provider_binding_hash ~ '^sha256:[a-f0-9]{64}$'),
+  secret_presence_hash text not null check (secret_presence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  captured_at timestamptz not null default timezone('utc', now()),
+  unique (deployment_release_id, environment, configuration_hash)
+);
+
+create table if not exists public.moral_trade_configuration_change_records (
+  id uuid primary key default gen_random_uuid(),
+  configuration_snapshot_id uuid not null references public.moral_trade_configuration_snapshots (id) on delete cascade,
+  change_kind text not null check (
+    change_kind in ('feature_flag', 'environment_variable', 'provider_binding', 'payment_mode', 'policy_bundle')
+  ),
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'drift_detected', 'unverified')
+  ),
+  previous_hash text not null check (previous_hash ~ '^sha256:[a-f0-9]{64}$'),
+  next_hash text not null check (next_hash ~ '^sha256:[a-f0-9]{64}$'),
+  privileged_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_schema_migration_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  dry_run_required boolean not null default true,
+  rollback_or_forward_fix_required boolean not null default true,
+  record_count_check_required boolean not null default true,
+  audit_integrity_check_required boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_schema_migration_runs (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_schema_migration_policies (id) on delete restrict,
+  migration_key text not null,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'unverified')
+  ),
+  source_schema_hash text not null check (source_schema_hash ~ '^sha256:[a-f0-9]{64}$'),
+  target_schema_hash text not null check (target_schema_hash ~ '^sha256:[a-f0-9]{64}$'),
+  dry_run_output_hash text not null check (dry_run_output_hash ~ '^sha256:[a-f0-9]{64}$'),
+  record_count_hash text not null check (record_count_hash ~ '^sha256:[a-f0-9]{64}$'),
+  rollback_plan_hash text not null check (rollback_plan_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_decision_id uuid,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (migration_key, target_schema_hash)
+);
+
+create table if not exists public.moral_trade_environment_data_isolation_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  demo_counts_as_live boolean not null default false,
+  sandbox_provider_counts_as_live boolean not null default false,
+  synthetic_identity_counts_as_supporter boolean not null default false,
+  cross_environment_promotion_requires_review boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_environment_data_isolation_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_environment_data_isolation_policies (id) on delete restrict,
+  source_environment text not null check (source_environment in ('demo', 'sandbox', 'test', 'staging', 'production')),
+  target_environment text not null check (target_environment in ('demo', 'sandbox', 'test', 'staging', 'production')),
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'drift_detected', 'unverified')
+  ),
+  provenance_hash text not null check (provenance_hash ~ '^sha256:[a-f0-9]{64}$'),
+  redaction_manifest_hash text not null check (redaction_manifest_hash ~ '^sha256:[a-f0-9]{64}$'),
+  live_metric_exclusion_hash text not null check (live_metric_exclusion_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_decision_id uuid,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (source_environment <> 'production' or target_environment = 'production')
+);
+
+create table if not exists public.moral_trade_financial_reconciliation_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  provider_settlement_required boolean not null default true,
+  internal_ledger_match_required boolean not null default true,
+  fee_variance_requires_review boolean not null default true,
+  unmatched_event_blocks_release boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_financial_reconciliation_runs (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_financial_reconciliation_policies (id) on delete restrict,
+  subject_kind text not null check (subject_kind in ('round', 'payout_milestone', 'sponsor_pool', 'provider_settlement')),
+  subject_id text not null,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'variance_unresolved', 'unverified')
+  ),
+  provider_settlement_hash text not null check (provider_settlement_hash ~ '^sha256:[a-f0-9]{64}$'),
+  internal_ledger_hash text not null check (internal_ledger_hash ~ '^sha256:[a-f0-9]{64}$'),
+  unmatched_provider_event_count integer not null default 0 check (unmatched_provider_event_count >= 0),
+  fee_variance_cents integer not null default 0,
+  blocker_summary text not null default '',
+  reconciled_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_audit_integrity_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review')
+  ),
+  hash_link_required boolean not null default true,
+  immutable_storage_required boolean not null default false,
+  max_checkpoint_age_hours integer not null default 24 check (max_checkpoint_age_hours > 0),
+  covered_record_families text[] not null default '{}',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_audit_integrity_checkpoints (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_audit_integrity_policies (id) on delete restrict,
+  checkpoint_scope text not null,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'unverified')
+  ),
+  previous_checkpoint_hash text check (
+    previous_checkpoint_hash is null or previous_checkpoint_hash ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  checkpoint_hash text not null check (checkpoint_hash ~ '^sha256:[a-f0-9]{64}$'),
+  covered_record_count integer not null default 0 check (covered_record_count >= 0),
+  broken_link_count integer not null default 0 check (broken_link_count >= 0),
+  verified_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_data_security_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'unverified')
+  ),
+  sensitive_data_classes text[] not null default '{}',
+  encryption_or_tokenization_required boolean not null default true,
+  key_version_required boolean not null default true,
+  private_access_log_required boolean not null default true,
+  secret_logging_prohibited boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_key_version_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_id uuid not null references public.moral_trade_data_security_policies (id) on delete restrict,
+  data_class text not null,
+  key_version_ref_hash text not null check (key_version_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null default 'under_review' check (
+    status in ('ready', 'not_required_for_stage', 'missing', 'failed', 'stale', 'under_review', 'unverified')
+  ),
+  rotation_due_at timestamptz,
+  decryption_audit_hash text not null check (decryption_audit_hash ~ '^sha256:[a-f0-9]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_production_readiness_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  gate text not null check (
+    gate in (
+      'sandbox_calculation_preview',
+      'real_money_capture',
+      'payout_release',
+      'round_close',
+      'public_money_metric_release',
+      'privacy_disclosure',
+      'release_gate_promotion',
+      'non_emergency_privileged_change'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_control_count integer not null default 0 check (required_control_count >= 0),
+  passing_control_count integer not null default 0 check (passing_control_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  sandbox_calculation_preview_allowed_bool boolean not null default false,
+  real_money_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  round_close_allowed_bool boolean not null default false,
+  public_money_metric_release_allowed_bool boolean not null default false,
+  privacy_disclosure_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  non_emergency_privileged_change_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_production_readiness_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_control_count <= required_control_count),
+  check (record_count <= 64),
+  check (sandbox_calculation_preview_allowed_bool = false),
+  check (real_money_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (round_close_allowed_bool = false),
+  check (public_money_metric_release_allowed_bool = false),
+  check (privacy_disclosure_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (non_emergency_privileged_change_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_production_readiness_enforcement_records is
+  'Append-only user-owned production-readiness enforcement records. A record stores normalized operational-control input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize sandbox preview, money capture, payout release, round close, public money metric release, privacy disclosure, release-gate promotion, or non-emergency privileged change.';
+
+create index if not exists mt_production_readiness_enforce_owner_status_idx
+  on public.moral_trade_production_readiness_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_production_readiness_enforce_gate_idx
+  on public.moral_trade_production_readiness_enforcement_records (gate, enforcement_status, created_at desc);
+
+create index if not exists mt_production_readiness_enforce_hash_idx
+  on public.moral_trade_production_readiness_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_production_readiness_enforcement_records enable row level security;
+
+drop policy if exists "mt_production_readiness_enforce_select_owner"
+  on public.moral_trade_production_readiness_enforcement_records;
+create policy "mt_production_readiness_enforce_select_owner"
+  on public.moral_trade_production_readiness_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_production_readiness_enforce_insert_owner"
+  on public.moral_trade_production_readiness_enforcement_records;
+create policy "mt_production_readiness_enforce_insert_owner"
+  on public.moral_trade_production_readiness_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and sandbox_calculation_preview_allowed_bool = false
+    and real_money_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and round_close_allowed_bool = false
+    and public_money_metric_release_allowed_bool = false
+    and privacy_disclosure_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and non_emergency_privileged_change_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_non_public_goods_tier_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-non-public-goods-tier-v0.1-2026-06',
+  tier text not null check (
+    tier in (
+      'tier_1_money_only_donation_offset',
+      'tier_2_donation_offset_with_abstention_or_additionality_proof',
+      'tier_3_closed_counterparty_pledge_swap',
+      'tier_4_open_market_pledge_swap_or_compensated_action'
+    )
+  ),
+  approved_transition text not null check (
+    approved_transition in (
+      'draft_preview',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  policy_snapshot_status text not null default 'missing' check (
+    policy_snapshot_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  release_stage text not null check (
+    release_stage in ('donation_offset_pilot', 'pledge_swap_preview_only', 'pledge_swap_manual_pilot', 'sandbox_calculation')
+  ),
+  payable_allowed_bool boolean not null default false,
+  reliance_bearing_allowed_bool boolean not null default false,
+  public_metric_allowed_bool boolean not null default false,
+  open_market_matching_allowed_bool boolean not null default false,
+  requires_counterfactual_trust_assessment_bool boolean not null default true,
+  allowed_counterparty_modes text[] not null default '{}',
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_non_public_goods_tier_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    not (
+      tier = 'tier_3_closed_counterparty_pledge_swap'
+      and open_market_matching_allowed_bool
+    )
+  ),
+  check (
+    not (
+      tier = 'tier_4_open_market_pledge_swap_or_compensated_action'
+      and (
+        payable_allowed_bool
+        or reliance_bearing_allowed_bool
+        or public_metric_allowed_bool
+      )
+    )
+  )
+);
+
+create table if not exists public.moral_trade_counterfactual_trust_assessments (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'matched_trade_lock_proposal',
+      'template_instance_record',
+      'worked_example'
+    )
+  ),
+  subject_ref text not null,
+  tier text not null check (
+    tier in (
+      'tier_1_money_only_donation_offset',
+      'tier_2_donation_offset_with_abstention_or_additionality_proof',
+      'tier_3_closed_counterparty_pledge_swap',
+      'tier_4_open_market_pledge_swap_or_compensated_action'
+    )
+  ),
+  counterfactual_trust_class text not null check (
+    counterfactual_trust_class in (
+      'money_only_verified_destination',
+      'abstention_or_additionality_claim',
+      'closed_counterparty_known_baseline',
+      'open_market_behavior_change',
+      'compensated_personal_action',
+      'self_offset_or_personal_bookkeeping'
+    )
+  ),
+  assessment_status text not null default 'under_review' check (
+    assessment_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  evidence_burden_status text not null default 'under_review' check (
+    evidence_burden_status in ('least_intrusive_sufficient', 'not_required_for_stage', 'missing', 'too_intrusive', 'under_review', 'failed', 'stale')
+  ),
+  counterparty_mode text not null default 'none_required' check (
+    counterparty_mode in ('none_required', 'closed_counterparty', 'invite_only', 'user_supplied', 'open_market', 'autonomous_outreach')
+  ),
+  baseline_confidence_level text not null default 'low' check (
+    baseline_confidence_level in ('low', 'medium', 'high', 'not_required_for_stage')
+  ),
+  baseline_integrity_status text not null default 'under_review' check (
+    baseline_integrity_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  participant_uncertainty_disclosed_bool boolean not null default false,
+  participant_confirmation_ref text,
+  reviewer_decision_ref text,
+  assessment_hash text not null check (assessment_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_counterfactual_trust_assessments (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (counterparty_mode <> 'autonomous_outreach'),
+  check (
+    not (
+      counterfactual_trust_class = 'self_offset_or_personal_bookkeeping'
+      and subject_type in ('matched_trade_lock_proposal', 'pledge_swap')
+    )
+  )
+);
+
+create table if not exists public.moral_trade_non_public_goods_tier_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  passing_policy_count integer not null default 0 check (passing_policy_count >= 0),
+  required_assessment_count integer not null default 0 check (required_assessment_count >= 0),
+  passing_assessment_count integer not null default 0 check (passing_assessment_count >= 0),
+  policy_count integer not null default 0 check (policy_count >= 0),
+  assessment_count integer not null default 0 check (assessment_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_non_public_goods_tier_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_policy_count <= required_policy_count),
+  check (passing_assessment_count <= required_assessment_count),
+  check (policy_count <= 24),
+  check (assessment_count <= 64),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_non_public_goods_tier_policies is
+  'Frozen non-public-goods launch-tier policies. Tier-4 remains disabled for payable, reliance-bearing, and public-metric transitions; closed-counterparty pledge-swap tiers cannot enable open-market matching by default.';
+
+comment on table public.moral_trade_counterfactual_trust_assessments is
+  'First-class counterfactual-trust assessment records for donation offsets, pledge swaps, compensated moral-action drafts, and matched-trade proposals. Records classify claim type, counterparty mode, evidence burden, baseline confidence, baseline integrity, participant uncertainty disclosure, and reviewer decision without exposing private baselines publicly.';
+
+comment on table public.moral_trade_non_public_goods_tier_enforcement_records is
+  'Append-only owner-scoped non-public-goods tier enforcement records. A record stores normalized tier/counterfactual-trust input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize preview, lock, payment, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists mt_non_public_goods_tier_policy_idx
+  on public.moral_trade_non_public_goods_tier_policies (tier, approved_transition, status, created_at desc);
+
+create index if not exists mt_counterfactual_trust_subject_idx
+  on public.moral_trade_counterfactual_trust_assessments (subject_type, subject_ref, assessment_status, created_at desc);
+
+create index if not exists mt_counterfactual_trust_tier_idx
+  on public.moral_trade_counterfactual_trust_assessments (tier, counterfactual_trust_class, assessment_status, created_at desc);
+
+create index if not exists mt_non_public_goods_tier_enforce_owner_status_idx
+  on public.moral_trade_non_public_goods_tier_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_non_public_goods_tier_enforce_transition_idx
+  on public.moral_trade_non_public_goods_tier_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists mt_non_public_goods_tier_enforce_hash_idx
+  on public.moral_trade_non_public_goods_tier_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_non_public_goods_tier_policies enable row level security;
+alter table public.moral_trade_counterfactual_trust_assessments enable row level security;
+alter table public.moral_trade_non_public_goods_tier_enforcement_records enable row level security;
+
+drop policy if exists "mt_non_public_goods_tier_policies_select_auth"
+  on public.moral_trade_non_public_goods_tier_policies;
+create policy "mt_non_public_goods_tier_policies_select_auth"
+  on public.moral_trade_non_public_goods_tier_policies
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "mt_counterfactual_trust_assessments_select_auth"
+  on public.moral_trade_counterfactual_trust_assessments;
+create policy "mt_counterfactual_trust_assessments_select_auth"
+  on public.moral_trade_counterfactual_trust_assessments
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "mt_non_public_goods_tier_enforce_select_owner"
+  on public.moral_trade_non_public_goods_tier_enforcement_records;
+create policy "mt_non_public_goods_tier_enforce_select_owner"
+  on public.moral_trade_non_public_goods_tier_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_non_public_goods_tier_enforce_insert_owner"
+  on public.moral_trade_non_public_goods_tier_enforcement_records;
+create policy "mt_non_public_goods_tier_enforce_insert_owner"
+  on public.moral_trade_non_public_goods_tier_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_risk_control_packs (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-risk-control-matrix-v0.1-2026-06',
+  pack_name text not null,
+  applies_to_trade_type text not null check (
+    applies_to_trade_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond',
+      'side_agreement',
+      'evidence_claim',
+      'payment_event',
+      'manual_review',
+      'mixed'
+    )
+  ),
+  applies_to_release_stages_json jsonb not null default '[]'::jsonb check (jsonb_typeof(applies_to_release_stages_json) = 'array'),
+  applies_to_tiers_json jsonb not null default '[]'::jsonb check (jsonb_typeof(applies_to_tiers_json) = 'array'),
+  required_control_codes_json jsonb not null default '[]'::jsonb check (jsonb_typeof(required_control_codes_json) = 'array'),
+  optional_control_codes_json jsonb not null default '[]'::jsonb check (jsonb_typeof(optional_control_codes_json) = 'array'),
+  not_required_control_codes_json jsonb not null default '[]'::jsonb check (jsonb_typeof(not_required_control_codes_json) = 'array'),
+  fail_closed_unknown_controls_bool boolean not null default true,
+  control_pack_hash text not null check (control_pack_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_decision_ref text,
+  superseded_by uuid references public.moral_trade_risk_control_packs (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (fail_closed_unknown_controls_bool = true),
+  check (jsonb_array_length(required_control_codes_json) > 0)
+);
+
+create table if not exists public.moral_trade_control_applicability_matrices (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'compensated_action_terms',
+      'pledge_performance_bond_record',
+      'payment_event',
+      'evidence_record',
+      'dispute_case',
+      'appeal_case'
+    )
+  ),
+  subject_id text not null,
+  release_stage text not null check (
+    release_stage in (
+      'draft_preview',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_release',
+      'manual_review',
+      'release_gate_promotion'
+    )
+  ),
+  trade_type text not null check (
+    trade_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond',
+      'side_agreement',
+      'evidence_claim',
+      'payment_event',
+      'manual_review',
+      'mixed'
+    )
+  ),
+  non_public_goods_market_tier text not null check (
+    non_public_goods_market_tier in (
+      'tier_1_money_only_donation_offset',
+      'tier_2_donation_offset_with_abstention_or_additionality_proof',
+      'tier_3_closed_counterparty_pledge_swap',
+      'tier_4_open_market_pledge_swap_or_compensated_action',
+      'not_applicable'
+    )
+  ),
+  jurisdiction_bucket text not null,
+  money_movement_bool boolean not null default false,
+  participant_term_sheet_required_bool boolean not null default false,
+  counterparty_blinding_required_bool boolean not null default false,
+  recipient_acceptance_required_bool boolean not null default false,
+  ai_preference_elicitation_used_bool boolean not null default false,
+  post_clear_audit_required_bool boolean not null default false,
+  compensation_bool boolean not null default false,
+  negative_commitment_bool boolean not null default false,
+  high_stakes_or_irreversible_bool boolean not null default false,
+  open_market_matching_bool boolean not null default false,
+  evidence_burden_level text not null default 'medium' check (
+    evidence_burden_level in ('none_required', 'low', 'medium', 'high', 'confidential_attestation_required')
+  ),
+  noncompensable_blocker_present_bool boolean not null default false,
+  stale_offer_bool boolean not null default false,
+  batch_clearing_required_bool boolean not null default false,
+  direct_pair_clearing_bool boolean not null default false,
+  cause_bucket_taxonomy_ref text,
+  resource_compatibility_required_bool boolean not null default false,
+  net_offset_accounting_required_bool boolean not null default false,
+  confidential_verification_required_bool boolean not null default false,
+  applicable_risk_control_pack_refs_json jsonb not null default '[]'::jsonb check (jsonb_typeof(applicable_risk_control_pack_refs_json) = 'array'),
+  applicable_control_codes_json jsonb not null default '[]'::jsonb check (jsonb_typeof(applicable_control_codes_json) = 'array'),
+  matrix_hash text not null check (matrix_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_decision_ref text,
+  superseded_by uuid references public.moral_trade_control_applicability_matrices (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (jsonb_array_length(applicable_risk_control_pack_refs_json) > 0),
+  check (jsonb_array_length(applicable_control_codes_json) > 0)
+);
+
+create table if not exists public.moral_trade_control_requirement_results (
+  id uuid primary key default gen_random_uuid(),
+  control_applicability_matrix_ref text not null,
+  risk_control_pack_ref text not null,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'compensated_action_terms',
+      'pledge_performance_bond_record',
+      'payment_event',
+      'evidence_record',
+      'dispute_case',
+      'appeal_case'
+    )
+  ),
+  subject_id text not null,
+  control_code text not null,
+  result_status text not null default 'under_review' check (
+    result_status in (
+      'passed',
+      'not_required_for_stage',
+      'privileged_neutral_review_waiver',
+      'missing',
+      'unknown',
+      'unmapped',
+      'duplicated',
+      'under_review',
+      'failed',
+      'stale',
+      'superseded'
+    )
+  ),
+  policy_snapshot_ref text,
+  evidence_ref text,
+  reviewer_decision_ref text,
+  neutral_review_ref text,
+  privileged_action_ref text,
+  result_hash text not null check (result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  checked_at timestamptz not null,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_control_requirement_results (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    result_status <> 'privileged_neutral_review_waiver'
+    or (neutral_review_ref is not null and privileged_action_ref is not null)
+  ),
+  check (
+    result_status <> 'not_required_for_stage'
+    or policy_snapshot_ref is not null
+  )
+);
+
+create table if not exists public.moral_trade_risk_control_matrix_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion',
+      'dispute_or_appeal_resolution'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  matrix_count integer not null default 0 check (matrix_count >= 0),
+  pack_count integer not null default 0 check (pack_count >= 0),
+  result_count integer not null default 0 check (result_count >= 0),
+  required_control_count integer not null default 0 check (required_control_count >= 0),
+  non_blocking_control_count integer not null default 0 check (non_blocking_control_count >= 0),
+  privileged_waiver_count integer not null default 0 check (privileged_waiver_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_risk_control_matrix_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_control_count <= required_control_count),
+  check (privileged_waiver_count <= non_blocking_control_count),
+  check (matrix_count <= 24),
+  check (pack_count <= 32),
+  check (result_count <= 160),
+  check (runtime_transition_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_risk_control_packs is
+  'Reviewed risk-control packs that map a trade type, release stage, and market tier to required, optional, and explicitly not-required control codes. Unknown controls fail closed by table constraint.';
+
+comment on table public.moral_trade_control_applicability_matrices is
+  'Subject-scoped control applicability matrices for non-public-goods transitions. A matrix records the reviewed control codes and risk-control pack references required before a runtime transition can proceed.';
+
+comment on table public.moral_trade_control_requirement_results is
+  'Per-control requirement results for a control applicability matrix. Only passed, not-required-with-policy, or privileged neutral-review waiver results can be treated as non-blocking by the evaluator.';
+
+comment on table public.moral_trade_risk_control_matrix_enforcement_records is
+  'Append-only owner-scoped risk-control matrix enforcement records. Enforcement records store normalized input and deterministic evaluation output while enforcing that this endpoint cannot authorize transition, lock, payment, public metrics, or release promotion.';
+
+create index if not exists mt_risk_control_pack_trade_stage_idx
+  on public.moral_trade_risk_control_packs (applies_to_trade_type, created_at desc);
+
+create index if not exists mt_control_matrix_subject_idx
+  on public.moral_trade_control_applicability_matrices (subject_type, subject_id, release_stage, created_at desc);
+
+create index if not exists mt_control_result_subject_idx
+  on public.moral_trade_control_requirement_results (subject_type, subject_id, control_code, result_status, created_at desc);
+
+create index if not exists mt_control_result_matrix_pack_idx
+  on public.moral_trade_control_requirement_results (control_applicability_matrix_ref, risk_control_pack_ref, control_code, created_at desc);
+
+create index if not exists mt_risk_control_matrix_enforce_owner_status_idx
+  on public.moral_trade_risk_control_matrix_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_risk_control_matrix_enforce_transition_idx
+  on public.moral_trade_risk_control_matrix_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists mt_risk_control_matrix_enforce_hash_idx
+  on public.moral_trade_risk_control_matrix_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_risk_control_packs enable row level security;
+alter table public.moral_trade_control_applicability_matrices enable row level security;
+alter table public.moral_trade_control_requirement_results enable row level security;
+alter table public.moral_trade_risk_control_matrix_enforcement_records enable row level security;
+
+drop policy if exists "mt_risk_control_packs_select_auth"
+  on public.moral_trade_risk_control_packs;
+create policy "mt_risk_control_packs_select_auth"
+  on public.moral_trade_risk_control_packs
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "mt_control_applicability_matrices_select_auth"
+  on public.moral_trade_control_applicability_matrices;
+create policy "mt_control_applicability_matrices_select_auth"
+  on public.moral_trade_control_applicability_matrices
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "mt_control_requirement_results_select_auth"
+  on public.moral_trade_control_requirement_results;
+create policy "mt_control_requirement_results_select_auth"
+  on public.moral_trade_control_requirement_results
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "mt_risk_control_matrix_enforce_select_owner"
+  on public.moral_trade_risk_control_matrix_enforcement_records;
+create policy "mt_risk_control_matrix_enforce_select_owner"
+  on public.moral_trade_risk_control_matrix_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_risk_control_matrix_enforce_insert_owner"
+  on public.moral_trade_risk_control_matrix_enforcement_records;
+create policy "mt_risk_control_matrix_enforce_insert_owner"
+  on public.moral_trade_risk_control_matrix_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create index if not exists moral_trade_account_security_events_profile_idx
+  on public.moral_trade_account_security_events (profile_id, risk_status, created_at desc);
+create index if not exists moral_trade_backup_recovery_checkpoints_status_idx
+  on public.moral_trade_backup_recovery_checkpoints (status, created_at desc);
+create index if not exists moral_trade_deployment_release_records_stage_idx
+  on public.moral_trade_deployment_release_records (release_stage, status, created_at desc);
+create index if not exists moral_trade_configuration_snapshots_environment_idx
+  on public.moral_trade_configuration_snapshots (environment, status, captured_at desc);
+create index if not exists moral_trade_schema_migration_runs_key_idx
+  on public.moral_trade_schema_migration_runs (migration_key, status, created_at desc);
+create index if not exists moral_trade_environment_data_isolation_records_status_idx
+  on public.moral_trade_environment_data_isolation_records (source_environment, target_environment, status);
+create index if not exists moral_trade_financial_reconciliation_runs_subject_idx
+  on public.moral_trade_financial_reconciliation_runs (subject_kind, subject_id, status);
+create index if not exists moral_trade_audit_integrity_checkpoints_scope_idx
+  on public.moral_trade_audit_integrity_checkpoints (checkpoint_scope, status, created_at desc);
+create index if not exists moral_trade_key_version_records_data_class_idx
+  on public.moral_trade_key_version_records (data_class, status, created_at desc);
+
+alter table public.moral_trade_account_security_policies enable row level security;
+alter table public.moral_trade_account_security_events enable row level security;
+alter table public.moral_trade_backup_recovery_policies enable row level security;
+alter table public.moral_trade_backup_recovery_checkpoints enable row level security;
+alter table public.moral_trade_deployment_release_records enable row level security;
+alter table public.moral_trade_configuration_snapshots enable row level security;
+alter table public.moral_trade_configuration_change_records enable row level security;
+alter table public.moral_trade_schema_migration_policies enable row level security;
+alter table public.moral_trade_schema_migration_runs enable row level security;
+alter table public.moral_trade_environment_data_isolation_policies enable row level security;
+alter table public.moral_trade_environment_data_isolation_records enable row level security;
+alter table public.moral_trade_financial_reconciliation_policies enable row level security;
+alter table public.moral_trade_financial_reconciliation_runs enable row level security;
+alter table public.moral_trade_audit_integrity_policies enable row level security;
+alter table public.moral_trade_audit_integrity_checkpoints enable row level security;
+alter table public.moral_trade_data_security_policies enable row level security;
+alter table public.moral_trade_key_version_records enable row level security;
+
+create table if not exists public.moral_trade_recipient_registry_entries (
+  id uuid primary key default gen_random_uuid(),
+  canonical_name text not null,
+  recipient_kind text not null default 'organization' check (
+    recipient_kind in ('organization', 'individual', 'fiscal_host', 'charity', 'project', 'donor_advised_fund', 'other_reviewed')
+  ),
+  status text not null default 'under_review' check (
+    status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  anti_impersonation_status text not null default 'under_review' check (
+    anti_impersonation_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  jurisdiction_status text not null default 'under_review' check (
+    jurisdiction_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  prohibited_use_status text not null default 'under_review' check (
+    prohibited_use_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  evidence_bundle_hash text not null check (evidence_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  registry_entry_hash text not null check (registry_entry_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  verification_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  public_safe_summary text not null default '',
+  private_review_notes text not null default '',
+  superseded_by uuid references public.moral_trade_recipient_registry_entries (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    status <> 'verified'
+    or (
+      anti_impersonation_status = 'verified'
+      and jurisdiction_status = 'verified'
+      and prohibited_use_status = 'verified'
+      and reviewed_at is not null
+      and verification_action_record_id is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_recipient_registry_entries is
+  'First-class reviewed recipient registry entries. Free-text recipient names are evidence inputs only until resolved here.';
+
+create table if not exists public.moral_trade_payment_destinations (
+  id uuid primary key default gen_random_uuid(),
+  recipient_registry_entry_id uuid not null references public.moral_trade_recipient_registry_entries (id) on delete restrict,
+  destination_kind text not null default 'external_donation_link' check (
+    destination_kind in ('external_donation_link', 'fiscal_host_account', 'bank_account', 'wallet_address', 'donor_advised_fund', 'payment_processor_account', 'manual_offline', 'other_reviewed')
+  ),
+  provider_name text not null default '',
+  destination_fingerprint_hash text not null check (destination_fingerprint_hash ~ '^sha256:[a-f0-9]{64}$'),
+  destination_evidence_hash text not null check (destination_evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null default 'under_review' check (
+    status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  identity_match_status text not null default 'under_review' check (
+    identity_match_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  payment_rail_status text not null default 'under_review' check (
+    payment_rail_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  jurisdiction_status text not null default 'under_review' check (
+    jurisdiction_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  prohibited_use_status text not null default 'under_review' check (
+    prohibited_use_status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  verification_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  live_mode_allowed boolean not null default false,
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  private_review_notes text not null default '',
+  superseded_by uuid references public.moral_trade_payment_destinations (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (recipient_registry_entry_id, destination_fingerprint_hash),
+  check (
+    status <> 'verified'
+    or (
+      identity_match_status = 'verified'
+      and payment_rail_status = 'verified'
+      and jurisdiction_status = 'verified'
+      and prohibited_use_status = 'verified'
+      and reviewed_at is not null
+      and verification_action_record_id is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_payment_destinations is
+  'First-class reviewed payment destinations. Links, wallet addresses, and bank details cannot authorize capture or payout unless represented here without exposing raw credentials.';
+
+create table if not exists public.moral_trade_recipient_destination_reviews (
+  id uuid primary key default gen_random_uuid(),
+  recipient_registry_entry_id uuid references public.moral_trade_recipient_registry_entries (id) on delete cascade,
+  payment_destination_id uuid references public.moral_trade_payment_destinations (id) on delete cascade,
+  review_dimension text not null check (
+    review_dimension in ('recipient_identity', 'destination_identity', 'anti_impersonation', 'jurisdiction', 'prohibited_use', 'payment_rail', 'authority_to_receive', 'source_authentication')
+  ),
+  status text not null default 'under_review' check (
+    status in ('verified', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'impersonation_risk', 'jurisdiction_blocked', 'prohibited_use_blocked', 'superseded')
+  ),
+  evidence_hash text not null check (evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  privileged_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  notes text not null default '',
+  superseded_by uuid references public.moral_trade_recipient_destination_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (recipient_registry_entry_id is not null or payment_destination_id is not null),
+  check (
+    status <> 'verified'
+    or (
+      reviewed_at is not null
+      and privileged_action_record_id is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_recipient_destination_reviews is
+  'Review-dimension records for recipient identity, payment destination identity, anti-impersonation, jurisdiction, prohibited-use, payment-rail, authority, and source-authentication checks.';
+
+create index if not exists moral_trade_recipient_registry_entries_status_idx
+  on public.moral_trade_recipient_registry_entries (status, canonical_name, created_at desc);
+create index if not exists moral_trade_payment_destinations_recipient_status_idx
+  on public.moral_trade_payment_destinations (recipient_registry_entry_id, status, created_at desc);
+create index if not exists moral_trade_payment_destinations_fingerprint_idx
+  on public.moral_trade_payment_destinations (destination_fingerprint_hash, status);
+create index if not exists moral_trade_recipient_destination_reviews_subject_idx
+  on public.moral_trade_recipient_destination_reviews (recipient_registry_entry_id, payment_destination_id, review_dimension, status);
+
+alter table public.moral_trade_recipient_registry_entries enable row level security;
+alter table public.moral_trade_payment_destinations enable row level security;
+alter table public.moral_trade_recipient_destination_reviews enable row level security;
+
+create table if not exists public.moral_trade_identity_artifact_references (
+  id uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references public.profiles (id) on delete cascade,
+  artifact_kind text not null check (
+    artifact_kind in ('identity_document', 'legal_capacity_attestation', 'sanctions_screening', 'payment_rail_check', 'jurisdiction_evidence', 'sybil_linkage_signal', 'provider_source_event', 'other_private_reference')
+  ),
+  storage_class text not null default 'encrypted_private' check (
+    storage_class in ('encrypted_private', 'tokenized_private', 'external_processor_ref')
+  ),
+  artifact_ref_hash text not null check (artifact_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_hash text not null check (evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  retention_policy_snapshot_id uuid references public.moral_trade_policy_snapshots (id) on delete restrict,
+  privacy_grant_id uuid references public.privacy_grants (id) on delete set null,
+  public_exposure_allowed boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (public_exposure_allowed = false)
+);
+
+comment on table public.moral_trade_identity_artifact_references is
+  'Hash-only references to private identity, Sybil, legal-capacity, sanctions, payment-rail, and jurisdiction artifacts. Raw artifacts stay outside public contract surfaces.';
+
+create table if not exists public.moral_trade_participant_eligibility_records (
+  id uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'under_review' check (
+    status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  identity_verification_status text not null default 'under_review' check (
+    identity_verification_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  human_uniqueness_sybil_status text not null default 'under_review' check (
+    human_uniqueness_sybil_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  legal_capacity_status text not null default 'under_review' check (
+    legal_capacity_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  sanctions_screening_status text not null default 'under_review' check (
+    sanctions_screening_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  payment_rail_eligibility_status text not null default 'under_review' check (
+    payment_rail_eligibility_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  jurisdictional_eligibility_status text not null default 'under_review' check (
+    jurisdictional_eligibility_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  source_authentication_status text not null default 'under_review' check (
+    source_authentication_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  raw_identity_artifact_handling_status text not null default 'under_review' check (
+    raw_identity_artifact_handling_status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  latest_identity_artifact_ref_id uuid references public.moral_trade_identity_artifact_references (id) on delete set null,
+  eligibility_hash text not null check (eligibility_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_bundle_hash text not null check (evidence_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  counted_support_allowed boolean not null default false,
+  real_money_allowed boolean not null default false,
+  reliance_bearing_allowed boolean not null default false,
+  public_moral_reputation_impact text not null default 'none' check (public_moral_reputation_impact in ('none')),
+  identity_artifacts_publicly_exposed boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  private_review_notes text not null default '',
+  superseded_by uuid references public.moral_trade_participant_eligibility_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (identity_artifacts_publicly_exposed = false),
+  check (
+    status <> 'eligible'
+    or (
+      identity_verification_status = 'eligible'
+      and human_uniqueness_sybil_status = 'eligible'
+      and legal_capacity_status = 'eligible'
+      and sanctions_screening_status = 'eligible'
+      and payment_rail_eligibility_status = 'eligible'
+      and jurisdictional_eligibility_status = 'eligible'
+      and source_authentication_status = 'eligible'
+      and raw_identity_artifact_handling_status = 'eligible'
+      and reviewed_at is not null
+      and identity_artifacts_publicly_exposed = false
+      and public_moral_reputation_impact = 'none'
+    )
+  )
+);
+
+comment on table public.moral_trade_participant_eligibility_records is
+  'First-class participant eligibility records for identity, human uniqueness/Sybil, legal capacity, sanctions, payment rail, jurisdiction, source authentication, and private artifact handling.';
+
+create table if not exists public.moral_trade_participant_eligibility_reviews (
+  id uuid primary key default gen_random_uuid(),
+  eligibility_record_id uuid not null references public.moral_trade_participant_eligibility_records (id) on delete cascade,
+  participant_id uuid not null references public.profiles (id) on delete cascade,
+  review_dimension text not null check (
+    review_dimension in ('identity_verification', 'human_uniqueness_sybil', 'legal_capacity', 'sanctions_screening', 'payment_rail_eligibility', 'jurisdictional_eligibility', 'source_authentication', 'raw_identity_artifact_handling')
+  ),
+  status text not null default 'under_review' check (
+    status in ('eligible', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'identity_unverified', 'sybil_risk', 'legal_capacity_blocked', 'sanctions_potential_match', 'sanctions_blocked', 'payment_rail_blocked', 'jurisdiction_blocked', 'source_unauthenticated', 'artifact_handling_unverified', 'superseded')
+  ),
+  evidence_hash text not null check (evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  source_event_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (source_event_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  identity_artifact_ref_id uuid references public.moral_trade_identity_artifact_references (id) on delete set null,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  notes text not null default '',
+  superseded_by uuid references public.moral_trade_participant_eligibility_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (
+    status <> 'eligible'
+    or reviewed_at is not null
+  )
+);
+
+comment on table public.moral_trade_participant_eligibility_reviews is
+  'Review-dimension records for eligibility decisions. Provider identity, sanctions, payment-rail, and jurisdiction feeds must be source-authenticated before approval.';
+
+create index if not exists moral_trade_identity_artifact_refs_participant_idx
+  on public.moral_trade_identity_artifact_references (participant_id, artifact_kind, created_at desc);
+create index if not exists moral_trade_participant_eligibility_records_participant_idx
+  on public.moral_trade_participant_eligibility_records (participant_id, status, created_at desc);
+create index if not exists moral_trade_participant_eligibility_reviews_record_idx
+  on public.moral_trade_participant_eligibility_reviews (eligibility_record_id, review_dimension, status);
+
+alter table public.moral_trade_identity_artifact_references enable row level security;
+alter table public.moral_trade_participant_eligibility_records enable row level security;
+alter table public.moral_trade_participant_eligibility_reviews enable row level security;
+
+create table if not exists public.moral_trade_participant_eligibility_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'non_money_preview',
+      'counted_support',
+      'matching_clearing',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'payout_release',
+      'reliance_bearing_agreement',
+      'public_support_metric_release',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_record_count integer not null default 0 check (required_record_count >= 0),
+  passing_record_count integer not null default 0 check (passing_record_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  counted_support_allowed_bool boolean not null default false,
+  matching_clearing_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  reliance_bearing_agreement_allowed_bool boolean not null default false,
+  public_support_metric_release_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_participant_eligibility_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_record_count <= record_count),
+  check (record_count <= 64),
+  check (counted_support_allowed_bool = false),
+  check (matching_clearing_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (reliance_bearing_agreement_allowed_bool = false),
+  check (public_support_metric_release_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_participant_eligibility_enforcement_records is
+  'Append-only user-owned participant-eligibility enforcement records. A record stores normalized private eligibility input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize counted support, matching, matched-trade lock, payment authorization, payment capture, payout release, reliance-bearing agreement, public support metric release, or release-gate promotion.';
+
+create index if not exists mt_participant_eligibility_enforce_owner_status_idx
+  on public.moral_trade_participant_eligibility_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_participant_eligibility_enforce_transition_idx
+  on public.moral_trade_participant_eligibility_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists mt_participant_eligibility_enforce_hash_idx
+  on public.moral_trade_participant_eligibility_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_participant_eligibility_enforcement_records enable row level security;
+
+drop policy if exists "mt_participant_eligibility_enforce_select_owner"
+  on public.moral_trade_participant_eligibility_enforcement_records;
+create policy "mt_participant_eligibility_enforce_select_owner"
+  on public.moral_trade_participant_eligibility_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_participant_eligibility_enforce_insert_owner"
+  on public.moral_trade_participant_eligibility_enforcement_records;
+create policy "mt_participant_eligibility_enforce_insert_owner"
+  on public.moral_trade_participant_eligibility_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and counted_support_allowed_bool = false
+    and matching_clearing_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and reliance_bearing_agreement_allowed_bool = false
+    and public_support_metric_release_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_account_security_policies
+  add column if not exists policy_version text not null default 'moral-trade-account-security-policy-v0.1-2026-06',
+  add column if not exists applies_to_action text not null default 'participant_confirmation',
+  add column if not exists step_up_required_bool boolean not null default true,
+  add column if not exists trusted_device_required_bool boolean not null default false,
+  add column if not exists cooldown_hours integer not null default 0,
+  add column if not exists risk_signals_json jsonb not null default '[]'::jsonb,
+  add column if not exists high_risk_behavior text not null default 'step_up',
+  add column if not exists account_recovery_behavior text not null default 'manual_review',
+  add column if not exists reviewer_decision_ref uuid references public.moral_trade_review_decisions (id) on delete set null,
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
+
+alter table public.moral_trade_account_security_policies
+  drop constraint if exists moral_trade_account_security_policies_applies_to_action_check;
+
+alter table public.moral_trade_account_security_policies
+  add constraint moral_trade_account_security_policies_applies_to_action_check
+  check (
+    applies_to_action in (
+      'login',
+      'payment_method_change',
+      'participant_confirmation',
+      'payment_authorization',
+      'payment_capture',
+      'payout_release',
+      'privacy_grant',
+      'identity_artifact_change',
+      'contact_introduction',
+      'account_recovery',
+      'email_change',
+      'mfa_change',
+      'exposure_increase',
+      'reliance_bearing_agreement'
+    )
+  );
+
+alter table public.moral_trade_account_security_policies
+  drop constraint if exists moral_trade_account_security_policies_high_risk_behavior_check;
+
+alter table public.moral_trade_account_security_policies
+  add constraint moral_trade_account_security_policies_high_risk_behavior_check
+  check (high_risk_behavior in ('block', 'step_up', 'cooldown', 'manual_review'));
+
+alter table public.moral_trade_account_security_policies
+  drop constraint if exists moral_trade_account_security_policies_account_recovery_behavior_check;
+
+alter table public.moral_trade_account_security_policies
+  add constraint moral_trade_account_security_policies_account_recovery_behavior_check
+  check (account_recovery_behavior in ('block_real_money', 'manual_review', 'limited_access'));
+
+alter table public.moral_trade_account_security_policies
+  drop constraint if exists moral_trade_account_security_policies_cooldown_hours_check;
+
+alter table public.moral_trade_account_security_policies
+  add constraint moral_trade_account_security_policies_cooldown_hours_check
+  check (cooldown_hours >= 0);
+
+alter table public.moral_trade_account_security_events
+  add column if not exists participant_id_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+  add column if not exists account_security_policy_ref uuid references public.moral_trade_account_security_policies (id) on delete restrict,
+  add column if not exists risk_state text not null default 'manual_review',
+  add column if not exists action_subject_type text not null default 'participant_confirmation_record',
+  add column if not exists action_subject_id text not null default 'unknown',
+  add column if not exists notice_ref text,
+  add column if not exists trusted_device_status text not null default 'missing',
+  add column if not exists reviewer_decision_ref uuid references public.moral_trade_review_decisions (id) on delete set null,
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
+
+alter table public.moral_trade_account_security_events
+  drop constraint if exists moral_trade_account_security_events_event_type_check;
+
+alter table public.moral_trade_account_security_events
+  add constraint moral_trade_account_security_events_event_type_check
+  check (
+    event_type in (
+      'login',
+      'password_change',
+      'new_device',
+      'session_anomaly',
+      'payment_method_change',
+      'email_change',
+      'mfa_change',
+      'account_recovery',
+      'identity_artifact_change',
+      'participant_identity_change',
+      'step_up_passed',
+      'step_up_failed',
+      'manual_review'
+    )
+  );
+
+alter table public.moral_trade_account_security_events
+  drop constraint if exists moral_trade_account_security_events_risk_state_check;
+
+alter table public.moral_trade_account_security_events
+  add constraint moral_trade_account_security_events_risk_state_check
+  check (risk_state in ('low', 'medium', 'high', 'blocked', 'manual_review', 'stale'));
+
+alter table public.moral_trade_account_security_events
+  drop constraint if exists moral_trade_account_security_events_action_subject_type_check;
+
+alter table public.moral_trade_account_security_events
+  add constraint moral_trade_account_security_events_action_subject_type_check
+  check (
+    action_subject_type in (
+      'common_ground_budget',
+      'offset_offer',
+      'pledge_swap_offer',
+      'cleared_trade_agreement',
+      'privacy_grant',
+      'payment_event',
+      'payout_milestone',
+      'contact_interaction_record',
+      'participant_confirmation_record',
+      'participant_eligibility_record'
+    )
+  );
+
+alter table public.moral_trade_account_security_events
+  drop constraint if exists moral_trade_account_security_events_trusted_device_status_check;
+
+alter table public.moral_trade_account_security_events
+  add constraint moral_trade_account_security_events_trusted_device_status_check
+  check (
+    trusted_device_status in (
+      'passed',
+      'not_required_for_stage',
+      'missing',
+      'failed',
+      'stale',
+      'under_review'
+    )
+  );
+
+alter table public.moral_trade_account_security_events
+  drop constraint if exists moral_trade_account_security_events_participant_id_hash_check;
+
+alter table public.moral_trade_account_security_events
+  add constraint moral_trade_account_security_events_participant_id_hash_check
+  check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$');
+
+create index if not exists moral_trade_account_security_policies_action_idx
+  on public.moral_trade_account_security_policies (applies_to_action, status, created_at desc);
+
+create index if not exists moral_trade_account_security_events_subject_idx
+  on public.moral_trade_account_security_events (action_subject_type, action_subject_id, risk_state, created_at desc);
+
+create index if not exists moral_trade_account_security_events_participant_hash_idx
+  on public.moral_trade_account_security_events (participant_id_hash, risk_state, created_at desc);
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'reviewer_quality',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security'
+    )
+  );
+
+create table if not exists public.moral_trade_reviewer_quality_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-reviewer-quality-policy-v0.1-2026-06',
+  review_type text not null check (
+    review_type in (
+      'matching_clearing',
+      'release_gate_approval',
+      'recipient_destination_verification',
+      'privacy_grant_approval',
+      'evidence_acceptance',
+      'impact_claim_publication',
+      'appeal_resolution',
+      'incident_closure',
+      'payout_release',
+      'blocker_override'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  authorization_required_bool boolean not null default true,
+  conflict_check_required_bool boolean not null default true,
+  calibration_required_bool boolean not null default true,
+  second_review_required_bool boolean not null default true,
+  audit_sampling_required_bool boolean not null default true,
+  default_approval_prohibited_bool boolean not null default true,
+  review_speed_target_creates_default_bool boolean not null default false,
+  max_decision_age_days integer not null default 180 check (max_decision_age_days >= 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_reviewer_quality_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, review_type)
+);
+
+comment on table public.moral_trade_reviewer_quality_policies is
+  'Frozen reviewer-quality policies for authorization, conflict checks, calibration, second review, audit sampling, and default-approval prohibition.';
+
+create table if not exists public.moral_trade_review_quality_audits (
+  id uuid primary key default gen_random_uuid(),
+  reviewer_id_hash text not null check (reviewer_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_type text not null check (
+    review_type in (
+      'matching_clearing',
+      'release_gate_approval',
+      'recipient_destination_verification',
+      'privacy_grant_approval',
+      'evidence_acceptance',
+      'impact_claim_publication',
+      'appeal_resolution',
+      'incident_closure',
+      'payout_release',
+      'blocker_override'
+    )
+  ),
+  reviewer_quality_policy_id uuid not null references public.moral_trade_reviewer_quality_policies (id) on delete restrict,
+  audit_status text not null default 'under_review' check (
+    audit_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  sampled_decision_count integer not null default 0 check (sampled_decision_count >= 0),
+  overturn_count integer not null default 0 check (overturn_count >= 0),
+  calibration_failure_count integer not null default 0 check (calibration_failure_count >= 0),
+  unresolved_conflict_count integer not null default 0 check (unresolved_conflict_count >= 0),
+  out_of_scope_decision_count integer not null default 0 check (out_of_scope_decision_count >= 0),
+  default_approval_detected boolean not null default false,
+  audit_hash text not null check (audit_hash ~ '^sha256:[a-f0-9]{64}$'),
+  auditor_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  audited_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_review_quality_audits (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_review_quality_audits is
+  'Reviewer-quality audit records. Failed audits, overturns, unresolved conflicts, out-of-scope decisions, stale authorization, or default approvals block reliance-bearing review decisions.';
+
+alter table public.moral_trade_review_decisions
+  drop constraint if exists moral_trade_review_decisions_subject_kind_check;
+
+alter table public.moral_trade_review_decisions
+  add constraint moral_trade_review_decisions_subject_kind_check
+  check (
+    subject_kind in (
+      'proposal_record',
+      'agreement',
+      'offer',
+      'evidence_claim',
+      'matching_clearing_run',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'release_gate',
+      'recipient_registry_entry',
+      'payment_destination',
+      'privacy_grant',
+      'evidence_record',
+      'impact_claim_record',
+      'appeal_case',
+      'incident_response_record',
+      'payout_milestone',
+      'blocker_override'
+    )
+  );
+
+alter table public.moral_trade_review_decisions
+  add column if not exists reviewer_id_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+  add column if not exists reviewer_role text not null default 'reviewer',
+  add column if not exists conflict_of_interest_state text not null default 'missing',
+  add column if not exists neutral_panel_ref text,
+  add column if not exists reviewer_quality_policy_ref uuid references public.moral_trade_reviewer_quality_policies (id) on delete restrict,
+  add column if not exists review_quality_audit_refs uuid[] not null default '{}',
+  add column if not exists decision_state text not null default 'needs_changes',
+  add column if not exists prior_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  add column if not exists quality_checked_at timestamptz,
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
+
+alter table public.moral_trade_review_decisions
+  drop constraint if exists moral_trade_review_decisions_reviewer_id_hash_check;
+
+alter table public.moral_trade_review_decisions
+  add constraint moral_trade_review_decisions_reviewer_id_hash_check
+  check (reviewer_id_hash ~ '^sha256:[a-f0-9]{64}$');
+
+alter table public.moral_trade_review_decisions
+  drop constraint if exists moral_trade_review_decisions_conflict_state_check;
+
+alter table public.moral_trade_review_decisions
+  add constraint moral_trade_review_decisions_conflict_state_check
+  check (
+    conflict_of_interest_state in (
+      'none_declared',
+      'disclosed_nonblocking',
+      'not_required_for_stage',
+      'missing',
+      'unresolved',
+      'conflicted',
+      'superseded'
+    )
+  );
+
+alter table public.moral_trade_review_decisions
+  drop constraint if exists moral_trade_review_decisions_decision_state_check;
+
+alter table public.moral_trade_review_decisions
+  add constraint moral_trade_review_decisions_decision_state_check
+  check (decision_state in ('approved', 'blocked', 'needs_changes', 'recused', 'superseded'));
+
+create index if not exists moral_trade_reviewer_quality_policies_type_idx
+  on public.moral_trade_reviewer_quality_policies (review_type, status, created_at desc);
+
+create index if not exists moral_trade_review_quality_audits_reviewer_idx
+  on public.moral_trade_review_quality_audits (reviewer_id_hash, review_type, audit_status, created_at desc);
+
+create index if not exists moral_trade_review_decisions_quality_idx
+  on public.moral_trade_review_decisions (subject_kind, subject_id, decision_state, conflict_of_interest_state, created_at desc);
+
+alter table public.moral_trade_reviewer_quality_policies enable row level security;
+alter table public.moral_trade_review_quality_audits enable row level security;
+
+create table if not exists public.moral_trade_reviewer_quality_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  review_type text not null check (
+    review_type in (
+      'matching_clearing',
+      'release_gate_approval',
+      'recipient_destination_verification',
+      'privacy_grant_approval',
+      'evidence_acceptance',
+      'impact_claim_publication',
+      'appeal_resolution',
+      'incident_closure',
+      'payout_release',
+      'blocker_override'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_decision_count integer not null default 0 check (required_decision_count >= 0),
+  policy_count integer not null default 0 check (policy_count >= 0),
+  decision_count integer not null default 0 check (decision_count >= 0),
+  audit_count integer not null default 0 check (audit_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  matching_clearing_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  recipient_destination_verification_allowed_bool boolean not null default false,
+  privacy_disclosure_allowed_bool boolean not null default false,
+  evidence_acceptance_allowed_bool boolean not null default false,
+  impact_claim_publication_allowed_bool boolean not null default false,
+  appeal_resolution_allowed_bool boolean not null default false,
+  incident_closure_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  blocker_override_allowed_bool boolean not null default false,
+  public_metric_release_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_reviewer_quality_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (policy_count <= 32),
+  check (decision_count <= 96),
+  check (audit_count <= 64),
+  check (matching_clearing_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (recipient_destination_verification_allowed_bool = false),
+  check (privacy_disclosure_allowed_bool = false),
+  check (evidence_acceptance_allowed_bool = false),
+  check (impact_claim_publication_allowed_bool = false),
+  check (appeal_resolution_allowed_bool = false),
+  check (incident_closure_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (blocker_override_allowed_bool = false),
+  check (public_metric_release_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_reviewer_quality_enforcement_records is
+  'Append-only user-owned reviewer-quality enforcement records. A record stores normalized private policy, decision, and audit summaries, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize clearing, release gates, recipient verification, privacy disclosure, evidence acceptance, impact publication, appeal resolution, incident closure, payout release, blocker overrides, public metrics, or release-gate promotion.';
+
+create index if not exists mt_reviewer_quality_enforce_owner_status_idx
+  on public.moral_trade_reviewer_quality_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_reviewer_quality_enforce_type_status_idx
+  on public.moral_trade_reviewer_quality_enforcement_records (review_type, enforcement_status, created_at desc);
+
+create index if not exists mt_reviewer_quality_enforce_hash_idx
+  on public.moral_trade_reviewer_quality_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_reviewer_quality_enforcement_records enable row level security;
+
+drop policy if exists "mt_reviewer_quality_enforce_select_owner"
+  on public.moral_trade_reviewer_quality_enforcement_records;
+create policy "mt_reviewer_quality_enforce_select_owner"
+  on public.moral_trade_reviewer_quality_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_reviewer_quality_enforce_insert_owner"
+  on public.moral_trade_reviewer_quality_enforcement_records;
+create policy "mt_reviewer_quality_enforce_insert_owner"
+  on public.moral_trade_reviewer_quality_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and matching_clearing_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and recipient_destination_verification_allowed_bool = false
+    and privacy_disclosure_allowed_bool = false
+    and evidence_acceptance_allowed_bool = false
+    and impact_claim_publication_allowed_bool = false
+    and appeal_resolution_allowed_bool = false
+    and incident_closure_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and blocker_override_allowed_bool = false
+    and public_metric_release_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security'
+    )
+  );
+
+create table if not exists public.moral_trade_anti_enumeration_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-anti-enumeration-policy-v0.1-2026-06',
+  surface text not null check (
+    surface in (
+      'public_search',
+      'signed_in_search',
+      'public_browse',
+      'preview_generation',
+      'invite_link_creation',
+      'match_candidate_browsing',
+      'transparency_report'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  rate_limit_required_bool boolean not null default true,
+  query_fingerprint_required_bool boolean not null default true,
+  access_event_logging_required_bool boolean not null default true,
+  bucketed_counts_required_bool boolean not null default true,
+  sparse_suppression_required_bool boolean not null default true,
+  timing_equalization_required_bool boolean not null default true,
+  incident_escalation_required_bool boolean not null default true,
+  max_repeated_fingerprint_count integer not null default 3 check (max_repeated_fingerprint_count >= 0),
+  min_public_bucket_size integer not null default 3 check (min_public_bucket_size >= 0),
+  max_event_age_days integer not null default 30 check (max_event_age_days >= 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_anti_enumeration_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, surface)
+);
+
+comment on table public.moral_trade_anti_enumeration_policies is
+  'Frozen anti-enumeration policies for discovery surfaces. Missing rate limits, query fingerprints, access-event logging, bucketed counts, sparse suppression, timing equalization, or repeated-probe audits fail closed.';
+
+create table if not exists public.moral_trade_discovery_access_events (
+  id uuid primary key default gen_random_uuid(),
+  surface text not null check (
+    surface in (
+      'public_search',
+      'signed_in_search',
+      'public_browse',
+      'preview_generation',
+      'invite_link_creation',
+      'match_candidate_browsing',
+      'transparency_report'
+    )
+  ),
+  anti_enumeration_policy_ref uuid not null references public.moral_trade_anti_enumeration_policies (id) on delete restrict,
+  actor_id_hash text check (actor_id_hash is null or actor_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  query_fingerprint text check (query_fingerprint is null or query_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+  source_route text not null default '',
+  result_count_bucket text not null default 'not_returned' check (
+    result_count_bucket in ('zero', 'one_or_two_suppressed', 'three_to_nine', 'ten_to_forty_nine', 'fifty_plus', 'not_returned')
+  ),
+  raw_query_stored_bool boolean not null default false,
+  exact_result_count_exposed_bool boolean not null default false,
+  sparse_suppression_applied_bool boolean not null default false,
+  timing_equalized_bool boolean not null default false,
+  rate_limit_applied_bool boolean not null default false,
+  delayed_response_applied_bool boolean not null default false,
+  redacted_response_applied_bool boolean not null default false,
+  event_hash text not null check (event_hash ~ '^sha256:[a-f0-9]{64}$'),
+  occurred_at timestamptz not null default timezone('utc', now()),
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_discovery_access_events (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_discovery_access_events is
+  'Hash-backed discovery access events for anti-enumeration accounting. Events record fingerprints, buckets, and suppression flags without raw query text or exact hidden counts.';
+
+create table if not exists public.moral_trade_discovery_probe_audits (
+  id uuid primary key default gen_random_uuid(),
+  surface text not null check (
+    surface in (
+      'public_search',
+      'signed_in_search',
+      'public_browse',
+      'preview_generation',
+      'invite_link_creation',
+      'match_candidate_browsing',
+      'transparency_report'
+    )
+  ),
+  anti_enumeration_policy_ref uuid not null references public.moral_trade_anti_enumeration_policies (id) on delete restrict,
+  query_fingerprint text not null check (query_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+  audit_status text not null default 'under_review' check (
+    audit_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  event_count integer not null default 0 check (event_count >= 0),
+  unique_actor_hash_count integer not null default 0 check (unique_actor_hash_count >= 0),
+  repeated_fingerprint_count integer not null default 0 check (repeated_fingerprint_count >= 0),
+  sparse_result_hit_count integer not null default 0 check (sparse_result_hit_count >= 0),
+  timing_variance_ms integer not null default 0 check (timing_variance_ms >= 0),
+  escalation_incident_ref text,
+  audit_hash text not null check (audit_hash ~ '^sha256:[a-f0-9]{64}$'),
+  audited_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_discovery_probe_audits (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_discovery_probe_audits is
+  'Repeated-probe audit records for discovery surfaces. Budget breaches, sparse-result probing, timing variance, or missing incident escalation block discovery reliance.';
+
+create index if not exists moral_trade_anti_enumeration_policies_surface_idx
+  on public.moral_trade_anti_enumeration_policies (surface, status, created_at desc);
+
+create index if not exists moral_trade_discovery_access_events_surface_idx
+  on public.moral_trade_discovery_access_events (surface, query_fingerprint, occurred_at desc);
+
+create index if not exists moral_trade_discovery_access_events_actor_idx
+  on public.moral_trade_discovery_access_events (actor_id_hash, surface, occurred_at desc)
+  where actor_id_hash is not null;
+
+create index if not exists moral_trade_discovery_probe_audits_fingerprint_idx
+  on public.moral_trade_discovery_probe_audits (surface, query_fingerprint, audit_status, created_at desc);
+
+alter table public.moral_trade_anti_enumeration_policies enable row level security;
+alter table public.moral_trade_discovery_access_events enable row level security;
+alter table public.moral_trade_discovery_probe_audits enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security'
+    )
+  );
+
+create table if not exists public.moral_trade_privacy_grant_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-privacy-governance-policy-v0.1-2026-06',
+  surface text not null check (
+    surface in (
+      'reviewer_access',
+      'counterparty_preview',
+      'contact_introduction',
+      'evidence_review',
+      'profile_export',
+      'public_redacted_publication'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  grant_required_bool boolean not null default true,
+  access_log_required_bool boolean not null default true,
+  role_limit_required_bool boolean not null default true,
+  purpose_limit_required_bool boolean not null default true,
+  revocable_grant_required_bool boolean not null default true,
+  expiry_required_bool boolean not null default true,
+  data_security_review_required_bool boolean not null default true,
+  confidentiality_review_required_bool boolean not null default true,
+  reviewer_quality_required_bool boolean not null default true,
+  account_security_required_bool boolean not null default true,
+  participant_confirmation_required_bool boolean not null default true,
+  external_authority_required_bool boolean not null default false,
+  redaction_required_bool boolean not null default false,
+  public_redaction_policy_required_bool boolean not null default false,
+  max_access_log_age_days integer not null default 30 check (max_access_log_age_days >= 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_privacy_grant_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, surface)
+);
+
+comment on table public.moral_trade_privacy_grant_policies is
+  'Frozen privacy-disclosure policies for private-data access. Missing grants, access logs, purpose limits, role limits, data-security review, confidentiality review, or required participant/reviewer/account checks fail closed before disclosure.';
+
+alter table public.privacy_grants
+  add column if not exists privacy_policy_ref uuid references public.moral_trade_privacy_grant_policies (id) on delete set null,
+  add column if not exists purpose_code text not null default '',
+  add column if not exists grant_hash text check (grant_hash is null or grant_hash ~ '^sha256:[a-f0-9]{64}$'),
+  add column if not exists revoked_at timestamptz,
+  add column if not exists superseded_by uuid references public.privacy_grants (id) on delete set null;
+
+create table if not exists public.moral_trade_privacy_access_logs (
+  id uuid primary key default gen_random_uuid(),
+  privacy_grant_id uuid not null references public.privacy_grants (id) on delete restrict,
+  privacy_policy_ref uuid not null references public.moral_trade_privacy_grant_policies (id) on delete restrict,
+  surface text not null check (
+    surface in (
+      'reviewer_access',
+      'counterparty_preview',
+      'contact_introduction',
+      'evidence_review',
+      'profile_export',
+      'public_redacted_publication'
+    )
+  ),
+  owner_profile_id_hash text not null check (owner_profile_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  actor_id_hash text check (actor_id_hash is null or actor_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  actor_role text not null default '',
+  purpose_code text not null default '',
+  field_key text not null,
+  access_decision text not null default 'blocked' check (access_decision in ('allowed', 'blocked', 'redacted')),
+  private_data_returned_bool boolean not null default false,
+  raw_private_artifact_returned_bool boolean not null default false,
+  redaction_applied_bool boolean not null default false,
+  role_limited_bool boolean not null default false,
+  purpose_limited_bool boolean not null default false,
+  counterparty_disclosure_bool boolean not null default false,
+  public_disclosure_bool boolean not null default false,
+  access_reason text not null default '',
+  access_hash text not null check (access_hash ~ '^sha256:[a-f0-9]{64}$'),
+  occurred_at timestamptz not null default timezone('utc', now()),
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_privacy_access_logs (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_privacy_access_logs is
+  'Purpose-limited and role-limited privacy access log ledger for reviewer, counterparty, contact, evidence, export, and redacted-public disclosure. Logs record hashes and controls, not raw private artifacts.';
+
+create table if not exists public.moral_trade_privacy_disclosure_reviews (
+  id uuid primary key default gen_random_uuid(),
+  privacy_grant_id uuid not null references public.privacy_grants (id) on delete restrict,
+  privacy_policy_ref uuid not null references public.moral_trade_privacy_grant_policies (id) on delete restrict,
+  surface text not null check (
+    surface in (
+      'reviewer_access',
+      'counterparty_preview',
+      'contact_introduction',
+      'evidence_review',
+      'profile_export',
+      'public_redacted_publication'
+    )
+  ),
+  review_status text not null default 'under_review' check (
+    review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  confidentiality_review_status text not null default 'under_review' check (
+    confidentiality_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  data_security_status text not null default 'under_review' check (
+    data_security_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  reviewer_quality_status text not null default 'under_review' check (
+    reviewer_quality_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  account_security_status text not null default 'under_review' check (
+    account_security_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  participant_confirmation_status text not null default 'under_review' check (
+    participant_confirmation_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  external_authority_status text not null default 'not_required_for_stage' check (
+    external_authority_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  review_hash text not null check (review_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_privacy_disclosure_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_privacy_disclosure_reviews is
+  'Disclosure review rows for confidentiality/privacy-rights, data security, reviewer quality, account security, participant confirmation, and external authority checks before private-data access.';
+
+create index if not exists moral_trade_privacy_grant_policies_surface_idx
+  on public.moral_trade_privacy_grant_policies (surface, status, created_at desc);
+
+create index if not exists privacy_grants_privacy_policy_ref_idx
+  on public.privacy_grants (privacy_policy_ref, status, updated_at desc)
+  where privacy_policy_ref is not null;
+
+create index if not exists moral_trade_privacy_access_logs_grant_idx
+  on public.moral_trade_privacy_access_logs (privacy_grant_id, surface, occurred_at desc);
+
+create index if not exists moral_trade_privacy_access_logs_actor_idx
+  on public.moral_trade_privacy_access_logs (actor_id_hash, surface, occurred_at desc)
+  where actor_id_hash is not null;
+
+create index if not exists moral_trade_privacy_disclosure_reviews_grant_idx
+  on public.moral_trade_privacy_disclosure_reviews (privacy_grant_id, surface, review_status, created_at desc);
+
+alter table public.moral_trade_privacy_grant_policies enable row level security;
+alter table public.moral_trade_privacy_access_logs enable row level security;
+alter table public.moral_trade_privacy_disclosure_reviews enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology'
+    )
+  );
+
+create table if not exists public.moral_trade_impact_claim_methodology_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-impact-claims-v0.1-2026-06',
+  claim_type text not null check (
+    claim_type in (
+      'transfer_metric',
+      'payout_metric',
+      'sponsor_leverage_metric',
+      'outcome_claim',
+      'cost_effectiveness_claim',
+      'causal_impact_claim',
+      'moral_value_claim'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  evidence_required_bool boolean not null default true,
+  uncertainty_disclosure_required_bool boolean not null default true,
+  transfer_separation_required_bool boolean not null default true,
+  content_moderation_required_bool boolean not null default true,
+  reviewer_quality_required_bool boolean not null default true,
+  privileged_action_required_bool boolean not null default true,
+  audit_integrity_required_bool boolean not null default true,
+  public_metric_suppression_required_bool boolean not null default true,
+  min_evidence_refs integer not null default 1 check (min_evidence_refs >= 0),
+  methodology_hash text not null check (methodology_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_impact_claim_methodology_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, claim_type)
+);
+
+comment on table public.moral_trade_impact_claim_methodology_policies is
+  'Frozen impact-claim methodology policies that keep transfer, payout, sponsor leverage, outcome, cost-effectiveness, causal-impact, and moral-value claims separate.';
+
+create table if not exists public.moral_trade_impact_claim_records (
+  id uuid primary key default gen_random_uuid(),
+  methodology_policy_ref uuid not null references public.moral_trade_impact_claim_methodology_policies (id) on delete restrict,
+  surface text not null check (
+    surface in (
+      'offer_detail',
+      'public_dashboard',
+      'transparency_report',
+      'round_summary',
+      'recipient_project_page'
+    )
+  ),
+  claim_type text not null check (
+    claim_type in (
+      'transfer_metric',
+      'payout_metric',
+      'sponsor_leverage_metric',
+      'outcome_claim',
+      'cost_effectiveness_claim',
+      'causal_impact_claim',
+      'moral_value_claim'
+    )
+  ),
+  publication_status text not null default 'draft' check (
+    publication_status in ('draft', 'under_review', 'reviewed', 'published', 'blocked', 'stale', 'superseded')
+  ),
+  claim_subject_ref text not null default '',
+  evidence_refs text[] not null default '{}',
+  evidence_claim_types text[] not null default '{}',
+  uncertainty_disclosure text not null default '',
+  transfer_vs_impact_label text not null default '',
+  gross_transfer_amount_displayed_bool boolean not null default false,
+  net_recipient_payout_displayed_bool boolean not null default false,
+  sponsor_leverage_displayed_bool boolean not null default false,
+  payment_evidence_used_as_impact_bool boolean not null default false,
+  impact_claim_text_public_bool boolean not null default false,
+  content_moderation_status text not null default 'missing' check (
+    content_moderation_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  reviewer_quality_status text not null default 'missing' check (
+    reviewer_quality_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  privileged_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete set null,
+  privileged_action_status text not null default 'missing' check (
+    privileged_action_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  audit_integrity_checkpoint_id uuid references public.moral_trade_audit_integrity_checkpoints (id) on delete set null,
+  audit_integrity_status text not null default 'missing' check (
+    audit_integrity_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  public_metric_suppression_status text not null default 'missing' check (
+    public_metric_suppression_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  private_evidence_public_bool boolean not null default false,
+  claim_hash text not null check (claim_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_impact_claim_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_impact_claim_records is
+  'Reviewed impact-claim records. Payment, payout, destination, sponsor-leverage, or transfer evidence cannot become causal impact, outcome, cost-effectiveness, or moral-value claims without reviewed methodology, evidence, uncertainty disclosure, and approvals.';
+
+create index if not exists moral_trade_impact_claim_methodology_policies_claim_type_idx
+  on public.moral_trade_impact_claim_methodology_policies (claim_type, status, created_at desc);
+
+create index if not exists moral_trade_impact_claim_records_surface_claim_type_idx
+  on public.moral_trade_impact_claim_records (surface, claim_type, publication_status, created_at desc);
+
+create index if not exists moral_trade_impact_claim_records_subject_idx
+  on public.moral_trade_impact_claim_records (claim_subject_ref, claim_type, created_at desc);
+
+alter table public.moral_trade_impact_claim_methodology_policies enable row level security;
+alter table public.moral_trade_impact_claim_records enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock'
+    )
+  );
+
+create table if not exists public.moral_trade_matching_clearing_runs (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  flow_type text not null check (
+    flow_type in (
+      'donation_offset_batch',
+      'pledge_swap_preview',
+      'broad_match_candidate',
+      'public_goods_round'
+    )
+  ),
+  run_status text not null default 'draft' check (
+    run_status in ('draft', 'dry_run', 'reviewed', 'blocked', 'locked', 'superseded', 'expired')
+  ),
+  algorithm_version text not null default '',
+  deterministic_algorithm_bool boolean not null default true,
+  input_bundle_hash text not null check (input_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  excluded_records_hash text not null check (excluded_records_hash ~ '^sha256:[a-f0-9]{64}$'),
+  privacy_policy_snapshot_id uuid references public.moral_trade_policy_snapshots (id) on delete restrict,
+  state_interpretation_policy_id uuid references public.moral_trade_state_interpretation_policies (id) on delete restrict,
+  result_hash text not null check (result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  manual_override_action_id uuid references public.moral_trade_privileged_action_records (id) on delete set null,
+  manual_override_approved_bool boolean not null default false,
+  database_order_matching_bool boolean not null default false,
+  hidden_match_reasoning_bool boolean not null default false,
+  payable_transition_bool boolean not null default false,
+  reliance_bearing_transition_bool boolean not null default false,
+  private_counterparty_data_public_bool boolean not null default false,
+  run_hash text not null check (run_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_matching_clearing_runs (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_matching_clearing_runs is
+  'Frozen deterministic matching-clearing runs for donation-offset batches, pledge-swap previews, broad match candidates, and public-goods rounds. Payable or reliance-bearing clearing cannot be produced by ad hoc operator matching, database-order matching, or hidden match reasoning.';
+
+create table if not exists public.moral_trade_matched_trade_lock_proposals (
+  id uuid primary key default gen_random_uuid(),
+  matching_clearing_run_id uuid not null references public.moral_trade_matching_clearing_runs (id) on delete restrict,
+  proposal_status text not null default 'draft' check (
+    proposal_status in ('draft', 'participant_review', 'confirmed', 'locked', 'declined', 'expired', 'superseded', 'blocked')
+  ),
+  proposal_subject_kind text not null check (
+    proposal_subject_kind in (
+      'donation_offset_batch',
+      'pledge_swap_match',
+      'broad_match_candidate',
+      'public_goods_round'
+    )
+  ),
+  exact_terms_hash text not null check (exact_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  counterparty_bucket_hash text not null check (counterparty_bucket_hash ~ '^sha256:[a-f0-9]{64}$'),
+  matched_volume_hash text not null check (matched_volume_hash ~ '^sha256:[a-f0-9]{64}$'),
+  clearing_ratio_bps integer not null default 0 check (clearing_ratio_bps >= 0 and clearing_ratio_bps <= 1000000),
+  ratio_bounds_status text not null default 'missing' check (
+    ratio_bounds_status in ('passed', 'missing', 'under_review', 'failed', 'out_of_bounds', 'stale', 'superseded')
+  ),
+  baseline_snapshot_hash text not null check (baseline_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  destination_verification_ref uuid references public.moral_trade_recipient_destination_reviews (id) on delete set null,
+  commitment_reservation_ref text not null default '',
+  atomic_settlement_group_ref text not null default '',
+  final_confirmation_refs uuid[] not null default '{}',
+  confirmation_state text not null default 'missing' check (
+    confirmation_state in ('missing', 'stale', 'scope_mismatch', 'passed', 'not_required_for_stage')
+  ),
+  fallback_terms_hash text not null check (fallback_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_standard_hash text not null check (evidence_standard_hash ~ '^sha256:[a-f0-9]{64}$'),
+  private_counterparty_data_public_bool boolean not null default false,
+  proposal_hash text not null check (proposal_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_matched_trade_lock_proposals (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_matched_trade_lock_proposals is
+  'Frozen matched-trade lock proposals that bind exact matched terms, counterparty bucket, volume, ratio, destination, evidence standard, deadline, no-trade baseline snapshots, residuals, fallback terms, and fresh final confirmations before a donation offset or pledge swap can lock.';
+
+create table if not exists public.moral_trade_matching_clearing_reproducibility_checks (
+  id uuid primary key default gen_random_uuid(),
+  matching_clearing_run_id uuid not null references public.moral_trade_matching_clearing_runs (id) on delete restrict,
+  check_status text not null default 'missing' check (
+    check_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  rerun_input_bundle_hash text not null check (rerun_input_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  rerun_result_hash text not null check (rerun_result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  deterministic_replay_bool boolean not null default false,
+  variance_reason text not null default '',
+  check_hash text not null check (check_hash ~ '^sha256:[a-f0-9]{64}$'),
+  checked_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_matching_clearing_reproducibility_checks (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_matching_clearing_reproducibility_checks is
+  'Replay checks proving a matching-clearing run can be reproduced from the frozen input bundle, deterministic algorithm version, excluded-record list, privacy policy, state-interpretation policy, and result hash.';
+
+create index if not exists moral_trade_matching_clearing_runs_flow_status_idx
+  on public.moral_trade_matching_clearing_runs (flow_type, run_status, created_at desc);
+
+create index if not exists moral_trade_matching_clearing_runs_result_idx
+  on public.moral_trade_matching_clearing_runs (result_hash, created_at desc);
+
+create index if not exists moral_trade_matched_trade_lock_proposals_run_idx
+  on public.moral_trade_matched_trade_lock_proposals (matching_clearing_run_id, proposal_status, created_at desc);
+
+create index if not exists moral_trade_matched_trade_lock_proposals_subject_idx
+  on public.moral_trade_matched_trade_lock_proposals (proposal_subject_kind, proposal_status, created_at desc);
+
+create index if not exists moral_trade_matching_clearing_reproducibility_checks_run_idx
+  on public.moral_trade_matching_clearing_reproducibility_checks (matching_clearing_run_id, check_status, checked_at desc);
+
+alter table public.moral_trade_matching_clearing_runs enable row level security;
+alter table public.moral_trade_matched_trade_lock_proposals enable row level security;
+alter table public.moral_trade_matching_clearing_reproducibility_checks enable row level security;
+
+create table if not exists public.moral_trade_matching_clearing_execution_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  execution_kind text not null check (execution_kind in ('evaluation', 'replay_check')),
+  flow_type text not null check (
+    flow_type in (
+      'donation_offset_batch',
+      'pledge_swap_preview',
+      'broad_match_candidate',
+      'public_goods_round'
+    )
+  ),
+  execution_status text not null check (execution_status in ('pass', 'blocked')),
+  requires_payable_transition_bool boolean not null default false,
+  requires_reliance_bearing_transition_bool boolean not null default false,
+  requires_lock_proposal_bool boolean not null default false,
+  run_count integer not null default 0 check (run_count >= 0),
+  lock_proposal_count integer not null default 0 check (lock_proposal_count >= 0),
+  execution_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  replay_input_hash text check (replay_input_hash is null or replay_input_hash ~ '^sha256:[a-f0-9]{64}$'),
+  replay_result_hash text check (replay_result_hash is null or replay_result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  deterministic_replay_bool boolean not null default false,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  creates_lock_proposal_bool boolean not null default false,
+  payable_transition_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_matching_clearing_execution_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (creates_lock_proposal_bool = false),
+  check (payable_transition_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_matching_clearing_execution_records is
+  'Append-only user-owned matching-clearing execution and replay audit records. These records store normalized evaluation inputs, deterministic evaluation results, replay hashes, blockers, and result hashes while enforcing that execution records cannot create lock proposals, authorize payment, authorize reliance, or publish public metrics.';
+
+create index if not exists moral_trade_matching_clearing_execution_records_owner_status_idx
+  on public.moral_trade_matching_clearing_execution_records (owner_profile_id, execution_status, created_at desc);
+
+create index if not exists moral_trade_matching_clearing_execution_records_flow_idx
+  on public.moral_trade_matching_clearing_execution_records (flow_type, execution_kind, execution_status, created_at desc);
+
+create index if not exists moral_trade_matching_clearing_execution_records_hash_idx
+  on public.moral_trade_matching_clearing_execution_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_matching_clearing_execution_records enable row level security;
+
+drop policy if exists "moral_trade_matching_clearing_execution_records_select_owner"
+  on public.moral_trade_matching_clearing_execution_records;
+create policy "moral_trade_matching_clearing_execution_records_select_owner"
+  on public.moral_trade_matching_clearing_execution_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_matching_clearing_execution_records_insert_owner"
+  on public.moral_trade_matching_clearing_execution_records;
+create policy "moral_trade_matching_clearing_execution_records_insert_owner"
+  on public.moral_trade_matching_clearing_execution_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and creates_lock_proposal_bool = false
+    and payable_transition_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_clearing_preview_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  source_offer_id uuid references public.offers (id) on delete set null,
+  track text not null check (track in ('donation_offset', 'pledge_swap')),
+  mode text not null check (mode in ('match_candidate', 'final_lock_proposal')),
+  release_stage text not null check (
+    release_stage in ('donation_offset_preview_no_capture', 'pledge_swap_preview_manual_review_only')
+  ),
+  preview_status text not null check (preview_status in ('preview_ready', 'blocked_preview_only')),
+  matching_clearing_run_ref text not null default '',
+  final_lock_proposal_ref text not null default '',
+  required_fresh_confirmations integer not null default 0 check (required_fresh_confirmations >= 0),
+  fresh_confirmation_count integer not null default 0 check (fresh_confirmation_count >= 0),
+  matched_counterparty_volume_cents integer not null default 0 check (matched_counterparty_volume_cents >= 0),
+  unmatched_residual_cents integer not null default 0 check (unmatched_residual_cents >= 0),
+  clearing_ratio_bps integer not null default 0 check (clearing_ratio_bps >= 0 and clearing_ratio_bps <= 1000000),
+  capture_allowed_bool boolean not null default false,
+  reliance_bearing_bool boolean not null default false,
+  match_candidate_creates_deal_bool boolean not null default false,
+  requires_final_lock_proposal_bool boolean not null default true,
+  requires_fresh_confirmations_bool boolean not null default true,
+  preview_input_json jsonb not null,
+  preview_result_json jsonb not null,
+  preview_section_statuses jsonb not null default '[]'::jsonb,
+  user_facing_blockers text[] not null default '{}',
+  blocker_codes text[] not null default '{}',
+  policy_snapshot_ref text not null default '',
+  state_interpretation_policy_ref text not null default '',
+  contract_version text not null,
+  validator_version text not null,
+  preview_hash text not null check (preview_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  superseded_by uuid references public.moral_trade_clearing_preview_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (capture_allowed_bool = false),
+  check (reliance_bearing_bool = false),
+  check (match_candidate_creates_deal_bool = false),
+  check (requires_final_lock_proposal_bool = true),
+  check (requires_fresh_confirmations_bool = true),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_clearing_preview_records is
+  'Append-only user-owned clearing-preview execution records. A record stores normalized donation-offset or pledge-swap preview inputs, section statuses, blocker copy, blocker codes, and preview hash while enforcing that preview records never authorize capture, reliance, or deal formation.';
+
+create index if not exists moral_trade_clearing_preview_records_owner_status_idx
+  on public.moral_trade_clearing_preview_records (owner_profile_id, preview_status, created_at desc);
+
+create index if not exists moral_trade_clearing_preview_records_track_status_idx
+  on public.moral_trade_clearing_preview_records (track, release_stage, preview_status, created_at desc);
+
+create index if not exists moral_trade_clearing_preview_records_hash_idx
+  on public.moral_trade_clearing_preview_records (preview_hash, created_at desc);
+
+alter table public.moral_trade_clearing_preview_records enable row level security;
+
+drop policy if exists "moral_trade_clearing_preview_records_select_owner"
+  on public.moral_trade_clearing_preview_records;
+create policy "moral_trade_clearing_preview_records_select_owner"
+  on public.moral_trade_clearing_preview_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_clearing_preview_records_insert_owner"
+  on public.moral_trade_clearing_preview_records;
+create policy "moral_trade_clearing_preview_records_insert_owner"
+  on public.moral_trade_clearing_preview_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and capture_allowed_bool = false
+    and reliance_bearing_bool = false
+    and match_candidate_creates_deal_bool = false
+    and requires_final_lock_proposal_bool = true
+    and requires_fresh_confirmations_bool = true
+  );
+
+create table if not exists public.moral_trade_baseline_integrity_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'donation_offset_lock',
+      'pledge_swap_lock',
+      'broad_match_candidate',
+      'public_goods_round',
+      'post_lock_amendment'
+    )
+  ),
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  launch_classification text not null check (
+    launch_classification in (
+      'clearable_moral_trade',
+      'preview_only',
+      'rejected_threat_externality',
+      'manual_review_required',
+      'unclassified'
+    )
+  ),
+  requires_clearable_transition_bool boolean not null default false,
+  requires_reliance_bearing_transition_bool boolean not null default false,
+  requires_assessment_bool boolean not null default true,
+  policy_count integer not null default 0 check (policy_count >= 0),
+  assessment_count integer not null default 0 check (assessment_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  creates_clearable_transition_bool boolean not null default false,
+  payable_transition_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_baseline_integrity_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (creates_clearable_transition_bool = false),
+  check (payable_transition_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_baseline_integrity_enforcement_records is
+  'Append-only user-owned baseline-integrity enforcement records. A record stores normalized baseline-integrity evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot create clearable transitions, authorize payment, authorize reliance, or publish public metrics.';
+
+create index if not exists moral_trade_baseline_integrity_enforcement_records_owner_status_idx
+  on public.moral_trade_baseline_integrity_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_baseline_integrity_enforcement_records_transition_status_idx
+  on public.moral_trade_baseline_integrity_enforcement_records (transition, subject_type, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_baseline_integrity_enforcement_records_hash_idx
+  on public.moral_trade_baseline_integrity_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_baseline_integrity_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_baseline_integrity_enforcement_records_select_owner"
+  on public.moral_trade_baseline_integrity_enforcement_records;
+create policy "moral_trade_baseline_integrity_enforcement_records_select_owner"
+  on public.moral_trade_baseline_integrity_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_baseline_integrity_enforcement_records_insert_owner"
+  on public.moral_trade_baseline_integrity_enforcement_records;
+create policy "moral_trade_baseline_integrity_enforcement_records_insert_owner"
+  on public.moral_trade_baseline_integrity_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and creates_clearable_transition_bool = false
+    and payable_transition_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing'
+    )
+  );
+
+create table if not exists public.moral_trade_baseline_integrity_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-baseline-integrity-v0.1-2026-06',
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  status text not null default 'missing' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  predates_offer_required_bool boolean not null default true,
+  independent_reason_required_bool boolean not null default true,
+  history_evidence_required_bool boolean not null default true,
+  additionality_review_required_bool boolean not null default true,
+  externality_review_required_bool boolean not null default true,
+  reviewer_quality_required_bool boolean not null default true,
+  participant_confirmation_required_bool boolean not null default true,
+  good_faith_confidence_separation_required_bool boolean not null default true,
+  private_evidence_publication_prohibited_bool boolean not null default true,
+  max_assessment_age_days integer not null default 90 check (max_assessment_age_days > 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by text,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_baseline_integrity_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_baseline_integrity_policies is
+  'Frozen baseline-integrity and baseline-manufacturing policies governing whether donation-offset and pledge-swap baselines predate marketplace exposure, have independent reasons, preserve good-faith/confidence separation, and require additionality/externality/reviewer/confirmation checks.';
+
+create table if not exists public.moral_trade_baseline_integrity_assessments (
+  id uuid primary key default gen_random_uuid(),
+  baseline_integrity_policy_ref uuid not null references public.moral_trade_baseline_integrity_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null default '',
+  assessment_state text not null default 'under_review' check (
+    assessment_state in ('not_required', 'under_review', 'non_blocking', 'blocked', 'superseded', 'stale')
+  ),
+  launch_classification text not null default 'manual_review_required' check (
+    launch_classification in ('clearable_moral_trade', 'preview_only', 'rejected_threat_externality', 'manual_review_required')
+  ),
+  baseline_source_kind text not null default 'unknown' check (
+    baseline_source_kind in (
+      'pre_existing_behavior',
+      'independent_obligation',
+      'historical_pattern',
+      'marketplace_created',
+      'marketplace_escalated',
+      'counterparty_triggered',
+      'unknown'
+    )
+  ),
+  baseline_snapshot_hash text not null check (baseline_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  predates_offer_bool boolean not null default false,
+  independent_reason_present_bool boolean not null default false,
+  history_evidence_present_bool boolean not null default false,
+  marketplace_created_bool boolean not null default false,
+  marketplace_escalated_bool boolean not null default false,
+  counterparty_triggered_escalation_bool boolean not null default false,
+  harmful_baseline_escalated_bool boolean not null default false,
+  good_faith_confidence_separated_bool boolean not null default false,
+  additionality_review_status text not null default 'missing' check (
+    additionality_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  externality_review_status text not null default 'missing' check (
+    externality_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  reviewer_quality_status text not null default 'missing' check (
+    reviewer_quality_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  participant_confirmation_status text not null default 'missing' check (
+    participant_confirmation_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  private_evidence_public_bool boolean not null default false,
+  assessment_hash text not null check (assessment_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_baseline_integrity_assessments (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_baseline_integrity_assessments is
+  'First-class baseline-integrity and baseline-manufacturing assessments. Marketplace-created, marketplace-escalated, or counterparty-triggered harmful baselines keep donation offsets and pledge swaps preview-only or rejected-threat/externality until review is non-blocking.';
+
+create index if not exists moral_trade_baseline_integrity_policies_subject_status_idx
+  on public.moral_trade_baseline_integrity_policies (subject_type, status, reviewed_at desc);
+
+create index if not exists moral_trade_baseline_integrity_assessments_policy_state_idx
+  on public.moral_trade_baseline_integrity_assessments (baseline_integrity_policy_ref, assessment_state, reviewed_at desc);
+
+create index if not exists moral_trade_baseline_integrity_assessments_subject_idx
+  on public.moral_trade_baseline_integrity_assessments (subject_type, subject_ref, assessment_state, created_at desc);
+
+alter table public.moral_trade_baseline_integrity_policies enable row level security;
+alter table public.moral_trade_baseline_integrity_assessments enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment'
+    )
+  );
+
+create table if not exists public.moral_trade_agreement_amendment_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-agreement-amendments-v0.1-2026-06',
+  subject_type text not null check (
+    subject_type in (
+      'locked_donation_offset',
+      'locked_pledge_swap',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  amendment_type text not null check (
+    amendment_type in (
+      'correction',
+      'mutual_modification',
+      'pause',
+      'early_termination',
+      'evidence_standard_change',
+      'schedule_change',
+      'compensation_change',
+      'destination_change',
+      'baseline_correction',
+      'privacy_change',
+      'other'
+    )
+  ),
+  status text not null default 'missing' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  renewed_confirmation_required_bool boolean not null default true,
+  neutral_review_required_for_burden_shift_bool boolean not null default true,
+  non_retroactivity_required_bool boolean not null default true,
+  before_after_hash_required_bool boolean not null default true,
+  notice_required_bool boolean not null default true,
+  reviewer_quality_required_bool boolean not null default true,
+  baseline_integrity_required_bool boolean not null default true,
+  max_amendment_age_days integer not null default 45 check (max_amendment_age_days > 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by text,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_agreement_amendment_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_agreement_amendment_policies is
+  'Frozen agreement-amendment policies governing renewed confirmations, non-retroactivity, before/after hashes, notice, reviewer quality, baseline integrity, and neutral review before material post-lock changes.';
+
+create table if not exists public.moral_trade_agreement_amendment_records (
+  id uuid primary key default gen_random_uuid(),
+  agreement_amendment_policy_ref uuid not null references public.moral_trade_agreement_amendment_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'locked_donation_offset',
+      'locked_pledge_swap',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null default '',
+  amendment_type text not null check (
+    amendment_type in (
+      'correction',
+      'mutual_modification',
+      'pause',
+      'early_termination',
+      'evidence_standard_change',
+      'schedule_change',
+      'compensation_change',
+      'destination_change',
+      'baseline_correction',
+      'privacy_change',
+      'other'
+    )
+  ),
+  amendment_state text not null default 'draft' check (
+    amendment_state in ('draft', 'presented', 'confirmed', 'approved', 'applied', 'rejected', 'withdrawn', 'superseded', 'stale')
+  ),
+  material_change_bool boolean not null default true,
+  burden_or_benefit_shift_bool boolean not null default false,
+  parent_record_edit_detected_bool boolean not null default false,
+  retroactive_performance_change_bool boolean not null default false,
+  evidence_claim_retyped_bool boolean not null default false,
+  exposure_increase_bool boolean not null default false,
+  funds_redirect_bool boolean not null default false,
+  compensation_change_bool boolean not null default false,
+  cancellation_rights_narrowed_bool boolean not null default false,
+  privacy_disclosure_change_bool boolean not null default false,
+  donor_of_record_change_bool boolean not null default false,
+  third_party_obligation_change_bool boolean not null default false,
+  before_terms_hash text not null check (before_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  after_terms_hash text not null check (after_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_bundle_hash text not null check (policy_snapshot_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  renewed_confirmation_refs uuid[] not null default '{}'::uuid[],
+  confirmation_state text not null default 'missing' check (
+    confirmation_state in ('missing', 'stale', 'scope_mismatch', 'passed', 'not_required_for_stage')
+  ),
+  neutral_review_status text not null default 'missing' check (
+    neutral_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  notice_status text not null default 'missing' check (
+    notice_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  reviewer_quality_status text not null default 'missing' check (
+    reviewer_quality_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  baseline_integrity_status text not null default 'missing' check (
+    baseline_integrity_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  amendment_hash text not null check (amendment_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  applied_at timestamptz,
+  superseded_by uuid references public.moral_trade_agreement_amendment_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_agreement_amendment_records is
+  'Append-only agreement-amendment records. Parent-record edits, retroactive performance changes, retyped evidence claims, unconfirmed exposure/funds/compensation/privacy changes, and missing neutral or reviewer-quality checks fail closed before material post-lock changes.';
+
+create index if not exists moral_trade_agreement_amendment_policies_subject_status_idx
+  on public.moral_trade_agreement_amendment_policies (subject_type, amendment_type, status, reviewed_at desc);
+
+create index if not exists moral_trade_agreement_amendment_records_policy_state_idx
+  on public.moral_trade_agreement_amendment_records (agreement_amendment_policy_ref, amendment_state, reviewed_at desc);
+
+create index if not exists moral_trade_agreement_amendment_records_subject_idx
+  on public.moral_trade_agreement_amendment_records (subject_type, subject_ref, amendment_state, created_at desc);
+
+alter table public.moral_trade_agreement_amendment_policies enable row level security;
+alter table public.moral_trade_agreement_amendment_records enable row level security;
+
+create table if not exists public.moral_trade_agreement_amendment_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'donation_offset_material_change',
+      'pledge_swap_material_change',
+      'post_lock_correction',
+      'pause_or_early_termination',
+      'evidence_standard_change',
+      'destination_change'
+    )
+  ),
+  subject_type text not null check (
+    subject_type in (
+      'locked_donation_offset',
+      'locked_pledge_swap',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  amendment_type text not null check (
+    amendment_type in (
+      'correction',
+      'mutual_modification',
+      'pause',
+      'early_termination',
+      'evidence_standard_change',
+      'schedule_change',
+      'compensation_change',
+      'destination_change',
+      'baseline_correction',
+      'privacy_change',
+      'other'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  requires_amendment_bool boolean not null default true,
+  requires_applied_amendment_bool boolean not null default false,
+  requires_reliance_bearing_transition_bool boolean not null default false,
+  requires_renewed_confirmations_bool boolean not null default true,
+  requires_neutral_review_bool boolean not null default false,
+  policy_count integer not null default 0 check (policy_count >= 0),
+  amendment_count integer not null default 0 check (amendment_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  applies_amendment_bool boolean not null default false,
+  material_change_allowed_bool boolean not null default false,
+  parent_record_mutation_allowed_bool boolean not null default false,
+  payment_transition_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_agreement_amendment_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (applies_amendment_bool = false),
+  check (material_change_allowed_bool = false),
+  check (parent_record_mutation_allowed_bool = false),
+  check (payment_transition_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_agreement_amendment_enforcement_records is
+  'Append-only user-owned agreement-amendment enforcement records. A record stores normalized agreement-amendment evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot apply amendments, edit parent records, authorize material changes, authorize payment, authorize reliance, or publish public metrics.';
+
+create index if not exists moral_trade_agreement_amendment_enforcement_records_owner_status_idx
+  on public.moral_trade_agreement_amendment_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_agreement_amendment_enforcement_records_transition_status_idx
+  on public.moral_trade_agreement_amendment_enforcement_records (transition, subject_type, amendment_type, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_agreement_amendment_enforcement_records_hash_idx
+  on public.moral_trade_agreement_amendment_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_agreement_amendment_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_agreement_amendment_enforcement_records_select_owner"
+  on public.moral_trade_agreement_amendment_enforcement_records;
+create policy "moral_trade_agreement_amendment_enforcement_records_select_owner"
+  on public.moral_trade_agreement_amendment_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_agreement_amendment_enforcement_records_insert_owner"
+  on public.moral_trade_agreement_amendment_enforcement_records;
+create policy "moral_trade_agreement_amendment_enforcement_records_insert_owner"
+  on public.moral_trade_agreement_amendment_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and applies_amendment_bool = false
+    and material_change_allowed_bool = false
+    and parent_record_mutation_allowed_bool = false
+    and payment_transition_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case'
+    )
+  );
+
+create table if not exists public.moral_trade_appeal_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-challenge-appeal-v0.3',
+  subject text not null check (
+    subject in (
+      'claim',
+      'evidence_row',
+      'baseline_concern',
+      'disclosure_decision',
+      'externality_trigger',
+      'completion_state',
+      'policy_flag'
+    )
+  ),
+  status text not null default 'missing' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  notice_required_bool boolean not null default true,
+  deadline_required_bool boolean not null default true,
+  neutral_review_required_bool boolean not null default true,
+  non_retaliation_required_bool boolean not null default true,
+  safety_blocker_waiver_prohibited_bool boolean not null default true,
+  settled_obligation_reopen_prohibited_bool boolean not null default true,
+  max_appeal_age_days integer not null default 30 check (max_appeal_age_days > 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by text,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_appeal_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_appeal_policies is
+  'Frozen appeal-case policies governing notice, deadlines, neutral review, non-retaliation, safety-blocker non-waiver, and settled-obligation non-reopening for bounded correction paths.';
+
+create table if not exists public.moral_trade_appeal_cases (
+  id uuid primary key default gen_random_uuid(),
+  appeal_policy_ref uuid not null references public.moral_trade_appeal_policies (id) on delete restrict,
+  subject text not null check (
+    subject in (
+      'claim',
+      'evidence_row',
+      'baseline_concern',
+      'disclosure_decision',
+      'externality_trigger',
+      'completion_state',
+      'policy_flag'
+    )
+  ),
+  standing text not null check (
+    standing in (
+      'participant',
+      'counterparty',
+      'affected_party',
+      'reviewer',
+      'admin_safety',
+      'external_verifier'
+    )
+  ),
+  trigger text not null check (
+    trigger in (
+      'duplicate_proof',
+      'coercive_baseline',
+      'wrong_scope_evidence',
+      'material_factual_error',
+      'privacy_disclosure_error',
+      'externality_remedy_gap',
+      'reviewer_conflict',
+      'policy_misapplied'
+    )
+  ),
+  outcome text not null check (
+    outcome in (
+      'uphold_decision',
+      'request_evidence',
+      'route_human_review',
+      'open_challenge_window',
+      'block_reliance',
+      'record_remedy',
+      'close_unresolved',
+      'correct_record'
+    )
+  ),
+  status text not null default 'filed' check (
+    status in (
+      'draft',
+      'filed',
+      'noticed',
+      'under_neutral_review',
+      'correction_requested',
+      'upheld',
+      'corrected',
+      'dismissed',
+      'closed_unresolved',
+      'superseded',
+      'stale'
+    )
+  ),
+  notice_state text not null default 'missing' check (
+    notice_state in ('missing', 'queued', 'delivered', 'failed', 'not_required_for_stage')
+  ),
+  deadline_at timestamptz,
+  filed_at timestamptz,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  neutral_review_status text not null default 'missing' check (
+    neutral_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  standing_status text not null default 'missing' check (
+    standing_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  scope_hash text not null check (scope_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_scope_refs text[] not null default '{}'::text[],
+  private_details_redacted_bool boolean not null default false,
+  safety_blocker_waiver_attempted_bool boolean not null default false,
+  settled_obligation_reopen_attempted_bool boolean not null default false,
+  non_retaliation_notice_sent_bool boolean not null default false,
+  case_hash text not null check (case_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  superseded_by uuid references public.moral_trade_appeal_cases (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_appeal_cases is
+  'First-class bounded appeal and correction cases. Appeals require notice, deadline, scope, evidence scope, standing, neutral review where relevant, non-retaliation, redaction, and cannot waive safety blockers or silently reopen settled obligations.';
+
+create index if not exists moral_trade_appeal_policies_subject_status_idx
+  on public.moral_trade_appeal_policies (subject, status, reviewed_at desc);
+
+create index if not exists moral_trade_appeal_cases_policy_status_idx
+  on public.moral_trade_appeal_cases (appeal_policy_ref, status, filed_at desc);
+
+create index if not exists moral_trade_appeal_cases_subject_trigger_idx
+  on public.moral_trade_appeal_cases (subject, trigger, status, created_at desc);
+
+alter table public.moral_trade_appeal_policies enable row level security;
+alter table public.moral_trade_appeal_cases enable row level security;
+
+create table if not exists public.moral_trade_challenge_appeal_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  subject text not null check (
+    subject in (
+      'claim',
+      'evidence_row',
+      'baseline_concern',
+      'disclosure_decision',
+      'externality_trigger',
+      'completion_state',
+      'policy_flag'
+    )
+  ),
+  trigger text not null check (
+    trigger in (
+      'duplicate_proof',
+      'coercive_baseline',
+      'wrong_scope_evidence',
+      'material_factual_error',
+      'privacy_disclosure_error',
+      'externality_remedy_gap',
+      'reviewer_conflict',
+      'policy_misapplied'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  requires_appeal_case_bool boolean not null default true,
+  requires_neutral_review_bool boolean not null default true,
+  policy_count integer not null default 0 check (policy_count >= 0),
+  appeal_case_count integer not null default 0 check (appeal_case_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  opens_appeal_bool boolean not null default false,
+  corrects_record_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  safety_blocker_waiver_allowed_bool boolean not null default false,
+  settled_obligation_reopen_allowed_bool boolean not null default false,
+  public_metric_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_challenge_appeal_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (opens_appeal_bool = false),
+  check (corrects_record_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (safety_blocker_waiver_allowed_bool = false),
+  check (settled_obligation_reopen_allowed_bool = false),
+  check (public_metric_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_challenge_appeal_enforcement_records is
+  'Append-only user-owned challenge-appeal enforcement records. A record stores normalized appeal-case enforcement input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot open appeals, correct records, authorize reliance, waive safety blockers, reopen settled obligations, or publish public metrics.';
+
+create index if not exists moral_trade_challenge_appeal_enforcement_records_owner_status_idx
+  on public.moral_trade_challenge_appeal_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_challenge_appeal_enforcement_records_subject_trigger_idx
+  on public.moral_trade_challenge_appeal_enforcement_records (subject, trigger, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_challenge_appeal_enforcement_records_hash_idx
+  on public.moral_trade_challenge_appeal_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_challenge_appeal_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_challenge_appeal_enforcement_records_select_owner"
+  on public.moral_trade_challenge_appeal_enforcement_records;
+create policy "moral_trade_challenge_appeal_enforcement_records_select_owner"
+  on public.moral_trade_challenge_appeal_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_challenge_appeal_enforcement_records_insert_owner"
+  on public.moral_trade_challenge_appeal_enforcement_records;
+create policy "moral_trade_challenge_appeal_enforcement_records_insert_owner"
+  on public.moral_trade_challenge_appeal_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and opens_appeal_bool = false
+    and corrects_record_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and safety_blocker_waiver_allowed_bool = false
+    and settled_obligation_reopen_allowed_bool = false
+    and public_metric_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review'
+    )
+  );
+
+create table if not exists public.moral_trade_side_agreement_disclosures (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond',
+      'evidence_term',
+      'challenge_term',
+      'recipient_choice',
+      'common_ground_budget',
+      'public_goods_round'
+    )
+  ),
+  subject_ref text not null,
+  side_agreement_present_bool boolean not null default false,
+  disclosure_status text not null default 'under_review' check (
+    disclosure_status in ('none_declared', 'disclosed', 'under_review', 'non_blocking', 'blocked', 'missing', 'stale', 'superseded')
+  ),
+  public_safe_summary text not null default '',
+  private_details_redacted_bool boolean not null default false,
+  participant_notice_status text not null default 'missing' check (
+    participant_notice_status in ('sent', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  disclosure_hash text not null check (disclosure_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_side_agreement_disclosures (id) on delete set null,
+  private_review_notes text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    side_agreement_present_bool = true
+    or disclosure_status in ('none_declared', 'missing', 'stale', 'superseded')
+  ),
+  check (
+    disclosure_status <> 'non_blocking'
+    or (
+      reviewed_at is not null
+      and private_details_redacted_bool = true
+      and participant_notice_status in ('sent', 'not_required_for_stage')
+    )
+  )
+);
+
+comment on table public.moral_trade_side_agreement_disclosures is
+  'First-class side-agreement disclosure records. Off-platform compensation, reciprocal favors, side promises, threats, collusion, authority claims, or reporting-suppression terms are blockers until represented and reviewed here.';
+
+create table if not exists public.moral_trade_side_agreement_reviews (
+  id uuid primary key default gen_random_uuid(),
+  side_agreement_disclosure_id uuid not null references public.moral_trade_side_agreement_disclosures (id) on delete cascade,
+  review_dimension text not null check (
+    review_dimension in (
+      'collusion',
+      'externality',
+      'legal_jurisdiction',
+      'anti_threat',
+      'reporting_integrity',
+      'civil_rights_discrimination',
+      'participant_autonomy',
+      'confidentiality_privacy_rights',
+      'financial_crime_fraud',
+      'anti_corruption',
+      'representative_authority'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'blocked', 'stale', 'superseded')
+  ),
+  evidence_hash text not null check (evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  privileged_action_record_id uuid references public.moral_trade_privileged_action_records (id) on delete restrict,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  notes text not null default '',
+  superseded_by uuid references public.moral_trade_side_agreement_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (
+    status not in ('passed', 'not_required_for_stage')
+    or reviewed_at is not null
+  )
+);
+
+comment on table public.moral_trade_side_agreement_reviews is
+  'Dimension-level side-agreement review records for collusion, externality, legal, anti-threat, reporting-integrity, civil-rights, autonomy, confidentiality/privacy, fraud, anti-corruption, and representative-authority checks.';
+
+create table if not exists public.moral_trade_side_agreement_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'payout_release',
+      'public_completion_claim',
+      'challenge_decision',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_disclosure_count integer not null default 0 check (required_disclosure_count >= 0),
+  passing_disclosure_count integer not null default 0 check (passing_disclosure_count >= 0),
+  disclosure_count integer not null default 0 check (disclosure_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_transition_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  challenge_decision_allowed_bool boolean not null default false,
+  public_completion_claim_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_side_agreement_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_disclosure_count <= disclosure_count),
+  check (lock_transition_allowed_bool = false),
+  check (payment_transition_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (challenge_decision_allowed_bool = false),
+  check (public_completion_claim_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_side_agreement_enforcement_records is
+  'Append-only user-owned side-agreement enforcement records. A record stores normalized side-agreement disclosure input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize lock, payment, payout, reliance, challenge decisions, public completion, or release-gate promotion.';
+
+create index if not exists moral_trade_side_agreement_disclosures_subject_idx
+  on public.moral_trade_side_agreement_disclosures (subject_type, subject_ref, disclosure_status, created_at desc);
+create index if not exists moral_trade_side_agreement_disclosures_policy_idx
+  on public.moral_trade_side_agreement_disclosures (policy_snapshot_id, disclosure_status, reviewed_at desc);
+create index if not exists moral_trade_side_agreement_reviews_dimension_idx
+  on public.moral_trade_side_agreement_reviews (side_agreement_disclosure_id, review_dimension, status);
+create index if not exists moral_trade_side_agreement_enforcement_records_owner_status_idx
+  on public.moral_trade_side_agreement_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_side_agreement_enforcement_records_transition_status_idx
+  on public.moral_trade_side_agreement_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_side_agreement_enforcement_records_hash_idx
+  on public.moral_trade_side_agreement_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_side_agreement_disclosures enable row level security;
+alter table public.moral_trade_side_agreement_reviews enable row level security;
+alter table public.moral_trade_side_agreement_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_side_agreement_enforcement_records_select_owner"
+  on public.moral_trade_side_agreement_enforcement_records;
+create policy "moral_trade_side_agreement_enforcement_records_select_owner"
+  on public.moral_trade_side_agreement_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_side_agreement_enforcement_records_insert_owner"
+  on public.moral_trade_side_agreement_enforcement_records;
+create policy "moral_trade_side_agreement_enforcement_records_insert_owner"
+  on public.moral_trade_side_agreement_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and lock_transition_allowed_bool = false
+    and payment_transition_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and challenge_decision_allowed_bool = false
+    and public_completion_claim_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement'
+    )
+  );
+
+create table if not exists public.moral_trade_trade_classification_records (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'common_ground_budget',
+      'public_goods_round',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null,
+  trade_classification text not null check (
+    trade_classification in (
+      'pure_moral_trade',
+      'mixed_moral_trade',
+      'moral_public_good_coalition',
+      'ordinary_donation_or_matching',
+      'ordinary_service_or_procurement',
+      'rejected_threat_or_externality'
+    )
+  ),
+  classification_state text not null default 'draft' check (
+    classification_state in ('draft', 'previewed', 'reviewed', 'metrics_excluded', 'blocked', 'stale', 'superseded')
+  ),
+  metrics_eligibility text not null default 'manual_review' check (
+    metrics_eligibility in ('eligible_for_moral_trade_metrics', 'excluded_ordinary', 'excluded_rejected', 'manual_review')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  payer_moral_reason_hash text check (payer_moral_reason_hash is null or payer_moral_reason_hash ~ '^sha256:[a-f0-9]{64}$'),
+  performer_counterfactual_acceptance_state text not null default 'not_recorded' check (
+    performer_counterfactual_acceptance_state in ('not_recorded', 'says_would_not_without_compensation', 'says_would_anyway', 'unclear', 'manual_review')
+  ),
+  ordinary_service_procurement_review_state text not null default 'under_review' check (
+    ordinary_service_procurement_review_state in ('not_required', 'under_review', 'ordinary_service_blocking', 'non_blocking', 'manual_review')
+  ),
+  moral_trade_classification_rationale_hash text not null check (moral_trade_classification_rationale_hash ~ '^sha256:[a-f0-9]{64}$'),
+  terms_state text not null default 'draft' check (
+    terms_state in ('draft', 'previewed', 'locked', 'blocked', 'superseded')
+  ),
+  exact_action_frozen_bool boolean not null default false,
+  compensation_terms_frozen_bool boolean not null default false,
+  evidence_burden_frozen_bool boolean not null default false,
+  review_period_frozen_bool boolean not null default false,
+  exit_remedy_rule_frozen_bool boolean not null default false,
+  public_badge_exposed_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_trade_classification_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    trade_classification not in ('ordinary_donation_or_matching', 'ordinary_service_or_procurement')
+    or metrics_eligibility = 'excluded_ordinary'
+  ),
+  check (
+    trade_classification <> 'rejected_threat_or_externality'
+    or metrics_eligibility = 'excluded_rejected'
+  ),
+  check (
+    subject_type <> 'compensated_moral_action'
+    or trade_classification = 'mixed_moral_trade'
+    or classification_state in ('draft', 'previewed', 'blocked', 'superseded')
+  ),
+  check (
+    trade_classification <> 'mixed_moral_trade'
+    or (
+      payer_moral_reason_hash is not null
+      and performer_counterfactual_acceptance_state = 'says_would_not_without_compensation'
+      and ordinary_service_procurement_review_state = 'non_blocking'
+    )
+  )
+);
+
+comment on table public.moral_trade_trade_classification_records is
+  'First-class trade_classification records. Classification is an implementation guard, not a public moral status badge; ordinary donations, same-view matching, and ordinary service/procurement are excluded from moral-trade-specific metrics.';
+
+create table if not exists public.moral_trade_compensated_action_terms (
+  id uuid primary key default gen_random_uuid(),
+  trade_classification_record_id uuid not null references public.moral_trade_trade_classification_records (id) on delete cascade,
+  payer_profile_hash text not null check (payer_profile_hash ~ '^sha256:[a-f0-9]{64}$'),
+  performer_profile_hash text not null check (performer_profile_hash ~ '^sha256:[a-f0-9]{64}$'),
+  exact_action_summary_hash text not null check (exact_action_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  compensation_terms_hash text not null check (compensation_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_burden_hash text not null check (evidence_burden_hash ~ '^sha256:[a-f0-9]{64}$'),
+  review_period_start_at timestamptz,
+  review_period_end_at timestamptz,
+  exit_remedy_rule_hash text not null check (exit_remedy_rule_hash ~ '^sha256:[a-f0-9]{64}$'),
+  terms_state text not null default 'draft' check (
+    terms_state in ('draft', 'previewed', 'locked', 'blocked', 'superseded')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    terms_state <> 'locked'
+    or (
+      review_period_start_at is not null
+      and review_period_end_at is not null
+      and review_period_end_at > review_period_start_at
+    )
+  )
+);
+
+comment on table public.moral_trade_compensated_action_terms is
+  'Frozen compensated moral-action terms: payer, performer, exact action, compensation, evidence burden, review period, and exit/remedy rule hashes before reliance-bearing lock.';
+
+create table if not exists public.moral_trade_ordinary_service_procurement_reviews (
+  id uuid primary key default gen_random_uuid(),
+  trade_classification_record_id uuid not null references public.moral_trade_trade_classification_records (id) on delete cascade,
+  review_state text not null default 'under_review' check (
+    review_state in ('not_required', 'under_review', 'ordinary_service_blocking', 'non_blocking', 'manual_review')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  reviewer_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  rationale_hash text not null check (rationale_hash ~ '^sha256:[a-f0-9]{64}$'),
+  ordinary_market_signal_bool boolean not null default false,
+  payer_moral_aim_necessary_bool boolean not null default false,
+  moral_prudential_asymmetry_bool boolean not null default false,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_ordinary_service_procurement_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (
+    review_state <> 'non_blocking'
+    or (
+      payer_moral_aim_necessary_bool = true
+      and moral_prudential_asymmetry_bool = true
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    review_state <> 'ordinary_service_blocking'
+    or ordinary_market_signal_bool = true
+  )
+);
+
+comment on table public.moral_trade_ordinary_service_procurement_reviews is
+  'Ordinary-service/procurement review records. If the same transaction would exist as ordinary service, procurement, or same-view matching without moral/prudential asymmetry, it is excluded from moral-trade-specific metrics.';
+
+create table if not exists public.moral_trade_trade_classification_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'payout_release',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_record_count integer not null default 0 check (required_record_count >= 0),
+  passing_record_count integer not null default 0 check (passing_record_count >= 0),
+  metric_eligible_record_count integer not null default 0 check (metric_eligible_record_count >= 0),
+  classification_record_count integer not null default 0 check (classification_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_transition_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_trade_classification_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_record_count <= classification_record_count),
+  check (metric_eligible_record_count <= classification_record_count),
+  check (lock_transition_allowed_bool = false),
+  check (payment_transition_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_trade_classification_enforcement_records is
+  'Append-only user-owned trade-classification enforcement records. A record stores normalized classification input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize lock, payment, payout, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_trade_classification_records_subject_idx
+  on public.moral_trade_trade_classification_records (subject_type, subject_ref, trade_classification, classification_state, created_at desc);
+create index if not exists moral_trade_trade_classification_records_policy_idx
+  on public.moral_trade_trade_classification_records (policy_snapshot_id, classification_state, reviewed_at desc);
+create index if not exists moral_trade_compensated_action_terms_classification_idx
+  on public.moral_trade_compensated_action_terms (trade_classification_record_id, terms_state);
+create index if not exists moral_trade_ordinary_service_reviews_state_idx
+  on public.moral_trade_ordinary_service_procurement_reviews (trade_classification_record_id, review_state, reviewed_at desc);
+create index if not exists moral_trade_trade_classification_enforcement_records_owner_status_idx
+  on public.moral_trade_trade_classification_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_trade_classification_enforcement_records_transition_status_idx
+  on public.moral_trade_trade_classification_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_trade_classification_enforcement_records_hash_idx
+  on public.moral_trade_trade_classification_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_trade_classification_records enable row level security;
+alter table public.moral_trade_compensated_action_terms enable row level security;
+alter table public.moral_trade_ordinary_service_procurement_reviews enable row level security;
+alter table public.moral_trade_trade_classification_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_trade_classification_enforcement_records_select_owner"
+  on public.moral_trade_trade_classification_enforcement_records;
+create policy "moral_trade_trade_classification_enforcement_records_select_owner"
+  on public.moral_trade_trade_classification_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_trade_classification_enforcement_records_insert_owner"
+  on public.moral_trade_trade_classification_enforcement_records;
+create policy "moral_trade_trade_classification_enforcement_records_insert_owner"
+  on public.moral_trade_trade_classification_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and lock_transition_allowed_bool = false
+    and payment_transition_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review'
+    )
+  );
+
+create table if not exists public.moral_trade_protective_assessment_records (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond',
+      'evidence_claim',
+      'side_agreement',
+      'recipient_choice',
+      'common_ground_budget',
+      'public_goods_round',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null,
+  assessment_dimension text not null check (
+    assessment_dimension in (
+      'negative_commitment_substitution',
+      'action_reversibility_high_stakes',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation',
+      'representative_authority',
+      'reporting_integrity_non_suppression',
+      'civil_rights_discrimination',
+      'participant_autonomy_undue_influence',
+      'confidentiality_privacy_rights',
+      'evidence_authenticity_synthetic_media',
+      'financial_crime_fraud_source_of_funds',
+      'agreement_non_transferability',
+      'regulated_goods_hazardous_activity',
+      'cyber_abuse_digital_systems_integrity',
+      'anti_corruption_process_integrity',
+      'least_intrusive_evidence',
+      'performance_bond_neutral_review'
+    )
+  ),
+  assessment_state text not null default 'under_review' check (
+    assessment_state in (
+      'not_triggered',
+      'required',
+      'under_review',
+      'non_blocking',
+      'blocked',
+      'not_required_for_stage',
+      'waived_by_neutral_review',
+      'stale',
+      'superseded',
+      'missing'
+    )
+  ),
+  risk_trigger text not null default 'unknown' check (
+    risk_trigger in ('none', 'possible', 'confirmed', 'rejected', 'unknown')
+  ),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  assessment_hash text not null check (assessment_hash ~ '^sha256:[a-f0-9]{64}$'),
+  user_facing_reason_category text not null,
+  evidence_plan_state text not null default 'under_review' check (
+    evidence_plan_state in (
+      'not_required_for_stage',
+      'least_intrusive_approved',
+      'high_burden_reviewer_approved',
+      'under_review',
+      'invasive_without_review',
+      'missing',
+      'stale',
+      'superseded'
+    )
+  ),
+  neutral_review_state text not null default 'under_review' check (
+    neutral_review_state in (
+      'not_required_for_stage',
+      'approved_neutral',
+      'under_review',
+      'counterparty_benefits',
+      'conflicted',
+      'missing',
+      'stale',
+      'superseded'
+    )
+  ),
+  reviewer_quality_state text not null default 'missing' check (
+    reviewer_quality_state in (
+      'authorized',
+      'not_required_for_stage',
+      'missing',
+      'out_of_scope',
+      'conflicted',
+      'stale',
+      'superseded'
+    )
+  ),
+  participant_notice_state text not null default 'missing' check (
+    participant_notice_state in ('sent', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  appeal_path_state text not null default 'missing' check (
+    appeal_path_state in ('available', 'not_required_for_stage', 'missing', 'emergency_only', 'stale')
+  ),
+  reviewed_at timestamptz not null default timezone('utc', now()),
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_protective_assessment_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, assessment_dimension, assessment_hash),
+  check (
+    assessment_state <> 'not_required_for_stage'
+    or risk_trigger in ('none', 'rejected')
+  ),
+  check (
+    assessment_state <> 'waived_by_neutral_review'
+    or neutral_review_state = 'approved_neutral'
+  )
+);
+
+comment on table public.moral_trade_protective_assessment_records is
+  'First-class MoralTrade60 protective assessment records. Donation offsets, pledge swaps, compensated actions, performance bonds, and side agreements fail closed before lock, payment, payout, public completion, or release promotion unless every required assessment is non-blocking, not required under a frozen policy, or neutral-review waived.';
+
+create index if not exists moral_trade_protective_assessment_subject_idx
+on public.moral_trade_protective_assessment_records (subject_type, subject_ref);
+
+create index if not exists moral_trade_protective_assessment_dimension_state_idx
+on public.moral_trade_protective_assessment_records (assessment_dimension, assessment_state);
+
+create table if not exists public.moral_trade_negative_commitment_scopes (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (subject_type in ('donation_offset', 'pledge_swap', 'compensated_moral_action')),
+  subject_ref text not null,
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  covered_action_hash text not null check (covered_action_hash ~ '^sha256:[a-f0-9]{64}$'),
+  time_window_hash text not null check (time_window_hash ~ '^sha256:[a-f0-9]{64}$'),
+  known_affiliates_substitutes_hash text not null check (known_affiliates_substitutes_hash ~ '^sha256:[a-f0-9]{64}$'),
+  excluded_de_minimis_conduct_hash text not null check (excluded_de_minimis_conduct_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_standard_hash text not null check (evidence_standard_hash ~ '^sha256:[a-f0-9]{64}$'),
+  abstention_confidence_state text not null default 'manual_review' check (
+    abstention_confidence_state in ('low', 'medium', 'high', 'manual_review', 'blocked')
+  ),
+  least_intrusive_evidence_state text not null default 'under_review' check (
+    least_intrusive_evidence_state in ('least_intrusive_approved', 'under_review', 'invasive_without_review', 'blocked')
+  ),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_action_reversibility_assessments (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (subject_type in ('pledge_swap', 'compensated_moral_action', 'performance_bond')),
+  subject_ref text not null,
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  reversibility_state text not null default 'under_review' check (
+    reversibility_state in ('reversible', 'partly_reversible', 'effectively_irreversible', 'under_review', 'blocked')
+  ),
+  high_stakes_bool boolean not null default false,
+  legal_review_state text not null default 'under_review' check (
+    legal_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'stale')
+  ),
+  externality_review_state text not null default 'under_review' check (
+    externality_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'stale')
+  ),
+  vulnerability_review_state text not null default 'under_review' check (
+    vulnerability_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'stale')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  check (
+    high_stakes_bool = false
+    or (
+      legal_review_state = 'passed'
+      and externality_review_state = 'passed'
+      and vulnerability_review_state = 'passed'
+    )
+  )
+);
+
+create table if not exists public.moral_trade_donor_of_record_tax_reviews (
+  id uuid primary key default gen_random_uuid(),
+  subject_type text not null check (subject_type in ('donation_offset', 'public_goods_round', 'common_ground_budget')),
+  subject_ref text not null,
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  donor_of_record_hash text not null check (donor_of_record_hash ~ '^sha256:[a-f0-9]{64}$'),
+  receipt_beneficiary_hash text not null check (receipt_beneficiary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  tax_benefit_claim_state text not null default 'not_claimed' check (
+    tax_benefit_claim_state in ('not_claimed', 'supported_by_policy', 'under_review', 'blocked')
+  ),
+  charitable_solicitation_review_state text not null default 'under_review' check (
+    charitable_solicitation_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'stale')
+  ),
+  double_claim_review_state text not null default 'under_review' check (
+    double_claim_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'stale')
+  ),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_authority_obligation_assessments (
+  id uuid primary key default gen_random_uuid(),
+  assessment_type text not null check (
+    assessment_type in ('third_party_obligation', 'representative_authority')
+  ),
+  subject_type text not null check (subject_type in ('donation_offset', 'pledge_swap', 'compensated_moral_action', 'side_agreement')),
+  subject_ref text not null,
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  authority_scope_hash text check (authority_scope_hash is null or authority_scope_hash ~ '^sha256:[a-f0-9]{64}$'),
+  obligations_hash text check (obligations_hash is null or obligations_hash ~ '^sha256:[a-f0-9]{64}$'),
+  conflict_review_state text not null default 'under_review' check (
+    conflict_review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'disputed', 'stale')
+  ),
+  review_state text not null default 'under_review' check (
+    review_state in ('not_required_for_stage', 'passed', 'under_review', 'blocked', 'disputed', 'stale')
+  ),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists moral_trade_negative_commitment_subject_idx
+on public.moral_trade_negative_commitment_scopes (subject_type, subject_ref);
+
+create index if not exists moral_trade_action_reversibility_subject_idx
+on public.moral_trade_action_reversibility_assessments (subject_type, subject_ref);
+
+create index if not exists moral_trade_donor_tax_subject_idx
+on public.moral_trade_donor_of_record_tax_reviews (subject_type, subject_ref);
+
+create index if not exists moral_trade_authority_obligation_subject_idx
+on public.moral_trade_authority_obligation_assessments (subject_type, subject_ref, assessment_type);
+
+alter table public.moral_trade_protective_assessment_records enable row level security;
+alter table public.moral_trade_negative_commitment_scopes enable row level security;
+alter table public.moral_trade_action_reversibility_assessments enable row level security;
+alter table public.moral_trade_donor_of_record_tax_reviews enable row level security;
+alter table public.moral_trade_authority_obligation_assessments enable row level security;
+
+create table if not exists public.moral_trade_protective_assessment_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'payout_release',
+      'public_completion_claim',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_dimension_count integer not null default 0 check (required_dimension_count >= 0),
+  passing_assessment_count integer not null default 0 check (passing_assessment_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  public_completion_claim_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_protective_assessment_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_assessment_count <= required_dimension_count),
+  check (required_dimension_count <= 64),
+  check (record_count <= 64),
+  check (draft_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (public_completion_claim_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_protective_assessment_enforcement_records is
+  'Append-only user-owned protective-assessment enforcement records. A record stores normalized protective assessment input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, matched-trade lock, payment capture, payout release, public completion, or release-gate promotion.';
+
+create index if not exists moral_trade_protective_assessment_enforcement_records_owner_status_idx
+  on public.moral_trade_protective_assessment_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_protective_assessment_enforcement_records_transition_status_idx
+  on public.moral_trade_protective_assessment_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_protective_assessment_enforcement_records_hash_idx
+  on public.moral_trade_protective_assessment_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_protective_assessment_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_protective_assessment_enforcement_records_select_owner"
+  on public.moral_trade_protective_assessment_enforcement_records;
+create policy "moral_trade_protective_assessment_enforcement_records_select_owner"
+  on public.moral_trade_protective_assessment_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_protective_assessment_enforcement_records_insert_owner"
+  on public.moral_trade_protective_assessment_enforcement_records;
+create policy "moral_trade_protective_assessment_enforcement_records_insert_owner"
+  on public.moral_trade_protective_assessment_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and public_completion_claim_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use'
+    )
+  );
+
+create table if not exists public.moral_trade_user_safety_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-user-safety-v0.1-2026-06',
+  surface text not null check (
+    surface in (
+      'contact_attempt',
+      'invite_link',
+      'profile_message',
+      'support_message',
+      'discussion_surface',
+      'reliance_bearing_preview',
+      'public_profile_amplification',
+      'release_gate_promotion'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  consent_required_bool boolean not null default true,
+  rate_limit_required_bool boolean not null default true,
+  block_decline_withdrawal_required_bool boolean not null default true,
+  abuse_report_resolution_required_bool boolean not null default true,
+  retaliation_prevention_required_bool boolean not null default true,
+  minor_vulnerable_contact_review_required_bool boolean not null default true,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_user_safety_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, surface)
+);
+
+comment on table public.moral_trade_user_safety_policies is
+  'Frozen user-safety policies for contact attempts, invite links, blocking, decline handling, abuse reporting, and retaliation prevention. Contact-enabling transitions fail closed without an immutable policy snapshot.';
+
+create table if not exists public.moral_trade_contact_interaction_records (
+  id uuid primary key default gen_random_uuid(),
+  user_safety_policy_ref uuid not null references public.moral_trade_user_safety_policies (id) on delete restrict,
+  interaction_type text not null check (
+    interaction_type in ('contact_attempt', 'invite_link', 'profile_message', 'support_message', 'discussion_surface')
+  ),
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'common_ground_budget',
+      'public_goods_round',
+      'profile',
+      'support_case',
+      'discussion_thread'
+    )
+  ),
+  subject_ref text not null,
+  status text not null default 'under_review' check (
+    status in ('non_blocking', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'serious_unresolved', 'stale', 'superseded')
+  ),
+  initiator_hash text not null check (initiator_hash ~ '^sha256:[a-f0-9]{64}$'),
+  recipient_hash text not null check (recipient_hash ~ '^sha256:[a-f0-9]{64}$'),
+  contact_channel_hash text not null check (contact_channel_hash ~ '^sha256:[a-f0-9]{64}$'),
+  contact_attempt_hash text not null check (contact_attempt_hash ~ '^sha256:[a-f0-9]{64}$'),
+  consent_status text not null default 'missing' check (
+    consent_status in ('consented', 'not_required_for_stage', 'missing', 'declined', 'blocked', 'withdrawn', 'stale')
+  ),
+  rate_limit_status text not null default 'missing' check (
+    rate_limit_status in ('within_limit', 'not_required_for_stage', 'missing', 'exceeded', 'stale')
+  ),
+  block_decline_withdrawal_status text not null default 'missing' check (
+    block_decline_withdrawal_status in ('respected', 'not_required_for_stage', 'missing', 'violated', 'stale')
+  ),
+  abuse_report_resolution_status text not null default 'none' check (
+    abuse_report_resolution_status in ('none', 'resolved_non_blocking', 'not_required_for_stage', 'missing', 'open', 'under_review', 'serious_unresolved', 'retaliation_risk', 'stale')
+  ),
+  retaliation_prevention_status text not null default 'missing' check (
+    retaliation_prevention_status in ('non_blocking', 'not_required_for_stage', 'missing', 'retaliation_risk', 'stale')
+  ),
+  contact_payload_stored_bool boolean not null default false,
+  private_message_public_bool boolean not null default false,
+  user_facing_reason_category text not null default 'Contact safety and abuse-report review',
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_contact_interaction_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (contact_payload_stored_bool = false),
+  check (private_message_public_bool = false),
+  check (
+    status <> 'non_blocking'
+    or (
+      consent_status in ('consented', 'not_required_for_stage')
+      and rate_limit_status in ('within_limit', 'not_required_for_stage')
+      and block_decline_withdrawal_status in ('respected', 'not_required_for_stage')
+      and abuse_report_resolution_status in ('none', 'resolved_non_blocking', 'not_required_for_stage')
+      and retaliation_prevention_status in ('non_blocking', 'not_required_for_stage')
+      and reviewed_at is not null
+      and private_message_public_bool = false
+    )
+  )
+);
+
+comment on table public.moral_trade_contact_interaction_records is
+  'First-class contact interaction records. User-initiated contact, invite links, profile messages, support messages, and discussion surfaces must respect consent, rate limits, blocks, declines, withdrawals, abuse reports, and non-retaliation before introductions or amplification.';
+
+create table if not exists public.moral_trade_abuse_report_records (
+  id uuid primary key default gen_random_uuid(),
+  user_safety_policy_ref uuid not null references public.moral_trade_user_safety_policies (id) on delete restrict,
+  contact_interaction_record_id uuid references public.moral_trade_contact_interaction_records (id) on delete set null,
+  subject_type text not null check (
+    subject_type in (
+      'contact_interaction',
+      'invite_link',
+      'profile',
+      'support_case',
+      'discussion_thread',
+      'offer',
+      'agreement',
+      'release_gate'
+    )
+  ),
+  subject_ref text not null,
+  reporter_hash text not null check (reporter_hash ~ '^sha256:[a-f0-9]{64}$'),
+  target_hash text not null check (target_hash ~ '^sha256:[a-f0-9]{64}$'),
+  severity text not null default 'medium' check (
+    severity in ('none', 'low', 'medium', 'serious', 'critical')
+  ),
+  resolution_status text not null default 'under_review' check (
+    resolution_status in ('none', 'resolved_non_blocking', 'not_required_for_stage', 'missing', 'open', 'under_review', 'serious_unresolved', 'retaliation_risk', 'stale')
+  ),
+  retaliation_risk_status text not null default 'missing' check (
+    retaliation_risk_status in ('non_blocking', 'not_required_for_stage', 'missing', 'retaliation_risk', 'stale')
+  ),
+  evidence_hash text not null check (evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  report_payload_public_bool boolean not null default false,
+  reporter_identity_public_bool boolean not null default false,
+  target_identity_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  resolved_at timestamptz,
+  superseded_by uuid references public.moral_trade_abuse_report_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (report_payload_public_bool = false),
+  check (reporter_identity_public_bool = false),
+  check (target_identity_public_bool = false),
+  check (
+    severity not in ('serious', 'critical')
+    or resolution_status in ('resolved_non_blocking', 'not_required_for_stage', 'serious_unresolved', 'under_review', 'open')
+  )
+);
+
+comment on table public.moral_trade_abuse_report_records is
+  'First-class abuse report records. Unresolved serious abuse reports block contact introductions, reliance-bearing previews, and public-profile amplification without exposing reporter or target identities.';
+
+create table if not exists public.moral_trade_content_moderation_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-content-moderation-v0.1-2026-06',
+  content_type text not null check (
+    content_type in (
+      'offer_text',
+      'template_text',
+      'profile_copy',
+      'public_description',
+      'evidence_filename_preview',
+      'reviewer_visible_note',
+      'invite_link_text',
+      'impact_claim_copy',
+      'contact_message',
+      'support_message',
+      'discussion_reply',
+      'abuse_report',
+      'appeal_text'
+    )
+  ),
+  status text not null default 'under_review' check (
+    status in ('approved', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  viewpoint_neutrality_required_bool boolean not null default true,
+  not_moral_ranking_bool boolean not null default true,
+  reviewer_quality_required_bool boolean not null default true,
+  prohibited_use_dimensions text[] not null default array[
+    'illegal_activity',
+    'coercion_threat',
+    'deception_fraud_impersonation',
+    'hate_harassment',
+    'doxxing_privacy_violation',
+    'self_harm_exploitation',
+    'malware_cyber_abuse',
+    'sexual_exploitation',
+    'extremist_or_terror_finance',
+    'spam_platform_abuse',
+    'viewpoint_neutrality'
+  ]::text[],
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_content_moderation_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, content_type),
+  check (not_moral_ranking_bool = true),
+  check (
+    prohibited_use_dimensions <@ array[
+      'illegal_activity',
+      'coercion_threat',
+      'deception_fraud_impersonation',
+      'hate_harassment',
+      'doxxing_privacy_violation',
+      'self_harm_exploitation',
+      'malware_cyber_abuse',
+      'sexual_exploitation',
+      'extremist_or_terror_finance',
+      'spam_platform_abuse',
+      'viewpoint_neutrality'
+    ]::text[]
+  )
+);
+
+comment on table public.moral_trade_content_moderation_policies is
+  'Frozen content-moderation and prohibited-use policies for public, reviewer-visible, reliance-bearing, payable, invite, support, discussion, and impact-claim copy. The policy is viewpoint-neutral and not a moral-ranking system.';
+
+create table if not exists public.moral_trade_content_moderation_records (
+  id uuid primary key default gen_random_uuid(),
+  content_moderation_policy_ref uuid not null references public.moral_trade_content_moderation_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offer',
+      'template',
+      'profile',
+      'public_description',
+      'evidence_preview',
+      'reviewer_note',
+      'invite_link',
+      'impact_claim',
+      'contact_message',
+      'support_message',
+      'discussion_reply',
+      'abuse_report',
+      'appeal'
+    )
+  ),
+  subject_ref text not null,
+  content_type text not null check (
+    content_type in (
+      'offer_text',
+      'template_text',
+      'profile_copy',
+      'public_description',
+      'evidence_filename_preview',
+      'reviewer_visible_note',
+      'invite_link_text',
+      'impact_claim_copy',
+      'contact_message',
+      'support_message',
+      'discussion_reply',
+      'abuse_report',
+      'appeal_text'
+    )
+  ),
+  moderation_status text not null default 'under_review' check (
+    moderation_status in ('approved', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  moderation_reason_code text not null default 'none' check (
+    moderation_reason_code in (
+      'none',
+      'illegal_activity',
+      'coercion_threat',
+      'deception_fraud_impersonation',
+      'hate_harassment',
+      'doxxing_privacy_violation',
+      'self_harm_exploitation',
+      'malware_cyber_abuse',
+      'sexual_exploitation',
+      'extremist_or_terror_finance',
+      'spam_platform_abuse',
+      'viewpoint_neutrality',
+      'unpopular_moral_view'
+    )
+  ),
+  prohibited_use_categories text[] not null default '{}'::text[] check (
+    prohibited_use_categories <@ array[
+      'illegal_activity',
+      'coercion_threat',
+      'deception_fraud_impersonation',
+      'hate_harassment',
+      'doxxing_privacy_violation',
+      'self_harm_exploitation',
+      'malware_cyber_abuse',
+      'sexual_exploitation',
+      'extremist_or_terror_finance',
+      'spam_platform_abuse',
+      'viewpoint_neutrality'
+    ]::text[]
+  ),
+  viewpoint_neutrality_status text not null default 'missing' check (
+    viewpoint_neutrality_status in ('confirmed_neutral', 'not_required_for_stage', 'missing', 'viewpoint_ranked', 'unpopular_view_blocked', 'stale')
+  ),
+  viewpoint_ranked_bool boolean not null default false,
+  content_hash text not null check (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_quality_status text not null default 'missing' check (
+    reviewer_quality_status in ('authorized', 'not_required_for_stage', 'missing', 'failed', 'stale')
+  ),
+  raw_content_stored_bool boolean not null default false,
+  raw_content_public_bool boolean not null default false,
+  user_facing_reason_category text not null default 'Content safety and prohibited-use review',
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_content_moderation_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (raw_content_public_bool = false),
+  check (viewpoint_ranked_bool = false),
+  check (
+    moderation_status <> 'approved'
+    or (
+      viewpoint_neutrality_status in ('confirmed_neutral', 'not_required_for_stage')
+      and reviewer_quality_status in ('authorized', 'not_required_for_stage')
+      and moderation_reason_code <> 'unpopular_moral_view'
+      and reviewed_at is not null
+      and raw_content_public_bool = false
+    )
+  )
+);
+
+comment on table public.moral_trade_content_moderation_records is
+  'First-class content-moderation and prohibited-use records. Public, reviewer-actionable, reliance-bearing, payable, invite, support, discussion, and impact-claim copy cannot proceed while missing, under review, blocked, stale, superseded, viewpoint-ranked, or blocked for an unpopular moral view.';
+
+create index if not exists moral_trade_user_safety_policies_surface_idx
+  on public.moral_trade_user_safety_policies (surface, status, created_at desc);
+
+create index if not exists moral_trade_contact_interaction_subject_idx
+  on public.moral_trade_contact_interaction_records (subject_type, subject_ref, interaction_type, status);
+
+create index if not exists moral_trade_contact_interaction_participant_hash_idx
+  on public.moral_trade_contact_interaction_records (initiator_hash, recipient_hash, created_at desc);
+
+create index if not exists moral_trade_abuse_report_subject_idx
+  on public.moral_trade_abuse_report_records (subject_type, subject_ref, severity, resolution_status);
+
+create index if not exists moral_trade_abuse_report_target_idx
+  on public.moral_trade_abuse_report_records (target_hash, severity, resolution_status, created_at desc);
+
+create index if not exists moral_trade_content_moderation_policies_type_idx
+  on public.moral_trade_content_moderation_policies (content_type, status, created_at desc);
+
+create index if not exists moral_trade_content_moderation_records_subject_idx
+  on public.moral_trade_content_moderation_records (subject_type, subject_ref, content_type, moderation_status);
+
+create index if not exists moral_trade_content_moderation_records_hash_idx
+  on public.moral_trade_content_moderation_records (content_hash, moderation_status, created_at desc);
+
+alter table public.moral_trade_user_safety_policies enable row level security;
+alter table public.moral_trade_contact_interaction_records enable row level security;
+alter table public.moral_trade_abuse_report_records enable row level security;
+alter table public.moral_trade_content_moderation_policies enable row level security;
+alter table public.moral_trade_content_moderation_records enable row level security;
+
+create table if not exists public.moral_trade_user_safety_content_moderation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'public_publication',
+      'reviewer_actionable',
+      'contact_introduction',
+      'invite_link_creation',
+      'reliance_bearing_preview',
+      'payment_capture',
+      'public_profile_amplification',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_content_type_count integer not null default 0 check (required_content_type_count >= 0),
+  required_user_safety_dimension_count integer not null default 0 check (required_user_safety_dimension_count >= 0),
+  passing_moderation_count integer not null default 0 check (passing_moderation_count >= 0),
+  passing_user_safety_count integer not null default 0 check (passing_user_safety_count >= 0),
+  moderation_record_count integer not null default 0 check (moderation_record_count >= 0),
+  user_safety_record_count integer not null default 0 check (user_safety_record_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  public_publication_allowed_bool boolean not null default false,
+  reviewer_actionable_allowed_bool boolean not null default false,
+  contact_introduction_allowed_bool boolean not null default false,
+  invite_link_creation_allowed_bool boolean not null default false,
+  reliance_bearing_preview_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_profile_amplification_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_user_safety_content_moderation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_moderation_count <= required_content_type_count),
+  check (passing_user_safety_count <= required_user_safety_dimension_count),
+  check (moderation_record_count <= 96),
+  check (user_safety_record_count <= 96),
+  check (draft_preview_allowed_bool = false),
+  check (public_publication_allowed_bool = false),
+  check (reviewer_actionable_allowed_bool = false),
+  check (contact_introduction_allowed_bool = false),
+  check (invite_link_creation_allowed_bool = false),
+  check (reliance_bearing_preview_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_profile_amplification_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_user_safety_content_moderation_enforcement_records is
+  'Append-only user-owned user-safety/content-moderation enforcement records. A record stores normalized safety and moderation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize public publication, reviewer actionability, contact introduction, invite-link creation, reliance-bearing preview, payment capture, profile amplification, or release-gate promotion.';
+
+create index if not exists mt_user_safety_moderation_enforce_owner_status_idx
+  on public.moral_trade_user_safety_content_moderation_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_user_safety_moderation_enforce_transition_idx
+  on public.moral_trade_user_safety_content_moderation_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists mt_user_safety_moderation_enforce_hash_idx
+  on public.moral_trade_user_safety_content_moderation_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_user_safety_content_moderation_enforcement_records enable row level security;
+
+drop policy if exists "mt_user_safety_moderation_enforce_select_owner"
+  on public.moral_trade_user_safety_content_moderation_enforcement_records;
+create policy "mt_user_safety_moderation_enforce_select_owner"
+  on public.moral_trade_user_safety_content_moderation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_user_safety_moderation_enforce_insert_owner"
+  on public.moral_trade_user_safety_content_moderation_enforcement_records;
+create policy "mt_user_safety_moderation_enforce_insert_owner"
+  on public.moral_trade_user_safety_content_moderation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and public_publication_allowed_bool = false
+    and reviewer_actionable_allowed_bool = false
+    and contact_introduction_allowed_bool = false
+    and invite_link_creation_allowed_bool = false
+    and reliance_bearing_preview_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_profile_amplification_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone'
+    )
+  );
+
+create table if not exists public.moral_trade_platform_fee_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-platform-fee-v0.1-2026-06',
+  surface text not null check (
+    surface in ('public_preview', 'matched_trade_lock', 'payment_authorization', 'payment_capture', 'payout_milestone_release', 'public_metric_publication')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  fee_disclosure_required_bool boolean not null default true,
+  moral_volume_exclusion_required_bool boolean not null default true,
+  qf_signal_exclusion_required_bool boolean not null default true,
+  threshold_progress_exclusion_required_bool boolean not null default true,
+  impact_claim_exclusion_required_bool boolean not null default true,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_platform_fee_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, surface),
+  check (fee_disclosure_required_bool = true),
+  check (moral_volume_exclusion_required_bool = true),
+  check (qf_signal_exclusion_required_bool = true),
+  check (threshold_progress_exclusion_required_bool = true),
+  check (impact_claim_exclusion_required_bool = true)
+);
+
+comment on table public.moral_trade_platform_fee_policies is
+  'Frozen platform-fee policies. Fees must be displayed separately and excluded from moral-trade volume, threshold progress, QF signal, and recipient-impact claims.';
+
+create table if not exists public.moral_trade_platform_fee_disclosures (
+  id uuid primary key default gen_random_uuid(),
+  platform_fee_policy_ref uuid not null references public.moral_trade_platform_fee_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'payout_milestone', 'release_gate')
+  ),
+  subject_ref text not null,
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  amount_cents integer not null default 0 check (amount_cents >= 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  currency_status text not null default 'missing' check (
+    currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage', 'missing', 'currency_mismatch', 'stale')
+  ),
+  fee_disclosure_status text not null default 'missing' check (
+    fee_disclosure_status in ('displayed_separately', 'not_required_for_stage', 'missing', 'bundled_into_moral_volume', 'stale')
+  ),
+  metric_exclusion_status text not null default 'missing' check (
+    metric_exclusion_status in ('excluded', 'not_required_for_stage', 'missing', 'included_in_moral_volume', 'included_in_qf_signal', 'included_in_threshold_progress', 'included_in_impact_claim', 'stale')
+  ),
+  fee_amount_hash text not null check (fee_amount_hash ~ '^sha256:[a-f0-9]{64}$'),
+  display_snapshot_hash text not null check (display_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_specific_fee_payment_record_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_platform_fee_disclosures (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (participant_specific_fee_payment_record_public_bool = false),
+  check (
+    status <> 'passed'
+    or (
+      currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage')
+      and fee_disclosure_status in ('displayed_separately', 'not_required_for_stage')
+      and metric_exclusion_status in ('excluded', 'not_required_for_stage')
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_platform_fee_disclosures is
+  'First-class platform-fee disclosure records. A fee cannot be bundled into moral volume, threshold progress, QF signal, or recipient-impact claims.';
+
+create table if not exists public.moral_trade_fx_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-fx-v0.1-2026-06',
+  surface text not null check (
+    surface in ('public_preview', 'matched_trade_lock', 'payment_authorization', 'payment_capture', 'payout_milestone_release', 'public_metric_publication')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  rate_snapshot_required_bool boolean not null default true,
+  spread_disclosure_required_bool boolean not null default true,
+  conversion_fee_disclosure_required_bool boolean not null default true,
+  metric_exclusion_required_bool boolean not null default true,
+  raw_fx_provider_payload_public_bool boolean not null default false,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_fx_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, surface),
+  check (rate_snapshot_required_bool = true),
+  check (spread_disclosure_required_bool = true),
+  check (conversion_fee_disclosure_required_bool = true),
+  check (metric_exclusion_required_bool = true),
+  check (raw_fx_provider_payload_public_bool = false)
+);
+
+comment on table public.moral_trade_fx_policies is
+  'Frozen FX policies requiring rate snapshots, separate spread/conversion-fee display, metric exclusion, and no public raw provider payloads.';
+
+create table if not exists public.moral_trade_fx_rate_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  fx_policy_ref uuid not null references public.moral_trade_fx_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'payout_milestone', 'release_gate')
+  ),
+  subject_ref text not null,
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  source_currency text not null check (source_currency ~ '^[a-z]{3}$'),
+  settlement_currency text not null check (settlement_currency ~ '^[a-z]{3}$'),
+  currency_status text not null default 'missing' check (
+    currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage', 'missing', 'currency_mismatch', 'stale')
+  ),
+  fx_snapshot_status text not null default 'missing' check (
+    fx_snapshot_status in ('snapshot_current', 'not_required_for_stage', 'missing', 'expired', 'spread_hidden', 'fee_not_separated', 'stale')
+  ),
+  fee_disclosure_status text not null default 'missing' check (
+    fee_disclosure_status in ('displayed_separately', 'not_required_for_stage', 'missing', 'bundled_into_moral_volume', 'stale')
+  ),
+  metric_exclusion_status text not null default 'missing' check (
+    metric_exclusion_status in ('excluded', 'not_required_for_stage', 'missing', 'included_in_moral_volume', 'included_in_qf_signal', 'included_in_threshold_progress', 'included_in_impact_claim', 'stale')
+  ),
+  rate_snapshot_hash text not null check (rate_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  spread_bps integer not null default 0 check (spread_bps >= 0),
+  conversion_fee_cents integer not null default 0 check (conversion_fee_cents >= 0),
+  quoted_at timestamptz not null,
+  quote_expires_at timestamptz not null,
+  raw_fx_provider_payload_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_fx_rate_snapshots (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (quote_expires_at > quoted_at),
+  check (raw_fx_provider_payload_public_bool = false),
+  check (
+    status <> 'passed'
+    or (
+      currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage')
+      and fx_snapshot_status in ('snapshot_current', 'not_required_for_stage')
+      and fee_disclosure_status in ('displayed_separately', 'not_required_for_stage')
+      and metric_exclusion_status in ('excluded', 'not_required_for_stage')
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_fx_rate_snapshots is
+  'First-class FX snapshots. FX spreads and conversion fees are displayed separately and excluded from moral metrics before preview, lock, capture, payout, or public metrics.';
+
+create table if not exists public.moral_trade_notification_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-notification-v0.1-2026-06',
+  notice_surface text not null check (
+    notice_surface in ('material_terms_change', 'challenge_window', 'dispute_deadline', 'renewed_confirmation', 'emergency_pause', 'payout_release_opportunity')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  recorded_notice_required_bool boolean not null default true,
+  confirmed_delivery_required_bool boolean not null default true,
+  rights_loss_without_notice_forbidden_bool boolean not null default true,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_notification_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, notice_surface),
+  check (recorded_notice_required_bool = true),
+  check (confirmed_delivery_required_bool = true),
+  check (rights_loss_without_notice_forbidden_bool = true)
+);
+
+create table if not exists public.moral_trade_material_notice_records (
+  id uuid primary key default gen_random_uuid(),
+  notification_policy_ref uuid not null references public.moral_trade_notification_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'challenge_window', 'payout_milestone', 'release_gate')
+  ),
+  subject_ref text not null,
+  notice_kind text not null check (
+    notice_kind in ('material_terms_change', 'challenge_window', 'dispute_deadline', 'renewed_confirmation', 'emergency_pause', 'payout_release_opportunity')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  notice_delivery_status text not null default 'missing' check (
+    notice_delivery_status in ('delivered_confirmed', 'not_required_for_stage', 'missing', 'failed', 'unconfirmed_channel', 'stale')
+  ),
+  participant_hash text not null check (participant_hash ~ '^sha256:[a-f0-9]{64}$'),
+  counterparty_hash text check (counterparty_hash is null or counterparty_hash ~ '^sha256:[a-f0-9]{64}$'),
+  channel_hash text not null check (channel_hash ~ '^sha256:[a-f0-9]{64}$'),
+  notice_hash text not null check (notice_hash ~ '^sha256:[a-f0-9]{64}$'),
+  delivered_at timestamptz,
+  confirmed_at timestamptz,
+  rights_loss_allowed_bool boolean not null default false,
+  raw_notice_payload_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_material_notice_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (rights_loss_allowed_bool = false),
+  check (raw_notice_payload_public_bool = false),
+  check (
+    notice_delivery_status <> 'delivered_confirmed'
+    or (delivered_at is not null and confirmed_at is not null)
+  ),
+  check (
+    status <> 'passed'
+    or (
+      notice_delivery_status in ('delivered_confirmed', 'not_required_for_stage')
+      and rights_loss_allowed_bool = false
+      and raw_notice_payload_public_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_material_notice_records is
+  'Recorded material notices for challenge windows, disputes, renewed confirmations, emergency pauses, and payout-release opportunities. Missing or failed notice cannot remove participant rights.';
+
+create table if not exists public.moral_trade_time_authority_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null default 'moral-trade-time-authority-v0.1-2026-06',
+  deadline_surface text not null check (
+    deadline_surface in ('challenge_window', 'dispute_deadline', 'lock_time', 'confirmation_expiry', 'fx_quote_expiry', 'authorization_expiry', 'cancellation_window', 'release_gate_time_limit')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  server_time_required_bool boolean not null default true,
+  client_clock_forbidden_bool boolean not null default true,
+  mutable_display_time_forbidden_bool boolean not null default true,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_time_authority_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (policy_snapshot_id, deadline_surface),
+  check (server_time_required_bool = true),
+  check (client_clock_forbidden_bool = true),
+  check (mutable_display_time_forbidden_bool = true)
+);
+
+create table if not exists public.moral_trade_deadline_records (
+  id uuid primary key default gen_random_uuid(),
+  time_authority_policy_ref uuid not null references public.moral_trade_time_authority_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'challenge_window', 'payout_milestone', 'release_gate')
+  ),
+  subject_ref text not null,
+  deadline_kind text not null check (
+    deadline_kind in ('challenge_window', 'dispute_deadline', 'lock_time', 'confirmation_expiry', 'fx_quote_expiry', 'authorization_expiry', 'cancellation_window', 'release_gate_time_limit')
+  ),
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  time_authority_status text not null default 'missing' check (
+    time_authority_status in ('server_authoritative', 'not_required_for_stage', 'missing', 'client_clock_used', 'unsynchronized_job', 'mutable_display_time', 'stale')
+  ),
+  server_computed_at timestamptz not null default timezone('utc', now()),
+  server_deadline_at timestamptz not null,
+  client_clock_used_bool boolean not null default false,
+  mutable_display_time_authoritative_bool boolean not null default false,
+  deadline_hash text not null check (deadline_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_deadline_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (server_deadline_at > server_computed_at),
+  check (client_clock_used_bool = false),
+  check (mutable_display_time_authoritative_bool = false),
+  check (
+    status <> 'passed'
+    or (
+      time_authority_status in ('server_authoritative', 'not_required_for_stage')
+      and client_clock_used_bool = false
+      and mutable_display_time_authoritative_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_deadline_records is
+  'Server-side deadline records for lock times, challenge windows, confirmation expiry, FX quotes, authorizations, cancellation windows, and release-gate time limits.';
+
+create table if not exists public.moral_trade_challenge_window_records (
+  id uuid primary key default gen_random_uuid(),
+  material_notice_record_id uuid references public.moral_trade_material_notice_records (id) on delete restrict,
+  deadline_record_id uuid not null references public.moral_trade_deadline_records (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'payout_milestone', 'release_gate')
+  ),
+  subject_ref text not null,
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  challenge_window_status text not null default 'missing' check (
+    challenge_window_status in ('open_or_not_required', 'closed_after_notice', 'not_required_for_stage', 'missing', 'expired_without_notice', 'defaulted_against_participant', 'stale')
+  ),
+  notice_delivery_status text not null default 'missing' check (
+    notice_delivery_status in ('delivered_confirmed', 'not_required_for_stage', 'missing', 'failed', 'unconfirmed_channel', 'stale')
+  ),
+  time_authority_status text not null default 'missing' check (
+    time_authority_status in ('server_authoritative', 'not_required_for_stage', 'missing', 'client_clock_used', 'unsynchronized_job', 'mutable_display_time', 'stale')
+  ),
+  opened_at timestamptz not null,
+  closes_at timestamptz not null,
+  closed_at timestamptz,
+  default_against_participant_bool boolean not null default false,
+  participant_right_loss_allowed_bool boolean not null default false,
+  challenge_record_hash text not null check (challenge_record_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  superseded_by uuid references public.moral_trade_challenge_window_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (closes_at > opened_at),
+  check (default_against_participant_bool = false),
+  check (participant_right_loss_allowed_bool = false),
+  check (
+    status <> 'passed'
+    or (
+      challenge_window_status in ('open_or_not_required', 'closed_after_notice', 'not_required_for_stage')
+      and notice_delivery_status in ('delivered_confirmed', 'not_required_for_stage')
+      and time_authority_status in ('server_authoritative', 'not_required_for_stage')
+      and default_against_participant_bool = false
+      and participant_right_loss_allowed_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_challenge_window_records is
+  'First-class challenge-window records. Defaults and timeouts cannot run against a participant from missing notice, failed notice, client clocks, or mutable display strings.';
+
+create table if not exists public.moral_trade_payout_milestone_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  challenge_window_record_id uuid references public.moral_trade_challenge_window_records (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('donation_offset', 'pledge_swap', 'common_ground_budget', 'public_goods_round', 'payment_event', 'release_gate')
+  ),
+  subject_ref text not null,
+  milestone_ref text not null,
+  status text not null default 'under_review' check (
+    status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  amount_cents integer not null check (amount_cents >= 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  currency_status text not null default 'missing' check (
+    currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage', 'missing', 'currency_mismatch', 'stale')
+  ),
+  payout_milestone_status text not null default 'under_review' check (
+    payout_milestone_status in ('releasable', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'destination_mismatch', 'evidence_missing', 'challenge_open', 'stale', 'superseded')
+  ),
+  evidence_status text not null default 'missing' check (
+    evidence_status in ('claim_typed_evidence_passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale')
+  ),
+  destination_status text not null default 'missing' check (
+    destination_status in ('verified_destination_bound', 'not_required_for_stage', 'missing', 'unverified', 'changed_after_lock', 'stale')
+  ),
+  challenge_window_status text not null default 'missing' check (
+    challenge_window_status in ('open_or_not_required', 'closed_after_notice', 'not_required_for_stage', 'missing', 'expired_without_notice', 'defaulted_against_participant', 'stale')
+  ),
+  destination_hash text not null check (destination_hash ~ '^sha256:[a-f0-9]{64}$'),
+  required_claim_typed_evidence_hash text not null check (required_claim_typed_evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_decision_hash text not null check (reviewer_decision_hash ~ '^sha256:[a-f0-9]{64}$'),
+  release_payment_event_hash text check (release_payment_event_hash is null or release_payment_event_hash ~ '^sha256:[a-f0-9]{64}$'),
+  payment_credentials_public_bool boolean not null default false,
+  raw_evidence_public_bool boolean not null default false,
+  private_provider_settlement_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  released_at timestamptz,
+  superseded_by uuid references public.moral_trade_payout_milestone_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, milestone_ref),
+  check (payment_credentials_public_bool = false),
+  check (raw_evidence_public_bool = false),
+  check (private_provider_settlement_public_bool = false),
+  check (
+    status <> 'passed'
+    or (
+      currency_status in ('explicit_currency', 'inherits_settlement_currency', 'not_required_for_stage')
+      and payout_milestone_status in ('releasable', 'not_required_for_stage')
+      and evidence_status in ('claim_typed_evidence_passed', 'not_required_for_stage')
+      and destination_status in ('verified_destination_bound', 'not_required_for_stage')
+      and challenge_window_status in ('closed_after_notice', 'not_required_for_stage')
+      and payment_credentials_public_bool = false
+      and raw_evidence_public_bool = false
+      and private_provider_settlement_public_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_payout_milestone_records is
+  'Staged payout milestone records. Release requires the frozen payout plan, claim-typed evidence, closed or waived challenge window, verified destination, and no public payment credentials or private settlement artifacts.';
+
+create index if not exists moral_trade_platform_fee_policies_surface_idx
+  on public.moral_trade_platform_fee_policies (surface, status, created_at desc);
+
+create index if not exists moral_trade_platform_fee_disclosures_subject_idx
+  on public.moral_trade_platform_fee_disclosures (subject_type, subject_ref, status);
+
+create index if not exists moral_trade_fx_policies_surface_idx
+  on public.moral_trade_fx_policies (surface, status, created_at desc);
+
+create index if not exists moral_trade_fx_rate_snapshots_subject_idx
+  on public.moral_trade_fx_rate_snapshots (subject_type, subject_ref, status, quote_expires_at);
+
+create index if not exists moral_trade_notification_policies_surface_idx
+  on public.moral_trade_notification_policies (notice_surface, status, created_at desc);
+
+create index if not exists moral_trade_material_notice_subject_idx
+  on public.moral_trade_material_notice_records (subject_type, subject_ref, notice_kind, notice_delivery_status);
+
+create index if not exists moral_trade_time_authority_policies_surface_idx
+  on public.moral_trade_time_authority_policies (deadline_surface, status, created_at desc);
+
+create index if not exists moral_trade_deadline_records_subject_idx
+  on public.moral_trade_deadline_records (subject_type, subject_ref, deadline_kind, server_deadline_at);
+
+create index if not exists moral_trade_challenge_window_subject_idx
+  on public.moral_trade_challenge_window_records (subject_type, subject_ref, challenge_window_status, closes_at);
+
+create index if not exists moral_trade_payout_milestone_subject_idx
+  on public.moral_trade_payout_milestone_records (subject_type, subject_ref, milestone_ref, payout_milestone_status);
+
+alter table public.moral_trade_platform_fee_policies enable row level security;
+alter table public.moral_trade_platform_fee_disclosures enable row level security;
+alter table public.moral_trade_fx_policies enable row level security;
+alter table public.moral_trade_fx_rate_snapshots enable row level security;
+alter table public.moral_trade_notification_policies enable row level security;
+alter table public.moral_trade_material_notice_records enable row level security;
+alter table public.moral_trade_time_authority_policies enable row level security;
+alter table public.moral_trade_deadline_records enable row level security;
+alter table public.moral_trade_challenge_window_records enable row level security;
+alter table public.moral_trade_payout_milestone_records enable row level security;
+
+create table if not exists public.moral_trade_financial_settlement_control_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'public_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'challenge_window_default',
+      'payout_milestone_release',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_control_count integer not null default 0 check (required_control_count >= 0),
+  passing_control_count integer not null default 0 check (passing_control_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  public_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  challenge_window_default_allowed_bool boolean not null default false,
+  payout_milestone_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_financial_settlement_control_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_control_count <= required_control_count),
+  check (record_count <= 64),
+  check (draft_preview_allowed_bool = false),
+  check (public_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (challenge_window_default_allowed_bool = false),
+  check (payout_milestone_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_financial_settlement_control_enforcement_records is
+  'Append-only user-owned financial-settlement control enforcement records. A record stores normalized settlement control input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize public preview, matched-trade lock, payment authorization, payment capture, challenge-window default, payout milestone release, public metric publication, or release-gate promotion.';
+
+create index if not exists mt_fin_settlement_control_enforce_owner_status_idx
+  on public.moral_trade_financial_settlement_control_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists mt_fin_settlement_control_enforce_transition_idx
+  on public.moral_trade_financial_settlement_control_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists mt_fin_settlement_control_enforce_hash_idx
+  on public.moral_trade_financial_settlement_control_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_financial_settlement_control_enforcement_records enable row level security;
+
+drop policy if exists "mt_fin_settlement_control_enforce_select_owner"
+  on public.moral_trade_financial_settlement_control_enforcement_records;
+create policy "mt_fin_settlement_control_enforce_select_owner"
+  on public.moral_trade_financial_settlement_control_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "mt_fin_settlement_control_enforce_insert_owner"
+  on public.moral_trade_financial_settlement_control_enforcement_records;
+create policy "mt_fin_settlement_control_enforce_insert_owner"
+  on public.moral_trade_financial_settlement_control_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and public_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and challenge_window_default_allowed_bool = false
+    and payout_milestone_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter'
+    )
+  );
+
+create table if not exists public.moral_trade_template_parameter_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  template_slug text not null,
+  template_version text not null,
+  trade_type text not null check (
+    trade_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond_condition',
+      'side_agreement'
+    )
+  ),
+  allowed_recipient_destination_classes text[] not null default '{}',
+  eligible_cause_bucket_refs text[] not null default '{}',
+  allowed_evidence_claim_types text[] not null default '{}',
+  challenge_window_policy_ref text,
+  cancellation_rule_ref text,
+  required_control_pack_ref text,
+  prohibited_parameter_codes_json jsonb not null default '[]'::jsonb,
+  off_template_behavior text not null default 'block' check (
+    off_template_behavior in ('block', 'preview_only', 'manual_review')
+  ),
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_template_parameter_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (template_slug, template_version),
+  check (jsonb_typeof(prohibited_parameter_codes_json) = 'array'),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      cardinality(allowed_recipient_destination_classes) > 0
+      and cardinality(eligible_cause_bucket_refs) > 0
+      and cardinality(allowed_evidence_claim_types) > 0
+      and challenge_window_policy_ref is not null
+      and cancellation_rule_ref is not null
+      and required_control_pack_ref is not null
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_template_parameter_policies is
+  'Immutable approved-template parameter policies. Reliance-bearing Moral Trade offers must freeze recipient/destination class, cause buckets, evidence claim types, challenge windows, cancellation rules, and control-pack references before lock, payment, reliance, or public metrics.';
+
+create table if not exists public.moral_trade_approved_trade_templates (
+  id uuid primary key default gen_random_uuid(),
+  template_parameter_policy_id uuid not null references public.moral_trade_template_parameter_policies (id) on delete restrict,
+  template_slug text not null,
+  template_version text not null,
+  trade_type text not null check (
+    trade_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond_condition',
+      'side_agreement'
+    )
+  ),
+  template_state text not null default 'draft' check (
+    template_state in ('draft', 'active', 'deprecated', 'superseded', 'blocked')
+  ),
+  template_summary_hash text not null check (template_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_approved_trade_templates (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (template_slug, template_version),
+  check (
+    template_state <> 'active'
+    or (reviewed_at is not null and expires_at is not null)
+  )
+);
+
+comment on table public.moral_trade_approved_trade_templates is
+  'First-class approved trade templates for donation offsets, pledge swaps, compensated moral actions, performance-bond conditions, and side agreements. Draft, deprecated, superseded, or blocked templates cannot support live, payable, reliance-bearing, or public-metric transitions.';
+
+create table if not exists public.moral_trade_template_instance_records (
+  id uuid primary key default gen_random_uuid(),
+  approved_trade_template_id uuid not null references public.moral_trade_approved_trade_templates (id) on delete restrict,
+  template_parameter_policy_id uuid not null references public.moral_trade_template_parameter_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'seed_template',
+      'worked_example'
+    )
+  ),
+  subject_ref text not null,
+  submitted_parameter_hash text not null check (submitted_parameter_hash ~ '^sha256:[a-f0-9]{64}$'),
+  normalized_parameter_hash text not null check (normalized_parameter_hash ~ '^sha256:[a-f0-9]{64}$'),
+  conformance_state text not null default 'draft' check (
+    conformance_state in (
+      'draft',
+      'conforms',
+      'off_template_preview_only',
+      'off_template_manual_review',
+      'blocked',
+      'superseded'
+    )
+  ),
+  off_template_reason_codes_json jsonb not null default '[]'::jsonb,
+  free_text_creates_new_obligations_bool boolean not null default false,
+  free_text_creates_new_evidence_standards_bool boolean not null default false,
+  free_text_creates_side_payments_bool boolean not null default false,
+  free_text_creates_new_counterparties_bool boolean not null default false,
+  neutral_reviewer_decision_id uuid references public.moral_trade_review_decisions (id) on delete set null,
+  renewed_participant_confirmation_id uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_template_instance_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, approved_trade_template_id),
+  check (jsonb_typeof(off_template_reason_codes_json) = 'array'),
+  check (
+    conformance_state <> 'conforms'
+    or (
+      free_text_creates_new_obligations_bool = false
+      and free_text_creates_new_evidence_standards_bool = false
+      and free_text_creates_side_payments_bool = false
+      and free_text_creates_new_counterparties_bool = false
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    conformance_state <> 'off_template_manual_review'
+    or (
+      neutral_reviewer_decision_id is not null
+      and renewed_participant_confirmation_id is not null
+      and free_text_creates_new_obligations_bool = false
+      and free_text_creates_new_evidence_standards_bool = false
+      and free_text_creates_side_payments_bool = false
+      and free_text_creates_new_counterparties_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_template_instance_records is
+  'Subject-specific template conformance records. User free text cannot create new obligations, evidence standards, side payments, or counterparties; off-template reliance requires neutral review and renewed participant confirmation.';
+
+create table if not exists public.moral_trade_template_conformance_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'live_offer_publication',
+      'matched_trade_lock',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_instance_count integer not null default 0 check (required_instance_count >= 0),
+  passing_instance_count integer not null default 0 check (passing_instance_count >= 0),
+  conforming_instance_count integer not null default 0 check (conforming_instance_count >= 0),
+  off_template_exception_count integer not null default 0 check (off_template_exception_count >= 0),
+  template_record_count integer not null default 0 check (template_record_count >= 0),
+  template_instance_record_count integer not null default 0 check (template_instance_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  live_publication_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_transition_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_template_conformance_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (passing_instance_count <= template_instance_record_count),
+  check (conforming_instance_count <= template_instance_record_count),
+  check (off_template_exception_count <= template_instance_record_count),
+  check (live_publication_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (payment_transition_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_template_conformance_enforcement_records is
+  'Append-only user-owned template-conformance enforcement records. A record stores normalized approved-template and template-instance evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize live publication, lock, payment, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_template_parameter_policies_template_idx
+  on public.moral_trade_template_parameter_policies (template_slug, template_version, policy_status);
+
+create index if not exists moral_trade_approved_trade_templates_state_idx
+  on public.moral_trade_approved_trade_templates (template_slug, template_version, trade_type, template_state);
+
+create index if not exists moral_trade_template_instance_records_subject_idx
+  on public.moral_trade_template_instance_records (subject_type, subject_ref, conformance_state, created_at desc);
+
+create index if not exists moral_trade_template_instance_records_template_idx
+  on public.moral_trade_template_instance_records (approved_trade_template_id, conformance_state, reviewed_at desc);
+create index if not exists moral_trade_template_conformance_enforcement_records_owner_status_idx
+  on public.moral_trade_template_conformance_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_template_conformance_enforcement_records_transition_status_idx
+  on public.moral_trade_template_conformance_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_template_conformance_enforcement_records_hash_idx
+  on public.moral_trade_template_conformance_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_template_parameter_policies enable row level security;
+alter table public.moral_trade_approved_trade_templates enable row level security;
+alter table public.moral_trade_template_instance_records enable row level security;
+alter table public.moral_trade_template_conformance_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_template_conformance_enforcement_records_select_owner"
+  on public.moral_trade_template_conformance_enforcement_records;
+create policy "moral_trade_template_conformance_enforcement_records_select_owner"
+  on public.moral_trade_template_conformance_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_template_conformance_enforcement_records_insert_owner"
+  on public.moral_trade_template_conformance_enforcement_records;
+create policy "moral_trade_template_conformance_enforcement_records_insert_owner"
+  on public.moral_trade_template_conformance_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and live_publication_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and payment_transition_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission'
+    )
+  );
+
+create table if not exists public.moral_trade_review_capacity_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  release_stage text not null,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond_condition',
+      'side_agreement',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  max_open_queue_depth integer not null check (max_open_queue_depth >= 0),
+  max_estimated_wait_days integer not null check (max_estimated_wait_days >= 0),
+  min_eligible_reviewer_count integer not null check (min_eligible_reviewer_count >= 0),
+  neutral_panel_required_bool boolean not null default false,
+  max_baseline_age_days integer not null check (max_baseline_age_days >= 0),
+  max_payment_authorization_age_days integer not null check (max_payment_authorization_age_days >= 0),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_review_capacity_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (release_stage, subject_type, policy_snapshot_id),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      max_open_queue_depth > 0
+      and max_estimated_wait_days > 0
+      and min_eligible_reviewer_count > 0
+      and max_baseline_age_days > 0
+      and max_payment_authorization_age_days > 0
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_review_capacity_policies is
+  'Frozen review-capacity policies for non-public-goods release stages. Live, matchable, payable, reliance-bearing, and public-metric transitions must fail closed when review capacity, reviewer eligibility, neutral-panel requirements, or freshness windows are missing or stale.';
+
+create table if not exists public.moral_trade_review_queue_records (
+  id uuid primary key default gen_random_uuid(),
+  review_capacity_policy_id uuid not null references public.moral_trade_review_capacity_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'performance_bond_condition',
+      'side_agreement',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null,
+  queue_state text not null default 'preview_only' check (
+    queue_state in ('preview_only', 'admitted', 'waitlisted', 'expired', 'blocked', 'superseded')
+  ),
+  queue_position integer check (queue_position is null or queue_position > 0),
+  open_queue_depth integer not null default 0 check (open_queue_depth >= 0),
+  eligible_reviewer_count integer not null default 0 check (eligible_reviewer_count >= 0),
+  neutral_panel_available_bool boolean not null default false,
+  visible_user_queue_status text not null check (
+    visible_user_queue_status in (
+      'preview',
+      'in_review_queue',
+      'waitlisted_capacity',
+      'review_delayed',
+      'expired_stale',
+      'blocked_needs_review',
+      'ready_for_review'
+    )
+  ),
+  user_status_copy_hash text not null check (user_status_copy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  estimated_review_by timestamptz,
+  baseline_expires_at timestamptz,
+  payment_authorization_expires_at timestamptz,
+  private_queue_reason_public_bool boolean not null default false,
+  reviewer_identity_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_review_queue_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, review_capacity_policy_id),
+  check (
+    queue_state <> 'admitted'
+    or (
+      queue_position is not null
+      and eligible_reviewer_count > 0
+      and estimated_review_by is not null
+      and visible_user_queue_status in ('in_review_queue', 'ready_for_review')
+      and private_queue_reason_public_bool = false
+      and reviewer_identity_public_bool = false
+      and reviewed_at is not null
+    )
+  ),
+  check (baseline_expires_at is null or estimated_review_by is null or estimated_review_by <= baseline_expires_at),
+  check (payment_authorization_expires_at is null or estimated_review_by is null or estimated_review_by <= payment_authorization_expires_at)
+);
+
+comment on table public.moral_trade_review_queue_records is
+  'Review queue-admission records for non-public-goods offers and locks. Overflow, waitlisted, blocked, expired, stale, or private-status-leaking queue records keep offers preview-only rather than silently accumulating unreviewed promises.';
+
+create table if not exists public.moral_trade_reviewer_panel_assignments (
+  id uuid primary key default gen_random_uuid(),
+  review_queue_record_id uuid not null references public.moral_trade_review_queue_records (id) on delete restrict,
+  assignment_state text not null default 'missing' check (
+    assignment_state in ('eligible', 'missing', 'conflicted', 'unavailable', 'stale', 'superseded')
+  ),
+  reviewer_count integer not null default 0 check (reviewer_count >= 0),
+  neutral_reviewer_count integer not null default 0 check (neutral_reviewer_count >= 0),
+  conflict_screening_state text not null default 'missing' check (
+    conflict_screening_state in (
+      'passed',
+      'disclosed_nonblocking',
+      'not_required_for_stage',
+      'missing',
+      'unresolved',
+      'conflicted',
+      'superseded'
+    )
+  ),
+  reviewer_quality_state text not null default 'missing' check (
+    reviewer_quality_state in (
+      'current',
+      'not_required_for_stage',
+      'missing',
+      'failed',
+      'stale',
+      'superseded'
+    )
+  ),
+  assignment_hash text not null check (assignment_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewer_identity_public_bool boolean not null default false,
+  conflict_facts_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_reviewer_panel_assignments (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (review_queue_record_id),
+  check (
+    assignment_state <> 'eligible'
+    or (
+      reviewer_count > 0
+      and conflict_screening_state in ('passed', 'disclosed_nonblocking', 'not_required_for_stage')
+      and reviewer_quality_state in ('current', 'not_required_for_stage')
+      and reviewer_identity_public_bool = false
+      and conflict_facts_public_bool = false
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_reviewer_panel_assignments is
+  'Reviewer and neutral-panel assignment records for review-capacity admission. Public contract surfaces expose only status categories, never reviewer identities, conflict facts, or reviewer notes.';
+
+create table if not exists public.moral_trade_review_capacity_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'live_offer_publication',
+      'matchable_publication',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_queue_record_count integer not null default 0 check (required_queue_record_count >= 0),
+  admitted_queue_count integer not null default 0 check (admitted_queue_count >= 0),
+  eligible_panel_count integer not null default 0 check (eligible_panel_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  queue_record_count integer not null default 0 check (queue_record_count >= 0),
+  panel_assignment_record_count integer not null default 0 check (panel_assignment_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  live_publication_allowed_bool boolean not null default false,
+  matchable_publication_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_review_capacity_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (admitted_queue_count <= queue_record_count),
+  check (eligible_panel_count <= panel_assignment_record_count),
+  check (live_publication_allowed_bool = false),
+  check (matchable_publication_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_review_capacity_enforcement_records is
+  'Append-only user-owned review-capacity enforcement records. A record stores normalized review-capacity policy, queue-admission, and reviewer-panel evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize live publication, matching, lock, payment authorization, payment capture, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_review_capacity_policies_stage_idx
+  on public.moral_trade_review_capacity_policies (release_stage, subject_type, policy_status);
+
+create index if not exists moral_trade_review_queue_records_subject_idx
+  on public.moral_trade_review_queue_records (subject_type, subject_ref, queue_state, created_at desc);
+
+create index if not exists moral_trade_review_queue_records_policy_idx
+  on public.moral_trade_review_queue_records (review_capacity_policy_id, queue_state, estimated_review_by);
+
+create index if not exists moral_trade_reviewer_panel_assignments_queue_idx
+  on public.moral_trade_reviewer_panel_assignments (review_queue_record_id, assignment_state, reviewed_at desc);
+create index if not exists moral_trade_review_capacity_enforcement_records_owner_status_idx
+  on public.moral_trade_review_capacity_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_review_capacity_enforcement_records_transition_status_idx
+  on public.moral_trade_review_capacity_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_review_capacity_enforcement_records_hash_idx
+  on public.moral_trade_review_capacity_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_review_capacity_policies enable row level security;
+alter table public.moral_trade_review_queue_records enable row level security;
+alter table public.moral_trade_reviewer_panel_assignments enable row level security;
+alter table public.moral_trade_review_capacity_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_review_capacity_enforcement_records_select_owner"
+  on public.moral_trade_review_capacity_enforcement_records;
+create policy "moral_trade_review_capacity_enforcement_records_select_owner"
+  on public.moral_trade_review_capacity_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_review_capacity_enforcement_records_insert_owner"
+  on public.moral_trade_review_capacity_enforcement_records;
+create policy "moral_trade_review_capacity_enforcement_records_insert_owner"
+  on public.moral_trade_review_capacity_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and live_publication_allowed_bool = false
+    and matchable_publication_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure'
+    )
+  );
+
+create table if not exists public.moral_trade_counterparty_blinding_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  release_stage text not null,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  allowed_disclosure_stages text[] not null default array[]::text[],
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  raw_counterparty_identity_public_bool boolean not null default false,
+  raw_contact_public_bool boolean not null default false,
+  private_wish_public_bool boolean not null default false,
+  exact_private_constraint_public_bool boolean not null default false,
+  hidden_match_reasoning_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_counterparty_blinding_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (release_stage, subject_type, policy_snapshot_id),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      cardinality(allowed_disclosure_stages) > 0
+      and reviewed_at is not null
+      and raw_counterparty_identity_public_bool = false
+      and raw_contact_public_bool = false
+      and private_wish_public_bool = false
+      and exact_private_constraint_public_bool = false
+      and hidden_match_reasoning_public_bool = false
+    )
+  ),
+  check (
+    allowed_disclosure_stages <@ array[
+      'none',
+      'cohort_count',
+      'redacted_counterparty',
+      'mutual_consent',
+      'post_lock_public_summary'
+    ]::text[]
+  )
+);
+
+comment on table public.moral_trade_counterparty_blinding_policies is
+  'Immutable counterparty blinding policies for participant term sheets. Public contract surfaces expose only status categories, stage names, and volume buckets, never raw identities, contact details, private wishes, exact constraints, or hidden match reasoning.';
+
+create table if not exists public.moral_trade_participant_term_sheet_records (
+  id uuid primary key default gen_random_uuid(),
+  counterparty_blinding_policy_id uuid not null references public.moral_trade_counterparty_blinding_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement'
+    )
+  ),
+  subject_ref text not null,
+  term_sheet_state text not null default 'draft' check (
+    term_sheet_state in (
+      'draft',
+      'participant_confirmed',
+      'counterparty_confirmed',
+      'mutually_confirmed',
+      'mismatch',
+      'expired',
+      'superseded',
+      'blocked'
+    )
+  ),
+  participant_term_hash text not null check (participant_term_hash ~ '^sha256:[a-f0-9]{64}$'),
+  counterparty_term_hash text check (counterparty_term_hash is null or counterparty_term_hash ~ '^sha256:[a-f0-9]{64}$'),
+  normalized_term_hash text not null check (normalized_term_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_facing_render_hash text check (participant_facing_render_hash is null or participant_facing_render_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_term_source_kind text not null default 'plain_language_render' check (
+    participant_term_source_kind in (
+      'plain_language_render',
+      'raw_json',
+      'hidden_policy_state',
+      'reviewer_shorthand',
+      'internal_terms_hash_only'
+    )
+  ),
+  participant_confirmation_id uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
+  counterparty_confirmation_id uuid references public.moral_trade_participant_confirmation_records (id) on delete set null,
+  mutual_confirmation_hash text check (mutual_confirmation_hash is null or mutual_confirmation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_facing_plain_language_bool boolean not null default false,
+  participant_facing_privacy_safe_bool boolean not null default false,
+  scoped_to_exact_matched_proposal_bool boolean not null default false,
+  internal_hash_has_participant_facing_equivalent_bool boolean not null default false,
+  free_text_creates_new_obligations_bool boolean not null default false,
+  free_text_creates_side_payments_bool boolean not null default false,
+  free_text_creates_new_counterparties_bool boolean not null default false,
+  raw_private_terms_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_participant_term_sheet_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, counterparty_blinding_policy_id),
+  check (
+    term_sheet_state <> 'participant_confirmed'
+    or (
+      participant_confirmation_id is not null
+      and participant_term_hash = normalized_term_hash
+      and participant_facing_render_hash is not null
+      and participant_term_source_kind = 'plain_language_render'
+      and participant_facing_plain_language_bool
+      and participant_facing_privacy_safe_bool
+      and internal_hash_has_participant_facing_equivalent_bool
+      and reviewed_at is not null
+      and free_text_creates_new_obligations_bool = false
+      and free_text_creates_side_payments_bool = false
+      and free_text_creates_new_counterparties_bool = false
+      and raw_private_terms_public_bool = false
+      and reviewer_notes_public_bool = false
+    )
+  ),
+  check (
+    term_sheet_state <> 'mutually_confirmed'
+    or (
+      participant_confirmation_id is not null
+      and counterparty_confirmation_id is not null
+      and participant_term_hash = normalized_term_hash
+      and counterparty_term_hash = normalized_term_hash
+      and mutual_confirmation_hash is not null
+      and participant_facing_render_hash is not null
+      and participant_term_source_kind = 'plain_language_render'
+      and participant_facing_plain_language_bool
+      and participant_facing_privacy_safe_bool
+      and scoped_to_exact_matched_proposal_bool
+      and internal_hash_has_participant_facing_equivalent_bool
+      and reviewed_at is not null
+      and free_text_creates_new_obligations_bool = false
+      and free_text_creates_side_payments_bool = false
+      and free_text_creates_new_counterparties_bool = false
+      and raw_private_terms_public_bool = false
+      and reviewer_notes_public_bool = false
+    )
+  )
+);
+
+comment on table public.moral_trade_participant_term_sheet_records is
+  'Hash-backed participant term sheet records. Confirmed records require a privacy-safe participant-facing plain-language render hash, not raw JSON, hidden policy state, reviewer shorthand, or an internal-only terms hash. Live, matchable, payable, reliance-bearing, and public metric transitions fail closed on mismatched hashes, missing confirmations, new side obligations, side payments, new counterparties, stale records, or public private terms.';
+
+create table if not exists public.moral_trade_staged_counterparty_disclosure_records (
+  id uuid primary key default gen_random_uuid(),
+  participant_term_sheet_record_id uuid not null references public.moral_trade_participant_term_sheet_records (id) on delete restrict,
+  counterparty_blinding_policy_id uuid not null references public.moral_trade_counterparty_blinding_policies (id) on delete restrict,
+  disclosure_state text not null default 'not_disclosed' check (
+    disclosure_state in (
+      'not_disclosed',
+      'stage_eligible',
+      'redacted_disclosed',
+      'mutually_consented',
+      'over_disclosed',
+      'expired',
+      'superseded',
+      'blocked'
+    )
+  ),
+  visible_user_disclosure_status text not null check (
+    visible_user_disclosure_status in (
+      'not_disclosed',
+      'volume_bucket_only',
+      'redacted_counterparty',
+      'mutual_consent_ready',
+      'mutually_disclosed',
+      'expired_stale',
+      'blocked_needs_review'
+    )
+  ),
+  disclosure_stage text not null default 'none' check (
+    disclosure_stage in (
+      'none',
+      'cohort_count',
+      'redacted_counterparty',
+      'mutual_consent',
+      'post_lock_public_summary'
+    )
+  ),
+  counterparty_volume_bucket text not null,
+  redaction_hash text not null check (redaction_hash ~ '^sha256:[a-f0-9]{64}$'),
+  mutual_consent_hash text check (mutual_consent_hash is null or mutual_consent_hash ~ '^sha256:[a-f0-9]{64}$'),
+  raw_counterparty_identity_public_bool boolean not null default false,
+  raw_contact_public_bool boolean not null default false,
+  private_wish_public_bool boolean not null default false,
+  exact_private_constraint_public_bool boolean not null default false,
+  hidden_match_reasoning_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_staged_counterparty_disclosure_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (participant_term_sheet_record_id, counterparty_blinding_policy_id),
+  check (
+    disclosure_state not in ('stage_eligible', 'redacted_disclosed', 'mutually_consented')
+    or (
+      visible_user_disclosure_status in (
+        'volume_bucket_only',
+        'redacted_counterparty',
+        'mutual_consent_ready',
+        'mutually_disclosed'
+      )
+      and counterparty_volume_bucket <> ''
+      and reviewed_at is not null
+      and raw_counterparty_identity_public_bool = false
+      and raw_contact_public_bool = false
+      and private_wish_public_bool = false
+      and exact_private_constraint_public_bool = false
+      and hidden_match_reasoning_public_bool = false
+      and reviewer_notes_public_bool = false
+    )
+  ),
+  check (
+    disclosure_state <> 'mutually_consented'
+    or (
+      mutual_consent_hash is not null
+      and disclosure_stage in ('mutual_consent', 'post_lock_public_summary')
+    )
+  )
+);
+
+comment on table public.moral_trade_staged_counterparty_disclosure_records is
+  'Staged counterparty disclosure records for participant term sheets. Public status may show only stage, broad volume bucket, and safe category; raw counterparty identity, contact details, private wishes, exact constraints, hidden match reasoning, and reviewer notes remain private.';
+
+create table if not exists public.moral_trade_participant_term_sheet_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'counterparty_preview',
+      'live_offer_publication',
+      'matchable_publication',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_term_sheet_count integer not null default 0 check (required_term_sheet_count >= 0),
+  required_disclosure_count integer not null default 0 check (required_disclosure_count >= 0),
+  immutable_policy_count integer not null default 0 check (immutable_policy_count >= 0),
+  passing_term_sheet_count integer not null default 0 check (passing_term_sheet_count >= 0),
+  staged_disclosure_count integer not null default 0 check (staged_disclosure_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  term_sheet_record_count integer not null default 0 check (term_sheet_record_count >= 0),
+  disclosure_record_count integer not null default 0 check (disclosure_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  counterparty_disclosure_allowed_bool boolean not null default false,
+  live_publication_allowed_bool boolean not null default false,
+  matchable_publication_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_participant_term_sheet_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (immutable_policy_count <= policy_record_count),
+  check (passing_term_sheet_count <= term_sheet_record_count),
+  check (staged_disclosure_count <= disclosure_record_count),
+  check (counterparty_disclosure_allowed_bool = false),
+  check (live_publication_allowed_bool = false),
+  check (matchable_publication_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_participant_term_sheet_enforcement_records is
+  'Append-only user-owned participant-term-sheet enforcement records. A record stores normalized counterparty-blinding, term-sheet, and staged-disclosure evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize counterparty disclosure, live publication, matching, lock, payment authorization, payment capture, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_counterparty_blinding_policies_stage_idx
+  on public.moral_trade_counterparty_blinding_policies (release_stage, subject_type, policy_status);
+
+create index if not exists moral_trade_participant_term_sheet_records_subject_idx
+  on public.moral_trade_participant_term_sheet_records (subject_type, subject_ref, term_sheet_state, created_at desc);
+
+create index if not exists moral_trade_participant_term_sheet_records_policy_idx
+  on public.moral_trade_participant_term_sheet_records (counterparty_blinding_policy_id, term_sheet_state, reviewed_at desc);
+
+create index if not exists moral_trade_staged_counterparty_disclosure_records_term_sheet_idx
+  on public.moral_trade_staged_counterparty_disclosure_records (participant_term_sheet_record_id, disclosure_state, reviewed_at desc);
+
+create index if not exists moral_trade_staged_counterparty_disclosure_records_policy_idx
+  on public.moral_trade_staged_counterparty_disclosure_records (counterparty_blinding_policy_id, disclosure_stage, visible_user_disclosure_status);
+create index if not exists moral_trade_participant_term_sheet_enforcement_records_owner_status_idx
+  on public.moral_trade_participant_term_sheet_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_participant_term_sheet_enforcement_records_transition_status_idx
+  on public.moral_trade_participant_term_sheet_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_participant_term_sheet_enforcement_records_hash_idx
+  on public.moral_trade_participant_term_sheet_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_counterparty_blinding_policies enable row level security;
+alter table public.moral_trade_participant_term_sheet_records enable row level security;
+alter table public.moral_trade_staged_counterparty_disclosure_records enable row level security;
+alter table public.moral_trade_participant_term_sheet_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_participant_term_sheet_enforcement_records_select_owner"
+  on public.moral_trade_participant_term_sheet_enforcement_records;
+create policy "moral_trade_participant_term_sheet_enforcement_records_select_owner"
+  on public.moral_trade_participant_term_sheet_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_participant_term_sheet_enforcement_records_insert_owner"
+  on public.moral_trade_participant_term_sheet_enforcement_records;
+create policy "moral_trade_participant_term_sheet_enforcement_records_insert_owner"
+  on public.moral_trade_participant_term_sheet_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and counterparty_disclosure_allowed_bool = false
+    and live_publication_allowed_bool = false
+    and matchable_publication_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure',
+      'recipient_acceptance',
+      'adverse_association'
+    )
+  );
+
+create table if not exists public.moral_trade_recipient_acceptance_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  release_stage text not null,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'common_ground_budget_project'
+    )
+  ),
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  requires_recipient_consent_bool boolean not null default true,
+  requires_adverse_association_review_bool boolean not null default true,
+  max_review_age_days integer not null default 90 check (max_review_age_days > 0),
+  public_summary_allowed_bool boolean not null default true,
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_recipient_acceptance_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (release_stage, subject_type, policy_snapshot_id),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      reviewed_at is not null
+      and requires_recipient_consent_bool = true
+      and requires_adverse_association_review_bool = true
+    )
+  )
+);
+
+comment on table public.moral_trade_recipient_acceptance_policies is
+  'Frozen recipient-acceptance and adverse-association policies. Lock, payment, payout, public metric, and release-gate transitions fail closed when recipient acceptance or association review policy is missing, mutable, stale, or superseded.';
+
+create table if not exists public.moral_trade_recipient_acceptance_records (
+  id uuid primary key default gen_random_uuid(),
+  recipient_acceptance_policy_id uuid not null references public.moral_trade_recipient_acceptance_policies (id) on delete restrict,
+  recipient_ref text not null,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset',
+      'pledge_swap',
+      'compensated_moral_action',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'common_ground_budget_project'
+    )
+  ),
+  subject_ref text not null,
+  acceptance_status text not null default 'pending_recipient' check (
+    acceptance_status in (
+      'not_required_for_stage',
+      'pending_recipient',
+      'accepted',
+      'conditional_acceptance',
+      'declined',
+      'expired',
+      'revoked',
+      'superseded',
+      'blocked'
+    )
+  ),
+  visible_user_status text not null default 'recipient_pending' check (
+    visible_user_status in (
+      'preview_only',
+      'recipient_pending',
+      'recipient_accepted',
+      'accepted_with_conditions',
+      'adverse_association_review',
+      'declined_or_blocked',
+      'expired_stale'
+    )
+  ),
+  recipient_consent_hash text check (recipient_consent_hash is null or recipient_consent_hash ~ '^sha256:[a-f0-9]{64}$'),
+  acceptance_scope_hash text not null check (acceptance_scope_hash ~ '^sha256:[a-f0-9]{64}$'),
+  accepted_at timestamptz,
+  conditional_terms_public_bool boolean not null default false,
+  recipient_private_notes_public_bool boolean not null default false,
+  donor_private_terms_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_recipient_acceptance_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (recipient_ref, subject_type, subject_ref, recipient_acceptance_policy_id),
+  check (
+    acceptance_status not in ('accepted', 'conditional_acceptance')
+    or (
+      recipient_consent_hash is not null
+      and accepted_at is not null
+      and reviewed_at is not null
+      and visible_user_status in ('recipient_accepted', 'accepted_with_conditions')
+      and conditional_terms_public_bool = false
+      and recipient_private_notes_public_bool = false
+      and donor_private_terms_public_bool = false
+      and reviewer_notes_public_bool = false
+    )
+  ),
+  check (
+    acceptance_status <> 'not_required_for_stage'
+    or visible_user_status = 'preview_only'
+  )
+);
+
+comment on table public.moral_trade_recipient_acceptance_records is
+  'Hash-backed recipient acceptance records. Recipient decline, revocation, pending consent, expired acceptance, public private notes, public donor private terms, or reviewer-note leakage blocks lock, payment, payout, public metric, and release-gate transitions.';
+
+create table if not exists public.moral_trade_adverse_association_reviews (
+  id uuid primary key default gen_random_uuid(),
+  recipient_acceptance_record_id uuid not null references public.moral_trade_recipient_acceptance_records (id) on delete restrict,
+  recipient_acceptance_policy_id uuid not null references public.moral_trade_recipient_acceptance_policies (id) on delete restrict,
+  review_status text not null default 'under_review' check (
+    review_status in (
+      'not_required_for_stage',
+      'cleared',
+      'mitigated',
+      'under_review',
+      'disclosed_nonblocking',
+      'unresolved',
+      'severe',
+      'recipient_declined',
+      'stale',
+      'expired',
+      'superseded',
+      'blocked'
+    )
+  ),
+  risk_class text not null default 'none' check (
+    risk_class in ('none', 'low', 'medium', 'high', 'severe')
+  ),
+  visible_user_status text not null default 'adverse_association_review' check (
+    visible_user_status in (
+      'preview_only',
+      'recipient_pending',
+      'recipient_accepted',
+      'accepted_with_conditions',
+      'adverse_association_review',
+      'declined_or_blocked',
+      'expired_stale'
+    )
+  ),
+  review_hash text not null check (review_hash ~ '^sha256:[a-f0-9]{64}$'),
+  mitigation_hash text check (mitigation_hash is null or mitigation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  raw_association_evidence_public_bool boolean not null default false,
+  recipient_identity_expansion_public_bool boolean not null default false,
+  private_donor_reason_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_adverse_association_reviews (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (recipient_acceptance_record_id, recipient_acceptance_policy_id),
+  check (
+    review_status not in ('cleared', 'mitigated', 'not_required_for_stage')
+    or (
+      reviewed_at is not null
+      and visible_user_status in (
+        'preview_only',
+        'recipient_accepted',
+        'accepted_with_conditions'
+      )
+      and raw_association_evidence_public_bool = false
+      and recipient_identity_expansion_public_bool = false
+      and private_donor_reason_public_bool = false
+      and reviewer_notes_public_bool = false
+    )
+  ),
+  check (
+    review_status <> 'mitigated'
+    or mitigation_hash is not null
+  )
+);
+
+comment on table public.moral_trade_adverse_association_reviews is
+  'Adverse-association review records for recipient acceptance. Public contract surfaces expose only status and risk-class categories, never raw association evidence, expanded recipient identity, private donor reasons, reviewer notes, or participant-specific review evidence.';
+
+create table if not exists public.moral_trade_recipient_acceptance_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'non_money_preview',
+      'recipient_listing_publication',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'payout_release',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_acceptance_record_count integer not null default 0 check (required_acceptance_record_count >= 0),
+  required_adverse_association_review_count integer not null default 0 check (required_adverse_association_review_count >= 0),
+  immutable_policy_count integer not null default 0 check (immutable_policy_count >= 0),
+  accepted_recipient_count integer not null default 0 check (accepted_recipient_count >= 0),
+  cleared_adverse_association_count integer not null default 0 check (cleared_adverse_association_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  acceptance_record_count integer not null default 0 check (acceptance_record_count >= 0),
+  adverse_association_review_count integer not null default 0 check (adverse_association_review_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  recipient_listing_publication_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_recipient_acceptance_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (immutable_policy_count <= policy_record_count),
+  check (accepted_recipient_count <= acceptance_record_count),
+  check (cleared_adverse_association_count <= adverse_association_review_count),
+  check (recipient_listing_publication_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_recipient_acceptance_enforcement_records is
+  'Append-only user-owned recipient-acceptance enforcement records. A record stores normalized recipient-acceptance and adverse-association evaluation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize recipient listing publication, lock, payment authorization, payment capture, payout release, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_recipient_acceptance_policies_stage_idx
+  on public.moral_trade_recipient_acceptance_policies (release_stage, subject_type, policy_status);
+
+create index if not exists moral_trade_recipient_acceptance_records_subject_idx
+  on public.moral_trade_recipient_acceptance_records (subject_type, subject_ref, acceptance_status, created_at desc);
+
+create index if not exists moral_trade_recipient_acceptance_records_recipient_idx
+  on public.moral_trade_recipient_acceptance_records (recipient_ref, acceptance_status, reviewed_at desc);
+
+create index if not exists moral_trade_adverse_association_reviews_acceptance_idx
+  on public.moral_trade_adverse_association_reviews (recipient_acceptance_record_id, review_status, risk_class);
+
+create index if not exists moral_trade_adverse_association_reviews_policy_idx
+  on public.moral_trade_adverse_association_reviews (recipient_acceptance_policy_id, review_status, reviewed_at desc);
+create index if not exists moral_trade_recipient_acceptance_enforcement_records_owner_status_idx
+  on public.moral_trade_recipient_acceptance_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_recipient_acceptance_enforcement_records_transition_status_idx
+  on public.moral_trade_recipient_acceptance_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_recipient_acceptance_enforcement_records_hash_idx
+  on public.moral_trade_recipient_acceptance_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_recipient_acceptance_policies enable row level security;
+alter table public.moral_trade_recipient_acceptance_records enable row level security;
+alter table public.moral_trade_adverse_association_reviews enable row level security;
+alter table public.moral_trade_recipient_acceptance_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_recipient_acceptance_enforcement_records_select_owner"
+  on public.moral_trade_recipient_acceptance_enforcement_records;
+create policy "moral_trade_recipient_acceptance_enforcement_records_select_owner"
+  on public.moral_trade_recipient_acceptance_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_recipient_acceptance_enforcement_records_insert_owner"
+  on public.moral_trade_recipient_acceptance_enforcement_records;
+create policy "moral_trade_recipient_acceptance_enforcement_records_insert_owner"
+  on public.moral_trade_recipient_acceptance_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and recipient_listing_publication_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure',
+      'recipient_acceptance',
+      'adverse_association',
+      'ai_preference_elicitation',
+      'post_clear_audit',
+      'non_public_goods_subsidy',
+      'subsidy_schedule',
+      'cause_bucket_taxonomy',
+      'resource_compatibility',
+      'net_offset_accounting',
+      'offer_validity',
+      'direct_pair_clearing',
+      'private_exchange_rate_quote',
+      'noncompensable_blocker',
+      'batch_clearing_objective',
+      'sensitive_evidence_attestation',
+      'pilot_evidence'
+    )
+  );
+
+create table if not exists public.moral_trade_ai_preference_elicitation_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  release_stage text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  allowed_scopes text[] not null default array[
+    'baseline',
+    'caps',
+    'side_constraints',
+    'empirical_assumptions',
+    'cause_buckets',
+    'evidence_preferences',
+    'fallback_rules',
+    'manual_review'
+  ],
+  allowed_subject_types text[] not null default array[
+    'offset_offer',
+    'pledge_swap_offer',
+    'matched_trade_lock_proposal',
+    'common_ground_budget',
+    'participant_confirmation_record'
+  ],
+  allows_preference_structuring_bool boolean not null default true,
+  prohibits_hidden_wtp_inference_bool boolean not null default true,
+  prohibits_autonomous_counteroffer_bool boolean not null default true,
+  prohibits_state_change_from_ai_output_bool boolean not null default true,
+  requires_user_edited_structured_input_for_state_change_bool boolean not null default true,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_ai_preference_elicitation_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (release_stage, policy_snapshot_id),
+  check (
+    allowed_scopes <@ array[
+      'baseline',
+      'caps',
+      'side_constraints',
+      'empirical_assumptions',
+      'cause_buckets',
+      'evidence_preferences',
+      'fallback_rules',
+      'manual_review'
+    ]
+  ),
+  check (
+    allowed_subject_types <@ array[
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'common_ground_budget',
+      'participant_confirmation_record'
+    ]
+  ),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      reviewed_at is not null
+      and allows_preference_structuring_bool = true
+      and prohibits_hidden_wtp_inference_bool = true
+      and prohibits_autonomous_counteroffer_bool = true
+      and prohibits_state_change_from_ai_output_bool = true
+      and requires_user_edited_structured_input_for_state_change_bool = true
+    )
+  )
+);
+
+comment on table public.moral_trade_ai_preference_elicitation_policies is
+  'Frozen AI preference-elicitation policies. AI may help structure baselines, caps, side constraints, empirical assumptions, cause buckets, evidence preferences, fallback rules, or manual review, but policy must prohibit hidden WTP inference, autonomous counteroffers, accepted matches, private disclosure, payment authorization, and AI state changes.';
+
+create table if not exists public.moral_trade_ai_preference_elicitation_records (
+  id uuid primary key default gen_random_uuid(),
+  ai_preference_elicitation_policy_id uuid not null references public.moral_trade_ai_preference_elicitation_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'common_ground_budget',
+      'participant_confirmation_record'
+    )
+  ),
+  subject_ref text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  elicitation_scope text not null check (
+    elicitation_scope in (
+      'baseline',
+      'caps',
+      'side_constraints',
+      'empirical_assumptions',
+      'cause_buckets',
+      'evidence_preferences',
+      'fallback_rules',
+      'manual_review'
+    )
+  ),
+  ai_output_hash text not null check (ai_output_hash ~ '^sha256:[a-f0-9]{64}$'),
+  user_edited_structured_input_hash text check (
+    user_edited_structured_input_hash is null
+    or user_edited_structured_input_hash ~ '^sha256:[a-f0-9]{64}$'
+  ),
+  hidden_willingness_to_pay_inference_prohibited_bool boolean not null default true check (
+    hidden_willingness_to_pay_inference_prohibited_bool = true
+  ),
+  autonomous_counteroffer_or_acceptance_bool boolean not null default false check (
+    autonomous_counteroffer_or_acceptance_bool = false
+  ),
+  state_change_allowed_bool boolean not null default false check (
+    state_change_allowed_bool = false
+  ),
+  participant_confirmation_record_ref text,
+  reviewer_decision_ref text,
+  elicitation_state text not null default 'sandbox' check (
+    elicitation_state in (
+      'sandbox',
+      'user_reviewed',
+      'converted_to_structured_input',
+      'discarded',
+      'blocked',
+      'superseded'
+    )
+  ),
+  raw_prompt_public_bool boolean not null default false,
+  raw_ai_output_public_bool boolean not null default false,
+  hidden_wtp_estimate_public_bool boolean not null default false,
+  hidden_negotiation_moves_public_bool boolean not null default false,
+  private_participant_notes_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, participant_id_hash, elicitation_scope, ai_preference_elicitation_policy_id),
+  check (
+    elicitation_state <> 'converted_to_structured_input'
+    or (
+      user_edited_structured_input_hash is not null
+      and (
+        participant_confirmation_record_ref is not null
+        or reviewer_decision_ref is not null
+      )
+    )
+  ),
+  check (
+    raw_prompt_public_bool = false
+    and raw_ai_output_public_bool = false
+    and hidden_wtp_estimate_public_bool = false
+    and hidden_negotiation_moves_public_bool = false
+    and private_participant_notes_public_bool = false
+    and reviewer_notes_public_bool = false
+  )
+);
+
+comment on table public.moral_trade_ai_preference_elicitation_records is
+  'Hash-backed AI preference-elicitation records. Records preserve a boundary between AI drafting and user-edited structured input, prohibit hidden willingness-to-pay inference, autonomous counteroffers, accepted matches, private disclosure, and state changes, and keep raw AI material private.';
+
+create table if not exists public.moral_trade_ai_preference_elicitation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preference_elicitation',
+      'structured_input_conversion',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'clearing_run_input',
+      'counterparty_disclosure',
+      'payment_authorization',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  ai_preference_elicitation_used_bool boolean not null default false,
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_record_count integer not null default 0 check (required_record_count >= 0),
+  immutable_policy_count integer not null default 0 check (immutable_policy_count >= 0),
+  converted_structured_input_count integer not null default 0 check (converted_structured_input_count >= 0),
+  confirmation_or_reviewer_decision_count integer not null default 0 check (confirmation_or_reviewer_decision_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  elicitation_record_count integer not null default 0 check (elicitation_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  structured_input_conversion_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  clearing_run_input_allowed_bool boolean not null default false,
+  counterparty_disclosure_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_ai_preference_elicitation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (immutable_policy_count <= policy_record_count),
+  check (converted_structured_input_count <= elicitation_record_count),
+  check (confirmation_or_reviewer_decision_count <= elicitation_record_count),
+  check (structured_input_conversion_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (clearing_run_input_allowed_bool = false),
+  check (counterparty_disclosure_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_ai_preference_elicitation_enforcement_records is
+  'Append-only user-owned AI preference-elicitation enforcement records. A record stores normalized AI preference-elicitation policy and record input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize structured input conversion, matching, clearing, counterparty disclosure, payment authorization, payment capture, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_ai_preference_elicitation_policies_stage_idx
+  on public.moral_trade_ai_preference_elicitation_policies (release_stage, policy_status);
+
+create index if not exists moral_trade_ai_preference_elicitation_records_subject_idx
+  on public.moral_trade_ai_preference_elicitation_records (subject_type, subject_ref, elicitation_state, created_at desc);
+
+create index if not exists moral_trade_ai_preference_elicitation_records_participant_idx
+  on public.moral_trade_ai_preference_elicitation_records (participant_id_hash, elicitation_scope, updated_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_owner_status_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_transition_status_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_hash_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_ai_preference_elicitation_policies enable row level security;
+alter table public.moral_trade_ai_preference_elicitation_records enable row level security;
+alter table public.moral_trade_ai_preference_elicitation_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_ai_preference_elicitation_enforcement_records_select_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records;
+create policy "moral_trade_ai_preference_elicitation_enforcement_records_select_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_ai_preference_elicitation_enforcement_records_insert_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records;
+create policy "moral_trade_ai_preference_elicitation_enforcement_records_insert_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and structured_input_conversion_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and clearing_run_input_allowed_bool = false
+    and counterparty_disclosure_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_post_clear_audit_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  release_stage text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  policy_hash text not null check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  sampled_subject_types text[] not null default array[
+    'cleared_trade_agreement',
+    'matched_trade_lock_proposal',
+    'payment_event',
+    'evidence_record',
+    'payout_milestone',
+    'impact_claim_record'
+  ],
+  audit_types text[] not null default array[
+    'random_sample',
+    'risk_triggered',
+    'dispute_triggered',
+    'payment_triggered',
+    'evidence_triggered',
+    'recipient_triggered',
+    'classification_triggered',
+    'manual_review'
+  ],
+  max_policy_age_days integer not null default 120 check (max_policy_age_days > 0),
+  requires_term_sheet_match_bool boolean not null default true,
+  requires_baseline_evidence_match_bool boolean not null default true,
+  requires_recipient_acceptance_match_bool boolean not null default true,
+  requires_payment_reconciliation_match_bool boolean not null default true,
+  requires_privacy_disclosure_match_bool boolean not null default true,
+  requires_classification_match_bool boolean not null default true,
+  prohibits_public_reputation_effect_bool boolean not null default true,
+  permits_correction_only_under_frozen_policy_bool boolean not null default true,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_post_clear_audit_policies (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (release_stage, policy_snapshot_id),
+  check (
+    sampled_subject_types <@ array[
+      'cleared_trade_agreement',
+      'matched_trade_lock_proposal',
+      'payment_event',
+      'evidence_record',
+      'payout_milestone',
+      'impact_claim_record'
+    ]
+  ),
+  check (
+    audit_types <@ array[
+      'random_sample',
+      'risk_triggered',
+      'dispute_triggered',
+      'payment_triggered',
+      'evidence_triggered',
+      'recipient_triggered',
+      'classification_triggered',
+      'manual_review'
+    ]
+  ),
+  check (
+    policy_status <> 'resolved_immutable'
+    or (
+      reviewed_at is not null
+      and prohibits_public_reputation_effect_bool = true
+      and permits_correction_only_under_frozen_policy_bool = true
+    )
+  )
+);
+
+comment on table public.moral_trade_post_clear_audit_policies is
+  'Frozen post-clear audit policies. Public metrics, payout release, reconciliation close, and release promotion fail closed when required post-clear audit sampling is missing, mutable, stale, superseded, unresolved, or privacy-leaking.';
+
+create table if not exists public.moral_trade_post_clear_audit_records (
+  id uuid primary key default gen_random_uuid(),
+  post_clear_audit_policy_id uuid not null references public.moral_trade_post_clear_audit_policies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'cleared_trade_agreement',
+      'matched_trade_lock_proposal',
+      'payment_event',
+      'evidence_record',
+      'payout_milestone',
+      'impact_claim_record'
+    )
+  ),
+  subject_ref text not null,
+  audit_type text not null check (
+    audit_type in (
+      'random_sample',
+      'risk_triggered',
+      'dispute_triggered',
+      'payment_triggered',
+      'evidence_triggered',
+      'recipient_triggered',
+      'classification_triggered',
+      'manual_review'
+    )
+  ),
+  sampled_fields_json jsonb not null default '{}'::jsonb,
+  sampled_fields_hash text not null check (sampled_fields_hash ~ '^sha256:[a-f0-9]{64}$'),
+  term_sheet_match_state text not null default 'not_checked' check (
+    term_sheet_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  baseline_and_evidence_match_state text not null default 'not_checked' check (
+    baseline_and_evidence_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  recipient_acceptance_match_state text not null default 'not_checked' check (
+    recipient_acceptance_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  payment_and_reconciliation_match_state text not null default 'not_checked' check (
+    payment_and_reconciliation_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  privacy_or_disclosure_match_state text not null default 'not_checked' check (
+    privacy_or_disclosure_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  classification_match_state text not null default 'not_checked' check (
+    classification_match_state in ('not_checked', 'matched', 'mismatch', 'manual_review')
+  ),
+  corrective_action_refs_json jsonb not null default '[]'::jsonb,
+  public_reputation_effect_prohibited_bool boolean not null default true check (
+    public_reputation_effect_prohibited_bool = true
+  ),
+  audit_state text not null default 'pending' check (
+    audit_state in (
+      'pending',
+      'passed',
+      'failed',
+      'corrective_action_open',
+      'closed',
+      'superseded'
+    )
+  ),
+  reviewer_decision_ref text,
+  raw_payment_evidence_public_bool boolean not null default false,
+  private_counterparty_terms_public_bool boolean not null default false,
+  reviewer_notes_public_bool boolean not null default false,
+  raw_reconciliation_rows_public_bool boolean not null default false,
+  provider_payload_public_bool boolean not null default false,
+  participant_specific_rows_public_bool boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (subject_type, subject_ref, audit_type, post_clear_audit_policy_id),
+  check (
+    audit_state not in ('passed', 'closed')
+    or (
+      reviewer_decision_ref is not null
+      and public_reputation_effect_prohibited_bool = true
+    )
+  ),
+  check (
+    audit_state <> 'passed'
+    or (
+      term_sheet_match_state = 'matched'
+      and baseline_and_evidence_match_state = 'matched'
+      and recipient_acceptance_match_state = 'matched'
+      and payment_and_reconciliation_match_state = 'matched'
+      and privacy_or_disclosure_match_state = 'matched'
+      and classification_match_state = 'matched'
+    )
+  ),
+  check (
+    raw_payment_evidence_public_bool = false
+    and private_counterparty_terms_public_bool = false
+    and reviewer_notes_public_bool = false
+    and raw_reconciliation_rows_public_bool = false
+    and provider_payload_public_bool = false
+    and participant_specific_rows_public_bool = false
+  )
+);
+
+comment on table public.moral_trade_post_clear_audit_records is
+  'Hash-backed post-clear audit records. Records sample completed non-public-goods trades against frozen baselines, evidence, recipient acceptance, disclosure, payment, classification, and term sheets without exposing raw payment evidence, private counterparty terms, reviewer notes, raw provider payloads, or participant-specific audit rows.';
+
+create table if not exists public.moral_trade_post_clear_audit_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'post_clear_sampling_assignment',
+      'audit_record_review',
+      'corrective_action_resolution',
+      'payment_reconciliation_close',
+      'payout_release',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  post_clear_audit_required_bool boolean not null default false,
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_record_count integer not null default 0 check (required_record_count >= 0),
+  immutable_policy_count integer not null default 0 check (immutable_policy_count >= 0),
+  non_blocking_audit_record_count integer not null default 0 check (non_blocking_audit_record_count >= 0),
+  reviewer_decision_count integer not null default 0 check (reviewer_decision_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  audit_record_count integer not null default 0 check (audit_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  post_clear_sampling_assignment_allowed_bool boolean not null default false,
+  audit_record_review_allowed_bool boolean not null default false,
+  corrective_action_resolution_allowed_bool boolean not null default false,
+  payment_reconciliation_close_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_post_clear_audit_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (immutable_policy_count <= policy_record_count),
+  check (non_blocking_audit_record_count <= audit_record_count),
+  check (reviewer_decision_count <= audit_record_count),
+  check (post_clear_sampling_assignment_allowed_bool = false),
+  check (audit_record_review_allowed_bool = false),
+  check (corrective_action_resolution_allowed_bool = false),
+  check (payment_reconciliation_close_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_post_clear_audit_enforcement_records is
+  'Append-only user-owned post-clear audit enforcement records. A record stores normalized post-clear audit policy and audit-record input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize sampling assignment, audit review, correction resolution, payment reconciliation close, payout release, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_post_clear_audit_policies_stage_idx
+  on public.moral_trade_post_clear_audit_policies (release_stage, policy_status);
+
+create index if not exists moral_trade_post_clear_audit_records_subject_idx
+  on public.moral_trade_post_clear_audit_records (subject_type, subject_ref, audit_state, created_at desc);
+
+create index if not exists moral_trade_post_clear_audit_records_policy_idx
+  on public.moral_trade_post_clear_audit_records (post_clear_audit_policy_id, audit_type, updated_at desc);
+create index if not exists moral_trade_post_clear_audit_enforcement_records_owner_status_idx
+  on public.moral_trade_post_clear_audit_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_post_clear_audit_enforcement_records_transition_status_idx
+  on public.moral_trade_post_clear_audit_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_post_clear_audit_enforcement_records_hash_idx
+  on public.moral_trade_post_clear_audit_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_post_clear_audit_policies enable row level security;
+alter table public.moral_trade_post_clear_audit_records enable row level security;
+alter table public.moral_trade_post_clear_audit_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_post_clear_audit_enforcement_records_select_owner"
+  on public.moral_trade_post_clear_audit_enforcement_records;
+create policy "moral_trade_post_clear_audit_enforcement_records_select_owner"
+  on public.moral_trade_post_clear_audit_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_post_clear_audit_enforcement_records_insert_owner"
+  on public.moral_trade_post_clear_audit_enforcement_records;
+create policy "moral_trade_post_clear_audit_enforcement_records_insert_owner"
+  on public.moral_trade_post_clear_audit_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and post_clear_sampling_assignment_allowed_bool = false
+    and audit_record_review_allowed_bool = false
+    and corrective_action_resolution_allowed_bool = false
+    and payment_reconciliation_close_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_non_public_goods_subsidy_pools (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  sponsor_id_hash text not null check (sponsor_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  applies_to_trade_type text not null check (
+    applies_to_trade_type in ('donation_offset', 'pledge_swap', 'compensated_moral_action', 'manual_review')
+  ),
+  applies_to_tiers text[] not null default array['tier_1_money_only_donation_offset'],
+  total_budget_cents bigint not null check (total_budget_cents > 0),
+  settlement_currency text not null default 'USD' check (settlement_currency ~ '^[A-Z]{3}$'),
+  source_of_funds_review_state text not null default 'not_started' check (
+    source_of_funds_review_state in ('not_started', 'under_review', 'non_blocking', 'blocked', 'manual_review', 'superseded')
+  ),
+  sponsor_conflict_of_interest_state text not null default 'not_started' check (
+    sponsor_conflict_of_interest_state in ('not_started', 'under_review', 'non_blocking', 'disclosed_nonblocking', 'blocked', 'manual_review', 'superseded')
+  ),
+  allowed_cause_bucket_taxonomy_refs text[] not null default '{}',
+  allowed_recipient_or_destination_classes_json jsonb not null default '[]'::jsonb,
+  eligibility_rule_hash text not null check (eligibility_rule_hash ~ '^sha256:[a-f0-9]{64}$'),
+  allocation_schedule_hash text not null check (allocation_schedule_hash ~ '^sha256:[a-f0-9]{64}$'),
+  max_subsidy_per_participant_cents bigint not null check (max_subsidy_per_participant_cents > 0),
+  max_subsidy_per_trade_cents bigint not null check (max_subsidy_per_trade_cents > 0),
+  max_subsidy_ratio_bps integer not null check (max_subsidy_ratio_bps > 0 and max_subsidy_ratio_bps <= 10000),
+  public_disclosure_level text not null default 'aggregate_only' check (
+    public_disclosure_level in ('aggregate_only', 'source_bucket', 'named_sponsor', 'manual_review', 'undisclosed')
+  ),
+  refund_or_carry_forward_policy text not null default 'manual_review' check (
+    refund_or_carry_forward_policy in ('return_to_sponsor', 'carry_forward', 'manual_review')
+  ),
+  subsidy_pool_state text not null default 'draft' check (
+    subsidy_pool_state in ('draft', 'active', 'paused', 'exhausted', 'closed', 'superseded', 'blocked')
+  ),
+  reviewer_decision_ref text,
+  sponsor_identity_public_bool boolean not null default false check (sponsor_identity_public_bool = false),
+  private_source_details_public_bool boolean not null default false check (private_source_details_public_bool = false),
+  reviewer_notes_public_bool boolean not null default false check (reviewer_notes_public_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  expires_at timestamptz,
+  superseded_by uuid references public.moral_trade_non_public_goods_subsidy_pools (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    applies_to_tiers <@ array[
+      'tier_1_money_only_donation_offset',
+      'tier_2_donation_offset_with_abstention_or_additionality_proof',
+      'tier_3_closed_counterparty_pledge_swap',
+      'tier_4_open_market_pledge_swap_or_compensated_action'
+    ]
+  ),
+  check (
+    max_subsidy_per_trade_cents <= total_budget_cents
+    and max_subsidy_per_participant_cents <= total_budget_cents
+  ),
+  check (
+    subsidy_pool_state <> 'active'
+    or (
+      applies_to_trade_type = 'donation_offset'
+      and applies_to_tiers <@ array['tier_1_money_only_donation_offset']
+      and cardinality(applies_to_tiers) > 0
+      and source_of_funds_review_state = 'non_blocking'
+      and sponsor_conflict_of_interest_state in ('non_blocking', 'disclosed_nonblocking')
+      and cardinality(allowed_cause_bucket_taxonomy_refs) > 0
+      and jsonb_array_length(allowed_recipient_or_destination_classes_json) > 0
+      and public_disclosure_level not in ('manual_review', 'undisclosed')
+      and refund_or_carry_forward_policy <> 'manual_review'
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+      and superseded_by is null
+    )
+  )
+);
+
+comment on table public.moral_trade_non_public_goods_subsidy_pools is
+  'Frozen sponsor-funded non-public-goods subsidy pools. Active pools are limited to low-risk tier-1 donation offsets and require source-of-funds review, conflict review, eligibility/cap hashes, disclosure policy, refund or carry-forward policy, and reviewer decision before any clearing, payment, public metric, or release gate can rely on them.';
+
+create table if not exists public.moral_trade_subsidy_schedule_records (
+  id uuid primary key default gen_random_uuid(),
+  non_public_goods_subsidy_pool_id uuid not null references public.moral_trade_non_public_goods_subsidy_pools (id) on delete restrict,
+  matching_clearing_run_ref text not null,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  subsidy_type text not null check (
+    subsidy_type in ('fixed_bonus', 'ratio_match', 'fee_offset', 'verification_cost_coverage', 'manual_review')
+  ),
+  eligibility_input_hash text not null check (eligibility_input_hash ~ '^sha256:[a-f0-9]{64}$'),
+  schedule_hash text not null check (schedule_hash ~ '^sha256:[a-f0-9]{64}$'),
+  subsidy_amount_cents bigint not null default 0 check (subsidy_amount_cents >= 0),
+  subsidy_ratio_bps integer not null default 0 check (subsidy_ratio_bps >= 0 and subsidy_ratio_bps <= 10000),
+  cap_binding_bool boolean not null default false,
+  participant_moral_trade_volume_exclusion_bool boolean not null default true,
+  direct_contribution_exclusion_bool boolean not null default true,
+  impact_claim_exclusion_bool boolean not null default true,
+  counterparty_distinctness_exclusion_bool boolean not null default true,
+  subsidy_state text not null default 'previewed' check (
+    subsidy_state in ('previewed', 'reserved', 'applied', 'released', 'cancelled', 'refunded', 'superseded', 'blocked')
+  ),
+  reviewer_decision_ref text,
+  raw_eligibility_input_public_bool boolean not null default false check (raw_eligibility_input_public_bool = false),
+  participant_specific_subsidy_public_bool boolean not null default false check (participant_specific_subsidy_public_bool = false),
+  private_sponsor_terms_public_bool boolean not null default false check (private_sponsor_terms_public_bool = false),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    subsidy_state not in ('reserved', 'applied', 'released')
+    or (
+      subsidy_type <> 'manual_review'
+      and cap_binding_bool = true
+      and participant_moral_trade_volume_exclusion_bool = true
+      and direct_contribution_exclusion_bool = true
+      and impact_claim_exclusion_bool = true
+      and counterparty_distinctness_exclusion_bool = true
+      and reviewer_decision_ref is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_subsidy_schedule_records is
+  'Hash-backed subsidy schedule records linking sponsor subsidy pools to matching-clearing runs, matched-trade lock proposals, or cleared agreements. Records preserve cap checks and metric exclusions so subsidy dollars cannot inflate participant moral-trade volume, direct contribution, impact claims, or counterparty distinctness.';
+
+create table if not exists public.moral_trade_non_public_goods_subsidy_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'subsidy_pool_activation',
+      'subsidy_schedule_preview',
+      'subsidy_schedule_reservation',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion',
+      'subsidy_refund_or_carry_forward'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  subsidy_required_bool boolean not null default false,
+  active_pool_count integer not null default 0 check (active_pool_count >= 0),
+  eligible_schedule_count integer not null default 0 check (eligible_schedule_count >= 0),
+  frozen_policy_count integer not null default 0 check (frozen_policy_count >= 0),
+  cap_checked_schedule_count integer not null default 0 check (cap_checked_schedule_count >= 0),
+  metric_excluded_schedule_count integer not null default 0 check (metric_excluded_schedule_count >= 0),
+  pool_record_count integer not null default 0 check (pool_record_count >= 0),
+  schedule_record_count integer not null default 0 check (schedule_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  subsidy_pool_activation_allowed_bool boolean not null default false,
+  subsidy_schedule_preview_allowed_bool boolean not null default false,
+  subsidy_schedule_reservation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  subsidy_refund_or_carry_forward_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_non_public_goods_subsidy_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (active_pool_count <= pool_record_count),
+  check (eligible_schedule_count <= schedule_record_count),
+  check (frozen_policy_count <= pool_record_count),
+  check (cap_checked_schedule_count <= schedule_record_count),
+  check (metric_excluded_schedule_count <= schedule_record_count),
+  check (subsidy_pool_activation_allowed_bool = false),
+  check (subsidy_schedule_preview_allowed_bool = false),
+  check (subsidy_schedule_reservation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (subsidy_refund_or_carry_forward_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_non_public_goods_subsidy_enforcement_records is
+  'Append-only user-owned non-public-goods subsidy enforcement records. A record stores normalized subsidy pool and schedule input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize subsidy pool activation, schedule preview, schedule reservation, matched-trade lock, payment authorization, payment capture, public metric publication, release-gate promotion, or refund/carry-forward handling.';
+
+create index if not exists moral_trade_non_public_goods_subsidy_pools_state_idx
+  on public.moral_trade_non_public_goods_subsidy_pools (subsidy_pool_state, applies_to_trade_type, created_at desc);
+
+create index if not exists moral_trade_non_public_goods_subsidy_pools_policy_idx
+  on public.moral_trade_non_public_goods_subsidy_pools (policy_snapshot_id, subsidy_pool_state);
+
+create index if not exists moral_trade_subsidy_schedule_records_pool_idx
+  on public.moral_trade_subsidy_schedule_records (non_public_goods_subsidy_pool_id, subsidy_state, created_at desc);
+
+create index if not exists moral_trade_subsidy_schedule_records_run_idx
+  on public.moral_trade_subsidy_schedule_records (matching_clearing_run_ref, subsidy_state, created_at desc);
+create index if not exists moral_trade_non_public_goods_subsidy_enforcement_records_owner_status_idx
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_non_public_goods_subsidy_enforcement_records_transition_status_idx
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_non_public_goods_subsidy_enforcement_records_hash_idx
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_non_public_goods_subsidy_pools enable row level security;
+alter table public.moral_trade_subsidy_schedule_records enable row level security;
+alter table public.moral_trade_non_public_goods_subsidy_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_non_public_goods_subsidy_enforcement_records_select_owner"
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records;
+create policy "moral_trade_non_public_goods_subsidy_enforcement_records_select_owner"
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_non_public_goods_subsidy_enforcement_records_insert_owner"
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records;
+create policy "moral_trade_non_public_goods_subsidy_enforcement_records_insert_owner"
+  on public.moral_trade_non_public_goods_subsidy_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and subsidy_pool_activation_allowed_bool = false
+    and subsidy_schedule_preview_allowed_bool = false
+    and subsidy_schedule_reservation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and subsidy_refund_or_carry_forward_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_cause_bucket_taxonomies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null,
+  taxonomy_type text not null check (
+    taxonomy_type in ('offered_cause', 'opposed_cause', 'compromise_destination', 'action_bucket', 'counterparty_bucket', 'manual_review')
+  ),
+  allowed_bucket_codes text[] not null default '{}',
+  bucket_definition_hashes text[] not null default '{}',
+  protected_trait_proxy_review_state text not null default 'under_review' check (
+    protected_trait_proxy_review_state in ('not_required', 'under_review', 'non_blocking', 'blocked', 'manual_review', 'superseded')
+  ),
+  ideology_or_psychology_inference_prohibited_bool boolean not null default true check (ideology_or_psychology_inference_prohibited_bool = true),
+  plural_reviewer_panel_ref text,
+  public_summary_hash text not null check (public_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  taxonomy_version_hash text not null check (taxonomy_version_hash ~ '^sha256:[a-f0-9]{64}$'),
+  taxonomy_state text not null default 'draft' check (
+    taxonomy_state in ('draft', 'active', 'deprecated', 'superseded', 'blocked')
+  ),
+  reviewer_decision_ref text,
+  public_moral_ranking_bool boolean not null default false check (public_moral_ranking_bool = false),
+  public_ideology_label_bool boolean not null default false check (public_ideology_label_bool = false),
+  protected_trait_proxy_allowed_bool boolean not null default false check (protected_trait_proxy_allowed_bool = false),
+  inferred_psychology_allowed_bool boolean not null default false check (inferred_psychology_allowed_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(allowed_bucket_codes) = cardinality(bucket_definition_hashes)),
+  check (
+    taxonomy_state <> 'active'
+    or (
+      cardinality(allowed_bucket_codes) >= 2
+      and protected_trait_proxy_review_state = 'non_blocking'
+      and length(trim(coalesce(plural_reviewer_panel_ref, ''))) > 0
+      and reviewer_decision_ref is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_cause_bucket_taxonomies is
+  'Versioned, plural-reviewed, non-ranking cause-bucket taxonomy records for offered causes, opposed causes, compromise destinations, action buckets, and counterparty buckets. Taxonomies are coordination interfaces, not ideology maps, moral rankings, protected-trait proxies, or inferred-psychology labels.';
+
+create table if not exists public.moral_trade_cause_bucket_assignments (
+  id uuid primary key default gen_random_uuid(),
+  cause_bucket_taxonomy_id uuid references public.moral_trade_cause_bucket_taxonomies (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in ('offset_offer', 'pledge_swap_offer', 'matched_trade_lock_proposal', 'cleared_trade_agreement', 'seed_template', 'worked_example')
+  ),
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  cause_bucket_taxonomy_ref text not null,
+  participant_selected_bucket_codes text[] not null default '{}',
+  reviewer_normalized_bucket_codes text[] not null default '{}',
+  assignment_confidence_state text not null default 'self_attested' check (
+    assignment_confidence_state in ('self_attested', 'reviewer_normalized', 'disputed', 'blocked', 'manual_review', 'superseded')
+  ),
+  assignment_visibility text not null default 'participant_only' check (
+    assignment_visibility in ('participant_only', 'reviewer_only', 'counterparty_band_only', 'public_coarse')
+  ),
+  affects_counterparty_distinctness_bool boolean not null default false,
+  affects_trade_classification_bool boolean not null default false,
+  affects_clearing_eligibility_bool boolean not null default false,
+  assignment_state text not null default 'draft' check (
+    assignment_state in ('draft', 'previewed', 'locked', 'disputed', 'superseded', 'blocked')
+  ),
+  reviewer_decision_ref text,
+  taxonomy_version_hash text not null check (taxonomy_version_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_visible_dependency_notice_bool boolean not null default false,
+  taxonomy_change_material_bool boolean not null default false,
+  preview_renewal_confirmation_ref text,
+  public_participant_identity_bool boolean not null default false check (public_participant_identity_bool = false),
+  public_detailed_bucket_narrative_bool boolean not null default false check (public_detailed_bucket_narrative_bool = false),
+  public_protected_trait_facts_bool boolean not null default false check (public_protected_trait_facts_bool = false),
+  public_inferred_ideology_or_psychology_bool boolean not null default false check (public_inferred_ideology_or_psychology_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    taxonomy_change_material_bool = false
+    or preview_renewal_confirmation_ref is not null
+  ),
+  check (
+    not (
+      affects_counterparty_distinctness_bool
+      or affects_trade_classification_bool
+      or affects_clearing_eligibility_bool
+    )
+    or (
+      assignment_confidence_state = 'reviewer_normalized'
+      and assignment_state in ('previewed', 'locked')
+      and participant_visible_dependency_notice_bool = true
+      and reviewer_decision_ref is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_cause_bucket_assignments is
+  'Privacy-safe cause-bucket assignment records. Effect-bearing assignments must be reviewer-normalized, non-disputed, version-hash linked, visible to participants as a dependency, and renewed after material taxonomy changes before they affect distinctness, classification, clearing, metrics, or release gates.';
+
+create index if not exists moral_trade_cause_bucket_taxonomies_state_idx
+  on public.moral_trade_cause_bucket_taxonomies (taxonomy_state, taxonomy_type, updated_at desc);
+
+create index if not exists moral_trade_cause_bucket_taxonomies_policy_idx
+  on public.moral_trade_cause_bucket_taxonomies (policy_snapshot_id, taxonomy_state);
+
+create index if not exists moral_trade_cause_bucket_assignments_subject_idx
+  on public.moral_trade_cause_bucket_assignments (subject_type, subject_id, assignment_state, updated_at desc);
+
+create index if not exists moral_trade_cause_bucket_assignments_taxonomy_idx
+  on public.moral_trade_cause_bucket_assignments (cause_bucket_taxonomy_ref, assignment_confidence_state, assignment_state);
+
+alter table public.moral_trade_cause_bucket_taxonomies enable row level security;
+alter table public.moral_trade_cause_bucket_assignments enable row level security;
+
+create table if not exists public.moral_trade_cause_bucket_taxonomy_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'clearing_run',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  taxonomy_required_bool boolean not null default false,
+  assignment_required_bool boolean not null default false,
+  active_taxonomy_count integer not null default 0 check (active_taxonomy_count >= 0),
+  non_ranking_taxonomy_count integer not null default 0 check (non_ranking_taxonomy_count >= 0),
+  privacy_safe_assignment_count integer not null default 0 check (privacy_safe_assignment_count >= 0),
+  effect_safe_assignment_count integer not null default 0 check (effect_safe_assignment_count >= 0),
+  taxonomy_record_count integer not null default 0 check (taxonomy_record_count >= 0),
+  assignment_record_count integer not null default 0 check (assignment_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  clearing_run_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_cause_bucket_taxonomy_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (active_taxonomy_count <= taxonomy_record_count),
+  check (non_ranking_taxonomy_count <= taxonomy_record_count),
+  check (privacy_safe_assignment_count <= assignment_record_count),
+  check (effect_safe_assignment_count <= assignment_record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (clearing_run_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_cause_bucket_taxonomy_enforcement_records is
+  'Append-only user-owned cause-bucket taxonomy enforcement records. A record stores normalized taxonomy and assignment input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, clearing run, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_cause_bucket_taxonomy_enforcement_records_owner_status_idx
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_cause_bucket_taxonomy_enforcement_records_transition_status_idx
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_cause_bucket_taxonomy_enforcement_records_hash_idx
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_cause_bucket_taxonomy_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_cause_bucket_taxonomy_enforcement_records_select_owner"
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records;
+create policy "moral_trade_cause_bucket_taxonomy_enforcement_records_select_owner"
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_cause_bucket_taxonomy_enforcement_records_insert_owner"
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records;
+create policy "moral_trade_cause_bucket_taxonomy_enforcement_records_insert_owner"
+  on public.moral_trade_cause_bucket_taxonomy_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and clearing_run_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_resource_compatibility_assessments (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'compensated_action_terms',
+      'negative_commitment_scope',
+      'side_agreement_disclosure'
+    )
+  ),
+  subject_id text not null,
+  participant_ids_hash text not null check (participant_ids_hash ~ '^sha256:[a-f0-9]{64}$'),
+  resource_compatibility_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  resource_or_action_conflict_type text not null default 'unknown' check (
+    resource_or_action_conflict_type in (
+      'none_disclosed',
+      'mutually_exclusive_resource',
+      'mutually_exclusive_action',
+      'incompatible_destination',
+      'incompatible_timing',
+      'zero_sum_control_claim',
+      'third_party_control_conflict',
+      'manual_review',
+      'unknown'
+    )
+  ),
+  joint_feasibility_state text not null default 'under_review' check (
+    joint_feasibility_state in (
+      'feasible',
+      'feasible_with_conditions',
+      'under_review',
+      'infeasible_blocking',
+      'disputed',
+      'manual_review',
+      'superseded'
+    )
+  ),
+  hybrid_or_compromise_good_state text not null default 'unclear' check (
+    hybrid_or_compromise_good_state in (
+      'not_applicable',
+      'identified',
+      'unclear',
+      'blocked',
+      'manual_review'
+    )
+  ),
+  incompatible_duty_or_control_refs_json jsonb not null default '[]'::jsonb,
+  review_state text not null default 'under_review' check (
+    review_state in (
+      'not_required',
+      'under_review',
+      'non_blocking',
+      'blocked',
+      'manual_review',
+      'superseded'
+    )
+  ),
+  reviewer_decision_ref text,
+  public_participant_identity_bool boolean not null default false check (public_participant_identity_bool = false),
+  public_private_duties_or_constraints_bool boolean not null default false check (public_private_duties_or_constraints_bool = false),
+  public_private_resource_claims_bool boolean not null default false check (public_private_resource_claims_bool = false),
+  public_reviewer_notes_bool boolean not null default false check (public_reviewer_notes_bool = false),
+  public_third_party_control_facts_bool boolean not null default false check (public_third_party_control_facts_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    jsonb_typeof(incompatible_duty_or_control_refs_json) = 'array'
+  ),
+  check (
+    resource_or_action_conflict_type in ('none_disclosed', 'manual_review', 'unknown')
+    or jsonb_array_length(incompatible_duty_or_control_refs_json) > 0
+  ),
+  check (
+    review_state <> 'non_blocking'
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(resource_compatibility_policy_ref)) > 0
+      and resource_or_action_conflict_type = 'none_disclosed'
+      and joint_feasibility_state in ('feasible', 'feasible_with_conditions')
+      and hybrid_or_compromise_good_state in ('not_applicable', 'identified')
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    public_participant_identity_bool = false
+    and public_private_duties_or_constraints_bool = false
+    and public_private_resource_claims_bool = false
+    and public_reviewer_notes_bool = false
+    and public_third_party_control_facts_bool = false
+  )
+);
+
+comment on table public.moral_trade_resource_compatibility_assessments is
+  'First-class resource-compatibility and joint-feasibility assessments for non-public-goods trades. Non-blocking assessments require immutable policy, jointly feasible actions, donations, abstentions, destinations, timing, duties, and control claims, and block zero-sum control claims, mutually exclusive resources or actions, incompatible destination or timing, and third-party-control conflicts without exposing participant identity hashes, private duties, private resource claims, reviewer notes, or third-party control facts.';
+
+create index if not exists moral_trade_resource_compatibility_subject_idx
+  on public.moral_trade_resource_compatibility_assessments (subject_type, subject_id, review_state, updated_at desc);
+
+create index if not exists moral_trade_resource_compatibility_policy_idx
+  on public.moral_trade_resource_compatibility_assessments (policy_snapshot_id, policy_status, review_state);
+
+create index if not exists moral_trade_resource_compatibility_conflict_idx
+  on public.moral_trade_resource_compatibility_assessments (resource_or_action_conflict_type, joint_feasibility_state, review_state);
+
+alter table public.moral_trade_resource_compatibility_assessments enable row level security;
+
+create table if not exists public.moral_trade_resource_compatibility_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'clearing_run',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  assessment_required_bool boolean not null default false,
+  reviewed_assessment_count integer not null default 0 check (reviewed_assessment_count >= 0),
+  feasible_assessment_count integer not null default 0 check (feasible_assessment_count >= 0),
+  privacy_safe_assessment_count integer not null default 0 check (privacy_safe_assessment_count >= 0),
+  assessment_record_count integer not null default 0 check (assessment_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  clearing_run_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_resource_compatibility_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_assessment_count <= assessment_record_count),
+  check (feasible_assessment_count <= assessment_record_count),
+  check (privacy_safe_assessment_count <= assessment_record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (clearing_run_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_resource_compatibility_enforcement_records is
+  'Append-only user-owned resource-compatibility enforcement records. A record stores normalized joint-feasibility assessment input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, clearing run, payment capture, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_resource_compatibility_enforcement_records_owner_status_idx
+  on public.moral_trade_resource_compatibility_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_resource_compatibility_enforcement_records_transition_status_idx
+  on public.moral_trade_resource_compatibility_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_resource_compatibility_enforcement_records_hash_idx
+  on public.moral_trade_resource_compatibility_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_resource_compatibility_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_resource_compatibility_enforcement_records_select_owner"
+  on public.moral_trade_resource_compatibility_enforcement_records;
+create policy "moral_trade_resource_compatibility_enforcement_records_select_owner"
+  on public.moral_trade_resource_compatibility_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_resource_compatibility_enforcement_records_insert_owner"
+  on public.moral_trade_resource_compatibility_enforcement_records;
+create policy "moral_trade_resource_compatibility_enforcement_records_insert_owner"
+  on public.moral_trade_resource_compatibility_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and clearing_run_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_net_offset_accounting_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'negative_commitment_scope',
+      'evidence_record'
+    )
+  ),
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  net_offset_accounting_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  baseline_opposed_action_type text not null default 'unknown' check (
+    baseline_opposed_action_type in (
+      'donation',
+      'abstention',
+      'advocacy',
+      'purchase',
+      'service_use',
+      'other',
+      'unknown'
+    )
+  ),
+  baseline_opposed_amount_cents bigint not null default 0 check (baseline_opposed_amount_cents >= 0),
+  baseline_opposed_action_units numeric not null default 0 check (baseline_opposed_action_units >= 0),
+  matched_canceled_amount_cents bigint not null default 0 check (matched_canceled_amount_cents >= 0),
+  matched_canceled_action_units numeric not null default 0 check (matched_canceled_action_units >= 0),
+  compromise_transfer_amount_cents bigint not null default 0 check (compromise_transfer_amount_cents >= 0),
+  sponsor_or_match_amount_cents bigint not null default 0 check (sponsor_or_match_amount_cents >= 0),
+  residual_opposed_amount_cents bigint not null default 0 check (residual_opposed_amount_cents >= 0),
+  residual_opposed_action_units numeric not null default 0 check (residual_opposed_action_units >= 0),
+  residual_action_policy text not null default 'manual_review' check (
+    residual_action_policy in (
+      'allowed_if_disclosed',
+      'blocks_clearance',
+      'manual_review',
+      'not_applicable'
+    )
+  ),
+  substitution_channel_review_state text not null default 'under_review' check (
+    substitution_channel_review_state in (
+      'not_required',
+      'under_review',
+      'non_blocking',
+      'blocked',
+      'manual_review',
+      'superseded'
+    )
+  ),
+  evidence_claim_refs_json jsonb not null default '[]'::jsonb,
+  evidence_standard_ref text,
+  net_offset_state text not null default 'draft' check (
+    net_offset_state in (
+      'draft',
+      'previewed',
+      'locked',
+      'verified',
+      'challenged',
+      'blocked',
+      'superseded'
+    )
+  ),
+  reviewer_decision_ref text,
+  public_participant_identity_bool boolean not null default false check (public_participant_identity_bool = false),
+  public_private_baseline_details_bool boolean not null default false check (public_private_baseline_details_bool = false),
+  public_substitution_channel_details_bool boolean not null default false check (public_substitution_channel_details_bool = false),
+  public_reviewer_notes_bool boolean not null default false check (public_reviewer_notes_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    jsonb_typeof(evidence_claim_refs_json) = 'array'
+  ),
+  check (
+    matched_canceled_amount_cents <= baseline_opposed_amount_cents
+    and matched_canceled_action_units <= baseline_opposed_action_units
+  ),
+  check (
+    not (
+      compromise_transfer_amount_cents > 0
+      and matched_canceled_amount_cents = 0
+      and matched_canceled_action_units = 0
+    )
+  ),
+  check (
+    residual_opposed_amount_cents = 0
+    and residual_opposed_action_units = 0
+    or residual_action_policy = 'allowed_if_disclosed'
+  ),
+  check (
+    net_offset_state not in ('locked', 'verified')
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(net_offset_accounting_policy_ref)) > 0
+      and baseline_opposed_action_type <> 'unknown'
+      and (
+        baseline_opposed_amount_cents > 0
+        or baseline_opposed_action_units > 0
+      )
+      and (
+        matched_canceled_amount_cents > 0
+        or matched_canceled_action_units > 0
+      )
+      and substitution_channel_review_state in ('not_required', 'non_blocking')
+      and jsonb_array_length(evidence_claim_refs_json) > 0
+      and length(trim(coalesce(evidence_standard_ref, ''))) > 0
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    public_participant_identity_bool = false
+    and public_private_baseline_details_bool = false
+    and public_substitution_channel_details_bool = false
+    and public_reviewer_notes_bool = false
+  )
+);
+
+comment on table public.moral_trade_net_offset_accounting_records is
+  'First-class net-offset accounting records for donation-offset and negative-commitment Moral Trade flows. Records distinguish baseline opposed action, matched canceled amount, compromise transfer, sponsor or match amount, residual opposed action, substitution-channel status, and evidence standard so gross transfers, sponsor matches, or payment evidence cannot count as moral-trade volume without a reviewed net canceled opposed action.';
+
+create index if not exists moral_trade_net_offset_accounting_subject_idx
+  on public.moral_trade_net_offset_accounting_records (subject_type, subject_id, net_offset_state, updated_at desc);
+
+create index if not exists moral_trade_net_offset_accounting_policy_idx
+  on public.moral_trade_net_offset_accounting_records (policy_snapshot_id, policy_status, net_offset_state);
+
+create index if not exists moral_trade_net_offset_accounting_participant_idx
+  on public.moral_trade_net_offset_accounting_records (participant_id_hash, baseline_opposed_action_type, updated_at desc);
+
+alter table public.moral_trade_net_offset_accounting_records enable row level security;
+
+create table if not exists public.moral_trade_net_offset_accounting_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'clearing_run',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  accounting_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  net_metric_eligible_record_count integer not null default 0 check (net_metric_eligible_record_count >= 0),
+  privacy_safe_record_count integer not null default 0 check (privacy_safe_record_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  net_canceled_amount_cents integer not null default 0 check (net_canceled_amount_cents >= 0),
+  gross_transfer_amount_cents integer not null default 0 check (gross_transfer_amount_cents >= 0),
+  sponsor_or_match_amount_cents integer not null default 0 check (sponsor_or_match_amount_cents >= 0),
+  residual_opposed_amount_cents integer not null default 0 check (residual_opposed_amount_cents >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  clearing_run_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_net_offset_accounting_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (net_metric_eligible_record_count <= record_count),
+  check (privacy_safe_record_count <= record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (clearing_run_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_net_offset_accounting_enforcement_records is
+  'Append-only user-owned net-offset accounting enforcement records. A record stores normalized net-offset accounting input, deterministic evaluation result, blockers, amounts, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, clearing run, payment capture, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_net_offset_accounting_enforcement_records_owner_status_idx
+  on public.moral_trade_net_offset_accounting_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_net_offset_accounting_enforcement_records_transition_status_idx
+  on public.moral_trade_net_offset_accounting_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_net_offset_accounting_enforcement_records_hash_idx
+  on public.moral_trade_net_offset_accounting_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_net_offset_accounting_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_net_offset_accounting_enforcement_records_select_owner"
+  on public.moral_trade_net_offset_accounting_enforcement_records;
+create policy "moral_trade_net_offset_accounting_enforcement_records_select_owner"
+  on public.moral_trade_net_offset_accounting_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_net_offset_accounting_enforcement_records_insert_owner"
+  on public.moral_trade_net_offset_accounting_enforcement_records;
+create policy "moral_trade_net_offset_accounting_enforcement_records_insert_owner"
+  on public.moral_trade_net_offset_accounting_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and clearing_run_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_offer_validity_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'seed_template',
+      'worked_example'
+    )
+  ),
+  subject_id text not null,
+  offer_validity_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  baseline_snapshot_hash text not null check (baseline_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  terms_snapshot_hash text not null check (terms_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  empirical_assumption_snapshot_refs text[] not null default '{}',
+  evidence_standard_refs_json jsonb not null default '[]'::jsonb,
+  jurisdiction_policy_version text not null,
+  recipient_or_destination_refs_json jsonb not null default '[]'::jsonb,
+  valid_from timestamptz not null,
+  offer_expires_at timestamptz not null,
+  stale_at timestamptz not null,
+  renewal_confirmation_record_refs text[] not null default '{}',
+  stale_reason_codes_json jsonb not null default '[]'::jsonb,
+  validity_state text not null default 'draft' check (
+    validity_state in ('draft', 'valid', 'stale', 'expired', 'renewed', 'withdrawn', 'superseded', 'blocked')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    jsonb_typeof(evidence_standard_refs_json) = 'array'
+    and jsonb_typeof(recipient_or_destination_refs_json) = 'array'
+    and jsonb_typeof(stale_reason_codes_json) = 'array'
+  ),
+  check (
+    valid_from < offer_expires_at
+    and valid_from <= stale_at
+    and stale_at <= offer_expires_at
+  ),
+  check (
+    validity_state not in ('valid', 'renewed')
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(offer_validity_policy_ref)) > 0
+      and cardinality(empirical_assumption_snapshot_refs) > 0
+      and jsonb_array_length(evidence_standard_refs_json) > 0
+      and length(trim(jurisdiction_policy_version)) > 0
+      and jsonb_array_length(recipient_or_destination_refs_json) > 0
+      and jsonb_array_length(stale_reason_codes_json) = 0
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    validity_state <> 'renewed'
+    or cardinality(renewal_confirmation_record_refs) > 0
+  )
+);
+
+comment on table public.moral_trade_offer_validity_records is
+  'First-class offer-validity records for donation-offset and pledge-swap offers. Records bind baseline snapshots, terms snapshots, empirical assumptions, evidence standards, jurisdiction policy, recipient/destination refs, validity windows, stale reasons, and renewed confirmations so stale or expired offers cannot become matchable, locked, captured, reliance-bearing, publicly counted, or release-promoted.';
+
+create index if not exists moral_trade_offer_validity_subject_idx
+  on public.moral_trade_offer_validity_records (subject_type, subject_id, validity_state, offer_expires_at);
+
+create index if not exists moral_trade_offer_validity_policy_idx
+  on public.moral_trade_offer_validity_records (policy_snapshot_id, policy_status, validity_state);
+
+create index if not exists moral_trade_offer_validity_expiry_idx
+  on public.moral_trade_offer_validity_records (stale_at, offer_expires_at, validity_state);
+
+alter table public.moral_trade_offer_validity_records enable row level security;
+
+create table if not exists public.moral_trade_offer_validity_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'live_offer_publication',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'payment_capture',
+      'reliance',
+      'public_completion_count',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  validity_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  active_validity_record_count integer not null default 0 check (active_validity_record_count >= 0),
+  stale_or_expired_record_count integer not null default 0 check (stale_or_expired_record_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  live_offer_publication_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_allowed_bool boolean not null default false,
+  public_completion_count_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_offer_validity_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (active_validity_record_count <= record_count),
+  check (stale_or_expired_record_count <= record_count),
+  check (draft_preview_allowed_bool = false),
+  check (live_offer_publication_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_allowed_bool = false),
+  check (public_completion_count_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_offer_validity_enforcement_records is
+  'Append-only user-owned offer-validity enforcement records. A record stores normalized offer-validity input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, live publication, match-candidate generation, matched-trade lock, payment capture, reliance, public completion count, or release-gate promotion.';
+
+create index if not exists moral_trade_offer_validity_enforcement_records_owner_status_idx
+  on public.moral_trade_offer_validity_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_offer_validity_enforcement_records_transition_status_idx
+  on public.moral_trade_offer_validity_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_offer_validity_enforcement_records_hash_idx
+  on public.moral_trade_offer_validity_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_offer_validity_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_offer_validity_enforcement_records_select_owner"
+  on public.moral_trade_offer_validity_enforcement_records;
+create policy "moral_trade_offer_validity_enforcement_records_select_owner"
+  on public.moral_trade_offer_validity_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_offer_validity_enforcement_records_insert_owner"
+  on public.moral_trade_offer_validity_enforcement_records;
+create policy "moral_trade_offer_validity_enforcement_records_insert_owner"
+  on public.moral_trade_offer_validity_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and live_offer_publication_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_allowed_bool = false
+    and public_completion_count_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_private_exchange_rate_quote_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'bargaining_round_record'
+    )
+  ),
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  private_exchange_rate_quote_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  quote_type text not null check (
+    quote_type in (
+      'clearing_ratio_bound',
+      'side_payment_bound',
+      'counterpart_volume_bound',
+      'action_money_tradeoff',
+      'empirical_effectiveness_tradeoff',
+      'manual_review'
+    )
+  ),
+  private_quote_terms_hash text not null check (private_quote_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  acceptable_min_bps integer not null check (acceptable_min_bps >= 0),
+  acceptable_max_bps integer not null check (acceptable_max_bps >= 0),
+  settlement_currency text check (settlement_currency is null or settlement_currency ~ '^[A-Z]{3}$'),
+  disclosure_scope text not null default 'participant_only' check (
+    disclosure_scope in (
+      'participant_only',
+      'reviewer_only',
+      'counterparty_band_only',
+      'public_suppressed'
+    )
+  ),
+  public_moral_price_prohibited_bool boolean not null default true,
+  public_cause_price_published_bool boolean not null default false,
+  global_exchange_rate_published_bool boolean not null default false,
+  public_effectiveness_comparison_published_bool boolean not null default false,
+  moral_value_inference_published_bool boolean not null default false,
+  exact_counterparty_quote_disclosed_bool boolean not null default false,
+  raw_private_terms_public_bool boolean not null default false,
+  quote_state text not null default 'draft' check (
+    quote_state in ('draft', 'active', 'locked', 'expired', 'superseded', 'withdrawn')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (acceptable_min_bps <= acceptable_max_bps),
+  check (
+    quote_type not in ('side_payment_bound', 'action_money_tradeoff')
+    or settlement_currency is not null
+  ),
+  check (
+    quote_state not in ('active', 'locked')
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(private_exchange_rate_quote_policy_ref)) > 0
+      and public_moral_price_prohibited_bool
+      and not public_cause_price_published_bool
+      and not global_exchange_rate_published_bool
+      and not public_effectiveness_comparison_published_bool
+      and not moral_value_inference_published_bool
+      and not exact_counterparty_quote_disclosed_bool
+      and not raw_private_terms_public_bool
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_private_exchange_rate_quote_records is
+  'First-class private exchange-rate quote records for participant-owned ratio bounds, side-payment bounds, counterpart-volume bounds, and implied tradeoffs. Public surfaces may report that trades cleared within participant bounds but cannot publish cause prices, global moral exchange rates, public effectiveness comparisons, exact willingness-to-trade terms, or inferred moral values.';
+
+create index if not exists moral_trade_private_exchange_rate_subject_idx
+  on public.moral_trade_private_exchange_rate_quote_records (subject_type, subject_id, quote_state, updated_at desc);
+
+create index if not exists moral_trade_private_exchange_rate_participant_idx
+  on public.moral_trade_private_exchange_rate_quote_records (participant_id_hash, quote_type, quote_state);
+
+create index if not exists moral_trade_private_exchange_rate_policy_idx
+  on public.moral_trade_private_exchange_rate_quote_records (policy_snapshot_id, policy_status, quote_state);
+
+alter table public.moral_trade_private_exchange_rate_quote_records enable row level security;
+
+create table if not exists public.moral_trade_private_exchange_rate_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'clearing_run',
+      'payment_capture',
+      'reliance',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  private_exchange_rate_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  active_quote_record_count integer not null default 0 check (active_quote_record_count >= 0),
+  privacy_safe_record_count integer not null default 0 check (privacy_safe_record_count >= 0),
+  affected_participant_quote_count integer not null default 0 check (affected_participant_quote_count >= 0),
+  required_affected_participant_count integer not null default 0 check (required_affected_participant_count >= 0),
+  public_price_blocker_count integer not null default 0 check (public_price_blocker_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  clearing_run_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_private_exchange_rate_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (active_quote_record_count <= record_count),
+  check (privacy_safe_record_count <= record_count),
+  check (affected_participant_quote_count <= record_count),
+  check (public_price_blocker_count <= record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (clearing_run_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_private_exchange_rate_enforcement_records is
+  'Append-only user-owned private exchange-rate enforcement records. A record stores normalized private quote input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, clearing run, payment capture, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_private_exchange_rate_enforcement_records_owner_status_idx
+  on public.moral_trade_private_exchange_rate_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_private_exchange_rate_enforcement_records_transition_status_idx
+  on public.moral_trade_private_exchange_rate_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_private_exchange_rate_enforcement_records_hash_idx
+  on public.moral_trade_private_exchange_rate_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_private_exchange_rate_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_private_exchange_rate_enforcement_records_select_owner"
+  on public.moral_trade_private_exchange_rate_enforcement_records;
+create policy "moral_trade_private_exchange_rate_enforcement_records_select_owner"
+  on public.moral_trade_private_exchange_rate_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_private_exchange_rate_enforcement_records_insert_owner"
+  on public.moral_trade_private_exchange_rate_enforcement_records;
+create policy "moral_trade_private_exchange_rate_enforcement_records_insert_owner"
+  on public.moral_trade_private_exchange_rate_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and clearing_run_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_noncompensable_blocker_assessments (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'compensated_action_terms',
+      'pledge_performance_bond_record',
+      'side_agreement_disclosure',
+      'payment_event',
+      'evidence_record',
+      'dispute_case'
+    )
+  ),
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  noncompensable_blocker_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  protected_interest_type text not null check (
+    protected_interest_type in (
+      'participant_waivable_interest',
+      'nonparticipant_interest',
+      'legal_or_regulatory',
+      'public_safety',
+      'truthful_reporting',
+      'civil_rights',
+      'confidentiality_or_privacy',
+      'institutional_process',
+      'digital_system_integrity',
+      'anti_threat',
+      'other'
+    )
+  ),
+  blocking_control_codes_json jsonb not null default '[]'::jsonb,
+  attempted_compensation_or_waiver_state text not null default 'none' check (
+    attempted_compensation_or_waiver_state in ('none', 'possible', 'under_review', 'blocking', 'superseded')
+  ),
+  personal_waiver_allowed_state text not null default 'not_applicable' check (
+    personal_waiver_allowed_state in (
+      'not_applicable',
+      'allowed_with_renewed_confirmation',
+      'disallowed',
+      'disputed',
+      'manual_review'
+    )
+  ),
+  renewed_confirmation_record_refs text[] not null default '{}',
+  review_state text not null default 'under_review' check (
+    review_state in ('not_required', 'under_review', 'non_blocking', 'blocked', 'manual_review', 'superseded')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (jsonb_typeof(blocking_control_codes_json) = 'array'),
+  check (
+    review_state = 'not_required'
+    or jsonb_array_length(blocking_control_codes_json) > 0
+  ),
+  check (
+    review_state <> 'non_blocking'
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(noncompensable_blocker_policy_ref)) > 0
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    protected_interest_type = 'participant_waivable_interest'
+    or personal_waiver_allowed_state <> 'allowed_with_renewed_confirmation'
+  ),
+  check (
+    protected_interest_type = 'participant_waivable_interest'
+    or attempted_compensation_or_waiver_state not in ('possible', 'under_review', 'blocking')
+    or review_state <> 'non_blocking'
+  ),
+  check (
+    protected_interest_type <> 'participant_waivable_interest'
+    or personal_waiver_allowed_state <> 'allowed_with_renewed_confirmation'
+    or cardinality(renewed_confirmation_record_refs) > 0
+  )
+);
+
+comment on table public.moral_trade_noncompensable_blocker_assessments is
+  'First-class noncompensable blocker assessments for safety, legal, privacy, third-party-rights, reporting-integrity, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity controls. These blockers are constraints, not prices, and side payments, higher donations, performance bonds, reciprocal favors, private agreements, or private waivers cannot clear them by themselves.';
+
+create index if not exists moral_trade_noncompensable_blocker_subject_idx
+  on public.moral_trade_noncompensable_blocker_assessments (subject_type, subject_id, review_state, updated_at desc);
+
+create index if not exists moral_trade_noncompensable_blocker_participant_idx
+  on public.moral_trade_noncompensable_blocker_assessments (participant_id_hash, protected_interest_type, review_state);
+
+create index if not exists moral_trade_noncompensable_blocker_policy_idx
+  on public.moral_trade_noncompensable_blocker_assessments (policy_snapshot_id, policy_status, review_state);
+
+alter table public.moral_trade_noncompensable_blocker_assessments enable row level security;
+
+create table if not exists public.moral_trade_noncompensable_blocker_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'payment_capture',
+      'payout_release',
+      'reliance',
+      'public_completion_count',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  assessment_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  non_blocking_assessment_count integer not null default 0 check (non_blocking_assessment_count >= 0),
+  affected_participant_assessment_count integer not null default 0 check (affected_participant_assessment_count >= 0),
+  required_affected_participant_count integer not null default 0 check (required_affected_participant_count >= 0),
+  compensation_attempt_blocker_count integer not null default 0 check (compensation_attempt_blocker_count >= 0),
+  personally_waivable_pass_count integer not null default 0 check (personally_waivable_pass_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  reliance_allowed_bool boolean not null default false,
+  public_completion_count_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_noncompensable_blocker_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (non_blocking_assessment_count <= record_count),
+  check (affected_participant_assessment_count <= record_count),
+  check (compensation_attempt_blocker_count <= record_count),
+  check (personally_waivable_pass_count <= record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (reliance_allowed_bool = false),
+  check (public_completion_count_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_noncompensable_blocker_enforcement_records is
+  'Append-only user-owned noncompensable-blocker enforcement records. A record stores normalized noncompensable-blocker input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, payment capture, payout release, reliance, public completion count, or release-gate promotion.';
+
+create index if not exists moral_trade_noncompensable_blocker_enforcement_records_owner_status_idx
+  on public.moral_trade_noncompensable_blocker_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_noncompensable_blocker_enforcement_records_transition_status_idx
+  on public.moral_trade_noncompensable_blocker_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_noncompensable_blocker_enforcement_records_hash_idx
+  on public.moral_trade_noncompensable_blocker_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_noncompensable_blocker_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_noncompensable_blocker_enforcement_records_select_owner"
+  on public.moral_trade_noncompensable_blocker_enforcement_records;
+create policy "moral_trade_noncompensable_blocker_enforcement_records_select_owner"
+  on public.moral_trade_noncompensable_blocker_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_noncompensable_blocker_enforcement_records_insert_owner"
+  on public.moral_trade_noncompensable_blocker_enforcement_records;
+create policy "moral_trade_noncompensable_blocker_enforcement_records_insert_owner"
+  on public.moral_trade_noncompensable_blocker_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and reliance_allowed_bool = false
+    and public_completion_count_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_batch_clearing_objective_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'donation_offset_batch',
+      'donation_offset_offer_pool',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'public_metric_batch',
+      'release_gate'
+    )
+  ),
+  subject_id text not null,
+  batch_clearing_objective_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  objective_type text not null check (
+    objective_type in (
+      'maximize_safe_matched_volume',
+      'maximize_safe_participant_count',
+      'minimize_unmatched_residual',
+      'manual_review'
+    )
+  ),
+  objective_frozen_at timestamptz,
+  deterministic_algorithm_version text not null,
+  tie_break_fairness_rule_type text not null check (
+    tie_break_fairness_rule_type in (
+      'seeded_deterministic_hash',
+      'pro_rata_by_frozen_capacity',
+      'round_robin_by_hash',
+      'reviewer_approved_manual',
+      'manual_review'
+    )
+  ),
+  tie_break_fairness_policy_ref text not null,
+  scarce_capacity_bool boolean not null default false,
+  input_bundle_hash text check (input_bundle_hash is null or input_bundle_hash ~ '^sha256:[a-f0-9]{64}$'),
+  excluded_records_hash text check (excluded_records_hash is null or excluded_records_hash ~ '^sha256:[a-f0-9]{64}$'),
+  objective_result_hash text check (objective_result_hash is null or objective_result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  reproducibility_check_ref text,
+  allocation_drivers_json jsonb not null default '[]'::jsonb,
+  result_state text not null default 'under_review' check (
+    result_state in ('draft', 'reproducible', 'under_review', 'non_blocking', 'blocked', 'superseded')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (jsonb_typeof(allocation_drivers_json) = 'array'),
+  check (
+    result_state not in ('reproducible', 'non_blocking')
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(batch_clearing_objective_policy_ref)) > 0
+      and objective_type <> 'manual_review'
+      and objective_frozen_at is not null
+      and length(trim(deterministic_algorithm_version)) > 0
+      and tie_break_fairness_rule_type in (
+        'seeded_deterministic_hash',
+        'pro_rata_by_frozen_capacity',
+        'round_robin_by_hash'
+      )
+      and length(trim(tie_break_fairness_policy_ref)) > 0
+      and input_bundle_hash is not null
+      and excluded_records_hash is not null
+      and objective_result_hash is not null
+      and reproducibility_check_ref is not null
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (
+    result_state not in ('reproducible', 'non_blocking')
+    or not (
+      allocation_drivers_json ?| array[
+        'moral_score',
+        'operator_preference',
+        'public_pressure',
+        'timestamp_race',
+        'private_cap_leakage',
+        'database_order',
+        'protected_trait',
+        'hidden_reviewer_preference'
+      ]
+    )
+  ),
+  check (
+    result_state not in ('reproducible', 'non_blocking')
+    or not scarce_capacity_bool
+    or allocation_drivers_json ?| array[
+      'seeded_hash',
+      'frozen_capacity',
+      'participant_confirmed_bounds'
+    ]
+  )
+);
+
+comment on table public.moral_trade_batch_clearing_objective_records is
+  'First-class donation-offset batch-clearing objective records. Batch clearing needs a frozen objective, deterministic tie-break fairness rule, reproducible objective result, and prohibited allocation drivers counter before scarce matches can allocate, lock, capture, rely, publish metrics, or promote release gates.';
+
+create index if not exists moral_trade_batch_clearing_objective_subject_idx
+  on public.moral_trade_batch_clearing_objective_records (subject_type, subject_id, result_state, updated_at desc);
+
+create index if not exists moral_trade_batch_clearing_objective_policy_idx
+  on public.moral_trade_batch_clearing_objective_records (policy_snapshot_id, policy_status, result_state);
+
+create index if not exists moral_trade_batch_clearing_objective_result_idx
+  on public.moral_trade_batch_clearing_objective_records (objective_type, tie_break_fairness_rule_type, result_state);
+
+alter table public.moral_trade_batch_clearing_objective_records enable row level security;
+
+create table if not exists public.moral_trade_batch_clearing_objective_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'match_candidate_generation',
+      'matched_trade_lock',
+      'clearing_run',
+      'payment_capture',
+      'reliance',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  batch_objective_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  reproducible_result_count integer not null default 0 check (reproducible_result_count >= 0),
+  prohibited_allocation_driver_count integer not null default 0 check (prohibited_allocation_driver_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  draft_preview_allowed_bool boolean not null default false,
+  match_candidate_generation_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  clearing_run_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_batch_clearing_objective_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (reproducible_result_count <= record_count),
+  check (draft_preview_allowed_bool = false),
+  check (match_candidate_generation_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (clearing_run_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_batch_clearing_objective_enforcement_records is
+  'Append-only user-owned batch-clearing objective enforcement records. A record stores normalized batch-objective input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize draft preview, match-candidate generation, matched-trade lock, clearing run, payment capture, reliance, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_batch_clearing_objective_enforcement_records_owner_status_idx
+  on public.moral_trade_batch_clearing_objective_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_batch_clearing_objective_enforcement_records_transition_status_idx
+  on public.moral_trade_batch_clearing_objective_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_batch_clearing_objective_enforcement_records_hash_idx
+  on public.moral_trade_batch_clearing_objective_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_batch_clearing_objective_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_batch_clearing_objective_enforcement_records_select_owner"
+  on public.moral_trade_batch_clearing_objective_enforcement_records;
+create policy "moral_trade_batch_clearing_objective_enforcement_records_select_owner"
+  on public.moral_trade_batch_clearing_objective_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_batch_clearing_objective_enforcement_records_insert_owner"
+  on public.moral_trade_batch_clearing_objective_enforcement_records;
+create policy "moral_trade_batch_clearing_objective_enforcement_records_insert_owner"
+  on public.moral_trade_batch_clearing_objective_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and draft_preview_allowed_bool = false
+    and match_candidate_generation_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and clearing_run_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_sensitive_evidence_attestations (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'evidence_record',
+      'impact_claim',
+      'matched_trade_lock_proposal',
+      'payout_milestone',
+      'recipient_destination',
+      'noncompensable_blocker_assessment',
+      'appeal_case',
+      'disclosure_decision'
+    )
+  ),
+  subject_id text not null,
+  evidence_path_type text not null check (
+    evidence_path_type in (
+      'private_receipt',
+      'identity_artifact',
+      'legal_capacity_artifact',
+      'payment_destination_artifact',
+      'source_note',
+      'private_message',
+      'protected_trait_evidence',
+      'safety_report',
+      'reviewer_note',
+      'provider_record',
+      'raw_private_artifact'
+    )
+  ),
+  claim_type text not null check (
+    claim_type in (
+      'payment_receipt_verified',
+      'destination_verified',
+      'eligibility_verified',
+      'baseline_scope_verified',
+      'completion_evidence_verified',
+      'impact_evidence_verified',
+      'safety_review_non_blocking',
+      'confidentiality_review_non_blocking',
+      'uncertainty_present',
+      'manual_review'
+    )
+  ),
+  attestation_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  raw_private_artifact_ref_hash text check (raw_private_artifact_ref_hash is null or raw_private_artifact_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  attestation_result_hash text check (attestation_result_hash is null or attestation_result_hash ~ '^sha256:[a-f0-9]{64}$'),
+  uncertainty_statement text not null default '',
+  scope_statement text not null default '',
+  challenge_route text not null default '',
+  disclosure_mode text not null default 'attestation_only' check (
+    disclosure_mode in (
+      'attestation_only',
+      'counterparty_claim_typed_summary',
+      'reviewer_raw_artifact',
+      'privacy_grant_broader_disclosure',
+      'public_suppressed'
+    )
+  ),
+  privacy_grant_status text not null default 'missing' check (
+    privacy_grant_status in ('not_required', 'granted_current', 'missing', 'expired', 'revoked', 'scope_mismatch')
+  ),
+  confidentiality_review_status text not null default 'missing' check (
+    confidentiality_review_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'failed', 'stale', 'superseded')
+  ),
+  counterparty_receives_raw_artifact_bool boolean not null default false,
+  public_raw_artifact_bool boolean not null default false,
+  result_state text not null default 'under_review' check (
+    result_state in ('draft', 'attested', 'insufficient', 'challenged', 'under_review', 'blocked', 'superseded')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    result_state <> 'attested'
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(attestation_policy_ref)) > 0
+      and raw_private_artifact_ref_hash is not null
+      and attestation_result_hash is not null
+      and length(trim(uncertainty_statement)) >= 12
+      and length(trim(scope_statement)) >= 12
+      and challenge_route in (
+        '/api/moral-trade/challenge-appeal/evaluate',
+        '/api/moral-trade/challenge-appeal/enforce',
+        '/api/moral-trade/challenge-appeal/contract'
+      )
+      and confidentiality_review_status = 'passed'
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  ),
+  check (not public_raw_artifact_bool),
+  check (
+    not counterparty_receives_raw_artifact_bool
+    or (
+      disclosure_mode = 'privacy_grant_broader_disclosure'
+      and privacy_grant_status = 'granted_current'
+      and confidentiality_review_status = 'passed'
+    )
+  )
+);
+
+comment on table public.moral_trade_sensitive_evidence_attestations is
+  'First-class sensitive-evidence attestation records. Counterparties receive claim-typed attestation results, uncertainty, scope, and challenge routes rather than raw private artifacts unless a privacy grant and passed confidentiality review explicitly allow broader disclosure.';
+
+create index if not exists moral_trade_sensitive_evidence_attestations_subject_idx
+  on public.moral_trade_sensitive_evidence_attestations (subject_type, subject_id, result_state, updated_at desc);
+
+create index if not exists moral_trade_sensitive_evidence_attestations_policy_idx
+  on public.moral_trade_sensitive_evidence_attestations (policy_snapshot_id, policy_status, result_state);
+
+create index if not exists moral_trade_sensitive_evidence_attestations_claim_idx
+  on public.moral_trade_sensitive_evidence_attestations (evidence_path_type, claim_type, disclosure_mode, result_state);
+
+alter table public.moral_trade_sensitive_evidence_attestations enable row level security;
+
+create table if not exists public.moral_trade_sensitive_evidence_attestation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'evidence_review',
+      'counterparty_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'payout_release',
+      'reliance',
+      'public_metric_publication',
+      'challenge_response',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  attestation_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  attested_record_count integer not null default 0 check (attested_record_count >= 0),
+  privacy_preserving_disclosure_count integer not null default 0 check (privacy_preserving_disclosure_count >= 0),
+  raw_artifact_disclosure_blocker_count integer not null default 0 check (raw_artifact_disclosure_blocker_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  evidence_review_allowed_bool boolean not null default false,
+  counterparty_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  payout_release_allowed_bool boolean not null default false,
+  reliance_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  challenge_response_allowed_bool boolean not null default false,
+  raw_artifact_disclosure_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_sensitive_evidence_attestation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (attested_record_count <= record_count),
+  check (privacy_preserving_disclosure_count <= record_count),
+  check (raw_artifact_disclosure_blocker_count <= record_count),
+  check (evidence_review_allowed_bool = false),
+  check (counterparty_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (payout_release_allowed_bool = false),
+  check (reliance_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (challenge_response_allowed_bool = false),
+  check (raw_artifact_disclosure_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_sensitive_evidence_attestation_enforcement_records is
+  'Append-only user-owned sensitive-evidence attestation enforcement records. A record stores normalized attestation input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize evidence review, counterparty preview, matched-trade lock, payment capture, payout release, reliance, public metric publication, challenge response, raw artifact disclosure, or release-gate promotion.';
+
+create index if not exists moral_trade_sensitive_evidence_attestation_enforcement_records_owner_status_idx
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_sensitive_evidence_attestation_enforcement_records_transition_status_idx
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_sensitive_evidence_attestation_enforcement_records_hash_idx
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_sensitive_evidence_attestation_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_sensitive_evidence_attestation_enforcement_records_select_owner"
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records;
+create policy "moral_trade_sensitive_evidence_attestation_enforcement_records_select_owner"
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_sensitive_evidence_attestation_enforcement_records_insert_owner"
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records;
+create policy "moral_trade_sensitive_evidence_attestation_enforcement_records_insert_owner"
+  on public.moral_trade_sensitive_evidence_attestation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and evidence_review_allowed_bool = false
+    and counterparty_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and payout_release_allowed_bool = false
+    and reliance_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and challenge_response_allowed_bool = false
+    and raw_artifact_disclosure_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_pilot_evidence_gates (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  pilot_track text not null check (
+    pilot_track in ('donation_offset', 'pledge_swap', 'combined_market_pilot')
+  ),
+  release_stage text not null,
+  pilot_evidence_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  simulation_evidence_hash text check (simulation_evidence_hash is null or simulation_evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  red_team_evidence_hash text check (red_team_evidence_hash is null or red_team_evidence_hash ~ '^sha256:[a-f0-9]{64}$'),
+  pre_registered_criteria_hash text check (pre_registered_criteria_hash is null or pre_registered_criteria_hash ~ '^sha256:[a-f0-9]{64}$'),
+  scale_up_criteria text not null default '',
+  pause_criteria text not null default '',
+  rollback_criteria text not null default '',
+  evidence_types_json jsonb not null default '[]'::jsonb,
+  success_metric_refs_json jsonb not null default '[]'::jsonb,
+  matched_volume_only_bool boolean not null default false,
+  replay_run_count integer not null default 0 check (replay_run_count >= 0),
+  red_team_finding_count integer not null default 0 check (red_team_finding_count >= 0),
+  unresolved_critical_finding_count integer not null default 0 check (unresolved_critical_finding_count >= 0),
+  result_state text not null default 'under_review' check (
+    result_state in ('draft', 'under_review', 'passed', 'blocked', 'paused', 'rollback_required', 'superseded')
+  ),
+  reviewer_decision_ref text,
+  criteria_published_at timestamptz,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    jsonb_typeof(evidence_types_json) = 'array'
+    and jsonb_typeof(success_metric_refs_json) = 'array'
+  ),
+  check (
+    result_state <> 'passed'
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(pilot_evidence_policy_ref)) > 0
+      and simulation_evidence_hash is not null
+      and red_team_evidence_hash is not null
+      and pre_registered_criteria_hash is not null
+      and length(trim(scale_up_criteria)) >= 12
+      and length(trim(pause_criteria)) >= 12
+      and length(trim(rollback_criteria)) >= 12
+      and jsonb_array_length(evidence_types_json) > 0
+      and jsonb_array_length(success_metric_refs_json) > 0
+      and not (success_metric_refs_json <@ '["matched_volume"]'::jsonb)
+      and matched_volume_only_bool = false
+      and replay_run_count > 0
+      and unresolved_critical_finding_count = 0
+      and reviewer_decision_ref is not null
+      and criteria_published_at is not null
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_pilot_evidence_gates is
+  'First-class pilot evidence gate records for donation-offset and pledge-swap promotion. Records require reviewed market simulation, red-team evidence, pre-registered scale-up, pause, and rollback criteria, and non-volume success metrics; matched volume alone cannot satisfy pilot success.';
+
+create index if not exists moral_trade_pilot_evidence_gates_track_idx
+  on public.moral_trade_pilot_evidence_gates (pilot_track, release_stage, result_state, updated_at desc);
+
+create index if not exists moral_trade_pilot_evidence_gates_policy_idx
+  on public.moral_trade_pilot_evidence_gates (policy_snapshot_id, policy_status, result_state);
+
+create index if not exists moral_trade_pilot_evidence_gates_review_idx
+  on public.moral_trade_pilot_evidence_gates (result_state, criteria_published_at, reviewed_at);
+
+alter table public.moral_trade_pilot_evidence_gates enable row level security;
+
+create table if not exists public.moral_trade_pilot_evidence_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'donation_offset_payable_promotion',
+      'pledge_swap_reliance_promotion',
+      'capped_real_money_release',
+      'public_metric_release',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  evidence_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  passing_record_count integer not null default 0 check (passing_record_count >= 0),
+  simulation_evidence_count integer not null default 0 check (simulation_evidence_count >= 0),
+  red_team_evidence_count integer not null default 0 check (red_team_evidence_count >= 0),
+  blocker_count integer not null default 0 check (blocker_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  donation_offset_payable_promotion_allowed_bool boolean not null default false,
+  pledge_swap_reliance_promotion_allowed_bool boolean not null default false,
+  capped_real_money_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_pilot_evidence_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (reviewed_record_count <= record_count),
+  check (passing_record_count <= record_count),
+  check (simulation_evidence_count <= record_count),
+  check (red_team_evidence_count <= record_count),
+  check (donation_offset_payable_promotion_allowed_bool = false),
+  check (pledge_swap_reliance_promotion_allowed_bool = false),
+  check (capped_real_money_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_pilot_evidence_enforcement_records is
+  'Append-only user-owned pilot-evidence enforcement records. A record stores normalized pilot evidence input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize donation-offset payable promotion, pledge-swap reliance promotion, capped real-money release, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_pilot_evidence_enforcement_records_owner_status_idx
+  on public.moral_trade_pilot_evidence_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_pilot_evidence_enforcement_records_transition_status_idx
+  on public.moral_trade_pilot_evidence_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_pilot_evidence_enforcement_records_hash_idx
+  on public.moral_trade_pilot_evidence_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_pilot_evidence_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_pilot_evidence_enforcement_records_select_owner"
+  on public.moral_trade_pilot_evidence_enforcement_records;
+create policy "moral_trade_pilot_evidence_enforcement_records_select_owner"
+  on public.moral_trade_pilot_evidence_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_pilot_evidence_enforcement_records_insert_owner"
+  on public.moral_trade_pilot_evidence_enforcement_records;
+create policy "moral_trade_pilot_evidence_enforcement_records_insert_owner"
+  on public.moral_trade_pilot_evidence_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and donation_offset_payable_promotion_allowed_bool = false
+    and pledge_swap_reliance_promotion_allowed_bool = false
+    and capped_real_money_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_direct_pair_clearing_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  trade_type text not null check (
+    trade_type in ('donation_offset', 'pledge_swap', 'compensated_moral_action', 'manual_review')
+  ),
+  source_offer_ids text[] not null default '{}',
+  matched_trade_lock_proposal_ref text,
+  initiator_participant_id_hash text not null check (initiator_participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invited_or_known_counterparty_id_hash text not null check (invited_or_known_counterparty_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_or_known_counterparty_ref text not null,
+  direct_pair_clearing_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  no_background_networking_bool boolean not null default true,
+  two_party_terms_snapshot_hash text not null check (two_party_terms_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  final_confirmation_record_refs text[] not null default '{}',
+  privacy_grant_refs text[] not null default '{}',
+  user_safety_review_state text not null default 'not_started' check (
+    user_safety_review_state in ('not_started', 'under_review', 'non_blocking', 'blocked', 'manual_review', 'superseded')
+  ),
+  matching_clearing_run_ref text,
+  direct_pair_state text not null default 'draft' check (
+    direct_pair_state in ('draft', 'invited', 'previewed', 'both_confirmed', 'locked', 'expired', 'withdrawn', 'superseded', 'blocked')
+  ),
+  ordinary_lock_review_payment_privacy_gates_status text not null default 'missing' check (
+    ordinary_lock_review_payment_privacy_gates_status in ('passed', 'not_required_for_stage', 'missing', 'under_review', 'blocked', 'stale', 'superseded')
+  ),
+  reviewer_decision_ref text,
+  public_counterparty_identity_bool boolean not null default false check (public_counterparty_identity_bool = false),
+  public_direct_contact_details_bool boolean not null default false check (public_direct_contact_details_bool = false),
+  public_exact_caps_bool boolean not null default false check (public_exact_caps_bool = false),
+  public_private_notes_bool boolean not null default false check (public_private_notes_bool = false),
+  public_private_surplus_bool boolean not null default false check (public_private_surplus_bool = false),
+  autonomous_outreach_attempted_bool boolean not null default false check (autonomous_outreach_attempted_bool = false),
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(source_offer_ids) <= 2),
+  check (
+    direct_pair_state not in ('both_confirmed', 'locked')
+    or (
+      trade_type in ('donation_offset', 'pledge_swap')
+      and cardinality(source_offer_ids) > 0
+      and matched_trade_lock_proposal_ref is not null
+      and length(trim(invite_or_known_counterparty_ref)) > 0
+      and length(trim(direct_pair_clearing_policy_ref)) > 0
+      and policy_status = 'resolved_immutable'
+      and no_background_networking_bool = true
+      and cardinality(final_confirmation_record_refs) >= 2
+      and cardinality(privacy_grant_refs) > 0
+      and user_safety_review_state = 'non_blocking'
+      and matching_clearing_run_ref is not null
+      and ordinary_lock_review_payment_privacy_gates_status = 'passed'
+      and reviewer_decision_ref is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_direct_pair_clearing_records is
+  'Frozen direct-pair clearing records for known or invite-linked two-party donation-offset and pledge-swap previews. Confirmed or locked records require no background networking, both-party confirmations, privacy grants, user-safety review, matching-clearing linkage, reviewer decision, and ordinary lock/review/payment/privacy gates before any lock, capture, public metric, or release gate can rely on them.';
+
+create index if not exists moral_trade_direct_pair_clearing_records_state_idx
+  on public.moral_trade_direct_pair_clearing_records (direct_pair_state, trade_type, created_at desc);
+
+create index if not exists moral_trade_direct_pair_clearing_records_policy_idx
+  on public.moral_trade_direct_pair_clearing_records (policy_snapshot_id, direct_pair_state);
+
+create index if not exists moral_trade_direct_pair_clearing_records_lock_idx
+  on public.moral_trade_direct_pair_clearing_records (matched_trade_lock_proposal_ref, direct_pair_state);
+
+alter table public.moral_trade_direct_pair_clearing_records enable row level security;
+
+create table if not exists public.moral_trade_direct_pair_clearing_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'direct_pair_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  direct_pair_required_bool boolean not null default false,
+  eligible_record_count integer not null default 0 check (eligible_record_count >= 0),
+  confirmed_record_count integer not null default 0 check (confirmed_record_count >= 0),
+  privacy_safe_record_count integer not null default 0 check (privacy_safe_record_count >= 0),
+  no_background_networking_count integer not null default 0 check (no_background_networking_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  direct_pair_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_direct_pair_clearing_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (eligible_record_count <= record_count),
+  check (confirmed_record_count <= record_count),
+  check (privacy_safe_record_count <= record_count),
+  check (no_background_networking_count <= record_count),
+  check (direct_pair_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_direct_pair_clearing_enforcement_records is
+  'Append-only user-owned direct-pair clearing enforcement records. A record stores normalized two-party or invite-linked direct-pair input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize direct-pair preview, matched-trade lock, payment authorization, payment capture, public metric publication, or release-gate promotion.';
+
+create index if not exists moral_trade_direct_pair_clearing_enforcement_records_owner_status_idx
+  on public.moral_trade_direct_pair_clearing_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_direct_pair_clearing_enforcement_records_transition_status_idx
+  on public.moral_trade_direct_pair_clearing_enforcement_records (transition, enforcement_status, created_at desc);
+
+create index if not exists moral_trade_direct_pair_clearing_enforcement_records_hash_idx
+  on public.moral_trade_direct_pair_clearing_enforcement_records (evaluation_hash, created_at desc);
+
+alter table public.moral_trade_direct_pair_clearing_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_direct_pair_clearing_enforcement_records_select_owner"
+  on public.moral_trade_direct_pair_clearing_enforcement_records;
+create policy "moral_trade_direct_pair_clearing_enforcement_records_select_owner"
+  on public.moral_trade_direct_pair_clearing_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_direct_pair_clearing_enforcement_records_insert_owner"
+  on public.moral_trade_direct_pair_clearing_enforcement_records;
+create policy "moral_trade_direct_pair_clearing_enforcement_records_insert_owner"
+  on public.moral_trade_direct_pair_clearing_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and direct_pair_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_option_set_comparison_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_ids_hash text not null check (participant_ids_hash ~ '^sha256:[a-f0-9]{64}$'),
+  no_trade_option_hash text not null check (no_trade_option_hash ~ '^sha256:[a-f0-9]{64}$'),
+  proposed_trade_option_hash text not null check (proposed_trade_option_hash ~ '^sha256:[a-f0-9]{64}$'),
+  preference_comparability_policy_ref text not null,
+  cardinal_score_required_bool boolean not null default false,
+  cardinal_score_prohibited_bool boolean not null default true,
+  pareto_dominance_review_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinal_score_required_bool = false),
+  check (cardinal_score_prohibited_bool = true)
+);
+
+create table if not exists public.moral_trade_preference_comparability_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_ids_hash text not null check (participant_ids_hash ~ '^sha256:[a-f0-9]{64}$'),
+  preference_comparability_policy_ref text not null,
+  participant_option_comparability_state text not null,
+  cardinal_score_prohibited_bool boolean not null default true,
+  public_cardinal_score_exposed_bool boolean not null default false,
+  public_ranking_exposed_bool boolean not null default false,
+  public_exchange_rate_exposed_bool boolean not null default false,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinal_score_prohibited_bool = true),
+  check (public_cardinal_score_exposed_bool = false),
+  check (public_ranking_exposed_bool = false),
+  check (public_exchange_rate_exposed_bool = false)
+);
+
+create table if not exists public.moral_trade_trade_burden_accounting_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  trade_burden_policy_ref text not null,
+  monetary_burden_cents integer not null default 0 check (monetary_burden_cents >= 0),
+  platform_fee_burden_cents integer not null default 0 check (platform_fee_burden_cents >= 0),
+  burden_disclosure_record_ref text not null,
+  burden_net_surplus_confirmation_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_moral_difference_attestation_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  moral_difference_policy_ref text not null,
+  asserted_trade_basis text not null,
+  full_theory_required_bool boolean not null default false,
+  ideology_inference_prohibited_bool boolean not null default true,
+  classification_support_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (full_theory_required_bool = false),
+  check (ideology_inference_prohibited_bool = true)
+);
+
+create table if not exists public.moral_trade_bargaining_protocols (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null,
+  applies_to text not null,
+  protocol_type text not null,
+  private_cap_disclosure_behavior text not null,
+  dynamic_pricing_allowed_bool boolean not null default false,
+  counteroffer_limit integer not null default 0 check (counteroffer_limit >= 0),
+  anti_holdup_cooldown_hours integer not null default 24 check (anti_holdup_cooldown_hours >= 1),
+  artificial_urgency_prohibited_bool boolean not null default true,
+  rejection_nonretaliation_required_bool boolean not null default true,
+  renewed_confirmation_required_for_counteroffer_bool boolean not null default true,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (dynamic_pricing_allowed_bool = false),
+  check (artificial_urgency_prohibited_bool = true),
+  check (rejection_nonretaliation_required_bool = true),
+  check (renewed_confirmation_required_for_counteroffer_bool = true)
+);
+
+create table if not exists public.moral_trade_bargaining_round_records (
+  id uuid primary key default gen_random_uuid(),
+  bargaining_protocol_id uuid not null references public.moral_trade_bargaining_protocols (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  round_index integer not null check (round_index >= 0),
+  proposed_by_hash text not null check (proposed_by_hash ~ '^sha256:[a-f0-9]{64}$'),
+  terms_snapshot_hash text not null check (terms_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  private_cap_disclosure_state text not null,
+  holdup_or_pressure_review_state text not null,
+  participant_confirmation_record_refs text[] not null default '{}',
+  counteroffer_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_empirical_assumption_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  assumption_summary_hash text not null check (assumption_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  evidence_refs_json jsonb not null default '[]'::jsonb,
+  material_to_surplus_confirmation_bool boolean not null default false,
+  stale_if_challenged_bool boolean not null default true,
+  challenge_state text not null,
+  assumption_review_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_moral_side_constraint_profiles (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  subject_type text not null,
+  subject_id text not null,
+  side_constraint_policy_ref text not null,
+  side_constraint_context text not null,
+  waiver_allowed_bool boolean not null default false,
+  waiver_confirmation_required_bool boolean not null default false,
+  cooling_off_required_bool boolean not null default true,
+  side_constraint_review_state text not null,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_intrapersonal_self_offset_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null,
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  self_offset_type text not null,
+  external_counterparty_present_bool boolean not null default false,
+  represented_moral_perspective_hash text not null check (represented_moral_perspective_hash ~ '^sha256:[a-f0-9]{64}$'),
+  classification_state text not null,
+  excluded_from_moral_trade_metrics_bool boolean not null default true,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    classification_state <> 'eligible_interpersonal_moral_trade'
+    or external_counterparty_present_bool = true
+  ),
+  check (
+    classification_state = 'eligible_interpersonal_moral_trade'
+    or excluded_from_moral_trade_metrics_bool = true
+  )
+);
+
+create table if not exists public.moral_trade_preference_integrity_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  integrity_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  public_metric_self_offset_block_count integer not null default 0 check (public_metric_self_offset_block_count >= 0),
+  public_preference_exposure_block_count integer not null default 0 check (public_preference_exposure_block_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_preference_integrity_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (runtime_transition_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_preference_integrity_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_preference_integrity_enforcement_records_select_owner"
+  on public.moral_trade_preference_integrity_enforcement_records;
+create policy "moral_trade_preference_integrity_enforcement_records_select_owner"
+  on public.moral_trade_preference_integrity_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_preference_integrity_enforcement_records_insert_owner"
+  on public.moral_trade_preference_integrity_enforcement_records;
+create policy "moral_trade_preference_integrity_enforcement_records_insert_owner"
+  on public.moral_trade_preference_integrity_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_commitment_inventory_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  commitment_type text not null,
+  subject_type text not null,
+  subject_id text not null,
+  no_trade_baseline_snapshot_hash text not null check (no_trade_baseline_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  negative_commitment_scope_ref text,
+  action_unit text not null,
+  amount_cents integer not null default 0 check (amount_cents >= 0),
+  currency text not null,
+  performance_window_start timestamptz not null,
+  performance_window_end timestamptz not null,
+  total_capacity_units numeric not null check (total_capacity_units >= 0),
+  reserved_capacity_units numeric not null default 0 check (reserved_capacity_units >= 0),
+  fulfilled_capacity_units numeric not null default 0 check (fulfilled_capacity_units >= 0),
+  commitment_inventory_policy_ref text not null,
+  reuse_policy text not null,
+  inventory_state text not null,
+  privacy_grant_refs text[] not null default '{}',
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (performance_window_start < performance_window_end),
+  check (reserved_capacity_units <= total_capacity_units),
+  check (fulfilled_capacity_units <= total_capacity_units),
+  check (reserved_capacity_units + fulfilled_capacity_units <= total_capacity_units)
+);
+
+create table if not exists public.moral_trade_commitment_reservation_records (
+  id uuid primary key default gen_random_uuid(),
+  commitment_inventory_record_id uuid not null references public.moral_trade_commitment_inventory_records (id) on delete restrict,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  reserved_units numeric not null check (reserved_units > 0),
+  reserved_amount_cents integer not null default 0 check (reserved_amount_cents >= 0),
+  reservation_scope text not null,
+  reservation_state text not null,
+  double_count_check_state text not null,
+  release_reason text,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    matched_trade_lock_proposal_ref is not null
+    or cleared_trade_agreement_ref is not null
+  ),
+  check (double_count_check_state in ('not_required', 'passed'))
+);
+
+create table if not exists public.moral_trade_atomic_settlement_groups (
+  id uuid primary key default gen_random_uuid(),
+  trade_type text not null,
+  matched_trade_lock_proposal_refs text[] not null default '{}',
+  required_participant_count integer not null check (required_participant_count >= 2),
+  required_final_confirmation_refs text[] not null default '{}',
+  required_payment_authorization_refs text[] not null default '{}',
+  commitment_reservation_refs text[] not null default '{}',
+  atomic_settlement_policy_ref text not null,
+  all_or_none_state text not null,
+  failed_member_behavior text not null,
+  no_partial_capture_bool boolean not null default true,
+  no_partial_disclosure_bool boolean not null default true,
+  no_irreversible_performance_before_lock_bool boolean not null default true,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(matched_trade_lock_proposal_refs) > 0),
+  check (cardinality(required_final_confirmation_refs) >= required_participant_count),
+  check (cardinality(commitment_reservation_refs) > 0),
+  check (failed_member_behavior <> 'manual_review'),
+  check (no_partial_capture_bool = true),
+  check (no_partial_disclosure_bool = true),
+  check (no_irreversible_performance_before_lock_bool = true)
+);
+
+create table if not exists public.moral_trade_commitment_settlement_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  commitment_settlement_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  reserved_commitment_count integer not null default 0 check (reserved_commitment_count >= 0),
+  atomic_settlement_group_count integer not null default 0 check (atomic_settlement_group_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  performance_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_commitment_settlement_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (runtime_transition_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (performance_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_commitment_settlement_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_commitment_settlement_enforcement_records_select_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records;
+create policy "moral_trade_commitment_settlement_enforcement_records_select_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_commitment_settlement_enforcement_records_insert_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records;
+create policy "moral_trade_commitment_settlement_enforcement_records_insert_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and performance_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure',
+      'recipient_acceptance',
+      'adverse_association',
+      'ai_preference_elicitation',
+      'post_clear_audit',
+      'non_public_goods_subsidy',
+      'subsidy_schedule',
+      'cause_bucket_taxonomy',
+      'resource_compatibility',
+      'net_offset_accounting',
+      'offer_validity',
+      'direct_pair_clearing',
+      'private_exchange_rate_quote',
+      'noncompensable_blocker',
+      'batch_clearing_objective',
+      'sensitive_evidence_attestation',
+      'pilot_evidence',
+      'option_set_comparison',
+      'preference_comparability',
+      'trade_burden_accounting',
+      'moral_difference_attestation',
+      'bargaining_protocol',
+      'empirical_assumption',
+      'moral_side_constraint',
+      'intrapersonal_self_offset',
+      'commitment_inventory',
+      'atomic_settlement',
+      'breach_remedy',
+      'pledge_performance_bond'
+    )
+  );
+
+create table if not exists public.moral_trade_pledge_performance_bond_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  policy_version text not null,
+  applies_to text not null,
+  allowed_release_stages text[] not null default '{}',
+  max_bond_cents integer not null check (max_bond_cents > 0),
+  min_bond_cents integer not null default 0 check (min_bond_cents >= 0),
+  settlement_currency text not null,
+  posting_mode text not null,
+  return_condition_policy_ref text not null,
+  forfeiture_condition_policy_ref text not null,
+  forfeiture_destination_policy text not null,
+  counterparty_benefit_from_forfeiture_allowed_bool boolean not null default false,
+  neutral_review_required_for_forfeiture_bool boolean not null default true,
+  evidence_standard_ref text not null,
+  challenge_window_policy_ref text not null,
+  refund_policy_ref text not null,
+  no_escrow_claim_disclaimer_required_bool boolean not null default true,
+  high_stakes_or_irreversible_action_behavior text not null,
+  reviewer_decision_ref text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (min_bond_cents <= max_bond_cents),
+  check (posting_mode <> 'manual_review'),
+  check (forfeiture_destination_policy <> 'manual_review'),
+  check (
+    counterparty_benefit_from_forfeiture_allowed_bool = false
+    or neutral_review_required_for_forfeiture_bool = true
+  ),
+  check (no_escrow_claim_disclaimer_required_bool = true),
+  check (high_stakes_or_irreversible_action_behavior <> 'manual_review'),
+  check (cardinality(allowed_release_stages) > 0)
+);
+
+create table if not exists public.moral_trade_pledge_performance_bond_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  pledge_performance_bond_policy_id uuid not null references public.moral_trade_pledge_performance_bond_policies (id) on delete restrict,
+  pledge_performance_bond_policy_ref text not null,
+  pledge_swap_offer_id text,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  bond_amount_cents integer not null check (bond_amount_cents > 0),
+  settlement_currency text not null,
+  payment_authorization_event_ref text,
+  posting_mode text not null,
+  bond_state text not null,
+  return_condition_summary_hash text not null check (return_condition_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  forfeiture_condition_summary_hash text not null check (forfeiture_condition_summary_hash ~ '^sha256:[a-f0-9]{64}$'),
+  forfeiture_destination_ref text not null,
+  counterparty_benefit_from_forfeiture_state text not null,
+  neutral_review_required_bool boolean not null default true,
+  evidence_due_at timestamptz not null,
+  evidence_record_refs text[] not null default '{}',
+  challenge_window_policy_ref text not null,
+  challenge_window_state text not null,
+  refund_policy_ref text not null,
+  agreement_transferability_assessment_ref text,
+  transferability_review_state text not null,
+  regulated_goods_hazardous_activity_assessment_ref text,
+  regulated_goods_review_state text not null,
+  hazardous_activity_review_state text not null,
+  cyber_abuse_digital_systems_integrity_assessment_ref text,
+  cyber_abuse_review_state text not null,
+  digital_systems_integrity_review_state text not null,
+  reviewer_decision_ref text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    pledge_swap_offer_id is not null
+    or matched_trade_lock_proposal_ref is not null
+    or cleared_trade_agreement_ref is not null
+  ),
+  check (
+    counterparty_benefit_from_forfeiture_state = 'none'
+    or neutral_review_required_bool = true
+  )
+);
+
+create table if not exists public.moral_trade_pledge_performance_bond_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  performance_bond_required_bool boolean not null default false,
+  policy_count integer not null default 0 check (policy_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  neutral_review_required_count integer not null default 0 check (neutral_review_required_count >= 0),
+  counterparty_benefit_record_count integer not null default 0 check (counterparty_benefit_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  performance_release_allowed_bool boolean not null default false,
+  forfeiture_decision_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_pledge_performance_bond_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (runtime_transition_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (performance_release_allowed_bool = false),
+  check (forfeiture_decision_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_pledge_performance_bond_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_pledge_performance_bond_enforcement_records_select_owner"
+  on public.moral_trade_pledge_performance_bond_enforcement_records;
+create policy "moral_trade_pledge_performance_bond_enforcement_records_select_owner"
+  on public.moral_trade_pledge_performance_bond_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_pledge_performance_bond_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_performance_bond_enforcement_records;
+create policy "moral_trade_pledge_performance_bond_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_performance_bond_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and performance_release_allowed_bool = false
+    and forfeiture_decision_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_pledge_swap_performance_schedules (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  pledge_swap_offer_id text,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  performance_schedule_policy_ref text not null,
+  performance_start_at timestamptz not null,
+  performance_end_at timestamptz not null,
+  checkpoint_schedule_json jsonb not null,
+  synchronized_start_required_bool boolean not null default true,
+  counterpart_nonperformance_suspension_rule text not null,
+  reciprocal_release_trigger text not null,
+  grace_or_cure_period_days integer not null default 0 check (grace_or_cure_period_days >= 0),
+  evidence_due_schedule jsonb not null,
+  public_breach_disclosure_allowed_bool boolean not null default false,
+  breach_remedy_policy_ref text not null,
+  schedule_state text not null,
+  reviewer_decision_ref text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    pledge_swap_offer_id is not null
+    or matched_trade_lock_proposal_ref is not null
+    or cleared_trade_agreement_ref is not null
+  ),
+  check (performance_start_at < performance_end_at),
+  check (checkpoint_schedule_json <> '{}'::jsonb),
+  check (evidence_due_schedule <> '{}'::jsonb),
+  check (synchronized_start_required_bool = true),
+  check (public_breach_disclosure_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_pledge_swap_performance_schedule_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  performance_schedule_required_bool boolean not null default false,
+  schedule_count integer not null default 0 check (schedule_count >= 0),
+  non_blocking_schedule_count integer not null default 0 check (non_blocking_schedule_count >= 0),
+  synchronized_schedule_count integer not null default 0 check (synchronized_schedule_count >= 0),
+  reciprocal_release_schedule_count integer not null default 0 check (reciprocal_release_schedule_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  performance_start_allowed_bool boolean not null default false,
+  checkpoint_evidence_allowed_bool boolean not null default false,
+  performance_release_allowed_bool boolean not null default false,
+  breach_remedy_allowed_bool boolean not null default false,
+  reciprocal_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_pledge_swap_performance_schedule_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_schedule_count <= schedule_count),
+  check (runtime_transition_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (performance_start_allowed_bool = false),
+  check (checkpoint_evidence_allowed_bool = false),
+  check (performance_release_allowed_bool = false),
+  check (breach_remedy_allowed_bool = false),
+  check (reciprocal_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_pledge_swap_performance_schedule_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_pledge_swap_performance_schedule_enforcement_records_select_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records;
+create policy "moral_trade_pledge_swap_performance_schedule_enforcement_records_select_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_pledge_swap_performance_schedule_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records;
+create policy "moral_trade_pledge_swap_performance_schedule_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and performance_start_allowed_bool = false
+    and checkpoint_evidence_allowed_bool = false
+    and performance_release_allowed_bool = false
+    and breach_remedy_allowed_bool = false
+    and reciprocal_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_negative_commitment_scope_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'reliance_bearing_transition',
+      'abstention_evidence_acceptance',
+      'completion_count',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  negative_commitment_scope_required_bool boolean not null default false,
+  scope_count integer not null default 0 check (scope_count >= 0),
+  bounded_scope_count integer not null default 0 check (bounded_scope_count >= 0),
+  high_confidence_scope_count integer not null default 0 check (high_confidence_scope_count >= 0),
+  substitution_reviewed_scope_count integer not null default 0 check (substitution_reviewed_scope_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  abstention_evidence_accepted_bool boolean not null default false,
+  completion_count_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  state_mutation_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_negative_commitment_scope_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (bounded_scope_count <= scope_count),
+  check (high_confidence_scope_count <= scope_count),
+  check (substitution_reviewed_scope_count <= scope_count),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (abstention_evidence_accepted_bool = false),
+  check (completion_count_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (state_mutation_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_negative_commitment_scope_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_negative_commitment_scope_enforcement_records_select_owner"
+  on public.moral_trade_negative_commitment_scope_enforcement_records;
+create policy "moral_trade_negative_commitment_scope_enforcement_records_select_owner"
+  on public.moral_trade_negative_commitment_scope_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_negative_commitment_scope_enforcement_records_insert_owner"
+  on public.moral_trade_negative_commitment_scope_enforcement_records;
+create policy "moral_trade_negative_commitment_scope_enforcement_records_insert_owner"
+  on public.moral_trade_negative_commitment_scope_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and abstention_evidence_accepted_bool = false
+    and completion_count_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and state_mutation_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_donor_of_record_tax_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_authorization',
+      'payment_capture',
+      'receipt_issuance',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  donor_of_record_tax_required_bool boolean not null default false,
+  record_count integer not null default 0 check (record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  explicit_donor_record_count integer not null default 0 check (explicit_donor_record_count >= 0),
+  receipt_safe_record_count integer not null default 0 check (receipt_safe_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  receipt_issuance_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  state_mutation_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_donor_of_record_tax_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (explicit_donor_record_count <= record_count),
+  check (receipt_safe_record_count <= record_count),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (receipt_issuance_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (state_mutation_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_donor_of_record_tax_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_donor_of_record_tax_enforcement_records_select_owner"
+  on public.moral_trade_donor_of_record_tax_enforcement_records;
+create policy "moral_trade_donor_of_record_tax_enforcement_records_select_owner"
+  on public.moral_trade_donor_of_record_tax_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_donor_of_record_tax_enforcement_records_insert_owner"
+  on public.moral_trade_donor_of_record_tax_enforcement_records;
+create policy "moral_trade_donor_of_record_tax_enforcement_records_insert_owner"
+  on public.moral_trade_donor_of_record_tax_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and receipt_issuance_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and state_mutation_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_action_reversibility_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'performance_start',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  action_reversibility_required_bool boolean not null default false,
+  record_count integer not null default 0 check (record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  high_stakes_or_irreversible_record_count integer not null default 0 check (high_stakes_or_irreversible_record_count >= 0),
+  approved_high_stakes_record_count integer not null default 0 check (approved_high_stakes_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  performance_start_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  state_mutation_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_action_reversibility_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (high_stakes_or_irreversible_record_count <= record_count),
+  check (approved_high_stakes_record_count <= high_stakes_or_irreversible_record_count),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (performance_start_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (state_mutation_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_action_reversibility_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_action_reversibility_enforcement_records_select_owner"
+  on public.moral_trade_action_reversibility_enforcement_records;
+create policy "moral_trade_action_reversibility_enforcement_records_select_owner"
+  on public.moral_trade_action_reversibility_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_action_reversibility_enforcement_records_insert_owner"
+  on public.moral_trade_action_reversibility_enforcement_records;
+create policy "moral_trade_action_reversibility_enforcement_records_insert_owner"
+  on public.moral_trade_action_reversibility_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and performance_start_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and state_mutation_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_authority_obligation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preview',
+      'matched_trade_lock',
+      'payment_capture',
+      'performance_start',
+      'reliance_bearing_transition',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  authority_obligation_required_bool boolean not null default false,
+  record_count integer not null default 0 check (record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  third_party_obligation_record_count integer not null default 0 check (third_party_obligation_record_count >= 0),
+  representative_authority_record_count integer not null default 0 check (representative_authority_record_count >= 0),
+  verified_authority_record_count integer not null default 0 check (verified_authority_record_count >= 0),
+  disclosed_obligation_record_count integer not null default 0 check (disclosed_obligation_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  performance_start_allowed_bool boolean not null default false,
+  reliance_bearing_transition_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  authority_delegation_accepted_bool boolean not null default false,
+  third_party_obligation_transfer_allowed_bool boolean not null default false,
+  state_mutation_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_authority_obligation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (third_party_obligation_record_count <= record_count),
+  check (representative_authority_record_count <= record_count),
+  check (verified_authority_record_count <= representative_authority_record_count),
+  check (disclosed_obligation_record_count <= third_party_obligation_record_count),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (performance_start_allowed_bool = false),
+  check (reliance_bearing_transition_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  check (authority_delegation_accepted_bool = false),
+  check (third_party_obligation_transfer_allowed_bool = false),
+  check (state_mutation_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_authority_obligation_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_authority_obligation_enforcement_records_select_owner"
+  on public.moral_trade_authority_obligation_enforcement_records;
+create policy "moral_trade_authority_obligation_enforcement_records_select_owner"
+  on public.moral_trade_authority_obligation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_authority_obligation_enforcement_records_insert_owner"
+  on public.moral_trade_authority_obligation_enforcement_records;
+create policy "moral_trade_authority_obligation_enforcement_records_insert_owner"
+  on public.moral_trade_authority_obligation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and matched_trade_lock_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and performance_start_allowed_bool = false
+    and reliance_bearing_transition_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+    and authority_delegation_accepted_bool = false
+    and third_party_obligation_transfer_allowed_bool = false
+    and state_mutation_allowed_bool = false
+  );
+
+create table if not exists public.moral_trade_credibility_scoring_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  max_single_testimonial_evidence_quality_delta_decimal numeric(6,5) not null check (max_single_testimonial_evidence_quality_delta_decimal between 0 and 1),
+  max_single_testimonial_additionality_delta_decimal numeric(6,5) not null check (max_single_testimonial_additionality_delta_decimal between 0 and 1),
+  max_single_testimonial_verification_confidence_delta_decimal numeric(6,5) not null check (max_single_testimonial_verification_confidence_delta_decimal between 0 and 1),
+  max_single_testimonial_credibility_delta_decimal numeric(6,5) not null check (max_single_testimonial_credibility_delta_decimal between 0 and 1),
+  high_stakes_standalone_testimonial_verification_allowed_bool boolean not null default false,
+  privacy_invasive_evidence_overreward_cap_decimal numeric(6,5) not null default 0.04 check (privacy_invasive_evidence_overreward_cap_decimal between 0 and 1),
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (high_stakes_standalone_testimonial_verification_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_testimonial_stake_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  default_stake_required_bool boolean not null default false,
+  optional_stake_enabled_bool boolean not null default false,
+  minimum_stake_minor integer,
+  maximum_stake_minor integer,
+  percentage_of_consideration_decimal numeric(6,5),
+  destination_policy text not null check (destination_policy in ('same_charity', 'neutral_approved_charity', 'random_same_cause_charity', 'no_stake')),
+  refund_or_forfeit_policy text,
+  legal_compliance_review_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (default_stake_required_bool = false),
+  check (optional_stake_enabled_bool = false or (minimum_stake_minor is not null and maximum_stake_minor is not null and percentage_of_consideration_decimal is not null and legal_compliance_review_ref is not null and minimum_stake_minor >= 0 and maximum_stake_minor >= minimum_stake_minor and percentage_of_consideration_decimal between 0 and 0.02 and maximum_stake_minor <= 1000))
+);
+
+create table if not exists public.moral_trade_participant_credibility_profiles (
+  participant_user_id uuid primary key references public.profiles (id) on delete cascade,
+  credibility_score_decimal numeric(6,5) not null default 0.5 check (credibility_score_decimal between 0 and 1),
+  credibility_tier text not null default 'new' check (credibility_tier in ('new', 'limited', 'standard', 'high', 'under_review')),
+  expected_completion_probability_decimal numeric(6,5) not null default 0.5 check (expected_completion_probability_decimal between 0 and 1),
+  evidence_reliability_decimal numeric(6,5) not null default 0.5 check (evidence_reliability_decimal between 0 and 1),
+  fraud_risk_decimal numeric(6,5) not null default 0.1 check (fraud_risk_decimal between 0 and 1),
+  future_verification_burden text not null default 'standard' check (future_verification_burden in ('light', 'standard', 'heightened', 'manual_review')),
+  last_credibility_event_id uuid,
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_friend_testimonial_invites (
+  id uuid primary key default gen_random_uuid(),
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  invited_friend_user_id uuid references public.profiles (id) on delete set null,
+  invited_friend_email_hash text,
+  invite_token_hash text not null unique check (invite_token_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_status text not null check (invite_status in ('pending', 'accepted', 'declined', 'expired', 'revoked', 'blocked', 'reported')),
+  relationship_claimed_by_participant text check (relationship_claimed_by_participant in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'other')),
+  minimum_necessary_disclosure_json jsonb not null,
+  hidden_from_invite text[] not null default '{}',
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  abuse_report_count integer not null default 0 check (abuse_report_count >= 0),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (invited_friend_user_id is not null or invited_friend_email_hash is not null),
+  check (expires_at > created_at)
+);
+
+create table if not exists public.moral_trade_friend_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid not null references public.moral_trade_friend_testimonial_invites (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  action_template_id text not null,
+  action_window_start_at timestamptz not null,
+  action_window_end_at timestamptz not null,
+  relationship_type text not null check (relationship_type in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'other')),
+  relationship_context_private text,
+  baseline_knowledge_level text not null check (baseline_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  completion_knowledge_level text not null check (completion_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  baseline_counterfactual_credence_decimal numeric(6,5) check (baseline_counterfactual_credence_decimal between 0 and 1),
+  completion_credence_decimal numeric(6,5) check (completion_credence_decimal between 0 and 1),
+  baseline_basis_json jsonb not null,
+  completion_basis_json jsonb not null,
+  concern_flag text not null default 'none' check (concern_flag in ('none', 'possible_noncompletion', 'possible_baseline_manipulation', 'possible_pressure', 'possible_side_payment', 'other')),
+  concern_notes_private text,
+  testimony_text_private text,
+  friend_terms_acceptance_id text not null,
+  submitted_at timestamptz not null,
+  testimonial_status text not null check (testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed', 'blocked')),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (action_window_start_at < action_window_end_at)
+);
+
+create table if not exists public.moral_trade_testimonial_quality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null default 'friend_testimonial',
+  source_id uuid not null,
+  relationship_weight_decimal numeric(6,5) not null check (relationship_weight_decimal between 0 and 1),
+  friend_credibility_weight_decimal numeric(6,5) not null check (friend_credibility_weight_decimal between 0 and 1),
+  specificity_score_decimal numeric(6,5) not null check (specificity_score_decimal between 0 and 1),
+  knowledge_basis_score_decimal numeric(6,5) not null check (knowledge_basis_score_decimal between 0 and 1),
+  consistency_score_decimal numeric(6,5) not null check (consistency_score_decimal between 0 and 1),
+  independence_score_decimal numeric(6,5) not null check (independence_score_decimal between 0 and 1),
+  collusion_risk_score_decimal numeric(6,5) not null check (collusion_risk_score_decimal between 0 and 1),
+  privacy_sensitivity_score_decimal numeric(6,5) not null check (privacy_sensitivity_score_decimal between 0 and 1),
+  baseline_probative_value_score_decimal numeric(6,5) not null check (baseline_probative_value_score_decimal between 0 and 1),
+  completion_probative_value_score_decimal numeric(6,5) not null check (completion_probative_value_score_decimal between 0 and 1),
+  accepted_for_additionality_bool boolean not null default false,
+  accepted_for_completion_verification_bool boolean not null default false,
+  accepted_for_credibility_update_bool boolean not null default false,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  review_status text not null check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  participant_visible_summary text,
+  private_notes_ref text,
+  risk_review_flags text[] not null default '{}',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (source_type = 'friend_testimonial')
+);
+
+create table if not exists public.moral_trade_credibility_events (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null check (source_type in ('pledge_swap', 'friend_testimonial', 'review', 'appeal')),
+  source_id text not null,
+  event_type text not null check (event_type in ('pledge_swap_completed', 'pledge_swap_failed', 'pledge_swap_withdrawn', 'pledge_swap_disputed', 'pledge_swap_appeal_correction', 'friend_testimonial_consistent', 'friend_testimonial_contradicted', 'friend_concern_report_supported')),
+  prior_credibility_score_decimal numeric(6,5) not null check (prior_credibility_score_decimal between 0 and 1),
+  credibility_delta_decimal numeric(7,5) not null check (credibility_delta_decimal between -1 and 1),
+  new_credibility_score_decimal numeric(6,5) not null check (new_credibility_score_decimal between 0 and 1),
+  evidence_quality_score_decimal numeric(6,5) not null check (evidence_quality_score_decimal between 0 and 1),
+  final_additionality_probability_decimal numeric(6,5) not null check (final_additionality_probability_decimal between 0 and 1),
+  verification_confidence_decimal numeric(6,5) not null check (verification_confidence_decimal between 0 and 1),
+  policy_snapshot_hash text not null check (policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  participant_visible_reason text,
+  private_reviewer_notes_ref text,
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  correction_of_event_id uuid references public.moral_trade_credibility_events (id) on delete restrict,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.moral_trade_participant_credibility_profiles
+  add constraint moral_trade_participant_credibility_profiles_last_event_fk
+  foreign key (last_credibility_event_id)
+  references public.moral_trade_credibility_events (id)
+  on delete set null;
+
+create table if not exists public.moral_trade_testimonial_credibility_events (
+  id uuid primary key default gen_random_uuid(),
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  related_participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  event_type text not null check (event_type in ('accurate_supportive_testimony', 'inaccurate_testimony', 'contradicted_testimony', 'concern_report_supported', 'concern_report_not_supported', 'reckless_or_fraudulent_testimony', 'appeal_correction')),
+  prior_testimonial_credibility_decimal numeric(6,5) not null check (prior_testimonial_credibility_decimal between 0 and 1),
+  delta_decimal numeric(7,5) not null check (delta_decimal between -1 and 1),
+  new_testimonial_credibility_decimal numeric(6,5) not null check (new_testimonial_credibility_decimal between 0 and 1),
+  participant_visible_reason text,
+  friend_visible_reason text not null,
+  private_reviewer_notes_ref text,
+  policy_snapshot_hash text not null check (policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'appeal_available', 'appealed', 'appeal_resolved', 'appeal_expired')),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_credibility_appeals (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_credibility_event_id uuid not null references public.moral_trade_credibility_events (id) on delete restrict,
+  appeal_status text not null check (appeal_status in ('available', 'submitted', 'under_review', 'resolved', 'expired')),
+  participant_visible_reason text not null,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  resolved_at timestamptz
+);
+
+create table if not exists public.moral_trade_testimonial_stakes (
+  id uuid primary key default gen_random_uuid(),
+  friend_testimonial_id uuid not null references public.moral_trade_friend_testimonials (id) on delete restrict,
+  friend_user_id uuid not null references public.profiles (id) on delete cascade,
+  amount_minor integer not null check (amount_minor between 0 and 1000),
+  currency text not null default 'USD',
+  destination_policy text not null check (destination_policy in ('same_charity', 'neutral_approved_charity', 'random_same_cause_charity', 'no_stake')),
+  donation_recipient_id text,
+  stake_status text not null check (stake_status in ('proposed', 'authorized', 'donated', 'released', 'failed', 'cancelled', 'blocked')),
+  payment_operation_id text,
+  donor_of_record_policy_snapshot_hash text check (donor_of_record_policy_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_participant_credibility_profiles is
+  'Private participant credibility profiles estimating future pledge-swap completion, evidence reliability, fraud risk, pricing, selection, and future verification burden. These are not public social credit, credit-score, or reputation-score surfaces.';
+
+comment on table public.moral_trade_friend_testimonials is
+  'Private friend testimonials for pledge-swap evidence. Baseline/additionality credence and completion credence are captured separately; raw testimony, concern notes, and friend identity are not public or funder-visible.';
+
+comment on table public.moral_trade_credibility_events is
+  'Append-only participant credibility events. Corrections and appeals create new events instead of mutating historical credibility events.';
+
+comment on table public.moral_trade_testimonial_credibility_events is
+  'Append-only testimonial-provider credibility events. Later contradiction, corroboration, and appeal corrections are recorded without public social-proof exposure.';
+
+alter table public.moral_trade_participant_credibility_profiles enable row level security;
+alter table public.moral_trade_friend_testimonial_invites enable row level security;
+alter table public.moral_trade_friend_testimonials enable row level security;
+alter table public.moral_trade_testimonial_quality_assessments enable row level security;
+alter table public.moral_trade_credibility_events enable row level security;
+alter table public.moral_trade_testimonial_credibility_events enable row level security;
+alter table public.moral_trade_credibility_appeals enable row level security;
+alter table public.moral_trade_testimonial_stakes enable row level security;
+
+alter table public.moral_trade_policy_snapshots
+  drop constraint if exists moral_trade_policy_snapshots_subject_kind_check;
+
+alter table public.moral_trade_policy_snapshots
+  add constraint moral_trade_policy_snapshots_subject_kind_check
+  check (
+    subject_kind in (
+      'release_gate',
+      'state_interpretation',
+      'payment_capture',
+      'payout_release',
+      'refund_cancellation',
+      'provider_source_authentication',
+      'time_authority',
+      'notification',
+      'fx',
+      'platform_fee',
+      'public_metrics',
+      'data_retention',
+      'participant_eligibility',
+      'recipient_destination_verification',
+      'account_security',
+      'backup_recovery',
+      'deployment_release',
+      'configuration_snapshot',
+      'schema_migration',
+      'environment_data_isolation',
+      'financial_reconciliation',
+      'audit_integrity',
+      'data_security',
+      'reviewer_quality',
+      'anti_enumeration',
+      'privacy_disclosure',
+      'impact_claim_methodology',
+      'matching_clearing',
+      'matched_trade_lock',
+      'baseline_integrity',
+      'baseline_manufacturing',
+      'agreement_amendment',
+      'appeal_case',
+      'side_agreement_disclosure',
+      'side_agreement_review',
+      'trade_classification',
+      'compensated_moral_action',
+      'ordinary_service_procurement',
+      'protective_assessment',
+      'negative_commitment_scope',
+      'action_reversibility_assessment',
+      'donor_of_record_tax_receipt',
+      'third_party_obligation_assessment',
+      'representative_authority_assessment',
+      'reporting_integrity_assessment',
+      'civil_rights_discrimination_assessment',
+      'participant_autonomy_assessment',
+      'confidentiality_privacy_rights_assessment',
+      'evidence_authenticity_assessment',
+      'financial_crime_fraud_assessment',
+      'agreement_transferability_assessment',
+      'regulated_goods_hazardous_activity_assessment',
+      'cyber_abuse_digital_integrity_assessment',
+      'anti_corruption_assessment',
+      'least_intrusive_evidence_assessment',
+      'performance_bond_neutral_review',
+      'user_safety',
+      'contact_interaction',
+      'abuse_report',
+      'content_moderation',
+      'prohibited_use',
+      'challenge_window',
+      'payout_milestone',
+      'approved_trade_template',
+      'template_parameter',
+      'review_capacity',
+      'review_queue_admission',
+      'participant_term_sheet',
+      'counterparty_blinding',
+      'staged_counterparty_disclosure',
+      'recipient_acceptance',
+      'adverse_association',
+      'ai_preference_elicitation',
+      'post_clear_audit',
+      'non_public_goods_subsidy',
+      'subsidy_schedule',
+      'cause_bucket_taxonomy',
+      'resource_compatibility',
+      'net_offset_accounting',
+      'offer_validity',
+      'direct_pair_clearing',
+      'private_exchange_rate_quote',
+      'noncompensable_blocker',
+      'batch_clearing_objective',
+      'sensitive_evidence_attestation',
+      'pilot_evidence',
+      'option_set_comparison',
+      'preference_comparability',
+      'trade_burden_accounting',
+      'moral_difference_attestation',
+      'bargaining_protocol',
+      'empirical_assumption',
+      'moral_side_constraint',
+      'intrapersonal_self_offset',
+      'commitment_inventory',
+      'atomic_settlement',
+      'breach_remedy',
+      'pledge_performance_bond',
+      'baseline_witness_testimony',
+      'witness_identity_assurance',
+      'witness_additionality_adjustment'
+    )
+  );
+
+create table if not exists public.guest_witness_identities (
+  id uuid primary key default gen_random_uuid(),
+  primary_email_hash text check (primary_email_hash is null or primary_email_hash ~ '^sha256:[a-f0-9]{64}$'),
+  phone_hash text check (phone_hash is null or phone_hash ~ '^sha256:[a-f0-9]{64}$'),
+  converted_user_id uuid references public.profiles (id) on delete set null,
+  witness_status text not null default 'active' check (witness_status in ('active', 'restricted', 'blocked', 'deleted')),
+  witness_credibility_decimal numeric(5,4) check (witness_credibility_decimal is null or (witness_credibility_decimal >= 0 and witness_credibility_decimal <= 1)),
+  witness_credibility_confidence_decimal numeric(5,4) check (witness_credibility_confidence_decimal is null or (witness_credibility_confidence_decimal >= 0 and witness_credibility_confidence_decimal <= 1)),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.guest_witness_identities is
+  'Private guest witness identity records for non-user baseline testimony. Contact fields are stored only as hashes, and conversion to a full user account is optional.';
+
+create unique index if not exists guest_witness_identities_email_hash_idx
+  on public.guest_witness_identities (primary_email_hash)
+  where primary_email_hash is not null;
+
+create unique index if not exists guest_witness_identities_phone_hash_idx
+  on public.guest_witness_identities (phone_hash)
+  where phone_hash is not null;
+
+create table if not exists public.external_witness_accounts (
+  id uuid primary key default gen_random_uuid(),
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete cascade,
+  provider text not null check (provider in ('x', 'facebook', 'instagram', 'google', 'apple', 'email_magic_link', 'manual_review')),
+  provider_account_id_hash text not null check (provider_account_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  provider_account_display_snapshot text,
+  provider_profile_url_snapshot text,
+  provider_verified_at timestamptz not null,
+  oauth_scope_snapshot_json jsonb,
+  token_storage_policy text not null default 'no_token' check (token_storage_policy in ('no_token', 'short_lived_token', 'long_lived_token_ref', 'manual')),
+  token_ref text,
+  token_expires_at timestamptz,
+  account_status text not null default 'connected' check (account_status in ('connected', 'expired', 'revoked', 'failed', 'blocked')),
+  privacy_notice_version text not null,
+  terms_acceptance_id text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    token_storage_policy <> 'no_token'
+    or (token_ref is null and token_expires_at is null)
+  )
+);
+
+comment on table public.external_witness_accounts is
+  'Optional privacy-minimized external account verification for guest witnesses. Stable provider ids are hashed; posting permissions and raw tokens are not stored by default.';
+
+create unique index if not exists external_witness_accounts_provider_hash_idx
+  on public.external_witness_accounts (provider, provider_account_id_hash);
+
+create index if not exists external_witness_accounts_identity_idx
+  on public.external_witness_accounts (guest_witness_identity_id, account_status, created_at desc);
+
+create table if not exists public.baseline_witness_invites (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id uuid references public.offers (id) on delete set null,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text references public.moral_goods_participant_action_commitments (id) on delete set null,
+  invited_email_hash text check (invited_email_hash is null or invited_email_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invited_phone_hash text check (invited_phone_hash is null or invited_phone_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_token_hash text not null unique check (invite_token_hash ~ '^sha256:[a-f0-9]{64}$'),
+  invite_status text not null default 'pending' check (invite_status in ('pending', 'opened', 'submitted', 'declined', 'expired', 'revoked', 'reported', 'blocked')),
+  participant_claimed_relationship text check (
+    participant_claimed_relationship is null or participant_claimed_relationship in (
+      'friend',
+      'family',
+      'roommate',
+      'romantic_partner',
+      'classmate',
+      'coworker',
+      'dining_companion',
+      'other'
+    )
+  ),
+  action_template_id text not null,
+  action_window_start_at timestamptz not null,
+  action_window_end_at timestamptz not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (action_window_end_at > action_window_start_at),
+  check (expires_at > created_at),
+  check (
+    invited_email_hash is not null
+    or invited_phone_hash is not null
+    or invite_token_hash is not null
+  )
+);
+
+comment on table public.baseline_witness_invites is
+  'Private expiring invites for baseline-only pre-pledge guest witness testimony. Raw invite tokens are never stored.';
+
+create index if not exists baseline_witness_invites_participant_status_idx
+  on public.baseline_witness_invites (participant_user_id, invite_status, created_at desc);
+
+create index if not exists baseline_witness_invites_pledge_status_idx
+  on public.baseline_witness_invites (pledge_swap_id, invite_status, created_at desc);
+
+create table if not exists public.baseline_witness_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid not null references public.baseline_witness_invites (id) on delete restrict,
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete restrict,
+  external_witness_account_id uuid references public.external_witness_accounts (id) on delete set null,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id uuid references public.offers (id) on delete set null,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text references public.moral_goods_participant_action_commitments (id) on delete set null,
+  relationship_type text not null check (relationship_type in ('friend', 'family', 'roommate', 'romantic_partner', 'classmate', 'coworker', 'dining_companion', 'other')),
+  baseline_knowledge_level text not null check (baseline_knowledge_level in ('none', 'low', 'moderate', 'high')),
+  recent_meal_observation_frequency text not null check (recent_meal_observation_frequency in ('never', 'once', 'few_times', 'weekly', 'daily', 'lived_together')),
+  baseline_counterfactual_credence_decimal numeric(5,4) not null check (baseline_counterfactual_credence_decimal >= 0 and baseline_counterfactual_credence_decimal <= 1),
+  basis_json jsonb not null default '{}'::jsonb,
+  uncertainty_notes_private text,
+  concern_flag text not null default 'none' check (concern_flag in ('none', 'possible_baseline_overstatement', 'possible_pressure', 'possible_side_payment', 'insufficient_knowledge', 'other')),
+  concern_notes_private text,
+  testimonial_status text not null default 'submitted' check (testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed', 'blocked')),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  submitted_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (invite_id),
+  check (jsonb_typeof(basis_json) = 'object')
+);
+
+comment on table public.baseline_witness_testimonials is
+  'Private baseline/additionality guest witness testimony. It is not completion proof, public testimony, or social proof of truth.';
+
+create unique index if not exists baseline_witness_testimonials_external_pledge_idx
+  on public.baseline_witness_testimonials (pledge_swap_id, external_witness_account_id)
+  where pledge_swap_id is not null and external_witness_account_id is not null;
+
+create index if not exists baseline_witness_testimonials_review_idx
+  on public.baseline_witness_testimonials (testimonial_status, submitted_at desc);
+
+create index if not exists baseline_witness_testimonials_participant_idx
+  on public.baseline_witness_testimonials (participant_user_id, pledge_swap_id, submitted_at desc);
+
+create table if not exists public.baseline_witness_quality_assessments (
+  id uuid primary key default gen_random_uuid(),
+  baseline_witness_testimonial_id uuid not null references public.baseline_witness_testimonials (id) on delete cascade,
+  guest_witness_identity_id uuid not null references public.guest_witness_identities (id) on delete restrict,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  identity_assurance_level text not null check (identity_assurance_level in ('email_only', 'social_verified', 'prior_user', 'manual_verified', 'weak')),
+  relationship_weight_decimal numeric(5,4) not null check (relationship_weight_decimal >= 0 and relationship_weight_decimal <= 1),
+  knowledge_basis_score_decimal numeric(5,4) not null check (knowledge_basis_score_decimal >= 0 and knowledge_basis_score_decimal <= 1),
+  specificity_score_decimal numeric(5,4) not null check (specificity_score_decimal >= 0 and specificity_score_decimal <= 1),
+  independence_score_decimal numeric(5,4) not null check (independence_score_decimal >= 0 and independence_score_decimal <= 1),
+  consistency_score_decimal numeric(5,4) not null check (consistency_score_decimal >= 0 and consistency_score_decimal <= 1),
+  collusion_risk_score_decimal numeric(5,4) not null check (collusion_risk_score_decimal >= 0 and collusion_risk_score_decimal <= 1),
+  baseline_probative_value_score_decimal numeric(5,4) not null check (baseline_probative_value_score_decimal >= 0 and baseline_probative_value_score_decimal <= 1),
+  accepted_for_additionality boolean not null default false,
+  accepted_for_credibility_update boolean not null default false,
+  proposed_additionality_adjustment_decimal numeric(5,4) check (proposed_additionality_adjustment_decimal is null or (proposed_additionality_adjustment_decimal >= 0 and proposed_additionality_adjustment_decimal <= 1)),
+  review_status text not null default 'pending' check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (baseline_witness_testimonial_id)
+);
+
+comment on table public.baseline_witness_quality_assessments is
+  'Reviewer-visible witness quality assessment records. Identity assurance is stored separately from claim credibility.';
+
+create index if not exists baseline_witness_quality_assessments_review_idx
+  on public.baseline_witness_quality_assessments (review_status, baseline_probative_value_score_decimal desc, created_at desc);
+
+create table if not exists public.baseline_witness_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid references public.baseline_witness_invites (id) on delete set null,
+  baseline_witness_testimonial_id uuid references public.baseline_witness_testimonials (id) on delete set null,
+  baseline_witness_quality_assessment_id uuid references public.baseline_witness_quality_assessments (id) on delete set null,
+  event_type text not null check (event_type in ('invite_created', 'invite_opened', 'magic_link_verified', 'testimonial_submitted', 'witness_declined', 'pressure_reported', 'quality_assessed', 'review_decision', 'policy_effect_applied', 'unlink_requested', 'deletion_requested')),
+  actor_kind text not null check (actor_kind in ('participant', 'witness', 'reviewer', 'system')),
+  actor_id_hash text check (actor_id_hash is null or actor_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  redacted_summary text not null,
+  event_payload_redacted jsonb not null default '{}'::jsonb,
+  private_ref_hash text check (private_ref_hash is null or private_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  check (jsonb_typeof(event_payload_redacted) = 'object')
+);
+
+comment on table public.baseline_witness_audit_events is
+  'Append-only redacted audit records for invite, submission, review, risk, and policy-effect guest witness events.';
+
+create index if not exists baseline_witness_audit_events_subject_idx
+  on public.baseline_witness_audit_events (invite_id, baseline_witness_testimonial_id, created_at desc);
+
+create table if not exists public.baseline_witness_risk_reports (
+  id uuid primary key default gen_random_uuid(),
+  invite_id uuid references public.baseline_witness_invites (id) on delete set null,
+  baseline_witness_testimonial_id uuid references public.baseline_witness_testimonials (id) on delete set null,
+  participant_user_id uuid references public.profiles (id) on delete set null,
+  guest_witness_identity_id uuid references public.guest_witness_identities (id) on delete set null,
+  report_kind text not null check (report_kind in ('pressure_or_coercion', 'possible_side_payment', 'testimonial_ring', 'duplicate_witness', 'other')),
+  review_status text not null default 'open' check (review_status in ('open', 'under_review', 'resolved', 'dismissed', 'escalated')),
+  redacted_summary text not null,
+  private_report_ref_hash text check (private_report_ref_hash is null or private_report_ref_hash ~ '^sha256:[a-f0-9]{64}$'),
+  routed_to text not null default 'risk_review',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.baseline_witness_risk_reports is
+  'Private witness pressure, side-payment, duplicate, and testimonial-ring risk reports. Participants never receive raw refusal reasons or pressure notes.';
+
+create index if not exists baseline_witness_risk_reports_status_idx
+  on public.baseline_witness_risk_reports (review_status, report_kind, created_at desc);
+
+alter table public.guest_witness_identities enable row level security;
+alter table public.external_witness_accounts enable row level security;
+alter table public.baseline_witness_invites enable row level security;
+alter table public.baseline_witness_testimonials enable row level security;
+alter table public.baseline_witness_quality_assessments enable row level security;
+alter table public.baseline_witness_audit_events enable row level security;
+alter table public.baseline_witness_risk_reports enable row level security;
+
+create table if not exists public.moral_trade_opportunity_constraint_policies (
+  id uuid primary key default gen_random_uuid(),
+  policy_version text not null unique,
+  canonical_json jsonb not null,
+  policy_hash text not null unique check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  status text not null check (status in ('draft', 'active', 'superseded')),
+  base_self_attestation_completion_confidence_decimal numeric(6,5) not null check (base_self_attestation_completion_confidence_decimal between 0 and 1),
+  seed_posterior_completion_confidence_decimal numeric(6,5) not null check (seed_posterior_completion_confidence_decimal between 0 and 1),
+  max_completion_confidence_decimal numeric(6,5) not null check (max_completion_confidence_decimal between 0 and 1),
+  max_completion_confidence_with_contrary_evidence_decimal numeric(6,5) not null check (max_completion_confidence_with_contrary_evidence_decimal between 0 and 1),
+  max_completion_confidence_without_direct_observer_decimal numeric(6,5) not null check (max_completion_confidence_without_direct_observer_decimal between 0 and 1),
+  max_additionality_adjustment_decimal numeric(6,5) not null check (max_additionality_adjustment_decimal between 0 and 1),
+  privacy_invasive_evidence_overreward_cap_decimal numeric(6,5) not null check (privacy_invasive_evidence_overreward_cap_decimal between 0 and 1),
+  weights_json jsonb not null,
+  fixed_consideration_adjustment_allowed_bool boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  activated_at timestamptz,
+  check (fixed_consideration_adjustment_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_opportunity_meal_evidence_bundles (
+  id uuid primary key default gen_random_uuid(),
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  pledge_swap_id text,
+  purchase_envelope_type text,
+  purchase_envelope_id text,
+  participant_action_commitment_id text,
+  action_template_id text not null,
+  meal_label text not null check (meal_label in ('breakfast', 'lunch', 'dinner', 'snack', 'other')),
+  meal_window_start_at timestamptz not null,
+  meal_window_end_at timestamptz not null,
+  ordinary_meal_venue_type text not null check (
+    ordinary_meal_venue_type in ('school_cafeteria', 'employer_cafeteria', 'dining_hall', 'home', 'restaurant', 'other')
+  ),
+  ordinary_meal_venue_description_private text,
+  venue_access_model text not null check (
+    venue_access_model in ('swipe_based', 'meal_plan', 'cash_register', 'open_access', 'unknown', 'other')
+  ),
+  participant_claims_usual_venue_for_meal_bool boolean not null,
+  participant_claims_usually_eats_once_for_meal_bool boolean not null,
+  post_meal_commitment_claimed_bool boolean not null,
+  post_meal_commitment_type text check (
+    post_meal_commitment_type in ('class', 'exam', 'work_shift', 'meeting', 'travel', 'appointment', 'other')
+  ),
+  post_meal_commitment_start_at timestamptz,
+  post_meal_commitment_evidence_ref text,
+  cafeteria_or_venue_record_ref text,
+  co_diner_count integer not null default 0 check (co_diner_count >= 0),
+  baseline_witness_count integer not null default 0 check (baseline_witness_count >= 0),
+  direct_observer_testimonial_count integer not null default 0 check (direct_observer_testimonial_count >= 0),
+  contrary_report_count integer not null default 0 check (contrary_report_count >= 0),
+  bundle_status text not null check (
+    bundle_status in ('draft', 'submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed')
+  ),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (meal_window_start_at < meal_window_end_at)
+);
+
+create table if not exists public.moral_trade_meal_witness_testimonials (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid not null references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  witness_user_id uuid references public.profiles (id) on delete set null,
+  witness_identity_ref text,
+  witness_role text not null check (
+    witness_role in ('baseline_witness', 'co_diner_direct_observer', 'schedule_constraint_witness')
+  ),
+  meal_label text not null check (meal_label in ('breakfast', 'lunch', 'dinner', 'snack', 'other')),
+  observed_meal_venue_private text,
+  observation_coverage text not null check (
+    observation_coverage in ('whole_meal', 'most_of_meal', 'part_of_meal', 'not_observed')
+  ),
+  directly_observed_meal_bool boolean not null default false,
+  participant_left_and_returned_during_meal_bool boolean not null default false,
+  saw_participant_eat_meat_or_fish_bool boolean not null default false,
+  reason_to_think_ate_meat_fish_before_or_after_bool boolean not null default false,
+  no_meat_fish_completion_credence_decimal numeric(6,5) check (no_meat_fish_completion_credence_decimal between 0 and 1),
+  baseline_counterfactual_credence_decimal numeric(6,5) check (baseline_counterfactual_credence_decimal between 0 and 1),
+  knows_usual_venue_for_meal_bool boolean,
+  knows_usually_eats_once_for_meal_bool boolean,
+  basis_text_private text not null,
+  pressured_to_submit_bool boolean not null default false,
+  side_payment_concern_bool boolean not null default false,
+  misleading_evidence_concern_bool boolean not null default false,
+  testimonial_status text not null check (
+    testimonial_status in ('submitted', 'under_review', 'accepted', 'partially_accepted', 'rejected', 'disputed')
+  ),
+  reviewer_user_id uuid references public.profiles (id) on delete set null,
+  participant_visible_summary text,
+  private_reviewer_notes_ref text,
+  submitted_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_opportunity_constraint_assessments (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid not null references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  participant_user_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null,
+  source_id text not null,
+  ordinary_venue_support_score_decimal numeric(6,5) not null check (ordinary_venue_support_score_decimal between 0 and 1),
+  swipe_or_access_constraint_score_decimal numeric(6,5) not null check (swipe_or_access_constraint_score_decimal between 0 and 1),
+  co_diner_observation_score_decimal numeric(6,5) not null check (co_diner_observation_score_decimal between 0 and 1),
+  post_meal_commitment_score_decimal numeric(6,5) not null check (post_meal_commitment_score_decimal between 0 and 1),
+  usual_single_meal_habit_score_decimal numeric(6,5) not null check (usual_single_meal_habit_score_decimal between 0 and 1),
+  baseline_witness_score_decimal numeric(6,5) not null check (baseline_witness_score_decimal between 0 and 1),
+  independence_score_decimal numeric(6,5) not null check (independence_score_decimal between 0 and 1),
+  consistency_score_decimal numeric(6,5) not null check (consistency_score_decimal between 0 and 1),
+  collusion_risk_score_decimal numeric(6,5) not null check (collusion_risk_score_decimal between 0 and 1),
+  contrary_evidence_score_decimal numeric(6,5) not null check (contrary_evidence_score_decimal between 0 and 1),
+  privacy_sensitivity_score_decimal numeric(6,5) not null check (privacy_sensitivity_score_decimal between 0 and 1),
+  proposed_completion_confidence_decimal numeric(6,5) not null check (proposed_completion_confidence_decimal between 0 and 1),
+  proposed_additionality_adjustment_decimal numeric(6,5) check (proposed_additionality_adjustment_decimal between 0 and 1),
+  cap_applied_decimal numeric(6,5) check (cap_applied_decimal between 0 and 1),
+  accepted_for_completion_verification_bool boolean not null default false,
+  accepted_for_additionality_bool boolean not null default false,
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  review_status text not null check (review_status in ('pending', 'accepted', 'rejected', 'needs_more_info', 'disputed')),
+  participant_visible_summary text,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.moral_trade_opportunity_meal_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  evidence_bundle_id uuid references public.moral_trade_opportunity_meal_evidence_bundles (id) on delete cascade,
+  opportunity_constraint_assessment_id uuid references public.moral_trade_opportunity_constraint_assessments (id) on delete cascade,
+  actor_user_id uuid references public.profiles (id) on delete set null,
+  actor_kind text not null check (actor_kind in ('participant', 'witness', 'reviewer', 'system')),
+  event_type text not null check (
+    event_type in (
+      'bundle_submitted',
+      'witness_testimony_submitted',
+      'assessment_created',
+      'risk_review_flagged',
+      'review_decision_recorded',
+      'policy_evaluation_trace_created',
+      'public_summary_generated'
+    )
+  ),
+  policy_hash text check (policy_hash ~ '^sha256:[a-f0-9]{64}$'),
+  material_effects text[] not null default '{}',
+  redacted_summary text not null,
+  private_notes_ref text,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+comment on table public.moral_trade_opportunity_meal_evidence_bundles is
+  'Private opportunity-constrained meal evidence bundles for optional one-meal or one-day no-meat pledge-swap verification. Private venue, schedule, and raw context are review-scoped and not public or funder-visible.';
+
+comment on table public.moral_trade_meal_witness_testimonials is
+  'Private meal witness testimonials with separate baseline, co-diner/direct-observer, and schedule-constraint roles. Baseline testimony affects additionality; direct meal observation affects completion verification.';
+
+comment on table public.moral_trade_opportunity_constraint_assessments is
+  'Reviewer-scoped opportunity-constraint assessments that can feed verification confidence and additionality only through a frozen policy, without retroactive fixed-consideration changes.';
+
+alter table public.moral_trade_opportunity_constraint_policies enable row level security;
+alter table public.moral_trade_opportunity_meal_evidence_bundles enable row level security;
+alter table public.moral_trade_meal_witness_testimonials enable row level security;
+alter table public.moral_trade_opportunity_constraint_assessments enable row level security;
+alter table public.moral_trade_opportunity_meal_audit_events enable row level security;

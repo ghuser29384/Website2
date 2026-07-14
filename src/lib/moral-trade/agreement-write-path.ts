@@ -476,6 +476,7 @@ export function buildAgreementReviewProvenanceRows({
     stateTransitionEvent: {
       actor_agent_id: actorProvenanceAgentId,
       actor_agent_kind: transitionEventRecord.actorAgentKind,
+      audit_question_answers: transitionEventRecord.auditQuestionAnswers,
       event_hash: transitionEventRecord.eventHash,
       from_status: transitionEventRecord.from,
       generated_entity_ids: generatedEntityIds,

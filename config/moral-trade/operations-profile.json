@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-operations-v0.2-2026-05",
-  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, retention lifecycle controls, observability metrics, fallback behavior, and rollout gates.",
+  "version": "moral-trade-operations-v0.3-2026-05",
+  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, email-outbox safety gates, retention lifecycle controls, observability metrics, fallback behavior, and rollout gates.",
   "securityHeaders": [
     {
       "code": "strict_transport_security",
@@ -54,10 +54,69 @@
     { "key": "saved_search_write", "window": "1 minute", "limit": 30 },
     { "key": "copilot_draft_review", "window": "1 minute", "limit": 30 },
     { "key": "match_signal_evaluate", "window": "1 minute", "limit": 60 },
+    { "key": "matching_clearing_execute", "window": "1 minute", "limit": 20 },
+    { "key": "clearing_preview_execute", "window": "1 minute", "limit": 30 },
+    { "key": "release_gate_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "baseline_integrity_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "agreement_amendment_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "production_readiness_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "side_agreement_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "trade_classification_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "template_conformance_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "review_capacity_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_term_sheet_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_confirmation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_eligibility_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "account_security_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "reviewer_quality_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "protective_assessment_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "user_safety_content_moderation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "financial_settlement_controls_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "recipient_acceptance_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "ai_preference_elicitation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "post_clear_audit_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "non_public_goods_subsidy_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "non_public_goods_tier_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "risk_control_matrix_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "preference_integrity_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "commitment_settlement_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "group_buying_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_credibility_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "opportunity_meal_evidence_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "guest_witness_invite_write", "window": "1 minute", "limit": 12 },
+    { "key": "guest_witness_testimony_write", "window": "1 minute", "limit": 20 },
+    { "key": "guest_witness_review_write", "window": "1 minute", "limit": 20 },
+    { "key": "pledge_performance_bond_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "pledge_swap_performance_schedule_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "negative_commitment_scope_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "donor_of_record_tax_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "action_reversibility_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "authority_obligation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "direct_pair_clearing_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "cause_bucket_taxonomy_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "resource_compatibility_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "net_offset_accounting_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "offer_validity_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "private_exchange_rate_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "noncompensable_blocker_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "batch_clearing_objective_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "sensitive_evidence_attestation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "pilot_evidence_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
+    { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "review_workflow_evaluate", "window": "1 minute", "limit": 60 },
     { "key": "profile_portability", "window": "1 minute", "limit": 12 },
+    { "key": "background_opportunity_brief_read", "window": "1 minute", "limit": 60 },
+    { "key": "background_opportunity_feedback_write", "window": "1 minute", "limit": 30 },
+    { "key": "background_helper_run_write", "window": "1 minute", "limit": 12 },
+    { "key": "background_wish_interview_write", "window": "1 minute", "limit": 20 },
+    { "key": "background_source_summary_write", "window": "1 minute", "limit": 12 },
+    { "key": "background_subject_identity_write", "window": "1 minute", "limit": 8 },
+    { "key": "background_claim_assurance_write", "window": "1 minute", "limit": 8 },
+    { "key": "background_pairwise_safety_write", "window": "1 minute", "limit": 12 },
+    { "key": "background_intro_packet_write", "window": "1 minute", "limit": 12 },
+    { "key": "background_private_overlap_check", "window": "1 minute", "limit": 12 },
     { "key": "wish_registry_search", "window": "1 minute", "limit": 60 },
     { "key": "analytics_ingest", "window": "1 minute", "limit": 120 }
   ],
@@ -83,6 +142,11 @@
       "evidence": "Background networking grants stage public previews, detail requests, and mutual consent."
     },
     {
+      "key": "email_outbox_safety_gate",
+      "label": "Email outbox safety gate",
+      "evidence": "src/lib/moral-trade/email-copy.ts centralizes generic dashboard-directed Moral Trade email copy and src/app/api/jobs/email/route.ts suppresses unsafe rows before provider send when body text contains contact details, exact offer terms, payment amounts, agreement or payment identifiers, evidence, raw source notes, or private wish markers."
+    },
+    {
       "key": "audit_events",
       "label": "Audit events",
       "evidence": "Match, privacy, and admin actions record audit events where disclosure is safe."
@@ -99,8 +163,8 @@
     {
       "key": "private_wish_source_lifecycle",
       "label": "Private wish and source lifecycle",
-      "scope": "Private wishes, source summaries, matching preferences, and consent-gated background-networking inputs.",
-      "retentionWindow": "Kept only for the consent scope or review workflow that needs it; exact wishes and source notes remain excluded from public cards, analytics, public contract routes, and search previews.",
+      "scope": "Private wishes, source summaries, approved source-derived profile signals, matching preferences, and consent-gated background-networking inputs.",
+      "retentionWindow": "Kept only for the consent scope or review workflow that needs it; expired or revoked source summaries and profile signals stop affecting matching, and exact wishes, raw source text, source notes, and shadow-run drafts remain excluded from public cards, analytics, public contract routes, and search previews.",
       "evidence": "Data-model and disclosure contracts require field-level grants, stage scope, expiry, and private/public boundaries before disclosure."
     },
     {
@@ -127,9 +191,9 @@
     {
       "key": "notification_delivery_lifecycle",
       "label": "Notification delivery lifecycle",
-      "scope": "Email/in-app delivery rows, digest preferences, opt-out state, and failed-delivery diagnostics.",
-      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, diagnose failed delivery, and avoid exposing private wish text in notifications.",
-      "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose."
+      "scope": "Email/in-app delivery rows, digest preferences, quiet-hour windows, source cooldown state, opt-out state, suppression status, and failed-delivery diagnostics.",
+      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, enforce discovery cooldowns, diagnose failed or suppressed delivery, and avoid exposing private wish text, contact details, exact terms, payment amounts, agreement IDs, evidence, or source notes in notifications.",
+      "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose; email-copy tests cover generic copy and sender-side suppression before provider delivery."
     },
     {
       "key": "data_right_request_lifecycle",
@@ -145,6 +209,7 @@
     "api_latency_p95",
     "web_vitals",
     "blocked_proposal_rate",
+    "email_outbox_suppression_count",
     "privacy_incident_count",
     "copilot_fallback_rate",
     "evidence_review_sla",
@@ -165,6 +230,11 @@
       "key": "provider_timeout_no_state_change",
       "label": "Provider timeout cannot change state",
       "rule": "Provider or payment/evidence timeouts remain pending or manual-review states."
+    },
+    {
+      "key": "unsafe_email_no_provider_send",
+      "label": "Unsafe email rows cannot reach the provider",
+      "rule": "Core Moral Trade email outbox rows with contact details, exact offer terms, payment amounts, agreement or payment identifiers, evidence, raw source notes, or private wish markers are marked suppressed before provider send."
     },
     {
       "key": "replay_safe_state_transitions",
@@ -199,6 +269,7 @@
     "private_cache_header_smoke",
     "rate_limit_surface_smoke",
     "retention_lifecycle_contract_smoke",
+    "email_outbox_safety_gate_smoke",
     "operations_profile_validator",
     "resilience_fallback_audit",
     "health_route_contract_smoke",

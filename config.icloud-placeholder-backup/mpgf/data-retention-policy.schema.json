@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Data Retention Policy",
+  "type": "object",
+  "required": ["version", "mode", "demoAuditRetentionDays", "realMoneyPrivateDataEnabled"],
+  "properties": {
+    "realMoneyPrivateDataEnabled": { "const": false },
+    "demoAuditRetentionDays": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": true
+}

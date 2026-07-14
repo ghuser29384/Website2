@@ -10,7 +10,7 @@ import {
 } from "@/lib/proposal-review";
 
 export const MORAL_TRADE_COPILOT_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-copilot-contract-validator-v0.2";
+  "moral-trade-copilot-contract-validator-v0.3";
 
 type CopilotRole = {
   key: string;
@@ -232,6 +232,25 @@ export interface MoralTradeCopilotEvidenceMetadataSummary {
   redactionsApplied: string[];
 }
 
+export interface MoralTradeCopilotStrictInputBundleAuditEntry {
+  key: string;
+  origin:
+    | "request"
+    | "system_contract"
+    | "optional_for_draft_review"
+    | "not_supplied";
+  status: "present" | "provided_by_system" | "optional" | "missing";
+}
+
+export interface MoralTradeCopilotStrictInputBundleAudit {
+  requiredSources: string[];
+  acceptedTopLevelKeys: string[];
+  rejectedTopLevelKeys: string[];
+  ignoredTopLevelKeys: string[];
+  sourceCoverage: MoralTradeCopilotStrictInputBundleAuditEntry[];
+  blockers: string[];
+}
+
 const copilotContract = copilotContractJson as MoralTradeCopilotContract;
 
 const REQUIRED_INPUT_BUNDLE = [
@@ -262,15 +281,68 @@ const REQUIRED_OUTPUT_SECTIONS = [
   "reviewer_summary",
   "citations",
 ] as const;
+const COPILOT_COMPLETENESS_KEYS = [
+  "missing_required_fields",
+  "underspecified_fields",
+  "policy_conflicts",
+] as const;
+const COPILOT_TRADE_STRUCTURE_KEYS = [
+  "format",
+  "offered_action",
+  "requested_action",
+  "duration",
+  "exit_conditions",
+  "verification_method",
+] as const;
+const COPILOT_TRUST_ASSESSMENT_KEYS = [
+  "factual_trust",
+  "counterfactual_baseline",
+  "externality_review",
+  "party_relative_benefit",
+  "privacy_redaction",
+] as const;
+const COPILOT_TRUST_RATING_KEYS = ["rating", "reasons"] as const;
+const COPILOT_EXTERNALITY_REVIEW_KEYS = ["required", "flags"] as const;
+const COPILOT_PRIVACY_REDACTION_KEYS = ["rating", "flags", "reasons"] as const;
+const COPILOT_MATCH_EXPLANATION_KEYS = [
+  "factor_codes",
+  "confidence_band",
+  "redactions_applied",
+] as const;
+const COPILOT_VERIFICATION_STEP_KEYS = [
+  "key",
+  "label",
+  "status",
+  "detail",
+  "blocks_matchable",
+] as const;
+const COPILOT_CLARIFICATION_QUESTION_KEYS = ["field", "question"] as const;
+const COPILOT_EVIDENCE_ROW_KEYS = [
+  "claim",
+  "evidence_type",
+  "citation",
+  "status",
+  "reviewer_note",
+] as const;
+const COPILOT_REVIEW_INSTRUCTION_KEYS = [
+  "artifacts_to_request",
+  "review_scope",
+  "appeal_triggers",
+] as const;
 
 const REQUIRED_GUARDRAILS = [
   "approved_json_only",
+  "observable_claims_only",
   "no_chain_of_thought",
   "no_global_moral_ranking",
   "no_autonomous_outreach",
   "no_private_feed_ingestion",
   "separate_trust_axes",
+  "insufficient_evidence_artifact_requests",
   "anti_threat_escalation",
+  "no_false_certainty",
+  "no_escrow_legal_tax_claims",
+  "verification_loop_matchability_gate",
 ] as const;
 
 const REQUIRED_PROMPT_TEMPLATES = [
@@ -333,6 +405,36 @@ const EVIDENCE_METADATA_ALLOWED_KEYS = [
 ] as const;
 const EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN =
   /(raw|body|private|contact|exact.*wish|source.*note|artifact.*content|free.*text)/i;
+const COPILOT_REQUEST_ALLOWED_TOP_LEVEL_KEYS = [
+  "draft",
+  "structuredDraft",
+  "structured_draft",
+  "citations",
+  "evidenceMetadata",
+  "evidence_metadata",
+] as const;
+const COPILOT_SYSTEM_PROVIDED_INPUT_SOURCES = [
+  "policy_registry",
+  "prohibited_pattern_registry",
+  "factor_code_dictionary",
+  "verification_method_taxonomy",
+  "redaction_policy",
+  "match_constraint_set",
+  "stated_exclusions",
+] as const;
+const COPILOT_OPTIONAL_DRAFT_REVIEW_INPUT_SOURCES = ["redacted_profile_pair"] as const;
+const COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN =
+  /(raw|conversation|message|thread|browser|session|cookie|token|secret|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|profile.*dump|app.*context)/i;
+const COPILOT_FORBIDDEN_CITATION_PATTERN =
+  /(raw|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|scratchpad|message|thread|cookie|token|secret)/i;
+const COPILOT_REQUIRED_REVIEWER_SUMMARY_SECTIONS = [
+  "What is being offered",
+  "What is being requested",
+  "Baseline claim",
+  "What evidence would count",
+  "Main policy flags",
+  "What remains unverified",
+] as const;
 const EVIDENCE_METADATA_STATUS_VALUES = [
   "submitted",
   "pending_review",
@@ -357,6 +459,36 @@ const EVIDENCE_METADATA_REDACTION_LEVELS = [
 ] as const;
 const HIDDEN_REASONING_DISCLOSURE_PATTERN =
   /\b(chain[- ]of[- ]thought|hidden reasoning|internal reasoning|private reasoning|step[- ]by[- ]step reasoning|scratchpad|let me think|my reasoning is)\b/i;
+const INCOMPLETE_RECORD_CERTAINTY_PATTERN =
+  /\b(guaranteed|definitive(?:ly)?|certain(?:ly)?|conclusive(?:ly)?|unquestionably|no uncertainty|proven beyond doubt|fully verified|safe to rely on without review|can be relied on without review)\b/i;
+const PROHIBITED_RELIANCE_CLAIM_PATTERN =
+  /\b(escrow-backed|escrow protected|legally enforceable|tax deductible|tax treatment guaranteed|investment advice|custody service|custody-backed|platform moral endorsement|morally endorsed by the platform|completion guaranteed)\b/i;
+const OBSERVABLE_CLAIMS_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|without inventing|not invented|no invented|observable claims only)\b/i;
+const INVENTED_CLAIM_PATTERNS = [
+  /\b(invent|fabricate|make up|hallucinate)\b[^.\n]{0,120}\b(fact|counterpart(?:y|ies)|prior behavior|evidence|citation|receipt|artifact|attestation)\b/i,
+  /\b(assume|presume|treat as true|state as fact)\b[^.\n]{0,120}\b(prior behavior|counterpart(?:y|ies)|receipt|evidence|artifact|attestation|completion|donation history)\b[^.\n]{0,120}\b(without evidence|without citation|without support|even if missing|not supplied)\b/i,
+  /\b(create|add|cite)\b[^.\n]{0,120}\b(fake|placeholder|synthetic|invented|fabricated)\b[^.\n]{0,120}\b(evidence|citation|receipt|artifact|counterpart(?:y|ies))\b/i,
+] as const;
+const EXACT_ARTIFACT_REQUEST_PATTERN =
+  /\b(receipt|public log|witness attestation|payment record|audit link|audit trail|provider record|baseline artifact|baseline record|prior-intent note|past behavior record|dated no-trade baseline statement|scoped evidence artifact)\b/i;
+const INSUFFICIENT_EVIDENCE_NOTICE_PATTERN =
+  /\b(evidence|artifact|receipt|attestation|payment record|audit trail|audit link|public log)\b[^.\n]{0,120}\b(needed|required|missing|insufficient|not specific enough|still needed|request)\b/i;
+const BLOCKED_POLICY_REASON_CODE_PATTERN = /^(anti_threat|prohibited)_[a-z0-9_:-]+$/;
+const GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|no global moral ranking|participant[- ]relative|participant's own stated priorities|not a platform judgment|not platform judgment)\b/i;
+const GLOBAL_MORAL_RANKING_PATTERNS = [
+  /\b(objectively|universally|globally)\b[^.\n]{0,120}\b(morally correct|morally right|morally wrong|morally best|moral(?:ly)? superior|best moral|moral value|rank(?:ed|ing)?|score)\b/i,
+  /\b(rank|ranking|score|scoring|rate|rating)\b[^.\n]{0,120}\b(proposal|trade|offer|participant|cause|moral value|morality)\b[^.\n]{0,120}\b(globally|objectively|universally|by the platform|platform-wide)\b/i,
+  /\b(platform|moral trade)\b[^.\n]{0,120}\b(decides?|determines?|certifies?|endorses?)\b[^.\n]{0,120}\b(morally correct|moral(?:ly)? superior|best moral|objective moral)\b/i,
+] as const;
+const AUTONOMOUS_OUTREACH_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|no autonomous outreach|only after explicit consent)\b/i;
+const AUTONOMOUS_OUTREACH_PATTERNS = [
+  /\b(automatically|autonomously|without explicit consent|without consent|before consent|prior to consent|before approval)\b[^.\n]{0,120}\b(contact|email|message|notify|introduce|disclose|reveal|send)\b/i,
+  /\b(contact|email|message|notify|introduce|disclose|reveal|send)\b[^.\n]{0,120}\b(counterpart(?:y|ies)|matched part(?:y|ies)|other participant|participants?|private wish(?:es)?|private contact|contact details|email address|phone number)\b[^.\n]{0,120}\b(without explicit consent|without consent|before consent|prior to consent|before approval|automatically|autonomously|now|immediately)\b/i,
+  /\b(send|disclose|reveal|share)\b[^.\n]{0,120}\b(private wish(?:es)?|contact details|email address|phone number)\b/i,
+] as const;
 
 export const MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS = [
   "raw_artifact_body",
@@ -381,6 +513,62 @@ function hasAll(values: readonly string[], required: readonly string[]) {
 
 function containsHiddenReasoningDisclosure(value: string) {
   return HIDDEN_REASONING_DISCLOSURE_PATTERN.test(value);
+}
+
+function containsIncompleteRecordCertaintyClaim(value: string) {
+  return INCOMPLETE_RECORD_CERTAINTY_PATTERN.test(value);
+}
+
+function containsProhibitedRelianceClaim(value: string) {
+  return PROHIBITED_RELIANCE_CLAIM_PATTERN.test(value);
+}
+
+function containsInventedClaimInstruction(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !OBSERVABLE_CLAIMS_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      INVENTED_CLAIM_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
+}
+
+function namesExactArtifactRequest(value: string) {
+  return EXACT_ARTIFACT_REQUEST_PATTERN.test(value);
+}
+
+function statesInsufficientEvidence(value: string) {
+  return INSUFFICIENT_EVIDENCE_NOTICE_PATTERN.test(value);
+}
+
+function isBlockedPolicyReasonCode(value: string) {
+  return BLOCKED_POLICY_REASON_CODE_PATTERN.test(value);
+}
+
+function containsGlobalMoralRankingClaim(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      GLOBAL_MORAL_RANKING_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
+}
+
+function containsAutonomousOutreachClaim(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !AUTONOMOUS_OUTREACH_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      AUTONOMOUS_OUTREACH_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
 }
 
 function check(
@@ -446,11 +634,26 @@ export function validateMoralTradeCopilotReviewRouteImplementation({
       "copilot-review-strict-input-normalization",
       "Copilot review route normalizes only the strict input bundle",
       /normalizeDraftInput/.test(routeSource) &&
+        /getUnsupportedDraftInputKeys/.test(routeSource) &&
+        /auditMoralTradeCopilotStrictInputBundle/.test(routeSource) &&
+        /inputBundleAudit\.blockers/.test(routeSource) &&
+        /unsupportedDraftInputBlockers/.test(routeSource) &&
         /normalizeMoralTradeCopilotEvidenceMetadata/.test(routeSource) &&
         /normalizeCitations/.test(routeSource) &&
+        /getUnsupportedCitationBlockers/.test(routeSource) &&
+        /unsupportedCitationBlockers/.test(routeSource) &&
         /MAX_TEXT_FIELD_LENGTH/.test(routeSource) &&
         /contract\.strictInputBundle/.test(routeSource),
       "Review route should normalize structured draft, citations, and redacted evidence metadata only.",
+    ),
+    check(
+      "copilot-review-invalid-bundle-no-output",
+      "Copilot review route emits no output for invalid strict bundles",
+      /preOutputBlockers/.test(routeSource) &&
+        /without emitting an output packet/.test(routeSource) &&
+        /inputBundleAudit\.blockers/.test(routeSource) &&
+        /evidenceMetadataNormalization\.blockers/.test(routeSource),
+      "Invalid strict input bundles should return blockers and fallback metadata before producing output.",
     ),
     check(
       "copilot-review-output-validation",
@@ -488,12 +691,90 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function getUnknownKeys(value: unknown, allowedKeys: readonly string[]) {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.keys(value).filter((key) => !allowedKeys.includes(key));
+}
+
+function pushUnknownKeyBlocker(
+  blockers: string[],
+  scope: string,
+  value: unknown,
+  allowedKeys: readonly string[],
+) {
+  const unknownKeys = getUnknownKeys(value, allowedKeys);
+
+  if (unknownKeys.length) {
+    blockers.push(
+      `approved_json_only:${scope}: unsupported fields ${unknownKeys.sort().join(",")}`,
+    );
+  }
+}
+
+function pushUnknownKeyBlockersForRows(
+  blockers: string[],
+  scope: string,
+  values: readonly unknown[],
+  allowedKeys: readonly string[],
+) {
+  values.forEach((value, index) => {
+    pushUnknownKeyBlocker(blockers, `${scope}:${index}`, value, allowedKeys);
+  });
+}
+
 function normalizeEvidenceMetadataToken(value: unknown) {
   return cleanBounded(value, 80).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 
 function containsContactLikeText(value: string) {
   return /@/.test(value) || /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value);
+}
+
+function isHttpEvidenceLocator(value: string) {
+  try {
+    const url = new URL(value);
+
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isApprovedCopilotCitation(value: string, evidenceType?: string) {
+  const citation = value.trim();
+
+  if (
+    !citation ||
+    citation.length > 240 ||
+    containsContactLikeText(citation) ||
+    containsHiddenReasoningDisclosure(citation) ||
+    COPILOT_FORBIDDEN_CITATION_PATTERN.test(citation)
+  ) {
+    return false;
+  }
+
+  if (evidenceType === "draft_field") {
+    return /^draft\.[a-z0-9_]+$/i.test(citation);
+  }
+
+  if (evidenceType === "policy_registry") {
+    return /^policy_registry\.[a-z0-9_:-]+$/i.test(citation);
+  }
+
+  if (evidenceType === "artifact_request") {
+    return /^review_instructions\.[a-z0-9_]+$/i.test(citation);
+  }
+
+  if (evidenceType === "evidence_locator") {
+    return /^evidence:[A-Za-z0-9._:-]+$/.test(citation) || isHttpEvidenceLocator(citation);
+  }
+
+  return /^(proposal|evidence|policy|protocol|contract|review):[A-Za-z0-9._:-]+$/.test(
+    citation,
+  );
 }
 
 function isValidIsoDate(value: string) {
@@ -519,6 +800,86 @@ function getEvidenceMetadataRawValue(
 
 function buildEvidenceMetadataReviewerNote(metadata: MoralTradeCopilotEvidenceMetadata) {
   return `Already-submitted ${metadata.scope.replaceAll("_", " ")} metadata only; raw artifacts and private notes stay outside the copilot bundle.`;
+}
+
+export function auditMoralTradeCopilotStrictInputBundle(
+  value: unknown,
+  contract: MoralTradeCopilotContract = copilotContract,
+): MoralTradeCopilotStrictInputBundleAudit {
+  const allowedRequestKeys = new Set<string>(COPILOT_REQUEST_ALLOWED_TOP_LEVEL_KEYS);
+  const systemProvidedSources = new Set<string>(COPILOT_SYSTEM_PROVIDED_INPUT_SOURCES);
+  const optionalDraftReviewSources = new Set<string>(
+    COPILOT_OPTIONAL_DRAFT_REVIEW_INPUT_SOURCES,
+  );
+  const requestRecord = isRecord(value) ? value : {};
+  const topLevelKeys = Object.keys(requestRecord);
+  const acceptedTopLevelKeys = topLevelKeys.filter((key) => allowedRequestKeys.has(key));
+  const ignoredTopLevelKeys = topLevelKeys.filter((key) => !allowedRequestKeys.has(key));
+  const rejectedTopLevelKeys = ignoredTopLevelKeys.filter((key) =>
+    COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN.test(key),
+  );
+  const hasStructuredDraft = acceptedTopLevelKeys.some((key) =>
+    ["draft", "structuredDraft", "structured_draft"].includes(key),
+  );
+  const hasEvidenceMetadata = acceptedTopLevelKeys.some((key) =>
+    ["evidenceMetadata", "evidence_metadata"].includes(key),
+  );
+  const blockers = rejectedTopLevelKeys.map(
+    (key) => `strict_input_bundle:top_level_field_not_allowed:${key}`,
+  );
+
+  if (!hasStructuredDraft) {
+    blockers.push("strict_input_bundle:structured_draft_missing");
+  }
+
+  const sourceCoverage = contract.strictInputBundle.map((key) => {
+    if (key === "structured_draft") {
+      return {
+        key,
+        origin: hasStructuredDraft ? "request" : "not_supplied",
+        status: hasStructuredDraft ? "present" : "missing",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (key === "evidence_metadata") {
+      return {
+        key,
+        origin: hasEvidenceMetadata ? "request" : "optional_for_draft_review",
+        status: hasEvidenceMetadata ? "present" : "optional",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (systemProvidedSources.has(key)) {
+      return {
+        key,
+        origin: "system_contract",
+        status: "provided_by_system",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (optionalDraftReviewSources.has(key)) {
+      return {
+        key,
+        origin: "optional_for_draft_review",
+        status: "optional",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    return {
+      key,
+      origin: "not_supplied",
+      status: "missing",
+    } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+  });
+
+  return {
+    requiredSources: [...contract.strictInputBundle],
+    acceptedTopLevelKeys,
+    rejectedTopLevelKeys,
+    ignoredTopLevelKeys,
+    sourceCoverage,
+    blockers,
+  };
 }
 
 export function normalizeMoralTradeCopilotEvidenceMetadata(
@@ -566,7 +927,13 @@ export function normalizeMoralTradeCopilotEvidenceMetadata(
     const forbiddenKeys = unknownKeys.filter((key) =>
       EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN.test(key),
     );
-    ignoredFieldCount += unknownKeys.length;
+
+    if (unknownKeys.length) {
+      ignoredFieldCount += unknownKeys.length;
+      entryBlockers.push(
+        `unsupported_metadata_fields_not_allowed:${unknownKeys.sort().join(",")}`,
+      );
+    }
 
     if (forbiddenKeys.length) {
       entryBlockers.push(
@@ -603,7 +970,7 @@ export function normalizeMoralTradeCopilotEvidenceMetadata(
       entryBlockers.push("evidence_type_required");
     }
 
-    if (!citation || containsContactLikeText(citation)) {
+    if (!isApprovedCopilotCitation(citation, "evidence_locator")) {
       entryBlockers.push("redacted_citation_required");
     }
 
@@ -1063,6 +1430,84 @@ export function buildMoralTradeCopilotOutput(
 
 export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput) {
   const blockers: string[] = [];
+  const verificationContractByKey = new Map(
+    copilotContract.verificationLoop.map((step) => [step.key, step]),
+  );
+
+  pushUnknownKeyBlocker(blockers, "output", output, REQUIRED_OUTPUT_SECTIONS);
+  pushUnknownKeyBlocker(blockers, "completeness", output.completeness, COPILOT_COMPLETENESS_KEYS);
+  pushUnknownKeyBlocker(
+    blockers,
+    "trade_structure",
+    output.trade_structure,
+    COPILOT_TRADE_STRUCTURE_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment",
+    output.trust_assessment,
+    COPILOT_TRUST_ASSESSMENT_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.factual_trust",
+    output.trust_assessment.factual_trust,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.counterfactual_baseline",
+    output.trust_assessment.counterfactual_baseline,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.externality_review",
+    output.trust_assessment.externality_review,
+    COPILOT_EXTERNALITY_REVIEW_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.party_relative_benefit",
+    output.trust_assessment.party_relative_benefit,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.privacy_redaction",
+    output.trust_assessment.privacy_redaction,
+    COPILOT_PRIVACY_REDACTION_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "match_explanation",
+    output.match_explanation,
+    COPILOT_MATCH_EXPLANATION_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "verification_loop",
+    output.verification_loop,
+    COPILOT_VERIFICATION_STEP_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "clarification_questions",
+    output.clarification_questions,
+    COPILOT_CLARIFICATION_QUESTION_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "cited_evidence_table",
+    output.cited_evidence_table,
+    COPILOT_EVIDENCE_ROW_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "review_instructions",
+    output.review_instructions,
+    COPILOT_REVIEW_INSTRUCTION_KEYS,
+  );
 
   if (!copilotContract.statusValues.includes(output.status)) {
     blockers.push("status: unrecognized copilot status");
@@ -1102,6 +1547,91 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     blockers.push("verification_loop: every fixed verification step needs status and detail");
   }
 
+  const verificationContractMismatches = output.verification_loop
+    .filter(
+      (step) =>
+        verificationContractByKey.get(step.key)?.blocksMatchable !== step.blocks_matchable,
+    )
+    .map((step) => step.key);
+
+  if (verificationContractMismatches.length) {
+    blockers.push(
+      `verification_loop_contract_mismatch: ${verificationContractMismatches.join(", ")}`,
+    );
+  }
+
+  const blockingVerificationFailures = output.verification_loop
+    .filter(
+      (step) =>
+        verificationContractByKey.get(step.key)?.blocksMatchable && step.status !== "pass",
+    )
+    .map((step) => `${step.key}:${step.status}`);
+  const incompleteRecord =
+    output.status !== "matchable" ||
+    output.completeness.missing_required_fields.length > 0 ||
+    output.completeness.underspecified_fields.length > 0 ||
+    output.completeness.policy_conflicts.length > 0 ||
+    blockingVerificationFailures.length > 0;
+
+  if (output.status === "matchable" && blockingVerificationFailures.length) {
+    blockers.push(
+      `matchable_verification_loop: blocking steps must pass before matchable status: ${blockingVerificationFailures.join(", ")}`,
+    );
+  }
+
+  const antiThreatStep = output.verification_loop.find((step) => step.key === "anti_threat");
+
+  if (antiThreatStep?.status === "blocked" && output.status !== "blocked") {
+    blockers.push("anti_threat_escalation: anti-threat blocks must return blocked status");
+  }
+
+  if (output.status === "blocked") {
+    const policyReasonCodes = output.completeness.policy_conflicts.filter(
+      isBlockedPolicyReasonCode,
+    );
+    const policyReasonEvidence = [
+      antiThreatStep?.detail ?? "",
+      output.reviewer_summary,
+      ...output.cited_evidence_table.flatMap((row) => [
+        row.claim,
+        row.citation,
+        row.reviewer_note,
+      ]),
+    ].join(" ");
+    const exactPolicyReasonNamed = policyReasonCodes.some((code) =>
+      policyReasonEvidence.includes(code),
+    );
+
+    if (
+      policyReasonCodes.length === 0 ||
+      antiThreatStep?.status !== "blocked" ||
+      !exactPolicyReasonNamed
+    ) {
+      blockers.push(
+        "anti_threat_escalation: blocked outputs must include exact anti-threat or prohibited-content policy reason codes",
+      );
+    }
+  }
+
+  const evidenceSufficiencyStep = output.verification_loop.find(
+    (step) => step.key === "evidence_sufficiency",
+  );
+
+  if (evidenceSufficiencyStep?.status === "needs_input") {
+    const artifactRequests = output.review_instructions.artifacts_to_request;
+    const namesExactArtifacts = artifactRequests.some(namesExactArtifactRequest);
+    const statesEvidenceInsufficient =
+      statesInsufficientEvidence(evidenceSufficiencyStep.detail) ||
+      output.next_step_checklist.some(statesInsufficientEvidence) ||
+      statesInsufficientEvidence(output.reviewer_summary);
+
+    if (!namesExactArtifacts || !statesEvidenceInsufficient) {
+      blockers.push(
+        "insufficient_evidence_artifact_requests: evidence_sufficiency needs_input requires an explicit insufficiency notice and exact artifact requests",
+      );
+    }
+  }
+
   if (output.clarification_questions.length > 5) {
     blockers.push("clarification_questions: at most five field-tied questions are allowed");
   }
@@ -1132,6 +1662,87 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   }
 
   if (
+    incompleteRecord &&
+    (containsIncompleteRecordCertaintyClaim(output.reviewer_summary) ||
+      output.verification_loop.some((step) => containsIncompleteRecordCertaintyClaim(step.detail)) ||
+      output.cited_evidence_table.some((row) =>
+        containsIncompleteRecordCertaintyClaim(`${row.claim} ${row.reviewer_note}`),
+      ) ||
+      output.next_step_checklist.some((step) => containsIncompleteRecordCertaintyClaim(step)) ||
+      output.review_instructions.artifacts_to_request.some(containsIncompleteRecordCertaintyClaim) ||
+      output.review_instructions.review_scope.some(containsIncompleteRecordCertaintyClaim) ||
+      output.review_instructions.appeal_triggers.some(containsIncompleteRecordCertaintyClaim))
+  ) {
+    blockers.push(
+      "no_false_certainty: incomplete outputs must preserve uncertainty instead of claiming definitive reliance",
+    );
+  }
+
+  if (
+    containsProhibitedRelianceClaim(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsProhibitedRelianceClaim(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsProhibitedRelianceClaim(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsProhibitedRelianceClaim(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsProhibitedRelianceClaim) ||
+    output.review_instructions.review_scope.some(containsProhibitedRelianceClaim) ||
+    output.review_instructions.appeal_triggers.some(containsProhibitedRelianceClaim)
+  ) {
+    blockers.push(
+      "no_escrow_legal_tax_claims: copilot outputs cannot imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement",
+    );
+  }
+
+  if (
+    containsInventedClaimInstruction(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsInventedClaimInstruction(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsInventedClaimInstruction(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsInventedClaimInstruction(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsInventedClaimInstruction) ||
+    output.review_instructions.review_scope.some(containsInventedClaimInstruction) ||
+    output.review_instructions.appeal_triggers.some(containsInventedClaimInstruction)
+  ) {
+    blockers.push(
+      "observable_claims_only: copilot outputs cannot invent facts, counterparties, prior behavior, evidence, or citations",
+    );
+  }
+
+  if (
+    containsGlobalMoralRankingClaim(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsGlobalMoralRankingClaim(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsGlobalMoralRankingClaim(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsGlobalMoralRankingClaim(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsGlobalMoralRankingClaim) ||
+    output.review_instructions.review_scope.some(containsGlobalMoralRankingClaim) ||
+    output.review_instructions.appeal_triggers.some(containsGlobalMoralRankingClaim)
+  ) {
+    blockers.push(
+      "no_global_moral_ranking: copilot outputs cannot rank or score proposals as objectively morally correct",
+    );
+  }
+
+  if (
+    containsAutonomousOutreachClaim(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsAutonomousOutreachClaim(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsAutonomousOutreachClaim(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsAutonomousOutreachClaim(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsAutonomousOutreachClaim) ||
+    output.review_instructions.review_scope.some(containsAutonomousOutreachClaim) ||
+    output.review_instructions.appeal_triggers.some(containsAutonomousOutreachClaim)
+  ) {
+    blockers.push(
+      "no_autonomous_outreach: copilot outputs cannot instruct contact, introduction, or private disclosure before explicit consent",
+    );
+  }
+
+  if (
     !output.cited_evidence_table.length ||
     output.cited_evidence_table.some(
       (row) => !row.claim || !row.citation || !row.status || !row.reviewer_note,
@@ -1140,8 +1751,35 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     blockers.push("cited_evidence_table: structured claim evidence rows with citations are required");
   }
 
-  if (!output.reviewer_summary || output.reviewer_summary.split(/\s+/).filter(Boolean).length > 180) {
+  const invalidEvidenceCitations = output.cited_evidence_table
+    .filter((row) => !isApprovedCopilotCitation(row.citation, row.evidence_type))
+    .map((row) => row.citation);
+  const invalidOutputCitations = output.citations.filter(
+    (citation) => !isApprovedCopilotCitation(citation),
+  );
+
+  if (invalidEvidenceCitations.length || invalidOutputCitations.length) {
+    blockers.push(
+      `citations: unsupported or private citation namespace: ${[
+        ...invalidEvidenceCitations,
+        ...invalidOutputCitations,
+      ].join(", ")}`,
+    );
+  }
+
+  const reviewerSummaryWordCount = output.reviewer_summary.split(/\s+/).filter(Boolean).length;
+  const missingReviewerSummarySections = COPILOT_REQUIRED_REVIEWER_SUMMARY_SECTIONS.filter(
+    (section) => !new RegExp(`${section}:`, "i").test(output.reviewer_summary),
+  );
+
+  if (!output.reviewer_summary || reviewerSummaryWordCount > 180) {
     blockers.push("reviewer_summary: bounded reviewer summary is missing or over 180 words");
+  }
+
+  if (missingReviewerSummarySections.length) {
+    blockers.push(
+      `reviewer_summary: missing required reviewer sections: ${missingReviewerSummarySections.join(", ")}`,
+    );
   }
 
   if (

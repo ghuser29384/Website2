@@ -11,6 +11,10 @@
     {
       "path": "/api/jobs/email",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/jobs/background-networking",
+      "schedule": "0 * * * *"
     }
   ]
 }

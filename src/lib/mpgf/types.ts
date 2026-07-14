@@ -470,6 +470,27 @@ export type MpgfPublicGoodsCaptureMode = "external_handoff" | "stored_payment_me
 
 export type MpgfPublicGoodsVisibilityMode = "private_amount" | "public_supporter" | "public_reason";
 
+export interface MpgfPublicGoodsCrossViewIntentTerms {
+  acceptableCounterpartBuckets: string[];
+  minimumCounterpartyClearedCents: number;
+  counterpartDistinctBucketRequired: true;
+  fallbackRule: {
+    roundNotClearedMode: "expire_without_charge";
+    recipientVerificationFailedMode: "release_authorization_or_reroute_to_next_eligible_common_ground_project";
+    authorizationExpiredMode: "reauthorize_only_after_clearance_reconfirmed";
+  };
+  recognitionConsent: MpgfPublicGoodsVisibilityMode;
+}
+
+export interface MpgfPublicGoodsDonorExposureDisclosure {
+  maxExposureCents: number;
+  exactClearanceConditions: string[];
+  roundFailureBehavior: string;
+  recipientVerificationFailureBehavior: string;
+  authorizationTiming: string;
+  authorizationExpiryBehavior: string;
+}
+
 export type MpgfPublicGoodsReviewAction = "approve" | "needs_evidence" | "block" | "challenge" | "finalize";
 
 export type MpgfPublicGoodsReviewReasonCode =
@@ -534,6 +555,11 @@ export interface MpgfPublicGoodsPledge {
   campaignId: string;
   userId: string;
   amountCents: number;
+  acceptableCounterpartBuckets?: string[];
+  minimumCounterpartyClearedCents?: number;
+  counterpartDistinctBucketRequired?: true;
+  maxExposureCents?: number;
+  donorExposureDisclosure?: MpgfPublicGoodsDonorExposureDisclosure;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   isRecurring: boolean;
   captureMode: MpgfPublicGoodsCaptureMode;
@@ -564,7 +590,11 @@ export interface MpgfPublicGoodsPaymentProof {
   amountVerifiedCents: number;
   status: "pending_review" | "verified" | "rejected" | "superseded";
   reasonCode: MpgfPublicGoodsReviewReasonCode;
-  reconciliationSource: "external_receipt" | "fiscal_host_webhook" | "sponsor_signed_intent";
+  reconciliationSource:
+    | "external_receipt"
+    | "fiscal_host_webhook"
+    | "sponsor_signed_intent"
+    | "every_org_partner_webhook";
   verifiedAt?: string;
   createdAt: string;
 }
@@ -648,6 +678,9 @@ export interface MpgfPublicGoodsAllocationLine {
 export interface MpgfPublicGoodsRoundAllocation {
   roundId: string;
   matchPoolId: string;
+  formulaVersion: "cg_vqaf_capital_constrained_qf_v1";
+  qfAllocationPolicy: "capital_constrained_lambda_bisection_with_per_campaign_cap";
+  qfLambda: number;
   baseMatchBudgetCents: number;
   qfBonusBudgetCents: number;
   baseMatchAllocatedCents: number;

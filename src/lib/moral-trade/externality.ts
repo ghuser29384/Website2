@@ -1,7 +1,7 @@
 import externalityProfileJson from "../../../config/moral-trade/externality-profile.json";
 
 export const MORAL_TRADE_EXTERNALITY_VALIDATOR_VERSION =
-  "moral-trade-externality-validator-v0.1";
+  "moral-trade-externality-validator-v0.2";
 
 type ExternalityRuleEntry = {
   key: string;
@@ -15,12 +15,19 @@ type ExternalityStandardEntry = {
   scope: string;
 };
 
+type ExternalityTriggerStandardEntry = {
+  triggerCode: string;
+  requiredStandards: string[];
+  evidenceExpectations: string[];
+};
+
 export type MoralTradeExternalityProfile = {
   version: string;
   purpose: string;
   dueDiligenceSteps: ExternalityRuleEntry[];
   triggerCodes: ExternalityRuleEntry[];
   reviewStandards: ExternalityStandardEntry[];
+  triggerStandardMatrix: ExternalityTriggerStandardEntry[];
   remedyControls: ExternalityRuleEntry[];
   allowedOutcomes: MoralTradeExternalityOutcome[];
   externalityTests: string[];
@@ -115,6 +122,7 @@ const REQUIRED_OUTCOMES = [
 const REQUIRED_TESTS = [
   "externality_profile_validator",
   "due_diligence_steps_contract",
+  "trigger_standard_matrix_contract",
   "affected_party_remedy_gate",
   "labor_supply_chain_standard_gate",
   "health_route_contract_smoke",
@@ -142,17 +150,23 @@ export function getMoralTradeExternalityProfile() {
   return externalityProfile;
 }
 
-function getRequiredExternalityStandards(triggerCodes: readonly string[]) {
-  const required = new Set<string>(["oecd_due_diligence", "un_guiding_principles"]);
+function getTriggerStandardMatrix(profile: MoralTradeExternalityProfile) {
+  return new Map(
+    profile.triggerStandardMatrix.map((entry) => [entry.triggerCode, entry]),
+  );
+}
 
-  if (triggerCodes.includes("labor_or_supply_chain")) {
-    required.add("ilo_fundamental_principles");
-    required.add("eti_base_code");
-    required.add("open_supply_hub");
-  }
+function getRequiredExternalityStandards(
+  triggerCodes: readonly string[],
+  profile: MoralTradeExternalityProfile,
+) {
+  const matrix = getTriggerStandardMatrix(profile);
+  const required = new Set<string>();
 
-  if (triggerCodes.includes("recipient_or_destination_risk")) {
-    required.add("fairtrade_standards");
+  for (const trigger of triggerCodes) {
+    for (const standard of matrix.get(trigger)?.requiredStandards ?? []) {
+      required.add(standard);
+    }
   }
 
   return [...required];
@@ -166,7 +180,11 @@ export function evaluateMoralTradeExternalityReview(
   const knownTriggers = new Set(profile.triggerCodes.map((entry) => entry.key));
   const sourceStandards = new Set(input.sourceStandards ?? []);
   const unknownTriggers = [...triggerSet].filter((trigger) => !knownTriggers.has(trigger));
-  const requiredStandards = getRequiredExternalityStandards([...triggerSet]);
+  const matrix = getTriggerStandardMatrix(profile);
+  const missingMatrixTriggers = [...triggerSet].filter(
+    (trigger) => knownTriggers.has(trigger) && !matrix.has(trigger),
+  );
+  const requiredStandards = getRequiredExternalityStandards([...triggerSet], profile);
   const blockers: string[] = [];
   const reasonCodes = [...triggerSet];
 
@@ -182,6 +200,10 @@ export function evaluateMoralTradeExternalityReview(
 
   if (unknownTriggers.length) {
     blockers.push(`unknown_externality_trigger:${unknownTriggers.join(",")}`);
+  }
+
+  for (const trigger of missingMatrixTriggers) {
+    blockers.push(`trigger_standard_matrix_missing:${trigger}`);
   }
 
   if (!input.affectedPartyStandingDocumented) {
@@ -225,6 +247,11 @@ export function validateMoralTradeExternalityProfile(
   const stepKeys = profile.dueDiligenceSteps.map((entry) => entry.key);
   const triggerKeys = profile.triggerCodes.map((entry) => entry.key);
   const standardKeys = profile.reviewStandards.map((entry) => entry.key);
+  const matrixTriggerCodes = profile.triggerStandardMatrix.map((entry) => entry.triggerCode);
+  const matrixStandardReferences = profile.triggerStandardMatrix.flatMap(
+    (entry) => entry.requiredStandards,
+  );
+  const standardKeySet = new Set(standardKeys);
   const remedyKeys = profile.remedyControls.map((entry) => entry.key);
   const checks = [
     check(
@@ -246,6 +273,21 @@ export function validateMoralTradeExternalityProfile(
       hasAll(standardKeys, REQUIRED_REVIEW_STANDARDS) &&
         profile.reviewStandards.every((entry) => entry.scope),
       standardKeys.join(", "),
+    ),
+    check(
+      "trigger-standard-matrix",
+      "Externality triggers map to required source standards and evidence expectations",
+      hasAll(matrixTriggerCodes, REQUIRED_TRIGGER_CODES) &&
+        matrixStandardReferences.every((standard) => standardKeySet.has(standard)) &&
+        profile.triggerStandardMatrix.every(
+          (entry) =>
+            entry.requiredStandards.includes("oecd_due_diligence") &&
+            entry.requiredStandards.includes("un_guiding_principles") &&
+            entry.evidenceExpectations.length > 0,
+        ),
+      profile.triggerStandardMatrix
+        .map((entry) => `${entry.triggerCode}->${entry.requiredStandards.join("+")}`)
+        .join(", "),
     ),
     check(
       "remedy-controls",

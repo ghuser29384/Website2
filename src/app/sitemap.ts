@@ -14,7 +14,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
-      url: getAbsoluteUrl("/moral-trade"),
+      url: getAbsoluteUrl("/ai.txt"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.62,
+    },
+    {
+      url: getAbsoluteUrl("/what-is-moral-trade"),
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.92,
@@ -50,7 +56,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.88,
     },
     {
-      url: getAbsoluteUrl("/anti-threat-baseline"),
+      url: getAbsoluteUrl("/worked-examples"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.86,
+    },
+    {
+      url: getAbsoluteUrl("/anti-threat-rules"),
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.82,
@@ -92,6 +104,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: getAbsoluteUrl("/offers/new"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.72,
+    },
+    {
       url: getAbsoluteUrl("/cohort"),
       lastModified: now,
       changeFrequency: "weekly",
@@ -104,13 +122,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.78,
     },
     {
-      url: getAbsoluteUrl("/updates"),
+      url: getAbsoluteUrl("/pilot-updates"),
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.76,
     },
     {
-      url: getAbsoluteUrl("/team"),
+      url: getAbsoluteUrl("/team-and-governance"),
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.76,
@@ -144,6 +162,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.85,
+    },
+    {
+      url: getAbsoluteUrl("/moral-goods-group-buying"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.86,
     },
     {
       url: getAbsoluteUrl("/donation-offsets"),

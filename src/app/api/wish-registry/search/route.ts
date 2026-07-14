@@ -5,7 +5,9 @@ import {
 } from "@/lib/background-operations";
 import {
   countRegistrySearchSpecificity,
+  getBackgroundQueryWindowStart,
   getBackgroundQueryFingerprint,
+  scoreRegistrySearchAnomaly,
   shouldApplySparseResultPrivacyFloor,
 } from "@/lib/background-query-budget";
 import {
@@ -14,7 +16,10 @@ import {
 } from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { searchWishRegistryPreviews } from "@/lib/wish-registry";
+import {
+  searchWishRegistryPreviews,
+  toPublicWishRegistrySearchResult,
+} from "@/lib/wish-registry";
 
 export const runtime = "nodejs";
 
@@ -144,13 +149,36 @@ export async function GET(request: Request) {
       resultCount: results.length,
       specificity,
     });
+    let recentSimilarCount = 0;
+
+    if (serviceClient && profileId) {
+      const { count } = await serviceClient
+        .from("background_query_events")
+        .select("id", { count: "exact", head: true })
+        .eq("profile_id", profileId)
+        .eq("scope", "registry_search")
+        .eq("query_fingerprint", queryFingerprint)
+        .gte("created_at", getBackgroundQueryWindowStart());
+      recentSimilarCount = count ?? 0;
+    }
+
+    const anomaly = scoreRegistrySearchAnomaly({
+      floorApplied,
+      recentSimilarCount,
+      resultCount: results.length,
+      specificity,
+      wasLimited: budgetReservation.limited,
+    });
 
     if (serviceClient) {
       await completeBackgroundQueryEvent({
         candidateCount: results.length,
         eventId: budgetReservation.eventId,
         metadata: {
+          anomalyLevel: anomaly.level,
+          anomalyScore: anomaly.score,
           floorApplied,
+          recentSimilarCount,
           resultBucket: results.length >= 10 ? "10+" : String(results.length),
           specificity,
         },
@@ -163,20 +191,45 @@ export async function GET(request: Request) {
       await recordBackgroundQueryRiskSignal({
         eventId: budgetReservation.eventId,
         metadata: {
+          anomalyLevel: anomaly.level,
+          anomalyScore: anomaly.score,
+          recentSimilarCount,
           scope: "registry_search",
           specificity,
         },
         profileId,
-        severity: "low",
+        severity: anomaly.level === "high" ? "high" : anomaly.level === "medium" ? "medium" : "low",
         signalType: "sparse_registry_search",
         summary:
           "A highly specific registry search returned too few broad previews, so results were withheld to reduce enumeration risk.",
         supabase: serviceClient,
       });
+    } else if (
+      profileId &&
+      serviceClient &&
+      (anomaly.level === "medium" || anomaly.level === "high")
+    ) {
+      await recordBackgroundQueryRiskSignal({
+        eventId: budgetReservation.eventId,
+        metadata: {
+          anomalyLevel: anomaly.level,
+          anomalyScore: anomaly.score,
+          recentSimilarCount,
+          resultBucket: results.length >= 10 ? "10+" : String(results.length),
+          scope: "registry_search",
+          specificity,
+        },
+        profileId,
+        severity: anomaly.level,
+        signalType: "narrow_registry_search_pattern",
+        summary:
+          "Repeated or highly specific registry searches are creating enumeration pressure and should be reviewed.",
+        supabase: serviceClient,
+      });
     }
 
     return buildMoralTradeApiJsonResponse({
-      results: floorApplied ? [] : results,
+      results: floorApplied ? [] : results.map(toPublicWishRegistrySearchResult),
       privacyNotice:
         floorApplied
           ? "Broaden the search to protect sparse profiles. Only broad preview fields are returned, and exact wishes, asks, constraints, contact details, and private sources are never exposed by this endpoint."

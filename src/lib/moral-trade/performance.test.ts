@@ -31,14 +31,33 @@ test("performance profile publishes route resilience, Web Vitals, latency, and n
 
 test("route recovery manifest covers Reasoning Center and public route families", () => {
   const audit = auditMoralTradeRouteRecoveryManifest();
+  const technicalSpecEntry = audit.entries.find(
+    (entry) => entry.path === "/moral-trade/technical-spec",
+  );
   const reasoningEntry = audit.entries.find((entry) => entry.path === "/reasoning-center");
+  const reasoningPacketJsonEntry = audit.entries.find(
+    (entry) => entry.path === "/api/moral-trade/reasoning/packets",
+  );
 
   assert.equal(audit.status, "pass");
   assert.equal(audit.coveredRouteCount, audit.routeCount);
   assert.equal(audit.coverageRatio, 1);
+  assert.equal(technicalSpecEntry?.stateMutationOnFallback, false);
+  assert.equal(
+    technicalSpecEntry?.evidenceFile,
+    "src/app/moral-trade/technical-spec/error.tsx",
+  );
+  assert.ok(technicalSpecEntry?.recoverySurfaces.includes("route_segment_error_boundary"));
+  assert.ok(technicalSpecEntry?.recoverySurfaces.includes("contract_json_fallbacks"));
   assert.equal(reasoningEntry?.stateMutationOnFallback, false);
+  assert.equal(reasoningEntry?.evidenceFile, "src/app/reasoning-center/error.tsx");
+  assert.ok(reasoningEntry?.recoverySurfaces.includes("route_segment_error_boundary"));
   assert.ok(reasoningEntry?.recoverySurfaces.includes("route_specific_viewer_fallback"));
+  assert.ok(reasoningEntry?.recoverySurfaces.includes("packet_generation_recovery_notice"));
   assert.ok(reasoningEntry?.recoverySurfaces.includes("packet_json_fallback"));
+  assert.equal(reasoningPacketJsonEntry?.stateMutationOnFallback, false);
+  assert.ok(reasoningPacketJsonEntry?.recoverySurfaces.includes("validator_blockers"));
+  assert.ok(reasoningPacketJsonEntry?.recoverySurfaces.includes("packet_generation_failed_contract"));
 });
 
 test("route recovery manifest fails missing routes, thin fallbacks, or mutating recovery", () => {
@@ -59,6 +78,7 @@ test("route recovery manifest fails missing routes, thin fallbacks, or mutating 
         serverRenderable: true,
         recoverySurfaces: ["global_error_boundary", "safe_navigation"],
         stateMutationOnFallback: true,
+        evidenceFile: "src/app/reasoning-center/missing-error.tsx",
       },
     ],
   });
@@ -66,6 +86,11 @@ test("route recovery manifest fails missing routes, thin fallbacks, or mutating 
   assert.equal(audit.status, "fail");
   assert.ok(audit.blockers.includes("route_recovery_surface_too_thin:/moral-trade/technical-spec"));
   assert.ok(audit.blockers.includes("route_recovery_mutates_state:/reasoning-center"));
+  assert.ok(
+    audit.blockers.includes(
+      "route_recovery_evidence_missing:/reasoning-center:src/app/reasoning-center/missing-error.tsx",
+    ),
+  );
   assert.ok(audit.blockers.includes("route_recovery_missing:/api/moral-trade/health"));
 });
 

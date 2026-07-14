@@ -1,0 +1,47 @@
+{
+  "version": "mpgf-status-values-v0.3-direct-working",
+  "values": {
+    "completion_profile": {
+      "allowedValues": ["not_started", "blocked", "passed", "revoked"],
+      "owner": "mpgf_completion_gate",
+      "conformanceRows": ["AC-COMPLETION-008"],
+      "acceptanceCriteria": ["AC-COMPLETION-008", "AC-COMPLETION-017"]
+    },
+    "contribution_mode": {
+      "allowedValues": ["pledge_only", "test_payment", "real_money"],
+      "owner": "mpgf_payment_flow",
+      "conformanceRows": ["AC-PAYMENT-019"],
+      "acceptanceCriteria": ["AC-PAYMENT-019", "AC-PAYMENT-021"]
+    },
+    "public_summary_state": {
+      "allowedValues": ["draft", "generated", "visibility_filtered", "validated", "published", "withdrawn", "failed"],
+      "owner": "mpgf_public_summary",
+      "conformanceRows": ["AC-PRIVACY-007"],
+      "acceptanceCriteria": ["AC-PRIVACY-007", "AC-STATE-016"]
+    },
+    "manual_external_payment_evidence": {
+      "allowedValues": ["not_required", "pending", "verified", "rejected"],
+      "owner": "mpgf_disbursement_ops",
+      "conformanceRows": ["AC-DISBURSEMENT-016"],
+      "acceptanceCriteria": ["AC-DISBURSEMENT-016"]
+    },
+    "automated_payout_provider": {
+      "allowedValues": ["disabled", "proposed", "approved"],
+      "owner": "mpgf_disbursement_ops",
+      "conformanceRows": ["AC-DISBURSEMENT-030"],
+      "acceptanceCriteria": ["AC-DISBURSEMENT-030"]
+    },
+    "validator_status": {
+      "allowedValues": ["passed", "failed"],
+      "owner": "mpgf_conformance",
+      "conformanceRows": ["AC-STATE-015"],
+      "acceptanceCriteria": ["AC-STATE-015"]
+    },
+    "production_evidence_status": {
+      "allowedValues": ["pending", "passed", "failed", "blocked"],
+      "owner": "mpgf_deployment",
+      "conformanceRows": ["AC-DEPLOY-005"],
+      "acceptanceCriteria": ["AC-DEPLOY-005", "AC-DEPLOY-009", "AC-DEPLOY-014"]
+    }
+  }
+}

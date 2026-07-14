@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.3-2026-05",
+  "version": "moral-trade-data-model-v0.1.7-2026-06",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -57,6 +57,78 @@
       "publicExposure": "Only coarse source summaries may be disclosed through a valid purpose-bound grant; raw notes remain private."
     },
     {
+      "key": "background_wish_interview_session",
+      "label": "Background wish interview session",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "participant_id", "private_profile_id", "status", "question_set_version", "ai_shadow_mode_allowed", "expires_at", "applied_at"],
+      "relationships": ["participant", "private_wish_profile", "background_wish_interview_answer", "background_profile_signal"],
+      "publicExposure": "Stores deterministic clarification state for the participant only; it does not publish exact wishes, contact details, private answer text, or live public-preview changes."
+    },
+    {
+      "key": "background_wish_interview_answer",
+      "label": "Background wish interview answer",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "participant_id", "prompt_key", "answer_ciphertext", "structured_patch", "created_at"],
+      "relationships": ["background_wish_interview_session", "participant"],
+      "publicExposure": "Answer text remains private and encrypted; analytics and match cards receive field keys, option counts, and length buckets rather than exact wishes or source notes."
+    },
+    {
+      "key": "background_wish_dialogue_session",
+      "label": "Background wish dialogue session",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "state", "created_at", "updated_at"],
+      "relationships": ["participant", "background_wish_dialogue_message", "background_wish_field_proposal", "background_profile_signal"],
+      "publicExposure": "Stores private fluent-composer workflow state only; natural-language wish text is encrypted in messages, exact wishes stay out of public previews, and matching cannot change until a proposal is explicitly applied."
+    },
+    {
+      "key": "background_wish_dialogue_message",
+      "label": "Background wish dialogue message",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "profile_id", "actor", "body_ciphertext", "body_encryption_version", "created_at"],
+      "relationships": ["background_wish_dialogue_session", "participant"],
+      "publicExposure": "Message bodies are encrypted private inputs for schema-bound proposals; analytics, public previews, and notifications never receive raw dialogue text or exact wishes."
+    },
+    {
+      "key": "background_wish_field_proposal",
+      "label": "Background wish field proposal",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "profile_id", "proposal", "uncertainty_flags", "approved", "created_at"],
+      "relationships": ["background_wish_dialogue_session", "participant", "background_profile_signal"],
+      "publicExposure": "Stores schema-bound broad field proposals and uncertainty flags only; exact wishes, contact details, raw notes, and protected-trait inferences are rejected before apply."
+    },
+    {
+      "key": "background_source_summary",
+      "label": "Reviewed background source summary",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "source_connection_id", "allowed_field_keys", "purpose", "summary_text", "retention_expires_at", "raw_ingestion_allowed", "status"],
+      "relationships": ["participant", "source_connection", "background_profile_signal", "privacy_grant"],
+      "publicExposure": "Stores only a reviewed summary with raw ingestion disabled; raw private feeds, exact requests, contacts, and source notes stay out of public previews and analytics."
+    },
+    {
+      "key": "background_source_sync_job",
+      "label": "Background source sync job",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "source_connection_id", "profile_id", "state", "attempts", "next_run_at", "created_at", "updated_at"],
+      "relationships": ["participant", "source_connection"],
+      "publicExposure": "Queues reviewed-summary sync work for a viewer-owned source connection; raw private feeds and source payloads are not stored, and revocation cancels queued or retrying jobs."
+    },
+    {
+      "key": "background_profile_signal",
+      "label": "Background profile signal",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "source", "allowed_field_key", "signal_key", "confidence_band", "sensitivity", "status", "expires_at"],
+      "relationships": ["private_wish_profile", "source_connection", "background_source_summary", "background_wish_interview_session"],
+      "publicExposure": "Derived signals are viewer-owned matching inputs and expose only broad field keys or counts; revoked, expired, or stale source notes stop influencing matching."
+    },
+    {
       "key": "saved_search",
       "label": "Saved search",
       "category": "matching",
@@ -84,6 +156,42 @@
       "publicExposure": "Public offers expose only reviewed or preview-safe terms and must not imply escrow, legal enforceability, tax treatment, or objective moral endorsement."
     },
     {
+      "key": "pledge_swap",
+      "label": "Pledge swap",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "offer_id", "participant_user_id", "counterparty_user_id", "frozen_terms_hash", "evidence_standard", "status"],
+      "relationships": ["offer", "participant", "baseline_statement", "evidence_claim", "review_decision", "dispute", "appeal"],
+      "publicExposure": "Pledge-swap public exposure is limited to reviewed or preview-safe terms and aggregate status; private evidence, contact details, consideration internals, and reviewer notes stay out of public reports."
+    },
+    {
+      "key": "purchase_envelope",
+      "label": "Purchase envelope",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "envelope_type", "envelope_id", "public_envelope_id", "lifecycle_state_group", "policy_bundle_hash", "visibility_policy"],
+      "relationships": ["participant", "pledge_swap", "payment_record", "evidence_claim", "review_decision"],
+      "publicExposure": "Purchase-envelope records expose only public or aggregate status allowed by the visibility policy; private settlement, payment, provider, and participant evidence details are not public."
+    },
+    {
+      "key": "participant_action_commitment",
+      "label": "Participant action commitment",
+      "category": "agreement",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "purchase_envelope_id", "participant_user_id", "action_template_id", "action_window_start_at", "action_window_end_at", "commitment_status"],
+      "relationships": ["participant", "purchase_envelope", "pledge_swap", "evidence_claim", "review_decision"],
+      "publicExposure": "Participant action commitments reveal only public-safe action status and timing where policy allows; private evidence, contact context, and reviewer notes stay review-scoped."
+    },
+    {
+      "key": "policy_evaluation_trace",
+      "label": "Policy evaluation trace",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject_type", "subject_id", "policy_hash", "material_effects", "effect_summary", "created_at"],
+      "relationships": ["review_decision", "evidence_claim", "participant", "payment_record"],
+      "publicExposure": "Policy evaluation traces support auditability for private review and payment-impact decisions; public reports expose only redacted or aggregate trace summaries."
+    },
+    {
       "key": "baseline_statement",
       "label": "Baseline statement",
       "category": "proposal",
@@ -100,6 +208,105 @@
       "requiredFields": ["id", "proposal_id", "claim_type", "artifact_ids", "claim_scope", "reviewer_confidence", "uniqueness_checked"],
       "relationships": ["offer", "evidence_artifact", "review_decision"],
       "publicExposure": "Claims disclose only scoped summaries and confidence; artifacts and private locators stay behind review controls."
+    },
+    {
+      "key": "participant_credibility_profile",
+      "label": "Participant credibility profile",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["participant_user_id", "credibility_score_decimal", "credibility_tier", "expected_completion_probability_decimal", "evidence_reliability_decimal", "fraud_risk_decimal", "last_credibility_event_id"],
+      "relationships": ["participant", "credibility_event", "credibility_appeal"],
+      "publicExposure": "Private estimate of future pledge-swap completion and evidence reliability; it is not public social proof, a public scoring surface, or a reputation market."
+    },
+    {
+      "key": "credibility_event",
+      "label": "Credibility event",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "source_type", "source_id", "event_type", "prior_credibility_score_decimal", "credibility_delta_decimal", "new_credibility_score_decimal", "policy_snapshot_hash", "created_at"],
+      "relationships": ["participant", "participant_credibility_profile", "friend_testimonial", "credibility_appeal", "review_decision"],
+      "publicExposure": "Append-only private credibility update with non-sensitive participant-visible reasons and correction or appeal events instead of mutable history."
+    },
+    {
+      "key": "friend_testimonial_invite",
+      "label": "Friend testimonial invite",
+      "category": "evidence",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "participant_user_id", "invite_token_hash", "invite_status", "minimum_necessary_disclosure_json", "expires_at", "created_at"],
+      "relationships": ["participant", "friend_testimonial"],
+      "publicExposure": "Private, revocable, expiring invite that reveals only action type, action window, participant context, and the testimonial request to the invited friend."
+    },
+    {
+      "key": "friend_testimonial",
+      "label": "Friend testimonial",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "invite_id", "participant_user_id", "friend_user_id", "action_template_id", "action_window_start_at", "action_window_end_at", "relationship_type", "baseline_counterfactual_credence_decimal", "completion_credence_decimal", "friend_terms_acceptance_id", "testimonial_status"],
+      "relationships": ["friend_testimonial_invite", "participant", "evidence_claim", "testimonial_quality_assessment", "testimonial_credibility_event"],
+      "publicExposure": "Private third-party evidence by default. Raw testimony, friend identity, relationship context, concern notes, and anti-fraud notes are not shown to funders or public reports."
+    },
+    {
+      "key": "testimonial_quality_assessment",
+      "label": "Testimonial quality assessment",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "friend_testimonial_id", "relationship_weight_decimal", "friend_credibility_weight_decimal", "knowledge_basis_score_decimal", "consistency_score_decimal", "collusion_risk_score_decimal", "accepted_for_credibility_update_bool", "review_status"],
+      "relationships": ["friend_testimonial", "review_decision", "credibility_event"],
+      "publicExposure": "Reviewer-scoped weighting record that can produce only coarse participant or aggregate summaries."
+    },
+    {
+      "key": "opportunity_constrained_meal_evidence_bundle",
+      "label": "Opportunity-constrained meal evidence bundle",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "action_template_id", "meal_label", "meal_window_start_at", "meal_window_end_at", "ordinary_meal_venue_type", "venue_access_model", "participant_claims_usual_venue_for_meal_bool", "participant_claims_usually_eats_once_for_meal_bool", "bundle_status", "created_at"],
+      "relationships": ["participant", "pledge_swap", "purchase_envelope", "participant_action_commitment", "meal_witness_testimonial", "opportunity_constraint_assessment", "policy_evaluation_trace"],
+      "publicExposure": "Private meal-context evidence for optional pledge-swap verification. Public reports may expose only coarse reviewed meal-context use and must suppress cafeteria names, schedules, witness names, relationship details, raw testimony, and private context."
+    },
+    {
+      "key": "meal_witness_testimonial",
+      "label": "Meal witness testimonial",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "evidence_bundle_id", "participant_user_id", "witness_role", "meal_label", "observation_coverage", "basis_text_private", "testimonial_status", "submitted_at"],
+      "relationships": ["opportunity_constrained_meal_evidence_bundle", "participant", "opportunity_constraint_assessment", "review_decision"],
+      "publicExposure": "Private baseline, co-diner/direct-observer, or schedule-constraint testimony. Raw basis text, witness identity, relationship details, venue names, pressure reports, and side-payment concerns are never shown to funders or public reports."
+    },
+    {
+      "key": "opportunity_constraint_assessment",
+      "label": "Opportunity constraint assessment",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "evidence_bundle_id", "participant_user_id", "ordinary_venue_support_score_decimal", "swipe_or_access_constraint_score_decimal", "co_diner_observation_score_decimal", "post_meal_commitment_score_decimal", "usual_single_meal_habit_score_decimal", "baseline_witness_score_decimal", "independence_score_decimal", "consistency_score_decimal", "collusion_risk_score_decimal", "contrary_evidence_score_decimal", "privacy_sensitivity_score_decimal", "proposed_completion_confidence_decimal", "accepted_for_completion_verification_bool", "accepted_for_additionality_bool", "review_status"],
+      "relationships": ["opportunity_constrained_meal_evidence_bundle", "meal_witness_testimonial", "policy_evaluation_trace", "review_decision"],
+      "publicExposure": "Reviewer-scoped scorecard for meal-context evidence. Material use can affect verification confidence or additionality only through the frozen policy and cannot retroactively reduce fixed consideration."
+    },
+    {
+      "key": "testimonial_credibility_event",
+      "label": "Testimonial credibility event",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "friend_user_id", "source_friend_testimonial_id", "event_type", "prior_testimonial_credibility_decimal", "delta_decimal", "new_testimonial_credibility_decimal", "policy_snapshot_hash", "created_at"],
+      "relationships": ["participant", "friend_testimonial", "review_decision"],
+      "publicExposure": "Append-only private update to a testimonial provider's credibility. It is visible through private correction or appeal paths, not public social proof."
+    },
+    {
+      "key": "credibility_appeal",
+      "label": "Credibility appeal",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "participant_user_id", "source_credibility_event_id", "appeal_status", "participant_visible_reason", "created_at"],
+      "relationships": ["participant", "credibility_event", "appeal", "review_decision"],
+      "publicExposure": "Private correction path for material adverse credibility effects. Public reports do not expose individual credibility appeal details."
+    },
+    {
+      "key": "testimonial_stake_policy",
+      "label": "Testimonial stake policy",
+      "category": "payment",
+      "privacyClass": "public_contract",
+      "requiredFields": ["id", "policy_version", "canonical_json", "policy_hash", "default_stake_required_bool", "optional_stake_enabled_bool", "destination_policy", "legal_compliance_review_ref"],
+      "relationships": ["friend_testimonial", "payment_record"],
+      "publicExposure": "Frozen policy for optional capped testimonial integrity stakes. Default requires no monetary stake and negative or concern testimony is free."
     },
     {
       "key": "evidence_artifact",
@@ -124,9 +331,9 @@
       "label": "Traceability event",
       "category": "provenance",
       "privacyClass": "review_scoped",
-      "requiredFields": ["id", "subject_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "sha256"],
+      "requiredFields": ["id", "subject_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "audit_question_answers", "sha256"],
       "relationships": ["evidence_artifact", "external_entity_reference", "provenance_agent", "provenance_activity", "review_decision"],
-      "publicExposure": "What/where/why event records can support payment, charity-routing, or external-evidence audits; raw artifacts and private provider payloads remain redacted."
+      "publicExposure": "What/where/why event records include explicit what happened, who touched it, and when answers for payment, charity-routing, or external-evidence audits; raw artifacts and private provider payloads remain redacted."
     },
     {
       "key": "provenance_activity",
@@ -151,9 +358,9 @@
       "label": "State transition event record",
       "category": "provenance",
       "privacyClass": "review_scoped",
-      "requiredFields": ["id", "subject_id", "from_status", "to_status", "provenance_activity", "actor_agent_id", "idempotency_key", "event_hash", "recorded_at"],
+      "requiredFields": ["id", "subject_id", "from_status", "to_status", "provenance_activity", "actor_agent_id", "idempotency_key", "audit_question_answers", "event_hash", "recorded_at"],
       "relationships": ["offer", "review_decision", "provenance_activity", "provenance_agent", "agreement_event"],
-      "publicExposure": "Reliance-bearing status changes require immutable event hashes and agent links; public exposure is limited to redacted status evidence."
+      "publicExposure": "Reliance-bearing status changes require immutable event hashes, agent links, and explicit what happened, who touched it, and when answers; public exposure is limited to redacted status evidence."
     },
     {
       "key": "review_decision",
@@ -205,9 +412,81 @@
       "label": "Match suggestion",
       "category": "matching",
       "privacyClass": "privacy_thresholded_public_preview",
-      "requiredFields": ["id", "left_profile_id", "right_profile_id", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "human_review_required"],
+      "requiredFields": ["id", "left_profile_id", "right_profile_id", "status", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "privacy_policy_id", "human_review_required", "created_at"],
       "relationships": ["public_profile", "private_wish_profile", "privacy_grant", "notification"],
-      "publicExposure": "Uses broad previews and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
+      "publicExposure": "Uses broad previews, privacy policy ids, disclosure stages, and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
+    },
+    {
+      "key": "background_opportunity_brief",
+      "label": "Background opportunity brief",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "match_id", "confidence_band", "factor_codes", "redacted_fields", "delivery_state", "review_status", "human_review_required", "created_at"],
+      "relationships": ["participant", "match_suggestion", "background_match_feedback", "background_intro_packet", "notification"],
+      "publicExposure": "Shows a participant-owned broad card with factor codes and hidden-field notices; exact wishes, private asks, contact details, and source notes stay in the dashboard until consent."
+    },
+    {
+      "key": "background_helper_run",
+      "label": "Background helper run",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "profile_id", "trigger_kind", "state", "attempts", "next_run_at", "query_fingerprint", "created_at", "updated_at"],
+      "relationships": ["participant", "saved_search", "background_source_summary", "background_opportunity_brief"],
+      "publicExposure": "Stores queued helper work and a hashed query fingerprint only; helper runs may prepare opportunity briefs and generic notifications but cannot send autonomous outreach."
+    },
+    {
+      "key": "background_match_feedback",
+      "label": "Background match feedback",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "profile_id", "opportunity_brief_id", "outcome", "reason_code", "created_at", "updated_at"],
+      "relationships": ["participant", "background_opportunity_brief"],
+      "publicExposure": "Stores closed-code relevance feedback and report reasons for private operations; public transparency uses only thresholded counts and generic labels."
+    },
+    {
+      "key": "background_intro_packet",
+      "label": "Background intro packet",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "requester_profile_id", "opportunity_brief_id", "requested_field_keys", "purpose", "review_state", "reveal_capsule", "created_at"],
+      "relationships": ["participant", "background_opportunity_brief", "match_suggestion", "privacy_grant", "match_concierge_request"],
+      "publicExposure": "Captures a reviewed next-step request and never sends autonomous outreach or contact details; exact private fields require operator review and consent grants."
+    },
+    {
+      "key": "background_private_overlap_tag",
+      "label": "Background private overlap tag",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "tag_namespace", "blinded_token", "token_version", "expiry_at", "created_at"],
+      "relationships": ["participant", "background_private_overlap_check"],
+      "publicExposure": "Stores blinded exact-tag tokens only; raw tags, canonical tags, free text, exact wishes, and contact details are forbidden."
+    },
+    {
+      "key": "background_private_overlap_check",
+      "label": "Background private overlap check",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "requester_id", "counterparty_id", "stage", "tag_namespace", "result_bucket", "receipt_id", "created_at"],
+      "relationships": ["participant", "background_private_overlap_tag", "transparency_receipt"],
+      "publicExposure": "Records only a bucketed overlap result and receipt id after governance gates; public exposure is redacted, and raw matching tags or counterparty tag sets are never exposed."
+    },
+    {
+      "key": "transparency_receipt",
+      "label": "Transparency receipt",
+      "category": "provenance",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "seq", "event_type", "actor_scope", "redacted_payload", "entry_hash", "created_at"],
+      "relationships": ["participant", "background_private_overlap_check", "privacy_grant"],
+      "publicExposure": "Participant-visible append-only receipt metadata uses redacted payloads and hash chaining; exact wishes, source notes, contact details, and raw tags are excluded."
+    },
+    {
+      "key": "match_concierge_request",
+      "label": "Match concierge request",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "requester_profile_id", "route", "status", "review_status", "sla_due_at", "appealed_at", "reviewed_at"],
+      "relationships": ["participant", "background_intro_packet", "privacy_grant", "match_suggestion"],
+      "publicExposure": "Operator review queue records stay review-scoped; public reporting exposes only aggregate appeal, decline, review-time, and SLA counts without notes, contacts, or private source details."
     },
     {
       "key": "notification",

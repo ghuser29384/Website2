@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   MORAL_TRADE_TRANSPARENCY_MIN_PUBLIC_COUNT,
+  auditMoralTradeTransparencyMetricSourceTables,
   buildMoralTradeTransparencyReportSnapshot,
   getMoralTradeTransparencyReportContract,
   getMoralTradeTransparencyReportPeriod,
@@ -18,7 +20,13 @@ test("transparency report contract publishes required aggregate-only metrics", (
   assert.equal(validation.status, "pass");
   assert.equal(contract.publicationCadence, "quarterly");
   assert.equal(contract.minimumPublicCount, MORAL_TRADE_TRANSPARENCY_MIN_PUBLIC_COUNT);
+  assert.ok(contract.contractTests.includes("transparency_report_metric_source_schema_audit"));
   assert.ok(metricKeys.includes("reviewed_match_suggestions"));
+  assert.ok(metricKeys.includes("opportunity_briefs_opened"));
+  assert.ok(metricKeys.includes("opportunity_feedback_submitted"));
+  assert.ok(metricKeys.includes("opportunity_briefs_dismissed"));
+  assert.ok(metricKeys.includes("opportunity_briefs_deferred"));
+  assert.ok(metricKeys.includes("opportunity_interest_marked"));
   assert.ok(metricKeys.includes("declined_intro_requests"));
   assert.ok(metricKeys.includes("disclosure_grants_created"));
   assert.ok(metricKeys.includes("concierge_appeals_requested"));
@@ -30,6 +38,19 @@ test("transparency report contract publishes required aggregate-only metrics", (
       ),
     ),
   );
+});
+
+test("transparency report metric sources are backed by schema tables", () => {
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const contract = getMoralTradeTransparencyReportContract();
+  const audit = auditMoralTradeTransparencyMetricSourceTables({ contract, schemaSql });
+  const allSourceTables = contract.metricDefinitions.flatMap((metric) => metric.sourceTables);
+
+  assert.equal(audit.status, "pass");
+  assert.deepEqual(audit.missingTables, []);
+  assert.ok(audit.checkedTables.includes("background_opportunity_briefs"));
+  assert.ok(audit.checkedTables.includes("background_intro_packets"));
+  assert.equal(allSourceTables.includes("background_intro_requests"), false);
 });
 
 test("transparency report suppresses small nonzero samples but publishes zero", () => {

@@ -55,6 +55,17 @@ async function collectRoute(page, route) {
     timeout: 30000,
     waitUntil: "load",
   });
+
+  await page.waitForSelector("main", { timeout: 5000 }).catch(() => {});
+  await page
+    .waitForFunction(
+      (minBodyTextCharacters) =>
+        (document.body?.innerText ?? "").trim().length >= minBodyTextCharacters,
+      config.budgets.minBodyTextCharacters,
+      { timeout: 5000 },
+    )
+    .catch(() => {});
+
   const metrics = await page.evaluate(() => {
     const navigation = performance.getEntriesByType("navigation")[0];
     const bodyText = document.body?.innerText ?? "";

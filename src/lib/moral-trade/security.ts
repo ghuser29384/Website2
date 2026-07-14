@@ -1,7 +1,7 @@
 import securityProfileJson from "../../../config/moral-trade/security-profile.json";
 
 export const MORAL_TRADE_SECURITY_VALIDATOR_VERSION =
-  "moral-trade-security-validator-v0.2";
+  "moral-trade-security-validator-v0.3";
 
 export type MoralTradeSecurityControlStatus =
   | "implemented"
@@ -75,6 +75,8 @@ const REQUIRED_CONTROLS = [
   "background_field_encryption_keyring",
   "server_only_secret_management",
   "two_factor_admin_gate",
+  "participant_session_review_revocation",
+  "contact_disclosure_mfa_step_up",
   "device_session_review_gate",
   "key_rotation_gate",
   "platform_abuse_throttling",
@@ -174,6 +176,9 @@ export function auditMoralTradeSecurityScaleReadiness({
 export function validateMoralTradeSecurityImplementation({
   actionsSource,
   adminSource,
+  backgroundDisclosureSource,
+  backgroundAccountSecuritySource,
+  backgroundAccountSecurityPanelSource,
   backgroundActionsSource,
   backgroundFieldEncryptionSource,
   mpgfAdminActionsSource,
@@ -183,6 +188,9 @@ export function validateMoralTradeSecurityImplementation({
 }: {
   actionsSource: string;
   adminSource: string;
+  backgroundDisclosureSource: string;
+  backgroundAccountSecuritySource: string;
+  backgroundAccountSecurityPanelSource: string;
   backgroundActionsSource: string;
   backgroundFieldEncryptionSource: string;
   mpgfAdminActionsSource: string;
@@ -215,13 +223,17 @@ export function validateMoralTradeSecurityImplementation({
         /source:\s*"\/admin\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/agreements\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/saved-offers\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/background-networking\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/onboarding\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/password-update\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/mpgf\/admin\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/mpgf\/account\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/profile\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/background\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/saved-searches"/.test(nextConfigSource) &&
         /source:\s*"\/api\/wish-registry\/search"/.test(nextConfigSource),
-      "dashboard, admin, agreement, saved-offer, MPGF account/admin, profile API, job API, saved-search, and wish-registry search routes should be private no-store.",
+      "dashboard, admin, agreement, saved-offer, background-networking, onboarding, password-update, MPGF account/admin, profile API, background API, job API, saved-search, and wish-registry search routes should be private no-store.",
     ),
     check(
       "supabase-session-refresh-source",
@@ -265,8 +277,29 @@ export function validateMoralTradeSecurityImplementation({
         /rotationReady/.test(backgroundFieldEncryptionSource) &&
         /BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY/.test(
           backgroundFieldEncryptionSource,
-        ),
+      ),
       "background sensitive text should encrypt with versioned key ids, support legacy decrypt, and fail closed without configured key material.",
+    ),
+    check(
+      "participant-session-review-source",
+      "Participant session review and other-session revocation are implemented",
+      /BACKGROUND_SESSION_REVIEW_CONTROL_VERSION/.test(backgroundAccountSecuritySource) &&
+        /getClaims/.test(backgroundAccountSecuritySource) &&
+        /session_id/.test(backgroundAccountSecuritySource) &&
+        /accessTokenWindowStatus/.test(backgroundAccountSecuritySource) &&
+        /signOut\(\{\s*scope:\s*"others"\s*\}\)/.test(backgroundActionsSource) &&
+        /Revoke other sessions/.test(backgroundAccountSecurityPanelSource) &&
+        /sessionIdSuffix/.test(backgroundAccountSecurityPanelSource),
+      "participants should see current-session JWT review data and be able to revoke other Supabase sessions from the dashboard.",
+    ),
+    check(
+      "contact-disclosure-step-up-source",
+      "Contact disclosure requires MFA step-up before contact details can be released",
+      /requiresContactDisclosureStepUp/.test(backgroundDisclosureSource) &&
+        /accessLevel === "contact"/.test(backgroundDisclosureSource) &&
+        /contact_email/.test(backgroundDisclosureSource) &&
+        /introduced/.test(backgroundDisclosureSource),
+      "contact-level grants or contact_email disclosure should require step-up and introduced-stage disclosure.",
     ),
     check(
       "attribution-cookie-boundary-source",
@@ -330,10 +363,18 @@ export function validateMoralTradeSecurityProfile(
     check(
       "admin-and-key-scale-gates",
       "MFA is enforced while device/session review and key rotation still gate sensitive scale",
-      controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
+        controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
+        controlMap.get("participant_session_review_revocation")?.status === "implemented" &&
+        controlMap.get("contact_disclosure_mfa_step_up")?.status === "implemented" &&
         controlMap.get("device_session_review_gate")?.status === "required_before_scale" &&
         controlMap.get("key_rotation_gate")?.status === "required_before_scale",
-      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate"]
+      [
+        "two_factor_admin_gate",
+        "participant_session_review_revocation",
+        "contact_disclosure_mfa_step_up",
+        "device_session_review_gate",
+        "key_rotation_gate",
+      ]
         .map((key) => `${key}:${controlMap.get(key)?.status ?? "missing"}`)
         .join(", "),
     ),

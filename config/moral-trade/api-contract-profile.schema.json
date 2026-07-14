@@ -26,7 +26,7 @@
         ],
         "properties": {
           "key": { "type": "string", "minLength": 1 },
-          "method": { "enum": ["GET", "POST"] },
+          "method": { "enum": ["GET", "POST", "DELETE"] },
           "path": { "type": "string", "pattern": "^/api/" },
           "auth": { "enum": ["public", "optional", "authenticated", "internal"] },
           "privacyClass": { "type": "string", "minLength": 1 },

@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   filterWishRegistryExamplePreviews,
+  getWishRegistryCompatibilityBand,
   getWishRegistryRedactedOverlapTokens,
+  toPublicWishRegistrySearchResult,
 } from "@/lib/wish-registry";
 
 const examplePreviews = [
@@ -72,4 +74,34 @@ test("wish registry overlap markers never echo raw query tokens", () => {
     "broad_language_overlap_3",
   ]);
   assert.equal(JSON.stringify(markers).includes("counterparty"), false);
+});
+
+test("wish registry compatibility display uses broad bands instead of exact scores", () => {
+  assert.equal(getWishRegistryCompatibilityBand(82), "High");
+  assert.equal(getWishRegistryCompatibilityBand(50), "Moderate");
+  assert.equal(getWishRegistryCompatibilityBand(10), "Tentative");
+  assert.equal(getWishRegistryCompatibilityBand(0), "Exploratory");
+});
+
+test("public wish registry results omit exact internal ranking scores", () => {
+  const publicResult = toPublicWishRegistrySearchResult({
+    causes: ["Animal welfare"],
+    collectiveName: "Preview collective",
+    locationCity: null,
+    locationRegion: "Public region",
+    opennessToPayment: true,
+    opennessToPledges: false,
+    participantKind: "collective",
+    privacyStage: "broad_preview",
+    profileId: "profile-1",
+    publicPreview: "Broad preview only.",
+    score: 82,
+    sharedTokens: ["broad_language_overlap_1"],
+  });
+  const serialized = JSON.stringify(publicResult);
+
+  assert.equal("score" in publicResult, false);
+  assert.equal(publicResult.compatibilityBand, "High");
+  assert.match(publicResult.compatibilityExplanation, /not moral worth/);
+  assert.doesNotMatch(serialized, /82|match score/);
 });

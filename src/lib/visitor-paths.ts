@@ -15,31 +15,31 @@ export const VISITOR_PATHS = [
   {
     key: "learn",
     title: "Learn the idea",
-    homeTitle: "Read what exists today",
+    homeTitle: "Understand the service",
     description:
-      "See what the pilot supports, what it does not promise, and why review matters.",
-    href: "/moral-trade",
+      "See what Moral Trade supports, what it does not claim, and why baselines, evidence, and review matter.",
+    href: "/what-is-moral-trade",
     icon: "source",
     actionLabel: "Read the plain-language primer",
     fit: "Best if you are new to moral trade and want the plain-language version first.",
   },
   {
     key: "test",
-    title: "Test an example",
-    homeTitle: "See a worked example",
+    title: "Inspect an example",
+    homeTitle: "See complete terms",
     description:
-      "Inspect a complete, non-live example before drafting or relying on a real trade.",
-    href: "/offers?view=examples",
+      "Inspect a complete, non-live example before drafting or relying on a participant record.",
+    href: "/worked-examples",
     icon: "example",
     actionLabel: "Open worked examples",
-    fit: "Best if you want to understand the mechanism by looking at concrete terms.",
+    fit: "Best if you want to understand the mechanism through concrete terms.",
   },
   {
     key: "donate",
-    title: "Donate through a route",
+    title: "Use a donation route",
     homeTitle: "Donate through a vetted route",
     description:
-      "Choose a cause, complete payment on Every.org, and optionally record the gift here.",
+      "Choose a cause, pay through an external provider, and submit reviewed evidence when a public-good workflow requires it.",
     href: "/donate",
     icon: "fund",
     actionLabel: "Open donation routes",
@@ -47,14 +47,14 @@ export const VISITOR_PATHS = [
   },
   {
     key: "join-build",
-    title: "Join or build",
-    homeTitle: "Join or build",
+    title: "Join the network",
+    homeTitle: "Create one concrete record",
     description:
-      "Enter the founding cohort, invite one serious counterparty, and start small.",
+      "Create an account, choose one first action, and invite one serious counterparty or collaborator.",
     href: "/cohort",
     icon: "profile",
-    actionLabel: "Join the founding cohort",
-    fit: "Best if you can help test the pilot with one serious counterparty or group.",
+    actionLabel: "Join the network",
+    fit: "Best if you can bring a concrete use case, counterparty, research question, or community.",
   },
 ] as const satisfies ReadonlyArray<VisitorPathConfig>;
 

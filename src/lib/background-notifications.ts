@@ -1,6 +1,15 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
-import { getBackgroundNotificationEventKindForWishNotification } from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS,
+  shouldSendBackgroundNotificationImmediately,
+} from "@/lib/background-notification-policy";
+import {
+  getBackgroundNotificationEventKindForWishNotification,
+  type BackgroundNotificationChannel,
+  type BackgroundNotificationDigestCadence,
+  type BackgroundNotificationEventKind,
+} from "@/lib/background-privacy-controls";
 import { getSiteUrl } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -26,6 +35,21 @@ export interface InsertWishNotificationsResult {
   notificationError: PostgrestError | null;
 }
 
+export interface SafeWishNotificationEmailPreference {
+  channel: BackgroundNotificationChannel;
+  daily_cap?: number | null;
+  digest_cadence: BackgroundNotificationDigestCadence;
+  enabled: boolean;
+  event_kind: BackgroundNotificationEventKind;
+  id?: string;
+  last_discovery_sent_at?: string | null;
+  profile_id: string;
+  quiet_hours_end?: number | null;
+  quiet_hours_start?: number | null;
+  quiet_until?: string | null;
+  source_cooldown_hours?: number | null;
+}
+
 const SAFE_EMAIL_SUBJECTS: Record<WishNotificationRow["kind"], string> = {
   consent: "Moral Trade: consent update",
   match: "Moral Trade: possible counterparty update",
@@ -48,6 +72,57 @@ export function buildSafeWishNotificationEmailCopy(
   ].join("\n");
 
   return { body, subject };
+}
+
+export function shouldQueueSafeWishNotificationEmail({
+  emailEnabledFallback = false,
+  eventKind,
+  now = new Date(),
+  preference,
+  recipientEmail,
+}: {
+  emailEnabledFallback?: boolean;
+  eventKind: BackgroundNotificationEventKind;
+  now?: Date;
+  preference?: SafeWishNotificationEmailPreference | null;
+  recipientEmail?: string | null;
+}) {
+  if (!recipientEmail) {
+    return false;
+  }
+
+  if (preference) {
+    return shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      dailyCap: preference.daily_cap,
+      digestCadence: preference.digest_cadence,
+      enabled: preference.enabled,
+      eventKind,
+      lastSourceNotificationAt: preference.last_discovery_sent_at,
+      now,
+      quietHoursEnd: preference.quiet_hours_end,
+      quietHoursStart: preference.quiet_hours_start,
+      quietUntil: preference.quiet_until,
+      sourceCooldownHours: preference.source_cooldown_hours,
+    });
+  }
+
+  if (BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS.has(eventKind)) {
+    return false;
+  }
+
+  return (
+    emailEnabledFallback &&
+    shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      digestCadence: "immediate",
+      enabled: true,
+      eventKind,
+      now,
+      quietHoursEnd: 8,
+      quietHoursStart: 22,
+    })
+  );
 }
 
 export async function queueSafeWishNotificationEmails({
@@ -88,7 +163,9 @@ export async function queueSafeWishNotificationEmails({
   );
   const { data: channelPrefs, error: channelPrefsError } = await supabase
     .from("background_notification_preferences")
-    .select("profile_id, event_kind, channel, enabled, digest_cadence")
+    .select(
+      "id, profile_id, event_kind, channel, enabled, digest_cadence, quiet_until, quiet_hours_start, quiet_hours_end, daily_cap, source_cooldown_hours, last_discovery_sent_at",
+    )
     .in("profile_id", profileIds)
     .eq("channel", "email_digest");
 
@@ -99,41 +176,76 @@ export async function queueSafeWishNotificationEmails({
     };
   }
 
-  const profilesWithEmailPrefs = new Set((channelPrefs ?? []).map((preference) => preference.profile_id));
-  const enabledEmailPreferenceKeys = new Set(
-    (channelPrefs ?? [])
-      .filter((preference) => preference.enabled && preference.digest_cadence !== "none")
-      .map((preference) => `${preference.profile_id}:${preference.event_kind}`),
+  const emailPreferenceByKey = new Map(
+    ((channelPrefs ?? []) as SafeWishNotificationEmailPreference[]).map((preference) => [
+      `${preference.profile_id}:${preference.event_kind}`,
+      preference,
+    ]),
   );
-  const emailRows: EmailOutboxInsert[] = notifications
-    .filter((notification) => {
+  const now = new Date();
+  const emailCandidates = notifications
+    .flatMap((notification) => {
       const eventKind = getBackgroundNotificationEventKindForWishNotification(notification.kind);
-
-      if (profilesWithEmailPrefs.has(notification.profile_id)) {
-        return enabledEmailPreferenceKeys.has(`${notification.profile_id}:${eventKind}`);
-      }
-
-      return emailEnabledProfileIds.has(notification.profile_id);
-    })
-    .map((notification) => {
+      const preference = emailPreferenceByKey.get(`${notification.profile_id}:${eventKind}`);
+      const discoveryPreferenceId =
+        preference && BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS.has(eventKind)
+          ? preference.id
+          : null;
       const recipientEmail = emailByProfileId.get(notification.profile_id) ?? "";
       const copy = buildSafeWishNotificationEmailCopy(notification, siteUrl);
 
-      return {
-        body: copy.body,
-        profile_id: notification.profile_id,
-        provider: "background-networking",
-        recipient_email: recipientEmail,
-        subject: copy.subject,
-      };
-    })
-    .filter((row) => row.recipient_email);
+      const sendNow = shouldQueueSafeWishNotificationEmail({
+        emailEnabledFallback: emailEnabledProfileIds.has(notification.profile_id),
+        eventKind,
+        now,
+        preference,
+        recipientEmail,
+      });
+
+      return sendNow
+        ? [{
+            discoveryPreferenceId,
+            row: {
+              body: copy.body,
+              profile_id: notification.profile_id,
+              provider: "background-networking",
+              recipient_email: recipientEmail,
+              subject: copy.subject,
+            },
+          }]
+        : [];
+    });
+  const emailRows: EmailOutboxInsert[] = emailCandidates.map((candidate) => candidate.row);
 
   if (!emailRows.length) {
     return { emailError: null, emailsQueued: 0 };
   }
 
   const { error } = await supabase.from("email_outbox").insert(emailRows);
+
+  if (!error) {
+    const discoveryPreferenceIds = [
+      ...new Set(
+        emailCandidates
+          .map((candidate) => candidate.discoveryPreferenceId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    if (discoveryPreferenceIds.length) {
+      const { error: cooldownError } = await supabase
+        .from("background_notification_preferences")
+        .update({ last_discovery_sent_at: now.toISOString() })
+        .in("id", discoveryPreferenceIds);
+
+      if (cooldownError) {
+        return {
+          emailError: cooldownError,
+          emailsQueued: 0,
+        };
+      }
+    }
+  }
 
   return {
     emailError: error,

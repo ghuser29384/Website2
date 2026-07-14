@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-performance-v0.2-2026-05",
+  "version": "moral-trade-performance-v0.4-2026-06",
   "purpose": "Public performance and route-resilience contract for the core Moral Trade experience, including loading-state recovery, Web Vitals, API latency, error-rate measurement, cache posture, and honest non-claims.",
   "measurementCadence": "weekly_internal_monthly_public_aggregate",
   "observedFriction": [
@@ -13,7 +13,7 @@
       "key": "reasoning_route_resilience",
       "label": "Reasoning route resilience",
       "risk": "A public reasoning/review route failure undermines trust in the protocol layer.",
-      "mitigation": "Use route error boundaries, retry controls, public-directory fallbacks, and route-manifest smoke checks."
+      "mitigation": "Use a Reasoning Center route segment error boundary, retry controls, public-directory fallbacks, and route-manifest smoke checks."
     },
     {
       "key": "public_liquidity_perception",
@@ -101,7 +101,7 @@
     {
       "key": "route_error_boundary",
       "label": "Route error boundary",
-      "rule": "Public route errors must expose retry and safe navigation paths instead of a dead end."
+      "rule": "Public route errors must expose retry and safe navigation paths instead of a dead end, with route-specific evidence for the Reasoning Center boundary."
     },
     {
       "key": "loading_state_inventory",
@@ -132,8 +132,8 @@
     },
     {
       "key": "reasoning_and_review",
-      "paths": ["/reasoning-center", "/validation", "/trust"],
-      "recoveryExpectation": "Review and reasoning pages expose safe navigation and retry paths if a route fails."
+      "paths": ["/reasoning-center", "/api/moral-trade/reasoning/packets", "/validation", "/trust"],
+      "recoveryExpectation": "Review and reasoning pages expose safe navigation and retry paths if a route fails; the Reasoning Center has a route segment error boundary, and packet JSON returns validator blockers instead of a public route crash."
     }
   ],
   "releaseGates": [

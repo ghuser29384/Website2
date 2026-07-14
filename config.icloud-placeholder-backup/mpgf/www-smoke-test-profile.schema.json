@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF WWW Smoke Test Profile",
+  "type": "object",
+  "required": [
+    "profileVersion",
+    "enabled",
+    "authMode",
+    "smokeUserRef",
+    "demoParticipantRef",
+    "allowedRoutes",
+    "allowedActions",
+    "termsVersion",
+    "privacyVersion",
+    "eligibilitySnapshotRef",
+    "candidateSetSnapshotRef",
+    "credentialSource",
+    "credentialRotationPolicy",
+    "auditLogRequired",
+    "rateLimitPolicy",
+    "forbiddenActions"
+  ],
+  "properties": {
+    "authMode": { "enum": ["repository_test_session", "preexisting_user_session", "server_side_test_harness"] },
+    "identityMode": { "enum": ["fixture_owned", "pre_existing"] },
+    "auditLogRequired": { "const": true },
+    "createsPublicRealUser": { "const": false },
+    "grantsAdminPermissions": { "const": false }
+  },
+  "additionalProperties": true
+}

@@ -5,6 +5,7 @@ import {
   BACKGROUND_QUERY_COSTS,
   BACKGROUND_QUERY_DAILY_LIMITS,
 } from "../background-query-budget";
+import { PRIVACY_ACCESS_REQUEST_WINDOW_DAYS } from "../background-disclosure";
 import {
   evaluateMoralTradeDisclosureGrant,
   getMoralTradeDisclosureContract,
@@ -56,7 +57,31 @@ test("disclosure grant evaluation blocks early contact and raw source notes", ()
   assert.ok(decision.blockers.includes("raw_source_notes_must_not_be_disclosed"));
   assert.ok(decision.blockers.includes("contact_details_require_introduced_stage"));
   assert.ok(decision.factorCodes.includes("introduced_contact_only"));
+  assert.ok(decision.factorCodes.includes("step_up_auth_required"));
   assert.ok(decision.factorCodes.includes("raw_source_notes_redacted"));
+  assert.equal(decision.stepUpAuthRequired, true);
+  assert.equal(validateMoralTradeDisclosureDecision(decision).status, "pass");
+});
+
+test("disclosure grant evaluation flags live contact grants for MFA step-up", () => {
+  const decision = evaluateMoralTradeDisclosureGrant({
+    requestId: "grant-contact-001",
+    fieldKeys: ["contact_email"],
+    purpose: "Coordinate a mutually approved introduction after both sides consent.",
+    stage: "introduced",
+    accessLevel: "contact",
+    status: "granted",
+    ownerProfileScoped: true,
+    counterpartyScoped: true,
+    matchScoped: true,
+  });
+
+  assert.equal(decision.status, "grant_ready");
+  assert.deepEqual(decision.blockers, []);
+  assert.deepEqual(decision.allowedFields, ["contact_email"]);
+  assert.equal(decision.stepUpAuthRequired, true);
+  assert.ok(decision.factorCodes.includes("introduced_contact_only"));
+  assert.ok(decision.factorCodes.includes("step_up_auth_required"));
   assert.equal(validateMoralTradeDisclosureDecision(decision).status, "pass");
 });
 
@@ -111,8 +136,23 @@ test("disclosure contract validates staged disclosure and privacy grant boundari
         control.minSpecificity === 3,
     ),
   );
+  assert.ok(
+    contract.searchPrivacyControls.some(
+      (control) =>
+        control.key === "detail_request_probe_limit" &&
+        control.scope === "privacy_access_request" &&
+        control.windowDays === PRIVACY_ACCESS_REQUEST_WINDOW_DAYS &&
+        control.pendingLimit === 3 &&
+        control.similarPendingLimit === 1 &&
+        control.similarWeeklyLimit === 3 &&
+        control.weeklyLimit === 6,
+    ),
+  );
   assert.ok(contract.approvedFactorCodes.includes("owner_approval_required"));
+  assert.ok(contract.approvedFactorCodes.includes("step_up_auth_required"));
   assert.ok(contract.contractTests.includes("disclosure_query_budget_contract_smoke"));
+  assert.ok(contract.contractTests.includes("disclosure_contact_step_up_contract_smoke"));
+  assert.ok(contract.contractTests.includes("privacy_access_request_cadence_smoke"));
   assert.ok(contract.contractTests.includes("disclosure_grant_evaluate_route_contract"));
 });
 
@@ -120,7 +160,7 @@ test("disclosure contract validation fails when consent and redaction safeguards
   const contract: MoralTradeDisclosureContract = {
     ...getMoralTradeDisclosureContract(),
     audienceStages: ["registry"],
-    disclosureFields: [],
+    disclosureFields: [] as unknown as MoralTradeDisclosureContract["disclosureFields"],
     redactedFields: ["contact_details_before_introduction"],
     searchPrivacyControls: [],
     approvedFactorCodes: ["field_level_grant"],

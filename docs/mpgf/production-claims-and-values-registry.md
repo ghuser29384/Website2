@@ -1,22 +1,26 @@
-# MPGF Production Claims And Values Registry
+# MPGF Production Claims and Values Registry
 
-Status: non-real-money production-demo claims only.
+Status: public claim registry for moral public goods funding.
 
-Allowed claims:
+## Allowed Claims
 
-- MPGF is a pilot mechanism.
-- Current direct-working pages are non-real-money unless explicitly approved otherwise.
-- Pledge-only records do not charge a payment method.
-- Demo ballots do not authorize real disbursement.
-- Public summaries distinguish allocation, internal release, payout authorization, and external payment.
+- MPGF uses Common-Ground Verified Quadratic Assurance Funding for public-goods coordination.
+- The mechanism can publish threshold progress, verified supporter counts, base match, QF bonus estimates, allocation hashes, and aggregate postmortems.
+- Common-ground discovery identifies coordinatable support across moral views.
+- Partner-held payment and payout operations can support non-custodial contribution paths when approved.
 
-Forbidden claims until explicitly approved:
+## Prohibited Claims
 
-- Tax deductibility.
-- Legal escrow.
-- Donation receipt issuance.
-- Guaranteed effectiveness.
-- Charity-evaluator status.
-- Real-money collection or disbursement.
+- No global moral ranking.
+- No donor moral reputation weighting.
+- No custody by Moral Trade unless separately approved and published.
+- No escrow claim unless legally approved wording is published.
+- No guaranteed effectiveness.
+- No tax-deductibility claim unless approved partner wording is published.
+- No token, karma, or transferable governance claim.
 
-Conformance rows: AC-COPY-001, AC-COMPLETION-008.
+## Values Invariants
+
+- Compliance gates protect payment legality and recipient eligibility; they are not moral authority signals.
+- Allocation inputs are published parameters, verified support, identity-confidence eligibility, review gates, and sponsor budgets.
+- Sponsors may fund a round or reserve, but they cannot micromanage campaign allocation after the round opens.

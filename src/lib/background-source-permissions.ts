@@ -57,6 +57,17 @@ export interface BackgroundSourcePermissionValidationResult {
   retentionExpiresAt: string;
 }
 
+export interface BackgroundSourceSummaryFieldScopeConnection {
+  access_status?: string | null;
+  allowed_field_keys?: readonly string[] | null;
+  retention_expires_at?: string | null;
+}
+
+export interface BackgroundSourceSummaryFieldScope {
+  allowedFieldKeys: BackgroundSourcePermissionField[];
+  errors: string[];
+}
+
 const SOURCE_PERMISSION_FIELD_VALUES = new Set(
   BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => option.value),
 );
@@ -115,6 +126,80 @@ export function hasActiveBackgroundSourcePermission(
   return Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > now.getTime();
 }
 
+export function resolveBackgroundSourceSummaryFieldScope({
+  now = new Date(),
+  requestedFieldKeys = [],
+  sourceConnection = null,
+}: {
+  now?: Date;
+  requestedFieldKeys?: string[];
+  sourceConnection?: BackgroundSourceSummaryFieldScopeConnection | null;
+}): BackgroundSourceSummaryFieldScope {
+  const requestedFields = normalizeBackgroundSourcePermissionFields(requestedFieldKeys);
+
+  if (!sourceConnection) {
+    return {
+      allowedFieldKeys: requestedFields,
+      errors: [],
+    };
+  }
+
+  const connectionFields = normalizeBackgroundSourcePermissionFields([
+    ...(sourceConnection.allowed_field_keys ?? []),
+  ]);
+  const connectionFieldSet = new Set(connectionFields);
+  const allowedFieldKeys = requestedFields.filter((fieldKey) => connectionFieldSet.has(fieldKey));
+  const disallowedFields = requestedFields.filter((fieldKey) => !connectionFieldSet.has(fieldKey));
+  const errors: string[] = [];
+
+  if (!hasActiveBackgroundSourcePermission(sourceConnection, now)) {
+    errors.push("Selected source connection is inactive, expired, revoked, or missing approved fields.");
+  }
+
+  if (disallowedFields.length) {
+    errors.push(
+      `Requested summary fields exceed the selected source connection permission: ${disallowedFields
+        .map(formatBackgroundSourcePermissionFieldLabel)
+        .join(", ")}.`,
+    );
+  }
+
+  return {
+    allowedFieldKeys,
+    errors,
+  };
+}
+
+export function validateBackgroundSourceSummaryRetentionScope({
+  sourceConnection = null,
+  summaryRetentionExpiresAt,
+}: {
+  sourceConnection?: BackgroundSourceSummaryFieldScopeConnection | null;
+  summaryRetentionExpiresAt?: string | null;
+}) {
+  if (!sourceConnection?.retention_expires_at || !summaryRetentionExpiresAt) {
+    return [];
+  }
+
+  const connectionExpiresAt = new Date(sourceConnection.retention_expires_at);
+  const summaryExpiresAt = new Date(summaryRetentionExpiresAt);
+
+  if (
+    !Number.isFinite(connectionExpiresAt.getTime()) ||
+    !Number.isFinite(summaryExpiresAt.getTime())
+  ) {
+    return ["Source-summary retention could not be validated against the selected source permission."];
+  }
+
+  if (summaryExpiresAt.getTime() > connectionExpiresAt.getTime()) {
+    return [
+      "Source-summary retention cannot outlive the selected source connection permission.",
+    ];
+  }
+
+  return [];
+}
+
 export function validateBackgroundSourcePermission({
   accessScope = "",
   accessStatus = "not_connected",
@@ -159,8 +244,8 @@ export function validateBackgroundSourcePermission({
     }
   }
 
-  if (aiShadowModeAllowed && accessStatus === "revoked") {
-    errors.push("AI shadow-mode evaluation cannot stay enabled for a revoked source.");
+  if (aiShadowModeAllowed && (accessStatus === "revoked" || accessStatus === "expired")) {
+    errors.push("AI shadow-mode evaluation cannot stay enabled for a revoked or expired source.");
   }
 
   return {

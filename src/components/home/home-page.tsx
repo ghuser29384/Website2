@@ -1,316 +1,291 @@
 import Link from "next/link";
 
-import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
+import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
+import { MutualStepFigure } from "@/components/home/mutual-step-figure";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import {
-  IconMark,
-  OfferCard,
-  SearchBar,
-  TrustChip,
-} from "@/components/ui/page-primitives";
-import type { IconName } from "@/components/ui/page-primitives";
-import type { MarketplaceOverview } from "@/lib/app-data";
+import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { VISITOR_PATHS } from "@/lib/visitor-paths";
-import {
-  getActionEvidenceSummary,
-  getBaselineConfidence,
-  getExternalityReviewSummary,
-  getOfferReviewCardInstrumentation,
-  getScoreConfidence,
-} from "@/lib/proposal-review";
 
 interface HomePageProps {
   isAuthenticated: boolean;
-  marketplaceOverview: MarketplaceOverview;
 }
 
-const categoryPills = [
-  { label: "Global health", href: "/offers?search=Global%20health" },
-  { label: "Animal welfare", href: "/offers?search=Animal%20welfare" },
-  { label: "Climate", href: "/offers?search=Climate" },
-  { label: "Long-run future", href: "/offers?search=Future" },
-  { label: "Public health", href: "/offers?search=Public%20health" },
-  { label: "Financial support", href: "/offers?search=Financial%20support" },
+const mechanismSteps = [
+  {
+    number: "01",
+    title: "Name the default.",
+    description:
+      "Record what each person would otherwise do. The baseline prevents manufactured threats from becoming bargaining leverage.",
+  },
+  {
+    number: "02",
+    title: "Specify bounded terms.",
+    description:
+      "Define the actions, timing, evidence, privacy level, exit conditions, and challenge process before anyone relies on the agreement.",
+  },
+  {
+    number: "03",
+    title: "Move only if both prefer it.",
+    description:
+      "Each participant evaluates the change by their own values. Moral Trade does not require a shared moral ranking.",
+  },
 ] as const;
 
-const formatPills = [
-  { label: "Pledge swaps", href: "/pledge-swaps" },
-  { label: "Donation offsets", href: "/donation-offsets" },
-  { label: "Public-good contributions", href: "/mpgf" },
-  { label: "Private matching", href: "/background-networking" },
-] as const;
-
-const activationCards: ReadonlyArray<{
-  actionLabel: string;
+const tradeLanes: ReadonlyArray<{
   description: string;
   href: string;
+  icon: IconName;
+  label: string;
   title: string;
 }> = [
   {
-    title: "Join a small cohort",
-    description: "Start with a group small enough for review, baseline checks, and human introductions.",
-    href: "/cohort",
-    actionLabel: "Open the cohort guide",
+    label: "01 / RECIPROCAL",
+    title: "Pledge swaps",
+    description: "Exchange small commitments that each participant values differently.",
+    href: "/pledge-swaps",
+    icon: "swap",
   },
   {
-    title: "Clone a worked example",
-    description: "Prefill a low-risk case, adjust terms, and keep scores party-relative.",
-    href: "/offers?view=examples",
-    actionLabel: "Choose a worked example",
+    label: "02 / REDIRECTION",
+    title: "Donation offsets",
+    description: "Redirect opposed giving toward a reciprocal or mutually preferred destination.",
+    href: "/donation-offsets",
+    icon: "offset",
   },
   {
-    title: "Invite one serious counterparty",
-    description: "The fastest early loop is one thoughtful invite, not a generic referral blast.",
-    href: "/cohort",
-    actionLabel: "Draft a cohort invite",
+    label: "03 / SHARED",
+    title: "Moral public goods",
+    description: "Coordinate funding for goods that many people value for different reasons.",
+    href: "/moral-goods-group-buying",
+    icon: "publicGoods",
   },
   {
-    title: "Submit one reviewable proof artifact",
-    description: "Use receipts, logs, attestations, or public statements before anyone relies on a claim.",
-    href: "/validation",
-    actionLabel: "Review evidence standards",
+    label: "04 / PRIVATE",
+    title: "Consent-gated matching",
+    description: "Find broad compatibility before identities, exact asks, or contact details are disclosed.",
+    href: "/background-networking",
+    icon: "lock",
   },
 ] as const;
 
-function formatOptionalCount(value: number | null) {
-  return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
-}
+const relianceRules = [
+  ["Explicit baselines", "The no-trade alternative is recorded before terms are compared."],
+  ["Reviewable evidence", "Receipts, logs, attestations, or public records support completion claims."],
+  ["Consent-gated disclosure", "Private wishes and identities remain private until both sides approve disclosure."],
+  ["Clear exits and challenges", "Participants can see withdrawal, review, dispute, and appeal paths before relying on terms."],
+] as const;
 
-function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["mode"]): IconName {
-  if (mode === "pledge") return "swap";
-  if (mode === "offset") return "offset";
-  if (mode === "payment") return "payment";
-  return "fund";
-}
-
-export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
-  const cohortHref = isAuthenticated ? "/dashboard" : "/cohort";
+export function HomePage({ isAuthenticated }: HomePageProps) {
+  const primaryHref = isAuthenticated ? "/dashboard" : "/signup?returnTo=/onboarding";
+  const primaryLabel = isAuthenticated ? "Open your workspace" : "Join the network";
+  const createHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/onboarding";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
-  const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
-  const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
 
   return (
-    <div className="page-shell page-shell-focused growth-shell">
-      <header className="growth-hero">
+    <div className="page-shell mt-site-shell mt-home-shell">
+      <header className="mt-home-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
           {...getTopbarActions(isAuthenticated)}
+          showSearch={false}
           showLogout={isAuthenticated}
         />
-
-        <div className="growth-hero-inner">
-          <section className="growth-hero-copy">
-            <h1>Make voluntary trades across moral disagreement.</h1>
-            <p className="hero-text">
-              Start with one pledge swap, donation offset, or public-good commitment. Moral Trade
-              keeps the terms, baselines, evidence rules, and manual review explicit before
-              anyone relies on the result.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
-                See a worked example
-              </Link>
-              <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/cohort"}>
-                {isAuthenticated ? "Open dashboard" : "Join the pilot"}
-              </Link>
-            </div>
-          </section>
-
-          <aside className="growth-progress-card panel" aria-label="Founding progress">
-            <div className="growth-progress-stat">
-              <IconMark name="marketplace" />
-              <span>Live offers</span>
-              <strong>{liveOfferCount}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="example" />
-              <span>Worked examples</span>
-              <strong>{CANONICAL_WORKED_CASE_COUNT}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="profile" />
-              <span>Public profiles</span>
-              <strong>{publicProfileCount}</strong>
-            </div>
-            <div className="growth-progress-stat">
-              <IconMark name="review" />
-              <span>Completed agreements</span>
-              <strong>{formatOptionalCount(marketplaceOverview.completedAgreementCount)}</strong>
-            </div>
-          </aside>
-        </div>
-
-        <div className="growth-trust-row" aria-label="Trust standards">
-          <TrustChip>Pilot stage</TrustChip>
-          <TrustChip>No custody or escrow</TrustChip>
-          <TrustChip>Manual review before reliance</TrustChip>
-          <TrustChip>Privacy-first matching</TrustChip>
-          <TrustChip>{formatOptionalCount(marketplaceOverview.completedAgreementCount)} completed agreements - transparency first</TrustChip>
-        </div>
-        <div className="growth-no-automation-strip" aria-label="Non-automation posture">
-          <strong>No surprise exposure. No autonomous outreach. No private-feed mining.</strong>
-          <span>Matching uses broad previews and consent-gated disclosure.</span>
-        </div>
       </header>
 
-      <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" aria-labelledby="marketplace-search-heading">
-          <div className="section-head section-head-compact">
-            <h2 id="marketplace-search-heading">Find a worked example or live offer</h2>
-            <p>
-              Start with broad categories and inspect examples first. Live offers only count once
-              they have public terms, baselines, and review states.
+      <main className="mt-home-main" id="main-content" tabIndex={-1}>
+        <section className="mt-home-hero" aria-labelledby="home-hero-heading">
+          <div className="mt-home-hero-copy">
+            <p className="mt-home-kicker">
+              <span aria-hidden="true" />
+              A coordination platform for moral disagreement
             </p>
-          </div>
-          <SearchBar placeholder="Search by cause, action, or trade type" />
-          <div className="pill-group" aria-label="Cause categories">
-            {categoryPills.map((pill) => (
-              <Link className="source-pill source-pill-link" href={pill.href} key={pill.label}>
-                {pill.label}
+            <h1 id="home-hero-heading">
+              Cooperate
+              <span>without agreeing.</span>
+            </h1>
+            <p className="mt-home-hero-text">
+              Moral Trade turns value disagreement into voluntary, bounded exchanges and shared
+              public-good commitments. Each participant judges the result by their own lights.
+            </p>
+            <div className="mt-home-hero-actions">
+              <Link className="button button-primary" href={primaryHref}>
+                {primaryLabel}
+                <span aria-hidden="true">↗</span>
               </Link>
-            ))}
-          </div>
-          <div className="pill-group" aria-label="Trade formats">
-            {formatPills.map((pill) => (
-              <Link className="badge badge-secondary" href={pill.href} key={pill.label}>
-                {pill.label}
+              <Link className="mt-text-link" href="/offers/examples/seed-victoria">
+                See a complete example
+                <span aria-hidden="true">→</span>
               </Link>
-            ))}
+            </div>
+            <ul className="mt-home-assurances" aria-label="Core operating principles">
+              <li>Voluntary</li>
+              <li>Explicit baselines</li>
+              <li>Evidence-reviewed</li>
+            </ul>
           </div>
+
+          <MutualStepFigure />
         </section>
 
-        <MoralTradeAnimations />
-
-        <section className="growth-start-section section section-white" aria-labelledby="start-heading">
-          <div className="section-head section-head-compact">
-            <h2 id="start-heading">Choose the right first path</h2>
-            <p>
-              The pilot routes visitors by intent before exposing deeper marketplace mechanics:
-              learn, test, donate, or join/build.
-            </p>
-          </div>
-          <div className="growth-start-grid">
-            {VISITOR_PATHS.map((path) => (
-              <Link className="growth-path-card panel" href={path.href} key={path.title}>
-                <IconMark name={path.icon} />
-                <div>
-                  <h3>{path.homeTitle}</h3>
-                  <p>{path.description}</p>
-                </div>
-                <span className="inline-link">{path.actionLabel}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="activation-heading">
-          <div className="section-head section-head-compact">
-            <h2 id="activation-heading">Start with one low-risk action</h2>
-            <p>
-              The founding cohort is designed for early users who want to learn by doing one small,
-              reviewable thing before publishing a full offer.
-            </p>
-          </div>
-          <div className="growth-activation-grid">
-            {activationCards.map((card) => (
-              <Link className="growth-activation-card panel" href={card.href} key={card.title}>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-                <span className="inline-link">{card.actionLabel}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="featured-examples-heading">
-          <div className="section-head section-head-compact">
-            <h2 id="featured-examples-heading">Marketplace preview</h2>
-            <p>
-              Examples show the terms, evidence rules, and review states a real offer should
-              expose before anyone relies on it.
-            </p>
-          </div>
-          <div className="listing-grid compact-listing-grid">
-            {featuredExamples.map((offer) => {
-              const reviewInstrumentation = getOfferReviewCardInstrumentation({
-                ...offer,
-                currentStatus: "Worked example; manual review required before reliance",
-                minCounterpartyImpact: offer.minCounterpartyImpact,
-              });
-
-              return (
-                <OfferCard
-                  alias={offer.alias}
-                  causeExchange={`${offer.offeredCause} -> ${offer.requestedCause}`}
-                  ctaHref={`/offers/examples/${offer.id}`}
-                  duration={offer.duration}
-                  evidence={offer.verification}
-                  key={offer.id}
-                  actionEvidence={getActionEvidenceSummary(offer)}
-                  baselineConfidence={getBaselineConfidence(offer)}
-                  externalityReview={getExternalityReviewSummary(offer)}
-                  modeIcon={getOfferModeIcon(offer.mode)}
-                  modeLabel={formatMode(offer.mode)}
-                  offeredAction={offer.offerAction}
-                  offeredScore={offer.offerImpact}
-                  primaryActionLabel="View example"
-                  requestedAction={offer.requestAction}
-                  requestedThreshold={offer.minCounterpartyImpact}
-                  reviewFactorCodes={reviewInstrumentation.factorCodes}
-                  reviewNextStep={reviewInstrumentation.nextStep}
-                  reviewState="Worked example. Manual review required before reliance."
-                  scoreConfidence={getScoreConfidence(offer)}
-                  secondaryAction={
-                    <Link
-                      className="button button-secondary button-mini"
-                      href={
-                        isAuthenticated
-                          ? `/offers/new?mode=${offer.mode}&example=${offer.id}`
-                          : `/signup?returnTo=${encodeURIComponent(`/offers/new?mode=${offer.mode}&example=${offer.id}`)}`
-                      }
-                    >
-                      Create similar
-                    </Link>
-                  }
-                  sourceLabel="Worked example"
-                  title={`${offer.offeredCause} for ${offer.requestedCause}`}
-                />
-              );
-            })}
-          </div>
-          <div className="section-actions">
-            <Link className="button button-primary" href="/offers?view=examples">
-              Browse all worked examples
-            </Link>
-            <Link className="button button-secondary" href="/cohort">
-              Read the cohort guide
-            </Link>
-          </div>
-        </section>
-
-        <section className="section section-subtle growth-cohort-callout" aria-labelledby="cohort-heading">
+        <section className="mt-home-thesis" aria-labelledby="home-thesis-heading">
+          <p className="mt-home-section-index">01 / THE PREMISE</p>
           <div>
-            <h2 id="cohort-heading">Build the pilot through trust and review</h2>
+            <h2 id="home-thesis-heading">Different values can support the same better outcome.</h2>
             <p>
-              Moral Trade is early. The strongest path is a founding cohort of effective givers,
-              organizers, founders, and serious counterparties who can test low-risk examples and
-              invite one relevant person at a time before the site tries to solve liquidity.
+              When people care differently about two outcomes, each may be able to give up less
+              and create more value for the other. The objective is not moral convergence. It is a
+              Pareto improvement relative to an explicit default.
             </p>
           </div>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/cohort">
-              Join the founding cohort
+          <MutualStepMark className="mt-home-thesis-mark" />
+        </section>
+
+        <section className="mt-home-process" aria-labelledby="home-process-heading">
+          <div className="mt-home-section-head">
+            <p className="mt-home-section-index">02 / THE PROTOCOL</p>
+            <h2 id="home-process-heading">A legible process for a difficult coordination problem.</h2>
+          </div>
+          <ol className="mt-home-process-grid">
+            {mechanismSteps.map((step) => (
+              <li key={step.number}>
+                <span className="mt-home-step-number">{step.number}</span>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-home-process-action">
+            <Link className="mt-text-link" href="/how-it-works">
+              Read the full protocol
+              <span aria-hidden="true">→</span>
             </Link>
-            <Link className="button button-secondary" href="/safety">
-              Review safety and baseline rules
+          </div>
+        </section>
+
+        <section className="mt-home-lanes" aria-labelledby="home-lanes-heading">
+          <div className="mt-home-section-head mt-home-section-head-split">
+            <div>
+              <p className="mt-home-section-index">03 / WAYS TO COORDINATE</p>
+              <h2 id="home-lanes-heading">Choose a concrete route.</h2>
+            </div>
+            <p>
+              Every route starts with a baseline, bounded terms, evidence requirements, privacy
+              controls, and a clear exit.
+            </p>
+          </div>
+          <div className="mt-home-lane-grid">
+            {tradeLanes.map((lane) => (
+              <Link className="mt-home-lane-card" href={lane.href} key={lane.title}>
+                <div className="mt-home-lane-card-head">
+                  <span>{lane.label}</span>
+                  <IconMark name={lane.icon} />
+                </div>
+                <h3>{lane.title}</h3>
+                <p>{lane.description}</p>
+                <span className="mt-home-card-arrow" aria-hidden="true">
+                  ↗
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-home-examples" aria-labelledby="home-examples-heading">
+          <div className="mt-home-section-head mt-home-section-head-split">
+            <div>
+              <p className="mt-home-section-index">04 / COMPLETE EXAMPLES</p>
+              <h2 id="home-examples-heading">Inspect the terms before creating anything.</h2>
+            </div>
+            <Link className="mt-text-link" href="/worked-examples">
+              All {CANONICAL_WORKED_CASE_COUNT} examples
+              <span aria-hidden="true">→</span>
             </Link>
-            <Link className="button button-secondary" href="/research">
-              Research and governance
+          </div>
+          <div className="mt-home-example-grid">
+            {featuredExamples.map((offer, index) => (
+              <article className="mt-home-example-card" key={offer.id}>
+                <div className="mt-home-example-meta">
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <span>{formatMode(offer.mode)}</span>
+                  <span>Worked example</span>
+                </div>
+                <h3>
+                  {offer.offeredCause}
+                  <span aria-hidden="true">↔</span>
+                  {offer.requestedCause}
+                </h3>
+                <dl>
+                  <div>
+                    <dt>Offers</dt>
+                    <dd>{offer.offerAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Requests</dt>
+                    <dd>{offer.requestAction}</dd>
+                  </div>
+                </dl>
+                <div className="mt-home-example-footer">
+                  <span>{offer.verification}</span>
+                  <Link
+                    aria-label={`View ${offer.offeredCause} and ${offer.requestedCause} example`}
+                    href={`/offers/examples/${offer.id}`}
+                  >
+                    View terms <span aria-hidden="true">↗</span>
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-home-reliance" aria-labelledby="home-reliance-heading">
+          <div className="mt-home-reliance-copy">
+            <p className="mt-home-section-index">05 / RELIABILITY</p>
+            <h2 id="home-reliance-heading">Built for serious, reviewable use.</h2>
+            <p>
+              The service exposes its operating rules and limits instead of asking participants to
+              rely on hidden judgment or implied guarantees.
+            </p>
+            <Link className="mt-text-link mt-text-link-light" href="/trust">
+              What you can rely on
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+          <ol className="mt-home-reliance-list">
+            {relianceRules.map(([title, description], index) => (
+              <li key={title}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="mt-home-final" aria-labelledby="home-final-heading">
+          <MutualStepMark className="mt-home-final-mark" />
+          <div>
+            <p className="mt-home-section-index">YOUR FIRST MOVE</p>
+            <h2 id="home-final-heading">Bring one real disagreement.</h2>
+            <p>
+              Start with one serious counterparty, one bounded commitment, and terms both sides
+              can inspect before relying on them.
+            </p>
+          </div>
+          <div className="mt-home-final-actions">
+            <Link className="button button-primary" href={createHref}>
+              {isAuthenticated ? "Create a trade" : "Join the network"}
+              <span aria-hidden="true">↗</span>
+            </Link>
+            <Link className="mt-text-link" href="/how-it-works">
+              Review the protocol
+              <span aria-hidden="true">→</span>
             </Link>
           </div>
         </section>

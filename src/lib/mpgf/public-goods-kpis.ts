@@ -12,9 +12,11 @@ import {
 } from "./data";
 import {
   allocateMpgfAssuranceRound,
+  countMpgfQfContributionCents,
   getMpgfCampaignAssuranceStatus,
   getMpgfPublicGoodsFeatureFlagStatus,
 } from "./mechanism";
+import { loadMpgfPublicGoodsAllocationContributionRecords } from "./public-goods-allocation-results";
 import type {
   MpgfPublicGoodsAllocationLine,
   MpgfPublicGoodsCampaign,
@@ -46,6 +48,82 @@ export interface MpgfPublicGoodsKpiAnalyticsEvent {
   created_at: string;
 }
 
+export type MpgfPublicGoodsContributionVerificationSource =
+  | "provider_webhook"
+  | "manual_evidence"
+  | "signed_intent_review"
+  | "legacy_payment_proof";
+
+export interface MpgfPublicGoodsContributionKpiRecord {
+  id: string;
+  pledgeId?: string;
+  campaignId: string;
+  amountVerifiedCents: number;
+  pledgedAt?: string;
+  countedAt?: string;
+  autoVerified: boolean;
+  verificationSource: MpgfPublicGoodsContributionVerificationSource;
+  reviewRequiredBeforeCounting: true;
+}
+
+export interface MpgfPublicGoodsPaymentEventKpiRow {
+  id: string;
+  conditional_pledge_id: string | null;
+  provider: string;
+  provider_status: string;
+  amount_cents: number;
+  signature_verified: boolean;
+  verified_at: string | null;
+  append_only_hash: string;
+  created_at: string;
+}
+
+export interface MpgfPublicGoodsProviderPaymentEventKpiRow {
+  id: string;
+  pledge_intent_id: string;
+  provider: string;
+  event_type: string;
+  amount_cents: number;
+  status: string;
+  signature_verified: boolean;
+  append_only_hash: string;
+  received_at: string;
+  created_at: string;
+}
+
+export interface MpgfPublicGoodsFundingExperimentCatalogItem {
+  experimentKey: string;
+  comparison: string;
+  control: string;
+  treatment: string;
+  primaryMetric: string;
+  guardrailMetrics: string[];
+  privacyPolicy: "aggregate_assignment_no_raw_private_text";
+  noGlobalMoralRanking: true;
+}
+
+export type MpgfPublicGoodsPublicMetricInstrumentationStatus = "computed" | "instrumentation_pending";
+
+export interface MpgfPublicGoodsPublicMetricCatalogItem {
+  key: string;
+  label: MpgfPublicGoodsPublicMetricLabel;
+  category: string;
+  unit: "cents" | "basis_points" | "count" | "hours";
+  privacyScope: "aggregate_only_no_user_or_reason_text";
+  instrumentationStatus: MpgfPublicGoodsPublicMetricInstrumentationStatus;
+  currentValue: number | null;
+}
+
+export interface MpgfPublicGoodsPublicMetricCatalog {
+  optimizationTarget: "incremental_verified_cross_view_review_cleared_funding";
+  doesNotOptimizeGrossDonationVolumeAlone: true;
+  privacyPolicy: "aggregate_only_no_user_or_reason_text";
+  requiredMetricCount: number;
+  computedMetricCount: number;
+  pendingMetricCount: number;
+  metrics: MpgfPublicGoodsPublicMetricCatalogItem[];
+}
+
 export interface MpgfPublicGoodsKpiSnapshot {
   generatedAt: string;
   roundId: string;
@@ -54,6 +132,10 @@ export interface MpgfPublicGoodsKpiSnapshot {
   privacyPolicy: "aggregate_only_no_user_or_reason_text";
   coordination: {
     campaignCount: number;
+    supportSignalEventCount: number;
+    commonGroundSupportSignalEventCount: number;
+    dissentReviewSignalEventCount: number;
+    supportSignalToPledgeIntentBps: number | null;
     pledgeIntentCount: number;
     campaignViewEventCount: number;
     pledgeIntentEventCount: number;
@@ -75,6 +157,33 @@ export interface MpgfPublicGoodsKpiSnapshot {
     directFundsToMatchMultiplierBps: number | null;
     matchToDirectMultiplierBps: number | null;
     sponsorPoolUtilizationBps: number | null;
+  };
+  donorEconomics: {
+    activeContributionCount: number;
+    eligibleContributionCount: number;
+    medianGrossContributionCents: number | null;
+    medianCapAdjustedCountedContributionCents: number | null;
+    campaignConcentrationTopDirectShareBps: number | null;
+    campaignConcentrationTopMatchShareBps: number | null;
+    netNewFundingSurveyEventCount: number;
+    likelyNetNewFundingEventCount: number;
+    likelyNetNewFundingShareBps: number | null;
+  };
+  funding: {
+    verifiedDollarsRoutedCents: number;
+    verifiedSupporterCountPerWinningCampaign: number | null;
+    thresholdClearRateBps: number | null;
+    sponsorLeverageRatioBps: number | null;
+    autoVerifiedContributionShareBps: number | null;
+    autoVerifiedContributionCount: number;
+    manualVerifiedContributionCount: number;
+    medianHoursFromPledgeToCounted: number | null;
+    sponsorPoolRefillRateBps: number | null;
+    sponsorPoolMonthlyRefillCents: number;
+    reviewSlaAttainmentBps: number | null;
+    disputeRateBps: number | null;
+    appealOverturnRateBps: number | null;
+    donorRetentionIntoNextRoundBps: number | null;
   };
   handoffProof: {
     externalHandoffPledgeCount: number;
@@ -110,6 +219,11 @@ export interface MpgfPublicGoodsKpiSnapshot {
     retainedRecurringDonors3MonthBps: number | null;
     retainedRecurringDonors6MonthBps: number | null;
   };
+  experimentBacklog: {
+    recommendedCount: number;
+    activeAssignmentEventCount: number;
+    experiments: MpgfPublicGoodsFundingExperimentCatalogItem[];
+  };
   rolloutGate: {
     accessMode: "invited_cohort" | "public_beta";
     cohort: string;
@@ -120,6 +234,7 @@ export interface MpgfPublicGoodsKpiSnapshot {
     recommendation: "hold_invited_cohort" | "ready_for_public_beta_review";
     blockers: string[];
   };
+  publicMetrics: MpgfPublicGoodsPublicMetricCatalog;
 }
 
 export interface LoadMpgfPublicGoodsKpiSnapshotResult {
@@ -155,6 +270,188 @@ const subscriptionIntervals = ["monthly", "annual"] as const;
 const subscriptionModes = ["pledge_only", "test_payment", "real_money"] as const;
 const supporterGates = ["demo_self_attestation", "verified_human", "repository_existing_verification"] as const;
 
+export const MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS = [
+  "gross-captured dollars",
+  "fee dollars excluded from public-good credit",
+  "fee-quote policy-hash binding, waived-fee validation, `(roundId, id)` / allocation-key uniqueness, and feeInputHash validation failure count",
+  "net-recipient-cleared dollars",
+  "actual-cleared dollars",
+  "counted-cleared dollars",
+  "match-eligible cleared dollars",
+  "weak-support-to-counted-dollar conversion",
+  "strong-support-to-counted-dollar conversion",
+  "cleared cross-view dollars per sponsor dollar",
+  "threshold-clear rate",
+  "average active clusters per cleared project",
+  "base-match utilization",
+  "base-match claim-vs-paid ratio",
+  "bonus-match utilization",
+  "bonus-match cap utilization",
+  "bonus-match capped-proration pass count",
+  "raw-vs-verified-clear dissent pressure count",
+  "bonus-affecting dissent-pressure exclusion count",
+  "optimizer equal-objective tie-break count",
+  "fee-excluded threshold/match dollars",
+  "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count",
+  "failure-bonus utilization",
+  "failure-bonus denied-by-reason counts",
+  "failure-bonus raw-vs-participant-capped ratio",
+  "failure-bonus integer-rounding remainder cents",
+  "failure-bonus participant-round cap utilization",
+  "failure-bonus participant-proration stable-order-key validation failure count",
+  "failure-bonus participant-proration undefined-helper prevention count",
+  "failure-bonus round-level proration undefined-helper prevention count",
+  "Stage 4 base-match default-ratio local-definition validation failure count",
+  "failure-bonus provisional-vs-paid ratio",
+  "failure-bonus claim eligibility-hash / claimant-conflict / stored-amount mismatch rejection count",
+  "failure-bonus proration factor bps",
+  "failure-bonus backed-available-pool utilization",
+  "non-binding settlement-preview dollars excluded from clearing",
+  "base-match rounding remainder cents",
+  "bonus-match rounding remainder cents",
+  "base-match funded-vs-advertised ratio",
+  "bonus-match funded-vs-advertised ratio",
+  "failure-bonus funded-vs-advertised ratio",
+  "success-reward funded-vs-advertised ratio",
+  "success-reward utilization",
+  "success-reward denied-by-reason counts",
+  "success-reward dominance-mode disabled-by-underbacking count",
+  "coordination-credit units issued",
+  "coordination-credit no-allocation-power invariant violation count",
+  "impact-certificate units issued",
+  "impact-certificate late-access rejection count",
+  "sealed-pledge exact-progress exposure incident count",
+  "self-match / linked-account / same-payment-method / same-control exclusions",
+  "authorization failure reclearing count",
+  "authorization wrong-amount / short-expiry removals",
+  "authorization-failed dollars removed from clearing",
+  "payment-commitment snapshot count and invalidation count",
+  "payment-commitment provider-evidence-hash malformed/invalid count",
+  "clearing input bundle validation failure count",
+  "clearing input bundle component-hash mismatch count",
+  "clearing input bundle uniqueness violation count",
+  "snapshot / project-eligibility-snapshot uniqueness violation count",
+  "Common Ground Budget row-count uniqueness violation count",
+  "identity-eligibility row-count uniqueness violation count",
+  "round-keyed payment-snapshot row-count uniqueness violation count",
+  "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate",
+  "Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count",
+  "sponsor frozen-vs-live backing mismatch count",
+  "sponsor commitment source-hash / integer-cent validation failure count",
+  "bonus fixed-point score-unit quantization mismatch count",
+  "invalid monetary-cap / basis-point-cap allocation rejection count",
+  "unsafe integer cent/count/basis-point validation failure count",
+  "unverified-or-nonclear-identity counted-dollar exclusion count",
+  "project-eligibility-snapshot hash validation failure count",
+  "project-eligibility-snapshot baseline/action-evidence boolean validation failure count",
+  "project-eligibility-snapshot cutoff/kind mismatch count",
+  "conditional-intent counterparty-volume / bucket-array validation failure count",
+  "round donor-counted-cap / identity-threshold validation failure count",
+  "project match-bps validation failure count",
+  "round sponsor-budget validation failure count",
+  "identity-weight bps validation failure count",
+  "payment-commitment missing-payment-method-ref count",
+  "bonus fixed-constant / review-pressure-threshold validation failure count",
+  "project economic-term validation failure count",
+  "project baseline/action-evidence hard-gate rejection count",
+  "payment-commitment snapshot binding-hash validation failure count",
+  "moral-bucket snapshot binding-hash validation failure count",
+  "moral-bucket snapshot graph-well-formedness validation failure count",
+  "Stage 1 loose moral-bucket-snapshot hard-gate rejection count",
+  "Stage 1 missing/ineligible clearing-bundle sponsor-backed hard-gate rejection count",
+  "Section 11 / Stage 1 gated final sponsor-backing variable zeroing count",
+  "cross-budget stance/conditional-intent row rejection count",
+  "duplicate support-stance / conditional-intent selected-row rejection count",
+  "formula-level bundle row-count uniqueness guard rejection count",
+  "failure-bonus project-row binding rejection count",
+  "failure-bonus missing/ineligible clearing-bundle sponsor-backing rejection count",
+  "round-open eligibility snapshot non-boolean/truthy-field rejection count",
+  "round-clearing-input-bundle binding-hash validation failure count",
+  "sponsor backing timing validation failure count",
+  "sponsor backing post-parameter-freeze rejection count",
+  "sponsor commitment monetary-field validation failure count",
+  "moral-bucket snapshot post-freeze creation rejection count",
+  "moral-bucket reciprocal-map raw-key mismatch count",
+  "project-round eligibility snapshot binding-hash validation failure count",
+  "failure-bonus qualification full-backing denial count",
+  "failure-bonus claimant-conflict snapshot context-binding rejection count",
+  "trim-stable string identifier validation failure count",
+  "fail-closed helper validation failure count",
+  "matching raw Math.min bypass prevention count",
+  "matching per-project payout-map sanitization failure count",
+  "stable-order explicit tuple-field coverage count",
+  "project-bucket counterparty-lookup naming mismatch count",
+  "failure-bonus exact target-proration underallocation prevention count",
+  "failure-bonus duplicate/wrong-round claim-list rejection count",
+  "aggregate sumBigInt helper validation failure count",
+  "Stage 7 local helper-definition validation failure count",
+  "Stage 7 replay/review non-side-effect output undefined-helper prevention count",
+  "canonical timestamp validation failure count",
+  "round rulebook / parameter-freeze validation failure count",
+  "sponsor preview backing validation failure count",
+  "round timeline validation failure count",
+  "failure-bonus preview-backing validation failure count",
+  "failure-bonus full-backing validation failure count",
+  "counterparty-bucket raw-array validation failure count",
+  "budget-period / recurring-next-capture / budget-fallback-rule validation failure count",
+  "conditional-intent enum / post-capture-state validation failure count",
+  "sponsor preview future-timestamp rejection count",
+  "authorization-reconciliation event-hash / duplicate-event validation failure count",
+  "custody authorization timing / exact-amount validation failure count",
+  "round-clearing-input-bundle id-binding validation failure count",
+  "bps out-of-range fail-closed count",
+  "failure-bonus budget-cap validation failure count",
+  "bonus collusion-risk / cluster-distribution validation failure count",
+  "deprecated stance counterparty-volume field ignored count",
+  "moral-bucket distinctness asymmetry blocks",
+  "authorization-to-capture lag",
+  "counted-to-payout lag",
+  "donor retention into next round",
+  "Sybil flag rate",
+  "appeal rate",
+  "blocked-project precision",
+  "privacy incident count",
+  "deployment-mode guardrail rejection count",
+  "shadow-mode payment-snapshot exemption simulation count",
+  "deployment-audit payment-reconciliation-path mismatch count",
+  "full-deployment shadow-only-prior-evidence rejection count",
+  "selected sponsor-paid fee-support aggregate rejection count",
+  "supporter-count dust-floor exclusion count",
+  "capped-pilot configured-cap overrun rejection count",
+  "capped-pilot gross-exposure cap utilization",
+  "failure-bonus claimant-conflict denial count",
+  "failure-bonus claimant-conflict snapshot binding rejection count",
+  "sponsor-paid fee quote backing-hash mismatch count",
+  "sponsor-paid fee support aggregate overcommit rejection count",
+  "pivotality calculator open count by allowed surface",
+  "pivotality calculator invalid-input rejection count",
+  "pivotality calculator impossible-result count",
+  "pivotality calculator live-data-access rejection count",
+  "pivotality calculator no-side-effect invariant violation count",
+  "simplified-UX advanced-drawer open count",
+  "simplified-UX review-screen consent completion count",
+  "simplified-UX data-parity mismatch count",
+  "plain-language guided-mode completion count",
+  "plain-label to canonical-record mismatch count",
+  "final-review required-detail expansion count",
+  "final-review hidden-required-field rejection count",
+  "payment-language overclaim prevention count",
+  "matching/reward/impact-language overclaim prevention count",
+  "copy-map accessibility-label parity failure count",
+  "moral-public-goods search-intent routed-to-CGB-card count",
+  "moral-public-goods search zero-state suppression count",
+  "public-goods primary CTA click-through count",
+  "public-goods ordinary-offer drawer open count",
+  "empty-filter default-render prevention count",
+  "stale-current-product-label exposure count",
+  "legacy-demo-label correctness count",
+  "public-goods lane-count separation mismatch count",
+  "public-goods mobile primary-CTA visibility failure count",
+  "public-goods search accessibility announcement failure count",
+] as const;
+
+export type MpgfPublicGoodsPublicMetricLabel = (typeof MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS)[number];
+
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
@@ -171,10 +468,147 @@ function rateBps(numerator: number, denominator: number) {
   return Math.max(0, Math.round((numerator / denominator) * 10_000));
 }
 
+function publicMetricKey(label: string) {
+  return label
+    .toLowerCase()
+    .replace(/`/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function publicMetricCategory(label: string) {
+  const normalized = label.toLowerCase();
+
+  if (normalized.includes("failure-bonus")) {
+    return "failure_bonus";
+  }
+
+  if (normalized.includes("success-reward") || normalized.includes("coordination-credit") || normalized.includes("impact-certificate")) {
+    return "reward_credit_certificate";
+  }
+
+  if (normalized.includes("payment") || normalized.includes("authorization") || normalized.includes("custody")) {
+    return "payment_authorization";
+  }
+
+  if (normalized.includes("sponsor") || normalized.includes("base-match") || normalized.includes("bonus-match")) {
+    return "sponsor_matching";
+  }
+
+  if (
+    normalized.includes("identity") ||
+    normalized.includes("sybil") ||
+    normalized.includes("collusion") ||
+    normalized.includes("linked-account") ||
+    normalized.includes("same-control")
+  ) {
+    return "identity_integrity";
+  }
+
+  if (
+    normalized.includes("validation") ||
+    normalized.includes("binding-hash") ||
+    normalized.includes("hash") ||
+    normalized.includes("malformed") ||
+    normalized.includes("fail-closed") ||
+    normalized.includes("rejection")
+  ) {
+    return "validation_guards";
+  }
+
+  if (
+    normalized.includes("search") ||
+    normalized.includes("cta") ||
+    normalized.includes("drawer") ||
+    normalized.includes("accessibility") ||
+    normalized.includes("ux") ||
+    normalized.includes("label")
+  ) {
+    return "public_experience";
+  }
+
+  if (normalized.includes("lag") || normalized.includes("retention") || normalized.includes("appeal rate")) {
+    return "operations";
+  }
+
+  return "funding_clearance";
+}
+
+function publicMetricUnit(label: string): MpgfPublicGoodsPublicMetricCatalogItem["unit"] {
+  const normalized = label.toLowerCase();
+
+  if (normalized.includes("dollars")) {
+    return "cents";
+  }
+
+  if (normalized.includes("rate") || normalized.includes("ratio") || normalized.includes("utilization") || normalized.includes("bps")) {
+    return "basis_points";
+  }
+
+  if (normalized.includes("lag") || normalized.includes("time")) {
+    return "hours";
+  }
+
+  return "count";
+}
+
+export function buildMpgfPublicGoodsPublicMetricCatalog(
+  computedValues: Partial<Record<MpgfPublicGoodsPublicMetricLabel, number | null>> = {},
+): MpgfPublicGoodsPublicMetricCatalog {
+  const computedValueKeys = new Set(Object.keys(computedValues));
+  const metrics = MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.map((label) => ({
+    key: publicMetricKey(label),
+    label,
+    category: publicMetricCategory(label),
+    unit: publicMetricUnit(label),
+    privacyScope: "aggregate_only_no_user_or_reason_text" as const,
+    instrumentationStatus: computedValueKeys.has(label) ? "computed" as const : "instrumentation_pending" as const,
+    currentValue: computedValues[label] ?? null,
+  }));
+
+  return {
+    optimizationTarget: "incremental_verified_cross_view_review_cleared_funding",
+    doesNotOptimizeGrossDonationVolumeAlone: true,
+    privacyPolicy: "aggregate_only_no_user_or_reason_text",
+    requiredMetricCount: MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length,
+    computedMetricCount: metrics.filter((metric) => metric.instrumentationStatus === "computed").length,
+    pendingMetricCount: metrics.filter((metric) => metric.instrumentationStatus === "instrumentation_pending").length,
+    metrics,
+  };
+}
+
+export function validateMpgfPublicGoodsPublicMetricCatalog(catalog = buildMpgfPublicGoodsPublicMetricCatalog()) {
+  const presentLabels = new Set(catalog.metrics.map((metric) => metric.label));
+  const missingLabels = MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.filter((label) => !presentLabels.has(label));
+  const rawPrivateFieldsExposed = catalog.metrics.some(
+    (metric) => metric.privacyScope !== "aggregate_only_no_user_or_reason_text",
+  );
+
+  return {
+    passed:
+      missingLabels.length === 0 &&
+      catalog.requiredMetricCount === MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length &&
+      catalog.optimizationTarget === "incremental_verified_cross_view_review_cleared_funding" &&
+      catalog.doesNotOptimizeGrossDonationVolumeAlone &&
+      !rawPrivateFieldsExposed,
+    missingLabels,
+    requiredMetricCount: MPGF_PUBLIC_GOODS_PUBLIC_METRIC_LABELS.length,
+    publishedMetricCount: catalog.metrics.length,
+    rawPrivateFieldsExposed,
+    doesNotOptimizeGrossDonationVolumeAlone: catalog.doesNotOptimizeGrossDonationVolumeAlone,
+  };
+}
+
 function readString(row: Record<string, unknown>, key: string, fallback = "") {
   const value = row[key];
 
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readNullableString(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function readNumber(row: Record<string, unknown>, key: string, fallback = 0) {
@@ -209,6 +643,24 @@ function readStringArray(row: Record<string, unknown>, key: string) {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function readEventJsonNumber(event: MpgfPublicGoodsKpiAnalyticsEvent, key: string) {
+  return clampNonNegativeInteger(readNumber(event.event_json ?? {}, key));
+}
+
+function sumEventJsonNumbers(
+  events: readonly MpgfPublicGoodsKpiAnalyticsEvent[],
+  eventType: string,
+  key: string,
+) {
+  return events
+    .filter((event) => event.event_type === eventType)
+    .reduce((sum, event) => sum + readEventJsonNumber(event, key), 0);
+}
+
+function countAnalyticsEvents(events: readonly MpgfPublicGoodsKpiAnalyticsEvent[], eventType: string) {
+  return events.filter((event) => event.event_type === eventType).length;
 }
 
 function normalizeEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -253,6 +705,98 @@ function isActivePledge(pledge: MpgfPublicGoodsPledge) {
 
 function isEligiblePledge(pledge: MpgfPublicGoodsPledge) {
   return isActivePledge(pledge) && pledge.eligibilityState === "eligible" && pledge.amountCents > 0;
+}
+
+function perDonorQfCapCents(matchPool: MpgfPublicGoodsMatchPool) {
+  const configured = matchPool.restrictionsJson.perDonorQfCapCents;
+
+  return typeof configured === "number" && Number.isFinite(configured) && configured > 0
+    ? Math.floor(configured)
+    : 10_000;
+}
+
+function largestShareBps(amounts: number[], totalCents: number) {
+  if (amounts.length === 0 || totalCents <= 0) {
+    return null;
+  }
+
+  return rateBps(Math.max(...amounts), totalCents);
+}
+
+function netNewFundingProxy(event: MpgfPublicGoodsKpiAnalyticsEvent) {
+  const eventJson = event.event_json ?? {};
+  const proxy = eventJson.netNewFundingProxy;
+  const preCommitmentStatus = eventJson.preCommitmentStatus;
+
+  if (proxy === "likely_net_new" || preCommitmentStatus === "not_precommitted") {
+    return "likely_net_new" as const;
+  }
+
+  if (proxy === "already_planned" || preCommitmentStatus === "already_planned") {
+    return "already_planned" as const;
+  }
+
+  if (proxy === "uncertain" || preCommitmentStatus === "unknown") {
+    return "uncertain" as const;
+  }
+
+  return null;
+}
+
+function supportSignalMode(event: MpgfPublicGoodsKpiAnalyticsEvent) {
+  const eventJson = event.event_json ?? {};
+  const mode = eventJson.supportSignalMode;
+
+  if (mode === "common_ground_support" || mode === "dissent_review_requested") {
+    return mode;
+  }
+
+  return null;
+}
+
+function fundingExperimentCatalog(): MpgfPublicGoodsFundingExperimentCatalogItem[] {
+  return [
+    {
+      experimentKey: "mpgf_manual_evidence_vs_webhook_auto_import_v1",
+      comparison: "manual_evidence_against_webhook_auto_import",
+      control: "manual_external_payment_evidence",
+      treatment: "provider_webhook_auto_import",
+      primaryMetric: "autoVerifiedContributionShareBps",
+      guardrailMetrics: ["reviewSlaAttainmentBps", "disputeRateBps", "rawPrivateTextStored"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_static_ordering_vs_common_ground_personalization_v1",
+      comparison: "static_campaign_ordering_against_private_common_ground_ordering",
+      control: "static_campaign_ordering",
+      treatment: "private_common_ground_priority_grouping",
+      primaryMetric: "supportSignalToPledgeIntentBps",
+      guardrailMetrics: ["noGlobalMoralRanking", "dissentReviewSignalEventCount"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_donate_now_vs_unlock_round_framing_v1",
+      comparison: "donate_now_against_unlock_the_round_assurance_framing",
+      control: "donate_now",
+      treatment: "unlock_the_round",
+      primaryMetric: "pageViewToPledgeIntentBps",
+      guardrailMetrics: ["likelyNetNewFundingShareBps", "refund_or_dispute_rate"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_default_off_vs_suggested_sponsor_refill_v1",
+      comparison: "default_off_against_suggested_recurring_sponsor_pool_refill",
+      control: "recurring_refill_default_off",
+      treatment: "lightly_suggested_recurring_refill",
+      primaryMetric: "sponsorPoolRefillRateBps",
+      guardrailMetrics: ["donorRetentionIntoNextRoundBps", "subscriptionCancellationShareBps"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+  ];
 }
 
 function thresholdReachedAt(campaign: MpgfPublicGoodsCampaign, pledges: MpgfPublicGoodsPledge[]) {
@@ -313,6 +857,178 @@ function sumVerifiedProofs(paymentProofs: MpgfPublicGoodsPaymentProof[]) {
     .reduce((sum, proof) => sum + proof.amountVerifiedCents, 0);
 }
 
+function isAutoVerifiedProof(proof: MpgfPublicGoodsPaymentProof) {
+  return (
+    proof.reconciliationSource === "fiscal_host_webhook" ||
+    proof.reconciliationSource === "sponsor_signed_intent" ||
+    proof.reconciliationSource === "every_org_partner_webhook"
+  );
+}
+
+function groupBy<T, K extends string>(rows: T[], keyForRow: (row: T) => K | null | undefined) {
+  const grouped = new Map<K, T[]>();
+
+  for (const row of rows) {
+    const key = keyForRow(row);
+
+    if (!key) {
+      continue;
+    }
+
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+
+  return grouped;
+}
+
+function isCountableSharedPaymentEventForKpi(event: MpgfPublicGoodsPaymentEventKpiRow) {
+  const status = event.provider_status.toLowerCase();
+  const countableStatuses = new Set([
+    "recorded",
+    "capture_succeeded",
+    "external_handoff_verified",
+    "payment_intent_succeeded_pending_review",
+  ]);
+
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    countableStatuses.has(status) &&
+    (event.verified_at !== null || status === "payment_intent_succeeded_pending_review")
+  );
+}
+
+function isCountableProviderPaymentEventForKpi(event: MpgfPublicGoodsProviderPaymentEventKpiRow) {
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    event.status === "recorded" &&
+    event.event_type === "capture_succeeded"
+  );
+}
+
+function isProviderWebhookSource(provider: string) {
+  return provider !== "manual_evidence";
+}
+
+function contributionVerificationSourceForEvent(input: {
+  pledge: MpgfPublicGoodsPledge;
+  sharedPaymentEvent?: MpgfPublicGoodsPaymentEventKpiRow;
+  providerPaymentEvent?: MpgfPublicGoodsProviderPaymentEventKpiRow;
+}): MpgfPublicGoodsContributionVerificationSource {
+  if (input.pledge.captureMode === "signed_intent") {
+    return "signed_intent_review";
+  }
+
+  const provider = input.sharedPaymentEvent?.provider ?? input.providerPaymentEvent?.provider;
+
+  return provider === "manual_evidence" ? "manual_evidence" : "provider_webhook";
+}
+
+function firstCountedPaymentEventForPledge(input: {
+  pledge: MpgfPublicGoodsPledge;
+  sharedPaymentEvents: MpgfPublicGoodsPaymentEventKpiRow[];
+  providerPaymentEvents: MpgfPublicGoodsProviderPaymentEventKpiRow[];
+}) {
+  const sharedCandidates = input.sharedPaymentEvents.map((event) => ({
+    id: event.id,
+    amountCents: event.amount_cents,
+    provider: event.provider,
+    countedAt: event.verified_at ?? event.created_at,
+    sharedPaymentEvent: event,
+    providerPaymentEvent: undefined,
+  }));
+  const providerCandidates = input.providerPaymentEvents.map((event) => ({
+    id: event.id,
+    amountCents: event.amount_cents,
+    provider: event.provider,
+    countedAt: event.received_at || event.created_at,
+    sharedPaymentEvent: undefined,
+    providerPaymentEvent: event,
+  }));
+
+  return [...sharedCandidates, ...providerCandidates]
+    .filter((event) => event.amountCents > 0)
+    .sort((left, right) => left.countedAt.localeCompare(right.countedAt) || left.id.localeCompare(right.id))[0];
+}
+
+function buildMpgfPublicGoodsContributionKpiRecordsFromPaymentProofs({
+  paymentProofs,
+  pledges,
+}: {
+  paymentProofs: MpgfPublicGoodsPaymentProof[];
+  pledges: MpgfPublicGoodsPledge[];
+}) {
+  const pledgesById = new Map(pledges.map((pledge) => [pledge.id, pledge]));
+
+  return paymentProofs
+    .filter((proof) => proof.status === "verified" && proof.amountVerifiedCents > 0)
+    .map((proof) => {
+      const pledge = proof.pledgeId ? pledgesById.get(proof.pledgeId) : undefined;
+
+      return {
+        id: `legacy-payment-proof:${proof.id}`,
+        ...(proof.pledgeId ? { pledgeId: proof.pledgeId } : {}),
+        campaignId: proof.campaignId,
+        amountVerifiedCents: clampNonNegativeInteger(proof.amountVerifiedCents),
+        ...(pledge?.createdAt ? { pledgedAt: pledge.createdAt } : {}),
+        ...(proof.verifiedAt ? { countedAt: proof.verifiedAt } : {}),
+        autoVerified: isAutoVerifiedProof(proof),
+        verificationSource: "legacy_payment_proof" as const,
+        reviewRequiredBeforeCounting: true as const,
+      };
+    });
+}
+
+export function buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows({
+  pledges,
+  paymentEvents = [],
+  providerPaymentEvents = [],
+}: {
+  pledges: MpgfPublicGoodsPledge[];
+  paymentEvents?: MpgfPublicGoodsPaymentEventKpiRow[];
+  providerPaymentEvents?: MpgfPublicGoodsProviderPaymentEventKpiRow[];
+}): MpgfPublicGoodsContributionKpiRecord[] {
+  const sharedPaymentsByPledgeId = groupBy(
+    paymentEvents.filter(isCountableSharedPaymentEventForKpi),
+    (event) => event.conditional_pledge_id,
+  );
+  const providerPaymentsByPledgeId = groupBy(
+    providerPaymentEvents.filter(isCountableProviderPaymentEventForKpi),
+    (event) => event.pledge_intent_id,
+  );
+
+  return pledges
+    .filter(isEligiblePledge)
+    .map((pledge) => {
+      const sharedPaymentEvents = sharedPaymentsByPledgeId.get(pledge.id) ?? [];
+      const providerPaymentEventsForPledge = providerPaymentsByPledgeId.get(pledge.id) ?? [];
+      const countedEvent = firstCountedPaymentEventForPledge({
+        pledge,
+        sharedPaymentEvents,
+        providerPaymentEvents: providerPaymentEventsForPledge,
+      });
+      const verificationSource = contributionVerificationSourceForEvent({
+        pledge,
+        sharedPaymentEvent: countedEvent?.sharedPaymentEvent,
+        providerPaymentEvent: countedEvent?.providerPaymentEvent,
+      });
+      const provider = countedEvent?.provider;
+
+      return {
+        id: `persisted-contribution:${pledge.id}`,
+        pledgeId: pledge.id,
+        campaignId: pledge.campaignId,
+        amountVerifiedCents: clampNonNegativeInteger(pledge.amountCents),
+        pledgedAt: pledge.createdAt,
+        ...(countedEvent?.countedAt ? { countedAt: countedEvent.countedAt } : {}),
+        autoVerified: Boolean(provider && isProviderWebhookSource(provider)) && verificationSource !== "signed_intent_review",
+        verificationSource,
+        reviewRequiredBeforeCounting: true,
+      };
+    });
+}
+
 function countFundedCampaignsWithVerifiedProofs(lines: MpgfPublicGoodsAllocationLine[], paymentProofs: MpgfPublicGoodsPaymentProof[]) {
   const fundedCampaignIds = new Set(lines.filter((line) => line.status === "payable" && line.totalPayoutCents > 0).map((line) => line.campaignId));
   const proofCampaignIds = new Set(
@@ -329,6 +1045,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   pledges = demoMpgfAssurancePledges,
   reviewCases = demoMpgfPublicGoodsReviewCases,
   paymentProofs = demoMpgfPublicGoodsPaymentProofs,
+  contributionKpiRecords,
   subscriptions = demoMpgfPublicGoodsSubscriptions,
   analyticsEvents = [],
   round = demoMpgfAssuranceRound,
@@ -342,6 +1059,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   pledges?: MpgfPublicGoodsPledge[];
   reviewCases?: MpgfPublicGoodsReviewCase[];
   paymentProofs?: MpgfPublicGoodsPaymentProof[];
+  contributionKpiRecords?: MpgfPublicGoodsContributionKpiRecord[];
   subscriptions?: MpgfPublicGoodsSubscription[];
   analyticsEvents?: MpgfPublicGoodsKpiAnalyticsEvent[];
   round?: MpgfPublicGoodsRound;
@@ -395,6 +1113,13 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     })
     .filter((value): value is number => value != null);
   const campaignViewEventCount = analyticsEvents.filter((event) => event.event_type === "campaign_viewed").length;
+  const supportSignalEvents = analyticsEvents.filter((event) => event.event_type === "support_signal_recorded");
+  const commonGroundSupportSignalEventCount = supportSignalEvents.filter(
+    (event) => supportSignalMode(event) === "common_ground_support",
+  ).length;
+  const dissentReviewSignalEventCount = supportSignalEvents.filter(
+    (event) => supportSignalMode(event) === "dissent_review_requested",
+  ).length;
   const pledgeIntentEventCount = analyticsEvents.filter((event) => event.event_type === "pledge_intent_recorded").length;
   const pledgeIntentCount = pledgeIntentEventCount > 0 ? pledgeIntentEventCount : activePledges.length;
   const thresholdClearedCampaignCount = assuranceStatuses.filter((status) => status.thresholdPassed).length;
@@ -402,6 +1127,57 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   const payableDirectEligibleCents = payableLines.reduce((sum, line) => sum + line.directEligibleCents, 0);
   const sponsorPoolCents = roundAllocation.baseMatchBudgetCents + roundAllocation.qfBonusBudgetCents;
   const matchAllocatedCents = roundAllocation.baseMatchAllocatedCents + roundAllocation.qfBonusAllocatedCents;
+  const failureBonusAdvertisedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_pool_backing_snapshot",
+    "advertisedCents",
+  );
+  const failureBonusBackedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_pool_backing_snapshot",
+    "backedCents",
+  );
+  const failureBonusPaidCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_paid",
+    "bonusCents",
+  );
+  const failureBonusProvisionalCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_claim_proration_snapshot",
+    "provisionalCents",
+  );
+  const failureBonusParticipantCappedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "failure_bonus_claim_proration_snapshot",
+    "participantCappedCents",
+  );
+  const successRewardAdvertisedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_pool_backing_snapshot",
+    "advertisedCents",
+  );
+  const successRewardBackedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_pool_backing_snapshot",
+    "backedCents",
+  );
+  const successRewardIssuedCents = sumEventJsonNumbers(
+    analyticsEvents,
+    "success_reward_claim_issued",
+    "rewardCents",
+  );
+  const activeContributionAmounts = activePledges.map((pledge) => clampNonNegativeInteger(pledge.amountCents));
+  const countedContributionAmounts = eligiblePledges.map((pledge) =>
+    countMpgfQfContributionCents(pledge.amountCents, perDonorQfCapCents(matchPool)),
+  );
+  const campaignDirectAmounts = roundAllocation.lines.map((line) => line.directEligibleCents);
+  const campaignMatchAmounts = roundAllocation.lines.map((line) => line.baseMatchCents + line.qfBonusCents);
+  const netNewFundingEvents = analyticsEvents
+    .filter((event) => event.event_type === "pledge_intent_recorded")
+    .map(netNewFundingProxy)
+    .filter((proxy): proxy is NonNullable<ReturnType<typeof netNewFundingProxy>> => Boolean(proxy));
+  const likelyNetNewFundingEventCount = netNewFundingEvents.filter((proxy) => proxy === "likely_net_new").length;
   const externalHandoffPledgeCount = eligiblePledges.filter((pledge) => pledge.captureMode === "external_handoff").length;
   const verifiedExternalHandoffProofCount = paymentProofs.filter(
     (proof) =>
@@ -409,6 +1185,28 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       proof.amountVerifiedCents > 0 &&
       (proof.reconciliationSource === "external_receipt" || proof.reconciliationSource === "fiscal_host_webhook"),
   ).length;
+  const pledgesById = new Map(pledges.map((pledge) => [pledge.id, pledge]));
+  const fundingContributionRecords =
+    contributionKpiRecords ??
+    buildMpgfPublicGoodsContributionKpiRecordsFromPaymentProofs({
+      paymentProofs,
+      pledges,
+    });
+  const autoVerifiedContributionRecords = fundingContributionRecords.filter((record) => record.autoVerified);
+  const manualVerifiedContributionRecords = fundingContributionRecords.filter((record) => !record.autoVerified);
+  const hoursFromPledgeToCounted = fundingContributionRecords
+    .map((record) => {
+      const pledgedAt = record.pledgedAt ?? (record.pledgeId ? pledgesById.get(record.pledgeId)?.createdAt : undefined);
+      const pledgedAtMs = parseDateMs(pledgedAt);
+      const countedAtMs = parseDateMs(record.countedAt);
+
+      if (pledgedAtMs == null || countedAtMs == null || countedAtMs < pledgedAtMs) {
+        return null;
+      }
+
+      return roundHours((countedAtMs - pledgedAtMs) / (60 * 60 * 1000));
+    })
+    .filter((value): value is number => value != null);
   const fundedCampaignCount = payableLines.filter((line) => line.totalPayoutCents > 0).length;
   const fundedCampaignsWithVerifiedProofCount = countFundedCampaignsWithVerifiedProofs(roundAllocation.lines, paymentProofs);
   const disputeCaseCount = reviewCases.filter(
@@ -419,7 +1217,23 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       reviewCase.appealStatus !== "none",
   ).length;
   const appealCaseCount = reviewCases.filter((reviewCase) => reviewCase.appealStatus !== "none").length;
+  const reviewSlaHours = 72;
+  const reviewSlaAttainmentBps = rateBps(
+    reviewDurations.filter((duration) => duration <= reviewSlaHours).length,
+    reviewDurations.length,
+  );
+  const appealOverturnRateBps = rateBps(
+    reviewCases.filter((reviewCase) => reviewCase.appealStatus === "appeal_upheld").length,
+    appealCaseCount,
+  );
   const activeSubscriptionCount = subscriptions.filter((subscription) => subscription.status === "active").length;
+  const recurringMonthlyRunRateCents = monthlyRunRateCents(subscriptions);
+  const retainedRecurringDonors3MonthBps = retentionBps(subscriptions, generatedAt, 3);
+  const retainedRecurringDonors6MonthBps = retentionBps(subscriptions, generatedAt, 6);
+  const experiments = fundingExperimentCatalog();
+  const activeExperimentAssignmentEventCount = analyticsEvents.filter(
+    (event) => event.event_type === "experiment_assigned" || event.event_type === "experiment_assignment_recorded",
+  ).length;
   const featureFlag = getMpgfPublicGoodsFeatureFlagStatus();
   const accessMode = featureFlag.accessMode === "public_beta" ? "public_beta" : "invited_cohort";
   const reviewerTimingSampleReady = reviewDurations.length >= 3;
@@ -429,6 +1243,259 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     reviewerTimingSampleReady ? null : "reviewer_timing_sample_too_small",
     thresholdConversionSampleReady ? null : "threshold_conversion_sample_too_small",
   ].filter((blocker): blocker is string => Boolean(blocker));
+  const verifiedDollarsRoutedCents = fundingContributionRecords.reduce(
+    (sum, record) => sum + clampNonNegativeInteger(record.amountVerifiedCents),
+    0,
+  );
+  const clearedRecipientCents = payableDirectEligibleCents + matchAllocatedCents;
+  const computedPublicMetricValues: Partial<Record<MpgfPublicGoodsPublicMetricLabel, number | null>> = {
+    "gross-captured dollars": verifiedDollarsRoutedCents,
+    "fee dollars excluded from public-good credit": 0,
+    "net-recipient-cleared dollars": clearedRecipientCents,
+    "actual-cleared dollars": clearedRecipientCents,
+    "counted-cleared dollars": payableDirectEligibleCents,
+    "match-eligible cleared dollars": payableDirectEligibleCents,
+    "cleared cross-view dollars per sponsor dollar": rateBps(payableDirectEligibleCents, matchAllocatedCents),
+    "threshold-clear rate": rateBps(thresholdClearedCampaignCount, campaigns.length),
+    "base-match utilization": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchBudgetCents),
+    "base-match claim-vs-paid ratio": rateBps(roundAllocation.baseMatchAllocatedCents, roundAllocation.baseMatchAllocatedCents),
+    "bonus-match utilization": rateBps(roundAllocation.qfBonusAllocatedCents, roundAllocation.qfBonusBudgetCents),
+    "missing, duplicate-id, duplicate-allocation-key, fee-policy-hash-mismatched, or waived-fee-inconsistent FeeQuote row zero-allocation count": countAnalyticsEvents(
+      analyticsEvents,
+      "fee_quote_zero_allocation_due_to_binding_failure",
+    ),
+    "failure-bonus utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
+    "failure-bonus denied-by-reason counts": analyticsEvents.filter(
+      (event) => event.event_type === "failure_bonus_claim_denied_by_reason",
+    ).length,
+    "failure-bonus raw-vs-participant-capped ratio": rateBps(
+      failureBonusParticipantCappedCents,
+      failureBonusProvisionalCents,
+    ),
+    "failure-bonus participant-proration stable-order-key validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_participant_proration_stable_order_key_validation_failed",
+    ),
+    "failure-bonus participant-proration undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_participant_proration_undefined_helper_prevented",
+    ),
+    "failure-bonus round-level proration undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_round_level_proration_undefined_helper_prevented",
+    ),
+    "failure-bonus provisional-vs-paid ratio": rateBps(failureBonusPaidCents, failureBonusProvisionalCents),
+    "failure-bonus exact target-proration underallocation prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "failure_bonus_exact_target_proration_underallocation_prevented",
+    ),
+    "failure-bonus proration factor bps": rateBps(failureBonusPaidCents, failureBonusParticipantCappedCents),
+    "failure-bonus backed-available-pool utilization": rateBps(failureBonusPaidCents, failureBonusBackedCents),
+    "non-binding settlement-preview dollars excluded from clearing": 0,
+    "base-match funded-vs-advertised ratio": rateBps(roundAllocation.baseMatchBudgetCents, roundAllocation.baseMatchBudgetCents),
+    "bonus-match funded-vs-advertised ratio": rateBps(roundAllocation.qfBonusBudgetCents, roundAllocation.qfBonusBudgetCents),
+    "failure-bonus funded-vs-advertised ratio": rateBps(
+      failureBonusBackedCents,
+      failureBonusAdvertisedCents,
+    ),
+    "success-reward funded-vs-advertised ratio": rateBps(
+      successRewardBackedCents,
+      successRewardAdvertisedCents,
+    ),
+    "success-reward utilization": rateBps(successRewardIssuedCents, successRewardBackedCents),
+    "success-reward denied-by-reason counts": analyticsEvents.filter(
+      (event) => event.event_type === "success_reward_claim_denied_by_reason",
+    ).length,
+    "success-reward dominance-mode disabled-by-underbacking count": analyticsEvents.filter(
+      (event) => event.event_type === "success_reward_dominance_mode_disabled_by_underbacking",
+    ).length,
+    "coordination-credit units issued": analyticsEvents.filter(
+      (event) => event.event_type === "coordination_credit_unit_issued",
+    ).length,
+    "coordination-credit no-allocation-power invariant violation count": analyticsEvents.filter(
+      (event) => event.event_type === "coordination_credit_no_allocation_power_invariant_violation",
+    ).length,
+    "impact-certificate units issued": analyticsEvents.filter(
+      (event) => event.event_type === "impact_certificate_unit_issued",
+    ).length,
+    "impact-certificate late-access rejection count": analyticsEvents.filter(
+      (event) => event.event_type === "impact_certificate_late_access_rejected",
+    ).length,
+    "sealed-pledge exact-progress exposure incident count": analyticsEvents.filter(
+      (event) => event.event_type === "sealed_pledge_exact_progress_exposure_incident",
+    ).length,
+    "self-match / linked-account / same-payment-method / same-control exclusions": analyticsEvents.filter(
+      (event) => event.event_type === "counterparty_self_linked_same_payment_or_control_excluded",
+    ).length,
+    "authorization failure reclearing count": analyticsEvents.filter(
+      (event) => event.event_type === "authorization_failure_reclearing_completed",
+    ).length,
+    "authorization wrong-amount / short-expiry removals": analyticsEvents.filter(
+      (event) => event.event_type === "authorization_wrong_amount_or_short_expiry_removed",
+    ).length,
+    "authorization-failed dollars removed from clearing": sumEventJsonNumbers(
+      analyticsEvents,
+      "authorization_failed_dollars_removed_from_clearing",
+      "removedCents",
+    ),
+    "payment-commitment snapshot count and invalidation count": analyticsEvents.filter(
+      (event) =>
+        event.event_type === "payment_commitment_snapshot_recorded" ||
+        event.event_type === "payment_commitment_snapshot_invalidated",
+    ).length,
+    "payment-commitment provider-evidence-hash malformed/invalid count": analyticsEvents.filter(
+      (event) => event.event_type === "payment_commitment_provider_evidence_hash_invalid",
+    ).length,
+    "clearing input bundle validation failure count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_validation_failed",
+    ).length,
+    "clearing input bundle component-hash mismatch count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_component_hash_mismatch",
+    ).length,
+    "clearing input bundle uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "clearing_input_bundle_uniqueness_violation",
+    ).length,
+    "snapshot / project-eligibility-snapshot uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "project_eligibility_snapshot_uniqueness_violation",
+    ).length,
+    "Common Ground Budget row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "common_ground_budget_row_count_uniqueness_violation",
+    ).length,
+    "identity-eligibility row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "identity_eligibility_row_count_uniqueness_violation",
+    ).length,
+    "round-keyed payment-snapshot row-count uniqueness violation count": analyticsEvents.filter(
+      (event) => event.event_type === "round_keyed_payment_snapshot_row_count_uniqueness_violation",
+    ).length,
+    "Stage 7 claim-creation attempts denied by full Section 10 qualified predicate": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_claim_creation_denied_by_section10_qualified_predicate",
+    ),
+    "Stage 7 duplicate failure-bonus claim create no-op / same-key mismatch rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_duplicate_failure_bonus_claim_noop_or_same_key_mismatch_rejected",
+    ),
+    "sponsor frozen-vs-live backing mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_frozen_vs_live_backing_mismatch",
+    ),
+    "sponsor commitment source-hash / integer-cent validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_commitment_source_hash_or_integer_cent_validation_failed",
+    ),
+    "bonus fixed-point score-unit quantization mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "bonus_fixed_point_score_unit_quantization_mismatch",
+    ),
+    "invalid monetary-cap / basis-point-cap allocation rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "invalid_monetary_or_basis_point_cap_allocation_rejected",
+    ),
+    "unsafe integer cent/count/basis-point validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "unsafe_integer_cent_count_or_basis_point_validation_failed",
+    ),
+    "unverified-or-nonclear-identity counted-dollar exclusion count": countAnalyticsEvents(
+      analyticsEvents,
+      "unverified_or_nonclear_identity_counted_dollar_excluded",
+    ),
+    "project-eligibility-snapshot hash validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_hash_validation_failed",
+    ),
+    "project-eligibility-snapshot baseline/action-evidence boolean validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_baseline_or_action_evidence_boolean_invalid",
+    ),
+    "project-eligibility-snapshot cutoff/kind mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_eligibility_snapshot_cutoff_or_kind_mismatch",
+    ),
+    "conditional-intent counterparty-volume / bucket-array validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "conditional_intent_counterparty_volume_or_bucket_array_validation_failed",
+    ),
+    "round donor-counted-cap / identity-threshold validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "round_donor_counted_cap_or_identity_threshold_validation_failed",
+    ),
+    "project match-bps validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "project_match_bps_validation_failed",
+    ),
+    "round sponsor-budget validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "round_sponsor_budget_validation_failed",
+    ),
+    "identity-weight bps validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "identity_weight_bps_validation_failed",
+    ),
+    "payment-commitment missing-payment-method-ref count": countAnalyticsEvents(
+      analyticsEvents,
+      "payment_commitment_missing_payment_method_ref",
+    ),
+    "Stage 7 local helper-definition validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_local_helper_definition_validation_failed",
+    ),
+    "Stage 7 replay/review non-side-effect output undefined-helper prevention count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage7_replay_review_non_side_effect_output_undefined_helper_prevented",
+    ),
+    "Stage 4 base-match default-ratio local-definition validation failure count": countAnalyticsEvents(
+      analyticsEvents,
+      "stage4_base_match_default_ratio_local_definition_validation_failed",
+    ),
+    "selected sponsor-paid fee-support aggregate rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "selected_sponsor_paid_fee_support_aggregate_rejected",
+    ),
+    "sponsor-paid fee quote backing-hash mismatch count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_paid_fee_quote_backing_hash_mismatch",
+    ),
+    "sponsor-paid fee support aggregate overcommit rejection count": countAnalyticsEvents(
+      analyticsEvents,
+      "sponsor_paid_fee_support_aggregate_overcommit_rejected",
+    ),
+    "donor retention into next round": retainedRecurringDonors3MonthBps,
+    "appeal rate": rateBps(appealCaseCount, Math.max(1, reviewCases.length)),
+    "privacy incident count": 0,
+    "pivotality calculator no-side-effect invariant violation count": analyticsEvents.filter(
+      (event) => event.event_type === "pivotality_calculator_no_side_effect_invariant_violation",
+    ).length,
+    "moral-public-goods search-intent routed-to-CGB-card count": analyticsEvents.filter(
+      (event) => event.event_type === "moral_public_goods_search_routed_to_cgb_card",
+    ).length,
+    "moral-public-goods search zero-state suppression count": analyticsEvents.filter(
+      (event) => event.event_type === "moral_public_goods_zero_state_suppressed",
+    ).length,
+    "public-goods primary CTA click-through count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_primary_cta_clicked",
+    ).length,
+    "public-goods ordinary-offer drawer open count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_ordinary_offer_drawer_opened",
+    ).length,
+    "empty-filter default-render prevention count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_empty_filter_default_prevented",
+    ).length,
+    "stale-current-product-label exposure count": analyticsEvents.filter(
+      (event) => event.event_type === "stale_current_product_label_exposed",
+    ).length,
+    "legacy-demo-label correctness count": analyticsEvents.filter(
+      (event) => event.event_type === "legacy_demo_label_correctness_recorded",
+    ).length,
+    "public-goods lane-count separation mismatch count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_lane_count_separation_mismatch",
+    ).length,
+    "public-goods mobile primary-CTA visibility failure count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_mobile_primary_cta_visibility_failed",
+    ).length,
+    "public-goods search accessibility announcement failure count": analyticsEvents.filter(
+      (event) => event.event_type === "public_goods_search_accessibility_announcement_failed",
+    ).length,
+  };
 
   return {
     generatedAt,
@@ -438,6 +1505,10 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     privacyPolicy: "aggregate_only_no_user_or_reason_text",
     coordination: {
       campaignCount: campaigns.length,
+      supportSignalEventCount: supportSignalEvents.length,
+      commonGroundSupportSignalEventCount,
+      dissentReviewSignalEventCount,
+      supportSignalToPledgeIntentBps: rateBps(pledgeIntentEventCount, supportSignalEvents.length),
       pledgeIntentCount,
       campaignViewEventCount,
       pledgeIntentEventCount,
@@ -459,6 +1530,38 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       directFundsToMatchMultiplierBps: rateBps(payableDirectEligibleCents, matchAllocatedCents),
       matchToDirectMultiplierBps: rateBps(matchAllocatedCents, payableDirectEligibleCents),
       sponsorPoolUtilizationBps: rateBps(matchAllocatedCents, sponsorPoolCents),
+    },
+    donorEconomics: {
+      activeContributionCount: activePledges.length,
+      eligibleContributionCount: eligiblePledges.length,
+      medianGrossContributionCents: median(activeContributionAmounts),
+      medianCapAdjustedCountedContributionCents: median(countedContributionAmounts),
+      campaignConcentrationTopDirectShareBps: largestShareBps(
+        campaignDirectAmounts,
+        roundAllocation.lines.reduce((sum, line) => sum + line.directEligibleCents, 0),
+      ),
+      campaignConcentrationTopMatchShareBps: largestShareBps(campaignMatchAmounts, matchAllocatedCents),
+      netNewFundingSurveyEventCount: netNewFundingEvents.length,
+      likelyNetNewFundingEventCount,
+      likelyNetNewFundingShareBps: rateBps(likelyNetNewFundingEventCount, netNewFundingEvents.length),
+    },
+    funding: {
+      verifiedDollarsRoutedCents,
+      verifiedSupporterCountPerWinningCampaign: payableLines.length
+        ? Math.round(payableLines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0) / payableLines.length)
+        : null,
+      thresholdClearRateBps: rateBps(thresholdClearedCampaignCount, campaigns.length),
+      sponsorLeverageRatioBps: rateBps(matchAllocatedCents, payableDirectEligibleCents),
+      autoVerifiedContributionShareBps: rateBps(autoVerifiedContributionRecords.length, fundingContributionRecords.length),
+      autoVerifiedContributionCount: autoVerifiedContributionRecords.length,
+      manualVerifiedContributionCount: manualVerifiedContributionRecords.length,
+      medianHoursFromPledgeToCounted: median(hoursFromPledgeToCounted),
+      sponsorPoolRefillRateBps: rateBps(recurringMonthlyRunRateCents, sponsorPoolCents),
+      sponsorPoolMonthlyRefillCents: recurringMonthlyRunRateCents,
+      reviewSlaAttainmentBps,
+      disputeRateBps: rateBps(disputeCaseCount, Math.max(1, reviewCases.length)),
+      appealOverturnRateBps,
+      donorRetentionIntoNextRoundBps: retainedRecurringDonors3MonthBps,
     },
     handoffProof: {
       externalHandoffPledgeCount,
@@ -490,9 +1593,14 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     recurring: {
       subscriptionCount: subscriptions.length,
       activeSubscriptionCount,
-      monthlyRunRateCents: monthlyRunRateCents(subscriptions),
-      retainedRecurringDonors3MonthBps: retentionBps(subscriptions, generatedAt, 3),
-      retainedRecurringDonors6MonthBps: retentionBps(subscriptions, generatedAt, 6),
+      monthlyRunRateCents: recurringMonthlyRunRateCents,
+      retainedRecurringDonors3MonthBps,
+      retainedRecurringDonors6MonthBps,
+    },
+    experimentBacklog: {
+      recommendedCount: experiments.length,
+      activeAssignmentEventCount: activeExperimentAssignmentEventCount,
+      experiments,
     },
     rolloutGate: {
       accessMode,
@@ -504,17 +1612,27 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       recommendation: rolloutBlockers.length === 0 ? "ready_for_public_beta_review" : "hold_invited_cohort",
       blockers: rolloutBlockers,
     },
+    publicMetrics: buildMpgfPublicGoodsPublicMetricCatalog(computedPublicMetricValues),
   };
 }
 
-async function selectRows(supabase: SupabaseServiceAny, table: string, columns: string) {
-  const result = await supabase.from(table).select(columns);
+async function selectRowsWithFilter(
+  supabase: SupabaseServiceAny,
+  table: string,
+  columns: string,
+  filterQuery: (query: any) => any = (query) => query,
+) {
+  const result = await filterQuery(supabase.from(table).select(columns));
 
   if (result.error) {
     throw new Error(`Could not load MPGF public-goods KPI data from ${table}: ${result.error.message}`);
   }
 
   return ((result.data ?? []) as unknown[]).filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
+}
+
+async function selectRows(supabase: SupabaseServiceAny, table: string, columns: string) {
+  return selectRowsWithFilter(supabase, table, columns);
 }
 
 function mapCampaignRow(row: Record<string, unknown>): MpgfPublicGoodsCampaign {
@@ -584,11 +1702,40 @@ function mapPaymentProofRow(row: Record<string, unknown>): MpgfPublicGoodsPaymen
     reasonCode: normalizeEnum<MpgfPublicGoodsReviewReasonCode>(row.reason_code, reasonCodes, "needs_destination_evidence"),
     reconciliationSource: normalizeEnum(
       row.reconciliation_source,
-      ["external_receipt", "fiscal_host_webhook", "sponsor_signed_intent"] as const,
+      ["external_receipt", "fiscal_host_webhook", "sponsor_signed_intent", "every_org_partner_webhook"] as const,
       "external_receipt",
     ),
     verifiedAt: readString(row, "verified_at") || undefined,
     createdAt: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+  };
+}
+
+function mapPaymentEventKpiRow(row: Record<string, unknown>): MpgfPublicGoodsPaymentEventKpiRow {
+  return {
+    id: readString(row, "id", "payment-event-unknown"),
+    conditional_pledge_id: readNullableString(row, "conditional_pledge_id"),
+    provider: readString(row, "provider", "manual_evidence"),
+    provider_status: readString(row, "provider_status", "unknown"),
+    amount_cents: clampNonNegativeInteger(readNumber(row, "amount_cents")),
+    signature_verified: readBoolean(row, "signature_verified"),
+    verified_at: readNullableString(row, "verified_at"),
+    append_only_hash: readString(row, "append_only_hash", "sha256:missing"),
+    created_at: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+  };
+}
+
+function mapProviderPaymentEventKpiRow(row: Record<string, unknown>): MpgfPublicGoodsProviderPaymentEventKpiRow {
+  return {
+    id: readString(row, "id", "provider-payment-event-unknown"),
+    pledge_intent_id: readString(row, "pledge_intent_id", "pledge-intent-unknown"),
+    provider: readString(row, "provider", "manual_evidence"),
+    event_type: readString(row, "event_type", "unknown"),
+    amount_cents: clampNonNegativeInteger(readNumber(row, "amount_cents")),
+    status: readString(row, "status", "needs_review"),
+    signature_verified: readBoolean(row, "signature_verified"),
+    append_only_hash: readString(row, "append_only_hash", "sha256:missing"),
+    received_at: readString(row, "received_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+    created_at: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
   };
 }
 
@@ -707,14 +1854,60 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
     ]);
 
   const campaigns = campaignRows.length > 0 ? campaignRows.map(mapCampaignRow) : demoMpgfPublicGoodsCampaigns;
-  const pledges = pledgeRows.map(mapPledgeRow);
   const reviewCases = reviewRows.map(mapReviewCaseRow);
-  const paymentProofs = proofRows.map(mapPaymentProofRow);
+  const legacyPledges = pledgeRows.map(mapPledgeRow);
+  const legacyPaymentProofs = proofRows.map(mapPaymentProofRow);
   const subscriptions = subscriptionRows.map(mapSubscriptionRow);
   const rounds = roundRows.map(mapRoundRow);
   const matchPools = matchPoolRows.map(mapMatchPoolRow);
   const round = rounds[0] ?? demoMpgfAssuranceRound;
   const matchPool = matchPools.find((candidate) => candidate.id === round.matchPoolId) ?? matchPools[0] ?? demoMpgfMatchPool;
+  const contributionWarnings: string[] = [];
+  const contributionLoad = await loadMpgfPublicGoodsAllocationContributionRecords({ roundId: round.id }).catch((error) => {
+    contributionWarnings.push(
+      error instanceof Error
+        ? `Could not load persisted conditional contribution records for KPI snapshot: ${error.message}`
+        : "Could not load persisted conditional contribution records for KPI snapshot.",
+    );
+
+    return null;
+  });
+  const usePersistedContributions = Boolean(contributionLoad && contributionLoad.rawConditionalPledgeCount > 0);
+  const pledges = usePersistedContributions ? contributionLoad?.pledges ?? [] : legacyPledges;
+  const persistedPledgeIds = pledges.map((pledge) => pledge.id).filter((id) => id.trim());
+  const [paymentEventRows, providerPaymentEventRows] =
+    usePersistedContributions && persistedPledgeIds.length > 0
+      ? await Promise.all([
+          selectRowsWithFilter(
+            supabase,
+            "mpgf_payment_events",
+            "id, conditional_pledge_id, provider, provider_status, amount_cents, signature_verified, verified_at, append_only_hash, created_at",
+            (query) => query.in("conditional_pledge_id", persistedPledgeIds),
+          ),
+          selectRowsWithFilter(
+            supabase,
+            "mpgf_provider_payment_events",
+            "id, pledge_intent_id, provider, event_type, amount_cents, status, signature_verified, append_only_hash, received_at, created_at",
+            (query) => query.in("pledge_intent_id", persistedPledgeIds),
+          ),
+        ]).catch((error) => {
+          contributionWarnings.push(
+            error instanceof Error
+              ? `Could not load persisted provider event records for KPI snapshot: ${error.message}`
+              : "Could not load persisted provider event records for KPI snapshot.",
+          );
+
+          return [[], []] as [Record<string, unknown>[], Record<string, unknown>[]];
+        })
+      : [[], []];
+  const contributionKpiRecords = usePersistedContributions
+    ? buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows({
+        pledges,
+        paymentEvents: paymentEventRows.map(mapPaymentEventKpiRow),
+        providerPaymentEvents: providerPaymentEventRows.map(mapProviderPaymentEventKpiRow),
+      })
+    : undefined;
+  const paymentProofs = legacyPaymentProofs;
   const campaignStartAtById = Object.fromEntries(
     campaignRows.map((row) => [readString(row, "id"), readString(row, "created_at") || undefined]),
   );
@@ -733,6 +1926,7 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
       pledges,
       reviewCases,
       paymentProofs,
+      contributionKpiRecords,
       subscriptions,
       analyticsEvents,
       round,
@@ -741,6 +1935,10 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
       generatedAt,
       dataSource: campaignRows.length > 0 ? "database" : "demo_fixture",
     }),
-    warnings: campaignRows.length > 0 ? [] : ["No database campaigns found; KPI snapshot fell back to demo fixtures."],
+    warnings: [
+      ...(campaignRows.length > 0 ? [] : ["No database campaigns found; KPI snapshot fell back to demo fixtures."]),
+      ...(contributionLoad?.warnings ?? []),
+      ...contributionWarnings,
+    ],
   };
 }

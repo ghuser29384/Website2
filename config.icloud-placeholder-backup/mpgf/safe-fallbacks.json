@@ -1,0 +1,12 @@
+{
+  "version": "mpgf-safe-fallbacks-v1",
+  "carryoverOnlyEmptyRegistry": false,
+  "fallbacks": [
+    {
+      "id": "carryover-next-cycle",
+      "status": "active",
+      "priorityBps": 10000,
+      "description": "Carry non-real-money demo budget forward if allocation cannot be certified."
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
+import { buildBackgroundIntentClaims } from "@/lib/background-intent-claims";
+import { getBackgroundSourceRetentionExpiresAt } from "@/lib/background-opportunity-briefs";
+import {
+  buildWishProfileImportFromBackgroundPackage,
+  isBackgroundProfilePackageV1,
+} from "@/lib/background-profile-package";
 import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
@@ -55,6 +61,10 @@ function jsonResponse(
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export async function POST(request: Request) {
   const rateLimit = takeMoralTradeApiRateLimitSlot(request, "profile_portability");
 
@@ -96,15 +106,16 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Authentication required." }, 401);
   }
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await request.json().catch(() => null);
 
-  if (!body) {
+  if (!isRecord(body)) {
     return jsonResponse({ error: "Invalid JSON payload." }, 400);
   }
 
   const replaceExisting = body.replaceExisting === true;
   const profileId = user.id;
   const importedCounts = {
+    backgroundProfilePackage: 0,
     backgroundNotificationPreferences: 0,
     brokerageBounties: 0,
     helperStrategies: 0,
@@ -124,12 +135,25 @@ export async function POST(request: Request) {
       supabase.from("profile_sources").delete().eq("profile_id", profileId),
       supabase.from("saved_searches").delete().eq("profile_id", profileId),
       supabase.from("source_connections").delete().eq("profile_id", profileId),
+      supabase.from("background_intent_claims").delete().eq("profile_id", profileId),
       supabase.from("wish_entries").delete().eq("profile_id", profileId),
       supabase.from("wish_profiles").delete().eq("profile_id", profileId),
     ]);
   }
 
-  const wishProfile = body.wishProfile as Record<string, unknown> | undefined;
+  const backgroundProfilePackage = isBackgroundProfilePackageV1(body.backgroundProfilePackage)
+    ? body.backgroundProfilePackage
+    : null;
+  const packageWishProfile: Record<string, unknown> | null = backgroundProfilePackage
+    ? buildWishProfileImportFromBackgroundPackage(backgroundProfilePackage)
+    : null;
+  const wishProfile: Record<string, unknown> | undefined =
+    (isRecord(body.wishProfile) ? body.wishProfile : undefined) ?? packageWishProfile ?? undefined;
+
+  if (backgroundProfilePackage) {
+    importedCounts.backgroundProfilePackage = 1;
+  }
+
   if (wishProfile) {
     let encryptedWishProfileFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
 
@@ -456,6 +480,10 @@ export async function POST(request: Request) {
           needs_review: row.needs_review !== false,
           imported_at:
             typeof row.imported_at === "string" && row.imported_at ? row.imported_at : null,
+          retention_expires_at:
+            typeof row.retention_expires_at === "string" && row.retention_expires_at
+              ? row.retention_expires_at
+              : getBackgroundSourceRetentionExpiresAt(90),
           is_active: row.is_active !== false,
           sensitive_ciphertexts: encryptedFields.ciphertexts,
           sensitive_encryption_version: encryptedFields.version,
@@ -589,14 +617,27 @@ export async function POST(request: Request) {
     { data: entryRows, error: entryError },
     { data: profileSourceRows, error: sourceError },
     { data: sourceConnectionRows, error: connectionError },
+    { data: profileSignalRows, error: signalError },
   ] = await Promise.all([
     supabase.from("wish_profiles").select("*").eq("profile_id", profileId).maybeSingle(),
     supabase.from("wish_entries").select("*").eq("profile_id", profileId),
     supabase.from("profile_sources").select("*").eq("profile_id", profileId),
     supabase.from("source_connections").select("*").eq("profile_id", profileId),
+    supabase
+      .from("background_profile_signals")
+      .select("*")
+      .eq("profile_id", profileId)
+      .eq("status", "active"),
   ]);
 
-  if (!profileError && !entryError && !sourceError && !connectionError && profileRow) {
+  if (
+    !profileError &&
+    !entryError &&
+    !sourceError &&
+    !connectionError &&
+    !signalError &&
+    profileRow
+  ) {
     const decryptedProfile = overlayBackgroundRecordSensitiveText(
       profileRow,
       WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
@@ -618,6 +659,8 @@ export async function POST(request: Request) {
       connections: decryptedSourceConnections,
       entries: decryptedEntries,
       profile: decryptedProfile,
+      profileSignals:
+        (profileSignalRows ?? []) as Database["public"]["Tables"]["background_profile_signals"]["Row"][],
       profileSources: decryptedProfileSources,
     });
     let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
@@ -651,6 +694,23 @@ export async function POST(request: Request) {
       },
       { onConflict: "profile_id" },
     );
+
+    const intentClaims = buildBackgroundIntentClaims({
+      profile: decryptedProfile,
+      sourceConnections: decryptedSourceConnections,
+      synthesis,
+    });
+    await supabase
+      .from("background_intent_claims")
+      .update({ status: "superseded" })
+      .eq("profile_id", profileId)
+      .eq("status", "active");
+
+    if (intentClaims.length) {
+      await supabase
+        .from("background_intent_claims")
+        .upsert(intentClaims, { onConflict: "profile_id,claim_key" });
+    }
   }
 
   return jsonResponse({

@@ -15,25 +15,71 @@ import {
   type BackgroundLocalDraftSyncResult,
   normalizeBackgroundLocalDraftBody,
 } from "@/lib/background-local-drafts";
+import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  BACKGROUND_CANDIDATE_EXPOSURE_VERSION,
+  buildBackgroundCandidateBudgetRecord,
+  buildBackgroundPurposeBindingRecord,
+  getBackgroundCandidateExposureExpiresAt,
+  normalizeBackgroundCandidateAudienceScope,
+  normalizeBackgroundInboundDelegateScope,
+  normalizeBackgroundPurposeCodeList,
+} from "@/lib/background-candidate-exposure";
+import {
+  evaluateBackgroundIntroRequestCadence,
+  getBackgroundIntroRequestWindowStart,
+} from "@/lib/background-intro-requests";
 import { getBackgroundTokens } from "@/lib/background-networking";
+import { recordBackgroundQueryRiskSignal } from "@/lib/background-operations";
+import {
+  buildBackgroundOpportunityFeedbackRow,
+  getOpportunityBriefStatusForFeedback,
+  isBackgroundOpportunityFeedbackPairAllowed,
+  normalizeBackgroundOpportunityFeedbackOutcome,
+  normalizeBackgroundOpportunityFeedbackReason,
+} from "@/lib/background-opportunity-feedback";
+import {
+  buildBackgroundDelegateReceiptRow,
+  buildIntroPacketRow,
+  buildProfileInterviewAnswerRow,
+  buildSourceSummaryRows,
+  getBackgroundSourceRetentionExpiresAt,
+  getOpportunityBriefDeliveryStateForFeedback,
+  validateIntroPacketInput,
+} from "@/lib/background-opportunity-briefs";
+import {
+  evaluateBackgroundPolicyDecision,
+} from "@/lib/background-phase-gates";
+import { BACKGROUND_PURPOSE_POLICY_VERSION } from "@/lib/background-purpose-registry";
 import {
   buildBackgroundNotificationPreferenceRows,
   getDataRightRequestDueAt,
   validateBackgroundSelfServeDeletion,
   validateProfileDataRightRequest,
 } from "@/lib/background-privacy-controls";
-import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
+import {
+  resolveBackgroundSourceSummaryFieldScope,
+  validateBackgroundSourceSummaryRetentionScope,
+  validateBackgroundSourcePermission,
+  type BackgroundSourceSummaryFieldScopeConnection,
+} from "@/lib/background-source-permissions";
 import { requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+import { takeRateLimitSlot } from "@/lib/rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
+type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 type SourceConnectionUpdate = Database["public"]["Tables"]["source_connections"]["Update"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type MatchConciergeRequestRow =
   Database["public"]["Tables"]["match_concierge_requests"]["Row"];
+type BackgroundOpportunityBriefStatus =
+  NonNullable<Database["public"]["Tables"]["background_opportunity_briefs"]["Update"]["status"]>;
+type BackgroundCollectiveRetentionDays =
+  NonNullable<Database["public"]["Tables"]["background_collective_policies"]["Update"]["default_retention_days"]>;
 
 const DATA_RIGHT_REQUEST_STATUSES = [
   "open",
@@ -88,7 +134,60 @@ async function collectMutationResult(
   }
 }
 
+function enforceBackgroundActionRateLimit({
+  key,
+  limit,
+  message,
+  returnTo,
+  windowMs,
+}: {
+  key: string;
+  limit: number;
+  message: string;
+  returnTo: string;
+  windowMs: number;
+}) {
+  const result = takeRateLimitSlot(key, { limit, windowMs });
+
+  if (result.limited) {
+    redirectWithMessage(returnTo, "error", message);
+  }
+}
+
 function normalizeSourceConnectionProvider(value: string): SourceConnectionInsert["provider"] {
+  if (
+    value === "url" ||
+    value === "public_url" ||
+    value === "substack_post"
+  ) {
+    return "blog";
+  }
+
+  if (
+    value === "manual_note" ||
+    value === "manual_paste"
+  ) {
+    return "manual";
+  }
+
+  if (
+    value === "email_export"
+  ) {
+    return "email";
+  }
+
+  if (
+    value === "calendar_export"
+  ) {
+    return "calendar";
+  }
+
+  if (
+    value === "chat_export"
+  ) {
+    return "chat_history";
+  }
+
   if (
     value === "social" ||
     value === "blog" ||
@@ -121,7 +220,12 @@ function normalizeSourceSyncFrequency(value: string): SourceConnectionInsert["sy
 }
 
 function normalizeSourceAccessStatus(value: string): SourceConnectionInsert["access_status"] {
-  if (value === "connected" || value === "revoked" || value === "needs_review") {
+  if (
+    value === "connected" ||
+    value === "expired" ||
+    value === "revoked" ||
+    value === "needs_review"
+  ) {
     return value;
   }
 
@@ -137,6 +241,638 @@ function parseOptionalTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+function readBoundedInt(formData: FormData, key: string, fallback: number, min: number, max: number) {
+  const parsed = Number(readOptional(formData, key));
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function normalizeCollectivePolicyStage(value: string) {
+  if (value === "registry" || value === "introduced") {
+    return value;
+  }
+
+  return "consent";
+}
+
+function normalizeCollectiveRetentionDays(value: number): BackgroundCollectiveRetentionDays {
+  if (value === 30 || value === 90 || value === 180 || value === 365) {
+    return value;
+  }
+
+  return 90;
+}
+
+function normalizeOpportunityBriefStatus(value: string): BackgroundOpportunityBriefStatus | null {
+  if (
+    value === "opened" ||
+    value === "dismissed" ||
+    value === "interested" ||
+    value === "maybe_later" ||
+    value === "muted"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
+export async function updateOpportunityBriefStatusAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const briefId = readOptional(formData, "opportunity_brief_id");
+  const status = normalizeOpportunityBriefStatus(readOptional(formData, "status"));
+  const feedbackReason =
+    normalizeBackgroundOpportunityFeedbackReason(readOptional(formData, "feedback_reason")) ??
+    (status === "interested" ? "interested" : status === "maybe_later" ? "maybe_later" : null);
+  const fallbackFeedbackOutcome =
+    status === "interested"
+      ? "interested"
+      : status === "maybe_later"
+        ? "maybe_later"
+        : status === "dismissed" || status === "muted"
+        ? "dismissed"
+        : null;
+  const feedbackOutcome =
+    normalizeBackgroundOpportunityFeedbackOutcome(readOptional(formData, "feedback_outcome")) ??
+    fallbackFeedbackOutcome;
+
+  if (!briefId) {
+    redirectWithMessage(returnTo, "error", "Opportunity brief ID is required.");
+  }
+
+  if (!status) {
+    redirectWithMessage(returnTo, "error", "Choose a supported opportunity brief action.");
+  }
+
+  if (
+    feedbackOutcome &&
+    feedbackReason &&
+    !isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: feedbackOutcome,
+      reasonCode: feedbackReason,
+    })
+  ) {
+    redirectWithMessage(returnTo, "error", "Choose a supported opportunity feedback reason.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: brief, error: briefError } = await supabase
+    .from("background_opportunity_briefs")
+    .select("candidate_profile_id, factor_codes, match_id")
+    .eq("id", briefId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (briefError || !brief) {
+    redirectWithMessage(returnTo, "error", briefError?.message ?? "Opportunity brief was not found.");
+  }
+
+  const nextStatus =
+    status === "muted"
+      ? status
+      : feedbackOutcome && feedbackReason
+        ? getOpportunityBriefStatusForFeedback(feedbackOutcome)
+        : status;
+  const briefUpdate: Database["public"]["Tables"]["background_opportunity_briefs"]["Update"] = {
+    feedback_reason: feedbackReason,
+    seen_at: new Date().toISOString(),
+    status: nextStatus,
+  };
+
+  if (feedbackOutcome) {
+    briefUpdate.delivery_state = getOpportunityBriefDeliveryStateForFeedback(feedbackOutcome);
+  } else if (status === "opened") {
+    briefUpdate.delivery_state = "opened";
+  }
+
+  const { error } = await supabase
+    .from("background_opportunity_briefs")
+    .update(briefUpdate)
+    .eq("id", briefId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  if (status === "muted") {
+    const factorCodePattern =
+      readOptional(formData, "factor_code_pattern") || brief.factor_codes[0] || "similar";
+    const mutedUntil = new Date();
+    mutedUntil.setUTCDate(mutedUntil.getUTCDate() + 30);
+    const { error: muteError } = await supabase.from("background_mute_rules").upsert(
+      {
+        candidate_profile_id: brief.candidate_profile_id,
+        factor_code_pattern: factorCodePattern.slice(0, 120),
+        muted_until: mutedUntil.toISOString(),
+        profile_id: viewer.authUser.id,
+        status: "active",
+      },
+      { onConflict: "profile_id,candidate_profile_id,factor_code_pattern" },
+    );
+
+    if (muteError) {
+      redirectWithMessage(returnTo, "error", muteError.message);
+    }
+  }
+
+  if (feedbackOutcome && feedbackReason) {
+    const { error: feedbackError } = await supabase.from("background_match_feedback").upsert(
+      buildBackgroundOpportunityFeedbackRow({
+        matchId: brief.match_id,
+        opportunityBriefId: briefId,
+        outcome: feedbackOutcome,
+        profileId: viewer.authUser.id,
+        reasonCode: feedbackReason,
+      }),
+      { onConflict: "profile_id,opportunity_brief_id" },
+    );
+
+    if (feedbackError) {
+      redirectWithMessage(returnTo, "error", feedbackError.message);
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Opportunity brief updated.");
+}
+
+export async function saveBackgroundProfileInterviewAnswerAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const answer = readOptional(formData, "answer");
+
+  if (!answer) {
+    redirectWithMessage(returnTo, "error", "Answer text is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const row = buildProfileInterviewAnswerRow({
+    answer,
+    broadPreviewUpdate: readOptional(formData, "broad_preview_update"),
+    privateIntentUpdate: readOptional(formData, "private_intent_update"),
+    profileId: viewer.authUser.id,
+    questionKey: readOptional(formData, "question_key"),
+    questionText: readOptional(formData, "question_text"),
+    uncertaintyFlags: readRepeatedStrings(formData, "uncertainty_flags"),
+  });
+  let encryptedInterviewFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedInterviewFields = prepareRecordSensitiveTextFields({
+      answer: row.answer ?? "",
+      private_intent_update: row.private_intent_update ?? "",
+    });
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Interview answers cannot be saved until background field encryption is configured.",
+    );
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("background_profile_interview_answers").upsert(
+    {
+      ...row,
+      answer: encryptedInterviewFields.plaintextFields.answer,
+      private_intent_update: encryptedInterviewFields.plaintextFields.private_intent_update,
+      sensitive_ciphertexts: encryptedInterviewFields.ciphertexts,
+      sensitive_encryption_version: encryptedInterviewFields.version,
+    },
+    { onConflict: "profile_id,question_key" },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Structured profile answer saved.");
+}
+
+export async function saveBackgroundSourceSummaryAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const label = readOptional(formData, "label");
+  const summaryText = readOptional(formData, "summary_text");
+
+  if (!summaryText) {
+    redirectWithMessage(returnTo, "error", "Source summary text is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  enforceBackgroundActionRateLimit({
+    key: `background-source-summary:${viewer.authUser.id}`,
+    limit: 12,
+    message: "Too many reviewed source summaries were saved recently. Try again shortly.",
+    returnTo,
+    windowMs: 60 * 1000,
+  });
+  const sourceType = normalizeSourceConnectionProvider(readOptional(formData, "source_type"));
+  const sourceConnectionId = readOptional(formData, "source_connection_id") || null;
+  const supabase = await createClient();
+  let sourceConnection: BackgroundSourceSummaryFieldScopeConnection | null = null;
+
+  if (sourceConnectionId) {
+    const { data, error } = await supabase
+      .from("source_connections")
+      .select("id, access_status, allowed_field_keys, retention_expires_at")
+      .eq("id", sourceConnectionId)
+      .eq("profile_id", viewer.authUser.id)
+      .maybeSingle();
+
+    if (error || !data) {
+      redirectWithMessage(returnTo, "error", "Selected source connection was not found.");
+    }
+
+    sourceConnection = data as Pick<
+      SourceConnectionRow,
+      "id" | "access_status" | "allowed_field_keys" | "retention_expires_at"
+    >;
+  }
+
+  const fieldScope = resolveBackgroundSourceSummaryFieldScope({
+    requestedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    sourceConnection,
+  });
+  const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
+    allowedFieldKeys: fieldScope.allowedFieldKeys,
+    label,
+    profileId: viewer.authUser.id,
+    purpose: readOptional(formData, "purpose"),
+    retentionDays: readOptional(formData, "retention_days") || 90,
+    sourceConnectionId,
+    sourceType,
+  });
+
+  validationErrors.push(...fieldScope.errors);
+  validationErrors.push(
+    ...validateBackgroundSourceSummaryRetentionScope({
+      sourceConnection,
+      summaryRetentionExpiresAt: sourceSummary.retention_expires_at,
+    }),
+  );
+
+  if (validationErrors.length) {
+    redirectWithMessage(returnTo, "error", validationErrors.join(" "));
+  }
+
+  let encryptedSummaryFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+  let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedSummaryFields = prepareRecordSensitiveTextFields({
+      purpose: sourceSummary.purpose ?? "",
+      summary_text: summaryText,
+    });
+    encryptedProfileSourceFields = prepareRecordSensitiveTextFields({
+      notes: summaryText,
+      snapshot_excerpt: summaryText.slice(0, 420),
+    });
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Source summaries cannot be saved until background field encryption is configured.",
+    );
+  }
+
+  const { data: receiptRow, error: receiptError } = await supabase
+    .from("background_grant_receipts")
+    .insert(receipt)
+    .select("id")
+    .maybeSingle();
+
+  if (receiptError || !receiptRow) {
+    redirectWithMessage(returnTo, "error", receiptError?.message ?? "Unable to record consent receipt.");
+  }
+
+  const { error: summaryError } = await supabase.from("background_source_summaries").insert({
+    ...sourceSummary,
+    approved_at: new Date().toISOString(),
+    consent_receipt_id: receiptRow.id,
+    purpose: encryptedSummaryFields.plaintextFields.purpose,
+    redaction_report: {
+      removedDirectQuotes: 0,
+      removedEmails: 0,
+      removedPhones: 0,
+      removedPreciseLocations: 0,
+      removedUrls: 0,
+    },
+    sensitive_ciphertexts: encryptedSummaryFields.ciphertexts,
+    sensitive_encryption_version: encryptedSummaryFields.version,
+    summary_text: encryptedSummaryFields.plaintextFields.summary_text,
+    summary_version: 1,
+  });
+
+  if (summaryError) {
+    redirectWithMessage(returnTo, "error", summaryError.message);
+  }
+
+  const profileSourceType = sourceType === "search_profile" ? "other" : sourceType;
+  const { error: profileSourceError } = await supabase.from("profile_sources").insert({
+    access_level: "manual_summary",
+    captured_tags: getBackgroundTokens(`${label} ${summaryText}`, 12),
+    content_kind: "manual_summary",
+    imported_at: new Date().toISOString(),
+    retention_expires_at: sourceSummary.retention_expires_at,
+    is_active: true,
+    label,
+    needs_review: true,
+    notes: encryptedProfileSourceFields.plaintextFields.notes,
+    profile_id: viewer.authUser.id,
+    sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
+    sensitive_encryption_version: encryptedProfileSourceFields.version,
+    snapshot_excerpt: encryptedProfileSourceFields.plaintextFields.snapshot_excerpt,
+    source_type: profileSourceType,
+    url: readOptional(formData, "source_url"),
+  });
+
+  if (profileSourceError) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      `Source summary saved, but the matching source note could not be recorded: ${profileSourceError.message}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Reviewed source summary saved without raw ingestion.");
+}
+
+export async function createBackgroundIntroPacketAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const purpose = readOptional(formData, "purpose");
+  const requestedFieldKeys = readRepeatedStrings(formData, "requested_field_keys");
+  const noTradeBaseline = readOptional(formData, "no_trade_baseline");
+  const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
+
+  if (validation.errors.length) {
+    redirectWithMessage(returnTo, "error", validation.errors.join(" "));
+  }
+
+  if (noTradeBaseline.trim().length < 12) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "State the no-trade baseline before requesting an introduction packet.",
+    );
+  }
+
+  const viewer = await requireViewer(returnTo);
+  enforceBackgroundActionRateLimit({
+    key: `background-intro-packet:${viewer.authUser.id}`,
+    limit: 12,
+    message: "Too many intro packet requests were created recently. Try again shortly.",
+    returnTo,
+    windowMs: 60 * 1000,
+  });
+  let matchId = readOptional(formData, "match_id") || null;
+  const opportunityBriefId = readOptional(formData, "opportunity_brief_id") || null;
+  let counterpartyProfileId: string | null = null;
+  let purposeCode: string | null = null;
+  let purposePolicyVersion: string | null = null;
+  const supabase = await createClient();
+  let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+
+  try {
+    serviceClient = createServiceClient();
+  } catch {
+    serviceClient = null;
+  }
+
+  if (opportunityBriefId) {
+    const { data: brief, error: briefError } = await supabase
+      .from("background_opportunity_briefs")
+      .select(
+        "candidate_profile_id, delivery_state, match_id, purpose_code, purpose_policy_version, review_status, status",
+      )
+      .eq("id", opportunityBriefId)
+      .eq("profile_id", viewer.authUser.id)
+      .maybeSingle();
+
+    if (briefError || !brief) {
+      redirectWithMessage(returnTo, "error", briefError?.message ?? "Opportunity brief was not found.");
+    }
+
+    if (
+      brief.review_status === "blocked" ||
+      brief.delivery_state === "expired" ||
+      ["dismissed", "expired", "muted"].includes(brief.status ?? "")
+    ) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "This opportunity brief is stale or no longer actionable.",
+      );
+    }
+
+    matchId = brief.match_id;
+    counterpartyProfileId = brief.candidate_profile_id;
+    purposeCode = brief.purpose_code;
+    purposePolicyVersion = brief.purpose_policy_version;
+  }
+
+  if (counterpartyProfileId) {
+    const { data: recentRequests, error: recentRequestsError } = await supabase
+      .from("background_intro_packets")
+      .select("created_at, review_state")
+      .eq("requester_profile_id", viewer.authUser.id)
+      .eq("counterparty_profile_id", counterpartyProfileId)
+      .gte("created_at", getBackgroundIntroRequestWindowStart())
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (recentRequestsError) {
+      redirectWithMessage(returnTo, "error", recentRequestsError.message);
+    }
+
+    const cadence = evaluateBackgroundIntroRequestCadence({
+      recentRequests: recentRequests ?? [],
+    });
+
+    if (serviceClient && cadence.riskLevel !== "none") {
+      await recordBackgroundQueryRiskSignal({
+        metadata: {
+          openRequestCount: cadence.openRequestCount,
+          recentRequestCount: cadence.recentRequestCount,
+          requestedFieldCount: validation.requestedFieldKeys.length,
+        },
+        profileId: viewer.authUser.id,
+        severity: cadence.allowed ? "low" : "medium",
+        signalType: "intro_request_probe_pressure",
+        summary:
+          "An intro-request pattern approached or crossed the repeated-target privacy threshold.",
+        supabase: serviceClient,
+      });
+    }
+
+    if (!cadence.allowed) {
+      redirectWithMessage(returnTo, "error", cadence.blockers.join(" "));
+    }
+  }
+
+  const packet = buildIntroPacketRow({
+    counterpartyProfileId,
+    matchId,
+    opportunityBriefId,
+    purpose,
+    purposeCode,
+    purposePolicyVersion,
+    requestedFieldKeys,
+    requesterAnswers: {
+      boundaries: readOptional(formData, "boundaries"),
+      firstQuestion: readOptional(formData, "first_question"),
+      noTradeBaseline,
+    },
+    requesterProfileId: viewer.authUser.id,
+  });
+  const { data: packetRow, error } = await supabase
+    .from("background_intro_packets")
+    .insert(packet)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !packetRow) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to create intro packet.");
+  }
+
+  const { data: receiptRow } = await supabase
+    .from("background_delegate_receipts")
+    .insert(
+      buildBackgroundDelegateReceiptRow({
+        factorCount: validation.requestedFieldKeys.length,
+        profileId: viewer.authUser.id,
+        publicSummary: "Reviewed introduction packet requested. No outreach or private detail was sent.",
+        purposeCode,
+        purposePolicyVersion,
+        receiptKind: "intro_request",
+        subjectId: packetRow.id,
+        subjectKind: "intro_packet",
+      }),
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (receiptRow) {
+    await supabase
+      .from("background_intro_packets")
+      .update({ redacted_receipt_id: receiptRow.id })
+      .eq("id", packetRow.id)
+      .eq("requester_profile_id", viewer.authUser.id);
+  }
+
+  if (opportunityBriefId) {
+    await supabase
+      .from("background_opportunity_briefs")
+      .update({ status: "packet_requested" })
+      .eq("id", opportunityBriefId)
+      .eq("profile_id", viewer.authUser.id);
+  }
+
+  const { data: conciergeRequest } = await supabase
+    .from("match_concierge_requests")
+    .insert({
+      ask_summary: "Review the field choices and mutual questions before any first conversation.",
+      cause_areas: [],
+      constraints: readOptional(formData, "boundaries"),
+      desired_timeline: "Review before any direct introduction.",
+      intent_summary: `Reviewed introduction packet requested. ${purpose}`.slice(0, 900),
+      match_id: matchId,
+      no_trade_baseline: noTradeBaseline.slice(0, 900),
+      offer_summary: "",
+      requester_profile_id: viewer.authUser.id,
+      route: "private_match",
+      status: "open",
+      target_preview: "Counterparty details remain hidden until review and consent.",
+      target_profile_id: counterpartyProfileId,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (serviceClient) {
+    await serviceClient.from("match_audit_events").insert({
+      actor_profile_id: viewer.authUser.id,
+      event_type: "intro_packet_requested",
+      match_id: matchId,
+      metadata: {
+        conciergeRequestId: conciergeRequest?.id ?? null,
+        introPacketId: packetRow.id,
+        requestedFieldCount: validation.requestedFieldKeys.length,
+      },
+      summary: "Participant requested a reviewed introduction packet; no outreach was sent.",
+    });
+
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Intro packet queued for review without sending outreach.");
+}
+
+export async function saveBackgroundCollectivePolicyAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const collectiveId = readOptional(formData, "collective_id");
+
+  if (!collectiveId) {
+    redirectWithMessage(returnTo, "error", "Collective ID is required.");
+  }
+
+  await requireViewer(returnTo);
+  const approverRoles = readRepeatedStrings(formData, "approver_roles");
+  const supabase = await createClient();
+  const { error } = await supabase.from("background_collective_policies").upsert(
+    {
+      approval_threshold: readBoundedInt(formData, "approval_threshold", 1, 1, 20),
+      approver_roles: approverRoles.length ? approverRoles : ["owner", "admin"],
+      collective_id: collectiveId,
+      default_retention_days: normalizeCollectiveRetentionDays(
+        readBoundedInt(formData, "default_retention_days", 90, 30, 365),
+      ),
+      disclosure_rules: {
+        requirePurpose: true,
+        reviewerNote: readOptional(formData, "reviewer_note"),
+      },
+      group_public_preview: readOptional(formData, "group_public_preview"),
+      max_auto_grant_stage: normalizeCollectivePolicyStage(
+        readOptional(formData, "max_auto_grant_stage"),
+      ),
+    },
+    { onConflict: "collective_id" },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Collective disclosure policy saved.");
+}
+
 export async function saveBackgroundNotificationPreferencesAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
@@ -146,10 +882,14 @@ export async function saveBackgroundNotificationPreferencesAction(formData: Form
     profileId: viewer.authUser.id,
   }).map((preference) => ({
     channel: preference.channel,
+    daily_cap: preference.dailyCap ?? null,
     digest_cadence: preference.digestCadence,
     enabled: preference.enabled,
     event_kind: preference.eventKind,
     profile_id: preference.profileId,
+    quiet_hours_end: preference.quietHoursEnd ?? null,
+    quiet_hours_start: preference.quietHoursStart ?? null,
+    source_cooldown_hours: preference.sourceCooldownHours ?? null,
     updated_at: new Date().toISOString(),
   }));
   const supabase = await createClient();
@@ -178,6 +918,117 @@ export async function saveBackgroundNotificationPreferencesAction(formData: Form
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Notification preferences saved.");
+}
+
+export async function saveCandidateInboundDelegateExposureAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const discovery = normalizeBackgroundInboundDelegateScope(
+    readOptional(formData, "inbound_delegate_discovery"),
+  );
+  const now = Date.now();
+  const nowDate = new Date(now);
+  const exposureVersion = `${BACKGROUND_CANDIDATE_EXPOSURE_VERSION}:${now}`;
+  const budgetVersion = `${BACKGROUND_CANDIDATE_BUDGET_VERSION}:${now}`;
+  const purposeCodes = normalizeBackgroundPurposeCodeList(
+    readRepeatedStrings(formData, "inbound_delegate_purpose_codes"),
+  );
+  const allowBroadProfileSurface = readBoolean(formData, "allow_broad_profile_surface");
+  const audienceScope = normalizeBackgroundCandidateAudienceScope(discovery);
+  const surfaceLimit = readBoundedInt(formData, "surface_limit", 3, 1, 50);
+  const windowDays = readBoundedInt(formData, "window_days", 30, 1, 90);
+  const pendingIntroLimit = readBoundedInt(formData, "pending_intro_limit", 3, 0, 50);
+  const allowedCohortIds = readRepeatedStrings(formData, "allowed_cohort_ids")
+    .flatMap((entry) => entry.split(/[,;\n]/))
+    .map((entry) => entry.trim())
+    .map((entry) => entry.slice(0, 80))
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index)
+    .slice(0, 12);
+  const cooloffUntil = parseOptionalTimestamp(readOptional(formData, "cooloff_until"));
+
+  const update: Database["public"]["Tables"]["wish_profiles"]["Update"] = {
+    allowed_cohort_ids: [],
+    candidate_exposure_version: exposureVersion,
+    candidate_inbound_budget_version: budgetVersion,
+    inbound_delegate_cooloff_until: null,
+    inbound_delegate_confirmed_at: null,
+    inbound_delegate_discovery: "off",
+    inbound_delegate_expires_at: null,
+    inbound_delegate_pending_intro_limit: null,
+    inbound_delegate_purpose_bindings: {},
+    inbound_delegate_purpose_codes: [],
+    inbound_delegate_surface_budget_per_window: {},
+    inbound_delegate_surfaces: [],
+    updated_at: new Date().toISOString(),
+  };
+
+  if (discovery !== "off") {
+    if (!purposeCodes.length) {
+      redirectWithMessage(returnTo, "error", "Choose at least one inbound delegate purpose.");
+    }
+
+    if (!allowBroadProfileSurface) {
+      redirectWithMessage(returnTo, "error", "Inbound delegate exposure requires the broad profile surface.");
+    }
+
+    update.allowed_cohort_ids = allowedCohortIds;
+    update.inbound_delegate_cooloff_until = cooloffUntil;
+    update.inbound_delegate_confirmed_at = nowDate.toISOString();
+    update.inbound_delegate_discovery = discovery;
+    update.inbound_delegate_expires_at = getBackgroundCandidateExposureExpiresAt({
+      now: nowDate,
+    });
+    update.inbound_delegate_pending_intro_limit = pendingIntroLimit;
+    update.inbound_delegate_purpose_bindings = buildBackgroundPurposeBindingRecord(purposeCodes);
+    update.inbound_delegate_purpose_codes = purposeCodes;
+    update.inbound_delegate_surface_budget_per_window = buildBackgroundCandidateBudgetRecord({
+      audienceScope,
+      purposeCodes,
+      surfaceLimit,
+      windowDays,
+    });
+    update.inbound_delegate_surfaces = ["broad_profile"];
+  }
+
+  const policyDecision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.candidate_exposure.update",
+    actorRole: "participant",
+    idempotencyKey: `${viewer.authUser.id}:${discovery}:${exposureVersion}`,
+    laneKey: "candidate_exposure",
+    outputSchemaVersion: "background-candidate-exposure-response-v1",
+    purposeCode: purposeCodes[0] ?? "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  if (policyDecision.verdict !== "allow") {
+    redirectWithMessage(returnTo, "error", "Candidate exposure updates are unavailable in this release.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("wish_profiles")
+    .update(update)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", "Could not save candidate exposure settings.");
+  }
+
+  const serviceSupabase = createServiceClient();
+  await serviceSupabase
+    .from("background_opportunity_briefs")
+    .update({
+      delivery_state: "expired",
+      generic_dependency_label: "stale_or_unavailable",
+      status: "expired",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("candidate_profile_id", viewer.authUser.id)
+    .in("status", ["open", "opened", "interested", "maybe_later", "packet_requested"]);
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Candidate exposure settings saved.");
 }
 
 export async function createProfileDataRightRequestAction(formData: FormData) {
@@ -209,6 +1060,164 @@ export async function createProfileDataRightRequestAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath("/admin");
   redirectWithMessage(returnTo, "message", "Data-right request recorded.");
+}
+
+export async function activateBackgroundPrivacyFreezeAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const profileId = viewer.authUser.id;
+  const decision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.privacy_freeze.activate",
+    actorRole: "participant",
+    idempotencyKey: `${profileId}:privacy-freeze:activate`,
+    laneKey: "privacy_freeze",
+    outputSchemaVersion: "background-privacy-freeze-response-v1",
+  });
+
+  if (decision.verdict !== "allow") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Privacy freeze is unavailable while background-networking policy gates are stale.",
+    );
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data: existing, error: existingError } = await supabase
+    .from("profile_data_right_requests")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("request_type", "restriction")
+    .eq("scope", "background_networking")
+    .in("status", ["open", "in_review"])
+    .limit(1);
+
+  if (existingError) {
+    redirectWithMessage(returnTo, "error", existingError.message);
+  }
+
+  if (!existing?.length) {
+    const { error } = await supabase.from("profile_data_right_requests").insert({
+      due_at: getDataRightRequestDueAt(),
+      operator_note:
+        "Participant activated a privacy freeze. Recompute from current inputs after release.",
+      profile_id: profileId,
+      request_details:
+        "Privacy freeze: pause background delegate runs, inbound surfacing, notifications, exports, intro advancement, and disclosure access.",
+      request_type: "restriction",
+      scope: "background_networking",
+      status: "open",
+    });
+
+    if (error) {
+      redirectWithMessage(returnTo, "error", error.message);
+    }
+  }
+
+  const failures: string[] = [];
+
+  await collectMutationResult(
+    failures,
+    "open opportunity briefs",
+    supabase
+      .from("background_opportunity_briefs")
+      .update({
+        delivery_state: "expired",
+        generic_dependency_label: "stale_or_unavailable",
+        review_status: "blocked",
+        status: "expired",
+        updated_at: now,
+      })
+      .eq("profile_id", profileId)
+      .in("status", ["open", "opened", "interested", "maybe_later", "packet_requested"]),
+  );
+  await collectMutationResult(
+    failures,
+    "queued background-networking emails",
+    supabase
+      .from("email_outbox")
+      .delete()
+      .eq("profile_id", profileId)
+      .eq("provider", "background-networking"),
+  );
+
+  if (failures.length) {
+    redirectWithMessage(returnTo, "error", failures.join(" "));
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Privacy freeze active. Background networking is paused until you release it and recompute.",
+  );
+}
+
+export async function releaseBackgroundPrivacyFreezeAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const profileId = viewer.authUser.id;
+  const confirmation = readOptional(formData, "release_confirmation");
+
+  if (confirmation !== "RELEASE FREEZE") {
+    redirectWithMessage(returnTo, "error", "Type RELEASE FREEZE to release the privacy freeze.");
+  }
+
+  const accountSecurity = await loadBackgroundAccountSecuritySummary();
+
+  if (accountSecurity.currentLevel !== "aal2") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Releasing a privacy freeze requires a current MFA step-up session.",
+    );
+  }
+
+  const decision = evaluateBackgroundPolicyDecision({
+    actionKind: "background.privacy_freeze.release",
+    actorRole: "participant",
+    idempotencyKey: `${profileId}:privacy-freeze:release`,
+    laneKey: "privacy_freeze",
+    outputSchemaVersion: "background-privacy-freeze-response-v1",
+  });
+
+  if (decision.verdict !== "allow") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Privacy freeze release is unavailable while background-networking policy gates are stale.",
+    );
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("profile_data_right_requests")
+    .update({
+      operator_note:
+        "Participant released the privacy freeze after MFA step-up. Existing artifacts remain non-actionable until recomputed.",
+      resolved_at: now,
+      status: "fulfilled",
+      updated_at: now,
+    })
+    .eq("profile_id", profileId)
+    .eq("request_type", "restriction")
+    .eq("scope", "background_networking")
+    .in("status", ["open", "in_review"]);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Privacy freeze released. Run a fresh scan to recompute from current consent settings.",
+  );
 }
 
 export async function saveBackgroundSourceConnectionAction(formData: FormData) {
@@ -336,6 +1345,20 @@ export async function revokeBackgroundSourceConnectionAction(formData: FormData)
     redirectWithMessage(returnTo, "error", "Source connection was not found.");
   }
 
+  await Promise.all([
+    supabase
+      .from("background_source_summaries")
+      .update({ status: "revoked", updated_at: now })
+      .eq("profile_id", viewer.authUser.id)
+      .eq("source_connection_id", connectionId),
+    supabase
+      .from("background_profile_signals")
+      .update({ status: "revoked", updated_at: now })
+      .eq("profile_id", viewer.authUser.id)
+      .eq("source_connection_id", connectionId)
+      .eq("status", "active"),
+  ]);
+
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Source permission revoked for future matching.");
 }
@@ -416,6 +1439,7 @@ export async function syncBackgroundLocalDraftAction(
     captured_tags: [draftTag, ...getBackgroundTokens(`${sourceLabel} ${body}`, 11)],
     content_kind: "manual_summary",
     imported_at: syncedAt,
+    retention_expires_at: getBackgroundSourceRetentionExpiresAt(90),
     is_active: true,
     label: sourceLabel,
     needs_review: true,
@@ -615,6 +1639,60 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
   );
   await collectMutationResult(
     failures,
+    "opportunity feedback",
+    supabase.from("background_match_feedback").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "opportunity briefs",
+    supabase
+      .from("background_opportunity_briefs")
+      .delete()
+      .or(`profile_id.eq.${profileId},candidate_profile_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "intro packets",
+    supabase
+      .from("background_intro_packets")
+      .delete()
+      .or(`requester_profile_id.eq.${profileId},counterparty_profile_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "source summaries",
+    supabase.from("background_source_summaries").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "profile signals",
+    supabase.from("background_profile_signals").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "shadow source runs",
+    supabase.from("background_shadow_runs").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "grant receipts",
+    supabase
+      .from("background_grant_receipts")
+      .delete()
+      .or(`profile_id.eq.${profileId},counterparty_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "profile interview answers",
+    supabase.from("background_profile_interview_answers").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "mute rules",
+    supabase.from("background_mute_rules").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
     "match audit events",
     supabase
       .from("match_audit_events")
@@ -752,6 +1830,11 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
     failures,
     "profile synthesis",
     supabase.from("profile_syntheses").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "intent claims",
+    supabase.from("background_intent_claims").delete().eq("profile_id", profileId),
   );
   await collectMutationResult(
     failures,
@@ -989,4 +2072,19 @@ export async function removeBackgroundNetworkingMfaAction(
     message: "Authenticator factor removed.",
     status: "removed",
   };
+}
+
+export async function revokeOtherBackgroundNetworkingSessionsAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  await requireViewer(returnTo);
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", "Could not revoke other active sessions.");
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Other active sessions were revoked.");
 }

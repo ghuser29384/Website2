@@ -7,6 +7,10 @@ import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { loadMpgfProductionControlPlaneSummary } from "@/lib/mpgf/control-plane";
 import { mpgfAdminSections } from "@/lib/mpgf/data";
+import {
+  getMpgfPublicGoodsAdminConsoles,
+  validateMpgfPublicGoodsAdminConsoles,
+} from "@/lib/mpgf/public-goods-admin-consoles";
 import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -38,6 +42,8 @@ export default async function MpgfAdminPage() {
     mfaSummary: adminMfaSummary,
   });
   const controlPlane = adminAccess.allowed ? await loadMpgfProductionControlPlaneSummary() : null;
+  const publicGoodsAdminConsoles = getMpgfPublicGoodsAdminConsoles();
+  const publicGoodsAdminConsoleValidation = validateMpgfPublicGoodsAdminConsoles();
 
   return (
     <MpgfPageFrame
@@ -67,6 +73,38 @@ export default async function MpgfAdminPage() {
               <div>
                 <span>real_money_complete</span>
                 <strong>{controlPlane?.completionProfiles.realMoneyComplete.replaceAll("_", " ")}</strong>
+              </div>
+            </div>
+
+            <div className="mpgf-admin-action-panel">
+              <p className="eyebrow">moralpublicgoods131.md section 16</p>
+              <h3>Operator console coverage</h3>
+              <p>
+                Registry, round, safety, sybil/collusion, and sponsor/governance consoles are
+                mapped as MFA-gated, privacy-safe operator surfaces. They create no live authority
+                and do not bypass moral public goods review, payment, authorization, sponsor, or
+                audit gates.
+              </p>
+              <div className="mpgf-control-summary">
+                <div>
+                  <span>Consoles</span>
+                  <strong>{publicGoodsAdminConsoleValidation.consoleCount}</strong>
+                </div>
+                <div>
+                  <span>Required fields</span>
+                  <strong>{publicGoodsAdminConsoleValidation.requiredLabelCount}</strong>
+                </div>
+                <div>
+                  <span>Validation</span>
+                  <strong>{publicGoodsAdminConsoleValidation.passed ? "passed" : "missing coverage"}</strong>
+                </div>
+              </div>
+              <div className="mpgf-admin-grid">
+                {publicGoodsAdminConsoles.map((consoleItem) => (
+                  <Link key={consoleItem.key} className="mpgf-admin-link" href={consoleItem.adminHref}>
+                    {consoleItem.title}
+                  </Link>
+                ))}
               </div>
             </div>
 

@@ -1,0 +1,6 @@
+{
+  "version": "mpgf-refund-policy-v1",
+  "mode": "non_real_money_demo",
+  "realMoneyRefundsEnabled": false,
+  "copy": "No money is collected in MPGF direct-working demo mode, so no refund is created or owed."
+}

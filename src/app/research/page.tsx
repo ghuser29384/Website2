@@ -10,28 +10,28 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Research and Governance",
   description:
-    "What Moral Trade is testing, what would make it unsafe, and how reviewer governance should develop during the pilot.",
+    "Moral Trade's research agenda, safety blockers, reviewer governance, transparency commitments, and open mechanism-design questions.",
   alternates: {
     canonical: "/research",
   },
   openGraph: {
     title: "Research and Governance",
     description:
-      "Research framing, reviewer rulebook links, transparency plans, and open mechanism-design questions for the Moral Trade pilot.",
+      "Research framing, reviewer rulebooks, transparency plans, and open mechanism-design questions for Moral Trade.",
     url: getAbsoluteUrl("/research"),
     type: "article",
   },
 };
 
 const testAreas = [
-  "Whether low-risk pledge swaps can be made legible enough for private counterparty discovery.",
+  "Whether low-risk pledge swaps can be made legible enough for serious counterparty discovery.",
   "Whether action evidence and baseline confidence can be separated without overwhelming users.",
   "Whether moral public-good threshold commitments can coordinate overlapping moral reasons.",
-  "Whether a small cohort can generate reviewable examples before broad marketplace mechanics exist.",
+  "Whether consent-gated matching can produce useful introductions without exposing exact wishes prematurely.",
 ] as const;
 
 const unsafeSignals = [
-  "The pilot rewards threats, newly escalated harmful behavior, or coercive bargaining.",
+  "The service rewards threats, newly escalated harmful behavior, or coercive bargaining.",
   "Scores start looking like platform moral rankings rather than party-relative statements.",
   "Private matching becomes targeting, surveillance, scraping, or autonomous outreach.",
   "Third-party objections are ignored because both direct parties prefer the trade.",
@@ -57,11 +57,11 @@ export default async function ResearchPage() {
       />
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Research and governance</p>
-        <h1>A pilot institution, not just a product surface.</h1>
+        <h1>An operating institution, not just a matching interface.</h1>
         <p>
           Moral trade depends unusually heavily on trust, review quality, and operator integrity.
-          This page keeps the research agenda, safety blockers, and governance work visible before
-          the project expands beyond cohort-mediated proposals.
+          This page keeps the research agenda, safety blockers, governance rules, and unresolved
+          design questions visible as the service grows.
         </p>
 
         <section className="panel data-card data-card-wide">
@@ -94,15 +94,15 @@ export default async function ResearchPage() {
         <section className="panel data-card data-card-wide">
           <h2>Reviewer rulebook</h2>
           <p>
-            The public rulebook should make reviewer roles, challenge windows, conflicts, appeal
-            paths, proof uniqueness, and third-party externality standing visible before users rely
-            on a proposal.
+            The public rulebook makes reviewer roles, challenge windows, conflicts, appeal paths,
+            proof uniqueness, and third-party externality standing visible before participants rely
+            on a record.
           </p>
           <div className="hero-actions">
             <Link className="button button-secondary" href="/validation">
               Validation
             </Link>
-            <Link className="button button-secondary" href="/anti-threat-baseline">
+            <Link className="button button-secondary" href="/anti-threat-rules">
               Anti-threat baseline rules
             </Link>
             <Link className="button button-secondary" href="/reasoning-standards">
@@ -114,9 +114,9 @@ export default async function ResearchPage() {
         <section className="panel data-card data-card-wide">
           <h2>Transparency reports</h2>
           <p>
-            The first useful report now counts review outcomes, disclosure grants, reports,
-            appeals, operator timing, and unresolved disputes with small-sample suppression. It
-            does not expose private-feed data, case files, report bodies, or exact wishes.
+            The report counts review outcomes, disclosure grants, reports, appeals, operator timing,
+            and unresolved disputes with small-sample suppression. It does not expose private-feed
+            data, case files, report bodies, or exact wishes.
           </p>
           <Link className="text-button" href="/transparency">
             Open transparency report
@@ -126,23 +126,23 @@ export default async function ResearchPage() {
         <section className="panel data-card data-card-wide">
           <h2>People, operators, and advisors</h2>
           <p>
-            Public authorship matters because counterparties are trusting more than a matching
-            interface. The team and governance page should identify operators, reviewer
-            responsibilities, and advisor roles as they become formal.
+            Public accountability matters because counterparties are trusting more than an
+            interface. The team and governance page identifies operators, reviewer
+            responsibilities, decision rights, and advisor roles as they become formal.
           </p>
-          <Link className="text-button" href="/team">
+          <Link className="text-button" href="/team-and-governance">
             View team and governance
           </Link>
         </section>
 
         <section className="panel data-card data-card-wide">
-          <h2>Subscribe for pilot updates</h2>
+          <h2>Service updates</h2>
           <p>
-            Follow the cohort, reviewer governance, and public-goods pilot without treating the
-            site as a liquid marketplace before the trust problem is solved.
+            Follow shipped changes, governance decisions, public-goods work, case studies, and
+            activation metrics without confusing plans with reviewed outcomes.
           </p>
           <Link className="button button-primary" href="/updates">
-            Read pilot updates
+            Read service updates
           </Link>
         </section>
       </main>

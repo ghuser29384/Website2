@@ -1,9 +1,24 @@
 # MPGF Privacy Launch Profile
 
-Status: direct-working privacy profile only.
+Status: public privacy framework for CG-VQAF.
 
-The public site may show non-real-money demo totals, visible demo alternatives, public-safe cycle summaries, and safe copy. It must not publish private payment identifiers, private verification evidence, private ballot identities, private appeal evidence, private audit evidence, or private real-user financial totals by default.
+## Data Minimization
 
-Real-money private data collection remains disabled by `config/mpgf/data-retention-policy.json` and by `MPGF_REAL_MONEY_ENABLED=false`.
+- Support signals private by default.
+- Donor rows are not public.
+- Public reports use aggregate-only reporting for funding, support breadth, disputes, and experiments.
+- No raw private wishes in analytics.
+- No private donor reasons, receipt URLs, reviewer notes, or provider payload bodies are exposed in public API responses.
 
-Conformance rows: AC-COPY-001, AC-DEPLOY-009.
+## Provider and Identity References
+
+- Hashed provider identifiers are used for Stripe, Every.org, and partner event references where possible.
+- Identity confidence can affect eligibility or weight, but donor moral reputation cannot affect allocation power.
+- Compliance screening outcomes are readiness gates, not public badges or moral scores.
+
+## Launch Controls
+
+- Public postmortems publish aggregate outcomes and next-round parameter reset evidence only.
+- Private evidence and receipt URLs remain access-controlled.
+- Analytics events use safe buckets and redacted reason codes.
+- Surprise counterparty exposure is prohibited.

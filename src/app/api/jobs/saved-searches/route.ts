@@ -4,10 +4,18 @@ import {
   evaluateDeterministicMatch,
   getDeterministicSignalsFromSynthesis,
 } from "@/lib/background-networking";
+import { buildBackgroundOpportunityNotificationCopy } from "@/lib/background-helper-runs";
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
 } from "@/lib/background-explanations";
+import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  evaluateCandidateExposureForBackgroundRun,
+  normalizeBackgroundCandidateAudienceScope,
+  type BackgroundCandidateExposureDecision,
+} from "@/lib/background-candidate-exposure";
 import {
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
   WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
@@ -19,8 +27,14 @@ import {
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
   reserveBackgroundQueryBudget,
+  upsertBackgroundOpportunityBriefs,
 } from "@/lib/background-operations";
+import { buildOpportunityBriefRow } from "@/lib/background-opportunity-briefs";
 import { getBackgroundQueryFingerprint } from "@/lib/background-query-budget";
+import {
+  BACKGROUND_PURPOSE_POLICY_VERSION,
+  type BackgroundPurposeBinding,
+} from "@/lib/background-purpose-registry";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -63,6 +77,43 @@ function getOrderedProfilePair(profileId: string, counterpartyId: string) {
     : { profileAId: counterpartyId, profileBId: profileId, viewerIsProfileA: false };
 }
 
+async function reserveCandidateExposureSurface({
+  candidateProfileId,
+  decision,
+  purposeBinding,
+  supabase,
+}: {
+  candidateProfileId: string;
+  decision: BackgroundCandidateExposureDecision;
+  purposeBinding: BackgroundPurposeBinding;
+  supabase: ReturnType<typeof createServiceClient>;
+}) {
+  if (!decision.allowed || !decision.budgetConfig) {
+    return false;
+  }
+
+  const { data, error } = await supabase.rpc("reserve_background_candidate_exposure", {
+    target_audience_scope: decision.normalizedAudienceScope,
+    target_budget_version: decision.candidateBudgetVersion || BACKGROUND_CANDIDATE_BUDGET_VERSION,
+    target_candidate_profile_id: candidateProfileId,
+    target_cohort_scope_id: "",
+    target_purpose_code: purposeBinding.purposeCode,
+    target_purpose_policy_version: purposeBinding.purposePolicyVersion,
+    target_surface_limit: decision.budgetConfig.surfaceLimit,
+    target_window_days: decision.budgetConfig.windowDays,
+  });
+
+  if (error) {
+    console.error("[background-networking] Failed to reserve saved-search candidate exposure", {
+      candidateProfileId,
+      error: error.message,
+    });
+    return false;
+  }
+
+  return Boolean(data?.[0]?.allowed);
+}
+
 async function processSavedSearches(request: Request) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,6 +150,7 @@ async function processSavedSearches(request: Request) {
     { data: ownerProfiles, error: ownerProfilesError },
     { data: ownerSyntheses, error: ownerSynthesesError },
     { data: previewSyntheses, error: previewSynthesesError },
+    { data: candidateProfiles, error: candidateProfilesError },
   ] = await Promise.all([
     dueProfileIds.length
       ? supabase.from("wish_profiles").select("*").in("profile_id", dueProfileIds)
@@ -115,15 +167,25 @@ async function processSavedSearches(request: Request) {
             previewRows.map((preview) => preview.profile_id),
           )
       : Promise.resolve({ data: [] as ProfileSynthesisRow[], error: null }),
+    previewRows.length
+      ? supabase
+          .from("wish_profiles")
+          .select("*")
+          .in(
+            "profile_id",
+            previewRows.map((preview) => preview.profile_id),
+          )
+      : Promise.resolve({ data: [] as WishProfileRow[], error: null }),
   ]);
 
-  if (ownerProfilesError || ownerSynthesesError || previewSynthesesError) {
+  if (ownerProfilesError || ownerSynthesesError || previewSynthesesError || candidateProfilesError) {
     return NextResponse.json(
       {
         error:
           ownerProfilesError?.message ??
           ownerSynthesesError?.message ??
-          previewSynthesesError?.message,
+          previewSynthesesError?.message ??
+          candidateProfilesError?.message,
       },
       { status: 500 },
     );
@@ -147,6 +209,14 @@ async function processSavedSearches(request: Request) {
       overlayBackgroundRecordSensitiveText(synthesis, PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS),
     ]),
   );
+  const candidateProfileById = new Map(
+    ((candidateProfiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
+  );
+  const purposeBinding: BackgroundPurposeBinding = {
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  };
+  const audienceScope = normalizeBackgroundCandidateAudienceScope("cohort_only");
 
   let searchesProcessed = 0;
   let candidatesScanned = 0;
@@ -210,6 +280,7 @@ async function processSavedSearches(request: Request) {
     let runRefreshed = 0;
     let runCandidates = 0;
     const explanationSnapshots: ReturnType<typeof buildMatchExplanationSnapshot>[] = [];
+    const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
     for (const preview of previewRows) {
       if (preview.profile_id === search.profile_id || !preview.background_search_enabled) {
@@ -217,6 +288,17 @@ async function processSavedSearches(request: Request) {
       }
 
       runCandidates += 1;
+      const candidateExposureDecision = evaluateCandidateExposureForBackgroundRun({
+        audienceScope,
+        candidateProfile: candidateProfileById.get(preview.profile_id) ?? null,
+        purposeBinding,
+        surfaces: ["broad_profile"],
+      });
+
+      if (!candidateExposureDecision.allowed) {
+        continue;
+      }
+
       const evaluation = evaluateDeterministicMatch({
         counterparty: preview,
         counterpartySignals: getDeterministicSignalsFromSynthesis(
@@ -269,6 +351,17 @@ async function processSavedSearches(request: Request) {
         continue;
       }
 
+      const exposureReserved = await reserveCandidateExposureSurface({
+        candidateProfileId: preview.profile_id,
+        decision: candidateExposureDecision,
+        purposeBinding,
+        supabase,
+      });
+
+      if (!exposureReserved) {
+        continue;
+      }
+
       const reasonForSearchOwner = `${evaluation.viewerReason} This came from one of your saved searches.`;
       const reasonForCounterparty =
         "A possible counterparty matched one of your broad registry previews through a saved-search scan. No exact wishes, private search text, or contact details were disclosed.";
@@ -277,6 +370,7 @@ async function processSavedSearches(request: Request) {
         "Saved search hit",
       ];
       const matchPayload: MatchSuggestionInsert = {
+        background_owner_profile_id: search.profile_id,
         profile_a_id: profileAId,
         profile_b_id: profileBId,
         profile_a_entry_id: null,
@@ -312,22 +406,8 @@ async function processSavedSearches(request: Request) {
           matchBasis,
           matchId,
           profileId: search.profile_id,
-          riskNotes: evaluation.riskNotes,
-          score: evaluation.score,
-          sharedCauses: evaluation.sharedCauses,
-          sourceRunId: search.id,
-          sourceRunKind: "saved_search_scan",
-          status: upsertedMatch.status,
-          suggestedFirstStep: evaluation.suggestedFirstStep,
-          viewerConsented: false,
-        }),
-        buildMatchExplanationSnapshot({
-          canRevealIdentity: false,
-          counterpartyConsented: false,
-          generatedBy: "saved-search-cron",
-          matchBasis,
-          matchId,
-          profileId: preview.profile_id,
+          purposeCode: purposeBinding.purposeCode,
+          purposePolicyVersion: purposeBinding.purposePolicyVersion,
           riskNotes: evaluation.riskNotes,
           score: evaluation.score,
           sharedCauses: evaluation.sharedCauses,
@@ -338,12 +418,35 @@ async function processSavedSearches(request: Request) {
           viewerConsented: false,
         }),
       );
+      opportunityBriefs.push(
+        buildOpportunityBriefRow({
+          canRevealIdentity: false,
+          candidateProfileId: preview.profile_id,
+          counterpartyConsented: false,
+          generatedBy: "saved-search-cron",
+          matchBasis,
+          matchId,
+          profileId: search.profile_id,
+          purposeCode: purposeBinding.purposeCode,
+          purposePolicyVersion: purposeBinding.purposePolicyVersion,
+          riskNotes: evaluation.riskNotes,
+          score: evaluation.score,
+          sharedCauses: evaluation.sharedCauses,
+          status: upsertedMatch.status,
+          suggestedFirstStep: evaluation.suggestedFirstStep,
+          title: "Opportunity brief: saved-search lead",
+          viewerConsented: false,
+        }),
+      );
 
       await supabase.from("match_audit_events").insert({
         match_id: matchId,
         actor_profile_id: search.profile_id,
         event_type: existingMatch ? "match_refreshed" : "match_created",
-        summary: `Saved-search scan found compatibility with score ${evaluation.score}.`,
+        summary: buildPrivacySafeMatchAuditSummary({
+          score: evaluation.score,
+          sourceLabel: "Saved-search scan",
+        }),
         metadata: buildPrivacySafeMatchAuditMetadata({
           compatibilityTags: evaluation.compatibilityTags,
           runReason: "saved-search-cron",
@@ -356,23 +459,15 @@ async function processSavedSearches(request: Request) {
         runRefreshed += 1;
       } else {
         runCreated += 1;
+        const notificationCopy = buildBackgroundOpportunityNotificationCopy();
         const notificationResult = await insertWishNotificationsWithSafeEmail({
-          notifications: [
-            {
-              profile_id: search.profile_id,
-              kind: "match",
-              title: "A potential moral trade was found",
-              body: reasonForSearchOwner,
-              match_id: matchId,
-            },
-            {
-              profile_id: preview.profile_id,
-              kind: "match",
-              title: "A potential moral trade was found",
-              body: reasonForCounterparty,
-              match_id: matchId,
-            },
-          ],
+          notifications: {
+            profile_id: search.profile_id,
+            kind: "match",
+            title: notificationCopy.title,
+            body: notificationCopy.body,
+            match_id: matchId,
+          },
           supabase,
         });
 
@@ -384,6 +479,18 @@ async function processSavedSearches(request: Request) {
           });
         }
       }
+    }
+
+    const opportunityBriefError = await upsertBackgroundOpportunityBriefs({
+      briefs: opportunityBriefs,
+      supabase,
+    });
+
+    if (opportunityBriefError) {
+      console.error("[background-networking] Failed to save saved-search opportunity briefs", {
+        error: opportunityBriefError.message,
+        searchId: search.id,
+      });
     }
 
     const snapshotError = await insertMatchExplanationSnapshots({

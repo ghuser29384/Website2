@@ -16,6 +16,150 @@ import {
   validateMoralTradePolicyBundleContract,
 } from "@/lib/moral-trade/policy-bundle";
 import {
+  getMoralTradeReleaseGateContract,
+  validateMoralTradeReleaseGateContract,
+} from "@/lib/moral-trade/release-gates";
+import {
+  getMoralTradeParticipantConfirmationContract,
+  validateMoralTradeParticipantConfirmationContract,
+} from "@/lib/moral-trade/participant-confirmations";
+import {
+  getMoralTradeParticipantEligibilityContract,
+  validateMoralTradeParticipantEligibilityContract,
+} from "@/lib/moral-trade/participant-eligibility";
+import {
+  getMoralTradeAccountSecurityContract,
+  validateMoralTradeAccountSecurityContract,
+} from "@/lib/moral-trade/account-security";
+import {
+  getMoralTradeReviewerQualityContract,
+  validateMoralTradeReviewerQualityContract,
+} from "@/lib/moral-trade/reviewer-quality";
+import {
+  getMoralTradeAntiEnumerationContract,
+  validateMoralTradeAntiEnumerationContract,
+} from "@/lib/moral-trade/anti-enumeration";
+import {
+  getMoralTradePrivacyGovernanceContract,
+  validateMoralTradePrivacyGovernanceContract,
+} from "@/lib/moral-trade/privacy-governance";
+import {
+  getMoralTradeImpactClaimContract,
+  validateMoralTradeImpactClaimContract,
+} from "@/lib/moral-trade/impact-claims";
+import {
+  getMoralTradeMatchingClearingContract,
+  validateMoralTradeMatchingClearingContract,
+} from "@/lib/moral-trade/matching-clearing";
+import {
+  getMoralTradeClearingPreviewContract,
+  validateMoralTradeClearingPreviewContract,
+} from "@/lib/moral-trade/clearing-previews";
+import {
+  getMoralTradeBaselineIntegrityContract,
+  validateMoralTradeBaselineIntegrityContract,
+} from "@/lib/moral-trade/baseline-integrity";
+import {
+  getMoralTradeAgreementAmendmentContract,
+  validateMoralTradeAgreementAmendmentContract,
+} from "@/lib/moral-trade/agreement-amendments";
+import {
+  getMoralTradeProductionReadinessContract,
+  validateMoralTradeProductionReadinessContract,
+} from "@/lib/moral-trade/production-readiness";
+import {
+  getMoralTradeRecipientDestinationContract,
+  validateMoralTradeRecipientDestinationContract,
+} from "@/lib/moral-trade/recipient-destination";
+import {
+  getMoralTradeRecipientAcceptanceContract,
+  validateMoralTradeRecipientAcceptanceContract,
+} from "@/lib/moral-trade/recipient-acceptance";
+import {
+  getMoralTradeAiPreferenceElicitationContract,
+  validateMoralTradeAiPreferenceElicitationContract,
+} from "@/lib/moral-trade/ai-preference-elicitation";
+import {
+  getMoralTradePostClearAuditContract,
+  validateMoralTradePostClearAuditContract,
+} from "@/lib/moral-trade/post-clear-audit";
+import {
+  getMoralTradeNonPublicGoodsSubsidyContract,
+  validateMoralTradeNonPublicGoodsSubsidyContract,
+} from "@/lib/moral-trade/non-public-goods-subsidies";
+import {
+  getMoralTradeDirectPairClearingContract,
+  validateMoralTradeDirectPairClearingContract,
+} from "@/lib/moral-trade/direct-pair-clearing";
+import {
+  getMoralTradeCauseBucketTaxonomyContract,
+  validateMoralTradeCauseBucketTaxonomyContract,
+} from "@/lib/moral-trade/cause-bucket-taxonomy";
+import {
+  getMoralTradeResourceCompatibilityContract,
+  validateMoralTradeResourceCompatibilityContract,
+} from "@/lib/moral-trade/resource-compatibility";
+import {
+  getMoralTradeNetOffsetAccountingContract,
+  validateMoralTradeNetOffsetAccountingContract,
+} from "@/lib/moral-trade/net-offset-accounting";
+import {
+  getMoralTradeOfferValidityContract,
+  validateMoralTradeOfferValidityContract,
+} from "@/lib/moral-trade/offer-validity";
+import {
+  getMoralTradePrivateExchangeRateContract,
+  validateMoralTradePrivateExchangeRateContract,
+} from "@/lib/moral-trade/private-exchange-rate";
+import {
+  getMoralTradeNoncompensableBlockerContract,
+  validateMoralTradeNoncompensableBlockerContract,
+} from "@/lib/moral-trade/noncompensable-blockers";
+import {
+  getMoralTradeBatchClearingObjectiveContract,
+  validateMoralTradeBatchClearingObjectiveContract,
+} from "@/lib/moral-trade/batch-clearing-objective";
+import {
+  getMoralTradeSensitiveEvidenceAttestationContract,
+  validateMoralTradeSensitiveEvidenceAttestationContract,
+} from "@/lib/moral-trade/sensitive-evidence-attestations";
+import {
+  getMoralTradePilotEvidenceContract,
+  validateMoralTradePilotEvidenceContract,
+} from "@/lib/moral-trade/pilot-evidence";
+import {
+  getMoralTradeSideAgreementContract,
+  validateMoralTradeSideAgreementContract,
+} from "@/lib/moral-trade/side-agreements";
+import {
+  getMoralTradeTradeClassificationContract,
+  validateMoralTradeTradeClassificationContract,
+} from "@/lib/moral-trade/trade-classification";
+import {
+  getMoralTradeTemplateConformanceContract,
+  validateMoralTradeTemplateConformanceContract,
+} from "@/lib/moral-trade/template-conformance";
+import {
+  getMoralTradeReviewCapacityContract,
+  validateMoralTradeReviewCapacityContract,
+} from "@/lib/moral-trade/review-capacity";
+import {
+  getMoralTradeParticipantTermSheetContract,
+  validateMoralTradeParticipantTermSheetContract,
+} from "@/lib/moral-trade/participant-term-sheet";
+import {
+  getMoralTradeProtectiveAssessmentContract,
+  validateMoralTradeProtectiveAssessmentContract,
+} from "@/lib/moral-trade/protective-assessments";
+import {
+  getMoralTradeUserSafetyContentModerationContract,
+  validateMoralTradeUserSafetyContentModerationContract,
+} from "@/lib/moral-trade/user-safety-content-moderation";
+import {
+  getMoralTradeFinancialSettlementControlsContract,
+  validateMoralTradeFinancialSettlementControlsContract,
+} from "@/lib/moral-trade/financial-settlement-controls";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -54,6 +198,14 @@ import {
   validateMoralTradeExternalityProfile,
 } from "@/lib/moral-trade/externality";
 import {
+  getMoralTradeTransparencyReportContract,
+  validateMoralTradeTransparencyReportContract,
+} from "@/lib/moral-trade/transparency-report";
+import {
+  getMarketplaceMeasurementContract,
+  validateMarketplaceMeasurementContract,
+} from "@/lib/marketplace-measurement";
+import {
   auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
@@ -62,6 +214,10 @@ import {
   getMoralTradeAiGovernanceProfile,
   validateMoralTradeAiGovernanceProfile,
 } from "@/lib/moral-trade/ai-governance";
+import {
+  getMoralTradeDocumentCoverageProfile,
+  validateMoralTradeDocumentCoverageProfile,
+} from "@/lib/moral-trade/document-coverage";
 import {
   getMoralTradeMatchSignalContract,
   validateMoralTradeMatchSignalContract,
@@ -79,6 +235,10 @@ import {
   getMoralTradeCopilotRolloutReadinessAudits,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
+import {
+  getMoralGoodsGroupBuyingContract,
+  validateMoralGoodsGroupBuyingContract,
+} from "@/lib/moral-trade/group-buying";
 import {
   getOfferReviewWorkflowContract,
   validateOfferReviewWorkflowContract,
@@ -103,10 +263,191 @@ export async function GET(request: Request) {
   const policyBundleContract = getMoralTradePolicyBundleContract();
   const policyBundleValidation =
     validateMoralTradePolicyBundleContract(policyBundleContract);
+  const releaseGateContract = getMoralTradeReleaseGateContract();
+  const releaseGateValidation =
+    validateMoralTradeReleaseGateContract(releaseGateContract);
+  const participantConfirmationContract =
+    getMoralTradeParticipantConfirmationContract();
+  const participantConfirmationValidation =
+    validateMoralTradeParticipantConfirmationContract(
+      participantConfirmationContract,
+    );
+  const participantEligibilityContract =
+    getMoralTradeParticipantEligibilityContract();
+  const participantEligibilityValidation =
+    validateMoralTradeParticipantEligibilityContract(
+      participantEligibilityContract,
+    );
+  const accountSecurityContract = getMoralTradeAccountSecurityContract();
+  const accountSecurityValidation =
+    validateMoralTradeAccountSecurityContract(accountSecurityContract);
+  const reviewerQualityContract = getMoralTradeReviewerQualityContract();
+  const reviewerQualityValidation =
+    validateMoralTradeReviewerQualityContract(reviewerQualityContract);
+  const antiEnumerationContract = getMoralTradeAntiEnumerationContract();
+  const antiEnumerationValidation =
+    validateMoralTradeAntiEnumerationContract(antiEnumerationContract);
+  const privacyGovernanceContract = getMoralTradePrivacyGovernanceContract();
+  const privacyGovernanceValidation =
+    validateMoralTradePrivacyGovernanceContract(privacyGovernanceContract);
+  const impactClaimContract = getMoralTradeImpactClaimContract();
+  const impactClaimValidation =
+    validateMoralTradeImpactClaimContract(impactClaimContract);
+  const matchingClearingContract = getMoralTradeMatchingClearingContract();
+  const matchingClearingValidation =
+    validateMoralTradeMatchingClearingContract(matchingClearingContract);
+  const clearingPreviewContract = getMoralTradeClearingPreviewContract();
+  const clearingPreviewValidation =
+    validateMoralTradeClearingPreviewContract(clearingPreviewContract);
+  const baselineIntegrityContract =
+    getMoralTradeBaselineIntegrityContract();
+  const baselineIntegrityValidation =
+    validateMoralTradeBaselineIntegrityContract(
+      baselineIntegrityContract,
+    );
+  const agreementAmendmentContract =
+    getMoralTradeAgreementAmendmentContract();
+  const agreementAmendmentValidation =
+    validateMoralTradeAgreementAmendmentContract(
+      agreementAmendmentContract,
+    );
+  const productionReadinessContract =
+    getMoralTradeProductionReadinessContract();
+  const productionReadinessValidation =
+    validateMoralTradeProductionReadinessContract(
+      productionReadinessContract,
+    );
+  const recipientDestinationContract =
+    getMoralTradeRecipientDestinationContract();
+  const recipientDestinationValidation =
+    validateMoralTradeRecipientDestinationContract(
+      recipientDestinationContract,
+    );
+  const recipientAcceptanceContract =
+    getMoralTradeRecipientAcceptanceContract();
+  const recipientAcceptanceValidation =
+    validateMoralTradeRecipientAcceptanceContract(
+      recipientAcceptanceContract,
+    );
+  const aiPreferenceElicitationContract =
+    getMoralTradeAiPreferenceElicitationContract();
+  const aiPreferenceElicitationValidation =
+    validateMoralTradeAiPreferenceElicitationContract(
+      aiPreferenceElicitationContract,
+    );
+  const postClearAuditContract = getMoralTradePostClearAuditContract();
+  const postClearAuditValidation =
+    validateMoralTradePostClearAuditContract(postClearAuditContract);
+  const nonPublicGoodsSubsidyContract =
+    getMoralTradeNonPublicGoodsSubsidyContract();
+  const nonPublicGoodsSubsidyValidation =
+    validateMoralTradeNonPublicGoodsSubsidyContract(
+      nonPublicGoodsSubsidyContract,
+    );
+  const directPairClearingContract = getMoralTradeDirectPairClearingContract();
+  const directPairClearingValidation =
+    validateMoralTradeDirectPairClearingContract(directPairClearingContract);
+  const causeBucketTaxonomyContract =
+    getMoralTradeCauseBucketTaxonomyContract();
+  const causeBucketTaxonomyValidation =
+    validateMoralTradeCauseBucketTaxonomyContract(
+      causeBucketTaxonomyContract,
+    );
+  const resourceCompatibilityContract =
+    getMoralTradeResourceCompatibilityContract();
+  const resourceCompatibilityValidation =
+    validateMoralTradeResourceCompatibilityContract(
+      resourceCompatibilityContract,
+    );
+  const netOffsetAccountingContract =
+    getMoralTradeNetOffsetAccountingContract();
+  const netOffsetAccountingValidation =
+    validateMoralTradeNetOffsetAccountingContract(
+      netOffsetAccountingContract,
+    );
+  const offerValidityContract = getMoralTradeOfferValidityContract();
+  const offerValidityValidation =
+    validateMoralTradeOfferValidityContract(offerValidityContract);
+  const privateExchangeRateContract =
+    getMoralTradePrivateExchangeRateContract();
+  const privateExchangeRateValidation =
+    validateMoralTradePrivateExchangeRateContract(
+      privateExchangeRateContract,
+    );
+  const noncompensableBlockerContract =
+    getMoralTradeNoncompensableBlockerContract();
+  const noncompensableBlockerValidation =
+    validateMoralTradeNoncompensableBlockerContract(
+      noncompensableBlockerContract,
+    );
+  const batchClearingObjectiveContract =
+    getMoralTradeBatchClearingObjectiveContract();
+  const batchClearingObjectiveValidation =
+    validateMoralTradeBatchClearingObjectiveContract(
+      batchClearingObjectiveContract,
+    );
+  const sensitiveEvidenceAttestationContract =
+    getMoralTradeSensitiveEvidenceAttestationContract();
+  const sensitiveEvidenceAttestationValidation =
+    validateMoralTradeSensitiveEvidenceAttestationContract(
+      sensitiveEvidenceAttestationContract,
+    );
+  const pilotEvidenceContract = getMoralTradePilotEvidenceContract();
+  const pilotEvidenceValidation =
+    validateMoralTradePilotEvidenceContract(pilotEvidenceContract);
+  const sideAgreementContract = getMoralTradeSideAgreementContract();
+  const sideAgreementValidation =
+    validateMoralTradeSideAgreementContract(sideAgreementContract);
+  const tradeClassificationContract =
+    getMoralTradeTradeClassificationContract();
+  const tradeClassificationValidation =
+    validateMoralTradeTradeClassificationContract(tradeClassificationContract);
+  const templateConformanceContract =
+    getMoralTradeTemplateConformanceContract();
+  const templateConformanceValidation =
+    validateMoralTradeTemplateConformanceContract(templateConformanceContract);
+  const reviewCapacityContract = getMoralTradeReviewCapacityContract();
+  const reviewCapacityValidation =
+    validateMoralTradeReviewCapacityContract(reviewCapacityContract);
+  const participantTermSheetContract =
+    getMoralTradeParticipantTermSheetContract();
+  const participantTermSheetValidation =
+    validateMoralTradeParticipantTermSheetContract(
+      participantTermSheetContract,
+    );
+  const protectiveAssessmentContract =
+    getMoralTradeProtectiveAssessmentContract();
+  const protectiveAssessmentValidation =
+    validateMoralTradeProtectiveAssessmentContract(
+      protectiveAssessmentContract,
+    );
+  const userSafetyContentModerationContract =
+    getMoralTradeUserSafetyContentModerationContract();
+  const userSafetyContentModerationValidation =
+    validateMoralTradeUserSafetyContentModerationContract(
+      userSafetyContentModerationContract,
+    );
+  const financialSettlementControlsContract =
+    getMoralTradeFinancialSettlementControlsContract();
+  const financialSettlementControlsValidation =
+    validateMoralTradeFinancialSettlementControlsContract(
+      financialSettlementControlsContract,
+    );
+  const groupBuyingContract = getMoralGoodsGroupBuyingContract();
+  const groupBuyingValidation =
+    validateMoralGoodsGroupBuyingContract(groupBuyingContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
   const schemaRegistryValidation = validateMoralTradeSchemaRegistry(schemaRegistry);
+  const schemaRegistrySampleValidationCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationCount,
+    0,
+  );
+  const schemaRegistrySampleValidationFailureCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationFailureCount,
+    0,
+  );
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
@@ -145,18 +486,69 @@ export async function GET(request: Request) {
   const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
   const externalityProfile = getMoralTradeExternalityProfile();
   const externalityValidation = validateMoralTradeExternalityProfile(externalityProfile);
+  const transparencyReportContract = getMoralTradeTransparencyReportContract();
+  const transparencyReportValidation =
+    validateMoralTradeTransparencyReportContract(transparencyReportContract);
+  const marketplaceMeasurementContract = getMarketplaceMeasurementContract();
+  const marketplaceMeasurementValidation =
+    validateMarketplaceMeasurementContract();
   const apiContractProfile = getMoralTradeApiContractProfile();
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
   const apiContractImplementationAudit =
     auditMoralTradeApiImplementationContract(apiContractProfile);
   const aiGovernanceProfile = getMoralTradeAiGovernanceProfile();
   const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile(aiGovernanceProfile);
+  const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
+  const documentCoverageValidation =
+    validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
+  const documentCoverageRequiredEvidencePhraseCount =
+    documentCoverageProfile.requirements.reduce(
+      (total, requirement) => total + requirement.requiredEvidencePhrases.length,
+      0,
+    );
 
   return buildMoralTradeApiJsonResponse({
     ok:
       validation.status === "pass" &&
       dataModelValidation.status === "pass" &&
       policyBundleValidation.status === "pass" &&
+      releaseGateValidation.status === "pass" &&
+      participantConfirmationValidation.status === "pass" &&
+      participantEligibilityValidation.status === "pass" &&
+      accountSecurityValidation.status === "pass" &&
+      reviewerQualityValidation.status === "pass" &&
+      antiEnumerationValidation.status === "pass" &&
+      privacyGovernanceValidation.status === "pass" &&
+      impactClaimValidation.status === "pass" &&
+      matchingClearingValidation.status === "pass" &&
+      clearingPreviewValidation.status === "pass" &&
+      baselineIntegrityValidation.status === "pass" &&
+      agreementAmendmentValidation.status === "pass" &&
+      productionReadinessValidation.status === "pass" &&
+      recipientDestinationValidation.status === "pass" &&
+      recipientAcceptanceValidation.status === "pass" &&
+      aiPreferenceElicitationValidation.status === "pass" &&
+      postClearAuditValidation.status === "pass" &&
+      nonPublicGoodsSubsidyValidation.status === "pass" &&
+      directPairClearingValidation.status === "pass" &&
+      causeBucketTaxonomyValidation.status === "pass" &&
+      resourceCompatibilityValidation.status === "pass" &&
+      netOffsetAccountingValidation.status === "pass" &&
+      offerValidityValidation.status === "pass" &&
+      privateExchangeRateValidation.status === "pass" &&
+      noncompensableBlockerValidation.status === "pass" &&
+      batchClearingObjectiveValidation.status === "pass" &&
+      sensitiveEvidenceAttestationValidation.status === "pass" &&
+      pilotEvidenceValidation.status === "pass" &&
+      sideAgreementValidation.status === "pass" &&
+      tradeClassificationValidation.status === "pass" &&
+      templateConformanceValidation.status === "pass" &&
+      reviewCapacityValidation.status === "pass" &&
+      participantTermSheetValidation.status === "pass" &&
+      protectiveAssessmentValidation.status === "pass" &&
+      userSafetyContentModerationValidation.status === "pass" &&
+      financialSettlementControlsValidation.status === "pass" &&
+      groupBuyingValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -171,15 +563,55 @@ export async function GET(request: Request) {
       evaluationValidation.status === "pass" &&
       performanceValidation.status === "pass" &&
       externalityValidation.status === "pass" &&
+      transparencyReportValidation.status === "pass" &&
+      marketplaceMeasurementValidation.status === "pass" &&
       apiContractValidation.status === "pass" &&
       apiContractImplementationAudit.status === "pass" &&
-      aiGovernanceValidation.status === "pass",
+      aiGovernanceValidation.status === "pass" &&
+      documentCoverageValidation.status === "pass",
     checkedAt: new Date().toISOString(),
     profileVersion: profile.version,
     purpose: profile.purpose,
     validation,
     dataModelValidation,
     policyBundleValidation,
+    releaseGateValidation,
+    participantConfirmationValidation,
+    participantEligibilityValidation,
+    accountSecurityValidation,
+    reviewerQualityValidation,
+    antiEnumerationValidation,
+    privacyGovernanceValidation,
+    impactClaimValidation,
+    matchingClearingValidation,
+    clearingPreviewValidation,
+    baselineIntegrityValidation,
+    agreementAmendmentValidation,
+    productionReadinessValidation,
+    recipientDestinationValidation,
+    recipientAcceptanceValidation,
+    aiPreferenceElicitationValidation,
+    postClearAuditValidation,
+    nonPublicGoodsSubsidyValidation,
+    directPairClearingValidation,
+    causeBucketTaxonomyValidation,
+    resourceCompatibilityValidation,
+    netOffsetAccountingValidation,
+    offerValidityValidation,
+    privateExchangeRateValidation,
+    noncompensableBlockerValidation,
+    batchClearingObjectiveValidation,
+    sensitiveEvidenceAttestationValidation,
+    pilotEvidenceValidation,
+    sideAgreementValidation,
+    tradeClassificationValidation,
+    templateConformanceValidation,
+    reviewCapacityValidation,
+    participantTermSheetValidation,
+    protectiveAssessmentValidation,
+    userSafetyContentModerationValidation,
+    financialSettlementControlsValidation,
+    groupBuyingValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -194,9 +626,12 @@ export async function GET(request: Request) {
     evaluationValidation,
     performanceValidation,
     externalityValidation,
+    transparencyReportValidation,
+    marketplaceMeasurementValidation,
     apiContractValidation,
     apiContractImplementationAudit,
     aiGovernanceValidation,
+    documentCoverageValidation,
     publicContract: {
       requiredProposalFields: profile.requiredProposalFields,
       dataModelProfileVersion: dataModelProfile.version,
@@ -219,7 +654,1018 @@ export async function GET(request: Request) {
         policyBundleContract.verificationMethodTaxonomy.map((entry) => entry.key),
       policyBundleRedactions: policyBundleContract.redactionPolicy.map((entry) => entry.key),
       policyBundleContractTests: policyBundleContract.contractTests,
+      releaseGateContractVersion: releaseGateContract.version,
+      releaseGateStageKeys: releaseGateContract.stages.map((stage) => stage.key),
+      releaseGateRequirementKeys:
+        releaseGateContract.requirementDefinitions.map((requirement) => requirement.key),
+      releaseGateFirstClassRecordTables: releaseGateContract.firstClassRecordTables,
+      releaseGatePolicySnapshotSubjects:
+        releaseGateContract.immutablePolicySnapshotSubjects,
+      releaseGatePrivilegedActionKeys: releaseGateContract.privilegedActionKeys,
+      releaseGateSampleEvaluationStatuses: Object.fromEntries(
+        releaseGateContract.sampleEvaluations.map((evaluation) => [
+          evaluation.stage,
+          evaluation.status,
+        ]),
+      ),
+      releaseGateContractTests: releaseGateContract.contractTests,
+      participantConfirmationContractVersion:
+        participantConfirmationContract.version,
+      participantConfirmationSubjectTypes:
+        participantConfirmationContract.subjectTypes,
+      participantConfirmationScopes:
+        participantConfirmationContract.confirmationScopes,
+      participantConfirmationFailClosedStatuses:
+        participantConfirmationContract.failClosedStatuses,
+      participantConfirmationFirstClassRecordTables:
+        participantConfirmationContract.firstClassRecordTables,
+      participantConfirmationRequiredHashFields:
+        participantConfirmationContract.requiredHashFields,
+      participantConfirmationHighRiskConsentQualityScopes:
+        participantConfirmationContract.highRiskScopesRequiringConsentQuality,
+      participantConfirmationSampleEvaluationStatuses:
+        participantConfirmationContract.sampleEvaluations.map((evaluation) => ({
+          scope: evaluation.confirmationScope,
+          status: evaluation.status,
+        })),
+      participantConfirmationContractTests:
+        participantConfirmationContract.contractTests,
+      participantEligibilityContractVersion:
+        participantEligibilityContract.version,
+      participantEligibilityTransitionKeys:
+        participantEligibilityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      participantEligibilityReviewDimensions:
+        participantEligibilityContract.reviewDimensions,
+      participantEligibilityFailClosedStatuses:
+        participantEligibilityContract.failClosedStatuses,
+      participantEligibilityFirstClassRecordTables:
+        participantEligibilityContract.firstClassRecordTables,
+      participantEligibilityPolicySnapshotSubjects:
+        participantEligibilityContract.policySnapshotSubjects,
+      participantEligibilitySampleEvaluationStatuses: Object.fromEntries(
+        participantEligibilityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      participantEligibilityContractTests:
+        participantEligibilityContract.contractTests,
+      accountSecurityContractVersion:
+        accountSecurityContract.version,
+      accountSecurityHighRiskActions:
+        accountSecurityContract.highRiskActions,
+      accountSecurityEventTypes:
+        accountSecurityContract.eventTypes,
+      accountSecurityFailClosedStatuses:
+        accountSecurityContract.failClosedStatuses,
+      accountSecurityFirstClassRecordTables:
+        accountSecurityContract.firstClassRecordTables,
+      accountSecurityPolicySnapshotSubjects:
+        accountSecurityContract.policySnapshotSubjects,
+      accountSecuritySampleEvaluationStatuses: Object.fromEntries(
+        accountSecurityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.action,
+          evaluation.status,
+        ]),
+      ),
+      accountSecurityContractTests:
+        accountSecurityContract.contractTests,
+      groupBuyingContractVersion: groupBuyingContract.version,
+      groupBuyingEnvelopeTypes: groupBuyingContract.envelopeTypes,
+      groupBuyingFeatureModules: groupBuyingContract.featureModules,
+      groupBuyingFirstClassRecordTables: groupBuyingContract.firstClassRecordTables,
+      groupBuyingSharedPrimitiveTables: groupBuyingContract.sharedPrimitiveTables,
+      groupBuyingSeedEnvelopeSlugs: groupBuyingContract.seedEnvelopeSlugs,
+      groupBuyingContractTests: groupBuyingContract.contractTests,
+      reviewerQualityContractVersion:
+        reviewerQualityContract.version,
+      reviewerQualityReviewTypes:
+        reviewerQualityContract.reviewTypes,
+      reviewerQualityFailClosedStatuses:
+        reviewerQualityContract.failClosedStatuses,
+      reviewerQualityFirstClassRecordTables:
+        reviewerQualityContract.firstClassRecordTables,
+      reviewerQualityPolicySnapshotSubjects:
+        reviewerQualityContract.policySnapshotSubjects,
+      reviewerQualitySampleEvaluationStatuses: Object.fromEntries(
+        reviewerQualityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.reviewType,
+          evaluation.status,
+        ]),
+      ),
+      reviewerQualityContractTests:
+        reviewerQualityContract.contractTests,
+      antiEnumerationContractVersion:
+        antiEnumerationContract.version,
+      antiEnumerationSurfaces:
+        antiEnumerationContract.surfaces,
+      antiEnumerationCountBuckets:
+        antiEnumerationContract.countBuckets,
+      antiEnumerationFailClosedStatuses:
+        antiEnumerationContract.failClosedStatuses,
+      antiEnumerationFirstClassRecordTables:
+        antiEnumerationContract.firstClassRecordTables,
+      antiEnumerationPolicySnapshotSubjects:
+        antiEnumerationContract.policySnapshotSubjects,
+      antiEnumerationSampleEvaluationStatuses: Object.fromEntries(
+        antiEnumerationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.surface,
+          evaluation.status,
+        ]),
+      ),
+      antiEnumerationContractTests:
+        antiEnumerationContract.contractTests,
+      privacyGovernanceContractVersion:
+        privacyGovernanceContract.version,
+      privacyGovernanceSurfaces:
+        privacyGovernanceContract.surfaces,
+      privacyGovernanceAudienceStages:
+        privacyGovernanceContract.audienceStages,
+      privacyGovernanceAccessLevels:
+        privacyGovernanceContract.accessLevels,
+      privacyGovernanceFailClosedStatuses:
+        privacyGovernanceContract.failClosedStatuses,
+      privacyGovernanceFirstClassRecordTables:
+        privacyGovernanceContract.firstClassRecordTables,
+      privacyGovernanceExistingRecordTables:
+        privacyGovernanceContract.existingRecordTables,
+      privacyGovernancePolicySnapshotSubjects:
+        privacyGovernanceContract.policySnapshotSubjects,
+      privacyGovernanceSampleEvaluationStatuses: Object.fromEntries(
+        privacyGovernanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.surface,
+          evaluation.status,
+        ]),
+      ),
+      privacyGovernanceContractTests:
+        privacyGovernanceContract.contractTests,
+      impactClaimContractVersion:
+        impactClaimContract.version,
+      impactClaimSurfaces:
+        impactClaimContract.surfaces,
+      impactClaimClaimTypes:
+        impactClaimContract.claimTypes,
+      impactClaimEvidenceClaimTypes:
+        impactClaimContract.evidenceClaimTypes,
+      impactClaimFailClosedStatuses:
+        impactClaimContract.failClosedStatuses,
+      impactClaimFirstClassRecordTables:
+        impactClaimContract.firstClassRecordTables,
+      impactClaimPolicySnapshotSubjects:
+        impactClaimContract.policySnapshotSubjects,
+      impactClaimSampleEvaluationStatuses: Object.fromEntries(
+        impactClaimContract.sampleEvaluations.map((evaluation) => [
+          evaluation.claimType,
+          evaluation.status,
+        ]),
+      ),
+      impactClaimContractTests:
+        impactClaimContract.contractTests,
+      matchingClearingContractVersion:
+        matchingClearingContract.version,
+      matchingClearingFlowTypes:
+        matchingClearingContract.flowTypes,
+      matchingClearingRunStatuses:
+        matchingClearingContract.runStatuses,
+      matchingClearingProposalStatuses:
+        matchingClearingContract.lockProposalStatuses,
+      matchingClearingFailClosedStatuses:
+        matchingClearingContract.failClosedStatuses,
+      matchingClearingFirstClassRecordTables:
+        matchingClearingContract.firstClassRecordTables,
+      matchingClearingExecutionRecordTables:
+        matchingClearingContract.executionRecordTables,
+      matchingClearingExecutionRoute:
+        matchingClearingContract.executionRoute,
+      matchingClearingReplayRule:
+        matchingClearingContract.replayRule,
+      matchingClearingPolicySnapshotSubjects:
+        matchingClearingContract.policySnapshotSubjects,
+      matchingClearingSampleEvaluationStatuses: Object.fromEntries(
+        matchingClearingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.flowType,
+          evaluation.status,
+        ]),
+      ),
+      matchingClearingContractTests:
+        matchingClearingContract.contractTests,
+      clearingPreviewContractVersion:
+        clearingPreviewContract.version,
+      clearingPreviewTracks:
+        clearingPreviewContract.tracks,
+      clearingPreviewModes:
+        clearingPreviewContract.modes,
+      clearingPreviewReleaseStages:
+        clearingPreviewContract.releaseStages,
+      clearingPreviewPersistenceRule:
+        clearingPreviewContract.persistenceRule,
+      clearingPreviewFirstClassRecordTables:
+        clearingPreviewContract.firstClassRecordTables,
+      clearingPreviewExecutionRoute:
+        clearingPreviewContract.executionRoute,
+      clearingPreviewRequiredSections:
+        clearingPreviewContract.requiredSections,
+      clearingPreviewRequiredControlStatuses:
+        clearingPreviewContract.requiredControlStatuses,
+      clearingPreviewSampleStatuses:
+        clearingPreviewContract.samplePreviews.map((preview) => ({
+          track: preview.track,
+          status: preview.status,
+          captureAllowed: preview.captureAllowed,
+          relianceBearing: preview.relianceBearing,
+        })),
+      clearingPreviewContractTests:
+        clearingPreviewContract.contractTests,
+      baselineIntegrityContractVersion:
+        baselineIntegrityContract.version,
+      baselineIntegrityTransitionKeys:
+        baselineIntegrityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      baselineIntegritySubjectTypes:
+        baselineIntegrityContract.subjectTypes,
+      baselineIntegrityAssessmentStates:
+        baselineIntegrityContract.assessmentStates,
+      baselineIntegrityFailClosedStatuses:
+        baselineIntegrityContract.failClosedStatuses,
+      baselineIntegrityFirstClassRecordTables:
+        baselineIntegrityContract.firstClassRecordTables,
+      baselineIntegrityEnforcementRule:
+        baselineIntegrityContract.enforcementRule,
+      baselineIntegrityEnforcementRecordTables:
+        baselineIntegrityContract.enforcementRecordTables,
+      baselineIntegrityEnforcementRoute:
+        baselineIntegrityContract.enforcementRoute,
+      baselineIntegrityPolicySnapshotSubjects:
+        baselineIntegrityContract.policySnapshotSubjects,
+      baselineIntegritySampleEvaluationStatuses: Object.fromEntries(
+        baselineIntegrityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      baselineIntegrityContractTests:
+        baselineIntegrityContract.contractTests,
+      agreementAmendmentContractVersion:
+        agreementAmendmentContract.version,
+      agreementAmendmentTransitionKeys:
+        agreementAmendmentContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      agreementAmendmentSubjectTypes:
+        agreementAmendmentContract.subjectTypes,
+      agreementAmendmentTypes:
+        agreementAmendmentContract.amendmentTypes,
+      agreementAmendmentStates:
+        agreementAmendmentContract.amendmentStates,
+      agreementAmendmentFailClosedStatuses:
+        agreementAmendmentContract.failClosedStatuses,
+      agreementAmendmentFirstClassRecordTables:
+        agreementAmendmentContract.firstClassRecordTables,
+      agreementAmendmentEnforcementRule:
+        agreementAmendmentContract.enforcementRule,
+      agreementAmendmentEnforcementRecordTables:
+        agreementAmendmentContract.enforcementRecordTables,
+      agreementAmendmentEnforcementRoute:
+        agreementAmendmentContract.enforcementRoute,
+      agreementAmendmentPolicySnapshotSubjects:
+        agreementAmendmentContract.policySnapshotSubjects,
+      agreementAmendmentSampleEvaluationStatuses: Object.fromEntries(
+        agreementAmendmentContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      agreementAmendmentContractTests:
+        agreementAmendmentContract.contractTests,
+      productionReadinessContractVersion:
+        productionReadinessContract.version,
+      productionReadinessControlKeys:
+        productionReadinessContract.controlDefinitions.map((control) => control.key),
+      productionReadinessGateKeys:
+        productionReadinessContract.gateDefinitions.map((gate) => gate.key),
+      productionReadinessFailClosedStatuses:
+        productionReadinessContract.failClosedStatuses,
+      productionReadinessFirstClassRecordTables:
+        productionReadinessContract.firstClassRecordTables,
+      productionReadinessPolicySnapshotSubjects:
+        productionReadinessContract.policySnapshotSubjects,
+      productionReadinessSampleEvaluationStatuses: Object.fromEntries(
+        productionReadinessContract.sampleEvaluations.map((evaluation) => [
+          evaluation.gate,
+          evaluation.status,
+        ]),
+      ),
+      productionReadinessContractTests:
+        productionReadinessContract.contractTests,
+      recipientDestinationContractVersion:
+        recipientDestinationContract.version,
+      recipientDestinationTransitionKeys:
+        recipientDestinationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      recipientDestinationReviewDimensions:
+        recipientDestinationContract.reviewDimensions,
+      recipientDestinationFailClosedStatuses:
+        recipientDestinationContract.failClosedStatuses,
+      recipientDestinationFirstClassRecordTables:
+        recipientDestinationContract.firstClassRecordTables,
+      recipientDestinationPolicySnapshotSubjects:
+        recipientDestinationContract.policySnapshotSubjects,
+      recipientDestinationSampleEvaluationStatuses: Object.fromEntries(
+        recipientDestinationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      recipientDestinationContractTests:
+        recipientDestinationContract.contractTests,
+      recipientAcceptanceContractVersion:
+        recipientAcceptanceContract.version,
+      recipientAcceptanceTransitionKeys:
+        recipientAcceptanceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      recipientAcceptanceSubjectTypes:
+        recipientAcceptanceContract.subjectTypes,
+      recipientAcceptanceStatuses:
+        recipientAcceptanceContract.acceptanceStatuses,
+      recipientAcceptanceAdverseAssociationStatuses:
+        recipientAcceptanceContract.adverseAssociationStatuses,
+      recipientAcceptanceVisibleStatuses:
+        recipientAcceptanceContract.visibleRecipientStatuses,
+      recipientAcceptanceRiskClasses:
+        recipientAcceptanceContract.riskClasses,
+      recipientAcceptanceFirstClassRecordTables:
+        recipientAcceptanceContract.firstClassRecordTables,
+      recipientAcceptancePolicySnapshotSubjects:
+        recipientAcceptanceContract.policySnapshotSubjects,
+      recipientAcceptancePrivacyBoundary:
+        recipientAcceptanceContract.privacyBoundary,
+      recipientAcceptanceSampleEvaluationStatuses: Object.fromEntries(
+        recipientAcceptanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      recipientAcceptanceContractTests:
+        recipientAcceptanceContract.contractTests,
+      aiPreferenceElicitationContractVersion:
+        aiPreferenceElicitationContract.version,
+      aiPreferenceElicitationTransitionKeys:
+        aiPreferenceElicitationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      aiPreferenceElicitationSubjectTypes:
+        aiPreferenceElicitationContract.subjectTypes,
+      aiPreferenceElicitationScopes:
+        aiPreferenceElicitationContract.scopes,
+      aiPreferenceElicitationStates:
+        aiPreferenceElicitationContract.elicitationStates,
+      aiPreferenceElicitationPolicyStatuses:
+        aiPreferenceElicitationContract.policyStatuses,
+      aiPreferenceElicitationProhibitedUseBlockers:
+        aiPreferenceElicitationContract.prohibitedUseBlockers,
+      aiPreferenceElicitationFirstClassRecordTables:
+        aiPreferenceElicitationContract.firstClassRecordTables,
+      aiPreferenceElicitationPolicySnapshotSubjects:
+        aiPreferenceElicitationContract.policySnapshotSubjects,
+      aiPreferenceElicitationPrivacyBoundary:
+        aiPreferenceElicitationContract.privacyBoundary,
+      aiPreferenceElicitationSampleEvaluationStatuses: Object.fromEntries(
+        aiPreferenceElicitationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      aiPreferenceElicitationContractTests:
+        aiPreferenceElicitationContract.contractTests,
+      postClearAuditContractVersion:
+        postClearAuditContract.version,
+      postClearAuditTransitionKeys:
+        postClearAuditContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      postClearAuditSubjectTypes:
+        postClearAuditContract.subjectTypes,
+      postClearAuditAuditTypes:
+        postClearAuditContract.auditTypes,
+      postClearAuditMatchStates:
+        postClearAuditContract.matchStates,
+      postClearAuditAuditStates:
+        postClearAuditContract.auditStates,
+      postClearAuditPolicyStatuses:
+        postClearAuditContract.policyStatuses,
+      postClearAuditCorrectionBoundaries:
+        postClearAuditContract.correctionBoundaries,
+      postClearAuditFirstClassRecordTables:
+        postClearAuditContract.firstClassRecordTables,
+      postClearAuditPolicySnapshotSubjects:
+        postClearAuditContract.policySnapshotSubjects,
+      postClearAuditPrivacyBoundary:
+        postClearAuditContract.privacyBoundary,
+      postClearAuditSampleEvaluationStatuses: Object.fromEntries(
+        postClearAuditContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      postClearAuditContractTests:
+        postClearAuditContract.contractTests,
+      nonPublicGoodsSubsidyContractVersion:
+        nonPublicGoodsSubsidyContract.version,
+      nonPublicGoodsSubsidyTransitionKeys:
+        nonPublicGoodsSubsidyContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      nonPublicGoodsSubsidyTradeTypes:
+        nonPublicGoodsSubsidyContract.tradeTypes,
+      nonPublicGoodsSubsidyAllowedLaunchTiers:
+        nonPublicGoodsSubsidyContract.allowedLaunchTiers,
+      nonPublicGoodsSubsidySourceReviewStates:
+        nonPublicGoodsSubsidyContract.sourceReviewStates,
+      nonPublicGoodsSubsidyConflictStates:
+        nonPublicGoodsSubsidyContract.conflictStates,
+      nonPublicGoodsSubsidyDisclosureLevels:
+        nonPublicGoodsSubsidyContract.disclosureLevels,
+      nonPublicGoodsSubsidyRefundPolicies:
+        nonPublicGoodsSubsidyContract.refundPolicies,
+      nonPublicGoodsSubsidyPoolStates:
+        nonPublicGoodsSubsidyContract.poolStates,
+      nonPublicGoodsSubsidyScheduleStates:
+        nonPublicGoodsSubsidyContract.scheduleStates,
+      nonPublicGoodsSubsidyPolicyStatuses:
+        nonPublicGoodsSubsidyContract.policyStatuses,
+      nonPublicGoodsSubsidyFirstClassRecordTables:
+        nonPublicGoodsSubsidyContract.firstClassRecordTables,
+      nonPublicGoodsSubsidyPolicySnapshotSubjects:
+        nonPublicGoodsSubsidyContract.policySnapshotSubjects,
+      nonPublicGoodsSubsidyPrivacyBoundary:
+        nonPublicGoodsSubsidyContract.privacyBoundary,
+      nonPublicGoodsSubsidyMetricExclusionRule:
+        nonPublicGoodsSubsidyContract.metricExclusionRule,
+      nonPublicGoodsSubsidySampleEvaluationStatuses: Object.fromEntries(
+        nonPublicGoodsSubsidyContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      nonPublicGoodsSubsidyContractTests:
+        nonPublicGoodsSubsidyContract.contractTests,
+      directPairClearingContractVersion:
+        directPairClearingContract.version,
+      directPairClearingTransitionKeys:
+        directPairClearingContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      directPairClearingTradeTypes:
+        directPairClearingContract.tradeTypes,
+      directPairClearingAllowedLaunchTradeTypes:
+        directPairClearingContract.allowedLaunchTradeTypes,
+      directPairClearingStates:
+        directPairClearingContract.directPairStates,
+      directPairClearingReviewStates:
+        directPairClearingContract.reviewStates,
+      directPairClearingPolicyStatuses:
+        directPairClearingContract.policyStatuses,
+      directPairClearingFirstClassRecordTables:
+        directPairClearingContract.firstClassRecordTables,
+      directPairClearingPolicySnapshotSubjects:
+        directPairClearingContract.policySnapshotSubjects,
+      directPairClearingPrivacyBoundary:
+        directPairClearingContract.privacyBoundary,
+      directPairClearingNoAutonomousOutreachRule:
+        directPairClearingContract.noAutonomousOutreachRule,
+      directPairClearingSampleEvaluationStatuses: Object.fromEntries(
+        directPairClearingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      directPairClearingContractTests:
+        directPairClearingContract.contractTests,
+      causeBucketTaxonomyContractVersion:
+        causeBucketTaxonomyContract.version,
+      causeBucketTaxonomyTransitionKeys:
+        causeBucketTaxonomyContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      causeBucketTaxonomyTypes:
+        causeBucketTaxonomyContract.taxonomyTypes,
+      causeBucketTaxonomySubjectTypes:
+        causeBucketTaxonomyContract.subjectTypes,
+      causeBucketTaxonomyReviewStates:
+        causeBucketTaxonomyContract.reviewStates,
+      causeBucketTaxonomyStates:
+        causeBucketTaxonomyContract.taxonomyStates,
+      causeBucketAssignmentConfidenceStates:
+        causeBucketTaxonomyContract.assignmentConfidenceStates,
+      causeBucketAssignmentVisibilityStates:
+        causeBucketTaxonomyContract.assignmentVisibilityStates,
+      causeBucketAssignmentStates:
+        causeBucketTaxonomyContract.assignmentStates,
+      causeBucketTaxonomyFirstClassRecordTables:
+        causeBucketTaxonomyContract.firstClassRecordTables,
+      causeBucketTaxonomyPolicySnapshotSubjects:
+        causeBucketTaxonomyContract.policySnapshotSubjects,
+      causeBucketTaxonomyPrivacyBoundary:
+        causeBucketTaxonomyContract.privacyBoundary,
+      causeBucketTaxonomyNonRankingRule:
+        causeBucketTaxonomyContract.nonRankingRule,
+      causeBucketTaxonomyMaterialChangeRule:
+        causeBucketTaxonomyContract.materialChangeRule,
+      causeBucketTaxonomySampleEvaluationStatuses: Object.fromEntries(
+        causeBucketTaxonomyContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      causeBucketTaxonomyContractTests:
+        causeBucketTaxonomyContract.contractTests,
+      resourceCompatibilityContractVersion:
+        resourceCompatibilityContract.version,
+      resourceCompatibilityTransitionKeys:
+        resourceCompatibilityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      resourceCompatibilitySubjectTypes:
+        resourceCompatibilityContract.subjectTypes,
+      resourceCompatibilityConflictTypes:
+        resourceCompatibilityContract.conflictTypes,
+      resourceCompatibilityJointFeasibilityStates:
+        resourceCompatibilityContract.jointFeasibilityStates,
+      resourceCompatibilityHybridOrCompromiseGoodStates:
+        resourceCompatibilityContract.hybridOrCompromiseGoodStates,
+      resourceCompatibilityReviewStates:
+        resourceCompatibilityContract.reviewStates,
+      resourceCompatibilityPolicyStatuses:
+        resourceCompatibilityContract.policyStatuses,
+      resourceCompatibilityFirstClassRecordTables:
+        resourceCompatibilityContract.firstClassRecordTables,
+      resourceCompatibilityPolicySnapshotSubjects:
+        resourceCompatibilityContract.policySnapshotSubjects,
+      resourceCompatibilityPrivacyBoundary:
+        resourceCompatibilityContract.privacyBoundary,
+      resourceCompatibilityZeroSumConflictRule:
+        resourceCompatibilityContract.zeroSumConflictRule,
+      resourceCompatibilitySampleEvaluationStatuses: Object.fromEntries(
+        resourceCompatibilityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      resourceCompatibilityContractTests:
+        resourceCompatibilityContract.contractTests,
+      netOffsetAccountingContractVersion:
+        netOffsetAccountingContract.version,
+      netOffsetAccountingTransitionKeys:
+        netOffsetAccountingContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      netOffsetAccountingSubjectTypes:
+        netOffsetAccountingContract.subjectTypes,
+      netOffsetAccountingBaselineOpposedActionTypes:
+        netOffsetAccountingContract.baselineOpposedActionTypes,
+      netOffsetAccountingResidualActionPolicies:
+        netOffsetAccountingContract.residualActionPolicies,
+      netOffsetAccountingSubstitutionChannelReviewStates:
+        netOffsetAccountingContract.substitutionChannelReviewStates,
+      netOffsetAccountingNetOffsetStates:
+        netOffsetAccountingContract.netOffsetStates,
+      netOffsetAccountingPolicyStatuses:
+        netOffsetAccountingContract.policyStatuses,
+      netOffsetAccountingFirstClassRecordTables:
+        netOffsetAccountingContract.firstClassRecordTables,
+      netOffsetAccountingPolicySnapshotSubjects:
+        netOffsetAccountingContract.policySnapshotSubjects,
+      netOffsetAccountingPrivacyBoundary:
+        netOffsetAccountingContract.privacyBoundary,
+      netOffsetAccountingGrossVolumeExclusionRule:
+        netOffsetAccountingContract.grossVolumeExclusionRule,
+      netOffsetAccountingSampleEvaluationStatuses: Object.fromEntries(
+        netOffsetAccountingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      netOffsetAccountingContractTests:
+        netOffsetAccountingContract.contractTests,
+      offerValidityContractVersion:
+        offerValidityContract.version,
+      offerValidityTransitionKeys:
+        offerValidityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      offerValiditySubjectTypes:
+        offerValidityContract.subjectTypes,
+      offerValidityStates:
+        offerValidityContract.validityStates,
+      offerValidityStaleReasonCodes:
+        offerValidityContract.staleReasonCodes,
+      offerValidityPolicyStatuses:
+        offerValidityContract.policyStatuses,
+      offerValidityFirstClassRecordTables:
+        offerValidityContract.firstClassRecordTables,
+      offerValidityPolicySnapshotSubjects:
+        offerValidityContract.policySnapshotSubjects,
+      offerValidityWindowRule:
+        offerValidityContract.validityWindowRule,
+      offerValiditySampleEvaluationStatuses: Object.fromEntries(
+        offerValidityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      offerValidityContractTests:
+        offerValidityContract.contractTests,
+      privateExchangeRateContractVersion:
+        privateExchangeRateContract.version,
+      privateExchangeRateTransitionKeys:
+        privateExchangeRateContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      privateExchangeRateSubjectTypes:
+        privateExchangeRateContract.subjectTypes,
+      privateExchangeRateQuoteTypes:
+        privateExchangeRateContract.quoteTypes,
+      privateExchangeRateDisclosureScopes:
+        privateExchangeRateContract.disclosureScopes,
+      privateExchangeRateQuoteStates:
+        privateExchangeRateContract.quoteStates,
+      privateExchangeRatePolicyStatuses:
+        privateExchangeRateContract.policyStatuses,
+      privateExchangeRateFirstClassRecordTables:
+        privateExchangeRateContract.firstClassRecordTables,
+      privateExchangeRatePolicySnapshotSubjects:
+        privateExchangeRateContract.policySnapshotSubjects,
+      privateExchangeRatePublicNonPriceRule:
+        privateExchangeRateContract.publicNonPriceRule,
+      privateExchangeRatePrivacyBoundary:
+        privateExchangeRateContract.privacyBoundary,
+      privateExchangeRateAffectedParticipantCoverageRule:
+        privateExchangeRateContract.affectedParticipantCoverageRule,
+      privateExchangeRateSampleEvaluationStatuses: Object.fromEntries(
+        privateExchangeRateContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      privateExchangeRateContractTests:
+        privateExchangeRateContract.contractTests,
+      noncompensableBlockerContractVersion:
+        noncompensableBlockerContract.version,
+      noncompensableBlockerTransitionKeys:
+        noncompensableBlockerContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      noncompensableBlockerSubjectTypes:
+        noncompensableBlockerContract.subjectTypes,
+      noncompensableBlockerProtectedInterestTypes:
+        noncompensableBlockerContract.protectedInterestTypes,
+      noncompensableBlockerAttemptedCompensationOrWaiverStates:
+        noncompensableBlockerContract.attemptedCompensationOrWaiverStates,
+      noncompensableBlockerPersonalWaiverAllowedStates:
+        noncompensableBlockerContract.personalWaiverAllowedStates,
+      noncompensableBlockerReviewStates:
+        noncompensableBlockerContract.reviewStates,
+      noncompensableBlockerPolicyStatuses:
+        noncompensableBlockerContract.policyStatuses,
+      noncompensableBlockerFirstClassRecordTables:
+        noncompensableBlockerContract.firstClassRecordTables,
+      noncompensableBlockerPolicySnapshotSubjects:
+        noncompensableBlockerContract.policySnapshotSubjects,
+      noncompensableBlockerPersonalWaiverRule:
+        noncompensableBlockerContract.personalWaiverRule,
+      noncompensableBlockerCompensationAttemptRule:
+        noncompensableBlockerContract.compensationAttemptRule,
+      noncompensableBlockerSampleEvaluationStatuses: Object.fromEntries(
+        noncompensableBlockerContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      noncompensableBlockerContractTests:
+        noncompensableBlockerContract.contractTests,
+      batchClearingObjectiveContractVersion:
+        batchClearingObjectiveContract.version,
+      batchClearingObjectiveTransitionKeys:
+        batchClearingObjectiveContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      batchClearingObjectiveSubjectTypes:
+        batchClearingObjectiveContract.subjectTypes,
+      batchClearingObjectiveTypes:
+        batchClearingObjectiveContract.objectiveTypes,
+      batchClearingObjectiveTieBreakFairnessRuleTypes:
+        batchClearingObjectiveContract.tieBreakFairnessRuleTypes,
+      batchClearingObjectiveAllocationDrivers:
+        batchClearingObjectiveContract.allocationDrivers,
+      batchClearingObjectiveProhibitedAllocationDrivers:
+        batchClearingObjectiveContract.prohibitedAllocationDrivers,
+      batchClearingObjectiveResultStates:
+        batchClearingObjectiveContract.resultStates,
+      batchClearingObjectivePolicyStatuses:
+        batchClearingObjectiveContract.policyStatuses,
+      batchClearingObjectiveFirstClassRecordTables:
+        batchClearingObjectiveContract.firstClassRecordTables,
+      batchClearingObjectivePolicySnapshotSubjects:
+        batchClearingObjectiveContract.policySnapshotSubjects,
+      batchClearingObjectiveDeterministicTieBreakRule:
+        batchClearingObjectiveContract.deterministicTieBreakRule,
+      batchClearingObjectiveProhibitedAllocationRule:
+        batchClearingObjectiveContract.prohibitedAllocationRule,
+      batchClearingObjectiveReproducibilityRule:
+        batchClearingObjectiveContract.reproducibilityRule,
+      batchClearingObjectiveSampleEvaluationStatuses: Object.fromEntries(
+        batchClearingObjectiveContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      batchClearingObjectiveContractTests:
+        batchClearingObjectiveContract.contractTests,
+      sensitiveEvidenceAttestationContractVersion:
+        sensitiveEvidenceAttestationContract.version,
+      sensitiveEvidenceAttestationTransitionKeys:
+        sensitiveEvidenceAttestationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      sensitiveEvidenceAttestationSubjectTypes:
+        sensitiveEvidenceAttestationContract.subjectTypes,
+      sensitiveEvidenceAttestationEvidencePathTypes:
+        sensitiveEvidenceAttestationContract.evidencePathTypes,
+      sensitiveEvidenceAttestationClaimTypes:
+        sensitiveEvidenceAttestationContract.claimTypes,
+      sensitiveEvidenceAttestationDisclosureModes:
+        sensitiveEvidenceAttestationContract.disclosureModes,
+      sensitiveEvidenceAttestationPrivacyGrantStatuses:
+        sensitiveEvidenceAttestationContract.privacyGrantStatuses,
+      sensitiveEvidenceAttestationConfidentialityReviewStatuses:
+        sensitiveEvidenceAttestationContract.confidentialityReviewStatuses,
+      sensitiveEvidenceAttestationResultStates:
+        sensitiveEvidenceAttestationContract.resultStates,
+      sensitiveEvidenceAttestationPolicyStatuses:
+        sensitiveEvidenceAttestationContract.policyStatuses,
+      sensitiveEvidenceAttestationFirstClassRecordTables:
+        sensitiveEvidenceAttestationContract.firstClassRecordTables,
+      sensitiveEvidenceAttestationPolicySnapshotSubjects:
+        sensitiveEvidenceAttestationContract.policySnapshotSubjects,
+      sensitiveEvidenceAttestationAttestationResultRule:
+        sensitiveEvidenceAttestationContract.attestationResultRule,
+      sensitiveEvidenceAttestationRawArtifactDisclosureRule:
+        sensitiveEvidenceAttestationContract.rawArtifactDisclosureRule,
+      sensitiveEvidenceAttestationChallengeRule:
+        sensitiveEvidenceAttestationContract.challengeRule,
+      sensitiveEvidenceAttestationSampleEvaluationStatuses: Object.fromEntries(
+        sensitiveEvidenceAttestationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      sensitiveEvidenceAttestationContractTests:
+        sensitiveEvidenceAttestationContract.contractTests,
+      pilotEvidenceContractVersion: pilotEvidenceContract.version,
+      pilotEvidenceTransitionKeys:
+        pilotEvidenceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      pilotEvidenceTracks: pilotEvidenceContract.pilotTracks,
+      pilotEvidenceEvidenceTypes: pilotEvidenceContract.evidenceTypes,
+      pilotEvidenceSuccessMetrics: pilotEvidenceContract.successMetrics,
+      pilotEvidenceFirstClassRecordTables:
+        pilotEvidenceContract.firstClassRecordTables,
+      pilotEvidencePolicySnapshotSubjects:
+        pilotEvidenceContract.policySnapshotSubjects,
+      pilotEvidenceSimulationRule: pilotEvidenceContract.simulationRule,
+      pilotEvidenceRedTeamRule: pilotEvidenceContract.redTeamRule,
+      pilotEvidenceExitCriteriaRule: pilotEvidenceContract.exitCriteriaRule,
+      pilotEvidenceMatchedVolumeRule: pilotEvidenceContract.matchedVolumeRule,
+      pilotEvidenceSampleEvaluationStatuses: Object.fromEntries(
+        pilotEvidenceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      pilotEvidenceContractTests: pilotEvidenceContract.contractTests,
+      sideAgreementContractVersion: sideAgreementContract.version,
+      sideAgreementTransitionKeys:
+        sideAgreementContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      sideAgreementSubjectTypes: sideAgreementContract.subjectTypes,
+      sideAgreementReviewDimensions: sideAgreementContract.reviewDimensions,
+      sideAgreementFailClosedStatuses:
+        sideAgreementContract.failClosedStatuses,
+      sideAgreementFirstClassRecordTables:
+        sideAgreementContract.firstClassRecordTables,
+      sideAgreementPolicySnapshotSubjects:
+        sideAgreementContract.policySnapshotSubjects,
+      sideAgreementForbiddenPublicSummaryTerms:
+        sideAgreementContract.forbiddenPublicSummaryTerms,
+      sideAgreementSampleEvaluationStatuses: Object.fromEntries(
+        sideAgreementContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      sideAgreementContractTests: sideAgreementContract.contractTests,
+      tradeClassificationContractVersion:
+        tradeClassificationContract.version,
+      tradeClassificationTransitionKeys:
+        tradeClassificationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      tradeClassificationClassifications:
+        tradeClassificationContract.classifications,
+      tradeClassificationSubjectTypes:
+        tradeClassificationContract.subjectTypes,
+      tradeClassificationReviewDimensions:
+        tradeClassificationContract.reviewDimensions,
+      tradeClassificationFailClosedStatuses:
+        tradeClassificationContract.failClosedStatuses,
+      tradeClassificationFirstClassRecordTables:
+        tradeClassificationContract.firstClassRecordTables,
+      tradeClassificationPolicySnapshotSubjects:
+        tradeClassificationContract.policySnapshotSubjects,
+      tradeClassificationPublicNonClaim:
+        tradeClassificationContract.publicNonClaim,
+      tradeClassificationSampleEvaluationStatuses: Object.fromEntries(
+        tradeClassificationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      tradeClassificationContractTests:
+        tradeClassificationContract.contractTests,
+      templateConformanceContractVersion:
+        templateConformanceContract.version,
+      templateConformanceTransitionKeys:
+        templateConformanceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      templateConformanceTradeTypes:
+        templateConformanceContract.tradeTypes,
+      templateConformanceSubjectTypes:
+        templateConformanceContract.subjectTypes,
+      templateConformanceConformanceStates:
+        templateConformanceContract.conformanceStates,
+      templateConformanceFirstClassRecordTables:
+        templateConformanceContract.firstClassRecordTables,
+      templateConformancePolicySnapshotSubjects:
+        templateConformanceContract.policySnapshotSubjects,
+      templateConformancePrivacyBoundary:
+        templateConformanceContract.privacyBoundary,
+      templateConformanceSampleEvaluationStatuses: Object.fromEntries(
+        templateConformanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      templateConformanceContractTests:
+        templateConformanceContract.contractTests,
+      reviewCapacityContractVersion:
+        reviewCapacityContract.version,
+      reviewCapacityTransitionKeys:
+        reviewCapacityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      reviewCapacitySubjectTypes:
+        reviewCapacityContract.subjectTypes,
+      reviewCapacityQueueStates:
+        reviewCapacityContract.queueStates,
+      reviewCapacityPanelStates:
+        reviewCapacityContract.panelStates,
+      reviewCapacityFirstClassRecordTables:
+        reviewCapacityContract.firstClassRecordTables,
+      reviewCapacityPolicySnapshotSubjects:
+        reviewCapacityContract.policySnapshotSubjects,
+      reviewCapacityPrivacyBoundary:
+        reviewCapacityContract.privacyBoundary,
+      reviewCapacitySampleEvaluationStatuses: Object.fromEntries(
+        reviewCapacityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      reviewCapacityContractTests:
+        reviewCapacityContract.contractTests,
+      participantTermSheetContractVersion:
+        participantTermSheetContract.version,
+      participantTermSheetTransitionKeys:
+        participantTermSheetContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      participantTermSheetSubjectTypes:
+        participantTermSheetContract.subjectTypes,
+      participantTermSheetStates:
+        participantTermSheetContract.termSheetStates,
+      participantTermSheetDisclosureStates:
+        participantTermSheetContract.disclosureStates,
+      participantTermSheetVisibleDisclosureStatuses:
+        participantTermSheetContract.visibleDisclosureStatuses,
+      participantTermSheetFirstClassRecordTables:
+        participantTermSheetContract.firstClassRecordTables,
+      participantTermSheetPolicySnapshotSubjects:
+        participantTermSheetContract.policySnapshotSubjects,
+      participantTermSheetPrivacyBoundary:
+        participantTermSheetContract.privacyBoundary,
+      participantTermSheetSampleEvaluationStatuses: Object.fromEntries(
+        participantTermSheetContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      participantTermSheetContractTests:
+        participantTermSheetContract.contractTests,
+      protectiveAssessmentContractVersion:
+        protectiveAssessmentContract.version,
+      protectiveAssessmentTransitionKeys:
+        protectiveAssessmentContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      protectiveAssessmentSubjectTypes:
+        protectiveAssessmentContract.subjectTypes,
+      protectiveAssessmentDimensions:
+        protectiveAssessmentContract.assessmentDimensions,
+      protectiveAssessmentFailClosedStatuses:
+        protectiveAssessmentContract.failClosedStatuses,
+      protectiveAssessmentFirstClassRecordTables:
+        protectiveAssessmentContract.firstClassRecordTables,
+      protectiveAssessmentPolicySnapshotSubjects:
+        protectiveAssessmentContract.policySnapshotSubjects,
+      protectiveAssessmentPrivacyBoundary:
+        protectiveAssessmentContract.privacyBoundary,
+      protectiveAssessmentSampleEvaluationStatuses: Object.fromEntries(
+        protectiveAssessmentContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      protectiveAssessmentContractTests:
+        protectiveAssessmentContract.contractTests,
+      userSafetyContentModerationContractVersion:
+        userSafetyContentModerationContract.version,
+      userSafetyContentModerationTransitionKeys:
+        userSafetyContentModerationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      userSafetyContentModerationContentTypes:
+        userSafetyContentModerationContract.contentTypes,
+      userSafetyContentModerationModerationDimensions:
+        userSafetyContentModerationContract.moderationDimensions,
+      userSafetyContentModerationUserSafetyDimensions:
+        userSafetyContentModerationContract.userSafetyDimensions,
+      userSafetyContentModerationFailClosedStatuses: {
+        moderation:
+          userSafetyContentModerationContract.moderationFailClosedStatuses,
+        userSafety:
+          userSafetyContentModerationContract.userSafetyFailClosedStatuses,
+      },
+      userSafetyContentModerationFirstClassRecordTables:
+        userSafetyContentModerationContract.firstClassRecordTables,
+      userSafetyContentModerationPolicySnapshotSubjects:
+        userSafetyContentModerationContract.policySnapshotSubjects,
+      userSafetyContentModerationPrivacyBoundary:
+        userSafetyContentModerationContract.privacyBoundary,
+      userSafetyContentModerationSampleEvaluationStatuses: Object.fromEntries(
+        userSafetyContentModerationContract.sampleEvaluations.map(
+          (evaluation) => [evaluation.transition, evaluation.status],
+        ),
+      ),
+      userSafetyContentModerationContractTests:
+        userSafetyContentModerationContract.contractTests,
+      financialSettlementControlsContractVersion:
+        financialSettlementControlsContract.version,
+      financialSettlementControlsTransitionKeys:
+        financialSettlementControlsContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      financialSettlementControlsControlKeys:
+        financialSettlementControlsContract.controlKeys,
+      financialSettlementControlsFirstClassRecordTables:
+        financialSettlementControlsContract.firstClassRecordTables,
+      financialSettlementControlsPolicySnapshotSubjects:
+        financialSettlementControlsContract.policySnapshotSubjects,
+      financialSettlementControlsFailClosedStatuses:
+        financialSettlementControlsContract.failClosedStatuses,
+      financialSettlementControlsPrivacyBoundary:
+        financialSettlementControlsContract.privacyBoundary,
+      financialSettlementControlsSampleEvaluationStatuses: Object.fromEntries(
+        financialSettlementControlsContract.sampleEvaluations.map(
+          (evaluation) => [evaluation.transition, evaluation.status],
+        ),
+      ),
+      financialSettlementControlsContractTests:
+        financialSettlementControlsContract.contractTests,
       statusValues: profile.statusValues,
+      decisionPipeline: profile.decisionPipeline.map((step) => ({
+        key: step.key,
+        requiredSignals: step.requiredSignals,
+        failureStatus: step.failureStatus,
+        blocksMatchable: step.blocksMatchable,
+      })),
       stateTransitionRules: profile.stateTransitionRules.map((rule) => ({
         key: rule.key,
         from: rule.from,
@@ -245,6 +1691,8 @@ export async function GET(request: Request) {
       schemaRegistryVersion: schemaRegistry.version,
       schemaRegistryDocuments: schemaRegistry.schemaDocuments.map((entry) => entry.key),
       schemaRegistryPublicPaths: schemaRegistry.schemaDocuments.map((entry) => entry.publicPath),
+      schemaRegistrySampleValidationCount,
+      schemaRegistrySampleValidationFailureCount,
       schemaRegistryDataModelSchema:
         schemaRegistry.schemaDocuments.find(
           (entry) => entry.key === "data_model_profile_schema",
@@ -274,6 +1722,28 @@ export async function GET(request: Request) {
       challengeAppealStandingCategories: challengeAppealContract.standingCategories,
       challengeAppealTriggers: challengeAppealContract.appealTriggers,
       challengeAppealAllowedOutcomes: challengeAppealContract.allowedOutcomes,
+      challengeAppealFirstClassRecordTables:
+        challengeAppealContract.firstClassRecordTables,
+      challengeAppealPolicySnapshotSubjects:
+        challengeAppealContract.policySnapshotSubjects,
+      challengeAppealEnforcementRule:
+        challengeAppealContract.enforcementRule,
+      challengeAppealEnforcementRecordTables:
+        challengeAppealContract.enforcementRecordTables,
+      challengeAppealEnforcementRoute:
+        challengeAppealContract.enforcementRoute,
+      challengeAppealCaseStatuses:
+        challengeAppealContract.appealCaseStatuses,
+      challengeAppealNoticeStates:
+        challengeAppealContract.noticeStates,
+      challengeAppealFailClosedStatuses:
+        challengeAppealContract.failClosedStatuses,
+      challengeAppealCaseSampleEvaluationStatuses: Object.fromEntries(
+        challengeAppealContract.sampleAppealCaseEvaluations.map((evaluation) => [
+          `${evaluation.subject}:${evaluation.trigger}:${evaluation.status}`,
+          evaluation.status,
+        ]),
+      ),
       challengeAppealFactorCodes: challengeAppealContract.approvedFactorCodes,
       challengeAppealContractTests: challengeAppealContract.contractTests,
       disclosureContractVersion: disclosureContract.version,
@@ -296,6 +1766,16 @@ export async function GET(request: Request) {
       reviewWorkflowParticipantCopyKeys: Object.keys(
         reviewWorkflowContract.participantCopyTemplates,
       ),
+      reviewWorkflowUserFacingBlockerCategories:
+        reviewWorkflowContract.userFacingBlockerExplanations.map(
+          (entry) => entry.reasonCategory,
+        ),
+      reviewWorkflowSampleBlockerExplanationKeys:
+        reviewWorkflowContract.sampleUserFacingBlockerExplanations.map(
+          (entry) => entry.key,
+        ),
+      reviewWorkflowForbiddenExplanationTerms:
+        reviewWorkflowContract.forbiddenUserFacingExplanationTerms,
       reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
       reasoningPacketContractVersion: reasoningPacketContract.version,
       reasoningPacketCount: reasoningPacketContract.packetCount,
@@ -368,7 +1848,31 @@ export async function GET(request: Request) {
       externalityReviewStandards: externalityProfile.reviewStandards.map(
         (standard) => standard.key,
       ),
+      externalityTriggerStandardMatrix:
+        externalityProfile.triggerStandardMatrix.map((entry) => ({
+          triggerCode: entry.triggerCode,
+          requiredStandards: entry.requiredStandards,
+        })),
       externalityRemedyControls: externalityProfile.remedyControls.map((control) => control.key),
+      transparencyReportContractVersion: transparencyReportContract.version,
+      transparencyReportMinimumPublicCount:
+        transparencyReportContract.minimumPublicCount,
+      transparencyReportMetricKeys: transparencyReportContract.metricDefinitions.map(
+        (metric) => metric.key,
+      ),
+      transparencyReportPrivacyRules: transparencyReportContract.privacyRules,
+      transparencyReportContractTests: transparencyReportContract.contractTests,
+      marketplaceMeasurementVersion: marketplaceMeasurementContract.version,
+      marketplaceMeasurementMinimumPublicCount:
+        marketplaceMeasurementContract.minimumPublicCount,
+      marketplaceMeasurementEventTypes: marketplaceMeasurementContract.eventSpecs.map(
+        (event) => event.eventType,
+      ),
+      marketplaceMeasurementKpiKeys:
+        marketplaceMeasurementContract.kpiDefinitions.map((kpi) => kpi.key),
+      marketplaceMeasurementPrivacyRules: marketplaceMeasurementContract.privacyRules,
+      marketplaceMeasurementContractTests:
+        marketplaceMeasurementContract.contractTests,
       apiContractProfileVersion: apiContractProfile.version,
       apiContractImplementationAuditStatus: apiContractImplementationAudit.status,
       apiRoutes: apiContractProfile.routes.map((route) => route.key),
@@ -395,17 +1899,76 @@ export async function GET(request: Request) {
       aiGovernanceDocumentationBeforeMl: aiGovernanceProfile.requiredDocumentationBeforeMl.map(
         (entry) => entry.key,
       ),
+      aiGovernanceSampleDocumentationPacketCount:
+        aiGovernanceProfile.sampleDocumentationPackets.length,
       aiGovernanceProhibitedUses: aiGovernanceProfile.prohibitedUses.map((entry) => entry.key),
       aiGovernanceExplanationControls: aiGovernanceProfile.explanationControls.map((entry) => entry.key),
       aiGovernanceExternalStandards: aiGovernanceProfile.externalStandards.map(
         (entry) => entry.key,
       ),
+      documentCoverageProfileVersion: documentCoverageProfile.version,
+      documentCoverageSourceDocuments: documentCoverageProfile.sourceDocuments.map(
+        (source) => source.key,
+      ),
+      documentCoverageSourceDocumentArtifacts:
+        documentCoverageValidation.sourceDocumentArtifacts,
+      documentCoverageSourceStackReferences:
+        documentCoverageProfile.sourceStackReferences.map((source) => source.key),
+      documentCoverageTestingPlanCoverage:
+        documentCoverageProfile.testingPlanCoverage.map((layer) => layer.key),
+      documentCoverageRequirementKeys: documentCoverageProfile.requirements.map(
+        (requirement) => requirement.key,
+      ),
+      documentCoverageRequiredEvidencePhraseCount,
+      documentCoverageCanonicalInstruction: {
+        path: documentCoverageProfile.canonicalInstruction.path,
+        verificationCommands:
+          documentCoverageProfile.canonicalInstruction.verificationCommands,
+        routeEvidence: documentCoverageProfile.canonicalInstruction.routeEvidence,
+        artifactHash: documentCoverageValidation.canonicalInstructionHash,
+      },
+      documentCoverageNonClaims: documentCoverageProfile.nonClaims,
       qualityMetrics: profile.qualityMetrics,
     },
     blockers: [
       ...validation.blockers,
       ...dataModelValidation.blockers,
       ...policyBundleValidation.blockers,
+      ...releaseGateValidation.blockers,
+      ...participantConfirmationValidation.blockers,
+      ...participantEligibilityValidation.blockers,
+      ...accountSecurityValidation.blockers,
+      ...reviewerQualityValidation.blockers,
+      ...antiEnumerationValidation.blockers,
+      ...privacyGovernanceValidation.blockers,
+      ...impactClaimValidation.blockers,
+      ...matchingClearingValidation.blockers,
+      ...baselineIntegrityValidation.blockers,
+      ...agreementAmendmentValidation.blockers,
+      ...productionReadinessValidation.blockers,
+      ...recipientDestinationValidation.blockers,
+      ...recipientAcceptanceValidation.blockers,
+      ...aiPreferenceElicitationValidation.blockers,
+      ...postClearAuditValidation.blockers,
+      ...nonPublicGoodsSubsidyValidation.blockers,
+      ...directPairClearingValidation.blockers,
+      ...causeBucketTaxonomyValidation.blockers,
+      ...resourceCompatibilityValidation.blockers,
+      ...netOffsetAccountingValidation.blockers,
+      ...offerValidityValidation.blockers,
+      ...privateExchangeRateValidation.blockers,
+      ...noncompensableBlockerValidation.blockers,
+      ...batchClearingObjectiveValidation.blockers,
+      ...sensitiveEvidenceAttestationValidation.blockers,
+      ...pilotEvidenceValidation.blockers,
+      ...sideAgreementValidation.blockers,
+      ...tradeClassificationValidation.blockers,
+      ...templateConformanceValidation.blockers,
+      ...reviewCapacityValidation.blockers,
+      ...participantTermSheetValidation.blockers,
+      ...protectiveAssessmentValidation.blockers,
+      ...userSafetyContentModerationValidation.blockers,
+      ...financialSettlementControlsValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,
@@ -420,9 +1983,12 @@ export async function GET(request: Request) {
       ...evaluationValidation.blockers,
       ...performanceValidation.blockers,
       ...externalityValidation.blockers,
+      ...transparencyReportValidation.blockers,
+      ...marketplaceMeasurementValidation.blockers,
       ...apiContractValidation.blockers,
       ...apiContractImplementationAudit.blockers,
       ...aiGovernanceValidation.blockers,
+      ...documentCoverageValidation.blockers,
     ],
   });
 }

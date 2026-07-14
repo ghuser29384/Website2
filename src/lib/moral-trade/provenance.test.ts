@@ -182,7 +182,13 @@ test("provenance bundles pass with entity/activity/agent links", () => {
   assert.ok(
     MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "external_entity_reference"),
   );
-  assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "match_signal"));
+  const matchSignalSchema = MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.find(
+    (schema) => schema.key === "match_signal",
+  );
+
+  assert.ok(matchSignalSchema);
+  assert.ok(matchSignalSchema.required.includes("privacyPolicyId"));
+  assert.ok(matchSignalSchema.required.includes("disclosureStage"));
   assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "traceability_event"));
 });
 
@@ -214,7 +220,18 @@ test("provenance contract publishes validator-backed sample bundle coverage", ()
   assert.equal(sampleValidation.status, "pass");
   assert.ok(contract.validationRules.some((rule) => rule.key === "one-proof-one-claim"));
   assert.ok(contract.validationRules.some((rule) => rule.key === "traceability-events"));
+  assert.ok(contract.validationRules.some((rule) => rule.key === "audit-question-answers"));
   assert.ok(contract.validationRules.some((rule) => rule.key === "external-entity-references"));
+  assert.ok(
+    contract.objectSchemas
+      .find((schema) => schema.key === "traceability_event")
+      ?.required.includes("auditQuestionAnswers"),
+  );
+  assert.ok(
+    contract.objectSchemas
+      .find((schema) => schema.key === "state_transition_event_record")
+      ?.required.includes("auditQuestionAnswers"),
+  );
   assert.equal(contract.sampleBundleSummary.validationStatus, "pass");
   assert.ok(contract.sampleBundleSummary.reviewDecisionCount > 0);
   assert.ok(
@@ -267,16 +284,20 @@ test("external entity references normalize identifiers and produce stable dedupe
   assert.equal(first.sha256.length, 64);
 });
 
-test("traceability events link what, where, why, and agents for external evidence", () => {
+test("traceability events link what, where, why, agents, and audit answers for external evidence", () => {
+  const event = traceabilityEvent();
   const result = validateMoralTradeProvenanceBundle(
     bundle({
-      traceabilityEvents: [traceabilityEvent()],
+      traceabilityEvents: [event],
     }),
     { now },
   );
 
   assert.equal(result.status, "pass");
   assert.equal(result.blockers.length, 0);
+  assert.equal(event.auditQuestionAnswers.whatHappened, "OBSERVE:payment_recorded:in_review:proposal-1");
+  assert.deepEqual(event.auditQuestionAnswers.whoTouchedIt, [participant.id]);
+  assert.equal(event.auditQuestionAnswers.whenRecorded, submittedAt);
 });
 
 test("traceability events fail when external location or linked evidence is not reviewable", () => {
@@ -301,6 +322,27 @@ test("traceability events fail when external location or linked evidence is not 
 
   assert.equal(result.status, "fail");
   assert.ok(result.blockers.some((blocker) => blocker.includes("traceability-events")));
+});
+
+test("traceability events require explicit audit-question answers", () => {
+  const result = validateMoralTradeProvenanceBundle(
+    bundle({
+      traceabilityEvents: [
+        {
+          ...traceabilityEvent(),
+          auditQuestionAnswers: {
+            whatHappened: "",
+            whoTouchedIt: [],
+            whenRecorded: "2026-05-01T12:01:00.000Z",
+          },
+        },
+      ],
+    }),
+    { now },
+  );
+
+  assert.equal(result.status, "fail");
+  assert.ok(result.blockers.some((blocker) => blocker.includes("audit-question-answers")));
 });
 
 test("charity traceability events require verified external entity references", () => {

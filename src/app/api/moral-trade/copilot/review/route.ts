@@ -5,6 +5,7 @@ import {
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
 import {
+  auditMoralTradeCopilotStrictInputBundle,
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
   normalizeMoralTradeCopilotEvidenceMetadata,
@@ -37,6 +38,15 @@ const NUMBER_DRAFT_FIELDS = [
   "participantImportance",
   "counterpartyThreshold",
 ] as const satisfies ReadonlyArray<keyof MoralTradeProtocolDraftInput>;
+
+const ALLOWED_DRAFT_FIELDS = new Set<string>([
+  ...STRING_DRAFT_FIELDS,
+  ...NUMBER_DRAFT_FIELDS,
+]);
+const FORBIDDEN_CITATION_PATTERN =
+  /(raw|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|scratchpad|message|thread|cookie|token|secret)/i;
+const APPROVED_CITATION_PATTERN =
+  /^(proposal|evidence|policy|protocol|contract|review):[A-Za-z0-9._:-]+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -79,6 +89,18 @@ function normalizeDraftInput(draft: Record<string, unknown>): MoralTradeProtocol
   return normalized;
 }
 
+function getUnsupportedDraftInputKeys(draft: Record<string, unknown>) {
+  const blockers: string[] = [];
+
+  for (const key of Object.keys(draft)) {
+    if (!ALLOWED_DRAFT_FIELDS.has(key)) {
+      blockers.push(`draft.${key}: unsupported structured draft field`);
+    }
+  }
+
+  return blockers;
+}
+
 function normalizeCitations(value: unknown) {
   if (!Array.isArray(value)) {
     return [];
@@ -89,6 +111,27 @@ function normalizeCitations(value: unknown) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, MAX_CITATIONS);
+}
+
+function containsContactLikeText(value: string) {
+  return /@/.test(value) || /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value);
+}
+
+function isApprovedCitation(value: string) {
+  return (
+    value.length <= 240 &&
+    !containsContactLikeText(value) &&
+    !FORBIDDEN_CITATION_PATTERN.test(value) &&
+    APPROVED_CITATION_PATTERN.test(value)
+  );
+}
+
+function getUnsupportedCitationBlockers(citations: string[]) {
+  return citations.flatMap((citation, index) =>
+    isApprovedCitation(citation)
+      ? []
+      : [`citations.${index}: unsupported or private citation label`],
+  );
 }
 
 function jsonResponse(
@@ -165,7 +208,16 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isRecord(body) || !isRecord(body.draft)) {
+  const requestDraft = isRecord(body)
+    ? (body.draft ?? body.structuredDraft ?? body.structured_draft)
+    : null;
+  const requestEvidenceMetadata = isRecord(body)
+    ? (body.evidenceMetadata ?? body.evidence_metadata)
+    : null;
+
+  if (!isRecord(body) || !isRecord(requestDraft)) {
+    const inputBundleAudit = auditMoralTradeCopilotStrictInputBundle(body, contract);
+
     return jsonResponse(
       {
         ok: false,
@@ -174,6 +226,7 @@ export async function POST(request: Request) {
         decisioningMode: "deterministic_draft_review_only",
         stateMutation: false,
         inputBundleUsed: contract.strictInputBundle,
+        inputBundleAudit,
         evidenceMetadataSummary: EMPTY_EVIDENCE_METADATA_SUMMARY,
         contractValidation,
         fallback:
@@ -184,17 +237,54 @@ export async function POST(request: Request) {
     );
   }
 
+  const inputBundleAudit = auditMoralTradeCopilotStrictInputBundle(body, contract);
   const evidenceMetadataNormalization = normalizeMoralTradeCopilotEvidenceMetadata(
-    body.evidenceMetadata,
+    requestEvidenceMetadata,
   );
+  const unsupportedDraftInputBlockers = getUnsupportedDraftInputKeys(requestDraft);
+  const citations = normalizeCitations(body.citations);
+  const unsupportedCitationBlockers = getUnsupportedCitationBlockers(citations);
+  const preOutputBlockers = [
+    ...contractValidation.blockers,
+    ...inputBundleAudit.blockers,
+    ...unsupportedDraftInputBlockers,
+    ...unsupportedCitationBlockers,
+    ...evidenceMetadataNormalization.blockers,
+  ];
+
+  if (preOutputBlockers.length) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        contractVersion: contract.version,
+        decisioningMode: "deterministic_draft_review_only",
+        stateMutation: false,
+        inputBundleUsed: contract.strictInputBundle,
+        inputBundleAudit,
+        evidenceMetadataSummary: summarizeMoralTradeCopilotEvidenceMetadata(
+          evidenceMetadataNormalization,
+        ),
+        contractValidation,
+        fallback:
+          "Invalid strict copilot input bundles fall back to manual or deterministic review without emitting an output packet or changing proposal state.",
+        blockers: preOutputBlockers,
+      },
+      422,
+    );
+  }
+
   const output = buildMoralTradeCopilotOutput(
-    normalizeDraftInput(body.draft),
-    normalizeCitations(body.citations),
+    normalizeDraftInput(requestDraft),
+    citations,
     evidenceMetadataNormalization.evidenceMetadata,
   );
   const outputValidation = validateMoralTradeCopilotOutput(output);
   const blockers = [
     ...contractValidation.blockers,
+    ...inputBundleAudit.blockers,
+    ...unsupportedDraftInputBlockers,
+    ...unsupportedCitationBlockers,
     ...outputValidation.blockers,
     ...evidenceMetadataNormalization.blockers,
   ];
@@ -207,6 +297,7 @@ export async function POST(request: Request) {
       decisioningMode: "deterministic_draft_review_only",
       stateMutation: false,
       inputBundleUsed: contract.strictInputBundle,
+      inputBundleAudit,
       evidenceMetadataSummary: summarizeMoralTradeCopilotEvidenceMetadata(
         evidenceMetadataNormalization,
       ),

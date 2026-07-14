@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  adjudicatePerformanceBondChallengeAction,
+  reviewBaselineBondEvidenceAction,
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
   updateAgreementReviewCaseAction,
@@ -14,13 +16,24 @@ import {
 import { updateProfileDataRightRequestAction } from "@/app/background-networking/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import { formatBaselineBondAmount, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
+import {
+  buildAgreementReviewerConsolePreview,
+  evaluateAdminOperatorAccess,
+  isAdminEmail,
+} from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
+import {
+  evidenceSchemaFromJson,
+  formatPerformanceBondAmount,
+  splitConfigFromJson,
+} from "@/lib/performance-bonds";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
@@ -57,6 +70,22 @@ type ProfileVerificationBadgeRow =
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BondEvidenceRow = Database["public"]["Tables"]["bond_evidence"]["Row"];
+type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
+type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
+type PerformanceBondAuditEventRow =
+  Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
+type BaselineWitnessInviteRow =
+  Database["public"]["Tables"]["baseline_witness_invites"]["Row"];
+type BaselineWitnessTestimonialRow =
+  Database["public"]["Tables"]["baseline_witness_testimonials"]["Row"];
+type BaselineWitnessQualityAssessmentRow =
+  Database["public"]["Tables"]["baseline_witness_quality_assessments"]["Row"];
+type ExternalWitnessAccountRow =
+  Database["public"]["Tables"]["external_witness_accounts"]["Row"];
+type BaselineWitnessRiskReportRow =
+  Database["public"]["Tables"]["baseline_witness_risk_reports"]["Row"];
 
 interface MatchConciergeReviewRecord {
   request: MatchConciergeRequestRow;
@@ -75,11 +104,50 @@ interface DonationOffsetReviewRecord {
   charity: RegisteredCharityRow | null;
 }
 
+interface PerformanceBondReviewRecord {
+  bond: PerformanceBondRow;
+  evidence: BondEvidenceRow[];
+  challenges: BondChallengeRow[];
+  ledgerEntries: BondLedgerEntryRow[];
+  auditEvents: PerformanceBondAuditEventRow[];
+  offer: OfferRow | null;
+  agreement: AgreementRow | null;
+}
+
+interface BaselineWitnessReviewRecord {
+  testimonial: BaselineWitnessTestimonialRow;
+  invite: BaselineWitnessInviteRow | null;
+  assessment: BaselineWitnessQualityAssessmentRow | null;
+  externalAccount: ExternalWitnessAccountRow | null;
+  riskReports: BaselineWitnessRiskReportRow[];
+}
+
 function formatPaymentAmount(amountCents: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amountCents / 100);
+}
+
+function formatAdminState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatPerformanceBondDestination(bond: PerformanceBondRow) {
+  if (bond.forfeiture_destination === "mpgf") {
+    return "Moral Public Goods Fund";
+  }
+
+  if (bond.forfeiture_destination === "counterparty") {
+    return "Counterparty after platform review";
+  }
+
+  if (bond.forfeiture_destination === "split") {
+    const split = splitConfigFromJson(bond.split_config);
+    return `Split: ${split.counterpartyPercent}% counterparty, ${split.neutralCausePercent}% neutral cause, ${split.mpgfPercent}% MPGF`;
+  }
+
+  return "Compromise charity / neutral cause, or MPGF if no neutral cause is available";
 }
 
 function formatSlaState(value: string | null) {
@@ -96,6 +164,28 @@ function formatSlaState(value: string | null) {
   const hours = Math.max(1, Math.ceil(Math.abs(diffMs) / (60 * 60 * 1000)));
 
   return diffMs < 0 ? `Overdue by ${hours}h` : `Due in ${hours}h`;
+}
+
+function getMetadataValue(metadata: Record<string, unknown>, key: string) {
+  return metadata[key];
+}
+
+function getMetadataBoolean(metadata: Record<string, unknown>, key: string) {
+  return getMetadataValue(metadata, key) === true;
+}
+
+function getMetadataString(metadata: Record<string, unknown>, key: string) {
+  const value = getMetadataValue(metadata, key);
+  return typeof value === "string" ? value : "";
+}
+
+function getJsonString(value: Json, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "";
+  }
+
+  const field = value[key];
+  return typeof field === "string" ? field : "";
 }
 
 async function loadAdminQueues() {
@@ -195,6 +285,31 @@ async function loadAdminQueues() {
     .eq("moderation_status", "flagged")
     .order("created_at", { ascending: false })
     .limit(50);
+  const baselineBondReviewsResult = await supabase
+    .from("donation_offset_offers")
+    .select("*")
+    .in("baseline_bond_status", ["evidence_due", "evidence_submitted"])
+    .order("baseline_bond_evidence_due_at", { ascending: true, nullsFirst: false })
+    .limit(50);
+  const performanceBondReviewsResult = await supabase
+    .from("performance_bonds")
+    .select("*")
+    .eq("enabled", true)
+    .in("status", ["challenged", "under_review", "rejected_after_review", "evidence_due"])
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  const baselineWitnessReviewsResult = await supabase
+    .from("baseline_witness_testimonials")
+    .select("*")
+    .in("testimonial_status", ["submitted", "under_review", "disputed"])
+    .order("submitted_at", { ascending: false })
+    .limit(50);
+  const baselineWitnessRiskReportsResult = await supabase
+    .from("baseline_witness_risk_reports")
+    .select("*")
+    .in("review_status", ["open", "under_review", "escalated"])
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   const errors = [
     reports.error,
@@ -210,6 +325,10 @@ async function loadAdminQueues() {
     agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
+    baselineBondReviewsResult.error,
+    performanceBondReviewsResult.error,
+    baselineWitnessReviewsResult.error,
+    baselineWitnessRiskReportsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
@@ -220,6 +339,12 @@ async function loadAdminQueues() {
   }
 
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
+  const baselineBondReviewOffsets = (baselineBondReviewsResult.data ?? []) as DonationOffsetOfferRow[];
+  const performanceBondRows = (performanceBondReviewsResult.data ?? []) as PerformanceBondRow[];
+  const baselineWitnessRows =
+    (baselineWitnessReviewsResult.data ?? []) as BaselineWitnessTestimonialRow[];
+  const baselineWitnessRiskRows =
+    (baselineWitnessRiskReportsResult.data ?? []) as BaselineWitnessRiskReportRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
   const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
@@ -255,8 +380,18 @@ async function loadAdminQueues() {
     );
   }
 
-  const flaggedOfferIds = flaggedOffsets.map((row) => row.offer_id);
-  const charityIds = [...new Set(flaggedOffsets.map((row) => row.compromise_charity_id))];
+  const flaggedOfferIds = [...new Set([
+    ...flaggedOffsets.map((row) => row.offer_id),
+    ...baselineBondReviewOffsets.map((row) => row.offer_id),
+  ])];
+  const charityIds = [
+    ...new Set([
+      ...flaggedOffsets.map((row) => row.compromise_charity_id),
+      ...baselineBondReviewOffsets
+        .map((row) => row.baseline_bond_forfeit_destination_id ?? row.compromise_charity_id)
+        .filter(Boolean),
+    ]),
+  ];
   const [flaggedOffersResult, flaggedCharitiesResult] = await Promise.all([
     flaggedOfferIds.length
       ? supabase.from("offers").select("*").in("id", flaggedOfferIds)
@@ -264,6 +399,55 @@ async function loadAdminQueues() {
     charityIds.length
       ? supabase.from("registered_charities").select("*").in("id", charityIds)
       : Promise.resolve({ data: [] as RegisteredCharityRow[], error: null }),
+  ]);
+
+  const performanceBondIds = performanceBondRows.map((bond) => bond.id);
+  const performanceBondOfferIds = [...new Set(performanceBondRows.map((bond) => bond.offer_id))];
+  const performanceBondAgreementIds = [
+    ...new Set(performanceBondRows.map((bond) => bond.swap_id).filter((id): id is string => Boolean(id))),
+  ];
+  const [
+    performanceBondEvidenceResult,
+    performanceBondChallengesResult,
+    performanceBondLedgerResult,
+    performanceBondAuditResult,
+    performanceBondOffersResult,
+    performanceBondAgreementsResult,
+  ] = await Promise.all([
+    performanceBondIds.length
+      ? supabase
+          .from("bond_evidence")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("submitted_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondEvidenceRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("bond_challenges")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("challenged_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondChallengeRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("bond_ledger_entries")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondLedgerEntryRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("performance_bond_audit_events")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as PerformanceBondAuditEventRow[], error: null }),
+    performanceBondOfferIds.length
+      ? supabase.from("offers").select("*").in("id", performanceBondOfferIds)
+      : Promise.resolve({ data: [] as OfferRow[], error: null }),
+    performanceBondAgreementIds.length
+      ? supabase.from("agreements").select("*").in("id", performanceBondAgreementIds)
+      : Promise.resolve({ data: [] as AgreementRow[], error: null }),
   ]);
 
   if (flaggedOffersResult.error || flaggedCharitiesResult.error) {
@@ -274,12 +458,99 @@ async function loadAdminQueues() {
     );
   }
 
+  const performanceBondRelatedError =
+    performanceBondEvidenceResult.error ??
+    performanceBondChallengesResult.error ??
+    performanceBondLedgerResult.error ??
+    performanceBondAuditResult.error ??
+    performanceBondOffersResult.error ??
+    performanceBondAgreementsResult.error;
+
+  if (performanceBondRelatedError) {
+    throw new Error(performanceBondRelatedError.message);
+  }
+
+  const baselineWitnessIds = baselineWitnessRows.map((row) => row.id);
+  const baselineWitnessInviteIds = [
+    ...new Set([
+      ...baselineWitnessRows.map((row) => row.invite_id),
+      ...baselineWitnessRiskRows.map((row) => row.invite_id).filter((id): id is string => Boolean(id)),
+    ]),
+  ];
+  const baselineWitnessExternalAccountIds = [
+    ...new Set(
+      baselineWitnessRows
+        .map((row) => row.external_witness_account_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const [
+    baselineWitnessAssessmentsResult,
+    baselineWitnessInvitesResult,
+    baselineWitnessExternalAccountsResult,
+  ] = await Promise.all([
+    baselineWitnessIds.length
+      ? supabase
+          .from("baseline_witness_quality_assessments")
+          .select("*")
+          .in("baseline_witness_testimonial_id", baselineWitnessIds)
+      : Promise.resolve({ data: [] as BaselineWitnessQualityAssessmentRow[], error: null }),
+    baselineWitnessInviteIds.length
+      ? supabase.from("baseline_witness_invites").select("*").in("id", baselineWitnessInviteIds)
+      : Promise.resolve({ data: [] as BaselineWitnessInviteRow[], error: null }),
+    baselineWitnessExternalAccountIds.length
+      ? supabase
+          .from("external_witness_accounts")
+          .select("*")
+          .in("id", baselineWitnessExternalAccountIds)
+      : Promise.resolve({ data: [] as ExternalWitnessAccountRow[], error: null }),
+  ]);
+
+  const baselineWitnessRelatedError =
+    baselineWitnessAssessmentsResult.error ??
+    baselineWitnessInvitesResult.error ??
+    baselineWitnessExternalAccountsResult.error;
+
+  if (baselineWitnessRelatedError) {
+    throw new Error(baselineWitnessRelatedError.message);
+  }
+
   const offerMap = new Map(
     ((flaggedOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
   );
   const charityMap = new Map(
     ((flaggedCharitiesResult.data ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
   );
+  const performanceBondOffersById = new Map(
+    ((performanceBondOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
+  );
+  const performanceBondAgreementsById = new Map(
+    ((performanceBondAgreementsResult.data ?? []) as AgreementRow[]).map((row) => [row.id, row] as const),
+  );
+  const performanceBondEvidenceByBond = new Map<string, BondEvidenceRow[]>();
+  for (const row of (performanceBondEvidenceResult.data ?? []) as BondEvidenceRow[]) {
+    const bucket = performanceBondEvidenceByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondEvidenceByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondChallengesByBond = new Map<string, BondChallengeRow[]>();
+  for (const row of (performanceBondChallengesResult.data ?? []) as BondChallengeRow[]) {
+    const bucket = performanceBondChallengesByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondChallengesByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondLedgerByBond = new Map<string, BondLedgerEntryRow[]>();
+  for (const row of (performanceBondLedgerResult.data ?? []) as BondLedgerEntryRow[]) {
+    const bucket = performanceBondLedgerByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondLedgerByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondAuditByBond = new Map<string, PerformanceBondAuditEventRow[]>();
+  for (const row of (performanceBondAuditResult.data ?? []) as PerformanceBondAuditEventRow[]) {
+    const bucket = performanceBondAuditByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondAuditByBond.set(row.bond_id, bucket);
+  }
   const conciergeEventsByRequest = new Map<string, MatchConciergeEventRow[]>();
   for (const event of (conciergeEventsResult.data ?? []) as MatchConciergeEventRow[]) {
     const current = conciergeEventsByRequest.get(event.request_id) ?? [];
@@ -292,8 +563,35 @@ async function loadAdminQueues() {
   const reviewEvidenceMap = new Map(
     ((reviewEvidenceItemsResult.data ?? []) as AgreementEvidenceItemRow[]).map((row) => [row.id, row] as const),
   );
+  const baselineWitnessAssessmentByTestimonial = new Map(
+    ((baselineWitnessAssessmentsResult.data ?? []) as BaselineWitnessQualityAssessmentRow[]).map(
+      (row) => [row.baseline_witness_testimonial_id, row] as const,
+    ),
+  );
+  const baselineWitnessInviteById = new Map(
+    ((baselineWitnessInvitesResult.data ?? []) as BaselineWitnessInviteRow[]).map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const baselineWitnessExternalAccountById = new Map(
+    ((baselineWitnessExternalAccountsResult.data ?? []) as ExternalWitnessAccountRow[]).map(
+      (row) => [row.id, row] as const,
+    ),
+  );
+  const baselineWitnessRiskReportsBySubject = new Map<string, BaselineWitnessRiskReportRow[]>();
+  for (const row of baselineWitnessRiskRows) {
+    for (const key of [row.baseline_witness_testimonial_id, row.invite_id]) {
+      if (!key) continue;
+      const bucket = baselineWitnessRiskReportsBySubject.get(key) ?? [];
+      bucket.push(row);
+      baselineWitnessRiskReportsBySubject.set(key, bucket);
+    }
+  }
+
+  const loadedAtIso = new Date().toISOString();
 
   return {
+    loadedAtIso,
     reports: (reports.data ?? []) as MatchReportRow[],
     payments: (payments.data ?? []) as AgreementPaymentRow[],
     events: (events.data ?? []) as AgreementEventRow[],
@@ -320,6 +618,35 @@ async function loadAdminQueues() {
       offer: offerMap.get(offset.offer_id) ?? null,
       charity: charityMap.get(offset.compromise_charity_id) ?? null,
     })),
+    baselineBondReviews: baselineBondReviewOffsets.map((offset) => ({
+      offset,
+      offer: offerMap.get(offset.offer_id) ?? null,
+      charity: charityMap.get(
+        offset.baseline_bond_forfeit_destination_id ?? offset.compromise_charity_id,
+      ) ?? null,
+    })),
+    performanceBondReviews: performanceBondRows.map((bond) => ({
+      bond,
+      evidence: performanceBondEvidenceByBond.get(bond.id) ?? [],
+      challenges: performanceBondChallengesByBond.get(bond.id) ?? [],
+      ledgerEntries: performanceBondLedgerByBond.get(bond.id) ?? [],
+      auditEvents: performanceBondAuditByBond.get(bond.id) ?? [],
+      offer: performanceBondOffersById.get(bond.offer_id) ?? null,
+      agreement: bond.swap_id ? performanceBondAgreementsById.get(bond.swap_id) ?? null : null,
+    })) satisfies PerformanceBondReviewRecord[],
+    baselineWitnessReviews: baselineWitnessRows.map((testimonial) => ({
+      assessment: baselineWitnessAssessmentByTestimonial.get(testimonial.id) ?? null,
+      externalAccount: testimonial.external_witness_account_id
+        ? baselineWitnessExternalAccountById.get(testimonial.external_witness_account_id) ?? null
+        : null,
+      invite: baselineWitnessInviteById.get(testimonial.invite_id) ?? null,
+      riskReports: [
+        ...(baselineWitnessRiskReportsBySubject.get(testimonial.id) ?? []),
+        ...(baselineWitnessRiskReportsBySubject.get(testimonial.invite_id) ?? []),
+      ],
+      testimonial,
+    })) satisfies BaselineWitnessReviewRecord[],
+    baselineWitnessRiskReports: baselineWitnessRiskRows,
   };
 }
 
@@ -354,6 +681,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
   const limitedQueryEvents =
     queues?.backgroundQueryEvents.filter((event) => event.was_limited).length ?? 0;
+  const sparseFloorHitEvents =
+    queues?.backgroundQueryEvents.filter((event) =>
+      getMetadataBoolean(event.metadata, "floorApplied"),
+    ).length ?? 0;
+  const anomalyReviewEvents =
+    queues?.backgroundQueryEvents.filter((event) =>
+      ["medium", "high"].includes(getMetadataString(event.metadata, "anomalyLevel")),
+    ).length ?? 0;
+  const queryBudgetRiskSignals =
+    queues?.riskSignals.filter((signal) =>
+      [
+        "background_query_budget_pressure",
+        "narrow_registry_search_pattern",
+        "sparse_registry_search",
+      ].includes(signal.signal_type),
+    ).length ?? 0;
   const openConciergeAppeals =
     queues?.matchConciergeRequests.filter((entry) =>
       ["requested", "under_review"].includes(entry.request.appeal_status),
@@ -441,19 +784,37 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">08</span>
                 <div>
+                  <strong>{queues?.performanceBondReviews.length ?? 0} pledge bond review item(s)</strong>
+                  <p>Performance bond evidence, challenges, and release decisions.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">09</span>
+                <div>
+                  <strong>
+                    {(queues?.baselineWitnessReviews.length ?? 0) +
+                      (queues?.baselineWitnessRiskReports.length ?? 0)}{" "}
+                    witness review item(s)
+                  </strong>
+                  <p>Private baseline testimony, identity assurance, and risk reports.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">10</span>
+                <div>
                   <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
                   <p>Paused donation offsets needing baseline or legality review.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">09</span>
+                <span className="flow-number">11</span>
                 <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">10</span>
+                <span className="flow-number">12</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -510,6 +871,43 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </section>
         ) : (
           <>
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Marketplace bootstrap</p>
+                <h2>Reviewed seed template promotion controls</h2>
+                <p>
+                  Seed templates are operator-reviewed bootstrap records. They remain excluded from
+                  live offer, agreement, payment, and moral-trade volume metrics unless promoted by
+                  a separate reviewed live-template approval.
+                </p>
+              </div>
+              <div className="data-grid">
+                {REVIEWED_MARKETPLACE_SEED_TEMPLATES.map((template) => (
+                  <article className="panel data-card" key={template.id}>
+                    <p className="detail-kicker">
+                      {template.formatLabel} | {template.reviewStatusLabel}
+                    </p>
+                    <h3>{template.prefill.title}</h3>
+                    <p className="route-text">{template.reviewSummary}</p>
+                    <ul className="trust-check-list">
+                      <li>{template.environmentLabel}</li>
+                      <li>{template.promotionControlLabel}</li>
+                      <li>Live metric eligible: {template.liveMetricEligible ? "yes" : "no"}</li>
+                      <li>Review decision: {template.reviewDecisionId}</li>
+                    </ul>
+                    <div className="hero-actions">
+                      <Link className="button button-secondary button-mini" href={template.templateHref}>
+                        Open template
+                      </Link>
+                      <button className="button button-secondary button-mini" type="button" disabled>
+                        Promotion requires reviewed live-template approval
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Privacy operations</p>
@@ -590,7 +988,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               <div className="data-grid">
                 {queues?.agreementEvidenceReviews.length ? (
-                  queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => (
+                  queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => {
+                    const reviewerConsolePreview = buildAgreementReviewerConsolePreview({
+                      appealReason: reviewCase.appeal_reason,
+                      assignedReviewerId: reviewCase.assigned_reviewer_id,
+                      conflictOfInterestNotes: reviewCase.conflict_of_interest_notes,
+                      evidenceItemAttached: Boolean(evidenceItem),
+                      neutralReviewAssignment: reviewCase.neutral_review_assignment,
+                      reviewPanelNotes: reviewCase.review_panel_notes,
+                      reviewScope: reviewCase.review_scope,
+                      reviewerConflictState: reviewCase.reviewer_conflict_state,
+                      reviewerRole: reviewCase.reviewer_role,
+                      status: reviewCase.status,
+                    });
+
+                    return (
                     <article className="panel data-card" key={reviewCase.id}>
                       <p className="detail-kicker">
                         {reviewCase.reviewer_role.replaceAll("_", " ")} |{" "}
@@ -622,6 +1034,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <strong>Appeal:</strong> {reviewCase.appeal_reason}
                         </p>
                       ) : null}
+                      <div className="status-banner">
+                        <strong>{reviewerConsolePreview.statusLabel}</strong>
+                        <p>
+                          Conflict:{" "}
+                          {reviewerConsolePreview.reviewerConflictState.replaceAll("_", " ")}.
+                          Neutral assignment:{" "}
+                          {reviewerConsolePreview.neutralReviewAssignment.replaceAll("_", " ")}.
+                        </p>
+                        <div className="mini-list" aria-label="Reviewer console gates">
+                          {reviewerConsolePreview.gates.map((gate) => (
+                            <span className="source-pill" key={gate.key}>
+                              {gate.label}: {gate.status.replaceAll("_", " ")}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       <form action={updateAgreementReviewCaseAction} className="compact-form">
                         <input name="review_case_id" type="hidden" value={reviewCase.id} />
                         <input name="return_to" type="hidden" value="/admin" />
@@ -668,6 +1096,46 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             />
                           </label>
                         </div>
+                        <fieldset className="review-readiness-fieldset">
+                          <legend>Reviewer conflict and neutral assignment</legend>
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>Conflict state</span>
+                              <select
+                                name="reviewer_conflict_state"
+                                defaultValue={reviewCase.reviewer_conflict_state}
+                              >
+                                <option value="not_checked">Not checked</option>
+                                <option value="no_conflict_declared">No conflict declared</option>
+                                <option value="possible_conflict">Possible conflict</option>
+                                <option value="conflict_disclosed">Conflict disclosed</option>
+                                <option value="recused">Recused</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Neutral review assignment</span>
+                              <select
+                                name="neutral_review_assignment"
+                                defaultValue={reviewCase.neutral_review_assignment}
+                              >
+                                <option value="unassigned">Unassigned</option>
+                                <option value="operator_review_only">Operator review only</option>
+                                <option value="neutral_reviewer_assigned">Neutral reviewer assigned</option>
+                                <option value="neutral_panel_assigned">Neutral panel assigned</option>
+                                <option value="not_required_for_stage">Not required for stage</option>
+                              </select>
+                            </label>
+                          </div>
+                          <label className="field">
+                            <span>Panel / neutral assignment notes</span>
+                            <textarea
+                              defaultValue={reviewCase.review_panel_notes}
+                              name="review_panel_notes"
+                              placeholder="Neutral reviewer, panel composition, recusal handling, or why neutral review is not required."
+                              rows={3}
+                            />
+                          </label>
+                        </fieldset>
                         <label className="field">
                           <span>Conflict-of-interest notes</span>
                           <textarea
@@ -716,12 +1184,396 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </button>
                       </form>
                     </article>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="empty-state">
                     <div>
                       <strong>No agreement evidence reviews.</strong>
                       <p>Evidence submitted from agreement rooms will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Baseline witness review</p>
+                <h2>Guest witness testimony queue</h2>
+                <p>
+                  Review baseline-only witness statements before they affect additionality or
+                  credibility. Social-account verification is identity assurance only; claim
+                  credibility depends on relationship, direct knowledge, specificity, consistency,
+                  and risk review.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.baselineWitnessRiskReports
+                  .filter((report) => !report.baseline_witness_testimonial_id)
+                  .map((report) => (
+                    <article className="panel data-card" key={report.id}>
+                      <p className="detail-kicker">
+                        {report.report_kind.replaceAll("_", " ")} |{" "}
+                        {report.review_status.replaceAll("_", " ")}
+                      </p>
+                      <h3>Witness risk report</h3>
+                      <p className="route-text">{report.redacted_summary}</p>
+                      <p className="panel-note">
+                        Invite {report.invite_id ?? "not attached"}; participant{" "}
+                        {report.participant_user_id ?? "not attached"}. Private report text is
+                        stored only by reference hash.
+                      </p>
+                    </article>
+                  ))}
+                {queues?.baselineWitnessReviews.length ? (
+                  queues.baselineWitnessReviews.map(({ testimonial, invite, assessment, externalAccount, riskReports }) => {
+                    const basisText = getJsonString(testimonial.basis_json, "basisText");
+
+                    return (
+                      <article className="panel data-card data-card-wide" key={testimonial.id}>
+                        <p className="detail-kicker">
+                          {testimonial.testimonial_status.replaceAll("_", " ")} |{" "}
+                          {testimonial.relationship_type.replaceAll("_", " ")}
+                        </p>
+                        <h3>
+                          Baseline credence{" "}
+                          {Math.round(testimonial.baseline_counterfactual_credence_decimal * 100)}%
+                        </h3>
+                        <div className="tag-row">
+                          <span className="badge">
+                            Identity{" "}
+                            {assessment?.identity_assurance_level.replaceAll("_", " ") ?? "pending"}
+                          </span>
+                          <span className="source-pill">
+                            Provider {externalAccount?.provider ?? "not recorded"}
+                          </span>
+                          <span className="source-pill">
+                            Knowledge {testimonial.baseline_knowledge_level}
+                          </span>
+                          <span className="source-pill">
+                            Observed {testimonial.recent_meal_observation_frequency.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        {invite ? (
+                          <p className="route-text">
+                            Invite status {invite.invite_status.replaceAll("_", " ")}; action
+                            window {new Date(invite.action_window_start_at).toLocaleDateString()} to{" "}
+                            {new Date(invite.action_window_end_at).toLocaleDateString()}.
+                          </p>
+                        ) : null}
+                        <div className="field-grid">
+                          <div>
+                            <h4>Private testimony basis</h4>
+                            <p className="route-text">{basisText || "No basis text recorded."}</p>
+                            {testimonial.uncertainty_notes_private ? (
+                              <p className="route-text">
+                                <strong>Uncertainty:</strong> {testimonial.uncertainty_notes_private}
+                              </p>
+                            ) : null}
+                            {testimonial.concern_notes_private ? (
+                              <p className="route-text">
+                                <strong>Concern notes:</strong> {testimonial.concern_notes_private}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div>
+                            <h4>Quality assessment</h4>
+                            {assessment ? (
+                              <div className="mini-list">
+                                <span className="source-pill">
+                                  Probative {assessment.baseline_probative_value_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Relationship {assessment.relationship_weight_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Knowledge {assessment.knowledge_basis_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Specificity {assessment.specificity_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Independence {assessment.independence_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Consistency {assessment.consistency_score_decimal.toFixed(2)}
+                                </span>
+                                <span className="source-pill">
+                                  Collusion risk {assessment.collusion_risk_score_decimal.toFixed(2)}
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="route-text">No quality assessment is attached.</p>
+                            )}
+                          </div>
+                        </div>
+                        {riskReports.length ? (
+                          <div className="status-banner status-banner-error">
+                            <strong>Private risk report</strong>
+                            <div className="mini-list">
+                              {riskReports.map((report) => (
+                                <span className="source-pill" key={report.id}>
+                                  {report.report_kind.replaceAll("_", " ")} |{" "}
+                                  {report.review_status.replaceAll("_", " ")}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        <p className="panel-note">
+                          Participant-visible state remains status-only. Do not copy private notes,
+                          social handles, provider ids, refusal reasons, or scores into participant
+                          summaries.
+                        </p>
+                        <form action="/api/moral-trade/guest-witness/review" className="compact-form" method="post">
+                          <input name="testimonial_id" type="hidden" value={testimonial.id} />
+                          <input name="assessment_id" type="hidden" value={assessment?.id ?? ""} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>Decision</span>
+                              <select defaultValue="needs_more_info" name="decision">
+                                <option value="accept">Accept for additionality and credibility</option>
+                                <option value="partial">Accept for additionality only</option>
+                                <option value="reject">Reject</option>
+                                <option value="needs_more_info">Needs more information</option>
+                                <option value="dispute">Disputed</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Participant-safe summary</span>
+                              <input
+                                name="participant_visible_summary"
+                                placeholder="Optional coarse status summary only"
+                              />
+                            </label>
+                          </div>
+                          <label className="field">
+                            <span>Private reviewer notes</span>
+                            <textarea
+                              name="private_reviewer_notes"
+                              placeholder="Policy trace, uncertainty, and risk rationale."
+                              rows={4}
+                            />
+                          </label>
+                          <button
+                            className="button button-primary button-mini"
+                            disabled={!assessment}
+                            type="submit"
+                          >
+                            Save witness decision
+                          </button>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : queues?.baselineWitnessRiskReports.some(
+                    (report) => !report.baseline_witness_testimonial_id,
+                  ) ? null : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No guest witness reviews.</strong>
+                      <p>Submitted baseline testimony and witness pressure reports will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Pledge bond review</p>
+                <h2>Performance bond challenge queue</h2>
+                <p>
+                  Review challenged or overdue pledge performance bonds with their evidence schema,
+                  challenge reason, ledger status, and audit trail. Reviewer decisions require a
+                  written reason.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.performanceBondReviews.length ? (
+                  queues.performanceBondReviews.map(
+                    ({ bond, evidence, challenges, ledgerEntries, auditEvents, offer, agreement }) => {
+                      const evidenceSchema = evidenceSchemaFromJson(bond.evidence_schema);
+                      const latestEvidence = evidence[0] ?? null;
+                      const latestChallenge = challenges[0] ?? null;
+
+                      return (
+                        <article className="panel data-card data-card-wide" key={bond.id}>
+                          <p className="detail-kicker">
+                            {bond.side === "offerer" ? "Offer-maker bond" : "Taker bond"} |{" "}
+                            {formatAdminState(bond.status)}
+                          </p>
+                          <h3>{formatPerformanceBondAmount(bond.amount_cents, bond.currency)}</h3>
+                          <div className="tag-row">
+                            <span className="badge">Funding {formatAdminState(bond.funding_status)}</span>
+                            <span className="source-pill">Party {bond.party_id}</span>
+                            <span className="source-pill">
+                              Counterparty {bond.counterparty_id ?? "not locked"}
+                            </span>
+                            {agreement ? (
+                              <span className="source-pill">
+                                Agreement {agreement.id.slice(0, 8)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {offer ? (
+                            <p className="route-text">
+                              Offer context: {offer.offered_cause} for {offer.requested_cause}.{" "}
+                              {offer.offer_action}
+                            </p>
+                          ) : null}
+                          <div className="field-grid">
+                            <div>
+                              <h4>Evidence schema</h4>
+                              <p className="route-text">
+                                <strong>Action:</strong> {evidenceSchema.actionToProve}
+                              </p>
+                              <p className="route-text">
+                                <strong>Evidence types:</strong> {evidenceSchema.acceptedEvidenceTypes}
+                              </p>
+                              <p className="route-text">
+                                <strong>Minimum detail:</strong> {evidenceSchema.minimumDetail}
+                              </p>
+                              <p className="route-text">
+                                <strong>Review standard:</strong> {evidenceSchema.reviewStandard}
+                              </p>
+                              <p className="route-text">
+                                <strong>Visibility:</strong>{" "}
+                                {formatAdminState(evidenceSchema.visibility)}
+                              </p>
+                            </div>
+                            <div>
+                              <h4>Bond terms</h4>
+                              <p className="route-text">
+                                Evidence due{" "}
+                                {bond.evidence_due_at
+                                  ? new Date(bond.evidence_due_at).toLocaleDateString()
+                                  : "not set"}
+                                ; challenge window {bond.challenge_window_days} days.
+                              </p>
+                              <p className="route-text">
+                                <strong>Forfeiture rule:</strong>{" "}
+                                {formatPerformanceBondDestination(bond)}
+                              </p>
+                              <p className="route-text">
+                                <strong>No-trade baseline:</strong> {bond.no_trade_baseline}
+                              </p>
+                              <p className="route-text">
+                                <strong>Additionality:</strong> {bond.additionality_statement}
+                              </p>
+                            </div>
+                          </div>
+                          {latestEvidence ? (
+                            <div className="status-banner">
+                              <strong>Submitted evidence</strong>
+                              <p>{latestEvidence.evidence_text}</p>
+                              {latestEvidence.evidence_urls.length ? (
+                                <div className="mini-list">
+                                  {latestEvidence.evidence_urls.map((url) => (
+                                    <a className="inline-link" href={url} key={url}>
+                                      Open evidence link
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {latestEvidence.redaction_notes ? (
+                                <p className="panel-note">
+                                  Redaction notes: {latestEvidence.redaction_notes}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="route-text">No evidence has been submitted yet.</p>
+                          )}
+                          {latestChallenge ? (
+                            <div className="status-banner status-banner-error">
+                              <strong>Challenge reason</strong>
+                              <p>{latestChallenge.reason}</p>
+                              <p>{latestChallenge.specific_objection}</p>
+                              <p className="panel-note">
+                                Requested outcome: {latestChallenge.requested_outcome}
+                              </p>
+                            </div>
+                          ) : null}
+                          <form action={adjudicatePerformanceBondChallengeAction} className="compact-form">
+                            <input name="bond_id" type="hidden" value={bond.id} />
+                            <input name="challenge_id" type="hidden" value={latestChallenge?.id ?? ""} />
+                            <input name="return_to" type="hidden" value="/admin" />
+                            <div className="field-grid">
+                              <label className="field">
+                                <span>Decision</span>
+                                <select defaultValue="request_more_evidence" name="decision">
+                                  <option value="accept">Accept evidence and refund</option>
+                                  <option value="reject">Reject evidence and release</option>
+                                  <option value="request_more_evidence">Request more evidence</option>
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Appeal deadline</span>
+                                <input name="appeal_deadline" type="date" />
+                              </label>
+                            </div>
+                            <label className="radio-row">
+                              <input name="appeal_allowed" type="checkbox" />
+                              <span>Appeal allowed under this review decision.</span>
+                            </label>
+                            <label className="field">
+                              <span>Decision reason</span>
+                              <textarea
+                                name="decision_reason"
+                                placeholder="Explain the exact evidence-schema match, mismatch, or missing information."
+                                required
+                                rows={4}
+                              />
+                            </label>
+                            <button className="button button-primary button-mini" type="submit">
+                              Save bond decision
+                            </button>
+                          </form>
+                          {ledgerEntries.length ? (
+                            <div className="mini-list">
+                              {ledgerEntries.slice(0, 5).map((entry) => (
+                                <div className="mini-list-item" key={entry.id}>
+                                  <strong>
+                                    {formatAdminState(entry.type)} |{" "}
+                                    {formatPaymentAmount(entry.amount_cents, entry.currency)}
+                                  </strong>
+                                  <span>
+                                    {formatAdminState(entry.status)} to {entry.destination_type}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {auditEvents.length ? (
+                            <details className="subtle-panel">
+                              <summary className="panel-summary">Audit log</summary>
+                              <div className="mini-list">
+                                {auditEvents.slice(0, 8).map((event) => (
+                                  <div className="mini-list-item" key={event.id}>
+                                    <strong>
+                                      {formatAdminState(event.event_type)} |{" "}
+                                      {formatAdminState(event.from_status)} to{" "}
+                                      {formatAdminState(event.to_status)}
+                                    </strong>
+                                    <span>{event.reason}</span>
+                                    <span>{new Date(event.created_at).toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : null}
+                        </article>
+                      );
+                    },
+                  )
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No pledge performance bond reviews.</strong>
+                      <p>Challenges and overdue bonded pledges will appear here.</p>
                     </div>
                   </div>
                 )}
@@ -833,6 +1685,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       {request.constraints ? (
                         <p className="route-text">
                           <strong>Constraints:</strong> {request.constraints}
+                        </p>
+                      ) : null}
+                      {request.no_trade_baseline ? (
+                        <p className="route-text">
+                          <strong>No-trade baseline:</strong> {request.no_trade_baseline}
                         </p>
                       ) : null}
                       {request.target_preview ? (
@@ -1014,6 +1871,32 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <p>
                   Inspect coarse reason codes, workflow stages, and query-budget pressure without
                   opening raw wishes, source notes, or private search text.
+                </p>
+              </div>
+              <div className="panel data-card data-card-wide">
+                <p className="detail-kicker">Privacy and safety dashboard</p>
+                <h3>Enumeration pressure and weekly review cues</h3>
+                <dl className="values-summary compact-summary">
+                  <div>
+                    <dt>Sparse floor hits</dt>
+                    <dd>{sparseFloorHitEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Budget limited</dt>
+                    <dd>{limitedQueryEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Anomaly reviews</dt>
+                    <dd>{anomalyReviewEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Query risk signals</dt>
+                    <dd>{queryBudgetRiskSignals}</dd>
+                  </div>
+                </dl>
+                <p className="route-text">
+                  Review sparse-floor hits and medium/high anomaly events weekly; exact queries and
+                  wish text stay out of this console.
                 </p>
               </div>
               <div className="panel data-card data-card-wide">
@@ -1199,6 +2082,135 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No paused donation offsets.</strong>
                       <p>Flagged offset offers will appear here for review.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-subtle">
+              <div className="section-head">
+                <p className="eyebrow">Baseline credibility bonds</p>
+                <h2>Bond evidence awaiting review</h2>
+                <p>
+                  Review unmatched baseline evidence and record privacy-safe decisions. Private
+                  payment details stay out of this queue and the public audit trail.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.baselineBondReviews.length ? (
+                  queues.baselineBondReviews.map((review) => {
+                    const status = normalizeBaselineBondStatus(review.offset.baseline_bond_status);
+                    const amountLabel = review.offset.baseline_bond_amount_cents
+                      ? formatBaselineBondAmount(
+                          review.offset.baseline_bond_amount_cents,
+                          review.offset.baseline_bond_currency ?? "USD",
+                        )
+                      : "No amount recorded";
+                    const appealWindowEndsAt = review.offset.baseline_bond_appeal_window_ends_at;
+                    const appealWindowOpen = appealWindowEndsAt
+                      ? appealWindowEndsAt > queues.loadedAtIso
+                      : false;
+
+                    return (
+                      <article className="panel data-card" key={`baseline-bond-${review.offset.offer_id}`}>
+                        <p className="detail-kicker">
+                          {status.replaceAll("_", " ")} | {amountLabel}
+                        </p>
+                        <h3>
+                          {review.offer?.offered_cause ?? "Offset"} for{" "}
+                          {review.offer?.requested_cause ?? "counterparty"}
+                        </h3>
+                        <p className="route-text">
+                          Forfeit destination: {review.charity?.name ?? "Public-good destination missing"}
+                        </p>
+                        <p className="route-text">
+                          Baseline: {formatBaselineBondAmount(review.offset.baseline_amount_cents)} from{" "}
+                          {review.offset.baseline_opposed_cause}
+                        </p>
+                        <p className="route-text">
+                          Offer expiry:{" "}
+                          {review.offset.offer_expires_at
+                            ? new Date(review.offset.offer_expires_at).toLocaleString()
+                            : "Not recorded"}
+                          {" | "}evidence due:{" "}
+                          {review.offset.baseline_bond_evidence_due_at
+                            ? new Date(review.offset.baseline_bond_evidence_due_at).toLocaleString()
+                            : "Not recorded"}
+                        </p>
+                        <p className="route-text">
+                          Evidence standard:{" "}
+                          {review.offset.baseline_bond_evidence_standard ?? "No standard recorded."}
+                        </p>
+                        {review.offset.baseline_bond_evidence_url ? (
+                          <p className="route-text">
+                            Evidence:{" "}
+                            <a className="inline-link" href={review.offset.baseline_bond_evidence_url}>
+                              open submitted packet
+                            </a>
+                          </p>
+                        ) : (
+                          <p className="route-text">Evidence: not submitted yet.</p>
+                        )}
+                        {appealWindowEndsAt ? (
+                          <p className="route-text">
+                            Appeal window:{" "}
+                            {appealWindowOpen ? "open until " : "closed at "}
+                            {new Date(appealWindowEndsAt).toLocaleString()}
+                          </p>
+                        ) : null}
+                        {review.offset.baseline_bond_review_notes ? (
+                          <p className="route-text">
+                            Review notes: {review.offset.baseline_bond_review_notes}
+                          </p>
+                        ) : null}
+                        <form action={reviewBaselineBondEvidenceAction} className="compact-form">
+                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <label className="field">
+                            <span>Reviewer notes</span>
+                            <textarea
+                              defaultValue={review.offset.baseline_bond_review_notes ?? ""}
+                              name="baseline_bond_review_notes"
+                              placeholder="Evidence reviewed, appeal state, and decision rationale."
+                              rows={3}
+                            />
+                          </label>
+                          <div className="form-actions">
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="approve"
+                            >
+                              Approve evidence and mark refund
+                            </button>
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="forfeit"
+                            >
+                              Forfeit after appeal window
+                            </button>
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="cancel"
+                            >
+                              Cancel by review
+                            </button>
+                          </div>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No baseline credibility bond evidence is awaiting review.</strong>
+                      <p>Expired unmatched bonded baselines will appear here when evidence opens.</p>
                     </div>
                   </div>
                 )}

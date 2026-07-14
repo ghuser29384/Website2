@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 type MoralTradeScene =
   | "reciprocal"
@@ -13,6 +14,7 @@ type MoralTradeScene =
 const animationCards: ReadonlyArray<{
   alt: string;
   id: string;
+  href: string;
   scene: MoralTradeScene;
   summary: string;
   title: string;
@@ -20,6 +22,7 @@ const animationCards: ReadonlyArray<{
 }> = [
   {
     id: "reciprocal-mixed",
+    href: "/offers/examples/reciprocal-mixed",
     scene: "reciprocal",
     typeLabel: "A. Reciprocal mixed trade",
     title: "Two sacrifices become two moral gains",
@@ -30,6 +33,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "moral-for-prudential",
+    href: "/offers/examples/moral-for-prudential",
     scene: "prudential",
     typeLabel: "B. Moral-for-prudential trade",
     title: "An incentive buys a behavior change",
@@ -40,6 +44,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "pure-opposed-cause",
+    href: "/offers/examples/pure-opposed-cause",
     scene: "pure",
     typeLabel: "C. Pure opposed-cause trade",
     title: "Opposed efforts redirect into a shared good",
@@ -50,6 +55,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "intrapersonal",
+    href: "/offers/examples/intrapersonal",
     scene: "intrapersonal",
     typeLabel: "D. Intrapersonal trade",
     title: "A divided self finds a better bundle",
@@ -60,6 +66,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "bargained-coordination",
+    href: "/offers/examples/bargained-coordination",
     scene: "bargained",
     typeLabel: "E. Bargained coordination",
     title: "Repeated structure recovers blocked gains",
@@ -70,6 +77,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "lottery-mediated",
+    href: "/offers/examples/lottery-mediated",
     scene: "lottery",
     typeLabel: "F. Lottery-mediated trade",
     title: "Chance creates a bridge certainty cannot",
@@ -80,6 +88,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "side-payment",
+    href: "/offers/examples/side-payment",
     scene: "sidePayment",
     typeLabel: "G. Side-payment trade",
     title: "Compensation reshapes the feasible set",
@@ -90,6 +99,7 @@ const animationCards: ReadonlyArray<{
   },
   {
     id: "market-mediated",
+    href: "/offers/examples/market-mediated",
     scene: "market",
     typeLabel: "H. Market-mediated trade",
     title: "A clearing layer scales moral barter",
@@ -353,7 +363,12 @@ export function MoralTradeAnimations() {
 
         <div className="moral-animation-grid">
           {animationCards.map((card) => (
-            <article className="panel moral-animation-card" key={card.id}>
+            <Link
+              aria-label={`Create ${card.typeLabel.replace(/^[A-H]\. /, "")}`}
+              className="panel moral-animation-card"
+              href={card.href}
+              key={card.id}
+            >
               <div
                 aria-label={card.alt}
                 className={`moral-animation-frame moral-animation-frame-${card.scene}`}
@@ -364,9 +379,10 @@ export function MoralTradeAnimations() {
               <div className="moral-animation-card-copy">
                 <p className="detail-kicker">{card.typeLabel}</p>
                 <h3>{card.title}</h3>
-                <p>{card.summary}</p>
+                <p className="moral-animation-card-summary">{card.summary}</p>
+                <span className="moral-animation-card-action">Create this trade</span>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
       </div>

@@ -1,0 +1,1099 @@
+import {
+  assessDonationOffsetModeration,
+  calculateDonationOffsetPreview,
+  calculateDonationOffsetPoolProgress,
+  createDefaultDonationOffsetFields,
+  formatDonationOffsetParticipationMode,
+  formatDonationOffsetPoolSide,
+  formatDonationOffsetRatio,
+  formatDonationOffsetTimeHorizon,
+  formatDonationOffsetUnmatchedRule,
+  formatDonationOffsetVerificationMethod,
+  getDonationOffsetComplexityWarnings,
+  validateDonationOffsetFields,
+  type DonationOffsetModerationStatus,
+  type DonationOffsetParticipationMode,
+  type DonationOffsetPoolSide,
+  type DonationOffsetTimeHorizon,
+  type DonationOffsetUnmatchedSurplusRule,
+  type DonationOffsetVerificationMethod,
+} from "@/lib/donation-offsets";
+
+export type OfferMode = "pledge" | "offset" | "payment";
+export type PaymentIntervalUnit = "none" | "day" | "month" | "year";
+export type FilterMode = OfferMode | "all";
+export type SortOrder = "match" | "trust" | "recent";
+
+export interface Offer {
+  id: string;
+  alias: string;
+  mode: OfferMode;
+  offeredCause: string;
+  requestedCause: string;
+  offerAction: string;
+  requestAction: string;
+  compromiseCause: string;
+  offerImpact: number;
+  minCounterpartyImpact: number;
+  verification: string;
+  duration: string;
+  paymentIntervalValue: number | null;
+  paymentIntervalUnit: PaymentIntervalUnit;
+  trustLevel: number;
+  notes: string;
+  baselineAmountUsd: number | null;
+  baselineOpposedCause: string;
+  requestedMatchingAmountUsd: number | null;
+  requestedOpposedCause: string;
+  compromiseDestinationId: string;
+  offsetRatio: number | null;
+  offsetTimeHorizon: DonationOffsetTimeHorizon;
+  offsetVerificationMethod: DonationOffsetVerificationMethod;
+  unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  offsetParticipationMode: DonationOffsetParticipationMode;
+  offsetPoolId: string;
+  offsetPoolName: string;
+  offsetPoolSide: DonationOffsetPoolSide | "";
+  assuranceMinimumUsd: number | null;
+  poolMaximumCapUsd: number | null;
+  assuranceDeadline: string;
+  evidenceUrl: string;
+  moderationStatus: DonationOffsetModerationStatus | null;
+  source: string;
+  createdAt: number;
+}
+
+export interface OfferDraft {
+  alias: string;
+  mode: OfferMode;
+  offeredCause: string;
+  requestedCause: string;
+  offerAction: string;
+  requestAction: string;
+  compromiseCause: string;
+  offerImpact: number;
+  minCounterpartyImpact: number;
+  verification: string;
+  duration: string;
+  paymentIntervalValue: number | null;
+  paymentIntervalUnit: PaymentIntervalUnit;
+  trustLevel: number;
+  notes: string;
+  baselineAmountUsd: number | null;
+  baselineOpposedCause: string;
+  requestedMatchingAmountUsd: number | null;
+  requestedOpposedCause: string;
+  compromiseDestinationId: string;
+  offsetRatio: number | null;
+  offsetTimeHorizon: DonationOffsetTimeHorizon;
+  offsetVerificationMethod: DonationOffsetVerificationMethod;
+  unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  offsetParticipationMode: DonationOffsetParticipationMode;
+  offsetPoolId: string;
+  offsetPoolName: string;
+  offsetPoolSide: DonationOffsetPoolSide | "";
+  assuranceMinimumUsd: number | null;
+  poolMaximumCapUsd: number | null;
+  assuranceDeadline: string;
+  evidenceUrl: string;
+  counterfactualHonesty: boolean;
+  policyPledge: boolean;
+}
+
+export interface OfferFilters {
+  mode: FilterMode;
+  cause: string;
+  sortOrder: SortOrder;
+}
+
+export interface EvaluatedPair {
+  offer: Offer;
+  reciprocal: boolean;
+  compromiseCompatible: boolean;
+  offsetRatioCompatible: boolean;
+  offsetTimingCompatible: boolean;
+  impactCompatible: boolean;
+  trustAligned: boolean;
+  verificationAligned: boolean;
+  durationAligned: boolean;
+  score: number;
+  exact: boolean;
+}
+
+const LOCAL_STORAGE_KEY = "moralTradeLocalOffers";
+const LEGACY_LOCAL_STORAGE_KEY = "moralTradeMarketLocalOffers";
+
+export const CAUSE_OPTIONS = [
+  "Animal welfare",
+  "Existential risk",
+  "Future flourishing",
+  "Moral status of digital minds",
+  "Extreme power concentration",
+  "S-risks",
+  "Global poverty",
+  "Climate",
+  "Public health",
+  "Financial support",
+  "Gun rights",
+  "Gun control",
+  "Democracy",
+  "Community service",
+] as const;
+
+export const OFFER_MODE_OPTIONS: Array<{ value: OfferMode; label: string }> = [
+  { value: "pledge", label: "Personal pledge swap" },
+  { value: "offset", label: "Donation offset" },
+  { value: "payment", label: "Paid action offer" },
+];
+
+export const FILTER_MODE_OPTIONS: Array<{ value: FilterMode; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "pledge", label: "Pledge swaps" },
+  { value: "offset", label: "Donation offsets" },
+  { value: "payment", label: "Paid action offers" },
+];
+
+export const COMPROMISE_CAUSE_OPTIONS = [
+  "Not needed",
+  "Disaster relief",
+  "Future flourishing",
+  "Global poverty",
+  "Climate resilience",
+  "Public health",
+  "Animal welfare",
+  "Community service",
+] as const;
+
+export const VERIFICATION_OPTIONS = [
+  "Annual receipts",
+  "Peer witness",
+  "Evidence-gated",
+  "Manual review required",
+  "Payment pending verification",
+  "Public pledge",
+] as const;
+
+export const DURATION_OPTIONS = [
+  "30 days",
+  "3 months",
+  "6 months",
+  "12 months",
+  "Open-ended",
+] as const;
+
+export const PAYMENT_INTERVAL_UNIT_OPTIONS: Array<{
+  value: PaymentIntervalUnit;
+  label: string;
+}> = [
+  { value: "none", label: "One-time or unspecified" },
+  { value: "day", label: "Days" },
+  { value: "month", label: "Months" },
+  { value: "year", label: "Years" },
+] as const;
+
+export const SORT_OPTIONS: Array<{ value: SortOrder; label: string }> = [
+  { value: "match", label: "Best match first" },
+  { value: "trust", label: "Trust first" },
+  { value: "recent", label: "Newest first" },
+];
+
+export const DEFAULT_FILTERS: OfferFilters = {
+  mode: "all",
+  cause: "all",
+  sortOrder: "match",
+};
+
+export function createDefaultOfferDraft(): OfferDraft {
+  const defaultOffsetFields = createDefaultDonationOffsetFields();
+
+  return {
+    alias: "",
+    mode: "pledge",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
+    offerAction: "",
+    requestAction: "",
+    compromiseCause: "Not needed",
+    offerImpact: 7,
+    minCounterpartyImpact: 6,
+    verification: "Annual receipts",
+    duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 3,
+    notes: "",
+    baselineAmountUsd: defaultOffsetFields.baselineAmountUsd,
+    baselineOpposedCause: defaultOffsetFields.baselineOpposedCause,
+    requestedMatchingAmountUsd: defaultOffsetFields.requestedMatchingAmountUsd,
+    requestedOpposedCause: defaultOffsetFields.requestedOpposedCause,
+    compromiseDestinationId: defaultOffsetFields.compromiseDestinationId,
+    offsetRatio: defaultOffsetFields.offsetRatio,
+    offsetTimeHorizon: defaultOffsetFields.timeHorizon,
+    offsetVerificationMethod: defaultOffsetFields.verificationMethod,
+    unmatchedSurplusRule: defaultOffsetFields.unmatchedSurplusRule,
+    offsetParticipationMode: defaultOffsetFields.participationMode,
+    offsetPoolId: defaultOffsetFields.poolId,
+    offsetPoolName: defaultOffsetFields.poolName,
+    offsetPoolSide: defaultOffsetFields.poolSide,
+    assuranceMinimumUsd: defaultOffsetFields.assuranceMinimumUsd,
+    poolMaximumCapUsd: defaultOffsetFields.poolMaximumCapUsd,
+    assuranceDeadline: defaultOffsetFields.assuranceDeadline,
+    evidenceUrl: "",
+    counterfactualHonesty: false,
+    policyPledge: false,
+  };
+}
+
+export const SEED_OFFERS: Offer[] = [
+  {
+    id: "seed-victoria",
+    alias: "Victoria",
+    mode: "pledge",
+    offeredCause: "Global poverty",
+    requestedCause: "Animal welfare",
+    offerAction: "Donate 1% of my income to an evidence-backed poverty charity for 12 months.",
+    requestAction: "Adopt a vegetarian diet for 12 months.",
+    compromiseCause: "Not needed",
+    offerImpact: 7,
+    minCounterpartyImpact: 8,
+    verification: "Annual receipts",
+    duration: "12 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 3,
+    notes: "I already care about poverty, but a reciprocal trade would let me buy much more animal welfare than I could create alone.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000001000,
+  },
+  {
+    id: "seed-paul",
+    alias: "Paul",
+    mode: "pledge",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
+    offerAction: "Go vegetarian for 12 months, with a yearly check-in and visible meal log.",
+    requestAction: "Donate 1% of income to an effective poverty fund for the same period.",
+    compromiseCause: "Not needed",
+    offerImpact: 8,
+    minCounterpartyImpact: 7,
+    verification: "Annual receipts",
+    duration: "12 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 3,
+    notes: "The diet shift is worth it if it reliably increases poverty giving that I would not otherwise cause.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000002000,
+  },
+  {
+    id: "seed-nia",
+    alias: "Nia",
+    mode: "pledge",
+    offeredCause: "Climate",
+    requestedCause: "Public health",
+    offerAction: "Replace two weekly car trips with transit and contribute monthly to a climate resilience fund.",
+    requestAction: "Volunteer four hours each month with a vaccination or clinic outreach effort.",
+    compromiseCause: "Not needed",
+    offerImpact: 7,
+    minCounterpartyImpact: 6,
+    verification: "Public pledge",
+    duration: "6 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 2,
+    notes: "I want a mixed trade that links a climate habit to a public-health action with light verification.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000003000,
+  },
+  {
+    id: "seed-omar",
+    alias: "Omar",
+    mode: "pledge",
+    offeredCause: "Public health",
+    requestedCause: "Climate",
+    offerAction: "Volunteer four hours monthly with a community health campaign.",
+    requestAction: "Cut two weekly car trips and redirect the savings into climate resilience.",
+    compromiseCause: "Not needed",
+    offerImpact: 6,
+    minCounterpartyImpact: 6,
+    verification: "Public pledge",
+    duration: "6 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 2,
+    notes: "This is a reciprocal mixed trade, not a shared moral consensus.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000004000,
+  },
+  {
+    id: "seed-rebecca",
+    alias: "Rebecca",
+    mode: "offset",
+    offeredCause: "Gun rights",
+    requestedCause: "Gun control",
+    offerAction: "Redirect $1,000 I would have sent to gun-rights lobbying into a global poverty fund.",
+    requestAction: "Redirect $1,000 you would have sent to gun-control lobbying into the same global poverty fund.",
+    compromiseCause: "Global poverty",
+    offerImpact: 8,
+    minCounterpartyImpact: 7,
+    verification: "Manual review required",
+    duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 4,
+    notes: "If matched, this beats spending money on a zero-sum advocacy fight.",
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun rights",
+    requestedMatchingAmountUsd: 1000,
+    requestedOpposedCause: "Gun control",
+    compromiseDestinationId: "givewell-top-charities-fund",
+    offsetRatio: 1,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "third_party_audit",
+    unmatchedSurplusRule: "donate_to_compromise_destination",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "https://example.com/rebecca-review-confirmation",
+    moderationStatus: "clear",
+    source: "Seeded example",
+    createdAt: 1700000005000,
+  },
+  {
+    id: "seed-christopher",
+    alias: "Christopher",
+    mode: "offset",
+    offeredCause: "Gun control",
+    requestedCause: "Gun rights",
+    offerAction: "Redirect $1,000 I would have sent to gun-control lobbying into the same global poverty fund.",
+    requestAction: "Redirect $1,000 you would have sent to gun-rights lobbying into that poverty fund.",
+    compromiseCause: "Global poverty",
+    offerImpact: 8,
+    minCounterpartyImpact: 7,
+    verification: "Manual review required",
+    duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    trustLevel: 4,
+    notes: "I still care most about policy, but matched redirection dominates cancelling out.",
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun control",
+    requestedMatchingAmountUsd: 1000,
+    requestedOpposedCause: "Gun rights",
+    compromiseDestinationId: "givewell-top-charities-fund",
+    offsetRatio: 1,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "third_party_audit",
+    unmatchedSurplusRule: "donate_to_compromise_destination",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "https://example.com/christopher-review-confirmation",
+    moderationStatus: "clear",
+    source: "Seeded example",
+    createdAt: 1700000006000,
+  },
+  {
+    id: "seed-lina",
+    alias: "Lina",
+    mode: "payment",
+    offeredCause: "Financial support",
+    requestedCause: "Animal welfare",
+    offerAction: "Pay $600 in three installments if someone adopts a vegetarian diet for 12 months.",
+    requestAction: "Adopt a vegetarian diet for 12 months with monthly check-ins and a simple meal log.",
+    compromiseCause: "Not needed",
+    offerImpact: 7,
+    minCounterpartyImpact: 6,
+    verification: "Payment pending verification",
+    duration: "12 months",
+    paymentIntervalValue: 1,
+    paymentIntervalUnit: "month",
+    trustLevel: 4,
+    notes: "For me, paying for a real dietary shift is worth the money if it changes behavior that would not have happened otherwise.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000007000,
+  },
+  {
+    id: "seed-marco",
+    alias: "Marco",
+    mode: "payment",
+    offeredCause: "Animal welfare",
+    requestedCause: "Financial support",
+    offerAction: "Adopt a vegetarian diet for 12 months, with monthly check-ins and a shared meal tracker.",
+    requestAction: "Receive $600 over the year if I follow through.",
+    compromiseCause: "Not needed",
+    offerImpact: 6,
+    minCounterpartyImpact: 6,
+    verification: "Payment pending verification",
+    duration: "12 months",
+    paymentIntervalValue: 1,
+    paymentIntervalUnit: "month",
+    trustLevel: 4,
+    notes: "I am already somewhat open to the diet, so a credible payment offer makes the switch prudentially worthwhile.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "proof_of_past_donations",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+    moderationStatus: null,
+    source: "Seeded example",
+    createdAt: 1700000008000,
+  },
+];
+
+export function getAllOffers(localOffers: Offer[]) {
+  return [...SEED_OFFERS, ...localOffers];
+}
+
+export function formatMode(mode: OfferMode) {
+  switch (mode) {
+    case "offset":
+      return "Donation offset";
+    case "payment":
+      return "Paid action offer";
+    default:
+      return "Personal pledge swap";
+  }
+}
+
+export function formatOffsetSummary(offer: Offer) {
+  if (offer.mode !== "offset") {
+    return null;
+  }
+
+  const preview = calculateDonationOffsetPreview({
+    baselineAmountUsd: offer.baselineAmountUsd,
+    requestedMatchingAmountUsd: offer.requestedMatchingAmountUsd,
+    offsetRatio: offer.offsetRatio,
+    unmatchedSurplusRule: offer.unmatchedSurplusRule,
+  });
+
+  return {
+    ratio: formatDonationOffsetRatio(offer.offsetRatio),
+    timeHorizon: formatDonationOffsetTimeHorizon(offer.offsetTimeHorizon),
+    verification: formatDonationOffsetVerificationMethod(offer.offsetVerificationMethod),
+    unmatchedRule: formatDonationOffsetUnmatchedRule(offer.unmatchedSurplusRule),
+    participationMode: formatDonationOffsetParticipationMode(offer.offsetParticipationMode),
+    poolSide: formatDonationOffsetPoolSide(offer.offsetPoolSide),
+    poolName: offer.offsetPoolName,
+    complexityWarnings: getDonationOffsetComplexityWarnings({
+      baselineAmountUsd: offer.baselineAmountUsd,
+      baselineOpposedCause: offer.baselineOpposedCause,
+      requestedMatchingAmountUsd: offer.requestedMatchingAmountUsd,
+      requestedOpposedCause: offer.requestedOpposedCause,
+      compromiseDestinationId: offer.compromiseDestinationId,
+      offsetRatio: offer.offsetRatio,
+      timeHorizon: offer.offsetTimeHorizon,
+      verificationMethod: offer.offsetVerificationMethod,
+      unmatchedSurplusRule: offer.unmatchedSurplusRule,
+      participationMode: offer.offsetParticipationMode,
+      poolId: offer.offsetPoolId,
+      poolName: offer.offsetPoolName,
+      poolSide: offer.offsetPoolSide,
+      assuranceMinimumUsd: offer.assuranceMinimumUsd,
+      poolMaximumCapUsd: offer.poolMaximumCapUsd,
+      assuranceDeadline: offer.assuranceDeadline,
+      description: offer.notes,
+      evidenceUrl: offer.evidenceUrl,
+    }),
+    preview,
+    poolProgress:
+      offer.offsetParticipationMode === "pool"
+        ? calculateDonationOffsetPoolProgress({
+            sideATotalUsd:
+              offer.offsetPoolSide === "side_b" ? offer.requestedMatchingAmountUsd ?? 0 : offer.baselineAmountUsd ?? 0,
+            sideBTotalUsd:
+              offer.offsetPoolSide === "side_b" ? offer.baselineAmountUsd ?? 0 : offer.requestedMatchingAmountUsd ?? 0,
+            offsetRatio: offer.offsetRatio,
+            assuranceMinimumUsd: offer.assuranceMinimumUsd,
+            deadlineAt: offer.assuranceDeadline,
+          })
+        : null,
+  };
+}
+
+function pluralizeInterval(unit: Exclude<PaymentIntervalUnit, "none">, value: number) {
+  const base = unit === "day" ? "day" : unit === "month" ? "month" : "year";
+  return value === 1 ? base : `${base}s`;
+}
+
+export function formatPaymentCadence(offer: {
+  mode: OfferMode | string;
+  paymentIntervalValue?: number | null;
+  paymentIntervalUnit?: PaymentIntervalUnit | string | null;
+  payment_interval_value?: number | null;
+  payment_interval_unit?: PaymentIntervalUnit | string | null;
+}) {
+  if (offer.mode !== "payment") {
+    return null;
+  }
+
+  const rawIntervalUnit = offer.paymentIntervalUnit ?? offer.payment_interval_unit ?? "none";
+  const intervalValue = offer.paymentIntervalValue ?? offer.payment_interval_value ?? null;
+
+  const intervalUnit =
+    rawIntervalUnit === "day" || rawIntervalUnit === "month" || rawIntervalUnit === "year"
+      ? rawIntervalUnit
+      : "none";
+
+  if (!intervalUnit || intervalUnit === "none" || !intervalValue) {
+    return "One-time or unspecified payment";
+  }
+
+  return `Paid every ${intervalValue} ${pluralizeInterval(intervalUnit, intervalValue)}`;
+}
+
+export function filterOffers(offers: Offer[], filters: OfferFilters) {
+  return offers.filter((offer) => {
+    const modeMatches = filters.mode === "all" || offer.mode === filters.mode;
+    const causeMatches =
+      filters.cause === "all" ||
+      offer.offeredCause === filters.cause ||
+      offer.requestedCause === filters.cause ||
+      offer.compromiseCause === filters.cause;
+
+    return modeMatches && causeMatches;
+  });
+}
+
+export function sortOffers(offers: Offer[], selected: Offer | null, sortOrder: SortOrder) {
+  const sorted = [...offers];
+
+  if (sortOrder === "recent") {
+    return sorted.sort((left, right) => right.createdAt - left.createdAt);
+  }
+
+  if (sortOrder === "trust") {
+    return sorted.sort((left, right) => {
+      if (right.trustLevel !== left.trustLevel) {
+        return right.trustLevel - left.trustLevel;
+      }
+
+      return right.offerImpact - left.offerImpact;
+    });
+  }
+
+  return sorted.sort((left, right) => {
+    if (selected) {
+      if (left.id === selected.id) {
+        return -1;
+      }
+      if (right.id === selected.id) {
+        return 1;
+      }
+
+      const leftScore = evaluatePair(selected, left).score;
+      const rightScore = evaluatePair(selected, right).score;
+
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
+      }
+    }
+
+    return right.createdAt - left.createdAt;
+  });
+}
+
+export function evaluatePair(selected: Offer, candidate: Offer): EvaluatedPair {
+  const sameMode = selected.mode === candidate.mode;
+  const reciprocal =
+    sameMode &&
+    normalize(selected.offeredCause) === normalize(candidate.requestedCause) &&
+    normalize(selected.requestedCause) === normalize(candidate.offeredCause);
+
+  const compromiseCompatible =
+    selected.mode !== "offset" ||
+    selected.compromiseCause === "Not needed" ||
+    candidate.compromiseCause === "Not needed" ||
+    normalize(selected.compromiseCause) === normalize(candidate.compromiseCause);
+  const offsetRatioCompatible =
+    selected.mode !== "offset" ||
+    Math.abs((selected.offsetRatio ?? 1) - (candidate.offsetRatio ?? 1)) <= 0.25;
+  const offsetTimingCompatible =
+    selected.mode !== "offset" || selected.offsetTimeHorizon === candidate.offsetTimeHorizon;
+
+  const impactCompatible =
+    candidate.offerImpact >= selected.minCounterpartyImpact &&
+    selected.offerImpact >= candidate.minCounterpartyImpact;
+
+  const trustGap = Math.abs(selected.trustLevel - candidate.trustLevel);
+  const trustAligned = trustGap <= 1;
+  const verificationAligned = selected.verification === candidate.verification;
+  const durationAligned = selected.duration === candidate.duration;
+
+  const impactMargin =
+    Math.max(0, candidate.offerImpact - selected.minCounterpartyImpact) +
+    Math.max(0, selected.offerImpact - candidate.minCounterpartyImpact);
+
+  const score =
+    (reciprocal ? 48 : sameMode ? 18 : 0) +
+    (compromiseCompatible ? 8 : 0) +
+    (offsetRatioCompatible ? 5 : 0) +
+    (offsetTimingCompatible ? 4 : 0) +
+    (impactCompatible ? 18 : 0) +
+    Math.max(0, 10 - trustGap * 3) +
+    (verificationAligned ? 6 : 0) +
+    (durationAligned ? 4 : 0) +
+    impactMargin * 2;
+
+  return {
+    offer: candidate,
+    reciprocal,
+    compromiseCompatible,
+    offsetRatioCompatible,
+    offsetTimingCompatible,
+    impactCompatible,
+    trustAligned,
+    verificationAligned,
+    durationAligned,
+    score,
+    exact: reciprocal && compromiseCompatible && impactCompatible,
+  };
+}
+
+export function exactReasons(pair: EvaluatedPair) {
+  const reasons = ["Reciprocal causes", "Impact thresholds clear"];
+
+  if (pair.verificationAligned) {
+    reasons.push("Same verification");
+  }
+
+  if (pair.durationAligned) {
+    reasons.push("Same review period");
+  }
+
+  if (pair.trustAligned) {
+    reasons.push("Trust levels close");
+  }
+
+  return reasons;
+}
+
+export function gapReasons(pair: EvaluatedPair) {
+  const reasons: string[] = [];
+
+  if (!pair.reciprocal) {
+    reasons.push("Causes are not fully reciprocal");
+  }
+
+  if (!pair.impactCompatible) {
+    reasons.push("Impact threshold mismatch");
+  }
+
+  if (!pair.compromiseCompatible) {
+    reasons.push("Different compromise destination");
+  }
+
+  if (!pair.offsetRatioCompatible) {
+    reasons.push("Different offset ratio");
+  }
+
+  if (!pair.offsetTimingCompatible) {
+    reasons.push("Different offset horizon");
+  }
+
+  if (!pair.trustAligned) {
+    reasons.push("Trust intensity differs");
+  }
+
+  if (!reasons.length) {
+    reasons.push("Close enough to negotiate");
+  }
+
+  return reasons;
+}
+
+export function validateOfferDraft(draft: OfferDraft) {
+  if (!draft.alias.trim() || !draft.offerAction.trim() || !draft.requestAction.trim()) {
+    return "Alias, your action, and the requested action are required.";
+  }
+
+  if (draft.mode === "offset") {
+    const errors = validateDonationOffsetDraft(draft);
+    if (errors.length) {
+      return errors[0];
+    }
+  }
+
+  if (!draft.counterfactualHonesty || !draft.policyPledge) {
+    return "Confirm both honesty and policy pledges before publishing an offer.";
+  }
+
+  return null;
+}
+
+export function createOfferFromDraft(draft: OfferDraft): Offer {
+  return {
+    id: makeId(),
+    alias: draft.alias.trim(),
+    mode: draft.mode,
+    offeredCause: draft.offeredCause,
+    requestedCause: draft.requestedCause,
+    offerAction: draft.offerAction.trim(),
+    requestAction: draft.requestAction.trim(),
+    compromiseCause: draft.mode === "offset" ? draft.compromiseCause : "Not needed",
+    offerImpact: draft.offerImpact,
+    minCounterpartyImpact: draft.minCounterpartyImpact,
+    verification: draft.verification,
+    duration: draft.duration,
+    paymentIntervalValue:
+      draft.mode === "payment" && draft.paymentIntervalUnit !== "none"
+        ? draft.paymentIntervalValue
+        : null,
+    paymentIntervalUnit: draft.mode === "payment" ? draft.paymentIntervalUnit : "none",
+    trustLevel: draft.trustLevel,
+    notes: draft.notes.trim(),
+    baselineAmountUsd: draft.mode === "offset" ? draft.baselineAmountUsd : null,
+    baselineOpposedCause: draft.mode === "offset" ? draft.baselineOpposedCause : "",
+    requestedMatchingAmountUsd: draft.mode === "offset" ? draft.requestedMatchingAmountUsd : null,
+    requestedOpposedCause: draft.mode === "offset" ? draft.requestedOpposedCause : "",
+    compromiseDestinationId: draft.mode === "offset" ? draft.compromiseDestinationId : "",
+    offsetRatio: draft.mode === "offset" ? draft.offsetRatio : null,
+    offsetTimeHorizon: draft.mode === "offset" ? draft.offsetTimeHorizon : "one_off",
+    offsetVerificationMethod:
+      draft.mode === "offset" ? draft.offsetVerificationMethod : "receipts_uploaded",
+    unmatchedSurplusRule:
+      draft.mode === "offset" ? draft.unmatchedSurplusRule : "return_to_donors",
+    offsetParticipationMode:
+      draft.mode === "offset" ? draft.offsetParticipationMode : "direct",
+    offsetPoolId: draft.mode === "offset" ? draft.offsetPoolId : "",
+    offsetPoolName: draft.mode === "offset" ? draft.offsetPoolName.trim() : "",
+    offsetPoolSide: draft.mode === "offset" ? draft.offsetPoolSide : "",
+    assuranceMinimumUsd:
+      draft.mode === "offset" ? draft.assuranceMinimumUsd : null,
+    poolMaximumCapUsd:
+      draft.mode === "offset" ? draft.poolMaximumCapUsd : null,
+    assuranceDeadline: draft.mode === "offset" ? draft.assuranceDeadline : "",
+    evidenceUrl: draft.mode === "offset" ? draft.evidenceUrl.trim() : "",
+    moderationStatus:
+      draft.mode === "offset"
+        ? assessDonationOffsetModeration({
+            baselineAmountUsd: draft.baselineAmountUsd,
+            baselineOpposedCause: draft.baselineOpposedCause,
+            requestedMatchingAmountUsd: draft.requestedMatchingAmountUsd,
+            requestedOpposedCause: draft.requestedOpposedCause,
+            compromiseDestinationId: draft.compromiseDestinationId,
+            offsetRatio: draft.offsetRatio,
+            timeHorizon: draft.offsetTimeHorizon,
+            verificationMethod: draft.offsetVerificationMethod,
+            unmatchedSurplusRule: draft.unmatchedSurplusRule,
+            participationMode: draft.offsetParticipationMode,
+            poolId: draft.offsetPoolId,
+            poolName: draft.offsetPoolName,
+            poolSide: draft.offsetPoolSide,
+            assuranceMinimumUsd: draft.assuranceMinimumUsd,
+            poolMaximumCapUsd: draft.poolMaximumCapUsd,
+            assuranceDeadline: draft.assuranceDeadline,
+            description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
+            evidenceUrl: draft.evidenceUrl,
+          }).status
+        : null,
+    source: "Your local offer",
+    createdAt: Date.now(),
+  };
+}
+
+export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDraft {
+  if (mode === "offset") {
+    const defaultOffsetFields = createDefaultDonationOffsetFields();
+    return {
+      ...draft,
+      mode,
+      compromiseCause: draft.compromiseCause === "Not needed" ? "Global poverty" : draft.compromiseCause,
+      verification: "Manual review required",
+      duration: "3 months",
+      paymentIntervalValue: null,
+      paymentIntervalUnit: "none",
+      baselineAmountUsd: draft.baselineAmountUsd ?? defaultOffsetFields.baselineAmountUsd,
+      baselineOpposedCause:
+        draft.baselineOpposedCause || defaultOffsetFields.baselineOpposedCause,
+      requestedMatchingAmountUsd:
+        draft.requestedMatchingAmountUsd ?? defaultOffsetFields.requestedMatchingAmountUsd,
+      requestedOpposedCause:
+        draft.requestedOpposedCause || defaultOffsetFields.requestedOpposedCause,
+      compromiseDestinationId:
+        draft.compromiseDestinationId || defaultOffsetFields.compromiseDestinationId,
+      offsetRatio: draft.offsetRatio ?? defaultOffsetFields.offsetRatio,
+      offsetTimeHorizon: draft.offsetTimeHorizon,
+      offsetVerificationMethod: draft.offsetVerificationMethod,
+      unmatchedSurplusRule: draft.unmatchedSurplusRule,
+      offsetParticipationMode: draft.offsetParticipationMode,
+      offsetPoolId: draft.offsetPoolId,
+      offsetPoolName: draft.offsetPoolName,
+      offsetPoolSide: draft.offsetPoolSide,
+      assuranceMinimumUsd: draft.assuranceMinimumUsd,
+      poolMaximumCapUsd: draft.poolMaximumCapUsd ?? defaultOffsetFields.poolMaximumCapUsd,
+      assuranceDeadline: draft.assuranceDeadline,
+      evidenceUrl: draft.evidenceUrl,
+    };
+  }
+
+  if (mode === "payment") {
+    return {
+      ...draft,
+      mode,
+      offeredCause:
+        draft.offeredCause === "Animal welfare" ? "Financial support" : draft.offeredCause,
+      requestedCause:
+        draft.requestedCause === "Global poverty" ? "Animal welfare" : draft.requestedCause,
+      compromiseCause: "Not needed",
+      verification: "Payment pending verification",
+      duration: "12 months",
+      paymentIntervalValue: draft.paymentIntervalValue ?? 1,
+      paymentIntervalUnit:
+        draft.paymentIntervalUnit === "none" ? "month" : draft.paymentIntervalUnit,
+      baselineAmountUsd: null,
+      baselineOpposedCause: "",
+      requestedMatchingAmountUsd: null,
+      requestedOpposedCause: "",
+      compromiseDestinationId: "",
+      offsetRatio: null,
+      offsetTimeHorizon: "one_off",
+      offsetVerificationMethod: "receipts_uploaded",
+      unmatchedSurplusRule: "return_to_donors",
+      offsetParticipationMode: "direct",
+      offsetPoolId: "",
+      offsetPoolName: "",
+      offsetPoolSide: "",
+      assuranceMinimumUsd: null,
+      poolMaximumCapUsd: null,
+      assuranceDeadline: "",
+      evidenceUrl: "",
+    };
+  }
+
+  return {
+    ...draft,
+    mode,
+    compromiseCause: "Not needed",
+    verification: draft.verification.toLowerCase().includes("escrow")
+      ? "Annual receipts"
+      : draft.verification,
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
+    assuranceDeadline: "",
+    evidenceUrl: "",
+  };
+}
+
+export function validateDonationOffsetDraft(draft: OfferDraft) {
+  return validateDonationOffsetFields({
+    baselineAmountUsd: draft.baselineAmountUsd,
+    baselineOpposedCause: draft.baselineOpposedCause,
+    requestedMatchingAmountUsd: draft.requestedMatchingAmountUsd,
+    requestedOpposedCause: draft.requestedOpposedCause,
+    compromiseDestinationId: draft.compromiseDestinationId,
+    offsetRatio: draft.offsetRatio,
+    timeHorizon: draft.offsetTimeHorizon,
+    verificationMethod: draft.offsetVerificationMethod,
+    unmatchedSurplusRule: draft.unmatchedSurplusRule,
+    participationMode: draft.offsetParticipationMode,
+    poolId: draft.offsetPoolId,
+    poolName: draft.offsetPoolName,
+    poolSide: draft.offsetPoolSide,
+    assuranceMinimumUsd: draft.assuranceMinimumUsd,
+    poolMaximumCapUsd: draft.poolMaximumCapUsd,
+    assuranceDeadline: draft.assuranceDeadline,
+    description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
+    evidenceUrl: draft.evidenceUrl,
+  });
+}
+
+export function loadLocalOffers() {
+  const browserStorage = (globalThis as unknown as {
+    localStorage?: {
+      getItem: (key: string) => string | null;
+      setItem: (key: string, value: string) => void;
+      removeItem: (key: string) => void;
+    };
+  }).localStorage;
+
+  if (!browserStorage) {
+    return [];
+  }
+
+  try {
+    let raw = browserStorage.getItem(LOCAL_STORAGE_KEY);
+
+    if (!raw) {
+      raw = browserStorage.getItem(LEGACY_LOCAL_STORAGE_KEY);
+
+      if (raw) {
+        browserStorage.setItem(LOCAL_STORAGE_KEY, raw);
+        browserStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
+      }
+    }
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Offer[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistLocalOffers(offers: Offer[]) {
+  const browserStorage = (globalThis as unknown as {
+    localStorage?: {
+      setItem: (key: string, value: string) => void;
+    };
+  }).localStorage;
+
+  if (!browserStorage) {
+    return;
+  }
+
+  browserStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(offers));
+}
+
+export function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function shorten(value: string, limit: number) {
+  if (value.length <= limit) {
+    return value;
+  }
+
+  return `${value.slice(0, limit - 1)}...`;
+}
+
+function normalize(value: string) {
+  return String(value).trim().toLowerCase();
+}
+
+function makeId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `local-${crypto.randomUUID()}`;
+  }
+
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}

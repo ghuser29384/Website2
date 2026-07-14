@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MpgfContributionControls } from "@/components/mpgf/mpgf-contribution-controls";
+import { MpgfContributionProofLedger } from "@/components/mpgf/mpgf-contribution-proof-ledger";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
+import { buildMpgfContributionProofLedger } from "@/lib/mpgf/public-goods-contribution-ledger";
 import { loadMpgfRealMoneyAccountState, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -34,6 +36,10 @@ export default async function MpgfAccountContributionsPage() {
   const realMoneyAccountState = await loadMpgfRealMoneyAccountState({
     userId: viewer?.authUser.id,
   });
+  const contributionProofLedger = buildMpgfContributionProofLedger({
+    participantState,
+    realMoneyAccountState,
+  });
 
   return (
     <MpgfPageFrame
@@ -50,6 +56,7 @@ export default async function MpgfAccountContributionsPage() {
       viewerPresent={Boolean(viewer)}
     >
       <section className="section section-white">
+        <MpgfContributionProofLedger ledger={contributionProofLedger} />
         <MpgfContributionControls
           participantState={participantState}
           realMoneyAccountState={realMoneyAccountState}

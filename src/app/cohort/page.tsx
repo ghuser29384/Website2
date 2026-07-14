@@ -5,83 +5,83 @@ import { createNetworkInviteAction, createWebinarRsvpAction } from "@/app/action
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
-import { getFormMessage } from "@/lib/form-state";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { getFormMessage } from "@/lib/form-state";
 import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Founding cohort",
+  title: "Join the network",
   description: truncateDescription(
-    "Join the Moral Trade founding cohort, invite one serious counterparty, and help test privacy-first pledge swaps, donation offsets, and shared public-good commitments.",
+    "Join the Moral Trade network, choose one concrete first action, and use reviewed workflows for pledge swaps, donation offsets, private matching, and moral public goods.",
   ),
   alternates: {
     canonical: "/cohort",
   },
   openGraph: {
-    title: "Moral Trade founding cohort",
+    title: "Join the Moral Trade network",
     description:
-      "A partner and referral page for communities testing voluntary moral trade with explicit terms, privacy-first matching, and manual review.",
+      "A direct onboarding route for people using Moral Trade to structure voluntary cooperation across moral disagreement.",
     url: getAbsoluteUrl("/cohort"),
     type: "website",
   },
 };
 
-interface CohortPageProps {
+interface NetworkPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function formatOptionalCount(value: number | null) {
-  return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
+  return value === null ? "—" : new Intl.NumberFormat("en-US").format(value);
 }
 
-const cohortStartPaths = [
+const startPaths = [
   {
-    title: "Browse worked examples",
+    title: "Adapt a worked example",
     description:
-      "Inspect pledge swaps, donation offsets, and public-good commitments before drafting anything public.",
-    href: "/offers?view=examples",
+      "Start from complete terms for a pledge swap, donation offset, or shared public-good commitment.",
+    href: "/worked-examples",
     icon: "example",
     actionLabel: "Open worked examples",
   },
   {
-    title: "Request a private intro",
+    title: "Request a private introduction",
     description:
-      "Use broad previews and concierge review before exact wishes, identities, or contact details are shared.",
+      "Share a broad preview first. Exact wishes, identities, and contact details remain consent-gated.",
     href: "/background-networking#concierge-intake",
     icon: "profile",
-    actionLabel: "Request concierge intro",
+    actionLabel: "Request an introduction",
   },
   {
-    title: "Start a public-good action",
+    title: "Create a public-good action",
     description:
-      "Coordinate around thresholded commitments and external evidence without platform custody claims.",
-    href: "/mpgf",
+      "Coordinate around thresholded commitments and external evidence without platform custody.",
+    href: "/moral-goods-group-buying",
     icon: "fund",
-    actionLabel: "Open public-good flow",
+    actionLabel: "Open public-good tools",
   },
 ] as const;
 
 const activationTargets = [
   {
-    label: "Activated account",
-    value: "One first action",
-    detail: "Clone an example, create a broad preview, log a public-good action, or send an invite.",
+    label: "Account activated",
+    value: "One concrete action",
+    detail: "Create, adapt, log, or request something that produces a reviewable record.",
   },
   {
-    label: "Public proof",
-    value: "Reviewable artifact",
-    detail: "A worked example clone, public preview, submitted offer, or external-evidence record.",
+    label: "Terms made legible",
+    value: "One bounded artifact",
+    detail: "A complete example, broad preview, submitted offer, or evidence-backed action.",
   },
   {
-    label: "Referral loop",
-    value: "One serious invite",
-    detail: "Invite a counterparty, organizer, or donor who is plausibly open to voluntary cooperation.",
+    label: "Network expanded",
+    value: "One serious invitation",
+    detail: "Invite a plausible counterparty, researcher, organizer, donor, or builder.",
   },
 ] as const;
 
-export default async function CohortPage({ searchParams }: CohortPageProps) {
+export default async function NetworkPage({ searchParams }: NetworkPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
@@ -109,41 +109,39 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
           </div>
         ) : null}
 
-        <section className="cohort-hero" aria-labelledby="cohort-heading">
+        <section className="cohort-hero" aria-labelledby="network-heading">
           <div className="cohort-hero-copy">
-            <p className="eyebrow">Community partner cohort</p>
-            <h1 id="cohort-heading">Grow cooperative impact in your community</h1>
+            <p className="eyebrow">Moral Trade network</p>
+            <h1 id="network-heading">Put one real disagreement into a usable structure.</h1>
             <p className="hero-text">
-              Equip members to cooperate across moral disagreement through clear terms, private
-              matching, and shared public goods.
+              Create a bounded trade, request a consent-gated introduction, or coordinate a shared
+              public-good action. Start with one concrete record rather than a general expression of
+              interest.
             </p>
             <div className="hero-actions">
-              <a
-                className="button button-primary"
-                href="#demo-rsvp"
-              >
-                RSVP for live demo
-              </a>
-              <Link className="button button-secondary" href={signupHref}>
-                Join cohort
+              <Link className="button button-primary" href={signupHref}>
+                {viewer ? "Continue onboarding" : "Create account"}
               </Link>
+              <a className="button button-secondary" href="#working-session">
+                Book a working session
+              </a>
             </div>
           </div>
 
-          <aside className="cohort-demo-card panel" aria-label="Live demo">
-            <h2>RSVP for live demo</h2>
+          <aside className="cohort-demo-card panel" aria-label="Working session">
+            <h2>Book a working session</h2>
             <div className="cohort-demo-row">
               <IconMark name="review" />
               <div>
-                <strong>Upcoming sessions</strong>
-                <p>Small-group walkthroughs for organizers and serious early users.</p>
+                <strong>Direct product onboarding</strong>
+                <p>Bring a concrete use case. Leave with a drafted next action and explicit terms.</p>
               </div>
             </div>
             <div className="cohort-demo-meta">
-              <span>Weekly by request</span>
-              <span>45 min</span>
+              <span>Scheduled by request</span>
+              <span>25 min</span>
             </div>
-            <form action={createWebinarRsvpAction} className="compact-form" id="demo-rsvp">
+            <form action={createWebinarRsvpAction} className="compact-form" id="working-session">
               <input name="return_to" type="hidden" value="/cohort" />
               <label className="field">
                 <span>Email</span>
@@ -157,29 +155,26 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
               </label>
               <label className="field">
                 <span>Role or community</span>
-                <input
-                  name="role"
-                  placeholder="Organizer, donor, researcher, builder"
-                />
+                <input name="role" placeholder="Researcher, builder, donor, organizer" />
               </label>
               <input name="session_preference" type="hidden" value="next_available" />
               <button className="button button-primary" type="submit">
-                RSVP now
+                Request a session
               </button>
             </form>
           </aside>
         </section>
 
-        <section className="section section-white cohort-start-section" aria-labelledby="cohort-start-heading">
+        <section className="section section-white cohort-start-section" aria-labelledby="network-start-heading">
           <div className="section-head section-head-compact">
-            <h2 id="cohort-start-heading">Start with one concrete action</h2>
+            <h2 id="network-start-heading">Choose one first action</h2>
             <p>
-              Cohort members do not need a full trade on day one. Pick one low-risk action that
-              creates a useful signal without overstating marketplace liquidity.
+              The fastest route to a useful account is a single completed record. Each path below
+              is bounded, reviewable, and reversible before reliance.
             </p>
           </div>
           <div className="growth-start-grid">
-            {cohortStartPaths.map((path) => (
+            {startPaths.map((path) => (
               <Link className="growth-path-card panel" href={path.href} key={path.title}>
                 <IconMark name={path.icon} />
                 <div>
@@ -192,12 +187,12 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
           </div>
         </section>
 
-        <section className="section section-subtle cohort-target-section" aria-labelledby="cohort-target-heading">
+        <section className="section section-subtle cohort-target-section" aria-labelledby="network-target-heading">
           <div className="section-head section-head-compact">
-            <h2 id="cohort-target-heading">What counts as progress</h2>
+            <h2 id="network-target-heading">What activation means</h2>
             <p>
-              These are cohort operating metrics, not impact claims. They make early learning
-              visible while the live marketplace is still intentionally narrow.
+              A registered email is not an active user. Activation requires a concrete action that
+              another person can inspect, respond to, or build on.
             </p>
           </div>
           <div className="cohort-target-grid">
@@ -211,10 +206,10 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
           </div>
         </section>
 
-        <section className="cohort-grid" aria-label="Founding cohort tools">
-          <article className="cohort-card panel">
+        <section className="cohort-grid" aria-label="Network tools">
+          <article className="cohort-card panel" id="invite">
             <h2>Invite one serious counterparty</h2>
-            <p>Invite a potential counterparty to your first public commitment.</p>
+            <p>Save a concrete invitation target and the reason this person is relevant.</p>
             <form action={createNetworkInviteAction} className="compact-form">
               <input name="return_to" type="hidden" value="/cohort" />
               <input name="target_kind" type="hidden" value="person" />
@@ -224,45 +219,45 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
                 <input name="target_label" placeholder="name@example.com" required />
               </label>
               <label className="field">
-                <span>Personal note</span>
+                <span>Why this person</span>
                 <textarea
                   name="suggested_message"
-                  placeholder="Why you are inviting them"
+                  placeholder="The concrete use case or disagreement you want to explore"
                   rows={3}
                 />
               </label>
               <label className="field">
                 <span>Context</span>
-                <input name="target_context" placeholder="Cause, community, or relationship" />
+                <input name="target_context" placeholder="Cause area, community, or relationship" />
               </label>
               <button className="button button-primary" type="submit">
-                {viewer ? "Save invite draft" : "Sign in to save invite"}
+                {viewer ? "Save invitation" : "Sign in to save invitation"}
               </button>
             </form>
           </article>
 
           <article className="cohort-card panel">
-            <h2>Your referral link</h2>
-            <p>Share this link with your community.</p>
+            <h2>Network link</h2>
+            <p>Share the direct onboarding route with a serious prospective participant.</p>
             <label className="field">
-              <span>Referral URL</span>
+              <span>URL</span>
               <input readOnly value="https://moraltrade.org/cohort" />
             </label>
             <div className="cohort-how-it-works">
-              <strong>How it works</strong>
+              <strong>Privacy rule</strong>
               <p>
-                People who join with your link help grow the founding cohort. No public stats,
-                scraping, or outreach happens without consent.
+                Joining the network does not publish a profile, exact wish, or contact detail.
+                Disclosure remains controlled by the participant.
               </p>
             </div>
           </article>
 
           <article className="cohort-card cohort-progress-card panel">
-            <h2>Founding progress</h2>
+            <h2>Network activity</h2>
             <div className="cohort-progress-list">
               <div>
                 <IconMark name="marketplace" />
-                <span>Live proposals</span>
+                <span>Open proposals</span>
                 <strong>{formatOptionalCount(overview.openOfferCount)}</strong>
               </div>
               <div>
@@ -279,27 +274,27 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
           </article>
 
           <article className="cohort-card panel">
-            <h2>Safety and privacy</h2>
+            <h2>Operating safeguards</h2>
             <div className="cohort-safety-list">
               <div>
                 <IconMark name="safety" />
                 <span>
-                  <strong>Privacy-first matching</strong>
-                  <small>We minimize what we collect and share.</small>
+                  <strong>Consent-gated disclosure</strong>
+                  <small>Private fields are shared only after an explicit grant.</small>
                 </span>
               </div>
               <div>
                 <IconMark name="fund" />
                 <span>
-                  <strong>No escrow or custody claim</strong>
-                  <small>We do not hold or transfer funds.</small>
+                  <strong>No platform custody</strong>
+                  <small>Moral Trade does not hold participant funds or commitments.</small>
                 </span>
               </div>
               <div>
                 <IconMark name="evidence" />
                 <span>
-                  <strong>Explicit terms and review</strong>
-                  <small>Manual review before reliance.</small>
+                  <strong>Reviewable terms and evidence</strong>
+                  <small>Claims remain distinguishable from verified records.</small>
                 </span>
               </div>
             </div>
@@ -307,7 +302,8 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
         </section>
 
         <p className="cohort-disclaimer">
-          This is a founding cohort. Numbers reflect true progress, not commitments or capital.
+          Activity metrics count backed records. Examples, invitations, and stated intentions are
+          not counted as completed agreements.
         </p>
       </main>
 

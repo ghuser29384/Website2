@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
 import type { Database } from "@/lib/supabase/database.types";
+import { isAgreementPaymentCapturePermitted } from "@/lib/agreement-payment-authorization";
 import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
+import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
+import { handleConditionalStripeWebhookEvent } from "@/lib/payments/conditional-webhook";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 
@@ -23,6 +26,46 @@ async function markPaymentFromSession(
   const supabase = createServiceClient();
   const paymentIntent =
     typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+
+  const { data: currentPayment } = await supabase
+    .from("agreement_payments")
+    .select("*")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (!currentPayment) {
+    return;
+  }
+
+  if (
+    status === "paid" &&
+    !isAgreementPaymentCapturePermitted({
+      authorizationMode: currentPayment.authorization_mode,
+      authorizationStatus: currentPayment.authorization_status,
+      capturePolicy: currentPayment.capture_policy,
+    })
+  ) {
+    await supabase
+      .from("agreement_payments")
+      .update({
+        authorization_status: "capture_blocked",
+        authorization_gate_snapshot: [
+          currentPayment.authorization_gate_snapshot,
+          `stripe_checkout_session:${session.id}:capture_blocked`,
+        ]
+          .filter(Boolean)
+          .join(";"),
+      })
+      .eq("id", paymentId);
+    await supabase.from("agreement_events").insert({
+      agreement_id: currentPayment.agreement_id,
+      actor_id: currentPayment.payer_id,
+      event_type: "payment_update",
+      summary: "Stripe checkout completion was blocked by the payment authorization stub.",
+      details: session.id,
+    });
+    return;
+  }
 
   const { data: payment } = await supabase
     .from("agreement_payments")
@@ -58,15 +101,15 @@ async function markPaymentFromSession(
   const outboxRows: EmailOutboxInsert[] = [payment.payer_id, payment.payee_id]
     .map((profileId) => {
       const recipientEmail = profileEmails.get(profileId) ?? "";
+      const emailCopy = buildMoralTradeSafeEmailCopy(
+        status === "paid" ? "payment_confirmed" : "payment_failed",
+      );
 
       return {
         profile_id: profileId,
         recipient_email: recipientEmail,
-        subject: status === "paid" ? "Moral Trade payment confirmed" : "Moral Trade payment failed",
-        body:
-          status === "paid"
-            ? `Stripe confirmed a ${payment.currency.toUpperCase()} payment for agreement ${payment.agreement_id}.`
-            : `Stripe reported that payment ${payment.id} failed. Sign in to review the agreement.`,
+        subject: emailCopy.subject,
+        body: emailCopy.body,
         status: recipientEmail ? "queued" : "suppressed",
       } satisfies EmailOutboxInsert;
     })
@@ -102,6 +145,10 @@ function isPotentialMpgfStripeEvent(event: Stripe.Event) {
     return Boolean(object.subscription);
   }
 
+  if (event.type === "customer.subscription.deleted" || event.type === "customer.subscription.updated") {
+    return Boolean(object.id);
+  }
+
   if (event.type === "charge.refunded") {
     return Boolean(object.payment_intent);
   }
@@ -116,26 +163,42 @@ export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
   const rawBodyHash = hashStripeWebhookBody(rawBody);
 
-  let event: Stripe.Event;
-  let signatureVerified = false;
+  if (!webhookSecret) {
+    return NextResponse.json(
+      { error: "Stripe webhook processing is disabled until STRIPE_WEBHOOK_SECRET is configured." },
+      { status: 503 },
+    );
+  }
+  if (!signature) {
+    return NextResponse.json({ error: "Missing Stripe-Signature header." }, { status: 400 });
+  }
 
+  let event: Stripe.Event;
   try {
-    if (webhookSecret && signature) {
-      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-      signatureVerified = true;
-    } else {
-      event = JSON.parse(rawBody);
-    }
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid Stripe webhook.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const conditionalResult = await handleConditionalStripeWebhookEvent({
+    event,
+    rawBodyHash,
+    signatureVerified: true,
+  });
+  if (conditionalResult.handled) {
+    return NextResponse.json({
+      received: true,
+      conditionalPayments: conditionalResult.status,
+      duplicate: conditionalResult.duplicate,
+    });
   }
 
   if (isPotentialMpgfStripeEvent(event)) {
     const mpgfResult = await handleMpgfStripeWebhookEvent({
       event,
       rawBodyHash,
-      signatureVerified,
+      signatureVerified: true,
     });
 
     if (mpgfResult.handled) {

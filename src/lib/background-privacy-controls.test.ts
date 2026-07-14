@@ -31,10 +31,29 @@ test("default background notification preferences use inbox and digest, not push
   );
   assert.equal(
     preferences.every((preference) =>
-      preference.channel === "email_digest" ? preference.digestCadence === "daily" : true,
+      preference.channel === "email_digest" && preference.eventKind === "match_suggestions"
+        ? preference.digestCadence === "daily"
+        : true,
     ),
     true,
   );
+  assert.equal(
+    preferences.every((preference) =>
+      preference.channel === "email_digest" && preference.eventKind !== "match_suggestions"
+        ? preference.digestCadence === "immediate"
+        : true,
+    ),
+    true,
+  );
+  const matchDigest = preferences.find(
+    (preference) =>
+      preference.channel === "email_digest" && preference.eventKind === "match_suggestions",
+  );
+
+  assert.equal(matchDigest?.dailyCap, 1);
+  assert.equal(matchDigest?.quietHoursStart, 22);
+  assert.equal(matchDigest?.quietHoursEnd, 8);
+  assert.equal(matchDigest?.sourceCooldownHours, 24);
 });
 
 test("preference rows preserve explicit opt-outs and keep disabled push off", () => {
@@ -86,6 +105,15 @@ test("data-right requests require detail for destructive or corrective requests"
 
 test("privacy inventory separates sensitive stores from public previews", () => {
   assert.ok(BACKGROUND_DATA_INVENTORY.some((item) => item.surface === "wish_profile_previews"));
+  assert.ok(
+    BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_match_feedback")),
+  );
+  assert.ok(
+    BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_profile_signals")),
+  );
+  assert.ok(
+    BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_shadow_runs")),
+  );
   assert.ok(BACKGROUND_DATA_INVENTORY.some((item) => item.classification === "private-profile"));
   assert.ok(BACKGROUND_SENSITIVE_FIELD_KEYS.includes("exact_wish"));
   assert.equal(isBackgroundSensitiveFieldKey("exact_wish"), true);

@@ -1,15 +1,21 @@
 # MPGF Receipt Template Approval
 
-Status: non-real-money acknowledgement approved; payment/tax receipts blocked.
+Status: template policy published. External receipt wording remains partner-approved only.
 
-The operative receipt registry is `config/mpgf/receipt-templates.json`.
+## Receipt Boundaries
 
-Approved direct-working template:
+- Moral Trade does not issue a no tax receipt, charitable receipt, or payment confirmation unless approved partner wording explicitly authorizes it.
+- The partner receipt issuer is the fiscal sponsor, Every.org, payment provider, or approved legal recipient responsible for the underlying transaction.
+- MPGF allocation reports are not donation receipts.
+- Checkout success pages are not final payment confirmation.
 
-| Template | Mode | Approval |
-| --- | --- | --- |
-| `non_real_money_pledge_acknowledgement` | pledge_only | approved for non-real-money acknowledgement only |
+## Allowed Confirmation Language
 
-No template is approved for donation receipts, tax receipts, real-money payment receipts, or recurring billing receipts.
+- A pledge-only confirmation may say that a non-real-money demo intent was recorded.
+- A pending provider state may say that payment or donation verification is awaiting webhook confirmation.
+- A verified provider state may say that a webhook confirmed the provider event, subject to review and applicable refund, dispute, and payout gates.
+- Manual external evidence pending review cannot be described as paid, tax-deductible, or payout-authorized.
 
-Conformance rows: AC-PAYMENT-019, AC-COMPLETION-008.
+## Required Review
+
+Receipt, refund, tax, and charitable-solicitation copy must be reviewed before production real-money enablement.

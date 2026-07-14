@@ -67,6 +67,17 @@ export async function GET(request: Request) {
           previousPeriod: sampleAudits.uxReadinessAudit.previousPeriod,
           blockers: sampleAudits.uxReadinessAudit.blockers,
         },
+        workflowQuality: {
+          status: sampleAudits.workflowQualityAudit.status,
+          period: sampleAudits.workflowQualityAudit.period,
+          blockedProposalPrecision:
+            sampleAudits.workflowQualityAudit.blockedProposalPrecision,
+          falseMatchRate: sampleAudits.workflowQualityAudit.falseMatchRate,
+          humanOverruleRate: sampleAudits.workflowQualityAudit.humanOverruleRate,
+          overruleReasonCoverageRate:
+            sampleAudits.workflowQualityAudit.overruleReasonCoverageRate,
+          blockers: sampleAudits.workflowQualityAudit.blockers,
+        },
       },
       privacyBoundaries: profile.privacyBoundaries,
       promotionGates: profile.promotionGates.map((gate) => gate.stage),

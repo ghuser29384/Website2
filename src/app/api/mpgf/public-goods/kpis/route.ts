@@ -29,6 +29,22 @@ function readDryRun(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const dryRun = readDryRun(request);
+
+  if (dryRun) {
+    const result = await loadMpgfPublicGoodsKpiSnapshot({
+      dryRun: true,
+    });
+
+    return NextResponse.json({
+      ok: result.ok,
+      status: result.status,
+      publicScope: "dry_run_aggregate",
+      warnings: result.warnings,
+      snapshot: result.snapshot,
+    });
+  }
+
   if (!kpiSecret()) {
     return NextResponse.json(
       { ok: false, error: "MPGF public-goods KPI snapshots are not configured." },
@@ -42,7 +58,7 @@ export async function GET(request: Request) {
 
   try {
     const result = await loadMpgfPublicGoodsKpiSnapshot({
-      dryRun: readDryRun(request),
+      dryRun,
     });
 
     return NextResponse.json(

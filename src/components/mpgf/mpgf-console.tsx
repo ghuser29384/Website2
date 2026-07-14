@@ -88,6 +88,33 @@ function assignBrowserLocation(url: string) {
   (globalThis as unknown as { location?: { assign: (target: string) => void } }).location?.assign(url);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function payloadMessage(payload: unknown, fallback: string) {
+  const record = asRecord(payload);
+  const error = record?.error;
+  const nextAction = record?.nextAction;
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  if (typeof nextAction === "string" && nextAction.trim()) {
+    return nextAction.replaceAll("_", " ");
+  }
+
+  return fallback;
+}
+
+function donateHrefFromPayload(payload: unknown) {
+  const donateLink = asRecord(asRecord(payload)?.donateLink);
+  const href = donateLink?.href;
+
+  return typeof href === "string" && href.trim() ? href : null;
+}
+
 export function MpgfConsole({
   initialTab = "contribute",
   manualEvidenceReadiness,
@@ -98,17 +125,22 @@ export function MpgfConsole({
   const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
   const [persistedState, setPersistedState] = useState<MpgfParticipantState | undefined>(participantState);
   const [pendingAction, setPendingAction] = useState<
-    "pledge" | "publicGoodsPledge" | "checkout" | "manualEvidence" | "proposal" | "ballot" | null
+    "fastRoute" | "savedCommitment" | "pledge" | "publicGoodsPledge" | "checkout" | "manualEvidence" | "proposal" | "ballot" | null
   >(null);
   const [oneTimePledge, setOneTimePledge] = useState(25);
   const [monthlyPledge, setMonthlyPledge] = useState(10);
   const [publicGoodsCampaignId, setPublicGoodsCampaignId] = useState("campaign-global-health-basic-needs");
   const [publicGoodsPledgeAmount, setPublicGoodsPledgeAmount] = useState(25);
+  const [publicGoodsCounterpartBuckets, setPublicGoodsCounterpartBuckets] = useState(
+    "animal-welfare, existential-risk, institutional-integrity",
+  );
+  const [publicGoodsMinimumCounterpartyDollars, setPublicGoodsMinimumCounterpartyDollars] = useState(25);
   const [publicGoodsVisibilityMode, setPublicGoodsVisibilityMode] =
     useState<MpgfPublicGoodsVisibilityMode>("private_amount");
   const [publicGoodsCaptureMode, setPublicGoodsCaptureMode] =
     useState<MpgfPublicGoodsCaptureMode>("external_handoff");
   const [publicGoodsRecurring, setPublicGoodsRecurring] = useState(false);
+  const [futureUseConsentAccepted, setFutureUseConsentAccepted] = useState(false);
   const [publicGoodsReason, setPublicGoodsReason] = useState("");
   const [manualEvidenceAmount, setManualEvidenceAmount] = useState(25);
   const [manualEvidenceProvider, setManualEvidenceProvider] = useState<MpgfManualEvidenceProvider>("open_collective");
@@ -136,6 +168,12 @@ export function MpgfConsole({
   );
   const [publicGoodsPledgeConfirmation, setPublicGoodsPledgeConfirmation] = useState(
     "Your pledge only happens if enough verified people join. No money moves in pledge-only mode.",
+  );
+  const [fastRouteMessage, setFastRouteMessage] = useState(
+    "Every.org fast-route donations return to a pending state until webhook import and review.",
+  );
+  const [savedCommitmentMessage, setSavedCommitmentMessage] = useState(
+    "Saved commitments use Stripe SetupIntent first. PaymentIntent creation waits for threshold, review, and challenge gates.",
   );
   const [proposalTitle, setProposalTitle] = useState("Community public-goods evaluation reserve");
   const [proposalSummary, setProposalSummary] = useState("");
@@ -183,8 +221,8 @@ export function MpgfConsole({
   const [ballotReviewOpen, setBallotReviewOpen] = useState(false);
   const [realMoneyMessage, setRealMoneyMessage] = useState(
     realMoneyReadiness?.ready
-      ? "Real-money Stripe Checkout is available after terms acceptance."
-      : "Integrated checkout is planned for a later provider-approved phase.",
+      ? "Legacy direct checkout remains behind production readiness gates; saved commitments use SetupIntent above."
+      : "Direct checkout is not the default MPGF flow and remains gated behind provider approval.",
   );
   const [manualEvidenceMessage, setManualEvidenceMessage] = useState(
     !viewerPresent
@@ -405,6 +443,8 @@ export function MpgfConsole({
         idempotencyKey: publicGoodsPledgeIdempotencyKey,
         campaignId: selectedPublicGoodsCampaign.id,
         amountDollars: publicGoodsPledgeAmount,
+        acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
+        minimumCounterpartyClearedDollars: publicGoodsMinimumCounterpartyDollars,
         visibilityMode: publicGoodsVisibilityMode,
         captureMode: publicGoodsCaptureMode,
         isRecurring: publicGoodsRecurring,
@@ -436,6 +476,8 @@ export function MpgfConsole({
         campaign: selectedPublicGoodsCampaign,
         userId: identity.userId,
         amountCents: Math.max(1, Math.round(publicGoodsPledgeAmount * 100)),
+        acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
+        minimumCounterpartyClearedCents: Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)),
         visibilityMode: publicGoodsVisibilityMode,
         captureMode: publicGoodsCaptureMode,
         isRecurring: publicGoodsRecurring,
@@ -451,6 +493,91 @@ export function MpgfConsole({
         error instanceof Error ? error.message : "Public-goods pledge could not be recorded.",
       );
     }
+  }
+
+  async function startEveryOrgFastRoute() {
+    if (!selectedPublicGoodsCampaign) {
+      setFastRouteMessage("Choose a campaign before opening the Every.org fast route.");
+      return;
+    }
+
+    setPendingAction("fastRoute");
+
+    try {
+      const response = await fetch("/api/mpgf/every-org/donate-link", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          amountCents: Math.max(100, Math.round(publicGoodsPledgeAmount * 100)),
+          campaignId: selectedPublicGoodsCampaign.id,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      const href = donateHrefFromPayload(payload);
+
+      if (response.ok && href) {
+        setFastRouteMessage("Opening Every.org. Moral Trade will keep the return state pending until webhook review.");
+        setPendingAction(null);
+        assignBrowserLocation(href);
+        return;
+      }
+
+      setFastRouteMessage(payloadMessage(payload, "Could not create an Every.org fast-route link."));
+    } catch (error) {
+      setFastRouteMessage(error instanceof Error ? error.message : "Could not create an Every.org fast-route link.");
+    }
+
+    setPendingAction(null);
+  }
+
+  async function startSavedCommitment() {
+    if (!selectedPublicGoodsCampaign) {
+      setSavedCommitmentMessage("Choose a campaign before saving a conditional commitment.");
+      return;
+    }
+
+    if (!viewerPresent) {
+      setSavedCommitmentMessage("Sign in before saving a Stripe SetupIntent commitment.");
+      return;
+    }
+
+    if (!futureUseConsentAccepted) {
+      setSavedCommitmentMessage("Accept future-use consent before saving a Stripe SetupIntent commitment.");
+      return;
+    }
+
+    setPendingAction("savedCommitment");
+
+    try {
+      const response = await fetch("/api/mpgf/stripe/setup-intent", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          amountCents: Math.max(100, Math.round(publicGoodsPledgeAmount * 100)),
+          acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
+          campaignId: selectedPublicGoodsCampaign.id,
+          minimumCounterpartyClearedCents: Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)),
+          explicitFutureUseConsent: futureUseConsentAccepted,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+
+      setSavedCommitmentMessage(
+        response.ok
+          ? "SetupIntent saved. Client confirmation and Stripe webhook review are still required before counting."
+          : payloadMessage(payload, "Could not save a Stripe SetupIntent commitment."),
+      );
+    } catch (error) {
+      setSavedCommitmentMessage(
+        error instanceof Error ? error.message : "Could not save a Stripe SetupIntent commitment.",
+      );
+    }
+
+    setPendingAction(null);
   }
 
   async function startRealMoneyCheckout(cadence: "one_time" | "monthly") {
@@ -630,12 +757,55 @@ export function MpgfConsole({
       {activeTab === "contribute" ? (
         <div className="mpgf-workflow-grid">
           <section className="mpgf-panel mpgf-panel-primary">
-            <p className="eyebrow">Verified assurance pledge</p>
-            <h2>Your pledge only happens if enough verified people join</h2>
+            <p className="eyebrow">1. Every.org fast route</p>
+            <h2>Donate through webhook auto-import</h2>
             <p>
-              Choose a campaign, amount, visibility setting, and capture mode. Public-goods
-              pledges are conditional commitments: they count only after supporter, identity,
-              threshold, review, and evidence gates pass.
+              Open the curated Every.org destination for the selected campaign. The return page stays
+              pending: only the partner webhook plus MPGF review can make the contribution count.
+            </p>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>Campaign</dt>
+                <dd>{selectedPublicGoodsCampaign?.title ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Amount</dt>
+                <dd>{formatUsd(Math.max(100, Math.round(publicGoodsPledgeAmount * 100)))}</dd>
+              </div>
+              <div>
+                <dt>Return state</dt>
+                <dd>pending webhook</dd>
+              </div>
+              <div>
+                <dt>Fallback</dt>
+                <dd>manual proof</dd>
+              </div>
+            </dl>
+            <div className="mpgf-inline-actions">
+              <button
+                className="button button-primary"
+                disabled={pendingAction === "fastRoute" || publicGoodsPledgeAmount < 1}
+                type="button"
+                onClick={startEveryOrgFastRoute}
+              >
+                Open Every.org fast route
+              </button>
+              <Link className="button button-secondary" href="/mpgf/contribute/every-org/pending">
+                View pending state
+              </Link>
+            </div>
+            <p className="mpgf-small" role="status">
+              {fastRouteMessage}
+            </p>
+          </section>
+
+          <section className="mpgf-panel mpgf-panel-primary">
+            <p className="eyebrow">2. Saved commitment</p>
+            <h2>Save a conditional commitment</h2>
+            <p>
+              If the fast route is not the right fit, save a contribution intent or a Stripe
+              SetupIntent commitment. PaymentIntent creation waits for supporter, identity,
+              threshold, review, provider-event, and challenge gates.
             </p>
             <div className="mpgf-form-grid">
               <label>
@@ -678,6 +848,27 @@ export function MpgfConsole({
                 </select>
               </label>
               <label>
+                Acceptable counterpart buckets
+                <textarea
+                  placeholder="Comma-separated moral buckets that may clear against this pledge"
+                  value={publicGoodsCounterpartBuckets}
+                  onChange={(event) => setPublicGoodsCounterpartBuckets(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Minimum counterpart-cleared volume
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={publicGoodsMinimumCounterpartyDollars}
+                    onChange={(event) => setPublicGoodsMinimumCounterpartyDollars(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+              <label>
                 Capture mode
                 <select
                   value={publicGoodsCaptureMode}
@@ -709,6 +900,17 @@ export function MpgfConsole({
                 />
                 <span>Also create an optional monthly sponsor-pool refill pledge</span>
               </label>
+              <label className="checkbox-label">
+                <input
+                  checked={futureUseConsentAccepted}
+                  type="checkbox"
+                  onChange={(event) => setFutureUseConsentAccepted(event.currentTarget.checked)}
+                />
+                <span>
+                  I consent to save this payment method for one future MPGF charge only after
+                  threshold, review, challenge, and parameter-lock gates clear.
+                </span>
+              </label>
             </div>
             <dl className="mpgf-summary-grid">
               <div>
@@ -720,8 +922,24 @@ export function MpgfConsole({
                 <dd>{selectedPublicGoodsCampaign?.thresholdSupporters ?? "-"}</dd>
               </div>
               <div>
-                <dt>Default capture</dt>
-                <dd>{publicGoodsCaptureMode.replaceAll("_", " ")}</dd>
+                <dt>Saved path</dt>
+                <dd>SetupIntent first</dd>
+              </div>
+              <div>
+                <dt>Max exposure</dt>
+                <dd>{formatUsd(Math.max(100, Math.round(publicGoodsPledgeAmount * 100)))}</dd>
+              </div>
+              <div>
+                <dt>Counterpart minimum</dt>
+                <dd>{formatUsd(Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)))}</dd>
+              </div>
+              <div>
+                <dt>Failure path</dt>
+                <dd>expire, release authorization, or donor fallback reroute</dd>
+              </div>
+              <div>
+                <dt>Authorization timing</dt>
+                <dd>near clearing only</dd>
               </div>
               <div>
                 <dt>Deadline</dt>
@@ -738,78 +956,40 @@ export function MpgfConsole({
             <div className="mpgf-inline-actions">
               <button
                 className="button button-primary"
+                disabled={
+                  !viewerPresent ||
+                  pendingAction === "savedCommitment" ||
+                  publicGoodsPledgeAmount < 1 ||
+                  !futureUseConsentAccepted
+                }
+                type="button"
+                onClick={startSavedCommitment}
+              >
+                Save Stripe commitment
+              </button>
+              <button
+                className="button button-secondary"
                 disabled={pendingAction === "publicGoodsPledge" || publicGoodsPledgeAmount < 1}
                 type="button"
                 onClick={recordPublicGoodsAssurancePledge}
               >
-                {viewerPresent ? "Save assurance pledge" : "Record demo assurance pledge"}
+                {viewerPresent ? "Save pledge intent" : "Record demo contribution intent"}
               </button>
               <Link className="button button-secondary" href="/mpgf/pools">
                 Compare campaigns
               </Link>
             </div>
             <p className="mpgf-small" role="status">
+              {savedCommitmentMessage}
+            </p>
+            <p className="mpgf-small" role="status">
               {publicGoodsPledgeConfirmation}
             </p>
           </section>
 
-          <section className="mpgf-panel">
-            <p className="eyebrow">Pledge rehearsal</p>
-            <h2>Try the mechanism before evidence review</h2>
-            <p>{MPGF_COPY.pledgeOnly}</p>
-            <div className="mpgf-form-grid">
-              <label>
-                One-time pledge
-                <span className="mpgf-money-input">
-                  <span>$</span>
-                  <input
-                    disabled={!viewerPresent}
-                    min="1"
-                    step="1"
-                    type="number"
-                    value={oneTimePledge}
-                    onChange={(event) => setOneTimePledge(readNumericFormControlValue(event))}
-                  />
-                </span>
-              </label>
-              <label>
-                Monthly recurring pledge
-                <span className="mpgf-money-input">
-                  <span>$</span>
-                  <input
-                    min="0"
-                    step="1"
-                    type="number"
-                    value={monthlyPledge}
-                    onChange={(event) => setMonthlyPledge(readNumericFormControlValue(event))}
-                  />
-                </span>
-              </label>
-            </div>
-            <div className="mpgf-confirmation" role="status">
-              Demo pledge total: {formatUsd(Math.round(oneTimePledge * 100) + Math.round(monthlyPledge * 100))}
-            </div>
-            <div className="mpgf-inline-actions">
-              <button
-                className="button button-primary"
-                disabled={pendingAction === "pledge"}
-                type="button"
-                onClick={recordPledgeOnlyCommitments}
-              >
-                {viewerPresent ? "Save pledge state" : "Record demo pledges"}
-              </button>
-              <Link className="button button-secondary" href="/mpgf/account/contributions">
-                View contribution state
-              </Link>
-            </div>
-            <p className="mpgf-small" role="status">
-              {pledgeConfirmation}
-            </p>
-          </section>
-
-          <section className="mpgf-panel mpgf-panel-primary">
-            <p className="eyebrow">Manual evidence</p>
-            <h2>Record external payment evidence</h2>
+          <section className="mpgf-panel mpgf-panel-primary" id="manual-proof-fallback">
+            <p className="eyebrow">3. Manual proof fallback</p>
+            <h2>Use reviewed evidence only when integrations cannot import</h2>
             <p>{MPGF_COPY.manualExternalPaymentEvidence}</p>
             {manualEvidenceReadiness?.externalPaymentUrl ? (
               <a
@@ -921,13 +1101,67 @@ export function MpgfConsole({
           </section>
 
           <section className="mpgf-panel">
-            <p className="eyebrow">Real-money checkout</p>
-            <h2>Contribute with Stripe</h2>
+            <p className="eyebrow">Pledge rehearsal</p>
+            <h2>Try the mechanism before evidence review</h2>
+            <p>{MPGF_COPY.pledgeOnly}</p>
+            <div className="mpgf-form-grid">
+              <label>
+                One-time pledge
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    disabled={!viewerPresent}
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={oneTimePledge}
+                    onChange={(event) => setOneTimePledge(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+              <label>
+                Monthly recurring pledge
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    min="0"
+                    step="1"
+                    type="number"
+                    value={monthlyPledge}
+                    onChange={(event) => setMonthlyPledge(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+            </div>
+            <div className="mpgf-confirmation" role="status">
+              Demo pledge total: {formatUsd(Math.round(oneTimePledge * 100) + Math.round(monthlyPledge * 100))}
+            </div>
+            <div className="mpgf-inline-actions">
+              <button
+                className="button button-primary"
+                disabled={pendingAction === "pledge"}
+                type="button"
+                onClick={recordPledgeOnlyCommitments}
+              >
+                {viewerPresent ? "Save pledge state" : "Record demo pledges"}
+              </button>
+              <Link className="button button-secondary" href="/mpgf/account/contributions">
+                View contribution state
+              </Link>
+            </div>
+            <p className="mpgf-small" role="status">
+              {pledgeConfirmation}
+            </p>
+          </section>
+
+          <section className="mpgf-panel">
+            <p className="eyebrow">Provider checkout gate</p>
+            <h2>Legacy direct checkout remains gated</h2>
             <p>{MPGF_COPY.realMoneyContribution}</p>
             <div className="mpgf-confirmation" role="status">
               {realMoneyReadiness?.ready
-                ? "All configured real-money acceptance gates are passed."
-                : "Integrated checkout is planned for a later provider-approved phase."}
+                ? "All configured real-money acceptance gates are passed, but saved commitments remain the CG-VQAF default."
+                : "Direct checkout is planned only after provider approval and production gates."}
             </div>
             <div className="mpgf-inline-actions">
               <button
@@ -942,7 +1176,7 @@ export function MpgfConsole({
                 type="button"
                 onClick={() => startRealMoneyCheckout("one_time")}
               >
-                Contribute once
+                Open one-time checkout
               </button>
               <button
                 className="button button-secondary"
@@ -956,7 +1190,7 @@ export function MpgfConsole({
                 type="button"
                 onClick={() => startRealMoneyCheckout("monthly")}
               >
-                Start monthly
+                Open monthly checkout
               </button>
             </div>
             <p className="mpgf-small" role="status">

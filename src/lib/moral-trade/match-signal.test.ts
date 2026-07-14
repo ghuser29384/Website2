@@ -46,8 +46,14 @@ test("redacted profile match signals use factor codes, redactions, and human rev
   });
 
   assert.equal(signal.status, "matchable");
+  assert.match(signal.id, /^match_signal_[a-f0-9]{24}$/);
+  assert.equal(signal.leftProfileId, "profile-left");
+  assert.equal(signal.rightProfileId, "profile-right");
+  assert.equal(signal.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.equal(signal.disclosureStage, "broad_preview");
   assert.equal(signal.confidenceBand, "high");
   assert.equal(signal.humanReviewRequired, true);
+  assert.ok(Number.isFinite(Date.parse(signal.createdAt)));
   assert.deepEqual(signal.blockers, []);
   assert.equal(signal.counts.sharedCauseAreas, 1);
   assert.ok(signal.factorCodes.includes("cause_area_overlap"));
@@ -124,6 +130,29 @@ test("redacted profile matching blocks unresolved location, privacy, and exclusi
   assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
 });
 
+test("redacted profile matching honors phrase-level stated exclusions", () => {
+  const signal = evaluateMoralTradeRedactedProfileMatch({
+    left: {
+      ...leftProfile,
+      statedExclusions: ["no political campaign offsets"],
+    },
+    right: {
+      ...rightProfile,
+      causeAreas: ["Political campaign", "Public health"],
+      tradeModes: ["donation_offset"],
+      verificationPreferences: ["receipt"],
+    },
+  });
+
+  assert.equal(signal.status, "not_matchable");
+  assert.ok(signal.blockers.includes("stated_exclusion_conflict"));
+  assert.equal(signal.confidenceBand, "low");
+  assert.equal(signal.humanReviewRequired, true);
+  assert.ok(!signal.factorCodes.includes("stated_exclusions_clear"));
+  assert.match(signal.participantExplanation.summary, /stated_exclusion_conflict/);
+  assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
+});
+
 test("redacted profile matching ignores unsupported private inference fields", () => {
   const signal = evaluateMoralTradeRedactedProfileMatch({
     left: {
@@ -148,6 +177,8 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
 
   signal.humanReviewRequired = false;
   signal.redactedFields = [];
+  signal.privacyPolicyId = "private-feed-match-policy";
+  signal.disclosureStage = "private_auto_reveal" as MoralTradeMatchSignal["disclosureStage"];
   signal.factorCodes = [...signal.factorCodes, "raw_private_text_overlap" as MoralTradeMatchSignal["factorCodes"][number]];
   signal.participantExplanation.redactionNotice = "Nothing is hidden.";
 
@@ -155,6 +186,8 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("human_review_required")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy_policy_id")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("disclosure_stage")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("redacted_fields")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("factor_codes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("participant_explanation")));
@@ -186,6 +219,10 @@ test("match signal contract validates the redacted matching boundary", () => {
   assert.equal(contract.decisioningMode, "redacted_profile_match_preview_only");
   assert.equal(contract.stateMutation, false);
   assert.ok(contract.requiredInputFields.includes("privacyStage"));
+  assert.equal(contract.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.ok(contract.disclosureStages.includes("broad_preview"));
+  assert.equal(contract.sampleSignal.disclosureStage, "broad_preview");
+  assert.equal(contract.sampleSignal.privacyPolicyId, contract.privacyPolicyId);
   assert.ok(contract.approvedFactorCodes.includes("cause_area_complementarity"));
   assert.ok(contract.redactedFields.includes("exact_private_wishes"));
   assert.ok(contract.redactedFields.includes("ideology_or_psychology_inferences"));
@@ -259,7 +296,55 @@ test("match signal routes publish participant explanation copy", async () => {
   const evaluateBody = await evaluateResponse.json();
 
   assert.equal(evaluateResponse.status, 200);
+  assert.equal(evaluateBody.signal.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.equal(evaluateBody.signal.disclosureStage, "broad_preview");
+  assert.equal(evaluateBody.signal.leftProfileId, "profile-left");
+  assert.equal(evaluateBody.signal.rightProfileId, "profile-right");
   assert.equal(evaluateBody.signal.participantExplanation.headline, "Why you are seeing this match");
   assert.match(evaluateBody.signal.participantExplanation.summary, /Exact wishes and contact details are still hidden/i);
   assert.match(evaluateBody.signal.participantExplanation.humanReviewNotice, /Human review is mandatory/i);
+});
+
+test("match signal evaluate route rejects unsupported private profile fields before generating a signal", async () => {
+  const evaluateResponse = await evaluateRoute(
+    new Request("http://localhost/api/moral-trade/match-signal/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        profilePair: {
+          left: {
+            ...leftProfile,
+            contactDetails: "private@example.org",
+            rawPrivateNotes: "Exact private wish text",
+            protectedTraits: ["religion"],
+          },
+          right: rightProfile,
+        },
+      }),
+    }),
+  );
+  const evaluateBody = await evaluateResponse.json();
+  const serialized = JSON.stringify(evaluateBody);
+
+  assert.equal(evaluateResponse.status, 400);
+  assert.equal(evaluateBody.ok, false);
+  assert.equal(evaluateBody.stateMutation, false);
+  assert.equal(evaluateBody.signal, undefined);
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.contactDetails: unsupported redacted profile field"),
+    ),
+  );
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.rawPrivateNotes: unsupported redacted profile field"),
+    ),
+  );
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.protectedTraits: unsupported redacted profile field"),
+    ),
+  );
+  assert.doesNotMatch(serialized, /private@example\.org/);
+  assert.doesNotMatch(serialized, /Exact private wish text/);
 });

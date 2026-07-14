@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import {
+  evaluateAdminOperatorAccess,
+  isAdminEmail,
+  normalizeAgreementReviewerConflictState,
+  normalizeNeutralReviewAssignment,
+} from "@/lib/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
@@ -22,14 +27,27 @@ import {
   evaluateDeterministicMatch,
   getBackgroundTokens,
   getDeterministicSignalsFromSynthesis,
+  hasActiveProfileSourcePermission,
   normalizeBackgroundToken,
+  type DeterministicSynthesisPayload,
 } from "@/lib/background-networking";
+import { buildBackgroundIntentClaims } from "@/lib/background-intent-claims";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
   type MatchExplanationSnapshotPayload,
 } from "@/lib/background-explanations";
+import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  buildBackgroundPurposeBindingRecord,
+  evaluateBackgroundDelegatePurposeAuthorization,
+  evaluateCandidateExposureForBackgroundRun,
+  normalizeBackgroundCandidateAudienceScope,
+  normalizeBackgroundPurposeCodeList,
+  type BackgroundCandidateExposureDecision,
+} from "@/lib/background-candidate-exposure";
 import { normalizeBackgroundConciergeAppealStatus } from "@/lib/background-concierge-appeals";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
@@ -43,23 +61,84 @@ import {
 } from "@/lib/background-field-encryption";
 import {
   buildDisclosureGrantNotes,
+  evaluatePrivacyAccessRequestCadence,
   getDefaultGrantExpiryDays,
+  getPrivacyAccessRequestWindowStart,
+  requiresContactDisclosureStepUp,
   validateDisclosureRequest,
   type DisclosureAccessLevel,
   type DisclosureAudienceStage,
+  type PrivacyAccessRequestCadenceRow,
 } from "@/lib/background-disclosure";
-import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
 import {
+  hasActiveBackgroundSourcePermission,
+  validateBackgroundSourcePermission,
+} from "@/lib/background-source-permissions";
+import {
+  buildPrivacySafeRiskSignalInsert,
   completeBackgroundQueryEvent,
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
   reserveBackgroundQueryBudget,
+  upsertBackgroundOpportunityBriefs,
 } from "@/lib/background-operations";
+import {
+  buildOpportunityBriefRow,
+  getBackgroundSourceRetentionExpiresAt,
+} from "@/lib/background-opportunity-briefs";
 import {
   getBackgroundQueryFingerprint,
   type BackgroundQueryScope,
 } from "@/lib/background-query-budget";
+import {
+  BACKGROUND_PURPOSE_POLICY_VERSION,
+  normalizeBackgroundPurposeCode,
+  type BackgroundPurposeBinding,
+} from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
+import {
+  getBaselineBondAppealWindowEndsAt,
+  getBaselineBondStatusAfterAccepted,
+  isPaymentBondsEnabled,
+  normalizeBaselineBondCurrency,
+  normalizeBaselineBondStatus,
+  validateBaselineBondInput,
+  type BaselineBondStatus,
+} from "@/lib/baseline-bonds";
+import {
+  PERFORMANCE_BOND_DEFAULT_CURRENCY,
+  PERFORMANCE_BOND_MANUAL_PROVIDER,
+  PERFORMANCE_BOND_REVIEWER_POLICY,
+  acceptBondEvidence,
+  adjudicateBondChallenge,
+  cancelPerformanceBondDraft,
+  challengeBondEvidence,
+  createPerformanceBond,
+  evidenceSchemaToJson,
+  getDefaultPerformanceBondSplitConfig,
+  getPerformanceBondConfig,
+  getPerformanceBondForfeitureRule,
+  isLiveBondPaymentsEnabled,
+  isPledgePerformanceBondsEnabled,
+  lockPerformanceBondTerms,
+  normalizePerformanceBondChallengeWindowDays,
+  normalizePerformanceBondCurrency,
+  normalizePerformanceBondEvidenceSchema,
+  normalizePerformanceBondForfeitureDestination,
+  normalizePerformanceBondVisibility,
+  parsePerformanceBondSplitConfig,
+  splitConfigToJson,
+  submitBondEvidence,
+  validatePerformanceBondTerms,
+  type BondAdjudicationDecision,
+  type BondFundingStatus,
+  type PerformanceBondForfeitureDestination,
+  type PerformanceBondRecord,
+  type PerformanceBondSide,
+  type PerformanceBondStatus,
+  type PerformanceBondTermsInput,
+} from "@/lib/performance-bonds";
+import { buildAgreementPaymentAuthorizationPreview } from "@/lib/agreement-payment-authorization";
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
@@ -74,13 +153,59 @@ import {
 } from "@/lib/growth";
 import {
   assessDonationOffsetModeration,
+  buildDonationOffsetAuthorityFairnessPreview,
+  buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetExternalityEvidencePreview,
+  buildDonationOffsetParticipantConfirmationPreview,
+  buildDonationOffsetPaymentDestinationPreview,
+  buildDonationOffsetSafetyAuthenticityPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
+  normalizeDonationOffsetCharitableSolicitationTreatment,
+  normalizeDonationOffsetDestinationVerificationStatus,
+  normalizeDonationOffsetDonorOfRecordRole,
+  normalizeDonationOffsetEvidenceBurden,
+  normalizeDonationOffsetFallbackPolicy,
+  normalizeDonationOffsetAmendmentStatus,
+  normalizeDonationOffsetBaselineIntegrityStatus,
+  normalizeDonationOffsetBinarySafetyAssertion,
+  normalizeDonationOffsetConfirmationScope,
+  normalizeDonationOffsetConsentQualityStatus,
+  normalizeDonationOffsetMatchedLockProposalStatus,
+  normalizeDonationOffsetNonparticipantExternalityStatus,
+  normalizeDonationOffsetNoticeRecordStatus,
+  normalizeDonationOffsetPaymentDestinationKind,
+  normalizeDonationOffsetPaymentDestinationReviewStatus,
+  normalizeDonationOffsetParticipantConfirmationRecordStatus,
+  normalizeDonationOffsetPrivacyGrantStatus,
+  normalizeDonationOffsetRepresentativeAuthorityStatus,
+  normalizeDonationOffsetRecipientIdentityStatus,
+  normalizeDonationOffsetTaxReceiptTreatment,
+  normalizeDonationOffsetThirdPartyObligationStatus,
+  normalizeDonationOffsetJurisdictionReviewStatus,
+  summarizeDonationOffsetAuthorityFairnessForNotes,
+  summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetExternalityEvidenceForNotes,
+  summarizeDonationOffsetParticipantConfirmationForNotes,
+  summarizeDonationOffsetPaymentDestinationForNotes,
+  summarizeDonationOffsetSafetyAuthenticityForNotes,
+  validateDonationOffsetAuthorityFairnessInput,
+  validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetExternalityEvidenceInput,
+  validateDonationOffsetParticipantConfirmationInput,
+  validateDonationOffsetPaymentDestinationInput,
+  validateDonationOffsetSafetyAuthenticityInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
+  type DonationOffsetAuthorityFairnessInput,
+  type DonationOffsetDonorOfRecordInput,
+  type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetParticipationMode,
+  type DonationOffsetParticipantConfirmationInput,
+  type DonationOffsetPaymentDestinationInput,
+  type DonationOffsetSafetyAuthenticityInput,
   type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
   type DonationOffsetUnmatchedSurplusRule,
@@ -109,6 +234,34 @@ import {
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
 import {
+  buildPledgeSwapManualReviewPreview,
+  summarizePledgeSwapManualReviewForNotes,
+  validatePledgeSwapManualReviewInput,
+  type PledgeSwapActionReversibility,
+  type PledgeSwapBaselineConfidence,
+  type PledgeSwapBinarySafetyAssertion,
+  type PledgeSwapManualReviewInput,
+  type PledgeSwapOrdinaryServiceClassification,
+  type PledgeSwapRepresentativeAuthority,
+  type PledgeSwapThirdPartyObligation,
+} from "@/lib/pledge-swaps";
+import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
+import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
+import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
+import {
+  buildAuthPath,
+  buildSupabaseAuthCallbackUrl,
+  getOAuthProviderLabel,
+  getAuthDefaultReturnTo,
+  normalizeAuthMode,
+  normalizeOAuthProvider,
+} from "@/lib/auth-routes";
+import { isOAuthProviderEnabled } from "@/lib/auth-provider-settings";
+import type {
+  MoralTradeEvidenceClaimScope,
+  MoralTradeEvidenceClaimType,
+} from "@/lib/moral-trade/provenance";
+import {
   buildAgreementReviewDecisionConflictSelector,
   buildAgreementReviewDecisionRow,
   buildAgreementReviewProvenanceAgentRow,
@@ -123,6 +276,8 @@ type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
+type BackgroundProfileSignalRow =
+  Database["public"]["Tables"]["background_profile_signals"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
@@ -139,12 +294,18 @@ type AgreementReviewCaseInsert =
   Database["public"]["Tables"]["agreement_review_cases"]["Insert"];
 type AgreementReviewCaseUpdate =
   Database["public"]["Tables"]["agreement_review_cases"]["Update"];
+type PerformanceBondInsert = Database["public"]["Tables"]["performance_bonds"]["Insert"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type PerformanceBondUpdate = Database["public"]["Tables"]["performance_bonds"]["Update"];
 type ProfileVerificationBadgeInsert =
   Database["public"]["Tables"]["profile_verification_badges"]["Insert"];
+type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
 type DonationOffsetPoolInsert = Database["public"]["Tables"]["donation_offset_pools"]["Insert"];
 type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_payment_schedules"]["Insert"];
+type AgreementPaymentInsert = Database["public"]["Tables"]["agreement_payments"]["Insert"];
+type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type PersonalDelegateInsert = Database["public"]["Tables"]["personal_delegates"]["Insert"];
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
 type HelperStrategyInsert = Database["public"]["Tables"]["helper_strategies"]["Insert"];
@@ -201,6 +362,128 @@ function readOptional(formData: FormData, key: string) {
 function readBoolean(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim().toLowerCase();
   return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
+function readPositiveIntOrNull(formData: FormData, key: string) {
+  const value = Number(readOptional(formData, key));
+
+  if (!Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+
+  return value;
+}
+
+function readNonNegativeIntOrNull(formData: FormData, key: string) {
+  const value = Number(readOptional(formData, key));
+
+  if (!Number.isInteger(value) || value < 0) {
+    return null;
+  }
+
+  return value;
+}
+
+function normalizePledgeSwapBaselineConfidence(value: string): PledgeSwapBaselineConfidence {
+  if (value === "low" || value === "high") {
+    return value;
+  }
+
+  return "medium";
+}
+
+function normalizePledgeSwapOrdinaryServiceClassification(
+  value: string,
+): PledgeSwapOrdinaryServiceClassification {
+  if (value === "ordinary_service_or_procurement" || value === "unclear") {
+    return value;
+  }
+
+  return "not_ordinary_service_market";
+}
+
+function normalizePledgeSwapActionReversibility(value: string): PledgeSwapActionReversibility {
+  if (
+    value === "reversible_or_low_stakes" ||
+    value === "irreversible_or_high_stakes" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "continuing_but_suspendable";
+}
+
+function normalizePledgeSwapThirdPartyObligation(value: string): PledgeSwapThirdPartyObligation {
+  if (value === "possible_or_unknown" || value === "conflict_declared") {
+    return value;
+  }
+
+  return "none_known";
+}
+
+function normalizePledgeSwapRepresentativeAuthority(
+  value: string,
+): PledgeSwapRepresentativeAuthority {
+  if (value === "claims_representative_authority" || value === "unknown") {
+    return value;
+  }
+
+  return "self_only";
+}
+
+function normalizePledgeSwapBinarySafetyAssertion(value: string): PledgeSwapBinarySafetyAssertion {
+  if (value === "possible_or_unknown" || value === "triggered") {
+    return value;
+  }
+
+  return "clear";
+}
+
+async function replaceBackgroundIntentClaims({
+  profile,
+  sourceConnections,
+  supabase,
+  synthesis,
+  userId,
+}: {
+  profile: WishProfileRow;
+  sourceConnections: SourceConnectionRow[];
+  supabase: SupabaseServerClient;
+  synthesis: DeterministicSynthesisPayload;
+  userId: string;
+}) {
+  const claims = buildBackgroundIntentClaims({
+    profile,
+    sourceConnections,
+    synthesis,
+  });
+  const { error: archiveError } = await supabase
+    .from("background_intent_claims")
+    .update({ status: "superseded" })
+    .eq("profile_id", userId)
+    .eq("status", "active");
+
+  if (archiveError) {
+    logSupabaseActionError("Failed to supersede background intent claims", archiveError, {
+      userId,
+    });
+    return;
+  }
+
+  if (!claims.length) {
+    return;
+  }
+
+  const { error: upsertError } = await supabase
+    .from("background_intent_claims")
+    .upsert(claims, { onConflict: "profile_id,claim_key" });
+
+  if (upsertError) {
+    logSupabaseActionError("Failed to refresh background intent claims", upsertError, {
+      userId,
+    });
+  }
 }
 
 function readPositiveMoneyAmount(formData: FormData, key: string) {
@@ -311,6 +594,30 @@ function readDisclosureFieldKeys(
 
 function disclosureErrorsToMessage(errors: string[]) {
   return errors.join(" ");
+}
+
+async function requireContactDisclosureMfaStepUp({
+  accessLevel,
+  fieldKeys,
+  returnTo,
+}: {
+  accessLevel: DisclosureAccessLevel;
+  fieldKeys: string[];
+  returnTo: string;
+}) {
+  if (!requiresContactDisclosureStepUp({ accessLevel, fieldKeys })) {
+    return;
+  }
+
+  const mfaSummary = await loadBackgroundAccountSecuritySummary();
+
+  if (mfaSummary.currentLevel !== "aal2") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Contact disclosure grants require an active MFA step-up. Verify an authenticator session from account security, then approve the grant.",
+    );
+  }
 }
 
 function logSupabaseActionError(
@@ -1035,6 +1342,38 @@ function normalizeDonationOffsetVerificationMethod(value: string): DonationOffse
   return "proof_of_past_donations";
 }
 
+function getDonationOffsetEvidencePersistenceShape(
+  verificationMethod: DonationOffsetVerificationMethod,
+) {
+  switch (verificationMethod) {
+    case "funds_in_escrow":
+      return {
+        claimScope: "payment_or_donation_record" as const,
+        evidenceKind: "payment_event" as const,
+        reasonCodes: ["donation_offset_evidence", "third_party_payment_record"],
+      };
+    case "third_party_audit":
+      return {
+        claimScope: "factual_action" as const,
+        evidenceKind: "attestation" as const,
+        reasonCodes: ["donation_offset_evidence", "third_party_audit"],
+      };
+    case "proof_of_past_donations":
+      return {
+        claimScope: "counterfactual_baseline" as const,
+        evidenceKind: "prior_intent" as const,
+        reasonCodes: ["donation_offset_evidence", "counterfactual_baseline"],
+      };
+    case "receipts_uploaded":
+    default:
+      return {
+        claimScope: "payment_or_donation_record" as const,
+        evidenceKind: "receipt" as const,
+        reasonCodes: ["donation_offset_evidence", "receipt_or_public_log"],
+      };
+  }
+}
+
 function normalizeDonationOffsetUnmatchedRule(value: string): DonationOffsetUnmatchedSurplusRule {
   if (
     value === "donate_to_compromise_destination" ||
@@ -1057,6 +1396,232 @@ function normalizeDonationOffsetPoolSide(value: string): DonationOffsetPoolSide 
   }
 
   return "";
+}
+
+function performanceBondFormKey(prefix: string, key: string) {
+  return `${prefix}_${key}`;
+}
+
+function readPerformanceBondTermsFromForm({
+  fallbackAdditionality,
+  fallbackNoTradeBaseline,
+  formData,
+  prefix,
+}: {
+  fallbackAdditionality: string;
+  fallbackNoTradeBaseline: string;
+  formData: FormData;
+  prefix: string;
+}) {
+  const field = (key: string) => performanceBondFormKey(prefix, key);
+  const enabled = readBoolean(formData, field("enabled"));
+  const forfeitureDestination = normalizePerformanceBondForfeitureDestination(
+    readOptional(formData, field("forfeiture_destination")),
+  );
+  const splitConfig = parsePerformanceBondSplitConfig({
+    counterpartyPercent: readOptional(formData, field("counterparty_percent")),
+    mpgfPercent: readOptional(formData, field("mpgf_percent")),
+    neutralCausePercent: readOptional(formData, field("neutral_cause_percent")),
+  });
+  const evidenceSchema = normalizePerformanceBondEvidenceSchema({
+    acceptedEvidenceTypes: readOptional(formData, field("evidence_types")),
+    actionToProve: readOptional(formData, field("action_to_prove")),
+    minimumDetail: readOptional(formData, field("minimum_detail")),
+    privateEvidenceAllowed: readBoolean(formData, field("private_evidence_allowed")),
+    reviewStandard: readOptional(formData, field("review_standard")),
+    templateKey: readOptional(formData, field("schema_template")),
+    visibility: readOptional(formData, field("visibility")),
+  });
+  const terms: PerformanceBondTermsInput = {
+    additionalityStatement:
+      readOptional(formData, field("additionality_statement")) || fallbackAdditionality,
+    amountCents: readMoneyCents(formData, field("amount_usd")),
+    challengeWindowDays: normalizePerformanceBondChallengeWindowDays(
+      readOptional(formData, field("challenge_window_days")),
+    ),
+    counterpartyPayoutConsent: readBoolean(formData, field("counterparty_payout_consent")),
+    currency: normalizePerformanceBondCurrency(
+      readOptional(formData, field("currency")) || PERFORMANCE_BOND_DEFAULT_CURRENCY,
+    ),
+    enabled,
+    evidenceDueAt: enabled ? parseOptionalTimestamp(readOptional(formData, field("evidence_due_at"))) : null,
+    evidenceSchema,
+    forfeitureDestination,
+    noTradeBaseline:
+      readOptional(formData, field("no_trade_baseline")) || fallbackNoTradeBaseline,
+    splitConfig: forfeitureDestination === "split" ? splitConfig : getDefaultPerformanceBondSplitConfig(),
+  };
+
+  return {
+    enabled,
+    forfeitureDestinationId: readOptional(formData, field("forfeiture_destination_id")) || null,
+    terms,
+  };
+}
+
+function buildDraftPerformanceBondPayload({
+  counterpartyId,
+  forfeitureDestinationId,
+  interestId,
+  offerId,
+  partyId,
+  side,
+  terms,
+}: {
+  counterpartyId: string | null;
+  forfeitureDestinationId: string | null;
+  interestId: string | null;
+  offerId: string;
+  partyId: string;
+  side: PerformanceBondSide;
+  terms: PerformanceBondTermsInput;
+}): PerformanceBondInsert {
+  const forfeitureDestination = normalizePerformanceBondForfeitureDestination(
+    terms.forfeitureDestination,
+  );
+
+  return {
+    additionality_statement: terms.additionalityStatement.trim(),
+    amount_cents: terms.amountCents,
+    challenge_window_days: terms.challengeWindowDays as 7 | 14 | 30,
+    counterparty_id: counterpartyId,
+    counterparty_payout_consent: terms.counterpartyPayoutConsent,
+    currency: normalizePerformanceBondCurrency(terms.currency),
+    enabled: terms.enabled,
+    evidence_due_at: terms.evidenceDueAt,
+    evidence_schema: evidenceSchemaToJson(terms.evidenceSchema),
+    forfeiture_destination: forfeitureDestination,
+    forfeiture_destination_id:
+      forfeitureDestination === "compromise_charity" ? forfeitureDestinationId : null,
+    forfeiture_rule: getPerformanceBondForfeitureRule(forfeitureDestination),
+    funding_status: "awaiting_funding",
+    interest_id: interestId,
+    no_trade_baseline: terms.noTradeBaseline.trim(),
+    offer_id: offerId,
+    party_id: partyId,
+    payment_provider: PERFORMANCE_BOND_MANUAL_PROVIDER,
+    reviewer_policy: PERFORMANCE_BOND_REVIEWER_POLICY,
+    side,
+    split_config: splitConfigToJson(terms.splitConfig),
+    status: "draft",
+  };
+}
+
+async function upsertDraftPerformanceBond({
+  counterpartyId,
+  forfeitureDestinationId,
+  interestId,
+  offerId,
+  partyId,
+  returnTo,
+  side,
+  supabase,
+  terms,
+}: {
+  counterpartyId: string | null;
+  forfeitureDestinationId: string | null;
+  interestId: string | null;
+  offerId: string;
+  partyId: string;
+  returnTo: string;
+  side: PerformanceBondSide;
+  supabase: ReturnType<typeof createServiceClient>;
+  terms: PerformanceBondTermsInput;
+}) {
+  const lookup = supabase
+    .from("performance_bonds")
+    .select("*")
+    .eq("offer_id", offerId)
+    .eq("side", side);
+  const { data: existing, error: existingError } = interestId
+    ? await lookup.eq("interest_id", interestId).maybeSingle()
+    : await lookup.maybeSingle();
+
+  if (existingError) {
+    redirectWithMessage(returnTo, "error", existingError.message);
+  }
+
+  const existingBond = existing as PerformanceBondRow | null;
+  if (existingBond?.locked_at) {
+    redirectWithMessage(returnTo, "error", "Pledge performance bond terms are locked after acceptance.");
+  }
+
+  if (!terms.enabled) {
+    if (existingBond) {
+      try {
+        await cancelPerformanceBondDraft({
+          actorId: partyId,
+          bondId: existingBond.id,
+          supabase,
+        });
+      } catch (error) {
+        redirectWithMessage(
+          returnTo,
+          "error",
+          error instanceof Error ? error.message : "Unable to cancel pledge performance bond.",
+        );
+      }
+    }
+
+    return null;
+  }
+
+  const validation = validatePerformanceBondTerms(terms, getPerformanceBondConfig());
+  if (validation.errors.length) {
+    redirectWithMessage(returnTo, "error", validation.errors[0] ?? "Complete the pledge performance bond fields.");
+  }
+
+  if (!existingBond) {
+    try {
+      return await createPerformanceBond({
+        counterpartyId,
+        forfeitureDestinationId,
+        interestId,
+        offerId,
+        partyId,
+        side,
+        supabase,
+        terms,
+      });
+    } catch (error) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        error instanceof Error ? error.message : "Unable to create pledge performance bond.",
+      );
+    }
+  }
+
+  const {
+    created_at: _createdAt,
+    id: _id,
+    offer_id: _offerId,
+    party_id: _partyId,
+    side: _side,
+    ...payload
+  } = buildDraftPerformanceBondPayload({
+    counterpartyId,
+    forfeitureDestinationId,
+    interestId,
+    offerId,
+    partyId,
+    side,
+    terms,
+  });
+  const updatePayload: PerformanceBondUpdate = payload;
+  const { data, error } = await supabase
+    .from("performance_bonds")
+    .update(updatePayload)
+    .eq("id", existingBond.id)
+    .eq("status", "draft")
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to update pledge performance bond.");
+  }
+
+  return data as PerformanceBondRow;
 }
 
 const blockedWishPatterns: Array<{ pattern: RegExp; label: string }> = [
@@ -1598,6 +2163,52 @@ function normalizeEvidenceType(value: string): NonNullable<AgreementEvidenceItem
   return "manual_attestation";
 }
 
+type AgreementEvidencePersistenceShape = {
+  claimScope: MoralTradeEvidenceClaimScope;
+  evidenceKind: MoralTradeEvidenceClaimType;
+  reasonCodes: string[];
+};
+
+function getAgreementEvidencePersistenceShape({
+  evidenceType,
+  tradeType,
+}: {
+  evidenceType: NonNullable<AgreementEvidenceItemInsert["evidence_type"]>;
+  tradeType: NonNullable<AgreementEvidenceItemInsert["trade_type"]>;
+}): AgreementEvidencePersistenceShape {
+  const evidenceKind: MoralTradeEvidenceClaimType =
+    evidenceType === "receipt"
+      ? "receipt"
+      : evidenceType === "provider_record"
+        ? "payment_event"
+        : evidenceType === "public_log"
+          ? "public_log"
+          : evidenceType === "timestamped_commitment"
+            ? "prior_intent"
+            : "attestation";
+  const paymentLikeTrade =
+    tradeType === "donation_offset" || tradeType === "mpgf" || tradeType === "paid_action";
+  const claimScope: MoralTradeEvidenceClaimScope =
+    evidenceType === "timestamped_commitment"
+      ? "counterfactual_baseline"
+      : evidenceType === "third_party_review"
+        ? "externality_review"
+        : (evidenceType === "receipt" || evidenceType === "provider_record") && paymentLikeTrade
+          ? "payment_or_donation_record"
+          : "factual_action";
+
+  return {
+    claimScope,
+    evidenceKind,
+    reasonCodes: [
+      "agreement_evidence",
+      `agreement_${tradeType}`,
+      `evidence_${evidenceType}`,
+      claimScope,
+    ],
+  };
+}
+
 function normalizeReviewCaseStatus(value: string): NonNullable<AgreementReviewCaseUpdate["status"]> {
   if (
     value === "under_review" ||
@@ -1640,6 +2251,14 @@ function normalizeVerificationBadgeStatus(value: string): ProfileVerificationBad
   }
 
   return "pending";
+}
+
+function normalizeBondAdjudicationDecision(value: string): BondAdjudicationDecision {
+  if (value === "reject" || value === "request_more_evidence") {
+    return value;
+  }
+
+  return "accept";
 }
 
 function readMoneyCents(formData: FormData, key: string) {
@@ -1882,6 +2501,51 @@ function getSharedCause(left: string[], right: string[]) {
   return left.find((cause) => rightSet.has(normalizeBackgroundToken(cause))) ?? null;
 }
 
+async function reserveBackgroundCandidateExposureSurface({
+  candidateProfileId,
+  cohortScopeId = "",
+  decision,
+  profileId,
+  purposeBinding,
+  runReason,
+  serviceSupabase,
+}: {
+  candidateProfileId: string;
+  cohortScopeId?: string;
+  decision: BackgroundCandidateExposureDecision;
+  profileId: string;
+  purposeBinding: BackgroundPurposeBinding;
+  runReason: string;
+  serviceSupabase: SupabaseServerClient;
+}) {
+  if (!decision.allowed || !decision.budgetConfig) {
+    return false;
+  }
+
+  const { data, error } = await serviceSupabase.rpc("reserve_background_candidate_exposure", {
+    target_audience_scope: decision.normalizedAudienceScope,
+    target_budget_version: decision.candidateBudgetVersion || BACKGROUND_CANDIDATE_BUDGET_VERSION,
+    target_candidate_profile_id: candidateProfileId,
+    target_cohort_scope_id: cohortScopeId,
+    target_purpose_code: purposeBinding.purposeCode,
+    target_purpose_policy_version: purposeBinding.purposePolicyVersion,
+    target_surface_limit: decision.budgetConfig.surfaceLimit,
+    target_window_days: decision.budgetConfig.windowDays,
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to reserve candidate exposure budget", error, {
+      candidateProfileId,
+      profileId,
+      runReason,
+    });
+    return false;
+  }
+
+  const reservation = data?.[0] ?? null;
+  return Boolean(reservation?.allowed);
+}
+
 async function generateWishMatchSuggestions({
   profileId,
   causes,
@@ -1907,6 +2571,8 @@ async function generateWishMatchSuggestions({
   const serviceSupabase = createServiceClient();
   const scope: BackgroundQueryScope =
     runReason === "manual-refresh" ? "manual_scan" : "profile_save_scan";
+  const backgroundGeneratedBy =
+    scope === "manual_scan" ? "manual-scan" : "profile-save-scan";
   const budgetReservation = await reserveBackgroundQueryBudget({
     metadata: { runReason },
     profileId,
@@ -1980,13 +2646,29 @@ async function generateWishMatchSuggestions({
 
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];
   const previewIds = previewRows.map((preview) => preview.profile_id);
-  const { data: counterpartySyntheses, error: synthesisError } = previewIds.length
-    ? await serviceSupabase.from("profile_syntheses").select("*").in("profile_id", previewIds)
-    : { data: [] as ProfileSynthesisRow[], error: null };
+  const [
+    { data: counterpartySyntheses, error: synthesisError },
+    { data: candidateProfiles, error: candidateProfileError },
+  ] = previewIds.length
+    ? await Promise.all([
+        serviceSupabase.from("profile_syntheses").select("*").in("profile_id", previewIds),
+        serviceSupabase.from("wish_profiles").select("*").in("profile_id", previewIds),
+      ])
+    : [
+        { data: [] as ProfileSynthesisRow[], error: null },
+        { data: [] as WishProfileRow[], error: null },
+      ];
 
   if (synthesisError) {
     logSupabaseActionError("Failed to load counterparty syntheses for match generation", synthesisError, {
       profileId,
+    });
+  }
+
+  if (candidateProfileError) {
+    logSupabaseActionError("Failed to load candidate exposure settings for match generation", candidateProfileError, {
+      profileId,
+      runReason,
     });
   }
 
@@ -1996,16 +2678,36 @@ async function generateWishMatchSuggestions({
       synthesis,
     ]),
   );
+  const candidateProfileById = new Map(
+    ((candidateProfiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
+  );
   const viewerSignals = getDeterministicSignalsFromSynthesis(
     (viewerSynthesis ?? null) as ProfileSynthesisRow | null,
   );
+  const purposeBinding: BackgroundPurposeBinding = {
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  };
+  const audienceScope = normalizeBackgroundCandidateAudienceScope("cohort_only");
 
   let matchesCreated = 0;
   let matchesRefreshed = 0;
   const generatedNotifications: Database["public"]["Tables"]["wish_notifications"]["Insert"][] = [];
   const explanationSnapshots: MatchExplanationSnapshotPayload[] = [];
+  const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
   for (const preview of previewRows) {
+    const candidateExposureDecision = evaluateCandidateExposureForBackgroundRun({
+      audienceScope,
+      candidateProfile: candidateProfileById.get(preview.profile_id) ?? null,
+      purposeBinding,
+      surfaces: ["broad_profile"],
+    });
+
+    if (!candidateExposureDecision.allowed) {
+      continue;
+    }
+
     const evaluation = evaluateDeterministicMatch({
       counterparty: preview,
       counterpartySignals: getDeterministicSignalsFromSynthesis(
@@ -2034,6 +2736,19 @@ async function generateWishMatchSuggestions({
     });
 
     if (evaluation.score < 52) {
+      continue;
+    }
+
+    const exposureReserved = await reserveBackgroundCandidateExposureSurface({
+      candidateProfileId: preview.profile_id,
+      decision: candidateExposureDecision,
+      profileId,
+      purposeBinding,
+      runReason,
+      serviceSupabase,
+    });
+
+    if (!exposureReserved) {
       continue;
     }
 
@@ -2079,7 +2794,7 @@ async function generateWishMatchSuggestions({
         target_shared_causes: evaluation.sharedCauses,
         target_suggested_first_step: evaluation.suggestedFirstStep,
         target_risk_notes: evaluation.riskNotes,
-        target_generated_by: "rule-based",
+        target_generated_by: backgroundGeneratedBy,
       },
     );
     const match = matchResult?.[0] ?? null;
@@ -2092,6 +2807,22 @@ async function generateWishMatchSuggestions({
       continue;
     }
 
+    const { error: ownerError } = await serviceSupabase
+      .from("match_suggestions")
+      .update({
+        background_owner_profile_id: profileId,
+        generated_by: backgroundGeneratedBy,
+      })
+      .eq("id", match.match_id);
+
+    if (ownerError) {
+      logSupabaseActionError("Failed to mark background match owner", ownerError, {
+        matchId: match.match_id,
+        profileId,
+        runReason,
+      });
+    }
+
     if (match.was_created) {
       matchesCreated += 1;
       generatedNotifications.push(
@@ -2099,15 +2830,9 @@ async function generateWishMatchSuggestions({
           profile_id: profileId,
           match_id: match.match_id,
           kind: "match",
-          title: "A potential moral trade was found",
-          body: evaluation.viewerReason,
-        },
-        {
-          profile_id: preview.profile_id,
-          match_id: match.match_id,
-          kind: "match",
-          title: "A potential moral trade was found",
-          body: evaluation.counterpartyReason,
+          title: "New opportunity brief",
+          body:
+            "A privacy-safe opportunity brief is ready in your dashboard. Exact wishes, private asks, and contact details are still hidden.",
         },
       );
     } else {
@@ -2118,26 +2843,12 @@ async function generateWishMatchSuggestions({
       buildMatchExplanationSnapshot({
         canRevealIdentity: false,
         counterpartyConsented: false,
-        generatedBy: "rule-based",
+        generatedBy: backgroundGeneratedBy,
         matchBasis,
         matchId: match.match_id,
         profileId,
-        riskNotes: evaluation.riskNotes,
-        score: evaluation.score,
-        sharedCauses: evaluation.sharedCauses,
-        sourceRunId: runReason,
-        sourceRunKind: scope,
-        status: "suggested",
-        suggestedFirstStep: evaluation.suggestedFirstStep,
-        viewerConsented: false,
-      }),
-      buildMatchExplanationSnapshot({
-        canRevealIdentity: false,
-        counterpartyConsented: false,
-        generatedBy: "rule-based",
-        matchBasis,
-        matchId: match.match_id,
-        profileId: preview.profile_id,
+        purposeCode: purposeBinding.purposeCode,
+        purposePolicyVersion: purposeBinding.purposePolicyVersion,
         riskNotes: evaluation.riskNotes,
         score: evaluation.score,
         sharedCauses: evaluation.sharedCauses,
@@ -2148,12 +2859,35 @@ async function generateWishMatchSuggestions({
         viewerConsented: false,
       }),
     );
+    opportunityBriefs.push(
+      buildOpportunityBriefRow({
+        canRevealIdentity: false,
+        candidateProfileId: preview.profile_id,
+        counterpartyConsented: false,
+        generatedBy: backgroundGeneratedBy,
+        matchBasis,
+        matchId: match.match_id,
+        profileId,
+        purposeCode: purposeBinding.purposeCode,
+        purposePolicyVersion: purposeBinding.purposePolicyVersion,
+        riskNotes: evaluation.riskNotes,
+        score: evaluation.score,
+        sharedCauses: evaluation.sharedCauses,
+        status: "suggested",
+        suggestedFirstStep: evaluation.suggestedFirstStep,
+        title: "Opportunity brief: possible counterparty",
+        viewerConsented: false,
+      }),
+    );
 
     const { error: auditError } = await supabase.from("match_audit_events").insert({
       match_id: match.match_id,
       actor_profile_id: profileId,
       event_type: match.was_created ? "match_created" : "match_refreshed",
-      summary: `Deterministic scan found compatibility with score ${evaluation.score}.`,
+      summary: buildPrivacySafeMatchAuditSummary({
+        score: evaluation.score,
+        sourceLabel: "Deterministic scan",
+      }),
       metadata: buildPrivacySafeMatchAuditMetadata({
         compatibilityTags: evaluation.compatibilityTags,
         runReason,
@@ -2168,6 +2902,18 @@ async function generateWishMatchSuggestions({
         matchId: match.match_id,
       });
     }
+  }
+
+  const opportunityBriefError = await upsertBackgroundOpportunityBriefs({
+    briefs: opportunityBriefs,
+    supabase: serviceSupabase,
+  });
+
+  if (opportunityBriefError) {
+    logSupabaseActionError("Failed to save opportunity briefs", opportunityBriefError, {
+      profileId,
+      runReason,
+    });
   }
 
   const snapshotError = await insertMatchExplanationSnapshots({
@@ -2232,7 +2978,12 @@ async function generateWishMatchSuggestions({
 
 export async function signUpAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/onboarding");
-  const signupPath = returnTo === "/onboarding" ? "/signup" : `/signup?returnTo=${encodeURIComponent(returnTo)}`;
+  const signupPath = buildAuthPath({
+    method: "email",
+    mode: "signup",
+    returnTo,
+    route: "/signup",
+  });
 
   if (!hasSupabaseEnv()) {
     redirectWithMessage(signupPath, "error", "Supabase is not configured yet.");
@@ -2240,10 +2991,6 @@ export async function signUpAction(formData: FormData) {
 
   const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
-  const displayName = readRequired(formData, "display_name");
-  const city = readOptional(formData, "city");
-  const region = readOptional(formData, "region");
-  const country = readOptional(formData, "country");
 
   if (!email || !password) {
     redirectWithMessage(signupPath, "error", "Email and password are required.");
@@ -2260,7 +3007,7 @@ export async function signUpAction(formData: FormData) {
   const supabase = await createClient();
   const headerStore = await headers();
   const origin = headerStore.get("origin") ?? getSiteUrl();
-  const confirmUrl = `${origin}/auth/confirm`;
+  const confirmUrl = buildSupabaseAuthCallbackUrl(origin, returnTo);
 
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -2268,10 +3015,6 @@ export async function signUpAction(formData: FormData) {
     options: {
       emailRedirectTo: confirmUrl,
       data: {
-        display_name: displayName,
-        city,
-        region,
-        country,
         public_location_granularity: "hidden",
       },
     },
@@ -2316,7 +3059,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   redirectWithMessage(
-    `/login?returnTo=${encodeURIComponent(returnTo)}`,
+    buildAuthPath({ mode: "login", returnTo, route: "/login" }),
     "message",
     "Account created. Check your email to confirm your address, then sign in.",
   );
@@ -2498,23 +3241,33 @@ export async function createWebinarRsvpAction(formData: FormData) {
 }
 
 export async function signInAction(formData: FormData) {
+  const next = getSafeInternalPath(
+    readOptional(formData, "next") || readOptional(formData, "return_to"),
+    "/dashboard",
+  );
+  const loginPath = buildAuthPath({
+    method: "email",
+    mode: "login",
+    returnTo: next,
+    route: "/login",
+  });
+
   if (!hasSupabaseEnv()) {
-    redirectWithMessage("/login", "error", "Supabase is not configured yet.");
+    redirectWithMessage(loginPath, "error", "Supabase is not configured yet.");
   }
 
   const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
-  const next = getSafeInternalPath(readRequired(formData, "next"), "/dashboard");
 
   if (!email || !password) {
-    redirectWithMessage("/login", "error", "Email and password are required.");
+    redirectWithMessage(loginPath, "error", "Email and password are required.");
   }
 
   enforceActionRateLimit({
     key: `login:${email}`,
     limit: 8,
     message: "Too many login attempts. Wait a few minutes before trying again.",
-    returnTo: "/login",
+    returnTo: loginPath,
     windowMs: 10 * 60 * 1000,
   });
 
@@ -2525,7 +3278,7 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithMessage("/login", "error", error.message);
+    redirectWithMessage(loginPath, "error", error.message);
   }
 
   if (data.user) {
@@ -2533,6 +3286,62 @@ export async function signInAction(formData: FormData) {
   }
 
   redirect(next);
+}
+
+export async function oauthSignInAction(formData: FormData) {
+  const mode = normalizeAuthMode(readOptional(formData, "mode"));
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    getAuthDefaultReturnTo(mode),
+  );
+  const authPath = buildAuthPath({ mode, returnTo, route: mode === "signup" ? "/signup" : "/login" });
+  const provider = normalizeOAuthProvider(readOptional(formData, "provider"));
+
+  if (!provider) {
+    redirectWithMessage(authPath, "error", "Choose a sign-in provider to continue.");
+  }
+
+  if (!(await isOAuthProviderEnabled(provider))) {
+    redirectWithMessage(
+      authPath,
+      "error",
+      `${getOAuthProviderLabel(provider)} sign-in is not enabled for this deployment. Use email instead.`,
+    );
+  }
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(authPath, "error", "Supabase is not configured yet.");
+  }
+
+  const headerStore = await headers();
+  const origin = headerStore.get("origin") ?? getSiteUrl();
+  const redirectTo = buildSupabaseAuthCallbackUrl(origin, returnTo, mode);
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    const message =
+      error.message.toLowerCase().includes("provider is not enabled") ||
+      error.message.toLowerCase().includes("unsupported provider")
+        ? `${getOAuthProviderLabel(provider)} sign-in is not enabled in Supabase yet. Use email instead.`
+        : error.message;
+    redirectWithMessage(authPath, "error", message);
+  }
+
+  if (!data.url) {
+    redirectWithMessage(
+      authPath,
+      "error",
+      "That provider is not configured yet. Try email or contact support.",
+    );
+  }
+
+  redirect(data.url);
 }
 
 export async function requestPasswordResetAction(formData: FormData) {
@@ -2701,6 +3510,9 @@ export async function createOfferAction(formData: FormData) {
   const offerAction = readRequired(formData, "offer_action");
   const requestAction = readRequired(formData, "request_action");
   const baselineStatement = readRequired(formData, "baseline_statement");
+  const additionalityStatement = normalizedMode === "pledge"
+    ? readRequired(formData, "additionality_statement")
+    : readOptional(formData, "additionality_statement");
   const exitCondition = readRequired(formData, "exit_condition");
   const compromiseCause = readRequired(formData, "compromise_cause") || "Not needed";
   const verification = readRequired(formData, "verification");
@@ -2769,12 +3581,386 @@ export async function createOfferAction(formData: FormData) {
     ? readOptional(formData, "assurance_deadline")
     : "";
   const evidenceUrl = normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "";
+  const baselineBondEnabled = normalizedMode === "offset"
+    ? readBoolean(formData, "baseline_bond_enabled")
+    : false;
+  const offerExpiresAt = normalizedMode === "offset"
+    ? parseOptionalTimestamp(readOptional(formData, "offer_expires_at"))
+    : null;
+  const baselineBondAmountUsd = normalizedMode === "offset" && baselineBondEnabled
+    ? readPositiveMoneyAmount(formData, "baseline_bond_amount_usd")
+    : null;
+  const baselineBondAmountCents = convertUsdToCents(baselineBondAmountUsd);
+  const baselineBondCurrency = normalizeBaselineBondCurrency(
+    normalizedMode === "offset" ? readOptional(formData, "baseline_bond_currency") : "",
+  );
+  const baselineBondForfeitDestinationId = normalizedMode === "offset" && baselineBondEnabled
+    ? readRequired(formData, "baseline_bond_forfeit_destination_id")
+    : "";
+  const baselineBondEvidenceDueAt = normalizedMode === "offset" && baselineBondEnabled
+    ? parseOptionalTimestamp(readOptional(formData, "baseline_bond_evidence_due_at"))
+    : null;
+  const baselineBondEvidenceStandard = normalizedMode === "offset" && baselineBondEnabled
+    ? readRequired(formData, "baseline_bond_evidence_standard")
+    : "";
   const antiThreatCertification = normalizedMode === "offset"
     ? readBoolean(formData, "offset_anti_threat_certification")
     : false;
   const verificationMetadataAcknowledged = normalizedMode === "offset"
     ? readBoolean(formData, "offset_verification_metadata_acknowledgement")
     : false;
+  const selectedDonationOffsetDestination =
+    normalizedMode === "offset" ? findRegisteredCharityById(compromiseDestinationId) : null;
+  const donationOffsetDonorOfRecordInput: DonationOffsetDonorOfRecordInput | null =
+    normalizedMode === "offset"
+      ? {
+          destinationLabel:
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
+          donationPlatform: readRequired(formData, "offset_donor_record_donation_platform"),
+          donorOfRecordRole: normalizeDonationOffsetDonorOfRecordRole(
+            readOptional(formData, "offset_donor_of_record_role"),
+          ),
+          donorOfRecordExplanation: readRequired(formData, "offset_donor_of_record_explanation"),
+          taxReceiptTreatment: normalizeDonationOffsetTaxReceiptTreatment(
+            readOptional(formData, "offset_tax_receipt_treatment"),
+          ),
+          taxReceiptExplanation: readRequired(formData, "offset_tax_receipt_explanation"),
+          taxBenefitClaimed: readBoolean(formData, "offset_tax_benefit_claimed"),
+          donorAdvisedFundInvolved: readBoolean(formData, "offset_daf_involved"),
+          employerMatchInvolved: readBoolean(formData, "offset_employer_match_involved"),
+          commercialCoVentureInvolved: readBoolean(formData, "offset_commercial_co_venture_involved"),
+          charitableSolicitationTreatment: normalizeDonationOffsetCharitableSolicitationTreatment(
+            readOptional(formData, "offset_charitable_solicitation_treatment"),
+          ),
+          jurisdictionReviewRequired: readBoolean(formData, "offset_jurisdiction_review_required"),
+          participantAcknowledgedNoTaxAdvice: readBoolean(
+            formData,
+            "offset_no_tax_advice_acknowledgement",
+          ),
+          participantAcknowledgedOperationalNotImpact: readBoolean(
+            formData,
+            "offset_receipt_operational_not_impact_acknowledgement",
+          ),
+          receiptDoubleClaimPrevented: readBoolean(formData, "offset_receipt_double_claim_prevented"),
+          receiptReassignmentProhibited: readBoolean(
+            formData,
+            "offset_receipt_reassignment_prohibited",
+          ),
+          lockTermsFrozenBeforeConfirmation: readBoolean(
+            formData,
+            "offset_donor_terms_lock_freeze_acknowledgement",
+          ),
+          destinationVerificationStatus: normalizeDonationOffsetDestinationVerificationStatus(
+            readOptional(formData, "offset_destination_verification_status"),
+          ),
+        }
+      : null;
+  const donationOffsetDonorOfRecordPreview = donationOffsetDonorOfRecordInput
+    ? buildDonationOffsetDonorOfRecordPreview(donationOffsetDonorOfRecordInput)
+    : null;
+  const donationOffsetPaymentDestinationInput: DonationOffsetPaymentDestinationInput | null =
+    normalizedMode === "offset"
+      ? {
+          recipientLabel:
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
+          recipientIdentityStatus: normalizeDonationOffsetRecipientIdentityStatus(
+            readOptional(formData, "offset_recipient_identity_status"),
+          ),
+          paymentDestinationKind: normalizeDonationOffsetPaymentDestinationKind(
+            readOptional(formData, "offset_payment_destination_kind"),
+          ),
+          paymentDestinationLocator: readRequired(
+            formData,
+            "offset_payment_destination_locator",
+          ),
+          paymentDestinationReviewStatus: normalizeDonationOffsetPaymentDestinationReviewStatus(
+            readOptional(formData, "offset_payment_destination_review_status"),
+          ),
+          antiImpersonationReviewed: readBoolean(
+            formData,
+            "offset_anti_impersonation_reviewed",
+          ),
+          jurisdictionReviewed: readBoolean(formData, "offset_jurisdiction_reviewed"),
+          prohibitedUseReviewed: readBoolean(formData, "offset_prohibited_use_reviewed"),
+          destinationControlledByRecipient: readBoolean(
+            formData,
+            "offset_destination_controlled_by_recipient",
+          ),
+          freeTextDestination: readBoolean(formData, "offset_free_text_destination"),
+          reuseAcrossAgreementsRequested: readBoolean(
+            formData,
+            "offset_destination_reuse_requested",
+          ),
+          captureOrReleaseRequested: readBoolean(
+            formData,
+            "offset_capture_or_release_requested",
+          ),
+          participantAcknowledgedEvidenceNotDestination: readBoolean(
+            formData,
+            "offset_evidence_not_destination_acknowledgement",
+          ),
+          participantAcknowledgedNoCaptureBeforeVerification: readBoolean(
+            formData,
+            "offset_no_capture_before_verification_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetPaymentDestinationPreview = donationOffsetPaymentDestinationInput
+    ? buildDonationOffsetPaymentDestinationPreview(donationOffsetPaymentDestinationInput)
+    : null;
+  const donationOffsetExternalityEvidenceInput: DonationOffsetExternalityEvidenceInput | null =
+    normalizedMode === "offset"
+      ? {
+          recipientLabel:
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
+          nonparticipantExternalityStatus:
+            normalizeDonationOffsetNonparticipantExternalityStatus(
+              readOptional(formData, "offset_nonparticipant_externality_status"),
+            ),
+          nonparticipantHarmSummary: readRequired(
+            formData,
+            "offset_nonparticipant_harm_summary",
+          ),
+          antiThreatReviewed: readBoolean(
+            formData,
+            "offset_anti_threat_externality_reviewed",
+          ),
+          evidenceBurden: normalizeDonationOffsetEvidenceBurden(
+            readOptional(formData, "offset_evidence_burden"),
+          ),
+          evidencePlanSummary: readRequired(formData, "offset_evidence_plan_summary"),
+          leastIntrusiveAlternative: readRequired(
+            formData,
+            "offset_least_intrusive_evidence_alternative",
+          ),
+          privacySensitiveEvidenceRequested: readBoolean(
+            formData,
+            "offset_privacy_sensitive_evidence_requested",
+          ),
+          highBurdenEvidenceReviewerApproved: readBoolean(
+            formData,
+            "offset_high_burden_evidence_reviewer_approved",
+          ),
+          impactClaimReviewRequired: readBoolean(
+            formData,
+            "offset_impact_claim_review_required",
+          ),
+          impactClaimMethodologyReviewed: readBoolean(
+            formData,
+            "offset_impact_claim_methodology_reviewed",
+          ),
+          fallbackPolicy: normalizeDonationOffsetFallbackPolicy(
+            readOptional(formData, "offset_fallback_policy"),
+          ),
+          fallbackExplanation: readRequired(formData, "offset_fallback_explanation"),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedNonparticipantHarmsNotWaived: readBoolean(
+            formData,
+            "offset_nonparticipant_harms_not_waived_acknowledgement",
+          ),
+          participantAcknowledgedLeastIntrusiveEvidence: readBoolean(
+            formData,
+            "offset_least_intrusive_evidence_acknowledgement",
+          ),
+          participantAcknowledgedNoImpactClaimFromReceipt: readBoolean(
+            formData,
+            "offset_no_impact_claim_from_receipt_acknowledgement",
+          ),
+          participantAcknowledgedFallbackNoSilentReroute: readBoolean(
+            formData,
+            "offset_fallback_no_silent_reroute_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetExternalityEvidencePreview = donationOffsetExternalityEvidenceInput
+    ? buildDonationOffsetExternalityEvidencePreview(donationOffsetExternalityEvidenceInput)
+    : null;
+  const donationOffsetSafetyAuthenticityInput: DonationOffsetSafetyAuthenticityInput | null =
+    normalizedMode === "offset"
+      ? {
+          publicDescription: [offerAction, requestAction, baselineStatement, exitCondition, notes]
+            .filter(Boolean)
+            .join("\n"),
+          evidencePlanSummary: readRequired(formData, "offset_evidence_plan_summary"),
+          paymentPatternSummary: readRequired(
+            formData,
+            "offset_safety_payment_pattern_summary",
+          ),
+          sideAgreementSummary: readRequired(
+            formData,
+            "offset_safety_side_agreement_summary",
+          ),
+          privacyGrantStatus: normalizeDonationOffsetPrivacyGrantStatus(
+            readOptional(formData, "offset_privacy_grant_status"),
+          ),
+          confidentialityPrivacy: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_confidentiality_privacy_status"),
+          ),
+          evidenceAuthenticity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_evidence_authenticity_status"),
+          ),
+          financialCrime: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_financial_crime_status"),
+          ),
+          nonTransferability: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_non_transferability_status"),
+          ),
+          regulatedGoodsHazardousActivity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_regulated_goods_hazardous_activity_status"),
+          ),
+          cyberAbuseDigitalIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_cyber_abuse_digital_integrity_status"),
+          ),
+          antiCorruptionProcessIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_anti_corruption_process_integrity_status"),
+          ),
+          privacySensitiveEvidenceRequested: readBoolean(
+            formData,
+            "offset_privacy_sensitive_evidence_requested",
+          ),
+          sourceAuthenticationReviewed: readBoolean(
+            formData,
+            "offset_source_authentication_reviewed",
+          ),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedNoUnauthorizedPrivateDisclosure: readBoolean(
+            formData,
+            "offset_no_unauthorized_private_disclosure_acknowledgement",
+          ),
+          participantAcknowledgedClaimTypedEvidence: readBoolean(
+            formData,
+            "offset_claim_typed_evidence_acknowledgement",
+          ),
+          participantAcknowledgedNonTransferability: readBoolean(
+            formData,
+            "offset_non_transferability_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetSafetyAuthenticityPreview = donationOffsetSafetyAuthenticityInput
+    ? buildDonationOffsetSafetyAuthenticityPreview(donationOffsetSafetyAuthenticityInput)
+    : null;
+  const donationOffsetAuthorityFairnessInput: DonationOffsetAuthorityFairnessInput | null =
+    normalizedMode === "offset"
+      ? {
+          publicDescription: [offerAction, requestAction, baselineStatement, exitCondition, notes]
+            .filter(Boolean)
+            .join("\n"),
+          baselineStatement,
+          authoritySummary: readRequired(formData, "offset_authority_summary"),
+          sideAgreementSummary: readRequired(
+            formData,
+            "offset_authority_side_agreement_summary",
+          ),
+          baselineIntegrityStatus: normalizeDonationOffsetBaselineIntegrityStatus(
+            readOptional(formData, "offset_baseline_integrity_status"),
+          ),
+          thirdPartyObligationStatus: normalizeDonationOffsetThirdPartyObligationStatus(
+            readOptional(formData, "offset_third_party_obligation_status"),
+          ),
+          representativeAuthorityStatus: normalizeDonationOffsetRepresentativeAuthorityStatus(
+            readOptional(formData, "offset_representative_authority_status"),
+          ),
+          reportingIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_reporting_integrity_status"),
+          ),
+          civilRights: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_civil_rights_status"),
+          ),
+          participantAutonomy: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_participant_autonomy_status"),
+          ),
+          jurisdictionReviewStatus: normalizeDonationOffsetJurisdictionReviewStatus(
+            readOptional(formData, "offset_jurisdiction_legal_review_status"),
+          ),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedOwnResourcesOnly: readBoolean(
+            formData,
+            "offset_own_resources_only_acknowledgement",
+          ),
+          participantAcknowledgedNoReportingSuppression: readBoolean(
+            formData,
+            "offset_no_reporting_suppression_acknowledgement",
+          ),
+          participantAcknowledgedNoDiscrimination: readBoolean(
+            formData,
+            "offset_no_discrimination_acknowledgement",
+          ),
+          participantAcknowledgedNoCoercion: readBoolean(
+            formData,
+            "offset_no_coercion_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetAuthorityFairnessPreview = donationOffsetAuthorityFairnessInput
+    ? buildDonationOffsetAuthorityFairnessPreview(donationOffsetAuthorityFairnessInput)
+    : null;
+  const donationOffsetParticipantConfirmationInput: DonationOffsetParticipantConfirmationInput | null =
+    normalizedMode === "offset"
+      ? {
+          baselineSnapshotId: readRequired(formData, "offset_baseline_snapshot_id"),
+          termsSnapshotId: readRequired(formData, "offset_terms_snapshot_id"),
+          policySnapshotId: readRequired(formData, "offset_policy_snapshot_id"),
+          maximumExposureUsd: readPositiveMoneyAmount(
+            formData,
+            "offset_maximum_exposure_usd",
+          ),
+          matchedTradeLockProposalStatus: normalizeDonationOffsetMatchedLockProposalStatus(
+            readOptional(formData, "offset_matched_lock_proposal_status"),
+          ),
+          confirmationRecordStatus: normalizeDonationOffsetParticipantConfirmationRecordStatus(
+            readOptional(formData, "offset_participant_confirmation_record_status"),
+          ),
+          consentQualityStatus: normalizeDonationOffsetConsentQualityStatus(
+            readOptional(formData, "offset_consent_quality_status"),
+          ),
+          noticeRecordStatus: normalizeDonationOffsetNoticeRecordStatus(
+            readOptional(formData, "offset_notice_record_status"),
+          ),
+          confirmationScope: normalizeDonationOffsetConfirmationScope(
+            readOptional(formData, "offset_confirmation_scope"),
+          ),
+          amendmentStatus: normalizeDonationOffsetAmendmentStatus(
+            readOptional(formData, "offset_amendment_status"),
+          ),
+          affectedParticipantCount:
+            readPositiveIntOrNull(formData, "offset_affected_participant_count") ?? 0,
+          freshConfirmationCount:
+            readNonNegativeIntOrNull(formData, "offset_fresh_confirmation_count") ?? -1,
+          participantSurplusConfirmed: readBoolean(
+            formData,
+            "offset_participant_surplus_confirmed",
+          ),
+          participantSurplusStatement: readRequired(
+            formData,
+            "offset_participant_surplus_statement",
+          ),
+          materialChangePending: readBoolean(formData, "offset_material_change_pending"),
+          lockOrCaptureRequested: readBoolean(formData, "offset_lock_or_capture_requested"),
+          participantAcknowledgedBaselineComparison: readBoolean(
+            formData,
+            "offset_baseline_comparison_acknowledgement",
+          ),
+          participantAcknowledgedFreshConfirmationRequired: readBoolean(
+            formData,
+            "offset_fresh_confirmation_required_acknowledgement",
+          ),
+          participantAcknowledgedNoPreselectedPaidCommitment: readBoolean(
+            formData,
+            "offset_no_preselected_paid_commitment_acknowledgement",
+          ),
+          participantAcknowledgedNoDarkPattern: readBoolean(
+            formData,
+            "offset_no_dark_pattern_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetParticipantConfirmationPreview =
+    donationOffsetParticipantConfirmationInput
+      ? buildDonationOffsetParticipantConfirmationPreview(
+          donationOffsetParticipantConfirmationInput,
+        )
+      : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
       ? `/offers/new?mode=offset${
@@ -2782,10 +3968,216 @@ export async function createOfferAction(formData: FormData) {
         }${poolId ? `&offset_pool_id=${encodeURIComponent(poolId)}` : ""}${
           poolSide ? `&offset_pool_side=${poolSide}` : ""
         }`
-      : "/offers/new";
+      : normalizedMode === "pledge"
+        ? "/offers/new?mode=pledge"
+        : "/offers/new";
+  const pledgePerformanceBondConfig = getPerformanceBondConfig();
+  const pledgePerformanceBondFields =
+    normalizedMode === "pledge" && pledgePerformanceBondConfig.enabled
+      ? readPerformanceBondTermsFromForm({
+          fallbackAdditionality: additionalityStatement,
+          fallbackNoTradeBaseline: baselineStatement,
+          formData,
+          prefix: "performance_bond",
+        })
+      : null;
+  const pledgeSwapManualReviewInput: PledgeSwapManualReviewInput | null =
+    normalizedMode === "pledge"
+      ? {
+          offeredAction: offerAction,
+          requestedAction: requestAction,
+          noTradeBaseline: baselineStatement,
+          additionalityStatement,
+          maxObligationDays: readPositiveIntOrNull(formData, "pledge_swap_max_obligation_days"),
+          reciprocalReleaseRule: readRequired(formData, "pledge_swap_reciprocal_release_rule"),
+          withdrawalBeforeLockRule: readRequired(formData, "pledge_swap_withdrawal_before_lock_rule"),
+          challengeWindowDays: readPositiveIntOrNull(formData, "pledge_swap_challenge_window_days"),
+          neutralReviewRequired: readBoolean(formData, "pledge_swap_neutral_review_required"),
+          evidencePlan: readRequired(formData, "pledge_swap_evidence_plan"),
+          leastIntrusiveAlternative: readRequired(formData, "pledge_swap_least_intrusive_alternative"),
+          baselinePredatesOffer: readBoolean(formData, "pledge_swap_baseline_predates_offer"),
+          baselineConfidence: normalizePledgeSwapBaselineConfidence(
+            readOptional(formData, "pledge_swap_baseline_confidence"),
+          ),
+          compensatedMoralAction: readBoolean(formData, "pledge_swap_compensated_moral_action"),
+          compensationSummary: readOptional(formData, "pledge_swap_compensation_summary"),
+          ordinaryServiceClassification: normalizePledgeSwapOrdinaryServiceClassification(
+            readOptional(formData, "pledge_swap_ordinary_service_classification"),
+          ),
+          negativeCommitmentScope: readOptional(formData, "pledge_swap_negative_commitment_scope"),
+          actionReversibility: normalizePledgeSwapActionReversibility(
+            readOptional(formData, "pledge_swap_action_reversibility"),
+          ),
+          thirdPartyObligation: normalizePledgeSwapThirdPartyObligation(
+            readOptional(formData, "pledge_swap_third_party_obligation"),
+          ),
+          representativeAuthority: normalizePledgeSwapRepresentativeAuthority(
+            readOptional(formData, "pledge_swap_representative_authority"),
+          ),
+          reportingIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_reporting_integrity"),
+          ),
+          civilRights: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_civil_rights"),
+          ),
+          participantAutonomy: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_participant_autonomy"),
+          ),
+          confidentialityPrivacy: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_confidentiality_privacy"),
+          ),
+          evidenceAuthenticity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_evidence_authenticity"),
+          ),
+          financialCrime: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_financial_crime"),
+          ),
+          nonTransferability: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_non_transferability"),
+          ),
+          regulatedGoodsHazardousActivity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_regulated_goods_hazardous_activity"),
+          ),
+          cyberAbuseDigitalIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_cyber_abuse_digital_integrity"),
+          ),
+          antiCorruptionProcessIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_anti_corruption_process_integrity"),
+          ),
+          performanceBondPreviewEnabled: Boolean(pledgePerformanceBondFields?.enabled),
+        }
+      : null;
+  const pledgeSwapManualReviewPreview = pledgeSwapManualReviewInput
+    ? buildPledgeSwapManualReviewPreview(pledgeSwapManualReviewInput)
+    : null;
 
   if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
+  }
+
+  if (normalizedMode === "pledge" && !additionalityStatement.trim()) {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      "Explain why this personal pledge swap is additional to the no-trade baseline.",
+    );
+  }
+
+  if (pledgeSwapManualReviewInput) {
+    const pledgeSwapValidationErrors = validatePledgeSwapManualReviewInput(
+      pledgeSwapManualReviewInput,
+    );
+
+    if (pledgeSwapValidationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        pledgeSwapValidationErrors[0] ?? "Complete the pledge-swap manual-review terms.",
+      );
+    }
+  }
+
+  if (donationOffsetDonorOfRecordInput) {
+    const donorOfRecordErrors = validateDonationOffsetDonorOfRecordInput(
+      donationOffsetDonorOfRecordInput,
+    );
+
+    if (donorOfRecordErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        donorOfRecordErrors[0] ?? "Complete the donation offset donor-of-record terms.",
+      );
+    }
+  }
+
+  if (donationOffsetPaymentDestinationInput) {
+    const paymentDestinationErrors = validateDonationOffsetPaymentDestinationInput(
+      donationOffsetPaymentDestinationInput,
+    );
+
+    if (paymentDestinationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        paymentDestinationErrors[0] ?? "Complete the donation offset payment-destination terms.",
+      );
+    }
+  }
+
+  if (donationOffsetExternalityEvidenceInput) {
+    const externalityEvidenceErrors = validateDonationOffsetExternalityEvidenceInput(
+      donationOffsetExternalityEvidenceInput,
+    );
+
+    if (externalityEvidenceErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        externalityEvidenceErrors[0] ??
+          "Complete the donation offset externality and evidence terms.",
+      );
+    }
+  }
+
+  if (donationOffsetSafetyAuthenticityInput) {
+    const safetyAuthenticityErrors = validateDonationOffsetSafetyAuthenticityInput(
+      donationOffsetSafetyAuthenticityInput,
+    );
+
+    if (safetyAuthenticityErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        safetyAuthenticityErrors[0] ??
+          "Complete the donation offset safety and evidence-authenticity terms.",
+      );
+    }
+  }
+
+  if (donationOffsetAuthorityFairnessInput) {
+    const authorityFairnessErrors = validateDonationOffsetAuthorityFairnessInput(
+      donationOffsetAuthorityFairnessInput,
+    );
+
+    if (authorityFairnessErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        authorityFairnessErrors[0] ??
+          "Complete the donation offset authority and fairness terms.",
+      );
+    }
+  }
+
+  if (donationOffsetParticipantConfirmationInput) {
+    const participantConfirmationErrors = validateDonationOffsetParticipantConfirmationInput(
+      donationOffsetParticipantConfirmationInput,
+    );
+
+    if (participantConfirmationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        participantConfirmationErrors[0] ??
+          "Complete the donation offset participant-confirmation terms.",
+      );
+    }
+  }
+
+  if (pledgePerformanceBondFields?.enabled) {
+    const bondValidation = validatePerformanceBondTerms(
+      pledgePerformanceBondFields.terms,
+      pledgePerformanceBondConfig,
+    );
+
+    if (bondValidation.errors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        bondValidation.errors[0] ?? "Complete the pledge performance bond fields.",
+      );
+    }
   }
 
   const protocolDraft = {
@@ -2842,11 +4234,38 @@ export async function createOfferAction(formData: FormData) {
   const structuredNotes = [
     notes,
     `No-trade baseline / default: ${baselineStatement}`,
+    additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    pledgeSwapManualReviewPreview
+      ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
+    donationOffsetDonorOfRecordPreview
+      ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
+      : "",
+    donationOffsetPaymentDestinationPreview
+      ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
+      : "",
+    donationOffsetExternalityEvidencePreview
+      ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetSafetyAuthenticityPreview
+      ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
+      : "",
+    donationOffsetAuthorityFairnessPreview
+      ? summarizeDonationOffsetAuthorityFairnessForNotes(donationOffsetAuthorityFairnessPreview)
+      : "",
+    donationOffsetParticipantConfirmationPreview
+      ? summarizeDonationOffsetParticipantConfirmationForNotes(
+          donationOffsetParticipantConfirmationPreview,
+        )
+      : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   let donationOffsetFields: DonationOffsetFields | null = null;
+  let baselineBondPauseReasons: string[] = [];
 
   if (normalizedMode === "offset") {
     donationOffsetFields = {
@@ -2871,6 +4290,25 @@ export async function createOfferAction(formData: FormData) {
     };
 
     const charity = findRegisteredCharityById(compromiseDestinationId);
+    const baselineBondForfeitDestination = findRegisteredCharityById(
+      baselineBondForfeitDestinationId,
+    );
+    const baselineBondValidation = validateBaselineBondInput({
+      amountCents: baselineBondAmountCents,
+      baselineAmountCents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
+      baselineStatement,
+      currency: baselineBondCurrency,
+      enabled: baselineBondEnabled,
+      evidenceDueAt: baselineBondEvidenceDueAt,
+      evidenceStandard: baselineBondEvidenceStandard,
+      forfeitDestination: baselineBondForfeitDestination,
+      forfeitDestinationId: baselineBondForfeitDestinationId,
+      notes,
+      offerExpiresAt,
+      offeredAction: offerAction,
+      requestedAction: requestAction,
+    });
+    baselineBondPauseReasons = baselineBondValidation.pauseReasons;
     const moderation = assessDonationOffsetModeration(donationOffsetFields, charity);
     const validationErrors = [
       ...(donationOffsetFields ? validateDonationOffsetFields(donationOffsetFields) : []),
@@ -2880,6 +4318,7 @@ export async function createOfferAction(formData: FormData) {
         verificationMetadataAcknowledged,
         evidenceUrl,
       }),
+      ...baselineBondValidation.errors,
     ];
 
     if (
@@ -2911,6 +4350,15 @@ export async function createOfferAction(formData: FormData) {
         "error",
         moderation.reasons[0] ??
           "This donation offset could not be published because it violates the platform safeguards.",
+      );
+    }
+
+    if (baselineBondValidation.safetyAction === "reject") {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        baselineBondValidation.rejectReasons[0] ??
+          "This baseline credibility bond cannot be offered under the platform safeguards.",
       );
     }
 
@@ -3050,8 +4498,12 @@ export async function createOfferAction(formData: FormData) {
     normalizedMode === "offset" && donationOffsetFields
       ? assessDonationOffsetModeration(donationOffsetFields)
       : null;
+  const effectiveOffsetModerationStatus =
+    offsetModeration?.status === "clear" && baselineBondPauseReasons.length
+      ? "flagged"
+      : offsetModeration?.status ?? null;
   const offerPersistenceStatus = getMoralTradeOfferPersistenceStatus({
-    donationOffsetModerationStatus: offsetModeration?.status ?? null,
+    donationOffsetModerationStatus: effectiveOffsetModerationStatus,
     protocolReviewStatus: protocolReview.status,
   });
 
@@ -3088,6 +4540,16 @@ export async function createOfferAction(formData: FormData) {
   }
 
   if (normalizedMode === "offset" && donationOffsetFields) {
+    const baselineBondStatus: BaselineBondStatus = baselineBondEnabled ? "pending_payment" : "none";
+    const baselineBondNotes = [
+      offsetModeration?.reasons.join(" ") ?? "",
+      ...baselineBondPauseReasons,
+      baselineBondEnabled && !isPaymentBondsEnabled()
+        ? "Baseline credibility bond recorded as planned pilot willingness only; no money was collected."
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     const offsetInsert: DonationOffsetOfferInsert = {
       offer_id: data.id,
       baseline_amount_cents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
@@ -3107,8 +4569,22 @@ export async function createOfferAction(formData: FormData) {
       assurance_minimum_cents: convertUsdToCents(donationOffsetFields.assuranceMinimumUsd),
       assurance_deadline_at: parseOptionalTimestamp(donationOffsetFields.assuranceDeadline),
       evidence_url: donationOffsetFields.evidenceUrl,
-      moderation_status: offsetModeration?.status ?? "clear",
-      moderation_notes: offsetModeration?.reasons.join(" ") ?? "",
+      moderation_status: effectiveOffsetModerationStatus ?? "clear",
+      moderation_notes: baselineBondNotes,
+      offer_expires_at: offerExpiresAt,
+      baseline_bond_enabled: baselineBondEnabled,
+      baseline_bond_amount_cents: baselineBondEnabled ? baselineBondAmountCents : 0,
+      baseline_bond_currency: baselineBondCurrency,
+      baseline_bond_forfeit_destination_id: baselineBondEnabled
+        ? baselineBondForfeitDestinationId
+        : null,
+      baseline_bond_evidence_due_at: baselineBondEnabled ? baselineBondEvidenceDueAt : null,
+      baseline_bond_evidence_standard: baselineBondEnabled ? baselineBondEvidenceStandard : "",
+      baseline_bond_evidence_url: "",
+      baseline_bond_status: baselineBondStatus,
+      baseline_bond_appeal_window_ends_at: baselineBondEnabled
+        ? getBaselineBondAppealWindowEndsAt(protocolTransitionRecordedAt)
+        : null,
     };
 
     const { error: offsetError } = await supabase.from("donation_offset_offers").insert(offsetInsert);
@@ -3119,6 +4595,109 @@ export async function createOfferAction(formData: FormData) {
         ownerId: viewer.authUser.id,
       });
       redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
+    }
+
+    if (donationOffsetFields.evidenceUrl) {
+      const evidencePersistenceShape = getDonationOffsetEvidencePersistenceShape(
+        donationOffsetFields.verificationMethod,
+      );
+      const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+        actorAgentId: viewer.authUser.id,
+        actorAgentKind: "participant",
+        actorLabel: ownerAlias,
+        claimScope: evidencePersistenceShape.claimScope,
+        evidenceKind: evidencePersistenceShape.evidenceKind,
+        evidenceUrl: donationOffsetFields.evidenceUrl,
+        idempotencyKey: `donation-offset:${data.id}:initial-evidence`,
+        offerId: data.id,
+        ownerProfileId: viewer.authUser.id,
+        reasonCodes: evidencePersistenceShape.reasonCodes,
+        recordedAt: protocolTransitionRecordedAt,
+        redactionLevel: "reviewer_only",
+        subjectId: data.id,
+        subjectKind: "offer",
+        supabase,
+      });
+
+      if (evidencePersistenceResult.error) {
+        logSupabaseActionError(
+          "Failed to persist donation offset evidence bundle",
+          toActionError(
+            evidencePersistenceResult.error,
+            "Unable to persist donation offset evidence bundle.",
+          ),
+          { offerId: data.id, ownerId: viewer.authUser.id },
+        );
+        redirectWithMessage(
+          `/offers/${data.id}`,
+          "error",
+          "Offer saved but kept paused because the donation offset evidence bundle could not be recorded.",
+        );
+      }
+    }
+
+    if (baselineBondEnabled) {
+      const bondTransitionResult = await persistBaselineBondStatusTransition({
+        actorAgentId: viewer.authUser.id,
+        actorAgentKind: "participant",
+        actorLabel: ownerAlias,
+        fromStatus: "none",
+        idempotencyKey: `baseline-bond:${data.id}:none-to-pending_payment`,
+        offerId: data.id,
+        ownerProfileId: viewer.authUser.id,
+        provenanceActivity: "risk_screened",
+        recordedAt: protocolTransitionRecordedAt,
+        supabase,
+        toStatus: "pending_payment",
+      });
+
+      if (bondTransitionResult.error) {
+        logSupabaseActionError(
+          "Failed to persist baseline credibility bond transition",
+          toActionError(
+            bondTransitionResult.error,
+            "Unable to persist baseline credibility bond transition.",
+          ),
+          {
+            offerId: data.id,
+            ownerId: viewer.authUser.id,
+          },
+        );
+        redirectWithMessage(
+          `/offers/${data.id}`,
+          "error",
+          "Offer saved but kept paused because the baseline credibility bond audit transition could not be written.",
+        );
+      }
+    }
+  }
+
+  if (normalizedMode === "pledge" && pledgePerformanceBondFields?.enabled) {
+    const serviceSupabase = createServiceClient();
+
+    try {
+      await createPerformanceBond({
+        counterpartyId: null,
+        forfeitureDestinationId: pledgePerformanceBondFields.forfeitureDestinationId,
+        offerId: data.id,
+        partyId: viewer.authUser.id,
+        side: "offerer",
+        supabase: serviceSupabase,
+        terms: pledgePerformanceBondFields.terms,
+      });
+    } catch (bondError) {
+      logSupabaseActionError(
+        "Failed to create pledge performance bond",
+        toActionError(bondError, "Unable to create pledge performance bond."),
+        { offerId: data.id, ownerId: viewer.authUser.id },
+      );
+      redirectWithMessage(
+        `/offers/${data.id}`,
+        "error",
+        bondError instanceof Error
+          ? bondError.message
+          : "Offer saved but the pledge performance bond could not be recorded.",
+      );
     }
   }
 
@@ -3148,9 +4727,35 @@ export async function createOfferAction(formData: FormData) {
   const finalStructuredNotes = [
     notes,
     `No-trade baseline / default: ${baselineStatement}`,
+    additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    pledgeSwapManualReviewPreview
+      ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
+    donationOffsetDonorOfRecordPreview
+      ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
+      : "",
+    donationOffsetPaymentDestinationPreview
+      ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
+      : "",
+    donationOffsetExternalityEvidencePreview
+      ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetSafetyAuthenticityPreview
+      ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
+      : "",
+    donationOffsetAuthorityFairnessPreview
+      ? summarizeDonationOffsetAuthorityFairnessForNotes(donationOffsetAuthorityFairnessPreview)
+      : "",
+    donationOffsetParticipantConfirmationPreview
+      ? summarizeDonationOffsetParticipantConfirmationForNotes(
+          donationOffsetParticipantConfirmationPreview,
+        )
+      : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const { error: finalOfferUpdateError } = await supabase
     .from("offers")
     .update({
@@ -3178,12 +4783,71 @@ export async function createOfferAction(formData: FormData) {
   redirectWithMessage(
     `/offers/${data.id}`,
     "message",
-    normalizedMode === "offset" && offsetModeration?.status === "flagged"
+    normalizedMode === "offset" && effectiveOffsetModerationStatus === "flagged"
       ? "Donation offset saved for moderator review. It will remain paused until the baseline evidence is approved."
       : offerPersistenceStatus === "paused"
         ? "Offer saved for protocol review. It will remain paused until evidence or human-review requirements are cleared."
       : "Offer created successfully.",
   );
+}
+
+async function refundPostedBaselineBondAfterMatch({
+  actorLabel,
+  actorProfileId,
+  idempotencyKeySuffix,
+  offerId,
+  offsetDetails,
+  ownerProfileId,
+  supabase,
+}: {
+  actorLabel: string;
+  actorProfileId: string;
+  idempotencyKeySuffix: string;
+  offerId: string;
+  offsetDetails: DonationOffsetOfferRow;
+  ownerProfileId: string;
+  supabase: SupabaseServerClient;
+}) {
+  const currentStatus = normalizeBaselineBondStatus(offsetDetails.baseline_bond_status);
+  const nextStatus = getBaselineBondStatusAfterAccepted({
+    offerExpiresAt: offsetDetails.offer_expires_at,
+    status: currentStatus,
+  });
+
+  if (nextStatus === currentStatus) {
+    return null;
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_status: nextStatus,
+      baseline_bond_review_notes:
+        "Baseline credibility bond marked for refund because the offer was accepted before expiry.",
+      baseline_bond_reviewed_at: new Date().toISOString(),
+      baseline_bond_reviewed_by: actorProfileId,
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    return updateError;
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: actorProfileId,
+    actorAgentKind: "participant",
+    actorLabel,
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:${currentStatus}-to-${nextStatus}:${idempotencyKeySuffix}`,
+    offerId,
+    ownerProfileId,
+    provenanceActivity: "review_completed",
+    supabase,
+    toStatus: nextStatus,
+  });
+
+  return transitionResult.error;
 }
 
 export async function expressInterestAction(formData: FormData) {
@@ -3193,12 +4857,13 @@ export async function expressInterestAction(formData: FormData) {
 
   const offerId = readRequired(formData, "offer_id");
   const message = readRequired(formData, "message");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
 
   if (!offerId) {
     redirectWithMessage("/offers", "error", "Offer ID is required.");
   }
 
-  const viewer = await requireViewer(`/offers/${offerId}`);
+  const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
 
   const { data: offer, error: offerError } = await supabase
@@ -3212,13 +4877,65 @@ export async function expressInterestAction(formData: FormData) {
   }
 
   if (offer.owner_id === viewer.authUser.id) {
-    redirectWithMessage(`/offers/${offerId}`, "error", "You cannot express interest in your own offer.");
+    redirectWithMessage(returnTo, "error", "You cannot express interest in your own offer.");
+  }
+
+  const pledgePerformanceBondFeatureEnabled = isPledgePerformanceBondsEnabled();
+  const { data: offererBond, error: offererBondError } =
+    pledgePerformanceBondFeatureEnabled && offer.mode === "pledge"
+      ? await supabase
+          .from("performance_bonds")
+          .select("*")
+          .eq("offer_id", offerId)
+          .eq("side", "offerer")
+          .eq("enabled", true)
+          .maybeSingle()
+      : { data: null, error: null };
+
+  if (offererBondError) {
+    redirectWithMessage(returnTo, "error", offererBondError.message);
+  }
+
+  if (offererBond && !readBoolean(formData, "accept_offerer_performance_bond_terms")) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Accept the offer-maker's locked evidence schema and forfeiture rule before responding.",
+    );
+  }
+
+  const takerBondFields =
+    pledgePerformanceBondFeatureEnabled && offer.mode === "pledge"
+      ? readPerformanceBondTermsFromForm({
+          fallbackAdditionality: readOptional(
+            formData,
+            "taker_performance_bond_additionality_statement",
+          ),
+          fallbackNoTradeBaseline: readOptional(formData, "taker_performance_bond_no_trade_baseline"),
+          formData,
+          prefix: "taker_performance_bond",
+        })
+      : null;
+
+  if (takerBondFields?.enabled) {
+    const takerBondValidation = validatePerformanceBondTerms(
+      takerBondFields.terms,
+      getPerformanceBondConfig(),
+    );
+
+    if (takerBondValidation.errors.length) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        takerBondValidation.errors[0] ?? "Complete reciprocal pledge performance bond fields.",
+      );
+    }
   }
 
   const interestedAlias = deriveDisplayName(viewer.authUser, viewer.profile);
   await ensureAccountRowsForUser(viewer.authUser, supabase);
 
-  const { error } = await supabase.from("interests").upsert(
+  const { data: interest, error } = await supabase.from("interests").upsert(
     {
       offer_id: offerId,
       user_id: viewer.authUser.id,
@@ -3229,10 +4946,25 @@ export async function expressInterestAction(formData: FormData) {
     {
       onConflict: "offer_id,user_id",
     },
-  );
+  ).select("*").single();
 
-  if (error) {
-    redirectWithMessage(`/offers/${offerId}`, "error", error.message);
+  if (error || !interest) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to record interest.");
+  }
+
+  if (takerBondFields) {
+    const serviceSupabase = createServiceClient();
+    await upsertDraftPerformanceBond({
+      counterpartyId: offer.owner_id,
+      forfeitureDestinationId: takerBondFields.forfeitureDestinationId,
+      interestId: interest.id,
+      offerId,
+      partyId: viewer.authUser.id,
+      returnTo,
+      side: "taker",
+      supabase: serviceSupabase,
+      terms: takerBondFields.terms,
+    });
   }
 
   const { data: ownerProfile } = await supabase
@@ -3241,16 +4973,23 @@ export async function expressInterestAction(formData: FormData) {
     .eq("id", offer.owner_id)
     .maybeSingle();
 
+  const offerResponseEmail = buildMoralTradeSafeEmailCopy("offer_response_received");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: ownerProfile?.email,
-    subject: "New response to your Moral Trade offer",
-    body: `${interestedAlias} responded to ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review the message and decide whether to form an agreement.`,
+    subject: offerResponseEmail.subject,
+    body: offerResponseEmail.body,
   });
 
   revalidatePath(`/offers/${offerId}`);
   revalidatePath("/dashboard");
-  redirectWithMessage(`/offers/${offerId}`, "message", "Interest recorded.");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    takerBondFields?.enabled
+      ? "Interest and reciprocal pledge performance bond terms recorded."
+      : "Interest recorded.",
+  );
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -3600,6 +5339,7 @@ export async function saveWishProfileAction(formData: FormData) {
       captured_tags: getBackgroundTokens(`${sourceLabel} ${sourceNotes}`, 12),
       needs_review: manualSourceReviewEnabled,
       imported_at: new Date().toISOString(),
+      retention_expires_at: getBackgroundSourceRetentionExpiresAt(90),
       is_active: true,
       sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
       sensitive_encryption_version: encryptedProfileSourceFields.version,
@@ -3617,10 +5357,16 @@ export async function saveWishProfileAction(formData: FormData) {
     { data: currentWishProfile, error: currentWishProfileError },
     { data: currentProfileSources, error: currentProfileSourcesError },
     { data: currentSourceConnections, error: currentSourceConnectionsError },
+    { data: currentProfileSignals, error: currentProfileSignalsError },
   ] = await Promise.all([
     supabase.from("wish_profiles").select("*").eq("profile_id", viewer.authUser.id).maybeSingle(),
     supabase.from("profile_sources").select("*").eq("profile_id", viewer.authUser.id),
     supabase.from("source_connections").select("*").eq("profile_id", viewer.authUser.id),
+    supabase
+      .from("background_profile_signals")
+      .select("*")
+      .eq("profile_id", viewer.authUser.id)
+      .eq("status", "active"),
   ]);
 
   if (currentWishProfileError) {
@@ -3645,12 +5391,25 @@ export async function saveWishProfileAction(formData: FormData) {
     );
   }
 
+  if (currentProfileSignalsError) {
+    logSupabaseActionError("Failed to reload profile signals after save", currentProfileSignalsError, {
+      userId: viewer.authUser.id,
+    });
+  }
+
   const profileSourcesRows = ((currentProfileSources ?? []) as ProfileSourceRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+  );
+  const activeProfileSourcesRows = profileSourcesRows.filter((row) =>
+    hasActiveProfileSourcePermission(row),
   );
   const sourceConnectionRows = ((currentSourceConnections ?? []) as SourceConnectionRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
   );
+  const activeSourceConnectionRows = sourceConnectionRows.filter((row) =>
+    hasActiveBackgroundSourcePermission(row),
+  );
+  const profileSignalRows = (currentProfileSignals ?? []) as BackgroundProfileSignalRow[];
   const insertedEntryRows = ((insertedEntries ?? []) as WishEntryRow[]).map((row) =>
     overlayEncryptedWishEntryBody(row),
   );
@@ -3683,7 +5442,8 @@ export async function saveWishProfileAction(formData: FormData) {
     participantKind,
     profileId: viewer.authUser.id,
     publicPreview: sharePublicPreview ? publicPreview : "",
-    sourceCount: profileSourcesRows.length + sourceConnectionRows.length,
+    sourceCount:
+      activeProfileSourcesRows.length + activeSourceConnectionRows.length + profileSignalRows.length,
     uncertaintyNotes,
     verificationPreferences,
     wishText,
@@ -3710,6 +5470,7 @@ export async function saveWishProfileAction(formData: FormData) {
       connections: sourceConnectionRows,
       entries: insertedEntryRows,
       profile: decryptedWishProfile,
+      profileSignals: profileSignalRows,
       profileSources: profileSourcesRows,
     });
     let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
@@ -3756,6 +5517,14 @@ export async function saveWishProfileAction(formData: FormData) {
 
     if (synthesisError) {
       logSupabaseActionError("Failed to refresh synthesis during wish profile save", synthesisError, {
+        userId: viewer.authUser.id,
+      });
+    } else {
+      await replaceBackgroundIntentClaims({
+        profile: decryptedWishProfile,
+        sourceConnections: sourceConnectionRows,
+        supabase,
+        synthesis: synthesisPayload,
         userId: viewer.authUser.id,
       });
     }
@@ -4515,6 +6284,61 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
   }
   const allowedFields = disclosureValidation.allowedFields;
+  const supabase = await createClient();
+  const { data: recentRequests, error: recentRequestsError } = await supabase
+    .from("privacy_access_requests")
+    .select("created_at, requested_fields, requested_stage, status")
+    .eq("requester_profile_id", viewer.authUser.id)
+    .eq("owner_profile_id", ownerProfileId)
+    .gte("created_at", getPrivacyAccessRequestWindowStart())
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (recentRequestsError) {
+    logSupabaseActionError("Failed to check recent privacy access requests", recentRequestsError, {
+      ownerProfileId,
+      requesterProfileId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Unable to check recent detail requests. Try again before requesting private fields.",
+    );
+  }
+
+  const cadenceDecision = evaluatePrivacyAccessRequestCadence({
+    recentRequests: (recentRequests ?? []) as PrivacyAccessRequestCadenceRow[],
+    requestedFields: allowedFields,
+    requestedStage,
+  });
+
+  if (
+    !cadenceDecision.allowed ||
+    cadenceDecision.similarRequestCount >= 2 ||
+    cadenceDecision.recentRequestCount >= 4
+  ) {
+    const serviceClient = createServiceClient();
+    await recordBackgroundQueryRiskSignal({
+      metadata: {
+        pendingRequestCount: cadenceDecision.pendingRequestCount,
+        recentRequestCount: cadenceDecision.recentRequestCount,
+        requestedFieldCount: allowedFields.length,
+        requestedStage,
+        similarPendingCount: cadenceDecision.similarPendingCount,
+        similarRequestCount: cadenceDecision.similarRequestCount,
+      },
+      profileId: viewer.authUser.id,
+      severity: cadenceDecision.allowed ? "low" : "medium",
+      signalType: "detail_request_probe_pressure",
+      summary:
+        "A detail request pattern approached or crossed the repeated-request privacy threshold.",
+      supabase: serviceClient,
+    });
+  }
+
+  if (!cadenceDecision.allowed) {
+    redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(cadenceDecision.blockers));
+  }
 
   const payload: PrivacyAccessRequestInsert = {
     owner_profile_id: ownerProfileId,
@@ -4527,7 +6351,6 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
     status: "pending",
   };
 
-  const supabase = await createClient();
   const { data: requestRow, error } = await supabase
     .from("privacy_access_requests")
     .insert(payload)
@@ -4637,6 +6460,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
   const offerSummary = readOptional(formData, "offer_summary");
   const askSummary = readOptional(formData, "ask_summary");
   const constraints = readOptional(formData, "constraints");
+  const noTradeBaseline = readOptional(formData, "no_trade_baseline");
   const targetPreview = readOptional(formData, "target_preview");
 
   if (!intentSummary || (!targetProfileId && !targetPreview && !askSummary)) {
@@ -4647,12 +6471,21 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
     );
   }
 
+  if (noTradeBaseline.trim().length < 12) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "State what happens if no trade or introduction occurs before requesting concierge review.",
+    );
+  }
+
   const safetyBlock = detectBlockedWishText([
     ...causeAreas,
     intentSummary,
     offerSummary,
     askSummary,
     constraints,
+    noTradeBaseline,
     targetPreview,
   ]);
 
@@ -4675,6 +6508,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
     offer_summary: truncateText(offerSummary, 900),
     ask_summary: truncateText(askSummary, 900),
     constraints: truncateText(constraints, 900),
+    no_trade_baseline: truncateText(noTradeBaseline, 900),
     desired_timeline: truncateText(readOptional(formData, "desired_timeline"), 240),
     risk_notes: "",
     status: "open",
@@ -4707,6 +6541,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
       route: payload.route,
       causeAreas,
       hasTargetProfile: Boolean(targetProfileId),
+      noTradeBaselineRecorded: true,
       slaDueAt: payload.sla_due_at,
     },
   });
@@ -4985,6 +6820,9 @@ export async function saveProfileSourceAction(formData: FormData) {
     needs_review: readBoolean(formData, "needs_review"),
     imported_at:
       parseOptionalTimestamp(readOptional(formData, "imported_at")) ?? new Date().toISOString(),
+    retention_expires_at: getBackgroundSourceRetentionExpiresAt(
+      readOptional(formData, "retention_days") || 90,
+    ),
     is_active: true,
     sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
     sensitive_encryption_version: encryptedProfileSourceFields.version,
@@ -5062,8 +6900,21 @@ export async function savePersonalDelegateAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
   const goals = readStringList(formData, "goals_json");
+  const allowedPurposeCodes = normalizeBackgroundPurposeCodeList([
+    ...readStringList(formData, "allowed_purpose_codes_json"),
+    ...readRepeatedStrings(formData, "allowed_purpose_codes", 6),
+  ]);
   const label = readOptional(formData, "label") || "Personal delegate";
   const operatingMode = normalizeDelegateMode(readOptional(formData, "operating_mode"));
+
+  if (operatingMode === "active" && !allowedPurposeCodes.length) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "An active personal delegate needs at least one allowed purpose.",
+    );
+  }
+
   const status = operatingMode === "paused" ? "paused" : "active";
   const payload: PersonalDelegateInsert = {
     profile_id: viewer.authUser.id,
@@ -5073,6 +6924,7 @@ export async function savePersonalDelegateAction(formData: FormData) {
     search_scope: readOptional(formData, "search_scope"),
     risk_tolerance: normalizeDelegateRiskTolerance(readOptional(formData, "risk_tolerance")),
     introduction_policy: normalizeIntroductionPolicy(readOptional(formData, "introduction_policy")),
+    allowed_purpose_bindings: buildBackgroundPurposeBindingRecord(allowedPurposeCodes),
     max_weekly_suggestions: readBoundedInt(formData, "max_weekly_suggestions", {
       fallback: 5,
       min: 0,
@@ -5203,7 +7055,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  const [{ data: profile }, { data: entries }, { data: sources }, { data: connections }] =
+  const [{ data: profile }, { data: entries }, { data: sources }, { data: connections }, { data: signals }] =
     await Promise.all([
       supabase.from("wish_profiles").select("*").eq("profile_id", viewer.authUser.id).maybeSingle(),
       supabase
@@ -5213,6 +7065,11 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
         .eq("safety_status", "clear"),
       supabase.from("profile_sources").select("*").eq("profile_id", viewer.authUser.id),
       supabase.from("source_connections").select("*").eq("profile_id", viewer.authUser.id),
+      supabase
+        .from("background_profile_signals")
+        .select("*")
+        .eq("profile_id", viewer.authUser.id)
+        .eq("status", "active"),
     ]);
 
   if (!profile) {
@@ -5226,6 +7083,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   const sourceConnectionRows = ((connections ?? []) as SourceConnectionRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
   );
+  const profileSignalRows = (signals ?? []) as BackgroundProfileSignalRow[];
   const decryptedProfile = overlayBackgroundRecordSensitiveText(
     profile as WishProfileRow,
     WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
@@ -5234,6 +7092,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     connections: sourceConnectionRows,
     entries: rows,
     profile: decryptedProfile,
+    profileSignals: profileSignalRows,
     profileSources: profileSourceRows,
   });
   let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
@@ -5285,6 +7144,14 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", error.message);
   }
 
+  await replaceBackgroundIntentClaims({
+    profile: decryptedProfile,
+    sourceConnections: sourceConnectionRows,
+    supabase,
+    synthesis: synthesisPayload,
+    userId: viewer.authUser.id,
+  });
+
   const { error: clarificationDeleteError } = await supabase
     .from("clarification_questions")
     .delete()
@@ -5332,19 +7199,21 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   }
 
   if (synthesisPayload.confidence_score < 70 || synthesisPayload.missing_fields.length >= 3) {
-    const { error: riskError } = await supabase.from("risk_signals").insert({
-      profile_id: viewer.authUser.id,
-      signal_type: "underspecified_profile",
-      severity: "low",
-      summary:
-        "The deterministic synthesis is low confidence; ask follow-up questions before relying on matches.",
-      metadata: {
-        confidenceBreakdown: synthesisPayload.confidence_breakdown,
-        missingFields: synthesisPayload.missing_fields,
-        sourceCount: synthesisPayload.source_count,
-        synthesisVersion: synthesisPayload.synthesis_version,
-      },
-    });
+    const { error: riskError } = await supabase.from("risk_signals").insert(
+      buildPrivacySafeRiskSignalInsert({
+        profile_id: viewer.authUser.id,
+        signal_type: "underspecified_profile",
+        severity: "low",
+        summary:
+          "The deterministic synthesis is low confidence; ask follow-up questions before relying on matches.",
+        metadata: {
+          confidenceScore: synthesisPayload.confidence_score,
+          missingFieldCount: synthesisPayload.missing_fields.length,
+          sourceCount: synthesisPayload.source_count,
+          synthesisVersion: synthesisPayload.synthesis_version,
+        },
+      }),
+    );
 
     if (riskError) {
       logSupabaseActionError("Failed to record low-confidence synthesis signal", riskError, {
@@ -5370,6 +7239,39 @@ export async function saveHelperStrategyAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  const purposeCode =
+    normalizeBackgroundPurposeCode(readOptional(formData, "purpose_code")) ?? "moral_trade_offer";
+  const purposeBinding: BackgroundPurposeBinding = {
+    purposeCode,
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  };
+  const supabase = await createClient();
+  const { data: delegate, error: delegateError } = await supabase
+    .from("personal_delegates")
+    .select("allowed_purpose_bindings")
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (delegateError) {
+    logSupabaseActionError("Failed to load personal delegate purpose authorization", delegateError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", delegateError.message);
+  }
+
+  if (
+    !evaluateBackgroundDelegatePurposeAuthorization({
+      allowedPurposeBindings: delegate?.allowed_purpose_bindings,
+      purposeBinding,
+    })
+  ) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "This helper strategy purpose is not authorized by your personal delegate.",
+    );
+  }
+
   const payload: HelperStrategyInsert = {
     profile_id: viewer.authUser.id,
     helper_kind: normalizeHelperKind(readOptional(formData, "helper_kind")),
@@ -5384,11 +7286,14 @@ export async function saveHelperStrategyAction(formData: FormData) {
       min: 0,
       max: 100,
     }),
+    purpose_code: purposeBinding.purposeCode,
+    purpose_policy_version: purposeBinding.purposePolicyVersion,
+    audience_scope: normalizeBackgroundCandidateAudienceScope(readOptional(formData, "audience_scope")),
+    cohort_scope_id: readOptional(formData, "cohort_scope_id").slice(0, 80),
     strategy_config: buildHelperStrategyConfig(formData),
     status: readBoolean(formData, "is_paused") ? "paused" : "active",
   };
 
-  const supabase = await createClient();
   const { error } = await supabase.from("helper_strategies").insert(payload);
 
   if (error) {
@@ -5417,6 +7322,7 @@ export async function savePrivacyGrantAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   const audienceStage = normalizeDisclosureStage(readOptional(formData, "audience_stage"));
   const accessLevel = normalizeDisclosureAccess(readOptional(formData, "access_level"));
+  const grantStatus = normalizePrivacyGrantStatus(readOptional(formData, "status"));
   const purpose = readOptional(formData, "purpose") || readOptional(formData, "notes");
   const disclosureValidation = validateDisclosureRequest({
     accessLevel,
@@ -5435,6 +7341,14 @@ export async function savePrivacyGrantAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "Choose a supported privacy field.");
   }
 
+  if (grantStatus === "granted") {
+    await requireContactDisclosureMfaStepUp({
+      accessLevel,
+      fieldKeys: disclosureValidation.allowedFields,
+      returnTo,
+    });
+  }
+
   const payload: PrivacyGrantInsert = {
     profile_id: viewer.authUser.id,
     counterparty_id: readOptional(formData, "counterparty_id") || null,
@@ -5442,7 +7356,7 @@ export async function savePrivacyGrantAction(formData: FormData) {
     field_key: fieldKey,
     access_level: accessLevel,
     audience_stage: audienceStage,
-    status: normalizePrivacyGrantStatus(readOptional(formData, "status")),
+    status: grantStatus,
     notes: buildDisclosureGrantNotes({
       ownerNote: readOptional(formData, "notes"),
       purpose,
@@ -5481,6 +7395,61 @@ export async function savePrivacyGrantAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Privacy grant saved.");
+}
+
+export async function revokePrivacyGrantAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const grantId = readRequired(formData, "grant_id");
+
+  if (!grantId) {
+    redirectWithMessage(returnTo, "error", "Privacy grant ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { count, error } = await supabase
+    .from("privacy_grants")
+    .update({
+      expires_at: now,
+      notes: buildDisclosureGrantNotes({
+        ownerNote: "Revoked from Consent Center.",
+        purpose: "Stop future disclosure under this grant.",
+      }),
+      status: "revoked",
+      updated_at: now,
+    }, { count: "exact" })
+    .eq("id", grantId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    logSupabaseActionError("Failed to revoke privacy grant", error, {
+      grantId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  if (!count) {
+    redirectWithMessage(returnTo, "error", "Privacy grant was not found.");
+  }
+
+  await recordServerFunnelEvent({
+    eventType: "privacy_grant_changed",
+    metadata: {
+      status: "revoked",
+    },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Privacy grant revoked.");
 }
 
 export async function respondPrivacyAccessRequestAction(formData: FormData) {
@@ -5551,6 +7520,14 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
 
   if (nextStatus === "approved" && disclosureValidation.errors.length) {
     redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
+  }
+
+  if (nextStatus === "approved" && isOwner) {
+    await requireContactDisclosureMfaStepUp({
+      accessLevel,
+      fieldKeys: disclosureValidation.allowedFields,
+      returnTo,
+    });
   }
 
   const resolvedAt =
@@ -6170,10 +8147,6 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
     redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
   }
 
-  if (!hasStripeEnv()) {
-    redirectWithMessage("/dashboard", "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
-  }
-
   const agreementId = readRequired(formData, "agreement_id");
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const amountCents = readMoneyCents(formData, "amount");
@@ -6207,6 +8180,114 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
 
   if (!viewerIsParticipant) {
     redirectWithMessage(returnTo, "error", "You can only pay inside your own agreements.");
+  }
+
+  const { data: linkedOffer, error: linkedOfferError } = agreement.offer_id
+    ? await supabase.from("offers").select("*").eq("id", agreement.offer_id).maybeSingle()
+    : { data: null, error: null };
+
+  if (linkedOfferError) {
+    logSupabaseActionError("Failed to load linked offer for payment authorization", linkedOfferError, {
+      agreementId,
+      offerId: agreement.offer_id,
+    });
+    redirectWithMessage(returnTo, "error", linkedOfferError.message);
+  }
+
+  const offer = linkedOffer as OfferRow | null;
+  const paymentAuthorizationPreview = buildAgreementPaymentAuthorizationPreview({
+    agreementCompletionState: agreement.completion_state,
+    agreementSource: agreement.source,
+    hasAtomicSettlementGroup: false,
+    hasFreshFinalConfirmations: false,
+    hasMatchedTradeLockProposal: false,
+    hasNonConflictingCommitmentReservation: false,
+    offerMode: offer?.mode,
+    participantEligibilityCleared: false,
+    paymentRailReviewCleared: false,
+    providerConfigured: hasStripeEnv(),
+    providerSupportsConditionalAuthorization: false,
+    reviewStage: agreement.status,
+    termsText: [
+      agreement.notes,
+      agreement.structured_terms,
+      agreement.no_trade_baseline,
+      agreement.counterfactual_declaration,
+      agreement.duration_terms,
+      agreement.exit_conditions,
+      agreement.evidence_rule,
+      offer?.offer_action,
+      offer?.request_action,
+      offer?.notes,
+      notes,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  if (!paymentAuthorizationPreview.checkoutCreationAllowed) {
+    if (!paymentAuthorizationPreview.requiresConditionalAuthorization) {
+      redirectWithMessage(returnTo, "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
+    }
+
+    const payeeId =
+      agreement.proposer_id === viewer.authUser.id ? agreement.responder_id : agreement.proposer_id;
+    const platformFeeCents = calculatePlatformFeeCents(amountCents);
+    const stubPayload: AgreementPaymentInsert = {
+      agreement_id: agreementId,
+      payer_id: viewer.authUser.id,
+      payee_id: payeeId,
+      amount_cents: amountCents,
+      currency,
+      cadence_interval_unit: cadenceUnit,
+      cadence_interval_value: cadenceValue,
+      platform_fee_cents: platformFeeCents,
+      authorization_mode: paymentAuthorizationPreview.authorizationMode,
+      authorization_status: paymentAuthorizationPreview.authorizationStatus,
+      capture_policy: paymentAuthorizationPreview.capturePolicy,
+      authorization_gate_snapshot: paymentAuthorizationPreview.gateSnapshot,
+      notes: [
+        notes,
+        paymentAuthorizationPreview.statusLabel,
+        "No Stripe Checkout was created. Payment authorization remains a manual-review stub until a frozen lock proposal, fresh final confirmations, reservation, atomic settlement, eligibility/payment-rail review, and conditional provider path are all non-blocking.",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      status: "draft",
+    };
+    const { data: stubPayment, error: stubError } = await supabase
+      .from("agreement_payments")
+      .insert(stubPayload)
+      .select("*")
+      .single();
+
+    if (stubError || !stubPayment) {
+      logSupabaseActionError("Failed to create agreement payment authorization stub", stubError, {
+        agreementId,
+        payerId: viewer.authUser.id,
+        payeeId,
+      });
+      redirectWithMessage(
+        returnTo,
+        "error",
+        stubError?.message ?? "Unable to create payment authorization stub.",
+      );
+    }
+
+    await supabase.from("agreement_events").insert({
+      agreement_id: agreementId,
+      actor_id: viewer.authUser.id,
+      event_type: "payment_update",
+      summary: `Payment authorization stub recorded for ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}.`,
+      details: paymentAuthorizationPreview.gateSnapshot,
+    });
+
+    revalidatePath(`/agreements/${agreementId}`);
+    redirectWithMessage(
+      returnTo,
+      "message",
+      "Payment authorization stub recorded. No Stripe checkout or capture was created.",
+    );
   }
 
   const payeeId =
@@ -6246,6 +8327,10 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
       cadence_interval_unit: cadenceUnit,
       cadence_interval_value: cadenceValue,
       platform_fee_cents: platformFeeCents,
+      authorization_mode: paymentAuthorizationPreview.authorizationMode,
+      authorization_status: paymentAuthorizationPreview.authorizationStatus,
+      capture_policy: paymentAuthorizationPreview.capturePolicy,
+      authorization_gate_snapshot: paymentAuthorizationPreview.gateSnapshot,
       notes,
       status: "draft",
     })
@@ -6574,7 +8659,12 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  await loadParticipantAgreementOrRedirect(supabase, agreementId, viewer.authUser.id, returnTo);
+  const agreement = await loadParticipantAgreementOrRedirect(
+    supabase,
+    agreementId,
+    viewer.authUser.id,
+    returnTo,
+  );
 
   const tradeType = normalizeEvidenceTradeType(readOptional(formData, "trade_type"));
   const evidenceType = normalizeEvidenceType(readOptional(formData, "evidence_type"));
@@ -6596,7 +8686,7 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
     title,
     evidence_url: evidenceUrl,
     evidence_summary: evidenceSummary,
-    status: "under_review",
+    status: "pending_evidence",
   };
 
   const { data: evidenceItem, error: evidenceError } = await supabase
@@ -6611,6 +8701,45 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
       userId: viewer.authUser.id,
     });
     redirectWithMessage(returnTo, "error", evidenceError?.message ?? "Unable to submit evidence.");
+  }
+
+  const evidencePersistenceShape = getAgreementEvidencePersistenceShape({
+    evidenceType,
+    tradeType,
+  });
+  const provenanceLocator = evidenceUrl || `moraltrade://agreement-evidence/${evidenceItem.id}`;
+  const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: agreement.responder_id === viewer.authUser.id ? "counterparty" : "participant",
+    actorLabel: viewer.displayName,
+    agreementId,
+    claimScope: evidencePersistenceShape.claimScope,
+    evidenceKind: evidencePersistenceShape.evidenceKind,
+    evidenceUrl: provenanceLocator,
+    idempotencyKey: `agreement:${agreementId}:evidence:${evidenceItem.id}`,
+    ownerProfileId: viewer.authUser.id,
+    reasonCodes: [...evidencePersistenceShape.reasonCodes],
+    redactionLevel: "reviewer_only",
+    subjectId: agreementId,
+    subjectKind: "agreement",
+    supabase,
+    traceabilityLocationType: evidenceUrl ? "public_log" : "platform",
+  });
+
+  if (evidencePersistenceResult.error) {
+    logSupabaseActionError(
+      "Failed to persist agreement evidence provenance bundle",
+      toActionError(
+        evidencePersistenceResult.error,
+        "Unable to persist agreement evidence provenance bundle.",
+      ),
+      { agreementId, evidenceItemId: evidenceItem.id, userId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was saved as pending, but review was not opened because the provenance bundle could not be recorded.",
+    );
   }
 
   const reviewPayload: AgreementReviewCaseInsert = {
@@ -6635,6 +8764,19 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", reviewError.message);
   }
 
+  const { error: evidenceStatusError } = await supabase
+    .from("agreement_evidence_items")
+    .update({ status: "under_review" })
+    .eq("id", evidenceItem.id);
+
+  if (evidenceStatusError) {
+    logSupabaseActionError("Failed to move agreement evidence into review", evidenceStatusError, {
+      agreementId,
+      evidenceItemId: evidenceItem.id,
+    });
+    redirectWithMessage(returnTo, "error", evidenceStatusError.message);
+  }
+
   await supabase
     .from("agreements")
     .update({ completion_state: "under_review" })
@@ -6652,6 +8794,200 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath(`/agreements/${agreementId}`);
   redirectWithMessage(returnTo, "message", "Evidence submitted for review.");
+}
+
+export async function submitPerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const evidenceText = truncateText(readRequired(formData, "evidence_text"), 2400);
+  const evidenceUrls = readStringList(formData, "evidence_urls")
+    .map((url) => truncateText(url, 900))
+    .filter(Boolean);
+  const visibility = normalizePerformanceBondVisibility(readOptional(formData, "visibility"));
+  const redactionNotes = truncateText(readOptional(formData, "redaction_notes"), 1200);
+  const attestation = readBoolean(formData, "attestation");
+
+  if (!bondId) {
+    redirectWithMessage(returnTo, "error", "Pledge performance bond ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const result = await submitBondEvidence({
+      actorId: viewer.authUser.id,
+      attestation,
+      bondId,
+      evidenceText,
+      evidenceUrls,
+      redactionNotes,
+      supabase: serviceSupabase,
+      visibility,
+    });
+
+    if (result.bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: result.bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "evidence_submitted",
+        summary: "Pledge performance bond evidence submitted.",
+        details: evidenceText,
+      });
+      revalidatePath(`/agreements/${result.bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to submit pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Pledge performance bond evidence submitted.");
+}
+
+export async function acceptPerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const reason = truncateText(readOptional(formData, "reason"), 1200);
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await acceptBondEvidence({
+      actorId: viewer.authUser.id,
+      bondId,
+      reason,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "review_status_changed",
+        summary: "Counterparty accepted pledge performance bond evidence.",
+        details: reason,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to accept pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Evidence accepted. Refund processing status updated.");
+}
+
+export async function challengePerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const reason = truncateText(readRequired(formData, "reason"), 1200);
+  const specificObjection = truncateText(readRequired(formData, "specific_objection"), 1200);
+  const requestedOutcome = truncateText(readOptional(formData, "requested_outcome") || "platform_review", 240);
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await challengeBondEvidence({
+      actorId: viewer.authUser.id,
+      bondId,
+      reason,
+      requestedOutcome,
+      specificObjection,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "challenge_opened",
+        summary: "Pledge performance bond evidence challenged.",
+        details: specificObjection,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to challenge pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Challenge recorded and routed to platform review.");
+}
+
+export async function adjudicatePerformanceBondChallengeAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/admin", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const bondId = readRequired(formData, "bond_id");
+  const challengeId = readOptional(formData, "challenge_id") || null;
+  const decision = normalizeBondAdjudicationDecision(readRequired(formData, "decision"));
+  const decisionReason = truncateText(readRequired(formData, "decision_reason"), 1600);
+  const appealAllowed = readBoolean(formData, "appeal_allowed");
+  const appealDeadline = parseOptionalTimestamp(readOptional(formData, "appeal_deadline"));
+  const admin = await requireAdminViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await adjudicateBondChallenge({
+      appealAllowed,
+      appealDeadline,
+      bondId,
+      challengeId,
+      decision,
+      decisionReason,
+      reviewerId: admin.authUser.id,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: admin.authUser.id,
+        event_type: "review_status_changed",
+        summary: `Pledge performance bond review decision: ${decision.replaceAll("_", " ")}.`,
+        details: decisionReason,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to adjudicate pledge performance bond.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Pledge performance bond review decision saved.");
 }
 
 export async function requestAgreementReviewAppealAction(formData: FormData) {
@@ -7060,10 +9396,17 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     reviewer_role: reviewerRole,
     assigned_reviewer_id: admin.authUser.id,
     review_scope: truncateText(readOptional(formData, "review_scope"), 900),
+    reviewer_conflict_state: normalizeAgreementReviewerConflictState(
+      readOptional(formData, "reviewer_conflict_state"),
+    ),
+    neutral_review_assignment: normalizeNeutralReviewAssignment(
+      readOptional(formData, "neutral_review_assignment"),
+    ),
     conflict_of_interest_notes: truncateText(
       readOptional(formData, "conflict_of_interest_notes"),
       1000,
     ),
+    review_panel_notes: truncateText(readOptional(formData, "review_panel_notes"), 1000),
     reviewer_notes: truncateText(readOptional(formData, "reviewer_notes"), 1400),
     public_reasoning_summary: truncateText(
       readOptional(formData, "public_reasoning_summary"),
@@ -7544,6 +9887,284 @@ export async function reviewDonationOffsetOfferAction(formData: FormData) {
   revalidatePath("/donation-offsets");
   revalidatePath(`/offers/${offerId}`);
   redirectWithMessage(returnTo, "message", "Donation offset review updated.");
+}
+
+export async function submitBaselineBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/offers", "error", "Supabase is not configured yet.");
+  }
+
+  const offerId = readRequired(formData, "offer_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
+  const evidenceUrl = readRequired(formData, "baseline_bond_evidence_url");
+
+  if (!offerId) {
+    redirectWithMessage(returnTo, "error", "Offer ID is required.");
+  }
+
+  if (!evidenceUrl || !/^https?:\/\//i.test(evidenceUrl)) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Submit a reviewable evidence link for the baseline credibility bond.",
+    );
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const [{ data: offer, error: offerError }, { data: offset, error: offsetError }] =
+    await Promise.all([
+      supabase.from("offers").select("*").eq("id", offerId).maybeSingle(),
+      supabase.from("donation_offset_offers").select("*").eq("offer_id", offerId).maybeSingle(),
+    ]);
+
+  if (offerError || !offer) {
+    redirectWithMessage(returnTo, "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offsetError || !offset) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      offsetError?.message ?? "Baseline credibility bond details were not found.",
+    );
+  }
+
+  if (offer.owner_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "Only the offer owner can submit baseline credibility bond evidence.");
+  }
+
+  const currentStatus = normalizeBaselineBondStatus(offset.baseline_bond_status);
+
+  if (currentStatus !== "evidence_due") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Baseline credibility bond evidence is not open for submission yet.",
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_evidence_url: evidenceUrl,
+      baseline_bond_status: "evidence_submitted",
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to submit baseline credibility bond evidence", updateError, {
+      offerId,
+      ownerId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const evidenceRecordedAt = new Date().toISOString();
+  const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: "participant",
+    actorLabel: offer.owner_alias,
+    claimScope: "counterfactual_baseline",
+    evidenceKind: "prior_intent",
+    evidenceUrl,
+    idempotencyKey: `baseline-bond:${offerId}:counterfactual-baseline-evidence`,
+    offerId,
+    ownerProfileId: viewer.authUser.id,
+    reasonCodes: ["baseline_credibility_bond", "counterfactual_baseline"],
+    recordedAt: evidenceRecordedAt,
+    redactionLevel: "reviewer_only",
+    subjectId: offerId,
+    subjectKind: "offer",
+    supabase,
+  });
+
+  if (evidencePersistenceResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond evidence bundle",
+      toActionError(
+        evidencePersistenceResult.error,
+        "Unable to persist baseline credibility bond evidence bundle.",
+      ),
+      { offerId, ownerId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was submitted, but the provenance evidence bundle could not be recorded.",
+    );
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: "participant",
+    actorLabel: offer.owner_alias,
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:evidence_due-to-evidence_submitted`,
+    offerId,
+    ownerProfileId: viewer.authUser.id,
+    provenanceActivity: "evidence_submitted",
+    recordedAt: evidenceRecordedAt,
+    supabase,
+    toStatus: "evidence_submitted",
+  });
+
+  if (transitionResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond evidence transition",
+      toActionError(
+        transitionResult.error,
+        "Unable to persist baseline credibility bond evidence transition.",
+      ),
+      { offerId, ownerId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was submitted, but the baseline credibility bond audit transition could not be recorded.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(returnTo, "message", "Baseline credibility bond evidence submitted for review.");
+}
+
+export async function reviewBaselineBondEvidenceAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const offerId = readRequired(formData, "offer_id");
+  const decision = readRequired(formData, "baseline_bond_decision");
+  const reviewNotes = readOptional(formData, "baseline_bond_review_notes");
+
+  if (!offerId) {
+    redirectWithMessage(returnTo, "error", "Offer ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const [{ data: offer, error: offerError }, { data: offset, error: offsetError }] =
+    await Promise.all([
+      supabase.from("offers").select("*").eq("id", offerId).maybeSingle(),
+      supabase.from("donation_offset_offers").select("*").eq("offer_id", offerId).maybeSingle(),
+    ]);
+
+  if (offerError || !offer) {
+    redirectWithMessage(returnTo, "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offsetError || !offset) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      offsetError?.message ?? "Baseline credibility bond details were not found.",
+    );
+  }
+
+  const currentStatus = normalizeBaselineBondStatus(offset.baseline_bond_status);
+  let nextStatus: BaselineBondStatus | null = null;
+
+  if (decision === "approve") {
+    if (currentStatus !== "evidence_submitted" && currentStatus !== "evidence_due") {
+      redirectWithMessage(returnTo, "error", "Baseline credibility bond evidence is not awaiting approval.");
+    }
+    nextStatus = "refunded_after_evidence";
+  } else if (decision === "forfeit") {
+    if (currentStatus !== "evidence_submitted" && currentStatus !== "evidence_due") {
+      redirectWithMessage(returnTo, "error", "Baseline credibility bond is not ready for forfeiture review.");
+    }
+
+    const now = new Date();
+    const appealWindowEndsAt =
+      offset.baseline_bond_appeal_window_ends_at ??
+      getBaselineBondAppealWindowEndsAt(now);
+    const appealWindowMs = appealWindowEndsAt ? Date.parse(appealWindowEndsAt) : NaN;
+
+    if (!Number.isFinite(appealWindowMs) || appealWindowMs > now.getTime()) {
+      const { error: appealWindowError } = await supabase
+        .from("donation_offset_offers")
+        .update({
+          baseline_bond_appeal_window_ends_at: appealWindowEndsAt,
+          baseline_bond_review_notes:
+            reviewNotes ||
+            "Evidence was not approved. The appeal window must close before forfeiture.",
+          baseline_bond_reviewed_at: now.toISOString(),
+          baseline_bond_reviewed_by: admin.authUser.id,
+        })
+        .eq("offer_id", offerId);
+
+      if (appealWindowError) {
+        redirectWithMessage(returnTo, "error", appealWindowError.message);
+      }
+
+      revalidatePath("/admin");
+      revalidatePath(`/offers/${offerId}`);
+      redirectWithMessage(
+        returnTo,
+        "message",
+        "Baseline credibility bond appeal window opened. Forfeiture is blocked until that window closes.",
+      );
+    }
+
+    nextStatus = "forfeited";
+  } else if (decision === "cancel") {
+    nextStatus = "cancelled_by_review";
+  } else {
+    redirectWithMessage(returnTo, "error", "Choose a valid baseline credibility bond review decision.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_status: nextStatus,
+      baseline_bond_review_notes: reviewNotes,
+      baseline_bond_reviewed_at: new Date().toISOString(),
+      baseline_bond_reviewed_by: admin.authUser.id,
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to review baseline credibility bond evidence", updateError, {
+      offerId,
+      decision,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: admin.authUser.id,
+    actorAgentKind: "operator",
+    actorLabel: admin.authUser.email ?? "Admin reviewer",
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:${currentStatus}-to-${nextStatus}`,
+    offerId,
+    ownerProfileId: offer.owner_id,
+    provenanceActivity: "review_completed",
+    supabase,
+    toStatus: nextStatus,
+  });
+
+  if (transitionResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond review transition",
+      toActionError(
+        transitionResult.error,
+        "Unable to persist baseline credibility bond review transition.",
+      ),
+      { offerId, decision },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Baseline credibility bond review was saved, but the audit transition could not be recorded.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(returnTo, "message", "Baseline credibility bond review updated.");
 }
 
 export async function toggleFollowAction(formData: FormData) {
@@ -8075,6 +10696,41 @@ export async function acceptInterestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "That interest is not attached to this offer.");
   }
 
+  let offererPerformanceBond: PerformanceBondRow | null = null;
+  let takerPerformanceBond: PerformanceBondRow | null = null;
+
+  if (offer.mode === "pledge" && isPledgePerformanceBondsEnabled()) {
+    const [offererBondResult, takerBondResult] = await Promise.all([
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .eq("offer_id", offerId)
+        .eq("side", "offerer")
+        .eq("enabled", true)
+        .maybeSingle(),
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .eq("interest_id", interestId)
+        .eq("side", "taker")
+        .eq("enabled", true)
+        .maybeSingle(),
+    ]);
+
+    if (offererBondResult.error || takerBondResult.error) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        offererBondResult.error?.message ??
+          takerBondResult.error?.message ??
+          "Unable to load pledge performance bond terms.",
+      );
+    }
+
+    offererPerformanceBond = offererBondResult.data as PerformanceBondRow | null;
+    takerPerformanceBond = takerBondResult.data as PerformanceBondRow | null;
+  }
+
   const { error: acceptError } = await supabase
     .from("interests")
     .update({
@@ -8107,7 +10763,7 @@ export async function acceptInterestAction(formData: FormData) {
     });
   }
 
-  const { error: agreementError } = await supabase.from("agreements").upsert(
+  const { data: agreement, error: agreementError } = await supabase.from("agreements").upsert(
     {
       offer_id: offerId,
       interest_id: interestId,
@@ -8119,6 +10775,8 @@ export async function acceptInterestAction(formData: FormData) {
       structured_terms: `${offer.offer_action} for ${offer.request_action}`,
       duration_terms: offer.duration,
       evidence_rule: offer.verification,
+      no_trade_baseline: offererPerformanceBond?.no_trade_baseline ?? "",
+      counterfactual_declaration: offererPerformanceBond?.additionality_statement ?? "",
       privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
       disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
       completion_state: "pending_evidence",
@@ -8126,16 +10784,58 @@ export async function acceptInterestAction(formData: FormData) {
     {
       onConflict: "interest_id",
     },
-  );
+  ).select("*").single();
 
-  if (agreementError) {
+  if (agreementError || !agreement) {
     logSupabaseActionError("Failed to create agreement after accepting interest", agreementError, {
       offerId,
       interestId,
       proposerId: viewer.authUser.id,
       responderId: interest.user_id,
     });
-    redirectWithMessage(returnTo, "error", agreementError.message);
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Unable to create agreement.");
+  }
+
+  if (offer.mode === "pledge" && (offererPerformanceBond || takerPerformanceBond)) {
+    const serviceSupabase = createServiceClient();
+    const livePaymentsEnabled = isLiveBondPaymentsEnabled();
+
+    try {
+      if (offererPerformanceBond) {
+        await lockPerformanceBondTerms({
+          actorId: viewer.authUser.id,
+          bondId: offererPerformanceBond.id,
+          counterpartyId: interest.user_id,
+          livePaymentsEnabled,
+          supabase: serviceSupabase,
+          swapId: agreement.id,
+        });
+      }
+
+      if (takerPerformanceBond) {
+        await lockPerformanceBondTerms({
+          actorId: interest.user_id,
+          bondId: takerPerformanceBond.id,
+          counterpartyId: viewer.authUser.id,
+          livePaymentsEnabled,
+          supabase: serviceSupabase,
+          swapId: agreement.id,
+        });
+      }
+    } catch (bondLockError) {
+      logSupabaseActionError(
+        "Failed to lock pledge performance bond terms",
+        toActionError(bondLockError, "Unable to lock pledge performance bond terms."),
+        { agreementId: agreement.id, offerId, interestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        bondLockError instanceof Error
+          ? bondLockError.message
+          : "Agreement created, but pledge performance bond terms could not be locked.",
+      );
+    }
   }
 
   if (offer.mode === "offset") {
@@ -8196,6 +10896,29 @@ export async function acceptInterestAction(formData: FormData) {
       });
       redirectWithMessage(returnTo, "error", matchError.message);
     }
+
+    const bondRefundError = await refundPostedBaselineBondAfterMatch({
+      actorLabel: offer.owner_alias,
+      actorProfileId: viewer.authUser.id,
+      idempotencyKeySuffix: interestId,
+      offerId,
+      offsetDetails: offsetDetails as DonationOffsetOfferRow,
+      ownerProfileId: viewer.authUser.id,
+      supabase,
+    });
+
+    if (bondRefundError) {
+      logSupabaseActionError(
+        "Failed to update baseline credibility bond after match",
+        toActionError(bondRefundError, "Unable to update baseline credibility bond after match."),
+        { offerId, interestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "The response was accepted, but the baseline credibility bond refund transition could not be recorded.",
+      );
+    }
   }
 
   const { data: responderProfile } = await supabase
@@ -8204,11 +10927,12 @@ export async function acceptInterestAction(formData: FormData) {
     .eq("id", interest.user_id)
     .maybeSingle();
 
+  const responseAcceptedEmail = buildMoralTradeSafeEmailCopy("response_accepted");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: responderProfile?.email,
-    subject: "Your Moral Trade response was accepted",
-    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review payment, evidence, verification, and status options.`,
+    subject: responseAcceptedEmail.subject,
+    body: responseAcceptedEmail.body,
   });
 
   const { error: offerUpdateError } = await supabase
@@ -8279,6 +11003,28 @@ export async function acceptGuestInterestAction(formData: FormData) {
       "error",
       "That guest respondent has not created an account yet. Ask them to sign up with the same email first.",
     );
+  }
+
+  if (offer.mode === "pledge" && isPledgePerformanceBondsEnabled()) {
+    const { data: offererBond, error: offererBondError } = await supabase
+      .from("performance_bonds")
+      .select("id")
+      .eq("offer_id", offerId)
+      .eq("side", "offerer")
+      .eq("enabled", true)
+      .maybeSingle();
+
+    if (offererBondError) {
+      redirectWithMessage(returnTo, "error", offererBondError.message);
+    }
+
+    if (offererBond) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Bonded pledge swaps require a signed-in member response so evidence terms and reciprocal bond choices can be locked before acceptance.",
+      );
+    }
   }
 
   const { data: existingAgreement, error: existingAgreementError } = await supabase
@@ -8435,13 +11181,40 @@ export async function acceptGuestInterestAction(formData: FormData) {
       });
       redirectWithMessage(returnTo, "error", matchError.message);
     }
+
+    const bondRefundError = await refundPostedBaselineBondAfterMatch({
+      actorLabel: offer.owner_alias,
+      actorProfileId: viewer.authUser.id,
+      idempotencyKeySuffix: guestInterestId,
+      offerId,
+      offsetDetails: offsetDetails as DonationOffsetOfferRow,
+      ownerProfileId: viewer.authUser.id,
+      supabase,
+    });
+
+    if (bondRefundError) {
+      logSupabaseActionError(
+        "Failed to update baseline credibility bond after guest match",
+        toActionError(
+          bondRefundError,
+          "Unable to update baseline credibility bond after guest match.",
+        ),
+        { offerId, guestInterestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "The guest response was accepted, but the baseline credibility bond refund transition could not be recorded.",
+      );
+    }
   }
 
+  const responseAcceptedEmail = buildMoralTradeSafeEmailCopy("response_accepted");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: guestInterest.contact_email,
-    subject: "Your Moral Trade response was accepted",
-    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in with the same email to manage the agreement.`,
+    subject: responseAcceptedEmail.subject,
+    body: responseAcceptedEmail.body,
   });
 
   const { error: offerUpdateError } = await supabase

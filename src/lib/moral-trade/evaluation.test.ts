@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS,
   auditMoralTradeSurfacingParity,
+  auditMoralTradeWorkflowQuality,
   auditMoralTradeUxReadiness,
   getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
@@ -20,6 +22,8 @@ test("evaluation profile publishes Codex quality, privacy, fairness, and reviewe
   assert.ok(profile.metrics.some((metric) => metric.key === "draft_completion_rate"));
   assert.ok(profile.metrics.some((metric) => metric.key === "time_to_valid_draft"));
   assert.ok(profile.metrics.some((metric) => metric.key === "privacy_leakage_incidents"));
+  assert.ok(profile.metrics.some((metric) => metric.key === "blocked_proposal_precision"));
+  assert.ok(profile.metrics.some((metric) => metric.key === "false_match_rate"));
   assert.ok(profile.metrics.some((metric) => metric.key === "subgroup_surfacing_parity"));
   assert.ok(profile.metrics.some((metric) => metric.key === "human_overrule_rate"));
   assert.ok(profile.metrics.some((metric) => metric.key === "reviewer_efficiency_minutes"));
@@ -29,6 +33,7 @@ test("evaluation profile publishes Codex quality, privacy, fairness, and reviewe
   assert.ok(profile.cohortSlices.includes("privacy_stage"));
   assert.ok(profile.cohortSlices.includes("geography_bucket"));
   assert.ok(profile.cohortSlices.includes("optional_governed_sensitive_attribute"));
+  assert.ok(profile.evaluationTests.includes("workflow_quality_audit"));
   assert.ok(profile.evaluationTests.includes("surfacing_parity_audit"));
   assert.ok(profile.evaluationTests.includes("surfacing_deviation_review_log"));
   assert.ok(profile.evaluationTests.includes("ux_readiness_audit"));
@@ -49,6 +54,11 @@ test("evaluation contract publishes executable sample audit evidence", () => {
   assert.equal(sampleAudits.surfacingParityAudit.deviationReviews.length, 2);
   assert.equal(sampleAudits.uxReadinessAudit.status, "pass");
   assert.deepEqual(sampleAudits.uxReadinessAudit.blockers, []);
+  assert.equal(sampleAudits.workflowQualityAudit.status, "pass");
+  assert.equal(sampleAudits.workflowQualityAudit.blockedProposalPrecision, 0.9167);
+  assert.equal(sampleAudits.workflowQualityAudit.falseMatchRate, 0.15);
+  assert.equal(sampleAudits.workflowQualityAudit.humanOverruleRate, 0.2222);
+  assert.equal(sampleAudits.workflowQualityAudit.overruleReasonCoverageRate, 1);
 });
 
 test("evaluation validation fails when privacy metrics or human control gates are missing", () => {
@@ -279,6 +289,72 @@ test("UX readiness audit passes when valid-draft, explanation, and reviewer metr
   assert.deepEqual(audit.blockers, []);
   assert.ok(audit.checks.every((check) => check.status === "pass"));
   assert.equal(MORAL_TRADE_UX_READINESS_DEFAULTS.minExplanationHelpfulMedianRating, 4);
+});
+
+test("workflow quality audit passes bounded Codex-assist safety metrics", () => {
+  const audit = auditMoralTradeWorkflowQuality({
+    snapshot: {
+      period: "2026-05",
+      blockedProposalReviewCount: 10,
+      confirmedCorrectBlockCount: 9,
+      privacyLeakageIncidentCount: 0,
+      matchPreviewReviewCount: 12,
+      falseMatchRejectionCount: 2,
+      suggestionReviewCount: 10,
+      humanOverruleCount: 2,
+      overruleReasonCodeCount: 2,
+    },
+  });
+
+  assert.equal(audit.status, "pass");
+  assert.deepEqual(audit.blockers, []);
+  assert.equal(audit.blockedProposalPrecision, 0.9);
+  assert.equal(audit.falseMatchRate, 0.1667);
+  assert.equal(audit.humanOverruleRate, 0.2);
+  assert.equal(audit.overruleReasonCoverageRate, 1);
+  assert.equal(MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.maxPrivacyLeakageIncidentCount, 0);
+});
+
+test("workflow quality audit blocks privacy leaks, false matches, and unexplained overruling", () => {
+  const audit = auditMoralTradeWorkflowQuality({
+    snapshot: {
+      period: "2026-05",
+      blockedProposalReviewCount: 10,
+      confirmedCorrectBlockCount: 6,
+      privacyLeakageIncidentCount: 1,
+      matchPreviewReviewCount: 10,
+      falseMatchRejectionCount: 5,
+      suggestionReviewCount: 10,
+      humanOverruleCount: 5,
+      overruleReasonCodeCount: 2,
+    },
+  });
+
+  assert.equal(audit.status, "fail");
+  assert.ok(audit.blockers.includes("blocked_proposal_precision_below_target"));
+  assert.ok(audit.blockers.includes("privacy_leakage_incident_present"));
+  assert.ok(audit.blockers.includes("false_match_rate_above_target"));
+  assert.ok(audit.blockers.includes("human_overrule_rate_above_target"));
+  assert.ok(audit.blockers.includes("human_overrule_reason_coverage_incomplete"));
+});
+
+test("workflow quality audit reports insufficient data before drawing safety conclusions", () => {
+  const audit = auditMoralTradeWorkflowQuality({
+    snapshot: {
+      period: "2026-05",
+      blockedProposalReviewCount: 1,
+      confirmedCorrectBlockCount: 1,
+      privacyLeakageIncidentCount: 0,
+      matchPreviewReviewCount: 1,
+      falseMatchRejectionCount: 0,
+      suggestionReviewCount: 1,
+      humanOverruleCount: 0,
+      overruleReasonCodeCount: 0,
+    },
+  });
+
+  assert.equal(audit.status, "insufficient_data");
+  assert.ok(audit.blockers.includes("workflow_quality_sample_too_small"));
 });
 
 test("UX readiness audit blocks promotion when guidance gets slower or less useful", () => {

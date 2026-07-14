@@ -56,6 +56,12 @@ export async function GET(request: Request) {
         reasoningCenterRecovery: routeRecoveryAudit.entries
           .find((entry) => entry.path === "/reasoning-center")
           ?.recoverySurfaces ?? [],
+        reasoningCenterEvidenceFile:
+          routeRecoveryAudit.entries.find((entry) => entry.path === "/reasoning-center")
+            ?.evidenceFile ?? null,
+        reasoningPacketJsonRecovery: routeRecoveryAudit.entries
+          .find((entry) => entry.path === "/api/moral-trade/reasoning/packets")
+          ?.recoverySurfaces ?? [],
       },
       releaseGates: profile.releaseGates.map((gate) => gate.key),
       publicNonClaims: profile.publicNonClaims,

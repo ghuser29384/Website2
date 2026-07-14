@@ -16,6 +16,18 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 
 export type MpgfPublicGoodsAnalyticsEventType =
   | "campaign_viewed"
+  | "contribution_route_selected"
+  | "legacy_demo_label_correctness_recorded"
+  | "moral_public_goods_search_routed_to_cgb_card"
+  | "moral_public_goods_zero_state_suppressed"
+  | "public_goods_empty_filter_default_prevented"
+  | "public_goods_lane_count_separation_mismatch"
+  | "public_goods_mobile_primary_cta_visibility_failed"
+  | "public_goods_ordinary_offer_drawer_opened"
+  | "public_goods_primary_cta_clicked"
+  | "public_goods_search_accessibility_announcement_failed"
+  | "support_signal_recorded"
+  | "stale_current_product_label_exposed"
   | "pledge_intent_recorded"
   | "threshold_status_evaluated"
   | "external_handoff_reconciled"
@@ -34,6 +46,9 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   amountBucket?: MpgfPublicGoodsAnalyticsAmountBucket;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
   captureMode?: MpgfPublicGoodsCaptureMode;
+  counterpartBucketCount?: number;
+  minimumCounterpartyClearedCents?: number;
+  maxExposureCents?: number;
   isRecurring?: boolean;
   eligibilityState?: MpgfPublicGoodsPledge["eligibilityState"];
   campaignStatus?: string;
@@ -43,6 +58,14 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   proofStatus?: string;
   publicEvidenceSource?: string;
   surface?: "public_campaign_page" | "mpgf_participant_action" | "protected_job" | "review_console";
+  contributionRoute?: "every_org_fast_route" | "stripe_setup_intent_saved_commitment" | "manual_proof_fallback";
+  contributionFunnelStep?: "route_selected" | "provider_link_created" | "setup_intent_started" | "fallback_opened";
+  supportSignalMode?: "common_ground_support" | "dissent_review_requested";
+  supportSignalState?: "signal_only" | "pledge_saved" | "pending_verification" | "threshold_cleared" | "counted" | "payout_in_milestones";
+  privateByDefault?: true;
+  publicAggregationOnly?: true;
+  preCommitmentStatus?: "not_precommitted" | "already_planned" | "unknown";
+  netNewFundingProxy?: "likely_net_new" | "already_planned" | "uncertain";
   cohort?: string;
   variant?: string;
   reminderKind?: string;
@@ -67,6 +90,18 @@ export interface RecordMpgfPublicGoodsAnalyticsEventResult {
 
 const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
   "campaign_viewed",
+  "contribution_route_selected",
+  "legacy_demo_label_correctness_recorded",
+  "moral_public_goods_search_routed_to_cgb_card",
+  "moral_public_goods_zero_state_suppressed",
+  "public_goods_empty_filter_default_prevented",
+  "public_goods_lane_count_separation_mismatch",
+  "public_goods_mobile_primary_cta_visibility_failed",
+  "public_goods_ordinary_offer_drawer_opened",
+  "public_goods_primary_cta_clicked",
+  "public_goods_search_accessibility_announcement_failed",
+  "support_signal_recorded",
+  "stale_current_product_label_exposed",
   "pledge_intent_recorded",
   "threshold_status_evaluated",
   "external_handoff_reconciled",
@@ -76,7 +111,7 @@ const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
 ]);
 
 const forbiddenAnalyticsKeyPattern =
-  /email|phone|contact|private[_-]?wish|raw[_-]?evidence|raw[_-]?text|source[_-]?note|receipt[_-]?text|supporter[_-]?reason|payment[_-]?secret|provider[_-]?payload|token|password|private[_-]?key/i;
+  /email|phone|contact|private[_-]?wish|raw[_-]?evidence|raw[_-]?text|source[_-]?note|receipt[_-]?text|supporter[_-]?reason|support[_-]?reason|signal[_-]?reason|moral[_-]?cluster|payment[_-]?secret|provider[_-]?payload|token|password|private[_-]?key/i;
 
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);

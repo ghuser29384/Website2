@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF State Machines",
+  "type": "object",
+  "required": ["version", "machines"],
+  "properties": {
+    "machines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["initial", "statuses", "transitions"],
+        "properties": {
+          "initial": { "type": "string" },
+          "statuses": { "type": "array", "items": { "type": "string" } },
+          "transitions": { "type": "array" }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

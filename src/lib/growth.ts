@@ -45,6 +45,44 @@ export const FUNNEL_EVENT_TYPES = [
   "day_one_return",
   "day_seven_return",
   "performance_metric_recorded",
+  "marketplace_tab_viewed",
+  "marketplace_filter_applied",
+  "marketplace_seed_template_selected",
+  "marketplace_create_from_template_started",
+  "marketplace_intake_triage_routed",
+  "marketplace_public_receipt_previewed",
+  "marketplace_public_receipt_published",
+  "marketplace_public_receipt_revoked",
+  "marketplace_claim_correction_requested",
+  "marketplace_claim_correction_resolved",
+  "marketplace_route_simplification_audited",
+  "marketplace_plain_language_copy_blocked",
+  "marketplace_internal_jargon_primary_copy_blocked",
+  "marketplace_signed_out_offset_builder_blocked",
+  "marketplace_route_fallback_diagnostics_blocked",
+  "marketplace_factor_code_primary_copy_blocked",
+  "marketplace_impact_score_default_surface_blocked",
+  "marketplace_advanced_filter_default_expanded_blocked",
+  "marketplace_worked_example_card_overload_blocked",
+  "marketplace_long_duration_default_example_blocked",
+  "marketplace_task_card_primary_action_blocked",
+  "marketplace_safe_template_default_hidden_fact_blocked",
+  "marketplace_term_map_inconsistency_blocked",
+  "marketplace_next_action_corrected",
+  "marketplace_recipient_association_blocked",
+  "marketplace_causal_wording_blocked",
+  "marketplace_personal_contribution_reuse_blocked",
+  "marketplace_net_personal_contribution_displayed",
+  "marketplace_reimbursement_subsidy_disclosure_blocked",
+  "marketplace_direct_donation_parity_used",
+  "marketplace_direct_donation_parity_non_preference_blocked",
+  "marketplace_sensitive_action_redacted",
+  "marketplace_exact_action_publication_confirmed",
+  "marketplace_publication_pressure_reported",
+  "marketplace_moral_score_language_blocked",
+  "marketplace_anti_gamification_blocked",
+  "marketplace_publication_as_trade_term_blocked",
+  "marketplace_verification_status_checked",
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENT_TYPES)[number];
@@ -93,7 +131,7 @@ export const FIRST_ACTIONS = [
   {
     value: "clone_example",
     label: "Clone a worked example",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     actionLabel: "Open worked examples",
   },
   {
@@ -214,12 +252,18 @@ export function isAnalyticsOptedOut(value: string | null | undefined) {
 
 const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
   "accessLevel",
+  "actionKind",
+  "auditStage",
   "audienceStage",
+  "blockKind",
   "bothConsented",
   "candidateBucket",
   "causeAreaCount",
   "causeAreas",
+  "claimKind",
+  "correctionReasonBucket",
   "decision",
+  "displayBucket",
   "exampleId",
   "fieldCount",
   "firstAction",
@@ -228,26 +272,46 @@ const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
   "hasNote",
   "hasSession",
   "hasTargetUrl",
+  "filterKeys",
+  "intakeRoute",
   "matchesCreated",
+  "liveMetricEligible",
+  "marketplaceTab",
   "metricName",
   "metricRating",
   "metricValueBucket",
   "mode",
   "navigationType",
   "participantKind",
+  "parityMode",
   "partnerSlug",
+  "policyArea",
   "primaryGoal",
+  "proofTier",
+  "publicationState",
+  "reasonBucket",
+  "resolutionStatus",
+  "resultStatus",
+  "revocationReasonBucket",
+  "routeFamily",
+  "routeEligible",
+  "screenFamily",
   "stage",
   "step",
   "targetKind",
   "taskCount",
   "template",
+  "templateKind",
+  "visibilityState",
 ]);
 
 const SENSITIVE_FUNNEL_METADATA_KEY_PATTERN =
   /(wish|ask|constraint|contact|email|phone|address|private|raw|message|note|source|evidence|receipt|counterparty|prompt|text)/i;
 const SENSITIVE_FUNNEL_VALUE_PATTERN =
   /\b(exact\s+private\s+wish|private\s+wish|source\s+note|raw\s+note|contact\s+details|sensitive\s+constraint|private\s+feed|counterparty)\b/i;
+const SAFE_QUERY_LENGTH_BUCKETS = new Set(["0", "1-19", "20-99", "100+"]);
+
+type SearchParamReader = Pick<URLSearchParams, "get" | "has" | "keys">;
 
 function normalizeFunnelMetadataKey(key: string) {
   return key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 48);
@@ -302,12 +366,49 @@ function getSearchParamKeys(value: unknown) {
   }
 
   try {
-    return Array.from(new Set(Array.from(new URLSearchParams(raw).keys()).map(normalizeFunnelMetadataKey)))
+    return Array.from(
+      new Set(
+        Array.from(new URLSearchParams(raw).keys())
+          .map(normalizeFunnelMetadataKey)
+          .filter((key) => key && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(key)),
+      ),
+    )
       .filter(Boolean)
       .slice(0, 12);
   } catch {
     return [];
   }
+}
+
+export function buildPrivacySafeSearchMetadata(
+  value: SearchParamReader | string | null | undefined,
+) {
+  if (!value) {
+    return {};
+  }
+
+  const params =
+    typeof value === "string" ? new URLSearchParams(value.replace(/^\?/, "")) : value;
+  const searchParamKeys = Array.from(
+    new Set(
+      Array.from(params.keys())
+        .map(normalizeFunnelMetadataKey)
+        .filter((key) => key && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(key)),
+    ),
+  ).slice(0, 12);
+  const metadata: Record<string, unknown> = {};
+
+  if (searchParamKeys.length) {
+    metadata.searchParamKeys = searchParamKeys;
+  }
+
+  if (params.has("search") || params.has("q")) {
+    const query = params.get("search") ?? params.get("q") ?? "";
+    metadata.queryPresent = cleanFunnelScalarText(query, 10_000).length > 0;
+    metadata.queryLengthBucket = getTextLengthBucket(query);
+  }
+
+  return metadata;
 }
 
 export function sanitizeFunnelEventPath(value: unknown, maxLength = 1_000) {
@@ -366,10 +467,58 @@ export function sanitizeFunnelEventMetadata(value: unknown) {
       continue;
     }
 
+    if (key === "queryPresent") {
+      safeMetadata.queryPresent =
+        rawValue === true || rawValue === "true" || rawValue === "1";
+      continue;
+    }
+
+    if (key === "queryLengthBucket") {
+      const bucket = cleanFunnelScalarText(rawValue, 20);
+      if (SAFE_QUERY_LENGTH_BUCKETS.has(bucket)) {
+        safeMetadata.queryLengthBucket = bucket;
+      }
+      continue;
+    }
+
     if (key === "search") {
       const searchParamKeys = getSearchParamKeys(rawValue);
       if (searchParamKeys.length) {
         safeMetadata.searchParamKeys = searchParamKeys;
+      }
+      continue;
+    }
+
+    if (key === "searchParamKeys") {
+      if (Array.isArray(rawValue)) {
+        const searchParamKeys = Array.from(
+          new Set(
+            rawValue
+              .map((entry) => normalizeFunnelMetadataKey(String(entry)))
+              .filter((entry) => entry && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(entry)),
+          ),
+        ).slice(0, 12);
+
+        if (searchParamKeys.length) {
+          safeMetadata.searchParamKeys = searchParamKeys;
+        }
+      }
+      continue;
+    }
+
+    if (key === "filterKeys") {
+      if (Array.isArray(rawValue)) {
+        const filterKeys = Array.from(
+          new Set(
+            rawValue
+              .map((entry) => normalizeFunnelMetadataKey(String(entry)))
+              .filter((entry) => entry && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(entry)),
+          ),
+        ).slice(0, 12);
+
+        if (filterKeys.length) {
+          safeMetadata.filterKeys = filterKeys;
+        }
       }
       continue;
     }

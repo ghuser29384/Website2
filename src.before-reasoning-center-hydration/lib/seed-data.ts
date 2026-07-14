@@ -1,0 +1,4 @@
+import { SEED_OFFERS } from "@/lib/offers";
+
+export const CANONICAL_WORKED_CASE_OFFERS = SEED_OFFERS;
+export const CANONICAL_WORKED_CASE_COUNT = CANONICAL_WORKED_CASE_OFFERS.length;

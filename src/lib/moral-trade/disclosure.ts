@@ -2,7 +2,9 @@ import {
   BACKGROUND_DISCLOSURE_FIELDS,
   DISCLOSURE_ACCESS_LEVELS,
   DISCLOSURE_AUDIENCE_STAGES,
+  PRIVACY_ACCESS_REQUEST_WINDOW_DAYS,
   getDefaultGrantExpiryDays,
+  requiresContactDisclosureStepUp,
   validateDisclosureRequest,
   type BackgroundDisclosureFieldKey,
   type DisclosureAccessLevel,
@@ -29,6 +31,7 @@ export type MoralTradeDisclosureFactorCode =
   | "introduced_contact_only"
   | "raw_source_notes_redacted"
   | "owner_approval_required"
+  | "step_up_auth_required"
   | "no_private_feed_mining"
   | "non_mutating_evaluation"
   | "expiry_window_named";
@@ -61,6 +64,7 @@ export interface MoralTradeDisclosureDecision {
   deniedFields: string[];
   factorCodes: MoralTradeDisclosureFactorCode[];
   ownerApprovalRequired: true;
+  stepUpAuthRequired: boolean;
   stateMutation: false;
   accessLevel: DisclosureAccessLevel;
   stage: DisclosureAudienceStage;
@@ -102,7 +106,12 @@ export interface MoralTradeDisclosureSearchPrivacyControl {
   dailyLimit?: number;
   minResultCount?: number;
   minSpecificity?: number;
+  similarPendingLimit?: number;
+  similarWeeklyLimit?: number;
+  pendingLimit?: number;
   scope?: string;
+  weeklyLimit?: number;
+  windowDays?: number;
 }
 
 export interface MoralTradeDisclosureContract {
@@ -143,6 +152,7 @@ const APPROVED_FACTOR_CODES = [
   "introduced_contact_only",
   "raw_source_notes_redacted",
   "owner_approval_required",
+  "step_up_auth_required",
   "no_private_feed_mining",
   "non_mutating_evaluation",
   "expiry_window_named",
@@ -154,6 +164,7 @@ const REQUIRED_SEARCH_PRIVACY_CONTROLS = [
   "stable_query_fingerprint",
   "redacted_overlap_tokens",
   "risk_signal_logging",
+  "detail_request_probe_limit",
 ] as const;
 
 const SEARCH_PRIVACY_CONTROLS = [
@@ -187,6 +198,18 @@ const SEARCH_PRIVACY_CONTROLS = [
     label: "Risk signal logging",
     rule: "Budget pressure and sparse searches are logged as redacted risk signals for operator review without revealing exact wishes.",
   },
+  {
+    key: "detail_request_probe_limit",
+    label: "Repeated detail-request limit",
+    pendingLimit: 3,
+    scope: "privacy_access_request",
+    similarPendingLimit: 1,
+    similarWeeklyLimit: 3,
+    weeklyLimit: 6,
+    windowDays: PRIVACY_ACCESS_REQUEST_WINDOW_DAYS,
+    rule:
+      "Repeated same-owner detail requests are checked over a seven-day window; pending duplicate field/stage requests are blocked and probing pressure is logged with counts only.",
+  },
 ] as const satisfies readonly MoralTradeDisclosureSearchPrivacyControl[];
 
 const CONTRACT_TESTS = [
@@ -194,6 +217,8 @@ const CONTRACT_TESTS = [
   "disclosure_grant_evaluate_route_contract",
   "disclosure_query_budget_contract_smoke",
   "background_disclosure_lattice_smoke",
+  "disclosure_contact_step_up_contract_smoke",
+  "privacy_access_request_cadence_smoke",
   "technical_spec_disclosure_grant_smoke",
 ] as const;
 
@@ -276,6 +301,10 @@ export function evaluateMoralTradeDisclosureGrant(
     purpose: input.purpose,
     stage: input.stage,
   });
+  const stepUpAuthRequired = requiresContactDisclosureStepUp({
+    accessLevel: input.accessLevel,
+    fieldKeys: input.fieldKeys,
+  });
   const blockers = [...validation.errors];
   const factorCodes: MoralTradeDisclosureFactorCode[] = [
     "purpose_bound_disclosure",
@@ -299,6 +328,10 @@ export function evaluateMoralTradeDisclosureGrant(
     factorCodes.push("introduced_contact_only");
   }
 
+  if (stepUpAuthRequired) {
+    factorCodes.push("step_up_auth_required");
+  }
+
   if (input.containsRawSourceNotes) {
     blockers.push("raw_source_notes_must_not_be_disclosed");
     factorCodes.push("raw_source_notes_redacted");
@@ -314,6 +347,7 @@ export function evaluateMoralTradeDisclosureGrant(
     deniedFields: getDeniedFields(input, validation.allowedFields),
     factorCodes: unique(factorCodes),
     ownerApprovalRequired: true,
+    stepUpAuthRequired,
     stateMutation: false,
     accessLevel: input.accessLevel,
     stage: input.stage,
@@ -367,6 +401,17 @@ export function validateMoralTradeDisclosureDecision(
       `${decision.status}; allowed ${decision.allowedFields.join(", ")}; blockers ${decision.blockers.length}`,
     ),
     check(
+      "contact-disclosure-step-up",
+      "Contact disclosure decisions require MFA step-up before live grant approval",
+      !requiresContactDisclosureStepUp({
+        accessLevel: decision.accessLevel,
+        fieldKeys: decision.allowedFields,
+      }) ||
+        (decision.stepUpAuthRequired === true &&
+          factorCodes.includes("step_up_auth_required")),
+      `stepUpAuthRequired ${decision.stepUpAuthRequired}; factors ${factorCodes.join(", ")}`,
+    ),
+    check(
       "blocked-grants-name-privacy-action",
       "Blocked grants name privacy actions",
       decision.status === "grant_ready" || decision.privacyActions.length > 0,
@@ -411,10 +456,11 @@ export function getMoralTradeDisclosureContract(): MoralTradeDisclosureContract 
     invariants: [
       "Registry-stage disclosure is limited to broad previews such as cause areas and coarse location.",
       "Exact wishes, exact asks, capabilities, constraints, verification preferences, and source summaries require the consent stage and a narrow purpose.",
-      "Contact details require the introduced stage and explicit owner approval.",
+      "Contact details require the introduced stage, explicit owner approval, and an active MFA step-up before live grant approval.",
       "Raw source notes, private feed payloads, exact private wishes before consent, and sensitive constraints in public previews stay redacted.",
       "Disclosure grants are field-level, purpose-bound, stage-bound, expiry-aware, and scoped to owner, counterparty, or match context.",
       "Registry search must enforce query budgets, sparse-result privacy floors, redacted overlap tokens, and risk-signal logging before broad previews can be relied on.",
+      "Detail requests must suppress repeated same-owner probing over a seven-day window and log only counts, stages, and field totals.",
       "Evaluators cannot disclose, introduce, contact, approve, revoke, or mutate records; live grants require authenticated owner-controlled actions.",
     ],
     sampleInput: SAMPLE_INPUT,
@@ -436,6 +482,9 @@ export function validateMoralTradeDisclosureContract(
   );
   const sparseResultControl = contract.searchPrivacyControls.find(
     (control) => control.key === "sparse_result_privacy_floor",
+  );
+  const detailRequestControl = contract.searchPrivacyControls.find(
+    (control) => control.key === "detail_request_probe_limit",
   );
   const checks = [
     check(
@@ -475,7 +524,8 @@ export function validateMoralTradeDisclosureContract(
       "Contract preserves broad preview, consent, and introduced-stage boundaries",
       contract.invariants.some((entry) => /Registry-stage disclosure is limited to broad previews/i.test(entry)) &&
         contract.invariants.some((entry) => /Exact wishes.*require the consent stage/i.test(entry)) &&
-        contract.invariants.some((entry) => /Contact details require the introduced stage/i.test(entry)),
+        contract.invariants.some((entry) => /Contact details require the introduced stage/i.test(entry)) &&
+        contract.invariants.some((entry) => /MFA step-up before live grant approval/i.test(entry)),
       contract.invariants.join(" | "),
     ),
     check(
@@ -498,6 +548,20 @@ export function validateMoralTradeDisclosureContract(
           /query budgets.*sparse-result privacy floors.*redacted overlap tokens/i.test(entry),
         ),
       searchPrivacyControlKeys.join(", "),
+    ),
+    check(
+      "detail-request-probing-controls",
+      "Contract publishes repeated detail-request probing limits",
+      detailRequestControl?.scope === "privacy_access_request" &&
+        detailRequestControl.windowDays === PRIVACY_ACCESS_REQUEST_WINDOW_DAYS &&
+        detailRequestControl.pendingLimit === 3 &&
+        detailRequestControl.similarPendingLimit === 1 &&
+        detailRequestControl.similarWeeklyLimit === 3 &&
+        detailRequestControl.weeklyLimit === 6 &&
+        contract.invariants.some((entry) => /same-owner probing.*seven-day window/i.test(entry)),
+      detailRequestControl
+        ? `${detailRequestControl.scope}; ${detailRequestControl.windowDays}d`
+        : "missing",
     ),
     check(
       "nonmutating-owner-control",

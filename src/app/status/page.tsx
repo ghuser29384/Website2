@@ -5,196 +5,154 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import {
-  auditMoralTradeApiImplementationContract,
-  getMoralTradeApiContractProfile,
-  validateMoralTradeApiContractProfile,
-} from "@/lib/moral-trade/api-contract";
-import { validateMoralTradeAiGovernanceProfile } from "@/lib/moral-trade/ai-governance";
-import {
-  getMoralTradeChallengeAppealContract,
-  validateMoralTradeChallengeAppealContract,
-} from "@/lib/moral-trade/challenge-appeal";
-import { validateMoralTradeDataModelProfile } from "@/lib/moral-trade/data-model";
-import {
-  getMoralTradeDisclosureContract,
-  validateMoralTradeDisclosureContract,
-} from "@/lib/moral-trade/disclosure";
-import { validateMoralTradeEvaluationProfile } from "@/lib/moral-trade/evaluation";
-import { validateMoralTradeExternalityProfile } from "@/lib/moral-trade/externality";
-import { validateMoralTradeIncidentResponseProfile } from "@/lib/moral-trade/incident-response";
-import { validateMoralTradeOperationsProfile } from "@/lib/moral-trade/operations";
-import {
-  auditMoralTradeRouteRecoveryManifest,
-  getMoralTradePerformanceProfile,
-  validateMoralTradePerformanceProfile,
-} from "@/lib/moral-trade/performance";
-import { validateMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
-import {
-  getMoralTradeReasoningPacketContract,
-  getMoralTradeReasoningPackets,
-  validateMoralTradeReasoningPacketContract,
-} from "@/lib/moral-trade/reasoning-packets";
-import { validateMoralTradeSecurityProfile } from "@/lib/moral-trade/security";
-import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
-import {
-  getMoralTradeTransparencyReportContract,
-  validateMoralTradeTransparencyReportContract,
-} from "@/lib/moral-trade/transparency-report";
 import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pilot Status",
+  title: "Service status",
   description:
-    "Current Moral Trade pilot status: what is live, what is reviewed, what is not guaranteed, and what comes next.",
+    "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
   alternates: {
     canonical: "/status",
   },
   openGraph: {
-    title: "Moral Trade pilot status",
+    title: "Moral Trade service status",
     description:
-      "See what the Moral Trade pilot currently supports, what remains prototype-stage, and where to start.",
+      "See the workflows Moral Trade supports, inspect public health endpoints, and review the service boundaries.",
     url: getAbsoluteUrl("/status"),
     type: "website",
   },
 };
 
 function formatStatusCount(value: number | null) {
-  return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
+  return value === null ? "—" : new Intl.NumberFormat("en-US").format(value);
 }
 
-type ValidationSummary = {
-  status: "pass" | "fail";
-  checks?: readonly unknown[];
-  blockers: readonly string[];
-};
+const supportedCapabilities = [
+  {
+    title: "Accounts and guided onboarding",
+    detail:
+      "Email-based accounts, structured onboarding, role and cause selection, referral attribution, and one-action activation routing.",
+    href: "/signup?returnTo=/onboarding",
+    action: "Create account",
+  },
+  {
+    title: "Bounded trade records",
+    detail:
+      "Create and inspect pledge swaps and donation offsets with explicit baselines, terms, evidence requirements, timing, and exit rules.",
+    href: "/offers",
+    action: "Explore trades",
+  },
+  {
+    title: "Consent-gated matching",
+    detail:
+      "Publish broad previews without exposing exact wishes or contact details, then disclose only after participant approval.",
+    href: "/background-networking",
+    action: "Open private matching",
+  },
+  {
+    title: "Moral public-good coordination",
+    detail:
+      "Structure shared actions, contribution records, external payment evidence, candidate pools, and governance review without platform custody.",
+    href: "/moral-goods-group-buying",
+    action: "Open public-good tools",
+  },
+  {
+    title: "Evidence and review",
+    detail:
+      "Store evidence states, reviewer decisions, challenges, appeals, disputes, and completion records without collapsing claims into verified facts.",
+    href: "/validation",
+    action: "Review validation rules",
+  },
+  {
+    title: "Member workspace",
+    detail:
+      "Signed-in participants can manage their offers, interests, wish profile, private matching state, agreements, invitations, and data portability.",
+    href: "/dashboard",
+    action: "Open workspace",
+  },
+] as const;
 
-function summarizeValidationSurfaces(...surfaces: readonly ValidationSummary[]) {
-  return {
-    status: surfaces.every((surface) => surface.status === "pass") ? "pass" : "fail",
-    checkCount: surfaces.reduce((total, surface) => total + (surface.checks?.length ?? 0), 0),
-    blockerCount: surfaces.reduce((total, surface) => total + surface.blockers.length, 0),
-  };
-}
+const publicHealthChecks = [
+  {
+    label: "Core protocol",
+    href: "/api/moral-trade/health",
+    summary: "Protocol fields, statuses, transition rules, privacy classes, and relationship boundaries.",
+  },
+  {
+    label: "Operations",
+    href: "/api/moral-trade/operations/health",
+    summary: "Operational controls, retention, rate limits, security non-claims, and launch gates.",
+  },
+  {
+    label: "Performance",
+    href: "/api/moral-trade/performance/health",
+    summary: "Performance targets, route recovery coverage, and privacy-safe telemetry limits.",
+  },
+  {
+    label: "Incident response",
+    href: "/api/moral-trade/incident-response/health",
+    summary: "Incident intake, severity rules, response phases, and disclosure boundaries.",
+  },
+  {
+    label: "Externality review",
+    href: "/api/moral-trade/externality/health",
+    summary: "Third-party impact triggers, affected-party standing, review standards, and remedies.",
+  },
+  {
+    label: "Transparency report",
+    href: "/api/moral-trade/transparency/report",
+    summary: "Aggregate review, disclosure, report, appeal, and operator-timing statistics.",
+  },
+] as const;
+
+const serviceBoundaries = [
+  {
+    title: "No liquidity claim",
+    detail:
+      "The service may have few open proposals. Worked examples are clearly separated from live participant records.",
+  },
+  {
+    title: "No escrow or custody",
+    detail:
+      "Moral Trade does not hold money, assets, participant commitments, or private keys. External providers handle payments where applicable.",
+  },
+  {
+    title: "No guaranteed legal enforceability",
+    detail:
+      "The service records terms, evidence, and review states. It does not provide legal, tax, investment, or fiduciary advice.",
+  },
+  {
+    title: "No autonomous disclosure or outreach",
+    detail:
+      "Private wishes, identities, and contact details remain participant-controlled. Matching and introductions are consent-gated.",
+  },
+] as const;
 
 export default async function StatusPage() {
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
-  const coreProtocolValidation = validateMoralTradeProtocolProfile();
-  const dataModelValidation = validateMoralTradeDataModelProfile();
-  const provenanceValidation = validateMoralTradeProvenanceContract();
-  const reasoningPackets = getMoralTradeReasoningPackets();
-  const reasoningPacketValidation = validateMoralTradeReasoningPacketContract(
-    getMoralTradeReasoningPacketContract(reasoningPackets),
-    reasoningPackets,
-  );
-  const operationsValidation = validateMoralTradeOperationsProfile();
-  const securityValidation = validateMoralTradeSecurityProfile();
-  const evaluationValidation = validateMoralTradeEvaluationProfile();
-  const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile();
-  const disclosureValidation = validateMoralTradeDisclosureContract(
-    getMoralTradeDisclosureContract(),
-  );
-  const challengeAppealValidation = validateMoralTradeChallengeAppealContract(
-    getMoralTradeChallengeAppealContract(),
-  );
-  const externalityValidation = validateMoralTradeExternalityProfile();
-  const incidentResponseValidation = validateMoralTradeIncidentResponseProfile();
-  const performanceProfile = getMoralTradePerformanceProfile();
-  const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
-  const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({
-    profile: performanceProfile,
+  const statusStructuredData = buildWebPageJsonLd({
+    name: "Moral Trade service status",
+    description:
+      "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
+    path: "/status",
   });
-  const apiContractProfile = getMoralTradeApiContractProfile();
-  const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
-  const apiImplementationAudit = auditMoralTradeApiImplementationContract(apiContractProfile);
-  const transparencyReportValidation = validateMoralTradeTransparencyReportContract(
-    getMoralTradeTransparencyReportContract(),
-  );
-  const protocolHealthSurfaces = [
-    {
-      label: "Core protocol and data model",
-      href: "/api/moral-trade/health",
-      summary:
-        "Required fields, statuses, factor codes, transition rules, privacy classes, and relationship boundaries.",
-      ...summarizeValidationSurfaces(coreProtocolValidation, dataModelValidation),
-    },
-    {
-      label: "Evidence provenance",
-      href: "/api/moral-trade/provenance/schema",
-      summary:
-        "Evidence artifacts, claims, reviewer decisions, traceability events, agents, and append-only persistence tables.",
-      ...summarizeValidationSurfaces(provenanceValidation),
-    },
-    {
-      label: "Reasoning Center packets",
-      href: "/api/moral-trade/reasoning/packets",
-      summary:
-        "Structured public packets, cited evidence rows, uncertainty flags, filters, and next human-controlled steps.",
-      ...summarizeValidationSurfaces(reasoningPacketValidation),
-    },
-    {
-      label: "API contract and implementation",
-      href: "/api/moral-trade/api-contract",
-      summary:
-        "Public route schemas, cache controls, rate-limit surfaces, fallbacks, and implementation audit.",
-      ...summarizeValidationSurfaces(apiContractValidation, apiImplementationAudit),
-      checkCount: apiContractValidation.checks.length + apiImplementationAudit.routeCount,
-    },
-    {
-      label: "Disclosure grants and appeals",
-      href: "/api/moral-trade/disclosure/contract",
-      summary:
-        "Stage-bound disclosure grants, redacted fields, search privacy controls, appeal triggers, standing, and review outcomes.",
-      ...summarizeValidationSurfaces(disclosureValidation, challengeAppealValidation),
-    },
-    {
-      label: "Externality and remedy review",
-      href: "/api/moral-trade/externality/health",
-      summary:
-        "Third-party impact triggers, due-diligence steps, affected-party standing, remediation controls, and review standards.",
-      ...summarizeValidationSurfaces(externalityValidation),
-    },
-    {
-      label: "Incident response",
-      href: "/api/moral-trade/incident-response/health",
-      summary:
-        "Incident intake channels, severity levels, privacy-safe disclosure rules, readiness gates, and response-phase coverage.",
-      ...summarizeValidationSurfaces(incidentResponseValidation),
-    },
-    {
-      label: "Performance and route recovery",
-      href: "/api/moral-trade/performance/health",
-      summary:
-        "Observed route friction, Core Web Vitals targets, route recovery manifest coverage, and privacy-safe telemetry limits.",
-      ...summarizeValidationSurfaces(performanceValidation, routeRecoveryAudit),
-    },
-    {
-      label: "Operations and security",
-      href: "/api/moral-trade/operations/health",
-      summary:
-        "Security headers, private-cache controls, retention lifecycle, rate limits, security non-claims, and scale gates.",
-      ...summarizeValidationSurfaces(operationsValidation, securityValidation),
-    },
-    {
-      label: "Evaluation and AI governance",
-      href: "/api/moral-trade/evaluation/health",
-      summary:
-        "Quality metrics, privacy-safe slices, promotion gates, model-card requirements, and prohibited automation.",
-      ...summarizeValidationSurfaces(evaluationValidation, aiGovernanceValidation),
-    },
-    {
-      label: "Transparency report",
-      href: "/api/moral-trade/transparency/report",
-      summary:
-        "Aggregate-only review outcomes, disclosure grants, reports, appeals, median timing, SLA attainment, and small-sample suppression.",
-      ...summarizeValidationSurfaces(transparencyReportValidation),
-    },
-  ] as const;
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/status", label: "Service status" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(statusStructuredData) }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
+        type="application/ld+json"
+      />
+
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -205,28 +163,28 @@ export default async function StatusPage() {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Pilot status</p>
-            <h1>What is real on Moral Trade today.</h1>
+            <p className="eyebrow">Service status</p>
+            <h1>What Moral Trade supports today.</h1>
             <p className="hero-text">
-              The public site is a reviewed pilot, not a liquid exchange. Its strongest current
-              use is understanding the mechanism, cloning worked examples, joining a small cohort,
-              and submitting reviewable proof artifacts.
+              Moral Trade is an operating coordination service with backed account, offer,
+              onboarding, matching, evidence, review, and public-good workflows. This page states
+              the limits that remain in force.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
-                Browse worked examples
+              <Link className="button button-primary" href="/worked-examples">
+                Inspect worked examples
               </Link>
               <Link className="button button-secondary" href="/trust">
-                Read what you can rely on
+                Read reliance rules
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Public snapshot</p>
+            <p className="eyebrow">Backed records</p>
             <dl className="profile-stats profile-stats-hero">
               <div>
-                <dt>Live proposals</dt>
+                <dt>Open proposals</dt>
                 <dd>{formatStatusCount(overview.openOfferCount)}</dd>
               </div>
               <div>
@@ -249,103 +207,67 @@ export default async function StatusPage() {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Now</p>
-            <h2>Supported pilot surfaces</h2>
-            <p>
-              These are the parts visitors can use without assuming hidden liquidity or automated
-              matching.
-            </p>
+            <p className="eyebrow">Available now</p>
+            <h2>Supported workflows</h2>
+            <p>These routes create or read backed records rather than simulated marketplace activity.</p>
           </div>
-
           <div className="data-grid">
-            <article className="panel data-card">
-              <h3>Primer and worked examples</h3>
-              <p className="route-text">
-                Public examples show terms, evidence, baseline confidence, and externality review
-                without pretending they are live offers.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Founding cohort</h3>
-              <p className="route-text">
-                Early users are routed toward one low-risk action, one serious invite, and one
-                proof artifact before broader marketplace activity.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Non-custodial donation routes</h3>
-              <p className="route-text">
-                Curated Every.org links and manual evidence records support donation workflows
-                without escrow, custody, tax advice, or platform-held funds.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="protocol-health-heading">
-          <div className="section-head">
-            <p className="eyebrow">Protocol health</p>
-            <h2 id="protocol-health-heading">Validator-backed surfaces you can audit now</h2>
-            <p>
-              The report recommends MPGF-style transparency for the core Moral Trade feature.
-              These public checks expose what is machine-checked today before any claim of scale,
-              automation, custody, or reliance.
-            </p>
-          </div>
-
-          <div className="data-grid">
-            {protocolHealthSurfaces.map((surface) => (
-              <article className="panel data-card" key={surface.label}>
+            {supportedCapabilities.map((capability) => (
+              <article className="panel data-card" key={capability.title}>
                 <div className="protocol-workflow-card-head">
-                  <h3>{surface.label}</h3>
-                  <StatusBadge tone={surface.status === "pass" ? "default" : "warning"}>
-                    {surface.status}
-                  </StatusBadge>
+                  <h3>{capability.title}</h3>
+                  <StatusBadge tone="default">available</StatusBadge>
                 </div>
-                <p className="route-text">{surface.summary}</p>
-                <p className="panel-note">
-                  {surface.checkCount} check(s), {surface.blockerCount} blocker(s).
-                </p>
-                <Link className="text-button" href={surface.href}>
-                  Open public JSON
+                <p className="route-text">{capability.detail}</p>
+                <Link className="text-button" href={capability.href}>
+                  {capability.action}
                 </Link>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" aria-labelledby="health-heading">
           <div className="section-head">
-            <p className="eyebrow">Not yet</p>
-            <h2>Prototype boundaries</h2>
+            <p className="eyebrow">Machine-readable checks</p>
+            <h2 id="health-heading">Public health and governance endpoints</h2>
             <p>
-              These are intentionally not marketed as complete until the site has more verified
-              activity and governance operations.
+              These endpoints expose protocol, operations, performance, incident, externality, and
+              transparency contracts for direct inspection.
             </p>
           </div>
-
           <div className="data-grid">
-            <article className="panel data-card">
-              <h3>No liquidity claim</h3>
-              <p className="route-text">
-                Public live proposals may be sparse or absent. Browse examples before treating the
-                site as a market.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>No automated outreach</h3>
-              <p className="route-text">
-                Broad previews and consent gates come before identity-specific disclosure or
-                introductions.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>No guaranteed legal enforceability</h3>
-              <p className="route-text">
-                The site records terms, evidence, and review states; it does not provide legal,
-                tax, escrow, custody, or investment services.
-              </p>
-            </article>
+            {publicHealthChecks.map((check) => (
+              <article className="panel data-card" key={check.label}>
+                <div className="protocol-workflow-card-head">
+                  <h3>{check.label}</h3>
+                  <StatusBadge tone="default">public</StatusBadge>
+                </div>
+                <p className="route-text">{check.summary}</p>
+                <Link className="text-button" href={check.href}>
+                  Open JSON
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Operating boundaries</p>
+            <h2>What the service does not claim</h2>
+            <p>
+              These limits are product controls, not temporary disclaimers. Any change requires an
+              explicit operational and governance update.
+            </p>
+          </div>
+          <div className="data-grid">
+            {serviceBoundaries.map((boundary) => (
+              <article className="panel data-card" key={boundary.title}>
+                <h3>{boundary.title}</h3>
+                <p className="route-text">{boundary.detail}</p>
+              </article>
+            ))}
           </div>
         </section>
       </main>

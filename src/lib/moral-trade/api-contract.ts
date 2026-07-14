@@ -1,3 +1,6 @@
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import apiContractProfileJson from "../../../config/moral-trade/api-contract-profile.json";
 
 import {
@@ -6,13 +9,13 @@ import {
 } from "./api-rate-limit";
 
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-api-contract-validator-v0.2";
+  "moral-trade-api-contract-validator-v0.4";
 export const MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION =
-  "moral-trade-api-implementation-audit-v0.1";
+  "moral-trade-api-implementation-audit-v0.2";
 
 export type MoralTradeApiRouteContract = {
   key: string;
-  method: "GET" | "POST";
+  method: "DELETE" | "GET" | "POST";
   path: string;
   auth: "public" | "optional" | "authenticated" | "internal";
   privacyClass: string;
@@ -62,6 +65,10 @@ export interface MoralTradeApiContractValidation {
 
 export interface MoralTradeApiImplementationRouteFinding {
   routeKey: string;
+  routePath: string;
+  routeFilePresent: boolean;
+  candidateRouteFiles: string[];
+  resolvedRouteFile: string | null;
   rateLimitSurface: string;
   rateLimitLimit: number | null;
   rateLimitWindowMs: number | null;
@@ -80,6 +87,7 @@ export interface MoralTradeApiImplementationAudit {
   implementedCacheControls: string[];
   missingRateLimitSurfaces: string[];
   missingCacheControls: string[];
+  missingRouteFiles: string[];
   orphanedRateLimitSurfaces: string[];
   routeFindings: MoralTradeApiImplementationRouteFinding[];
   blockers: string[];
@@ -98,6 +106,111 @@ const REQUIRED_ROUTES = [
   "public_offer_create_similar",
   "moral_trade_data_model_contract",
   "moral_trade_policy_bundle_contract",
+  "moral_trade_release_gate_contract",
+  "moral_trade_release_gate_enforce",
+  "moral_trade_participant_confirmation_contract",
+  "moral_trade_participant_confirmation_enforce",
+  "moral_trade_participant_eligibility_contract",
+  "moral_trade_participant_eligibility_enforce",
+  "moral_trade_account_security_contract",
+  "moral_trade_account_security_enforce",
+  "moral_trade_reviewer_quality_contract",
+  "moral_trade_reviewer_quality_enforce",
+  "moral_trade_reviewer_console_contract",
+  "moral_trade_anti_enumeration_contract",
+  "moral_trade_privacy_governance_contract",
+  "moral_trade_impact_claim_contract",
+  "moral_trade_matching_clearing_contract",
+  "moral_trade_matching_clearing_execute",
+  "moral_trade_clearing_preview_execute",
+  "moral_trade_baseline_integrity_contract",
+  "moral_trade_baseline_integrity_enforce",
+  "moral_trade_agreement_amendment_contract",
+  "moral_trade_agreement_amendment_enforce",
+  "moral_trade_production_readiness_contract",
+  "moral_trade_production_readiness_enforce",
+  "moral_trade_recipient_destination_contract",
+  "moral_trade_recipient_acceptance_contract",
+  "moral_trade_ai_preference_elicitation_contract",
+  "moral_trade_post_clear_audit_contract",
+  "moral_trade_post_clear_audit_enforce",
+  "moral_trade_non_public_goods_subsidy_contract",
+  "moral_trade_non_public_goods_subsidy_enforce",
+  "moral_trade_non_public_goods_tier_contract",
+  "moral_trade_non_public_goods_tier_enforce",
+  "moral_trade_risk_control_matrix_contract",
+  "moral_trade_risk_control_matrix_enforce",
+  "moral_trade_preference_integrity_contract",
+  "moral_trade_preference_integrity_enforce",
+  "moral_trade_commitment_settlement_contract",
+  "moral_trade_commitment_settlement_enforce",
+  "moral_goods_group_buying_collection",
+  "moral_goods_group_buying_contract",
+  "moral_goods_group_buying_enforce",
+  "moral_trade_participant_credibility_contract",
+  "moral_trade_participant_credibility_enforce",
+  "moral_trade_opportunity_meal_evidence_contract",
+  "moral_trade_opportunity_meal_evidence_enforce",
+  "moral_trade_guest_witness_contract",
+  "moral_trade_guest_witness_invite_write",
+  "moral_trade_guest_witness_testimony_write",
+  "moral_trade_guest_witness_review_write",
+  "moral_trade_pledge_performance_bond_contract",
+  "moral_trade_pledge_performance_bond_enforce",
+  "moral_trade_pledge_swap_performance_schedule_contract",
+  "moral_trade_pledge_swap_performance_schedule_enforce",
+  "moral_trade_behavioral_micro_pledge_contract",
+  "moral_trade_payment_event_contract",
+  "moral_trade_provider_source_authentication_contract",
+  "moral_trade_user_facing_status_contract",
+  "moral_trade_marketplace_state_event_contract",
+  "moral_trade_payment_authorization_contract",
+  "moral_trade_negative_commitment_scope_contract",
+  "moral_trade_negative_commitment_scope_enforce",
+  "moral_trade_donor_of_record_tax_contract",
+  "moral_trade_donor_of_record_tax_enforce",
+  "moral_trade_action_reversibility_contract",
+  "moral_trade_action_reversibility_enforce",
+  "moral_trade_authority_obligation_contract",
+  "moral_trade_authority_obligation_enforce",
+  "moral_trade_direct_pair_clearing_contract",
+  "moral_trade_direct_pair_clearing_enforce",
+  "moral_trade_cause_bucket_taxonomy_contract",
+  "moral_trade_cause_bucket_taxonomy_enforce",
+  "moral_trade_resource_compatibility_contract",
+  "moral_trade_resource_compatibility_enforce",
+  "moral_trade_net_offset_accounting_contract",
+  "moral_trade_net_offset_accounting_enforce",
+  "moral_trade_offer_validity_contract",
+  "moral_trade_offer_validity_enforce",
+  "moral_trade_private_exchange_rate_contract",
+  "moral_trade_private_exchange_rate_enforce",
+  "moral_trade_noncompensable_blocker_contract",
+  "moral_trade_noncompensable_blocker_enforce",
+  "moral_trade_batch_clearing_objective_contract",
+  "moral_trade_batch_clearing_objective_enforce",
+  "moral_trade_sensitive_evidence_attestation_contract",
+  "moral_trade_sensitive_evidence_attestation_enforce",
+  "moral_trade_pilot_evidence_contract",
+  "moral_trade_pilot_evidence_enforce",
+  "moral_trade_side_agreement_contract",
+  "moral_trade_side_agreement_enforce",
+  "moral_trade_trade_classification_contract",
+  "moral_trade_trade_classification_enforce",
+  "moral_trade_template_conformance_contract",
+  "moral_trade_template_conformance_enforce",
+  "moral_trade_review_capacity_contract",
+  "moral_trade_review_capacity_enforce",
+  "moral_trade_participant_term_sheet_contract",
+  "moral_trade_participant_term_sheet_enforce",
+  "moral_trade_recipient_acceptance_enforce",
+  "moral_trade_ai_preference_elicitation_enforce",
+  "moral_trade_protective_assessment_contract",
+  "moral_trade_protective_assessment_enforce",
+  "moral_trade_user_safety_content_moderation_contract",
+  "moral_trade_user_safety_content_moderation_enforce",
+  "moral_trade_financial_settlement_controls_contract",
+  "moral_trade_financial_settlement_controls_enforce",
   "moral_trade_provenance_schema",
   "moral_trade_schema_registry",
   "moral_trade_copilot_contract",
@@ -106,6 +219,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_match_signal_evaluate",
   "moral_trade_challenge_appeal_contract",
   "moral_trade_challenge_appeal_evaluate",
+  "moral_trade_challenge_appeal_enforce",
   "moral_trade_disclosure_contract",
   "moral_trade_disclosure_evaluate",
   "moral_trade_review_workflow_contract",
@@ -118,13 +232,48 @@ const REQUIRED_ROUTES = [
   "moral_trade_performance_health",
   "moral_trade_externality_health",
   "moral_trade_ai_governance_health",
+  "moral_trade_document_coverage_health",
   "moral_trade_ai_shadow_contract",
   "moral_trade_background_capability_gates_contract",
+  "moral_trade_private_overlap_contract",
   "moral_trade_background_rls_audit_contract",
   "moral_trade_transparency_report",
   "profile_schema",
   "profile_export",
   "profile_import",
+  "background_wish_interview_session_create",
+  "background_wish_interview_answer_create",
+  "background_wish_interview_apply",
+  "background_wish_dialogue_start",
+  "background_wish_dialogue_message",
+  "background_wish_dialogue_proposal",
+  "background_wish_dialogue_apply",
+  "background_source_connection_create",
+  "background_source_create_bg17_alias",
+  "background_source_connection_revoke",
+  "background_source_revoke_bg17_alias",
+  "background_source_sync_queue",
+  "background_source_summary_draft",
+  "background_source_summary_draft_bg16_alias",
+  "background_source_connection_summary_draft_alias",
+  "background_source_summary_approve",
+  "background_source_summary_draft_approve_bg17_alias",
+  "background_source_connection_approve_bg16_alias",
+  "background_source_connection_summary_approve_alias",
+  "background_profile_signal_recompute",
+  "background_profile_recompute_bg16_alias",
+  "background_source_summary_create",
+  "background_intro_packet_create",
+  "background_intro_request_create",
+  "background_intro_request_appeal",
+  "background_intro_request_approve_contact",
+  "background_opportunity_brief_list",
+  "background_opportunity_list",
+  "background_opportunity_feedback_create",
+  "background_opportunity_feedback_create_alias",
+  "background_helper_run_create",
+  "background_opportunity_feedback_create_bg17_body_alias",
+  "background_private_overlap_check",
   "wish_registry_search",
   "funnel_events",
 ] as const;
@@ -133,6 +282,7 @@ const REQUIRED_PRIVACY_CLASSES = [
   "public_contract",
   "public_schema",
   "authenticated_private",
+  "authenticated_private_step_up",
   "privacy_thresholded_public_preview",
   "redacted_analytics",
   "ephemeral_private_draft_review",
@@ -155,6 +305,99 @@ function check(
     label,
     status: passed ? "pass" : "fail",
     evidence,
+  };
+}
+
+const NEXT_APP_ROOT = "src/app";
+const NEXT_ROUTE_FILE_NAME = "route.ts";
+
+function absoluteWorkspacePath(relativePath: string) {
+  return join(process.cwd(), relativePath);
+}
+
+function fileExists(relativePath: string) {
+  return existsSync(absoluteWorkspacePath(relativePath));
+}
+
+function listChildRouteDirectories(relativeDirectory: string) {
+  try {
+    return readdirSync(absoluteWorkspacePath(relativeDirectory), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function isDynamicRouteDirectory(directoryName: string) {
+  return /^\[(?:\.\.\.)?[^/\]]+\]$/.test(directoryName);
+}
+
+function routePathSegments(routePath: string) {
+  return routePath
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean);
+}
+
+function contractSegmentToRouteDirectory(segment: string) {
+  return segment.startsWith(":") ? `[${segment.slice(1)}]` : segment;
+}
+
+function fallbackRouteFileForContractPath(routePath: string) {
+  return `${NEXT_APP_ROOT}/${routePathSegments(routePath)
+    .map(contractSegmentToRouteDirectory)
+    .join("/")}/${NEXT_ROUTE_FILE_NAME}`;
+}
+
+function resolveNextRouteFile(routePath: string) {
+  const segments = routePathSegments(routePath);
+  let candidateDirectories = [NEXT_APP_ROOT];
+
+  for (const segment of segments) {
+    const nextDirectories: string[] = [];
+
+    for (const directory of candidateDirectories) {
+      if (segment.startsWith(":")) {
+        const paramName = segment.slice(1);
+        const childDirectories = listChildRouteDirectories(directory).filter(isDynamicRouteDirectory);
+        const preferredNames = new Set([`[${paramName}]`, `[...${paramName}]`]);
+        const orderedChildDirectories = [
+          ...childDirectories.filter((childDirectory) => preferredNames.has(childDirectory)),
+          ...childDirectories.filter((childDirectory) => !preferredNames.has(childDirectory)),
+        ];
+
+        for (const childDirectory of orderedChildDirectories) {
+          nextDirectories.push(`${directory}/${childDirectory}`);
+        }
+      } else {
+        const staticDirectory = `${directory}/${segment}`;
+
+        if (fileExists(staticDirectory)) {
+          nextDirectories.push(staticDirectory);
+        }
+      }
+    }
+
+    candidateDirectories = Array.from(new Set(nextDirectories));
+
+    if (!candidateDirectories.length) {
+      break;
+    }
+  }
+
+  const candidateRouteFiles = Array.from(
+    new Set([
+      ...candidateDirectories.map((directory) => `${directory}/${NEXT_ROUTE_FILE_NAME}`),
+      fallbackRouteFileForContractPath(routePath),
+    ]),
+  ).sort();
+  const resolvedRouteFile = candidateRouteFiles.find(fileExists) ?? null;
+
+  return {
+    candidateRouteFiles,
+    resolvedRouteFile,
   };
 }
 
@@ -193,20 +436,32 @@ export function auditMoralTradeApiImplementationContract(
   const routeFindings = profile.routes.map((route) => {
     const rateLimit = implementedRateLimits[route.rateLimitSurface];
     const cacheControlHeader = implementedCacheControls[route.cacheControl] ?? null;
+    const routeFileResolution = resolveNextRouteFile(route.path);
+    const routeFilePresent = Boolean(routeFileResolution.resolvedRouteFile);
 
     return {
       routeKey: route.key,
+      routePath: route.path,
+      routeFilePresent,
+      candidateRouteFiles: routeFileResolution.candidateRouteFiles,
+      resolvedRouteFile: routeFileResolution.resolvedRouteFile,
       rateLimitSurface: route.rateLimitSurface,
       rateLimitLimit: rateLimit?.limit ?? null,
       rateLimitWindowMs: rateLimit?.windowMs ?? null,
       cacheControl: route.cacheControl,
       cacheControlHeader,
-      status: rateLimit && cacheControlHeader ? ("pass" as const) : ("fail" as const),
+      status:
+        rateLimit && cacheControlHeader && routeFilePresent ? ("pass" as const) : ("fail" as const),
     };
   });
+  const missingRouteFiles = routeFindings
+    .filter((finding) => !finding.routeFilePresent)
+    .map((finding) => `${finding.routeKey}:${finding.routePath}`)
+    .sort();
   const blockers = [
     ...missingRateLimitSurfaces.map((surface) => `missing_rate_limit_surface:${surface}`),
     ...missingCacheControls.map((cacheControl) => `missing_cache_control:${cacheControl}`),
+    ...missingRouteFiles.map((route) => `missing_route_file:${route}`),
     ...orphanedRateLimitSurfaces.map((surface) => `orphaned_rate_limit_surface:${surface}`),
   ];
 
@@ -220,6 +475,7 @@ export function auditMoralTradeApiImplementationContract(
     implementedCacheControls: implementedCacheControlKeys,
     missingRateLimitSurfaces,
     missingCacheControls,
+    missingRouteFiles,
     orphanedRateLimitSurfaces,
     routeFindings,
     blockers,
@@ -244,6 +500,9 @@ export function validateMoralTradeApiContractProfile(
   );
   const apiContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_api_contract",
+  );
+  const aggregateHealthResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "moral_trade_aggregate_health_response",
   );
   const apiContractResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "api_contract_response",
@@ -350,17 +609,29 @@ export function validateMoralTradeApiContractProfile(
   const matchSignalEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "match_signal_evaluate_response",
   );
+  const matchSignalSchema = profile.schemaDefinitions.find(
+    (schema) => schema.key === "match_signal",
+  );
   const challengeAppealContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_challenge_appeal_contract",
   );
   const challengeAppealEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_challenge_appeal_evaluate",
   );
+  const challengeAppealEnforceRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_challenge_appeal_enforce",
+  );
   const challengeAppealContractResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "challenge_appeal_contract_response",
   );
   const challengeAppealEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "challenge_appeal_evaluate_response",
+  );
+  const challengeAppealEnforceRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_enforce_request",
+  );
+  const challengeAppealEnforceResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_enforce_response",
   );
   const disclosureContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_disclosure_contract",
@@ -374,14 +645,29 @@ export function validateMoralTradeApiContractProfile(
   const disclosureEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "disclosure_evaluate_response",
   );
+  const backgroundIntroRequestCreateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "background_intro_request_create_request",
+  );
+  const backgroundIntroPacketCreateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "background_intro_packet_create_request",
+  );
   const incidentResponseHealthRoute = profile.routes.find(
     (route) => route.key === "moral_trade_incident_response_health",
   );
   const incidentResponseHealthResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "incident_response_health_response",
   );
+  const transparencyReportRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_transparency_report",
+  );
+  const transparencyReportResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "transparency_report_response",
+  );
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
+  );
+  const reviewWorkflowEvaluateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "review_workflow_evaluate_request",
   );
   const reasoningPacketsRoute = profile.routes.find(
     (route) => route.key === "moral_trade_reasoning_packets",
@@ -810,14 +1096,35 @@ export function validateMoralTradeApiContractProfile(
           route.method === "POST" &&
           route.cacheControl === "private_no_store" &&
           route.rateLimitSurface === "copilot_draft_review" &&
-          /never store|without changing proposal state|change proposal state/i.test(route.fallback),
+          /never store|without changing proposal state|change proposal state/i.test(route.fallback) &&
+          /strict-input-bundle|no copilot output packet/i.test(route.fallback),
       ) &&
+        Boolean(
+          copilotReviewRequest?.fields.some(
+            (field) =>
+              field.key === "draft" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, broad-context, or extra draft fields fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewRequest?.fields.some(
+            (field) =>
+              field.key === "citations" &&
+              /unsupported, private, contact-like, raw-note, source-note, thread, token, or hidden-reasoning labels fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
         Boolean(
           copilotReviewRequest?.fields.some(
             (field) =>
               field.key === "evidenceMetadata" &&
               field.privacy === "private_request" &&
-              /raw artifact|private notes|contact details/i.test(field.description),
+              /unsupported extra fields|raw artifact content|private notes|contact details|fail closed/i.test(
+                field.description,
+              ),
           ),
         ) &&
         Boolean(
@@ -825,7 +1132,17 @@ export function validateMoralTradeApiContractProfile(
             (field) =>
               field.key === "evidenceMetadataSummary" &&
               field.required &&
-              /raw artifacts|private notes/i.test(field.description),
+              /unsupported-field counts|raw artifacts|unsupported extra fields|private notes/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewResponse?.fields.some(
+            (field) =>
+              field.key === "output" &&
+              !field.required &&
+              /strict input bundle|pre-output validation/i.test(field.description),
           ),
         ),
       draftReviewRoutes.map((route) => `${route.key}:${route.cacheControl}`).join(", "),
@@ -838,6 +1155,15 @@ export function validateMoralTradeApiContractProfile(
         reviewWorkflowEvaluateRoute.rateLimitSurface === "review_workflow_evaluate" &&
         /without changing proposal state|never store|state/i.test(
           reviewWorkflowEvaluateRoute.fallback,
+        ) &&
+        Boolean(
+          reviewWorkflowEvaluateRequest?.fields.some(
+            (field) =>
+              field.key === "reviewInput" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra wrapper keys fail closed/i.test(
+                field.description,
+              ),
+          ),
         ),
       reviewWorkflowEvaluateRoute
         ? `${reviewWorkflowEvaluateRoute.key}:${reviewWorkflowEvaluateRoute.cacheControl}:${reviewWorkflowEvaluateRoute.rateLimitSurface}`
@@ -864,6 +1190,41 @@ export function validateMoralTradeApiContractProfile(
           matchSignalEvaluateResponse?.fields.some(
             (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
           ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "privacyPolicyId" &&
+              field.required &&
+              /redacted-preview privacy policy id/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "disclosureStage" &&
+              field.required &&
+              /disclosure-grant workflow/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "redactedFields" &&
+              field.required &&
+              /exact private wishes/i.test(field.description) &&
+              /contact details/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "humanReviewRequired" &&
+              field.required &&
+              /before disclosure, contact, reliance, or state changes/i.test(
+                field.description,
+              ),
+          ),
         ),
       matchSignalEvaluateRoute
         ? `${matchSignalEvaluateRoute.key}:${matchSignalEvaluateRoute.cacheControl}:${matchSignalEvaluateRoute.rateLimitSurface}`
@@ -871,7 +1232,7 @@ export function validateMoralTradeApiContractProfile(
     ),
     check(
       "challenge-appeal-routes",
-      "Challenge appeal contract and evaluate routes are validator-backed, scoped, and non-mutating",
+      "Challenge appeal contract, evaluate, and enforcement routes are validator-backed, scoped, and fail-closed",
       challengeAppealContractRoute?.method === "GET" &&
         challengeAppealContractRoute.cacheControl === "no_store_dynamic" &&
         /validation blockers|unrelated moral disagreements|human review/i.test(
@@ -883,6 +1244,13 @@ export function validateMoralTradeApiContractProfile(
         /never store|private details|broaden appeal scope|resolve disputes without human review/i.test(
           challengeAppealEvaluateRoute.fallback,
         ) &&
+        challengeAppealEnforceRoute?.method === "POST" &&
+        challengeAppealEnforceRoute.auth === "authenticated" &&
+        challengeAppealEnforceRoute.cacheControl === "private_no_store" &&
+        challengeAppealEnforceRoute.rateLimitSurface === "challenge_appeal_enforce" &&
+        /append-only challenge-appeal enforcement record|never open appeals|correct records|authorize reliance|waive safety blockers|reopen settled obligations|publish public metrics/i.test(
+          challengeAppealEnforceRoute.fallback,
+        ) &&
         Boolean(
           challengeAppealContractResponse?.fields.some(
             (field) => field.key === "validation" && field.type === "validator_result",
@@ -892,9 +1260,34 @@ export function validateMoralTradeApiContractProfile(
           challengeAppealEvaluateResponse?.fields.some(
             (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
           ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceRequest?.fields.some(
+            (field) =>
+              field.key === "evaluationInput" &&
+              /unsupported wrapper, evaluation, policy, or appeal-case keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceResponse?.fields.some(
+            (field) =>
+              field.key === "stateMutation" &&
+              /moral_trade_challenge_appeal_enforcement_records/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceResponse?.fields.some(
+            (field) =>
+              field.key === "safetyBlockerWaiverAllowed" &&
+              /Always false/i.test(field.description),
+          ),
         ),
-      challengeAppealEvaluateRoute
-        ? `${challengeAppealEvaluateRoute.key}:${challengeAppealEvaluateRoute.cacheControl}:${challengeAppealEvaluateRoute.rateLimitSurface}`
+      challengeAppealEnforceRoute
+        ? `${challengeAppealEvaluateRoute?.key}:${challengeAppealEnforceRoute.key}:${challengeAppealEnforceRoute.cacheControl}:${challengeAppealEnforceRoute.rateLimitSurface}`
         : "missing",
     ),
     check(
@@ -926,6 +1319,64 @@ export function validateMoralTradeApiContractProfile(
         : "missing",
     ),
     check(
+      "background-intro-request-field-boundary",
+      "Background intro requests fail closed on unsupported disclosure fields",
+      Boolean(
+        backgroundIntroRequestCreateRequest?.fields.some(
+          (field) =>
+            field.key === "requestedFieldKeys" &&
+            /unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed/i.test(
+              field.description,
+            ),
+        ),
+      ),
+      backgroundIntroRequestCreateRequest
+        ? `${backgroundIntroRequestCreateRequest.key}:requestedFieldKeys`
+        : "missing",
+    ),
+    check(
+      "background-intro-requester-answer-boundary",
+      "Background intro requester answers fail closed on unsupported private fields",
+      Boolean(
+        backgroundIntroPacketCreateRequest?.fields.some(
+          (field) =>
+            field.key === "requesterAnswers" &&
+            /approved firstQuestion, privacyConstraints, and proposedTradeShape keys/i.test(
+              field.description,
+            ) &&
+            /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+              field.description,
+            ),
+        ),
+      ) &&
+        Boolean(
+          backgroundIntroRequestCreateRequest?.fields.some(
+            (field) =>
+              field.key === "proposedTradeShape" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          backgroundIntroRequestCreateRequest?.fields.some(
+            (field) =>
+              field.key === "privacyConstraints" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ),
+      [
+        backgroundIntroPacketCreateRequest
+          ? `${backgroundIntroPacketCreateRequest.key}:requesterAnswers`
+          : "missing-packet",
+        backgroundIntroRequestCreateRequest
+          ? `${backgroundIntroRequestCreateRequest.key}:proposedTradeShape/privacyConstraints`
+          : "missing-request",
+      ].join(", "),
+    ),
+    check(
       "incident-response-health-route",
       "Incident response health route is validator-backed and privacy-redacted",
       incidentResponseHealthRoute?.method === "GET" &&
@@ -950,13 +1401,62 @@ export function validateMoralTradeApiContractProfile(
         : "missing",
     ),
     check(
+      "transparency-report-route",
+      "Transparency report route is aggregate-only, thresholded, and health-audited",
+      transparencyReportRoute?.method === "GET" &&
+        transparencyReportRoute.path === "/api/moral-trade/transparency/report" &&
+        transparencyReportRoute.auth === "public" &&
+        transparencyReportRoute.cacheControl === "no_store_dynamic" &&
+        transparencyReportRoute.rateLimitSurface === "public_contract_read" &&
+        transparencyReportRoute.privacyClass === "public_contract" &&
+        /threshold rules|aggregate-only|never expose participant ids|profile text|source notes|exact wishes|contact details|private evidence artifacts/i.test(
+          transparencyReportRoute.fallback,
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) =>
+              field.key === "publicContract" &&
+              field.privacy === "public_contract" &&
+              /minimum public count|metric definitions|privacy rules/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) =>
+              field.key === "report" &&
+              field.privacy === "public_contract" &&
+              /Thresholded aggregate metrics only|small nonzero samples are suppressed|no private case records/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          aggregateHealthResponse?.fields.some(
+            (field) =>
+              field.key === "transparencyReportValidation" &&
+              field.type === "validator_result" &&
+              /small-sample suppression|private-field exclusion/i.test(field.description),
+          ),
+        ),
+      transparencyReportRoute
+        ? `${transparencyReportRoute.key}:${transparencyReportRoute.cacheControl}:${transparencyReportRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
       "reasoning-packets-validator",
       "Reasoning packets route is public and validator-backed",
       reasoningPacketsRoute?.method === "GET" &&
         reasoningPacketsRoute.requestSchema === "reasoning_packets_request" &&
         reasoningPacketsRoute.cacheControl === "no_store_dynamic" &&
         reasoningPacketsRoute.privacyClass === "public_contract" &&
-        /validator|filter facets|private offers|hidden reasoning|global moral ranking/i.test(
+        /validator|filter facets|packet_generation_failed|route crash|private offers|hidden reasoning|global moral ranking/i.test(
           reasoningPacketsRoute.fallback,
         ) &&
         Boolean(
@@ -965,6 +1465,11 @@ export function validateMoralTradeApiContractProfile(
               field.key === "status" &&
               field.type === "enum" &&
               field.required === false,
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "recoveryMode" && /packet_generation_failed/i.test(field.description),
           ),
         ) &&
         Boolean(

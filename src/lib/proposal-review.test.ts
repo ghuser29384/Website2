@@ -3,10 +3,13 @@ import test from "node:test";
 
 import {
   evaluateMoralTradeProtocolDraft,
+  explainMoralTradeUserFacingBlocker,
   formatProtocolReviewStatus,
+  getMoralTradeUserFacingBlockerExplanations,
   getOfferReviewCardInstrumentation,
   getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
+  MORAL_TRADE_USER_FACING_EXPLANATION_FORBIDDEN_TERMS,
   MORAL_TRADE_VERIFICATION_LOOP_STEPS,
   PROHIBITED_MORAL_TRADE_PATTERNS,
   PROHIBITED_PROPOSAL_FIXTURES,
@@ -80,13 +83,30 @@ test("protocol draft review blocks threat-like proposal framing", () => {
     "blocked",
   );
   assert.ok(review.uncertaintyFlags.includes("policy_conflict:anti_threat_baseline"));
-  assert.ok(review.nextStepChecklist.some((step) => /Do not publish or match/i.test(step)));
   assert.ok(
-    review.citedEvidenceTable.some(
-      (row) => row.citation === "policy_registry.anti_threat_baseline" && row.status === "policy_flag",
+    review.userFacingBlockerExplanations.some(
+      (entry) =>
+        entry.key === "safety_review" &&
+        /Safety or legality review is needed/i.test(entry.reasonCategory),
     ),
   );
-  assert.match(review.reviewerSummary, /Main policy flags: anti_threat_baseline/);
+  assert.ok(review.nextStepChecklist.some((step) => /Pause publication/i.test(step)));
+  assert.doesNotMatch(
+    review.verificationLoop.find((step) => step.key === "anti_threat")?.detail ?? "",
+    /anti_threat_baseline|Policy conflict codes/i,
+  );
+  assert.ok(
+    review.citedEvidenceTable.some(
+      (row) =>
+        row.citation === "policy_registry.anti_threat_baseline" &&
+        row.status === "policy_flag",
+    ),
+  );
+  assert.match(
+    review.reviewerSummary,
+    /Main policy flags: Safety or legality review is needed/,
+  );
+  assert.doesNotMatch(review.reviewerSummary, /anti_threat_baseline|policy_conflict/);
 });
 
 test("protocol draft review asks for party-relative benefit before matchability", () => {
@@ -299,7 +319,7 @@ test("protocol draft review fixes public redaction before opening challenge wind
   assert.ok(review.uncertaintyFlags.includes("privacy:contact_email_in_public_draft"));
 });
 
-test("offer review workflow cards expose status, factor codes, next steps, and appeal scope", () => {
+test("offer review workflow cards expose status reasons, factor codes, next steps, and appeal scope", () => {
   const cards = getOfferReviewWorkflowCards({
     mode: "offset",
     verification: "Manual review required",
@@ -329,6 +349,12 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
     ],
   );
   assert.ok(cards.every((card) => card.factorCodes.length > 0));
+  assert.ok(cards.every((card) => card.statusReasonCode === `${card.key}.${card.status}`));
+  assert.ok(
+    cards.every((card) =>
+      card.statusReason.startsWith(`${card.status.replaceAll("_", " ")}:`),
+    ),
+  );
   assert.ok(
     cards.every((card) =>
       /Treat|Attach|What would you do|Ask|This score reflects|If you think/.test(
@@ -337,6 +363,10 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
     ),
   );
   assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "pass");
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.statusReason ?? "",
+    /named proof method and clear evidence locator/i,
+  );
   assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "pass");
   assert.equal(cards.find((card) => card.key === "externality_review")?.status, "human_review");
   assert.match(
@@ -370,10 +400,22 @@ test("offer review workflow cards use approved needs-evidence and safety copy", 
 
   assert.equal(cards.find((card) => card.key === "current_status")?.status, "blocked");
   assert.match(
+    cards.find((card) => card.key === "current_status")?.statusReason ?? "",
+    /cannot move forward until a safety reviewer clears it/i,
+  );
+  assert.match(
     cards.find((card) => card.key === "current_status")?.summary ?? "",
-    /cannot be published because it resembles a threat/i,
+    /Safety or legality review is needed/i,
+  );
+  assert.match(
+    cards.find((card) => card.key === "current_status")?.nextStep ?? "",
+    /Pause publication/i,
   );
   assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "needs_input");
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.statusReason ?? "",
+    /no reviewable proof method or evidence locator/i,
+  );
   assert.match(
     cards.find((card) => card.key === "action_evidence")?.summary ?? "",
     /Status: Needs evidence/i,
@@ -400,6 +442,8 @@ test("offer review card instrumentation exposes prioritized factor codes and nex
 
   assert.equal(instrumentation.status, "human_review");
   assert.equal(instrumentation.label, "Action evidence");
+  assert.equal(instrumentation.statusReasonCode, "action_evidence.human_review");
+  assert.match(instrumentation.statusReason, /proof method is named/i);
   assert.deepEqual(instrumentation.factorCodes.slice(0, 4), [
     "human_review_required",
     "evidence_rule_named",
@@ -408,6 +452,47 @@ test("offer review card instrumentation exposes prioritized factor codes and nex
   ]);
   assert.ok(instrumentation.factorCodes.includes("no_global_moral_ranking"));
   assert.match(instrumentation.nextStep, /scoped artifact/);
+});
+
+test("user-facing blocker explanation matrix is privacy-safe and covers review effects", () => {
+  const explanations = getMoralTradeUserFacingBlockerExplanations();
+  const explanationText = explanations
+    .map((entry) =>
+      [
+        entry.reasonCategory,
+        entry.plainLanguageStatus,
+        entry.nextAction,
+        entry.moneyEffect,
+        entry.obligationEffect,
+        entry.appealOrCorrectionPath,
+        entry.privacyBoundary,
+      ].join(" "),
+    )
+    .join(" ");
+
+  assert.equal(explanations.length, 12);
+  assert.equal(
+    explainMoralTradeUserFacingBlocker("payout_release_variance_unresolved").key,
+    "production_payout",
+  );
+  assert.equal(
+    explainMoralTradeUserFacingBlocker("notice_missing:appeal-case").key,
+    "appeal_correction",
+  );
+  assert.ok(
+    explanations.every(
+      (entry) =>
+        entry.reasonCategory &&
+        entry.nextAction &&
+        entry.moneyEffect &&
+        entry.obligationEffect &&
+        entry.appealOrCorrectionPath,
+    ),
+  );
+
+  for (const term of MORAL_TRADE_USER_FACING_EXPLANATION_FORBIDDEN_TERMS) {
+    assert.doesNotMatch(explanationText, new RegExp(term, "i"));
+  }
 });
 
 test("offer review workflow contract validates public card and marketplace instrumentation", () => {
@@ -419,15 +504,60 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "action_evidence"));
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "baseline_confidence"));
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "externality_review"));
+  assert.deepEqual(
+    contract.policyEnforcedWorkflow.map((step) => step.key).slice(0, 5),
+    [
+      "user_draft",
+      "schema_normalizer",
+      "completeness_check",
+      "anti_threat_policy_engine",
+      "baseline_credibility_assessment",
+    ],
+  );
+  assert.equal(
+    contract.policyEnforcedWorkflow[contract.policyEnforcedWorkflow.length - 1]?.key,
+    "audit_log_provenance_record",
+  );
+  assert.ok(contract.reviewStateOutcomes.includes("disputed_unresolved"));
+  assert.ok(contract.reviewStateOutcomes.includes("completion_reviewed"));
   assert.ok(contract.marketplaceFactorPriority.includes("no_global_moral_ranking"));
   assert.match(contract.participantCopyTemplates.baselineHelperText, /current intention/i);
   assert.match(contract.participantCopyTemplates.needsEvidenceStatusCopy, /Status: Needs evidence/i);
   assert.match(contract.participantCopyTemplates.safetyWarningCopy, /newly escalated harmful behavior/i);
   assert.match(contract.participantCopyTemplates.importanceScoreNote, /not a platform judgment/i);
   assert.match(contract.participantCopyTemplates.appealCopy, /specific claim/i);
+  assert.ok(contract.userFacingBlockerExplanations.length >= 12);
+  assert.ok(
+    contract.sampleUserFacingBlockerExplanations.some(
+      (entry) => entry.key === "safety_review",
+    ),
+  );
   assert.ok(contract.invariants.some((entry) => /Marketplace cards/.test(entry)));
+  assert.ok(contract.invariants.some((entry) => /status-reason code/.test(entry)));
+  assert.ok(
+    contract.invariants.some((entry) => /plain-language reason category/.test(entry)),
+  );
   assert.ok(contract.sampleMarketplaceCard.factorCodes.length <= 5);
+  assert.match(contract.sampleMarketplaceCard.statusReason, /human review/i);
+  assert.ok(contract.contractTests.includes("user_facing_blocker_explanation_smoke"));
   assert.ok(contract.contractTests.includes("technical_spec_review_workflow_smoke"));
+});
+
+test("offer review workflow contract rejects weakened policy-enforced path coverage", () => {
+  const contract = getOfferReviewWorkflowContract();
+  const validation = validateOfferReviewWorkflowContract({
+    ...contract,
+    policyEnforcedWorkflow: contract.policyEnforcedWorkflow.filter(
+      (step) => step.key !== "audit_log_provenance_record",
+    ),
+    reviewStateOutcomes: contract.reviewStateOutcomes.filter(
+      (outcome) => outcome !== "disputed_unresolved",
+    ),
+  });
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("policy-enforced-workflow-path")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("review-state-outcome-coverage")));
 });
 
 test("review workflow routes publish participant copy templates", async () => {
@@ -437,9 +567,43 @@ test("review workflow routes publish participant copy templates", async () => {
   const contractBody = await contractResponse.json();
 
   assert.equal(contractResponse.status, 200);
+  assert.equal(
+    contractBody.publicContract.policyEnforcedWorkflow[
+      contractBody.publicContract.policyEnforcedWorkflow.length - 1
+    ]?.key,
+    "audit_log_provenance_record",
+  );
+  assert.ok(contractBody.publicContract.reviewStateOutcomes.includes("completion_reviewed"));
   assert.match(
     contractBody.publicContract.participantCopyTemplates.baselineHelperText,
     /What would you do if this trade did not happen/i,
+  );
+  assert.ok(
+    contractBody.publicContract.userFacingBlockerExplanations.some(
+      (entry: { key: string; reasonCategory: string }) =>
+        entry.key === "safety_review" &&
+        /Safety or legality review is needed/i.test(entry.reasonCategory),
+    ),
+  );
+  assert.ok(
+    contractBody.publicContract.sampleUserFacingBlockerExplanations.some(
+      (entry: { key: string }) => entry.key === "production_payout",
+    ),
+  );
+  assert.ok(
+    contractBody.publicContract.forbiddenUserFacingExplanationTerms.includes(
+      "provider payload",
+    ),
+  );
+  assert.match(
+    contractBody.publicContract.sampleDetailCardStatusReasons.find(
+      (card: { key: string }) => card.key === "action_evidence",
+    )?.statusReason ?? "",
+    /proof method/i,
+  );
+  assert.match(
+    contractBody.publicContract.sampleMarketplaceStatusReason.statusReason,
+    /human review/i,
   );
 
   const evaluateResponse = await reviewWorkflowEvaluateRoute(
@@ -463,11 +627,68 @@ test("review workflow routes publish participant copy templates", async () => {
   assert.match(
     evaluateBody.workflowCards.find((card: { key: string }) => card.key === "current_status")
       ?.summary ?? "",
-    /cannot be published because it resembles a threat/i,
+    /Safety or legality review is needed/i,
   );
+  assert.match(
+    evaluateBody.workflowCards.find((card: { key: string }) => card.key === "current_status")
+      ?.statusReason ?? "",
+    /cannot move forward until a safety reviewer clears it/i,
+  );
+  assert.doesNotMatch(JSON.stringify(evaluateBody.workflowCards), /anti_threat_baseline/);
   assert.match(
     evaluateBody.workflowCards.find((card: { key: string }) => card.key === "action_evidence")
       ?.summary ?? "",
     /Status: Needs evidence/i,
   );
+});
+
+test("review workflow evaluate rejects unsupported private fields before producing cards", async () => {
+  const response = await reviewWorkflowEvaluateRoute(
+    new Request("http://localhost/api/moral-trade/review-workflow/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        reviewInput: {
+          mode: "offset",
+          verification: "Third-party receipt",
+          contactDetails: "victoria@example.org",
+          rawPrivateNotes: "Exact private wish: do not expose this note.",
+          protectedTraits: ["religion"],
+        },
+        unapprovedContext: "private feed transcript",
+      }),
+    }),
+  );
+  const body = await response.json();
+  const serializedBody = JSON.stringify(body);
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.ok(!("workflowCards" in body));
+  assert.ok(!("marketplaceCard" in body));
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("request.unapprovedContext: unsupported review-workflow input key"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.contactDetails: unsupported structured review input field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.rawPrivateNotes: unsupported structured review input field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.protectedTraits: unsupported structured review input field"),
+    ),
+  );
+  assert.doesNotMatch(serializedBody, /victoria@example\.org/);
+  assert.doesNotMatch(serializedBody, /Exact private wish/);
+  assert.doesNotMatch(serializedBody, /private feed transcript/);
 });

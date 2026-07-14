@@ -6,6 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
+  buildPrivacySafeSearchMetadata,
+  sanitizeFunnelEventPath,
   type FunnelEventType,
 } from "@/lib/growth";
 
@@ -20,7 +22,13 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/login")) return "sign_in_started";
   if (href.includes("/signup")) return "signup_start";
   if (href.includes("/cohort")) return "cohort_interest_started";
-  if (href.includes("/offers?view=examples")) return "worked_example_opened";
+  if (href.includes("/worked-examples") || href.includes("/offers?view=examples")) {
+    return "worked_example_opened";
+  }
+  if (target.dataset.intakeRoute) return "marketplace_intake_triage_routed";
+  if (href.includes("/offers/new") && href.includes("template=")) {
+    return "marketplace_seed_template_selected";
+  }
   if (href.includes("/offers/new") && href.includes("example=")) return "clone_example_action";
   if (href.includes("/offers/new")) return "create_trade_started";
   if (href.includes("/dashboard#wish-profile")) return "wish_profile_started";
@@ -30,6 +38,55 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/mpgf")) return "public_good_action_logged";
 
   return null;
+}
+
+function normalizeMarketplaceTab(value: string | null) {
+  if (value === "live" || value === "templates" || value === "demo" || value === "public_goods") {
+    return value;
+  }
+  if (value === "worked_examples" || value === "worked-examples" || value === "examples") {
+    return "worked_examples";
+  }
+  if (
+    value === "external_crecm" ||
+    value === "rounds" ||
+    value === "crecm" ||
+    value === "mpgf" ||
+    value === "public-goods"
+  ) {
+    return "public_goods";
+  }
+  return "default";
+}
+
+function inferTemplateKind(value: string | null) {
+  if (value === "offset" || value === "donation-offset") return "donation_offset";
+  if (value === "pledge" || value === "pledge-swap") return "pledge_swap";
+  return "reviewed_seed_template";
+}
+
+function getTemplateMetadata(href: string) {
+  try {
+    const url = new URL(href, window.location.origin);
+    const mode = url.searchParams.get("mode");
+    const template = url.searchParams.get("template");
+
+    return {
+      generatedBy: "reviewed_seed_template",
+      liveMetricEligible: false,
+      mode: mode ?? "",
+      routeFamily: "marketplace",
+      template: template ?? "",
+      templateKind: inferTemplateKind(mode),
+    };
+  } catch {
+    return {
+      generatedBy: "reviewed_seed_template",
+      liveMetricEligible: false,
+      routeFamily: "marketplace",
+      templateKind: "reviewed_seed_template",
+    };
+  }
 }
 
 function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, unknown>) {
@@ -50,7 +107,7 @@ function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, un
   const body = JSON.stringify({
     eventType,
     metadata,
-    path: `${window.location.pathname}${window.location.search}`,
+    path: window.location.pathname,
     referrer: document.referrer,
   });
 
@@ -112,9 +169,36 @@ export function FunnelTracker() {
   });
 
   useEffect(() => {
-    postFunnelEvent("page_view", {
-      search: searchParams.toString(),
-    });
+    const searchMetadata = buildPrivacySafeSearchMetadata(searchParams);
+
+    postFunnelEvent("page_view", searchMetadata);
+
+    if (pathname === "/offers") {
+      const marketplaceTab = normalizeMarketplaceTab(
+        searchParams.get("tab") ?? searchParams.get("view"),
+      );
+      const searchParamKeys = Array.isArray(searchMetadata.searchParamKeys)
+        ? searchMetadata.searchParamKeys
+        : [];
+      const filterKeys = searchParamKeys.filter(
+        (key) => !["tab", "view", "page", "pageSize", "page_size"].includes(String(key)),
+      );
+
+      postFunnelEvent("marketplace_tab_viewed", {
+        ...searchMetadata,
+        marketplaceTab,
+        routeFamily: "marketplace",
+      });
+
+      if (filterKeys.length || searchMetadata.queryPresent) {
+        postFunnelEvent("marketplace_filter_applied", {
+          ...searchMetadata,
+          filterKeys,
+          marketplaceTab,
+          routeFamily: "marketplace",
+        });
+      }
+    }
 
     if (pathname.startsWith("/offers/examples/")) {
       postFunnelEvent("worked_example_opened", {
@@ -122,16 +206,19 @@ export function FunnelTracker() {
       });
     }
 
+    if (pathname === "/offers/new" && searchParams.get("template")) {
+      postFunnelEvent(
+        "marketplace_create_from_template_started",
+        getTemplateMetadata(window.location.href),
+      );
+    }
+
     if (pathname === "/login") {
-      postFunnelEvent("sign_in_started", {
-        search: searchParams.toString(),
-      });
+      postFunnelEvent("sign_in_started", buildPrivacySafeSearchMetadata(searchParams));
     }
 
     if ((pathname === "/offers" || pathname === "/wish-registry") && searchParams.get("search")) {
-      postFunnelEvent("registry_search_executed", {
-        query: searchParams.get("search"),
-      });
+      postFunnelEvent("registry_search_executed", buildPrivacySafeSearchMetadata(searchParams));
     }
 
     if (pathname.startsWith("/cohort/")) {
@@ -154,8 +241,19 @@ export function FunnelTracker() {
       }
 
       postFunnelEvent(inferredEvent, {
-        href: target.href,
+        href: sanitizeFunnelEventPath(target.href),
         label: target.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        ...(inferredEvent === "marketplace_seed_template_selected"
+          ? getTemplateMetadata(target.href)
+          : {}),
+        ...(inferredEvent === "marketplace_intake_triage_routed"
+          ? {
+              intakeRoute: target.dataset.intakeRoute ?? "unknown",
+              liveMetricEligible: false,
+              routeEligible: target.dataset.routeEligible === "true",
+              routeFamily: "marketplace",
+            }
+          : {}),
       });
     }
 

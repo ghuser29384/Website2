@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-copilot-v0.1.2-2026-05",
+  "version": "moral-trade-copilot-v0.1.3-2026-06",
   "purpose": "Strict contract for schema-bound Moral Trade drafting, critique, explanation, evidence-metadata review, evidence-checklist, and reviewer-summary assistance.",
   "permittedRoles": [
     {
@@ -37,6 +37,7 @@
         "Use participant-relative language and never rank global moral value.",
         "Do not contact, reveal, or introduce counterparties without explicit consent.",
         "Separate factual proof, counterfactual baseline confidence, and externality review.",
+        "Do not invent facts, counterparties, prior behavior, evidence, or citations.",
         "Output approved JSON fields, uncertainty flags, cited evidence rows, and reviewer-facing summaries rather than chain-of-thought."
       ],
       "safetyCodes": [
@@ -57,6 +58,7 @@
         "Normalize into schema fields before judging readiness.",
         "Generate at most five field-tied clarification questions.",
         "Score only factual evidence, baseline credibility, and externality-review need.",
+        "If evidence is insufficient, say so and request exact missing artifacts.",
         "Return blocked for anti-threat or prohibited-content patterns."
       ],
       "safetyCodes": [
@@ -156,6 +158,11 @@
       "rule": "Emit only the approved output schema plus a short reviewer-facing summary when explicitly requested."
     },
     {
+      "code": "observable_claims_only",
+      "label": "Observable claims only",
+      "rule": "Use only supplied structured draft, citations, policy registry, and redacted evidence metadata; never invent facts, counterparties, prior behavior, evidence, or citations."
+    },
+    {
       "code": "no_chain_of_thought",
       "label": "No hidden reasoning transcript",
       "rule": "Expose structured summaries, uncertainty flags, citations, and next-step checklists instead of private reasoning."
@@ -163,12 +170,12 @@
     {
       "code": "no_global_moral_ranking",
       "label": "No global moral ranking",
-      "rule": "Never decide whether a proposal is objectively morally correct."
+      "rule": "Never decide, rank, score, or compare whether a proposal is objectively morally correct."
     },
     {
       "code": "no_autonomous_outreach",
       "label": "No autonomous outreach",
-      "rule": "Never reveal, contact, or introduce counterparties without explicit consent in the input bundle."
+      "rule": "Never reveal, contact, introduce counterparties, or instruct disclosure of private contact details without explicit consent in the input bundle."
     },
     {
       "code": "no_private_feed_ingestion",
@@ -181,9 +188,29 @@
       "rule": "Keep factual proof, counterfactual baseline confidence, and externality review separate."
     },
     {
+      "code": "insufficient_evidence_artifact_requests",
+      "label": "Insufficient evidence requests exact artifacts",
+      "rule": "When evidence_sufficiency needs input, say evidence is insufficient and request exact missing artifacts such as receipts, logs, attestations, payment records, audit links, or baseline records."
+    },
+    {
       "code": "anti_threat_escalation",
       "label": "Anti-threat escalation",
       "rule": "Return blocked with policy reason for threat, coercion, doxxing, harassment, fraud, illegality, or newly escalated harmful behavior."
+    },
+    {
+      "code": "no_false_certainty",
+      "label": "No false certainty",
+      "rule": "When a record has missing fields, policy conflicts, uncertainty flags, or non-pass blocking verification steps, preserve uncertainty instead of claiming definitive reliance."
+    },
+    {
+      "code": "no_escrow_legal_tax_claims",
+      "label": "No escrow, legal, tax, custody, or endorsement claims",
+      "rule": "Copilot outputs must not imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement."
+    },
+    {
+      "code": "verification_loop_matchability_gate",
+      "label": "Verification loop gates matchability",
+      "rule": "A copilot output with status matchable is invalid unless every verification step marked blocksMatchable has status pass."
     }
   ],
   "verificationLoop": [

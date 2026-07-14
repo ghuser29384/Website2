@@ -9,6 +9,7 @@ import {
   addOfferRecommendationAction,
   expressInterestAction,
   removeOfferRecommendationAction,
+  submitBaselineBondEvidenceAction,
   toggleCartAction,
   updateOfferDiscountAction,
 } from "@/app/actions";
@@ -16,6 +17,14 @@ import { CommentThread } from "@/components/community/comment-thread";
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import {
+  CommitmentSheet,
+  CommitmentTermsPanel,
+  CompatibleAdditions,
+  DealDetailObject,
+  MarketplaceBottomNav,
+  ReviewPlanPanel,
+} from "@/components/marketplace/marketplace-components";
 import {
   getInterestForOffer,
   getOfferById,
@@ -27,8 +36,30 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
+import {
+  BASELINE_BOND_TOOLTIP,
+  formatBaselineBondAmount,
+  formatPostedBaselineBondBadge,
+  normalizeBaselineBondStatus,
+} from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
+import {
+  buildCompatibleAdditions,
+  marketplaceDealFromOfferRecord,
+} from "@/lib/marketplace-deals";
+import {
+  PERFORMANCE_BOND_COUNTERPARTY_WARNING,
+  PERFORMANCE_BOND_EVIDENCE_TEMPLATES,
+  PERFORMANCE_BOND_LIMITATION_COPY,
+  PERFORMANCE_BOND_REFUND_SUMMARY,
+  PERFORMANCE_BOND_REVIEWER_POLICY,
+  evidenceSchemaFromJson,
+  formatPerformanceBondAmount,
+  getPerformanceBondConfig,
+  isPledgePerformanceBondsEnabled,
+  splitConfigFromJson,
+} from "@/lib/performance-bonds";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
   THIRD_PARTY_EXTERNALITY_PROMPTS,
@@ -36,15 +67,145 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
+  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
+import { createServiceClient } from "@/lib/supabase/server";
+import { hasStripeEnv } from "@/lib/stripe";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BaselineWitnessInviteRow =
+  Database["public"]["Tables"]["baseline_witness_invites"]["Row"];
+type ParticipantWitnessInviteStatus = Pick<
+  BaselineWitnessInviteRow,
+  "expires_at" | "id" | "invite_status" | "participant_claimed_relationship"
+>;
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+}
+
+function formatBondState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatPerformanceBondDestination(bond: PerformanceBondRow) {
+  if (bond.forfeiture_destination === "mpgf") {
+    return "Moral Public Goods Fund";
+  }
+
+  if (bond.forfeiture_destination === "counterparty") {
+    return "Counterparty after platform review";
+  }
+
+  if (bond.forfeiture_destination === "split") {
+    const split = splitConfigFromJson(bond.split_config);
+    return `Split: ${split.counterpartyPercent}% counterparty, ${split.neutralCausePercent}% neutral cause, ${split.mpgfPercent}% MPGF`;
+  }
+
+  return "Compromise charity / neutral cause, or MPGF if no neutral cause is available";
+}
+
+function formatPerformanceBondVisibility(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function PerformanceBondSummary({
+  bond,
+  compact = false,
+}: {
+  bond: PerformanceBondRow;
+  compact?: boolean;
+}) {
+  const evidenceSchema = evidenceSchemaFromJson(bond.evidence_schema);
+
+  return (
+    <div className={compact ? "mini-list" : "clean-stack"}>
+      <div className="tag-row">
+        <span className="badge">{bond.side === "offerer" ? "Offer-maker bond" : "Taker bond"}</span>
+        <span className="source-pill">{formatPerformanceBondAmount(bond.amount_cents, bond.currency)}</span>
+        <span className="source-pill">Status: {formatBondState(bond.status)}</span>
+        <span className="source-pill">Funding: {formatBondState(bond.funding_status)}</span>
+      </div>
+      <p className="route-text">
+        Evidence due {formatDate(bond.evidence_due_at)}. Challenge window:{" "}
+        {bond.challenge_window_days} days.
+      </p>
+      <p className="route-text">
+        <strong>Evidence standard:</strong> {evidenceSchema.actionToProve}
+      </p>
+      <p className="route-text">
+        <strong>Accepted evidence:</strong> {evidenceSchema.acceptedEvidenceTypes}
+      </p>
+      <p className="route-text">
+        <strong>Minimum detail:</strong> {evidenceSchema.minimumDetail}
+      </p>
+      <p className="route-text">
+        <strong>Review standard:</strong> {evidenceSchema.reviewStandard}
+      </p>
+      <p className="route-text">
+        <strong>Evidence visibility:</strong> {formatPerformanceBondVisibility(evidenceSchema.visibility)}
+        {evidenceSchema.privateEvidenceAllowed ? "; redacted/private evidence allowed" : ""}
+      </p>
+      <p className="route-text">
+        <strong>Forfeiture rule:</strong> {formatPerformanceBondDestination(bond)}
+      </p>
+      <p className="route-text">
+        <strong>Reviewer:</strong> {PERFORMANCE_BOND_REVIEWER_POLICY}
+      </p>
+      {!compact ? (
+        <>
+          <p className="route-text">
+            <strong>No-trade baseline:</strong> {bond.no_trade_baseline}
+          </p>
+          <p className="route-text">
+            <strong>Why this is additional:</strong> {bond.additionality_statement}
+          </p>
+          <p className="panel-note">{PERFORMANCE_BOND_LIMITATION_COPY}</p>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+async function listBaselineWitnessInviteStatusesForOffer(
+  offerId: string,
+  participantUserId: string,
+): Promise<ParticipantWitnessInviteStatus[]> {
+  if (!hasSupabaseEnv() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return [];
+  }
+
+  const supabase = createServiceClient();
+  const result = await supabase
+    .from("baseline_witness_invites")
+    .select("id, invite_status, participant_claimed_relationship, expires_at")
+    .eq("participant_user_id", participantUserId)
+    .eq("purchase_envelope_type", "offer")
+    .eq("purchase_envelope_id", offerId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (result.error) {
+    return [];
+  }
+
+  return (result.data ?? []) as ParticipantWitnessInviteStatus[];
 }
 
 export async function generateMetadata({ params }: OfferPageProps): Promise<Metadata> {
@@ -88,7 +249,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const [myInterest, incomingResponses, recommendations, comments, cartState, recommendableOffers] =
+  const [
+    myInterest,
+    incomingResponses,
+    recommendations,
+    comments,
+    cartState,
+    recommendableOffers,
+    baselineWitnessInviteStatuses,
+  ] =
     await Promise.all([
       viewer ? await getInterestForOffer(offerId, viewer.authUser.id) : null,
       isOwner ? await listOfferResponses(offerId, viewer?.authUser.id) : Promise.resolve([]),
@@ -97,6 +266,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
       await getOfferCartState(offerId, viewer?.authUser.id, offer.owner_id),
       isOwner && viewer
         ? await listRecommendableOffers(viewer.authUser.id, offer.id)
+        : Promise.resolve([]),
+      isOwner && viewer && offer.mode === "pledge"
+        ? await listBaselineWitnessInviteStatusesForOffer(offer.id, viewer.authUser.id)
         : Promise.resolve([]),
     ]);
   const relatedDonationTarget =
@@ -193,17 +365,47 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     offeredCause: offer.offered_cause,
     requestedCause: offer.requested_cause,
   };
+  const baselineBondStatus = normalizeBaselineBondStatus(
+    offer.donationOffset?.baseline_bond_status,
+  );
+  const pledgePerformanceBondsEnabled = isPledgePerformanceBondsEnabled();
+  const performanceBondConfig = getPerformanceBondConfig();
+  const defaultPerformanceBondTemplate = PERFORMANCE_BOND_EVIDENCE_TEMPLATES[0];
+  const offererPerformanceBond =
+    pledgePerformanceBondsEnabled && offer.mode === "pledge"
+      ? offer.performanceBonds.find((bond) => bond.enabled && bond.side === "offerer") ?? null
+      : null;
+  const postedBaselineBondBadge =
+    offer.donationOffset && baselineBondStatus === "posted"
+      ? formatPostedBaselineBondBadge(
+          offer.donationOffset.baseline_bond_amount_cents,
+          offer.donationOffset.baseline_bond_currency,
+        )
+      : null;
   const actionEvidence = getActionEvidenceSummary(reviewInput);
   const baselineConfidence = getBaselineConfidence(reviewInput);
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
+  const reviewWorkflowContract = getOfferReviewWorkflowContract();
+  const participantReviewCopy = reviewWorkflowContract.participantCopyTemplates;
   const reviewWorkflowCards = getOfferReviewWorkflowCards({
     ...reviewInput,
     currentStatus: offer.status,
     offerImpact: offer.offer_impact,
     minCounterpartyImpact: offer.min_counterparty_impact,
   });
+  const marketplaceDeal = marketplaceDealFromOfferRecord(offer);
+  const recommendedMarketplaceDeals = recommendations
+    .map((recommendation) => recommendation.recommendedOffer)
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .map(marketplaceDealFromOfferRecord);
+  const compatibleAdditions = buildCompatibleAdditions(marketplaceDeal, recommendedMarketplaceDeals);
+  const commitmentHref = !viewer
+    ? signInToRespondHref
+    : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool"
+      ? poolJoinHref ?? respondReturnTo
+      : respondReturnTo;
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -221,7 +423,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   };
 
   return (
-    <div className="page-shell">
+    <div className="page-shell marketplace-app-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offerStructuredData),
@@ -233,6 +435,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
 
@@ -365,6 +568,33 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         ) : null}
 
+        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-section-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Marketplace terms</p>
+            <h2 id="marketplace-detail-section-heading">Commitment preview</h2>
+            <p>
+              The marketplace view puts exposure, timing, verification, and failure rules before
+              the full review dossier. It does not bypass the existing response, payment, or review
+              gates.
+            </p>
+          </div>
+          <div className="marketplace-detail-grid">
+            <DealDetailObject deal={marketplaceDeal} headingId="marketplace-detail-heading" />
+            <div className="marketplace-detail-side">
+              <ReviewPlanPanel deal={marketplaceDeal} />
+              <CommitmentSheet
+                commitHref={commitmentHref}
+                deal={marketplaceDeal}
+                paymentSupportAvailable={hasStripeEnv()}
+              />
+            </div>
+          </div>
+          <div className="marketplace-detail-grid marketplace-detail-grid-secondary">
+            <CommitmentTermsPanel deal={marketplaceDeal} />
+            <CompatibleAdditions additions={compatibleAdditions} />
+          </div>
+        </section>
+
         {offer.mode === "offset" && offer.donationOffset?.moderation_status === "flagged" ? (
           <div className="status-banner status-banner-error">
             This donation offset is publicly visible but flagged because the baseline donation is not
@@ -432,6 +662,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
+                <p className="review-status-reason">
+                  <strong>Why this status:</strong> {card.statusReason}
+                </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
                     <span key={factorCode}>{factorCode}</span>
@@ -442,6 +675,37 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </p>
               </article>
             ))}
+          </div>
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant action guide</p>
+            <h3>What the review system will ask for next</h3>
+            <p>
+              These prompts are pulled from the public review-workflow contract, so the page shows
+              the same baseline, evidence, safety, score, and appeal instructions that validators
+              check.
+            </p>
+          </div>
+          <div className="protocol-contract-grid" aria-label="Participant review action copy">
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Baseline helper</p>
+              <p>{participantReviewCopy.baselineHelperText}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Needs evidence status</p>
+              <p>{participantReviewCopy.needsEvidenceStatusCopy}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Safety boundary</p>
+              <p>{participantReviewCopy.safetyWarningCopy}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Participant importance</p>
+              <p>{participantReviewCopy.importanceScoreNote}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Appeal scope</p>
+              <p>{participantReviewCopy.appealCopy}</p>
+            </article>
           </div>
         </section>
 
@@ -467,6 +731,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   Counterparty minimum acceptable importance {offer.min_counterparty_impact}+/10
                 </span>
                 <span className="impact-pill">Confidence: {scoreConfidence}</span>
+                {postedBaselineBondBadge ? (
+                  <span className="badge badge-warning" title={BASELINE_BOND_TOOLTIP}>
+                    {postedBaselineBondBadge}
+                  </span>
+                ) : null}
               </div>
               <p className="route-text">
                 Not a platform moral ranking. These scores reflect participant-stated views, not
@@ -481,6 +750,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   <h3>Requested reciprocal action</h3>
                   <p>{offer.request_action}</p>
                 </div>
+                {offererPerformanceBond ? (
+                  <div>
+                    <h3>Pledge performance bond</h3>
+                    <p className="route-text">
+                      This offer includes an optional platform-reviewed performance bond attached to
+                      the offer-maker&apos;s pledge. It supports factual trust without replacing the
+                      no-trade baseline or additionality claim.
+                    </p>
+                    <PerformanceBondSummary bond={offererPerformanceBond} />
+                  </div>
+                ) : null}
                 <div>
                   <h3>Compromise destination</h3>
                   <p>
@@ -538,6 +818,65 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     ) : (
                       <p>Evidence link not yet provided. This offer may remain flagged.</p>
                     )}
+                    {offer.donationOffset.baseline_bond_enabled ? (
+                      <div>
+                        <h3>Baseline credibility bond</h3>
+                        <p>
+                          {formatBaselineBondAmount(
+                            offer.donationOffset.baseline_bond_amount_cents,
+                            offer.donationOffset.baseline_bond_currency,
+                          )}{" "}
+                          | status {baselineBondStatus.replaceAll("_", " ")}
+                        </p>
+                        {offer.donationOffset.offer_expires_at ? (
+                          <p>
+                            Offer expires{" "}
+                            {new Date(offer.donationOffset.offer_expires_at).toLocaleDateString()}.
+                          </p>
+                        ) : null}
+                        {offer.donationOffset.baseline_bond_evidence_due_at ? (
+                          <p>
+                            Evidence due{" "}
+                            {new Date(
+                              offer.donationOffset.baseline_bond_evidence_due_at,
+                            ).toLocaleDateString()}
+                            .
+                          </p>
+                        ) : null}
+                        <p>{offer.donationOffset.baseline_bond_evidence_standard}</p>
+                        {isOwner && offer.donationOffset.baseline_bond_evidence_url ? (
+                          <p>
+                            Baseline evidence:{" "}
+                            <a
+                              className="inline-link"
+                              href={offer.donationOffset.baseline_bond_evidence_url}
+                            >
+                              open submitted evidence
+                            </a>
+                          </p>
+                        ) : offer.donationOffset.baseline_bond_evidence_url ? (
+                          <p>Baseline evidence was submitted for reviewer-only provenance review.</p>
+                        ) : null}
+                        {isOwner && baselineBondStatus === "evidence_due" ? (
+                          <form action={submitBaselineBondEvidenceAction} className="stack-form">
+                            <input name="offer_id" type="hidden" value={offer.id} />
+                            <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                            <label className="field">
+                              <span>Submit baseline evidence</span>
+                              <input
+                                name="baseline_bond_evidence_url"
+                                placeholder="https://..."
+                                required
+                                type="url"
+                              />
+                            </label>
+                            <button className="button button-secondary button-mini" type="submit">
+                              Submit evidence
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {relatedDonationTarget ? (
@@ -626,6 +965,78 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       </button>
                     </div>
                   </form>
+
+                  {offer.mode === "pledge" ? (
+                    <section className="panel subtle-panel">
+                      <p className="eyebrow">Optional baseline witness</p>
+                      <h3>Invite a private witness</h3>
+                      <p className="route-text">
+                        A guest witness can privately tell reviewers what they directly know about
+                        your ordinary baseline before the pledge window. You will only see invite
+                        status, not refusal reasons, pressure reports, testimony, social provider,
+                        or scoring effects.
+                      </p>
+                      <form action="/api/moral-trade/guest-witness/invites" className="stack-form" method="post">
+                        <input name="offer_id" type="hidden" value={offer.id} />
+                        <input name="return_to" type="hidden" value={offerReturnTo} />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Witness email</span>
+                            <input name="witness_email" placeholder="witness@example.com" type="email" />
+                          </label>
+                          <label className="field">
+                            <span>Witness phone</span>
+                            <input name="witness_phone" placeholder="+1..." type="tel" />
+                          </label>
+                          <label className="field">
+                            <span>Relationship</span>
+                            <select defaultValue="dining_companion" name="participant_claimed_relationship">
+                              <option value="dining_companion">Dining companion</option>
+                              <option value="roommate">Roommate</option>
+                              <option value="friend">Friend</option>
+                              <option value="family">Family</option>
+                              <option value="romantic_partner">Romantic partner</option>
+                              <option value="classmate">Classmate</option>
+                              <option value="coworker">Coworker</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Action window starts</span>
+                            <input name="action_window_start_at" required type="datetime-local" />
+                          </label>
+                          <label className="field">
+                            <span>Action window ends</span>
+                            <input name="action_window_end_at" required type="datetime-local" />
+                          </label>
+                        </div>
+                        <label className="radio-row">
+                          <input name="shareable_link_only" type="checkbox" />
+                          <span>Create a private link without storing witness contact hash.</span>
+                        </label>
+                        <button className="button button-secondary" type="submit">
+                          Create witness link
+                        </button>
+                      </form>
+
+                      {baselineWitnessInviteStatuses.length ? (
+                        <div className="mini-list">
+                          {baselineWitnessInviteStatuses.map((invite) => (
+                            <span className="source-pill" key={invite.id}>
+                              {invite.invite_status.replaceAll("_", " ")}
+                              {invite.participant_claimed_relationship
+                                ? ` | ${invite.participant_claimed_relationship.replaceAll("_", " ")}`
+                                : ""}
+                              {" | expires "}
+                              {formatDate(invite.expires_at)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="panel-note">No baseline witness invites for this offer yet.</p>
+                      )}
+                    </section>
+                  ) : null}
                 </div>
               ) : viewer && offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
                 <div className="clean-stack">
@@ -658,6 +1069,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               ) : viewer ? (
                 <form action={expressInterestAction} className="stack-form">
                   <input name="offer_id" type="hidden" value={offer.id} />
+                  <input name="return_to" type="hidden" value={offerReturnTo} />
                   <label className="field">
                     <span>Message</span>
                     <textarea
@@ -667,6 +1079,197 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       rows={5}
                     />
                   </label>
+
+                  {offererPerformanceBond ? (
+                    <section className="panel subtle-panel">
+                      <p className="eyebrow">Locked offer-maker bond terms</p>
+                      <h3>Review before responding</h3>
+                      <PerformanceBondSummary bond={offererPerformanceBond} compact />
+                      <p className="route-text">
+                        {PERFORMANCE_BOND_REFUND_SUMMARY}. If evidence is challenged, platform
+                        review is the final decision path.
+                      </p>
+                      <label className="radio-row">
+                        <input name="accept_offerer_performance_bond_terms" required type="checkbox" />
+                        <span>I accept the offer-maker&apos;s evidence schema and forfeiture rule.</span>
+                      </label>
+                    </section>
+                  ) : null}
+
+                  {pledgePerformanceBondsEnabled && offer.mode === "pledge" ? (
+                    <details className="panel subtle-panel">
+                      <summary className="panel-summary">Optional reciprocal performance bond</summary>
+                      <p className="route-text">
+                        Add a separate bond for your reciprocal pledge. It uses the same review
+                        rule: counterparty may accept or challenge, and platform review decides
+                        disputed outcomes.
+                      </p>
+                      <p className="panel-note">
+                        {performanceBondConfig.livePaymentsEnabled
+                          ? "Provider-backed funding is required before this reciprocal bond can become funded."
+                          : "Manual-payment pending mode: the platform records terms and review status but does not claim money is held."}
+                      </p>
+                      <label className="radio-row">
+                        <input name="taker_performance_bond_enabled" type="checkbox" />
+                        <span>Enable reciprocal pledge performance bond</span>
+                      </label>
+
+                      <div className="field-grid">
+                        <label className="field">
+                          <span>Bond amount</span>
+                          <input
+                            defaultValue={Math.max(performanceBondConfig.minAmountCents, 2500) / 100}
+                            max={performanceBondConfig.maxAmountCents / 100}
+                            min={performanceBondConfig.minAmountCents / 100}
+                            name="taker_performance_bond_amount_usd"
+                            step="0.01"
+                            type="number"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Evidence due date</span>
+                          <input name="taker_performance_bond_evidence_due_at" type="date" />
+                        </label>
+                        <label className="field">
+                          <span>Challenge window</span>
+                          <select defaultValue="14" name="taker_performance_bond_challenge_window_days">
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">30 days</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Currency</span>
+                          <input name="taker_performance_bond_currency" readOnly value="usd" />
+                        </label>
+                      </div>
+
+                      <input
+                        name="taker_performance_bond_schema_template"
+                        type="hidden"
+                        value={defaultPerformanceBondTemplate.key}
+                      />
+                      <div className="field-grid">
+                        <label className="field">
+                          <span>What action must be proven?</span>
+                          <textarea
+                            defaultValue={defaultPerformanceBondTemplate.schema.actionToProve}
+                            name="taker_performance_bond_action_to_prove"
+                            rows={3}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>What evidence types count?</span>
+                          <textarea
+                            defaultValue={defaultPerformanceBondTemplate.schema.acceptedEvidenceTypes}
+                            name="taker_performance_bond_evidence_types"
+                            rows={3}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Minimum acceptable detail</span>
+                          <textarea
+                            defaultValue={defaultPerformanceBondTemplate.schema.minimumDetail}
+                            name="taker_performance_bond_minimum_detail"
+                            rows={3}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Review standard</span>
+                          <textarea
+                            defaultValue={defaultPerformanceBondTemplate.schema.reviewStandard}
+                            name="taker_performance_bond_review_standard"
+                            rows={3}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="field-grid">
+                        <label className="field">
+                          <span>Evidence visibility</span>
+                          <select
+                            defaultValue={defaultPerformanceBondTemplate.schema.visibility}
+                            name="taker_performance_bond_visibility"
+                          >
+                            <option value="counterparty_only">Counterparty only</option>
+                            <option value="platform_reviewer_only">Platform reviewer only</option>
+                            <option value="public_proof">Public proof</option>
+                            <option value="mixed_redacted">Mixed/redacted</option>
+                          </select>
+                        </label>
+                        <label className="radio-row">
+                          <input
+                            defaultChecked={defaultPerformanceBondTemplate.schema.privateEvidenceAllowed}
+                            name="taker_performance_bond_private_evidence_allowed"
+                            type="checkbox"
+                          />
+                          <span>Private/redacted evidence is allowed.</span>
+                        </label>
+                      </div>
+
+                      <label className="field">
+                        <span>If not completed, release bond to</span>
+                        <select
+                          defaultValue="compromise_charity"
+                          name="taker_performance_bond_forfeiture_destination"
+                        >
+                          <option value="compromise_charity">Compromise charity / neutral cause</option>
+                          <option value="mpgf">Moral Public Goods Fund</option>
+                          <option value="counterparty">Counterparty</option>
+                          <option value="split">Split</option>
+                        </select>
+                      </label>
+                      <details className="subtle-panel">
+                        <summary className="panel-summary">Advanced counterparty payout settings</summary>
+                        <p className="panel-note">{PERFORMANCE_BOND_COUNTERPARTY_WARNING}</p>
+                        <label className="radio-row">
+                          <input name="taker_performance_bond_counterparty_payout_consent" type="checkbox" />
+                          <span>I explicitly consent if counterparty payout or split is selected.</span>
+                        </label>
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Counterparty %</span>
+                            <input defaultValue="0" max="100" min="0" name="taker_performance_bond_counterparty_percent" type="number" />
+                          </label>
+                          <label className="field">
+                            <span>Neutral cause %</span>
+                            <input defaultValue="50" max="100" min="0" name="taker_performance_bond_neutral_cause_percent" type="number" />
+                          </label>
+                          <label className="field">
+                            <span>MPGF %</span>
+                            <input defaultValue="50" max="100" min="0" name="taker_performance_bond_mpgf_percent" type="number" />
+                          </label>
+                        </div>
+                      </details>
+                      <label className="field">
+                        <span>Why this is additional?</span>
+                        <textarea
+                          name="taker_performance_bond_additionality_statement"
+                          placeholder="Explain why your reciprocal pledge would not happen on this timeline without the swap."
+                          rows={3}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>No-trade baseline</span>
+                        <textarea
+                          name="taker_performance_bond_no_trade_baseline"
+                          placeholder="What would you do if you do not accept this swap?"
+                          rows={3}
+                        />
+                      </label>
+                    </details>
+                  ) : null}
+
+                  {offererPerformanceBond || (pledgePerformanceBondsEnabled && offer.mode === "pledge") ? (
+                    <div className="status-banner">
+                      <strong>Bond confirmation</strong>
+                      <p>
+                        Bond terms lock on acceptance. Evidence goes through a challenge window, and
+                        disputed evidence routes to platform review; the counterparty is not the
+                        unilateral final judge.
+                      </p>
+                    </div>
+                  ) : null}
 
                   <div className="form-actions">
                     <button className="button button-primary" type="submit">
@@ -784,6 +1387,12 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         {new Date(interest.created_at).toLocaleDateString()}
                       </span>
                     </div>
+                    {interest.performanceBond ? (
+                      <div className="status-banner">
+                        <strong>Respondent reciprocal performance bond</strong>
+                        <PerformanceBondSummary bond={interest.performanceBond} compact />
+                      </div>
+                    ) : null}
                     {offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
                       <div className="status-banner status-banner-error">
                         Pool commitments are not accepted one-to-one. Ask respondents to publish a
@@ -1002,6 +1611,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         </section>
       </main>
 
+      <MarketplaceBottomNav active="browse" />
       <SiteFooter />
     </div>
   );

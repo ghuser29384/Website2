@@ -1,23 +1,31 @@
 # MPGF Legal Configuration Manifest
 
-Status: direct-working non-real-money configuration only; real-money mode blocked.
+Status: public readiness framework. External counsel approval required before real-money enablement.
 
-## Current Legal Posture
+This manifest defines the legal and compliance posture for Common-Ground Verified Quadratic Assurance Funding. It is not legal advice and it does not approve production money movement.
 
-MPGF is configured as a non-real-money, pledge-only/direct-working pilot. The public copy must not claim tax deductibility, escrow status, donation status, guaranteed effectiveness, charity-evaluator status, or real-money disbursement.
+## Required Role Separation
 
-## Required Configs
+- Moral Trade publishes campaign, review, allocation, and aggregate audit records.
+- Partner-held custody is required for sponsor-pool funds, donation receipts, and payout execution unless jurisdiction-specific legal review approves a different role.
+- Fiscal sponsors, Every.org, payment processors, or approved payout partners hold custody and issue any legally approved receipt.
+- Allocation records never create custody, escrow, tax, or guaranteed-effectiveness claims.
 
-| Area | Operative artifact | Current state |
-| --- | --- | --- |
-| Payout mode | `config/mpgf/payout-provider-profile.json` | manual evidence only, automated payouts disabled |
-| Refund policy | `config/mpgf/refund-policy.json` | no real-money refund path because no real-money collection |
-| Receipt templates | `config/mpgf/receipt-templates.json` | non-real-money acknowledgement only |
-| Data retention | `config/mpgf/data-retention-policy.json` | demo audit retention only; real-money private data disabled |
-| Copy policy | `config/mpgf/copy-library.json` | safe public copy required |
+## Production Gates
 
-## Gate
+- AML/KYC or KYB screening must be handled by the payment partner, fiscal sponsor, or payout operator responsible for custody, receipt issuance, or payout execution.
+- Sanctions screening must cover recipients, fiscal sponsors, payout operators, restricted sponsor sources, and destinations before release.
+- Charitable-solicitation and receipt wording must be approved by counsel or the legal recipient before public claims change.
+- Money-transmission, custody, escrow, and payout execution roles require jurisdiction-specific review before enablement.
 
-`real_money_complete` must remain blocked until legal, tax, receipt, privacy, payment, refund, and data-retention evidence has passed production review.
+## Public Claim Boundaries
 
-Conformance rows: AC-COPY-001, AC-PAYMENT-019, AC-COMPLETION-008.
+- No tax representation is made unless approved partner wording is published.
+- No escrow representation is made unless legally approved escrow wording is published.
+- No payout, custody, or receipt role is implied by an allocation result.
+- No donor moral reputation weighting is used for allocation power.
+- No global moral ranking is created by common-ground discovery or compliance review.
+
+## Approval Rule
+
+Production real-money mode remains blocked until the legal, payment, refund, receipt, AML/KYC, sanctions, privacy, and launch-readiness artifacts are complete and the required administrative gates are passed.

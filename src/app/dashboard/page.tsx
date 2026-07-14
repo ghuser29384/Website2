@@ -24,6 +24,7 @@ import {
   refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
   respondPrivacyAccessRequestAction,
+  revokePrivacyGrantAction,
   saveHelperStrategyAction,
   savePersonalDelegateAction,
   savePrivacyGrantAction,
@@ -34,13 +35,19 @@ import {
   updateAgreementStatusAction,
 } from "@/app/actions";
 import {
+  createBackgroundIntroPacketAction,
   createProfileDataRightRequestAction,
   deleteBackgroundNetworkingDataAction,
   requestMatchConciergeAppealAction,
   revokeBackgroundSourceConnectionAction,
+  saveBackgroundCollectivePolicyAction,
+  saveCandidateInboundDelegateExposureAction,
   saveBackgroundSourceConnectionAction,
+  saveBackgroundSourceSummaryAction,
+  saveBackgroundProfileInterviewAnswerAction,
   saveBackgroundNotificationPreferencesAction,
   syncBackgroundLocalDraftAction,
+  updateOpportunityBriefStatusAction,
 } from "@/app/background-networking/actions";
 import { BackgroundAccountSecurityPanel } from "@/components/dashboard/background-account-security-panel";
 import { BackgroundLocalDraftsPanel } from "@/components/dashboard/background-local-drafts-panel";
@@ -48,6 +55,7 @@ import { BackgroundLocalTransparencyPanel } from "@/components/dashboard/backgro
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
 import {
   buildMatchInboxBadges,
   buildMatchExplanation,
@@ -76,12 +84,28 @@ import {
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
   formatBackgroundSourcePermissionFieldLabel,
 } from "@/lib/background-source-permissions";
+import {
+  getBackgroundNetworkingRolloutPlan,
+  validateBackgroundNetworkingRolloutPlan,
+} from "@/lib/background-rollout";
+import {
+  buildBackgroundParticipantScreenState,
+  getBackgroundPlainLanguageTerm,
+} from "@/lib/background-ui-language";
+import { formatBackgroundIntentClaimType } from "@/lib/background-intent-claims";
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
+import { hasActiveProfileSourcePermission } from "@/lib/background-networking";
+import {
+  BACKGROUND_PURPOSE_CODES,
+  BACKGROUND_PURPOSE_POLICY_VERSION,
+  formatBackgroundPurposeLabel,
+} from "@/lib/background-purpose-registry";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import { formatPerformanceBondAmount } from "@/lib/performance-bonds";
 import { getPriorityCorrectionSummary } from "@/lib/priority-correction";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -118,6 +142,19 @@ function formatCadence(value: number, unit: string) {
   return value === 1 ? `every ${unit}` : `every ${value} ${unit}s`;
 }
 
+function formatDashboardState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatDashboardDate(value: string | null | undefined) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+}
+
 function formatConciergeSla(value: string | null) {
   if (!value) {
     return "No SLA set";
@@ -147,12 +184,46 @@ function formatDashboardDateTime(value: string | null | undefined) {
   return new Date(timestamp).toLocaleString();
 }
 
+function readCandidateBudgetValue({
+  audienceScope,
+  fallback,
+  key,
+  purposeCode,
+  record,
+}: {
+  audienceScope: string;
+  fallback: number;
+  key: "surfaceLimit" | "windowDays";
+  purposeCode: string;
+  record: unknown;
+}) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    return fallback;
+  }
+
+  const purposeRecord = (record as Record<string, unknown>)[purposeCode];
+  if (!purposeRecord || typeof purposeRecord !== "object" || Array.isArray(purposeRecord)) {
+    return fallback;
+  }
+
+  const audienceRecord = (purposeRecord as Record<string, unknown>)[audienceScope];
+  if (!audienceRecord || typeof audienceRecord !== "object" || Array.isArray(audienceRecord)) {
+    return fallback;
+  }
+
+  const value = Number((audienceRecord as Record<string, unknown>)[key]);
+  return Number.isFinite(value) ? Math.trunc(value) : fallback;
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const stripeReady = hasStripeEnv();
   const backgroundFieldEncryptionReady = hasBackgroundFieldEncryptionKey();
+  const backgroundRolloutPlan = getBackgroundNetworkingRolloutPlan();
+  const backgroundRolloutValidation =
+    validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
   const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
@@ -160,6 +231,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
+  );
+  const collectivePolicyById = new Map(
+    (dashboardData?.collectivePolicies ?? []).map((policy) => [policy.collective_id, policy]),
   );
   const introductionTasksByPlanId = new Map(
     (dashboardData?.introductionPlans ?? []).map((plan) => [
@@ -223,6 +297,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       latestSnapshotByMatchId.set(snapshot.match_id, snapshot);
     }
   }
+  const openOpportunityBriefCount =
+    dashboardData?.opportunityBriefs.filter((brief) => brief.status === "open").length ?? 0;
+  const introPacketReviewCount =
+    dashboardData?.introPackets.filter((packet) =>
+      ["requested", "under_review", "changes_requested"].includes(packet.review_state),
+    ).length ?? 0;
+  const introContactApprovalCount =
+    dashboardData?.introPackets.filter(
+      (packet) => packet.contact_approval_status !== "not_requested",
+    ).length ?? 0;
+  const activeSourceSummaryCount =
+    dashboardData?.sourceSummaries.filter((summary) => summary.status === "active").length ?? 0;
+  const activeProfileSignalCount =
+    dashboardData?.profileSignals.filter((signal) => signal.status === "active").length ?? 0;
+  const unpromotedShadowRunCount =
+    dashboardData?.shadowRuns.filter((run) => !run.was_promoted).length ?? 0;
+  const activeGrantReceiptCount =
+    dashboardData?.grantReceipts.filter((receipt) => receipt.status === "active").length ?? 0;
   const queryBudgetEvents = dashboardData?.backgroundQueryEvents ?? [];
   const limitedQueryEventCount = queryBudgetEvents.filter((event) => event.was_limited).length;
   const queryCostUsed = queryBudgetEvents
@@ -234,6 +326,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     0,
     profileCompletenessTotal - profileMissingFields.length,
   );
+  const activeIntentClaims =
+    dashboardData?.intentClaims.filter((claim) => claim.status === "active") ?? [];
+  const previewSafeIntentClaimCount = activeIntentClaims.filter(
+    (claim) => claim.preview_safe,
+  ).length;
+  const privateIntentClaimCount = Math.max(
+    0,
+    activeIntentClaims.length - previewSafeIntentClaimCount,
+  );
+  const intentClaimGroups = [
+    {
+      claimTypes: ["cause_priority", "trade_preference", "profile_state"],
+      label: "Broad preview intent",
+    },
+    {
+      claimTypes: ["ask_term", "offer_term", "capability_tag"],
+      label: "Private matching signals",
+    },
+    {
+      claimTypes: ["constraint_flag", "uncertainty_item", "missing_field"],
+      label: "Boundaries and open questions",
+    },
+    {
+      claimTypes: ["source_permission"],
+      label: "Reviewed source permissions",
+    },
+  ].map((group) => ({
+    ...group,
+    claims: activeIntentClaims
+      .filter((claim) => group.claimTypes.includes(claim.claim_type))
+      .slice(0, 8),
+  }));
   const notificationPreferenceRows =
     dashboardData?.backgroundNotificationPreferences.length || !viewer
       ? (dashboardData?.backgroundNotificationPreferences ?? []).map((preference) => ({
@@ -257,10 +381,102 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dashboardData?.profileDataRightRequests.filter((request) =>
       ["open", "in_review"].includes(request.status),
     ).length ?? 0;
+  const activePrivacyFreeze = Boolean(
+    dashboardData?.profileDataRightRequests.some(
+      (request) =>
+        request.request_type === "restriction" &&
+        request.scope === "background_networking" &&
+        ["open", "in_review"].includes(request.status),
+    ),
+  );
   const operatorVisibleDisclosureCount =
     (dashboardData?.matchReports.length ?? 0) +
     (dashboardData?.matchConciergeRequests.length ?? 0) +
     (dashboardData?.riskSignals.filter((signal) => signal.status === "open").length ?? 0);
+  const candidateInboundDiscovery =
+    dashboardData?.wishProfile?.inbound_delegate_discovery ?? "off";
+  const candidateAudienceScope =
+    candidateInboundDiscovery === "partner_matchmaker" ||
+    candidateInboundDiscovery === "public_broad_preview"
+      ? candidateInboundDiscovery
+      : "cohort_only";
+  const candidatePurposeCodes = new Set(
+    dashboardData?.wishProfile?.inbound_delegate_purpose_codes ?? [],
+  );
+  const delegatePurposeCodes = new Set(
+    dashboardData?.personalDelegate?.allowed_purpose_bindings &&
+      typeof dashboardData.personalDelegate.allowed_purpose_bindings === "object" &&
+      !Array.isArray(dashboardData.personalDelegate.allowed_purpose_bindings)
+      ? Object.keys(dashboardData.personalDelegate.allowed_purpose_bindings)
+      : [],
+  );
+  const firstCandidatePurposeCode =
+    dashboardData?.wishProfile?.inbound_delegate_purpose_codes[0] ?? "moral_trade_offer";
+  const candidateSurfaceLimit = readCandidateBudgetValue({
+    audienceScope: candidateAudienceScope,
+    fallback: 3,
+    key: "surfaceLimit",
+    purposeCode: firstCandidatePurposeCode,
+    record: dashboardData?.wishProfile?.inbound_delegate_surface_budget_per_window,
+  });
+  const candidateWindowDays = readCandidateBudgetValue({
+    audienceScope: candidateAudienceScope,
+    fallback: 30,
+    key: "windowDays",
+    purposeCode: firstCandidatePurposeCode,
+    record: dashboardData?.wishProfile?.inbound_delegate_surface_budget_per_window,
+  });
+  const candidateExposureExpiry =
+    candidateInboundDiscovery === "off" ? "Off" : `${candidateWindowDays} day window`;
+  const findOpportunitiesCopy = getBackgroundPlainLanguageTerm("delegate authorization");
+  const letOthersFindMeCopy = getBackgroundPlainLanguageTerm("candidate exposure");
+  const pauseEverythingCopy = getBackgroundPlainLanguageTerm("privacy freeze");
+  const activityReceiptCopy = getBackgroundPlainLanguageTerm("delegate receipt");
+  const possibleOpportunityCopy = getBackgroundPlainLanguageTerm("opportunity brief");
+  const backgroundSetupState = buildBackgroundParticipantScreenState({
+    actionKey: "find_opportunities_for_me",
+    defaultExplanation:
+      "Choose what to scan, who may see broad previews, and when permissions expire.",
+    screenKey: "dashboard.background-networking.setup",
+    statusInput: {
+      enabled: dashboardData?.personalDelegate?.status === "active",
+      opportunityAvailable: suggestedMatchCount > 0,
+      privacyFreezeActive: activePrivacyFreeze,
+      queuedOrWaiting:
+        latestBackgroundRun?.status === "queued" || latestBackgroundRun?.status === "running",
+      stale: latestBackgroundRun?.status === "failed",
+    },
+    technicalDetails: {
+      broadSignalCategories: ["wish profile", "broad preview", "saved search", "approved summary"],
+      outputSchemaVersion: "background-participant-screen-state-bg84-v1",
+      purposeCode: firstCandidatePurposeCode,
+      purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+      retentionWindow: "participant receipts plus redacted safety audit rows",
+    },
+    whySeeingThis:
+      "You have access to background networking controls from your dashboard. This view summarizes only your own setup state.",
+  });
+  const inboundExposureState = buildBackgroundParticipantScreenState({
+    actionKey: "let_others_find_me",
+    defaultExplanation:
+      "Allow a broad preview so others can ask to explore without seeing exact details.",
+    screenKey: "dashboard.background-networking.inbound-exposure",
+    statusInput: {
+      enabled: candidateInboundDiscovery !== "off",
+      needsReview: candidateInboundDiscovery !== "off" && !candidatePurposeCodes.size,
+      privacyFreezeActive: activePrivacyFreeze,
+      stale: false,
+    },
+    technicalDetails: {
+      broadSignalCategories: ["broad profile", "purpose binding", "surface budget"],
+      outputSchemaVersion: "background-candidate-exposure-response-v1",
+      purposeCode: firstCandidatePurposeCode,
+      purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+      retentionWindow: candidateExposureExpiry,
+    },
+    whySeeingThis:
+      "This control is separate from your outgoing search settings and affects whether your broad preview can be considered by others.",
+  });
   const aiShadowReadiness = summarizeBackgroundAiShadowReadiness(
     dashboardData?.sourceConnections ?? [],
   );
@@ -286,83 +502,108 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       status: grant.status,
       updatedAt: grant.updated_at,
     })) ?? [];
+  const profileCompletenessPercent = Math.round(
+    (profileCompletenessDone / profileCompletenessTotal) * 100,
+  );
+  const dashboardAnchorLinks = [
+    { href: "#dashboard-overview", label: "Overview" },
+    { href: "#wish-profile", label: "Wish profile" },
+    { href: "#background-networking", label: "Networking" },
+    { href: "#privacy-controls", label: "Privacy" },
+    { href: "#match-inbox", label: "Matches" },
+    { href: "#my-trades", label: "Trades" },
+    { href: "#advanced-setup", label: "Advanced" },
+  ];
+  const dashboardSnapshot = [
+    {
+      label: "Open matches",
+      value: `${suggestedMatchCount}`,
+      note: `${consentedMatchCount} with your opt-in`,
+    },
+    {
+      label: "Alerts",
+      value: `${unreadWishNotificationCount}`,
+      note: "Unread private match alerts",
+    },
+    {
+      label: "Offers",
+      value: `${dashboardData?.offers.length ?? 0}`,
+      note: `${dashboardData?.incomingInterests.length ?? 0} incoming responses`,
+    },
+    {
+      label: "Agreements",
+      value: `${dashboardData?.agreements.length ?? 0}`,
+      note: `${dashboardData?.cartItems.length ?? 0} saved offers`,
+    },
+  ];
+  const dashboardNextActions = [
+    {
+      href: dashboardData?.wishProfile ? "#background-networking" : "/wish-registry",
+      kicker: "1",
+      label: dashboardData?.wishProfile ? "Review matching setup" : "Create private wish profile",
+      note: dashboardData?.wishProfile
+        ? `${profileCompletenessPercent}% of profile details are filled in.`
+        : "Add causes, wishes, asks, limits, and proof preferences.",
+    },
+    {
+      href: "#match-inbox",
+      kicker: "2",
+      label: suggestedMatchCount ? "Review possible matches" : "Run matching",
+      note: suggestedMatchCount
+        ? `${suggestedMatchCount} suggestion(s) are waiting for a consent decision.`
+        : "Use saved searches or scan now to look for counterparties.",
+    },
+    {
+      href: "#privacy-controls",
+      kicker: "3",
+      label: activePrivacyFreeze ? "Review active privacy pause" : "Check privacy controls",
+      note: activePrivacyFreeze
+        ? "Background networking is paused until you release the freeze."
+        : `${activePrivacyGrantCount} active grants, ${openDataRightRequestCount} open data requests.`,
+    },
+  ];
 
   return (
-    <div className="page-shell">
-      <header className="hero">
+    <div className="page-shell dashboard-page marketplace-app-shell">
+      <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
           {...getTopbarActions(Boolean(viewer))}
+          showSearch={false}
           showLogout={Boolean(viewer)}
         />
-
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <p className="eyebrow">Member dashboard</p>
-            <h1>Review your recent public record and active commitments.</h1>
-            <p className="hero-text">
-              {viewer ? (
-                <>
-                  Signed in as <strong>{viewer.displayName}</strong>. This dashboard ties together
-                  your public profile, offers, interests, agreements, ratings, and saved offers.
-                </>
-              ) : (
-                <>Configure Supabase to enable the live dashboard and authenticated activity.</>
-              )}
-            </p>
-            {viewer ? (
-              <div className="hero-actions">
-                <Link className="button button-primary" href={`/people/${viewer.authUser.id}`}>
-                  View public profile
-                </Link>
-                <Link className="button button-secondary" href="/saved-offers">
-                  Open saved offers
-                </Link>
-              </div>
-            ) : null}
-          </section>
-
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Account summary</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Public profile</strong>
-                  <p>
-                    {[viewer?.profile.city, viewer?.profile.region].filter(Boolean).join(", ") ||
-                      "Location not yet listed"}
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Offers and interest</strong>
-                  <p>
-                    Showing recent items: {dashboardData?.offers.length ?? 0} offer(s) |{" "}
-                    {dashboardData?.incomingInterests.length ?? 0} incoming response(s) |{" "}
-                    {dashboardData?.interests.length ?? 0} outgoing response(s)
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Agreements and saved offers</strong>
-                  <p>
-                    Showing recent items: {dashboardData?.agreements.length ?? 0} agreement(s) |{" "}
-                    {dashboardData?.cartItems.length ?? 0} saved offer(s)
-                  </p>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="v72-private-surface v72-account-surface" aria-labelledby="account-heading">
+          <div className="v72-owner-strip">
+            <h1 id="account-heading">Account</h1>
+            <p>Account — saved settings and records.</p>
+          </div>
+          <div className="v72-account-header panel">
+            <strong>{viewer?.displayName ?? "Sign in required"}</strong>
+            <span>
+              {viewer
+                ? "Saved settings and private records stay account-owned."
+                : "Configure Supabase or sign in before private account records can load."}
+            </span>
+          </div>
+          <nav className="v72-shortcut-grid" aria-label="Account shortcuts">
+            {[
+              { href: "/saved-offers", label: "Plan", destination: "Saved offers" },
+              { href: "/commitments", label: "Track", destination: "Commitments" },
+              { href: "/offers", label: "Browse", destination: "Offers" },
+              { href: "/contact", label: "Support", destination: "Contact" },
+            ].map((item) => (
+              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>
+                <strong>{item.label}</strong>
+                <span>{item.destination}</span>
+              </Link>
+            ))}
+          </nav>
+        </section>
+
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
             Supabase is not configured yet. Add environment variables and apply the SQL schema
@@ -389,13 +630,51 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {viewer ? <ProfilePortabilityPanel /> : null}
 
-        <section className="section section-white">
+        <section className="section section-white dashboard-overview" id="dashboard-overview">
           <div className="section-head">
-            <p className="eyebrow">Priority Correction Fund</p>
-            <h2>Monthly correction pool</h2>
+            <p className="eyebrow">Start here</p>
+            <h2>What needs attention</h2>
             <p>
-              This section tracks the current month&apos;s fund, your own share of it, and whether
-              you have been assigned an arbiter role.
+              Pick the next thing to handle, then jump directly to matching, privacy, trades, or
+              setup.
+            </p>
+          </div>
+
+          <nav className="dashboard-anchor-nav" aria-label="Dashboard sections">
+            {dashboardAnchorLinks.map((link) => (
+              <a href={link.href} key={link.href}>
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="dashboard-task-grid">
+            {dashboardNextActions.map((action) => (
+              <Link className="dashboard-task-card" href={action.href} key={action.label}>
+                <span>{action.kicker}</span>
+                <strong>{action.label}</strong>
+                <small>{action.note}</small>
+              </Link>
+            ))}
+          </div>
+
+          <div className="dashboard-snapshot-grid">
+            {dashboardSnapshot.map((item) => (
+              <article className="dashboard-snapshot-card" key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.note}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="payments-and-fund">
+          <div className="section-head">
+            <p className="eyebrow">Correction fund</p>
+            <h2>This month&apos;s pool</h2>
+            <p>
+              Track the current fund, your share, and any arbiter role assigned to you.
             </p>
           </div>
 
@@ -438,14 +717,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="payment-setup">
           <div className="section-head">
             <p className="eyebrow">Payments</p>
-            <h2>Stripe Connect setup</h2>
+            <h2>Payment setup</h2>
             <p>
-              Payment-mediated trades use Stripe Checkout and Connect destination charges. This is
-              not legal escrow; the platform records payment state and supports refunds/disputes
-              through Stripe workflows.
+              Connect Stripe for payment-mediated trades. Moral Trade records payment state and
+              supports Stripe refund or dispute workflows; it is not legal escrow.
             </p>
           </div>
 
@@ -514,13 +792,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="wish-profile">
           <div className="section-head">
             <p className="eyebrow">Private wish profile</p>
-            <h2>Values, wishes, asks, and constraints</h2>
+            <h2>Your private matching profile</h2>
             <p>
-              This registry is separate from your public profile. Exact wishes stay private; broad
-              previews are used only for safe match suggestions and consent-gated introductions.
+              Exact wishes stay private. Broad previews are used only for safe suggestions and
+              consent-gated introductions.
             </p>
           </div>
 
@@ -639,23 +917,78 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           )}
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle dashboard-workspace" id="background-networking">
           <div className="section-head">
             <p className="eyebrow">Background networking</p>
-            <h2>Possible counterparties</h2>
+            <h2>{possibleOpportunityCopy?.participantLabel ?? "Possible opportunities"}</h2>
             <p>
-              Suggestions show only enough information to decide whether an introduction is worth
-              exploring. Identity details remain gated until both sides opt in.
+              Suggestions show enough to decide whether to ask to explore. Identity and exact
+              details stay hidden until both sides opt in.
             </p>
           </div>
 
           <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">
+              {backgroundSetupState.statusLabel} | {activityReceiptCopy?.participantLabel ?? "Activity receipt"}
+            </p>
+            <h3>{findOpportunitiesCopy?.participantLabel ?? backgroundSetupState.actionLabel}</h3>
+            <p className="route-text">{backgroundSetupState.defaultExplanation}</p>
+            <div className="data-grid">
+              <article>
+                <h4>Setup questions</h4>
+                <div className="mini-list">
+                  {backgroundSetupState.setupQuestions.map((question) => (
+                    <div className="mini-list-item" key={question.key}>
+                      <strong>{question.label}</strong>
+                      <span>{question.plainDescription}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+              <article>
+                <h4>Privacy summary</h4>
+                <dl className="values-summary compact-summary">
+                  <div>
+                    <dt>What happens</dt>
+                    <dd>{backgroundSetupState.privacySummary.whatHappens}</dd>
+                  </div>
+                  <div>
+                    <dt>What stays hidden</dt>
+                    <dd>{backgroundSetupState.privacySummary.whatStaysHidden}</dd>
+                  </div>
+                  <div>
+                    <dt>How to stop or undo future access</dt>
+                    <dd>{backgroundSetupState.privacySummary.howToStopOrUndo}</dd>
+                  </div>
+                </dl>
+              </article>
+              <article>
+                <h4>Why am I seeing this?</h4>
+                <p className="route-text">{backgroundSetupState.whySeeingThis}</p>
+                <details className="details-panel">
+                  <summary>{backgroundSetupState.technicalDetails.title}</summary>
+                  <div className="details-content">
+                    <dl className="values-summary compact-summary">
+                      {backgroundSetupState.technicalDetails.rows.map((row) => (
+                        <div key={row.label}>
+                          <dt>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                </details>
+              </article>
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
             <p className="detail-kicker">Match inbox</p>
-            <h3>Background networking status</h3>
+            <h3>Matching status</h3>
             <p className="route-text">
-              Scans use only your saved wish profile, broad registry previews, saved searches, and
-              manual source summaries. They do not read private feeds, send outreach, or reveal
-              exact wishes without consent.
+              Scans use your saved wish profile, broad previews, saved searches, and approved
+              summaries. Draft source-assist runs stay review-first; raw external text is not used
+              for matching, outreach, or disclosure.
             </p>
             <dl className="values-summary compact-summary">
               <div>
@@ -702,13 +1035,156 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData?.matchExplanationSnapshots.length ?? 0} explanation snapshot(s)
                 </dd>
               </div>
+              <div>
+                <dt>Source assist</dt>
+                <dd>
+                  {activeProfileSignalCount} approved signal(s); {unpromotedShadowRunCount} draft
+                  summary run(s)
+                </dd>
+              </div>
             </dl>
           </div>
 
           <div className="data-grid">
             <article className="panel data-card">
+              <p className="detail-kicker">{inboundExposureState.statusLabel}</p>
+              <h3>{letOthersFindMeCopy?.participantLabel ?? inboundExposureState.actionLabel}</h3>
+              <p className="route-text">
+                {inboundExposureState.defaultExplanation}
+              </p>
+              <dl className="values-summary compact-summary">
+                <div>
+                  <dt>What happens</dt>
+                  <dd>{inboundExposureState.privacySummary.whatHappens}</dd>
+                </div>
+                <div>
+                  <dt>What stays hidden</dt>
+                  <dd>{inboundExposureState.privacySummary.whatStaysHidden}</dd>
+                </div>
+                <div>
+                  <dt>How to stop or undo future access</dt>
+                  <dd>{inboundExposureState.privacySummary.howToStopOrUndo}</dd>
+                </div>
+                <div>
+                  <dt>Permission ends</dt>
+                  <dd>{candidateExposureExpiry}</dd>
+                </div>
+              </dl>
+              <form action={saveCandidateInboundDelegateExposureAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Who may see a broad preview?</span>
+                  <select name="inbound_delegate_discovery" defaultValue={candidateInboundDiscovery}>
+                    <option value="off">Off</option>
+                    <option value="cohort_only">Cohort only</option>
+                    <option value="partner_matchmaker">Partner matchmaker</option>
+                    <option value="public_broad_preview">Public broad preview</option>
+                  </select>
+                </label>
+                <div className="mini-list">
+                  {BACKGROUND_PURPOSE_CODES.map((purposeCode) => (
+                    <label className="field checkbox-field" key={purposeCode}>
+                      <input
+                        defaultChecked={candidatePurposeCodes.has(purposeCode)}
+                        name="inbound_delegate_purpose_codes"
+                        type="checkbox"
+                        value={purposeCode}
+                      />
+                      <span>
+                        {formatBackgroundPurposeLabel({
+                          purposeCode,
+                          purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+                        })}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <label className="field checkbox-field">
+                  <input
+                    defaultChecked={
+                      dashboardData?.wishProfile?.inbound_delegate_surfaces.includes("broad_profile") ??
+                      false
+                    }
+                    name="allow_broad_profile_surface"
+                    type="checkbox"
+                  />
+                  <span>Allow the broad profile preview surface</span>
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Broad preview cap</span>
+                    <input
+                      defaultValue={candidateSurfaceLimit}
+                      max={50}
+                      min={1}
+                      name="surface_limit"
+                      type="number"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Window days</span>
+                    <input
+                      defaultValue={candidateWindowDays}
+                      max={90}
+                      min={1}
+                      name="window_days"
+                      type="number"
+                    />
+                  </label>
+                </div>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Ask-to-explore cap</span>
+                    <input
+                      defaultValue={dashboardData?.wishProfile?.inbound_delegate_pending_intro_limit ?? 3}
+                      max={50}
+                      min={0}
+                      name="pending_intro_limit"
+                      type="number"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Pause until</span>
+                    <input
+                      defaultValue={
+                        dashboardData?.wishProfile?.inbound_delegate_cooloff_until?.slice(0, 16) ?? ""
+                      }
+                      name="cooloff_until"
+                      type="datetime-local"
+                    />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Allowed cohort IDs</span>
+                  <textarea
+                    defaultValue={dashboardData?.wishProfile?.allowed_cohort_ids.join(", ") ?? ""}
+                    name="allowed_cohort_ids"
+                    placeholder="Optional cohort or pilot identifiers"
+                  />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save how others can find me
+                </button>
+              </form>
+              <details className="details-panel">
+                <summary>{inboundExposureState.technicalDetails.title}</summary>
+                <div className="details-content">
+                  <p className="route-text">{inboundExposureState.whySeeingThis}</p>
+                  <dl className="values-summary compact-summary">
+                    {inboundExposureState.technicalDetails.rows.map((row) => (
+                      <div key={row.label}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              </details>
+            </article>
+
+            <article className="panel data-card" id="privacy-controls">
               <p className="detail-kicker">Privacy dashboard</p>
-              <h3>Data map and active controls</h3>
+              <h3>Privacy controls</h3>
               <dl className="values-summary compact-summary">
                 <div>
                   <dt>Inventory</dt>
@@ -724,6 +1200,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     {openDataRightRequestCount} open;{" "}
                     {dashboardData?.profileDataRightRequests.length ?? 0} recent
                   </dd>
+                </div>
+                <div>
+                  <dt>{pauseEverythingCopy?.participantLabel ?? "Pause everything now"}</dt>
+                  <dd>{activePrivacyFreeze ? "Active" : "Inactive"}</dd>
                 </div>
                 <div>
                   <dt>Operator-visible</dt>
@@ -756,7 +1236,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Notification controls</p>
-              <h3>Inbox plus digest defaults</h3>
+              <h3>Alert settings</h3>
+              <p className="route-text">
+                Alerts are digest-first by default. No one is contacted on your behalf, and exact
+                wishes, contact details, source notes, and sensitive constraints stay out of email
+                or push copy.
+              </p>
               <form action={saveBackgroundNotificationPreferencesAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <div className="mini-list">
@@ -810,12 +1295,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Data rights</p>
-              <h3>Export, correction, deletion, and restriction</h3>
+              <h3>Export, correct, delete, or pause</h3>
+              <p className="route-text">
+                {pauseEverythingCopy?.participantLabel ?? "Pause everything now"} pauses helper
+                runs, broad previews, queued email, intro progress, and profile export until you
+                release it. Existing suggestions stay non-actionable until a fresh recompute.
+              </p>
               <div className="offer-actions">
                 <Link className="button button-secondary button-mini" href="/api/profile/export">
                   Download export
                 </Link>
               </div>
+              {activePrivacyFreeze ? (
+                <p className="route-text">
+                  A background-networking restriction request is open. Use the data-rights request
+                  log or operator review path to release it after fresh validation.
+                </p>
+              ) : null}
               <form action={createProfileDataRightRequestAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <div className="field-grid">
@@ -867,7 +1363,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </form>
               <p className="route-text">
                 Removes: {BACKGROUND_SELF_SERVE_DELETION_SURFACES.slice(0, 6).join("; ")}.
-                Safety and budget audit rows are retained only as redacted or anonymized records.
+                Safety and budget audit rows stay only as redacted or anonymized records. Exact
+                wishes, previews, summaries, searches, grants, suggestions, notifications, intro
+                artifacts, and queued background-networking emails are removed from matching state.
               </p>
               {dashboardData?.errors.profileDataRightRequests ? (
                 <p className="route-text">Could not load data-right requests.</p>
@@ -886,13 +1384,121 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />
           </div>
 
-          <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">State machine</p>
-            <h3>Suggestions move through explicit consent stages</h3>
+          <div className="panel data-card data-card-wide" id="consent-center">
+            <p className="detail-kicker">Consent Center</p>
+            <h3>Consent and permissions</h3>
             <p className="route-text">
-              A match can move from broad suggestion to opt-in, narrow detail request, operator
-              review, introduction plan, and agreement room. Each transition is reversible until
-              both parties deliberately continue.
+              Review what may influence matching or disclosure before exact wishes, contact
+              details, or source summaries move beyond your account.
+            </p>
+            <div className="data-grid">
+              {(dashboardData?.sourceConnections ?? []).slice(0, 3).map((connection) => (
+                <article className="mini-list-item" key={`consent-source-${connection.id}`}>
+                  <strong>{connection.label}</strong>
+                  <span>
+                    Purpose: {connection.consent_notes || connection.access_scope || "Not specified"}
+                  </span>
+                  <span>
+                    Effect: {connection.access_status.replaceAll("_", " ")} · raw ingestion{" "}
+                    {connection.raw_ingestion_allowed ? "requested" : "off"}
+                    {connection.ai_shadow_mode_allowed ? " · AI shadow summary allowed" : ""}
+                  </span>
+                  <span>
+                    Fields:{" "}
+                    {(connection.allowed_field_keys ?? []).length
+                      ? (connection.allowed_field_keys ?? [])
+                          .map(formatBackgroundSourcePermissionFieldLabel)
+                          .join(", ")
+                      : "none selected"}
+                  </span>
+                  <span>
+                    Audience: profile matching only until a grant is approved ·{" "}
+                    {formatGrantExpiry(connection.retention_expires_at)}
+                  </span>
+                  <span>
+                    Last used: {formatDashboardDateTime(connection.last_imported_at ?? connection.updated_at)}
+                  </span>
+                  <span>Deletion effect: revocation stops future matching and AI shadow use.</span>
+                  {connection.access_status === "revoked" ? null : (
+                    <form action={revokeBackgroundSourceConnectionAction}>
+                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="source_connection_id" type="hidden" value={connection.id} />
+                      <button className="button button-secondary button-mini" type="submit">
+                        Revoke source
+                      </button>
+                    </form>
+                  )}
+                </article>
+              ))}
+              {(dashboardData?.privacyGrants ?? []).slice(0, 3).map((grant) => (
+                <article className="mini-list-item" key={`consent-grant-${grant.id}`}>
+                  <strong>{formatDisclosureFieldLabel(grant.field_key)}</strong>
+                  <span>Purpose: {grant.notes || "No purpose recorded."}</span>
+                  <span>
+                    Effect: {grant.access_level} access at {grant.audience_stage} stage ·{" "}
+                    {grant.status}
+                  </span>
+                  <span>
+                    Fields: {formatDisclosureFieldLabel(grant.field_key)} ·{" "}
+                    {formatGrantExpiry(grant.expires_at)}
+                  </span>
+                  <span>
+                    Audience: {grant.counterparty_id ? `Counterparty ${grant.counterparty_id}` : "No counterparty bound"}
+                  </span>
+                  <span>Last used: {formatDashboardDateTime(grant.updated_at)}</span>
+                  <span>Deletion effect: revocation removes future disclosure under this grant.</span>
+                  {grant.status === "granted" ? (
+                    <form action={revokePrivacyGrantAction}>
+                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="grant_id" type="hidden" value={grant.id} />
+                      <button className="button button-secondary button-mini" type="submit">
+                        Revoke grant
+                      </button>
+                    </form>
+                  ) : null}
+                </article>
+              ))}
+              {[...incomingPrivacyAccessRequests, ...outgoingPrivacyAccessRequests]
+                .slice(0, 3)
+                .map((request) => (
+                  <article className="mini-list-item" key={`consent-request-${request.id}`}>
+                    <strong>Disclosure request · {request.status}</strong>
+                    <span>Purpose: {request.purpose}</span>
+                    <span>
+                      Effect if approved: {request.requested_stage} access to{" "}
+                      {request.requested_fields.map(formatDisclosureFieldLabel).join(", ")}
+                    </span>
+                    <span>
+                      Audience: requester {request.requester_profile_id} · owner{" "}
+                      {request.owner_profile_id}
+                    </span>
+                    <span>Last used: {formatDashboardDateTime(request.created_at)}</span>
+                    <span>Deletion effect: denied or withdrawn requests do not create grants.</span>
+                  </article>
+                ))}
+              {!(dashboardData?.sourceConnections.length || dashboardData?.privacyGrants.length || incomingPrivacyAccessRequests.length || outgoingPrivacyAccessRequests.length) ? (
+                <article className="mini-list-item">
+                  <strong>No active consent records.</strong>
+                  <span>Source permissions, grants, and disclosure requests will appear here.</span>
+                </article>
+              ) : null}
+            </div>
+          </div>
+
+          <details className="dashboard-disclosure-group">
+            <summary>
+              <span>
+                <strong>Why suggestions appear</strong>
+                <small>Consent stages, profile signals, and completeness.</small>
+              </span>
+            </summary>
+            <div className="dashboard-group-body">
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Consent flow</p>
+            <h3>How a suggestion becomes an introduction</h3>
+            <p className="route-text">
+              A match moves from broad suggestion to opt-in, detail request, operator review,
+              introduction plan, and agreement room. Each step requires a deliberate choice.
             </p>
             <div className="tag-row">
               {[
@@ -912,11 +1518,77 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Profile completeness</p>
-            <h3>Structured elicitation for better matches</h3>
+            <p className="detail-kicker">Profile signals</p>
+            <h3>What your saved profile says you want</h3>
             <p className="route-text">
-              {profileCompletenessDone}/{profileCompletenessTotal} profile surfaces are filled in.
-              Open prompts are generated from missing explicit fields, not private-feed inference.
+              Active claims: {activeIntentClaims.length}. Preview-safe: {previewSafeIntentClaimCount}.
+              Owner-only signals: {privateIntentClaimCount}. These come from saved fields,
+              synthesis tags, and reviewed source permissions.
+            </p>
+            {dashboardData?.errors.intentClaims ? (
+              <p className="route-text">Could not load deterministic intent claims.</p>
+            ) : activeIntentClaims.length ? (
+              <div className="data-grid">
+                {intentClaimGroups.map((group) => (
+                  <article className="mini-list-item" key={group.label}>
+                    <strong>{group.label}</strong>
+                    {group.claims.length ? (
+                      <>
+                        <span>
+                          {group.claims
+                            .map(
+                              (claim) =>
+                                `${formatBackgroundIntentClaimType(claim.claim_type)}: ${
+                                  claim.claim_value
+                                }`,
+                            )
+                            .join(" / ")}
+                        </span>
+                        <span>
+                          Surfaces:{" "}
+                          {[...new Set(group.claims.map((claim) => claim.surface_label))]
+                            .filter(Boolean)
+                            .join(", ") || "not recorded"}
+                        </span>
+                        <span>
+                          Confidence:{" "}
+                          {[...new Set(group.claims.map((claim) => claim.confidence_band))]
+                            .join(", ")}
+                        </span>
+                      </>
+                    ) : (
+                      <span>No active claims in this group yet.</span>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No deterministic intent claims have been generated yet.</strong>
+                  <p>Save or refresh your private wish profile to create this owner-scoped view.</p>
+                </div>
+              </div>
+            )}
+            <div className="form-actions">
+              <form action={refreshProfileSynthesisAction}>
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <button className="button button-secondary button-mini" type="submit">
+                  Refresh synthesis and claims
+                </button>
+              </form>
+              <Link className="button button-secondary button-mini" href="/background-networking">
+                Open background workspace
+              </Link>
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Profile completeness</p>
+            <h3>Missing matching details</h3>
+            <p className="route-text">
+              {profileCompletenessDone}/{profileCompletenessTotal} profile areas are filled in.
+              Open prompts come from missing fields you control, not private-feed inference.
             </p>
             <div className="tag-row">
               {profileMissingFields.length ? (
@@ -930,10 +1602,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               )}
             </div>
           </div>
+            </div>
+          </details>
 
-          <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Non-AI scan controls</p>
-            <h3>Rule-based matching, manual sources, and clarification prompts</h3>
+          <div className="panel data-card data-card-wide dashboard-core-card">
+            <p className="detail-kicker">Scan controls</p>
+            <h3>Run rule-based matching</h3>
             <p className="route-text">
               This does not connect to social media, email, or chatbot logs. It only uses the
               private registry fields you save, broad public previews, and manual source notes you
@@ -953,6 +1627,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <span className="source-pill">
                   Runs logged: {dashboardData?.backgroundRuns.length ?? 0}
                 </span>
+                <span className="source-pill">Open briefs: {openOpportunityBriefCount}</span>
+                <span className="source-pill">Intro packets: {introPacketReviewCount}</span>
+                <span className="source-pill">Contact approvals: {introContactApprovalCount}</span>
+                <span className="source-pill">Source summaries: {activeSourceSummaryCount}</span>
+                <span className="source-pill">Approved signals: {activeProfileSignalCount}</span>
+                <span className="source-pill">Draft summaries: {unpromotedShadowRunCount}</span>
+                <span className="source-pill">Receipts: {activeGrantReceiptCount}</span>
               </div>
               <form action={refreshBackgroundMatchesAction}>
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -969,12 +1650,222 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
+          <details className="dashboard-disclosure-group">
+            <summary>
+              <span>
+                <strong>Release controls</strong>
+                <small>Feature flags, validation status, and rollback notes.</small>
+              </span>
+            </summary>
+            <div className="dashboard-group-body">
+              <div className="panel data-card data-card-wide">
+                <p className="detail-kicker">Bg14 rollout controls</p>
+                <h3>Feature rollout status</h3>
+                <p className="route-text">{backgroundRolloutPlan.deploymentNote.summary}</p>
+                <div className="tag-row">
+                  <span className="source-pill">
+                    Stage: {backgroundRolloutPlan.deploymentNote.currentStageLabel}
+                  </span>
+                  <span className="source-pill">
+                    Validation: {backgroundRolloutValidation.status}
+                  </span>
+                  {backgroundRolloutPlan.flags.map((flag) => (
+                    <span className="source-pill" key={flag.key}>
+                      {flag.envKey}: {flag.enabled ? "enabled" : "off"}
+                    </span>
+                  ))}
+                </div>
+                <p className="route-text">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
+              </div>
+            </div>
+          </details>
+
           <div className="panel data-card data-card-wide">
-            <p className="detail-kicker">Private match concierge</p>
-            <h3>Request operator help turning intent into an introduction path</h3>
+            <p className="detail-kicker">Opportunity briefs</p>
+            <h3>Leads with safe next steps</h3>
+            <p className="route-text">
+              Briefs explain why a lead appeared, what stays hidden, and the next reviewed action.
+              They do not create automatic introductions.
+            </p>
+            {dashboardData?.errors.opportunityBriefs ? (
+              <p className="route-text">Could not load opportunity briefs.</p>
+            ) : dashboardData?.opportunityBriefs.length ? (
+              <div className="mini-list">
+                {dashboardData.opportunityBriefs.slice(0, 4).map((brief) => (
+                  <div className="mini-list-item" key={brief.id}>
+                    <strong>{brief.title}</strong>
+                    <span>
+                      {brief.confidenceBand} confidence · delivery {brief.deliveryState} · review{" "}
+                      {brief.reviewStatus.replaceAll("_", " ")} · next step {brief.nextStep}
+                    </span>
+                    <span>{brief.why}</span>
+                    <span>{brief.hiddenFieldsNotice}</span>
+                    <span>{brief.revealConsequenceNotice}</span>
+                    <span>Dependency state: {brief.dependencyState.replaceAll("_", " ")}</span>
+                    {brief.humanReviewRequired ? (
+                      <span>Human review remains required before detail disclosure or contact.</span>
+                    ) : null}
+                    <div className="tag-row">
+                      {brief.factorCodes.slice(0, 5).map((code) => (
+                        <span className="source-pill" key={`${brief.id}-${code}`}>
+                          {code.replaceAll("_", " ")}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="tag-row">
+                      <span className="source-pill">
+                        Cause signals: {brief.visibleCounts.sharedCauses}
+                      </span>
+                      <span className="source-pill">
+                        Factor signals: {brief.visibleCounts.factorCodes}
+                      </span>
+                      <span className="source-pill">
+                        Redacted surfaces: {brief.visibleCounts.redactedFields}
+                      </span>
+                    </div>
+                    {brief.actions.length ? (
+                      <div className="offer-actions">
+                        <form action={updateOpportunityBriefStatusAction}>
+                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                          <input name="status" type="hidden" value="opened" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Open brief
+                          </button>
+                        </form>
+                        {brief.actions.includes("dismiss") ? (
+                          <form action={updateOpportunityBriefStatusAction}>
+                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                            <input name="status" type="hidden" value="dismissed" />
+                            <input name="feedback_outcome" type="hidden" value="dismissed" />
+                            <label className="field compact-field">
+                              <span>Reason</span>
+                              <select name="feedback_reason" defaultValue="not_relevant">
+                                <option value="not_relevant">Not relevant</option>
+                                <option value="already_connected">Already connected</option>
+                                <option value="bad_timing">Bad timing</option>
+                                <option value="too_vague">Too vague</option>
+                                <option value="privacy_concern">Privacy concern</option>
+                                <option value="safety_concern">Safety concern</option>
+                              </select>
+                            </label>
+                            <button className="button button-secondary button-mini" type="submit">
+                              Not for me
+                            </button>
+                          </form>
+                        ) : null}
+                        {brief.actions.includes("request_more_detail") ? (
+                          <form action={updateOpportunityBriefStatusAction}>
+                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                            <input name="status" type="hidden" value="interested" />
+                            <input name="feedback_outcome" type="hidden" value="interested" />
+                            <input name="feedback_reason" type="hidden" value="interested" />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Request more detail
+                            </button>
+                          </form>
+                        ) : null}
+                        {brief.actions.includes("maybe_later") ? (
+                          <form action={updateOpportunityBriefStatusAction}>
+                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                            <input name="status" type="hidden" value="maybe_later" />
+                            <input name="feedback_outcome" type="hidden" value="maybe_later" />
+                            <input name="feedback_reason" type="hidden" value="maybe_later" />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Maybe later
+                            </button>
+                          </form>
+                        ) : null}
+                        {brief.actions.includes("report_concern") ? (
+                          <form action={updateOpportunityBriefStatusAction}>
+                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                            <input name="status" type="hidden" value="dismissed" />
+                            <input name="feedback_outcome" type="hidden" value="dismissed" />
+                            <input name="feedback_reason" type="hidden" value="privacy_concern" />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Report privacy concern
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="route-text">
+                        This brief is paused until review completes or a fresh scan replaces it.
+                      </p>
+                    )}
+                    {brief.actions.includes("request_more_detail") ? (
+                      <form action={createBackgroundIntroPacketAction} className="compact-form">
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <label className="field">
+                          <span>Purpose for review</span>
+                          <input
+                            name="purpose"
+                            placeholder="What narrow decision should this intro packet support?"
+                          />
+                        </label>
+                        <div className="filter-option-list">
+                          {BACKGROUND_DISCLOSURE_FIELDS.filter(
+                            (field) => field.minStage !== "introduced",
+                          )
+                            .slice(0, 5)
+                            .map((field) => (
+                              <label className="check-row" key={`${brief.id}-${field.key}`}>
+                                <input
+                                  name="requested_field_keys"
+                                  type="checkbox"
+                                  value={field.key}
+                                />
+                                <span>{field.label}</span>
+                              </label>
+                            ))}
+                        </div>
+                        <label className="field">
+                          <span>Boundaries</span>
+                          <textarea
+                            name="boundaries"
+                            placeholder="Disclosure, timing, or safety constraints for reviewer triage."
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Anonymous first question</span>
+                          <input
+                            name="first_question"
+                            placeholder="A question an operator may relay before contact details are shared."
+                          />
+                        </label>
+                        <label className="field">
+                          <span>No-trade baseline</span>
+                          <textarea
+                            name="no_trade_baseline"
+                            placeholder="What happens if this introduction does not occur?"
+                            required
+                            rows={2}
+                          />
+                        </label>
+                        <button className="button button-primary button-mini" type="submit">
+                          Request reviewed intro packet
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="route-text">No opportunity briefs yet.</p>
+            )}
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Reviewed intro help</p>
+            <h3>Ask an operator to review an intro path</h3>
             <p className="route-text">
               Use this when a broad preview, saved wish, or private counterparty idea needs human
-              triage before a mutual introduction is appropriate.
+              review before a mutual introduction is appropriate.
             </p>
             <form action={createMatchConciergeRequestAction} className="compact-form">
               <input name="return_to" type="hidden" value="/dashboard" />
@@ -998,15 +1889,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   />
                 </label>
               </div>
-              <label className="field">
-                <span>Structured intent</span>
-                <textarea
+                <label className="field">
+                  <span>Structured intent</span>
+                  <textarea
                   name="intent_summary"
                   placeholder="What real introduction would help you decide whether a bounded moral trade is possible?"
                   required
                   rows={3}
-                />
-              </label>
+                  />
+                </label>
+                <label className="field">
+                  <span>No-trade baseline</span>
+                  <textarea
+                    name="no_trade_baseline"
+                    placeholder="What would you do, not do, or keep unchanged if no introduction happens?"
+                    required
+                    rows={3}
+                  />
+                </label>
               <div className="field-grid">
                 <label className="field">
                   <span>Offer</span>
@@ -1040,7 +1940,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
               </div>
               <button className="button button-primary button-mini" type="submit">
-                Request concierge review
+                Request review
               </button>
             </form>
             <div className="mini-list">
@@ -1092,13 +1992,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
           </div>
 
+          <details className="dashboard-disclosure-group" id="advanced-setup">
+            <summary>
+              <span>
+                <strong>Advanced setup and source controls</strong>
+                <small>
+                  Delegate settings, sources, helpers, collectives, grants, saved searches, drafts,
+                  and invite ideas.
+                </small>
+              </span>
+            </summary>
+            <div className="dashboard-group-body">
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Personal delegate</p>
-              <h3>Durable instructions for background search</h3>
+              <p className="detail-kicker">{backgroundSetupState.statusLabel}</p>
+              <h3>{findOpportunitiesCopy?.participantLabel ?? "Find opportunities for me"}</h3>
               <p className="route-text">
-                This is not an AI agent yet. It records stable goals and operating limits that
-                scheduled non-AI helper runs can obey.
+                Save goals and limits for scheduled rule-based scans. This does not contact anyone
+                on your behalf.
               </p>
               <form action={savePersonalDelegateAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1125,6 +2036,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     placeholder="Boundaries, communities, locations, or cause areas to search first."
                   />
                 </label>
+                <div className="mini-list">
+                  {BACKGROUND_PURPOSE_CODES.map((purposeCode) => (
+                    <label className="field checkbox-field" key={purposeCode}>
+                      <input
+                        defaultChecked={delegatePurposeCodes.has(purposeCode)}
+                        name="allowed_purpose_codes"
+                        type="checkbox"
+                        value={purposeCode}
+                      />
+                      <span>
+                        {formatBackgroundPurposeLabel({
+                          purposeCode,
+                          purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+                        })}
+                      </span>
+                    </label>
+                  ))}
+                </div>
                 <div className="field-grid">
                   <label className="field">
                     <span>Mode</span>
@@ -1174,18 +2103,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </label>
                 </div>
                 <button className="button button-secondary button-mini" type="submit">
-                  Save delegate
+                  Save opportunity search settings
                 </button>
               </form>
             </article>
 
             <article className="panel data-card">
-              <p className="detail-kicker">Consent ledger</p>
-              <h3>External source connections</h3>
+              <p className="detail-kicker">Consent Center</p>
+              <h3>Source permissions</h3>
               <p className="route-text">
                 Record what could be connected later. This stores consent and scope only; no
-                social, email, calendar, or chatbot data is imported. Active external connectors
-                need explicit field permissions, a retention window, and consent notes.
+                social, email, calendar, or chatbot data is imported.
+              </p>
+              <p className="route-text">
+                Previews show what a connection or reviewed summary may influence before it affects
+                matching. Raw source text, contact details, and exact wishes stay out of public
+                routes, emails, analytics, and autonomous outreach.
+              </p>
+              <p className="route-text">
+                Raw source content is not stored for matching. You review and approve a summary
+                before it can affect your profile.
               </p>
               <p className="route-text">
                 AI shadow readiness: {aiShadowReadiness.ready}/{aiShadowReadiness.total} source(s)
@@ -1223,6 +2160,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <option value="not_connected">Not connected</option>
                       <option value="needs_review">Needs review</option>
                       <option value="connected">Connected</option>
+                      <option value="expired">Expired</option>
                       <option value="revoked">Revoked</option>
                     </select>
                   </label>
@@ -1299,19 +2237,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.sourceConnections.slice(0, 4).map((connection) => (
                     <li key={connection.id}>
                       <div className="source-permission-row">
-                        <span>
-                          {connection.label} ({connection.provider}, {connection.access_status},{" "}
-                          {connection.import_mode}) · fields{" "}
-                          {(connection.allowed_field_keys ?? []).length
-                            ? (connection.allowed_field_keys ?? [])
-                                .map(formatBackgroundSourcePermissionFieldLabel)
-                                .join(", ")
-                            : "not set"}
-                          {connection.retention_expires_at
-                            ? ` · expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
-                            : ""}
-                          {connection.ai_shadow_mode_allowed ? " · AI shadow mode allowed" : ""}
-                        </span>
+                        <div>
+                          <strong>
+                            {connection.label} ({connection.provider}, {connection.access_status},{" "}
+                            {connection.import_mode})
+                          </strong>
+                          <p>
+                            <strong>Allowed fields:</strong>{" "}
+                            {(connection.allowed_field_keys ?? []).length
+                              ? (connection.allowed_field_keys ?? [])
+                                  .map(formatBackgroundSourcePermissionFieldLabel)
+                                  .join(", ")
+                              : "not set"}
+                            {connection.retention_expires_at
+                              ? `; expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
+                              : "; no expiry recorded"}
+                            {connection.ai_shadow_mode_allowed ? "; AI shadow mode allowed" : ""}
+                          </p>
+                          <p>
+                            <strong>Exposure preview:</strong> this source can influence only the
+                            listed matching fields after review; raw ingestion is{" "}
+                            {connection.raw_ingestion_allowed ? "flagged for reviewer follow-up" : "disabled"}.
+                          </p>
+                        </div>
                         {connection.access_status === "revoked" ? null : (
                           <form action={revokeBackgroundSourceConnectionAction}>
                             <input name="return_to" type="hidden" value="/dashboard" />
@@ -1330,14 +2278,147 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   ))}
                 </ul>
               ) : null}
+              <form action={saveBackgroundSourceSummaryAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <p className="detail-kicker">Reviewed source summary</p>
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="User-reviewed blog summary" />
+                </label>
+                <label className="field">
+                  <span>Source type</span>
+                  <select name="source_type" defaultValue="manual">
+                    <option value="manual">Manual</option>
+                    <option value="blog">Blog or website</option>
+                    <option value="social">Social media</option>
+                    <option value="email">Email</option>
+                    <option value="calendar">Calendar</option>
+                    <option value="chat_history">Chat history</option>
+                    <option value="search_profile">Search profile</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                {dashboardData?.sourceConnections.length ? (
+                  <label className="field">
+                    <span>Source permission</span>
+                    <select name="source_connection_id" defaultValue="">
+                      <option value="">Manual summary without saved connector</option>
+                      {dashboardData.sourceConnections
+                        .filter((connection) => connection.access_status !== "revoked")
+                        .slice(0, 8)
+                        .map((connection) => (
+                          <option key={`summary-connection-${connection.id}`} value={connection.id}>
+                            {connection.label} · {connection.access_status} · expires{" "}
+                            {connection.retention_expires_at
+                              ? new Date(connection.retention_expires_at).toLocaleDateString()
+                              : "not set"}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="field">
+                  <span>User-reviewed summary</span>
+                  <textarea
+                    name="summary_text"
+                    placeholder="A short summary you approve for broad matching signals only."
+                  />
+                </label>
+                <label className="field">
+                  <span>Purpose</span>
+                  <input
+                    name="purpose"
+                    placeholder="What broad matching decision may this summary support?"
+                  />
+                </label>
+                <fieldset className="filter-group">
+                  <legend>Allowed fields</legend>
+                  <div className="filter-option-list">
+                    {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
+                      <label className="check-row" key={`summary-${option.value}`}>
+                        <input name="allowed_field_keys" type="checkbox" value={option.value} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="field">
+                  <span>Retention</span>
+                  <select name="retention_days" defaultValue="90">
+                    {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                      <option key={`summary-${days}`} value={days}>
+                        {days} days
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save reviewed summary
+                </button>
+              </form>
+              {dashboardData?.sourceSummaries.length ? (
+                <ul className="clean-list">
+                  {dashboardData.sourceSummaries.slice(0, 4).map((summary) => (
+                    <li key={summary.id}>
+                      <strong>
+                        {summary.label} ({summary.status})
+                      </strong>
+                      <p>
+                        <strong>Purpose:</strong> {summary.purpose || "No purpose recorded."}
+                      </p>
+                      <p>
+                        <strong>Allowed fields:</strong>{" "}
+                        {summary.allowed_field_keys.length
+                          ? summary.allowed_field_keys
+                              .map(formatBackgroundSourcePermissionFieldLabel)
+                              .join(", ")
+                          : "not set"}
+                        ; expires {new Date(summary.retention_expires_at).toLocaleDateString()}
+                      </p>
+                      <p>
+                        <strong>Exposure preview:</strong> the reviewed summary may affect broad
+                        match explanations only through the fields above; the raw summary stays
+                        private and raw ingestion remains disabled.
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {dashboardData?.grantReceipts.length ? (
+                <div className="mini-list">
+                  <p className="detail-kicker">Grant receipts</p>
+                  {dashboardData.grantReceipts.slice(0, 4).map((receipt) => (
+                    <div className="mini-list-item" key={receipt.id}>
+                      <strong>
+                        {receipt.receipt_kind.replaceAll("_", " ")} · {receipt.status}
+                      </strong>
+                      <span>
+                        Purpose: {receipt.purpose || "No purpose recorded."}
+                      </span>
+                      <span>
+                        Fields:{" "}
+                        {receipt.field_keys.length
+                          ? receipt.field_keys.map(formatDisclosureFieldLabel).join(", ")
+                          : "not set"}
+                      </span>
+                      <span>
+                        Audience: {receipt.audience_stage}; expires{" "}
+                        {receipt.expires_at
+                          ? new Date(receipt.expires_at).toLocaleDateString()
+                          : "not set"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </article>
 
             <article className="panel data-card">
-              <p className="detail-kicker">Synthesis layer</p>
-              <h3>Deterministic profile summary</h3>
+              <p className="detail-kicker">Profile summary</p>
+              <h3>Rule-based profile summary</h3>
               <p className="route-text">
                 A structured summary of hopes, intent, capabilities, constraints, and uncertainty
-                built from fields you entered, not generated by AI.
+                built from fields you entered.
               </p>
               {dashboardData?.profileSynthesis ? (
                 <dl className="values-summary compact-summary">
@@ -1372,11 +2453,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Helper marketplace</p>
-              <h3>Multiple non-AI search strategies</h3>
+              <p className="detail-kicker">Search helpers</p>
+              <h3>Rule-based search strategies</h3>
               <p className="route-text">
-                Strategies let background jobs behave like specialized helpers without using AI:
-                cause overlap, payments, geography, outreach, saved searches, and risk filtering.
+                Choose which rule-based strategies background jobs may use: cause overlap,
+                payments, geography, outreach, saved searches, and risk filtering.
               </p>
               <form action={saveHelperStrategyAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1392,6 +2473,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </select>
                 </label>
                 <label className="field">
+                  <span>Purpose</span>
+                  <select name="purpose_code" defaultValue="moral_trade_offer">
+                    {BACKGROUND_PURPOSE_CODES.map((purposeCode) => (
+                      <option key={purposeCode} value={purposeCode}>
+                        {formatBackgroundPurposeLabel({
+                          purposeCode,
+                          purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+                        })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Audience</span>
+                    <select name="audience_scope" defaultValue="cohort_only">
+                      <option value="cohort_only">Cohort only</option>
+                      <option value="partner_matchmaker">Partner matchmaker</option>
+                      <option value="public_broad_preview">Public broad preview</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Cohort</span>
+                    <input name="cohort_scope_id" placeholder="Optional cohort or pilot id" />
+                  </label>
+                </div>
+                <label className="field">
                   <span>Label</span>
                   <input name="label" placeholder="Find animal welfare payment trades" />
                 </label>
@@ -1400,7 +2508,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input defaultValue={3} max={5} min={1} name="priority" type="number" />
                 </label>
                 <label className="field">
-                  <span>Minimum score</span>
+                  <span>Minimum compatibility threshold</span>
                   <input defaultValue={55} max={100} min={0} name="min_score" type="number" />
                 </label>
                 <label className="field">
@@ -1473,7 +2581,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Consent-gated next steps</p>
-              <h3>Introduction plans after mutual opt-in</h3>
+              <h3>Introduction plans</h3>
               <p className="route-text">
                 When both sides consent, the app drafts a concrete intro, agenda, verification
                 plan, and privacy note. It still does not send introductions automatically.
@@ -1561,11 +2669,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Field-level privacy</p>
-              <h3>Grant specific facts for a purpose and time box</h3>
+              <h3>Share specific facts for a limited purpose</h3>
               <p className="route-text">
-                Use grants to decide which facts can move from hidden to broad, specific, or
-                contact-level visibility for a match or counterparty. Prefer intro-specific grants
-                that expire, then renew only if both sides still need the detail.
+                Decide which facts can move from hidden to broad, specific, or contact-level
+                visibility for a match. Prefer intro-specific grants that expire.
+              </p>
+              <p className="route-text">
+                Contact-email or contact-level grants can be drafted here, but approving them
+                requires an active MFA step-up from account security.
               </p>
               <form action={savePrivacyGrantAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1805,8 +2916,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Brokerage incentives</p>
-              <h3>Match bounties and speculative coordination</h3>
+              <p className="detail-kicker">Match bounties</p>
+              <h3>Record a finder reward</h3>
               <p className="route-text">
                 Record willingness to pay for finding a useful counterparty or group. This is a
                 pledge-like signal, not an automatic charge.
@@ -1882,10 +2993,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Collectives</p>
-              <h3>Groups, institutions, and delegated authority</h3>
+              <h3>Groups and institutions</h3>
               <p className="route-text">
-                Create a collective record so future workflows can distinguish individual wishes
-                from group-level authority and verification.
+                Create a collective record so workflows can distinguish individual wishes from
+                group-level authority and verification.
               </p>
               <form action={createCollectiveAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1929,19 +3040,78 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.collectives.slice(0, 4).map((collective) => (
                     <li key={collective.id}>
                       {collective.name} ({collective.verification_status}) · ID: {collective.id}
+                      {collectivePolicyById.has(collective.id)
+                        ? ` · policy threshold ${collectivePolicyById.get(collective.id)?.approval_threshold}`
+                        : ""}
                     </li>
                   ))}
                 </ul>
               ) : null}
+              <form action={saveBackgroundCollectivePolicyAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Collective ID</span>
+                  <input name="collective_id" placeholder="Paste a collective ID from your list above" />
+                </label>
+                <label className="field">
+                  <span>Group preview</span>
+                  <textarea
+                    name="group_public_preview"
+                    placeholder="Public-safe description of what this collective can discuss."
+                  />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Approval threshold</span>
+                    <input defaultValue={1} min={1} max={20} name="approval_threshold" type="number" />
+                  </label>
+                  <label className="field">
+                    <span>Retention</span>
+                    <select name="default_retention_days" defaultValue="90">
+                      {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={`collective-retention-${days}`} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <fieldset className="filter-group">
+                  <legend>Approver roles</legend>
+                  <div className="filter-option-list">
+                    {["owner", "admin", "member"].map((role) => (
+                      <label className="check-row" key={role}>
+                        <input
+                          defaultChecked={role !== "member"}
+                          name="approver_roles"
+                          type="checkbox"
+                          value={role}
+                        />
+                        <span>{role}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="field">
+                  <span>Maximum automatic grant stage</span>
+                  <select name="max_auto_grant_stage" defaultValue="consent">
+                    <option value="registry">Registry</option>
+                    <option value="consent">Consent</option>
+                    <option value="introduced">Introduced</option>
+                  </select>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save policy
+                </button>
+              </form>
             </article>
 
             <article className="panel data-card">
               <p className="detail-kicker">Collective memberships</p>
-              <h3>Delegated roles and permissions</h3>
+              <h3>Member roles</h3>
               <p className="route-text">
-                Add an existing profile to a collective with scoped authority for matches,
-                privacy grants, and bounties. This helps collectives behave like real teams
-                before any AI-assisted workflow exists.
+                Add an existing profile to a collective with scoped authority for matches, privacy
+                grants, and bounties.
               </p>
               <form action={addCollectiveMemberAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2022,7 +3192,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Collective decisions</p>
-              <h3>Open approvals and delegated responses</h3>
+              <h3>Group approvals</h3>
               <p className="route-text">
                 Record lightweight group approvals for matches, privacy grants, bounties, and verification requests.
               </p>
@@ -2105,7 +3275,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Risk and audit</p>
-              <h3>Safety signals from non-AI checks</h3>
+              <h3>Safety review signals</h3>
               <p className="route-text">
                 Signals are review prompts for underspecified profiles, suspicious patterns, or
                 unsafe matching context. They do not block users automatically.
@@ -2134,10 +3304,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Manual sources</p>
-              <h3>Source consent without automatic ingestion</h3>
+              <h3>Manual source notes</h3>
               <p className="route-text">
                 Add a public page, profile summary, or note that could later be reviewed. The app
-                stores your note; it does not scrape or analyze the source.
+                stores your note with a retention timer; it does not scrape or analyze the source.
               </p>
               <form action={saveProfileSourceAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2178,6 +3348,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Captured tags</span>
                   <input name="captured_tags" placeholder="animal welfare, receipts, local, vegetarian" />
                 </label>
+                <label className="field">
+                  <span>Retention</span>
+                  <select name="retention_days" defaultValue="90">
+                    {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                      <option key={`manual-source-${days}`} value={days}>
+                        {days} days
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="field checkbox-field">
                   <input defaultChecked name="needs_review" type="checkbox" />
                   <span>Needs manual review before relying on it</span>
@@ -2192,23 +3372,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="route-text">Could not load source records.</p>
               ) : dashboardData?.profileSources.length ? (
                 <ul className="clean-list">
-                  {dashboardData.profileSources.slice(0, 4).map((source) => (
-                    <li key={source.id}>
-                      {source.label}
-                      {source.url ? ` (${source.url})` : ""}
-                      {source.snapshot_excerpt ? ` — ${source.snapshot_excerpt}` : ""}
-                    </li>
-                  ))}
+                  {dashboardData.profileSources.slice(0, 4).map((source) => {
+                    const sourceCanInfluence = hasActiveProfileSourcePermission(source);
+
+                    return (
+                      <li key={source.id}>
+                        <strong>{source.label}</strong>
+                        {source.url ? ` (${source.url})` : ""}
+                        {source.snapshot_excerpt ? ` — ${source.snapshot_excerpt}` : ""}
+                        <p>
+                          <strong>Retention:</strong>{" "}
+                          {sourceCanInfluence ? "may influence deterministic synthesis" : "expired or inactive; influence disabled"}{" "}
+                          until {new Date(source.retention_expires_at).toLocaleDateString()}.
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : null}
             </article>
 
             <article className="panel data-card" id="saved-searches">
               <p className="detail-kicker">Saved searches</p>
-              <h3>Run durable match searches</h3>
+              <h3>Recurring match searches</h3>
               <p className="route-text">
-                Save recurring search intent now; background workers can later use these records
-                for scheduled, rate-limited matching.
+                Save recurring search intent for scheduled, rate-limited matching.
               </p>
               <form action={saveSearchAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2226,7 +3414,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
                 <div className="field-grid">
                   <label className="field">
-                    <span>Minimum score</span>
+                    <span>Minimum compatibility threshold</span>
                     <input defaultValue={50} max={100} min={0} name="min_score" type="number" />
                   </label>
                   <label className="field">
@@ -2248,7 +3436,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.savedSearches.slice(0, 4).map((search) => (
                     <li key={search.id}>
-                      {search.label} ({search.cadence}, score {search.min_score}+)
+                      {search.label} ({search.cadence}, threshold {search.min_score}+)
                       {search.last_scanned_at
                         ? `; last scanned ${new Date(search.last_scanned_at).toLocaleDateString()}`
                         : ""}
@@ -2260,7 +3448,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Clarifying interview</p>
-              <h3>Rule-based follow-up questions</h3>
+              <h3>Follow-up questions</h3>
               {dashboardData?.errors.clarificationQuestions ? (
                 <p className="route-text">Could not load clarification questions.</p>
               ) : dashboardData?.clarificationQuestions.filter(
@@ -2295,14 +3483,60 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <p className="route-text">No open clarification questions.</p>
               )}
+              <form action={saveBackgroundProfileInterviewAnswerAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="question_key" type="hidden" value="guided_wish_composer" />
+                <input
+                  name="question_text"
+                  type="hidden"
+                  value="Guided wish composer broad/private split"
+                />
+                <label className="field">
+                  <span>Wish composer note</span>
+                  <textarea
+                    name="answer"
+                    placeholder="What do you want Moral Trade to notice in future background scans?"
+                  />
+                </label>
+                <label className="field">
+                  <span>Broad preview update</span>
+                  <input
+                    name="broad_preview_update"
+                    placeholder="A public-safe one-line preview"
+                  />
+                </label>
+                <label className="field">
+                  <span>Private intent update</span>
+                  <textarea
+                    name="private_intent_update"
+                    placeholder="Private asks, hard blockers, timing, or uncertainty that should stay hidden."
+                  />
+                </label>
+                <div className="filter-option-list">
+                  {["stated_uncertainty", "needs_evidence", "timing_unclear"].map((flag) => (
+                    <label className="check-row" key={flag}>
+                      <input name="uncertainty_flags" type="checkbox" value={flag} />
+                      <span>{flag.replaceAll("_", " ")}</span>
+                    </label>
+                  ))}
+                </div>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save composer note
+                </button>
+              </form>
+              {dashboardData?.profileInterviewAnswers.length ? (
+                <p className="route-text">
+                  Saved composer notes: {dashboardData.profileInterviewAnswers.length}.
+                </p>
+              ) : null}
             </article>
 
             <article className="panel data-card">
               <p className="detail-kicker">Network expansion</p>
-              <h3>Draft people or groups to invite</h3>
+              <h3>Invite ideas</h3>
               <p className="route-text">
-                Use this for early-stage adoption: note specific people, collectives, or communities
-                that might be valuable counterparties.
+                Note specific people, collectives, or communities that might be valuable
+                counterparties.
               </p>
               <form action={createNetworkInviteAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2356,8 +3590,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : null}
             </article>
           </div>
+            </div>
+          </details>
 
-          <div className="data-grid">
+          <div className="data-grid" id="match-inbox">
             {dashboardData?.errors.matchSuggestions ? (
               <div className="empty-state">
                 <div>
@@ -2407,8 +3643,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <div className="tag-row">
                     <span className="badge">{match.status}</span>
                     <span className="source-pill">{explanation.workflowStage.label}</span>
-                    <span className="impact-pill">Fit score {match.score}/100</span>
-                    <span className="source-pill">{explanation.confidenceBand} confidence</span>
+                    <span className="impact-pill">
+                      {explanation.confidenceBand} compatibility signal
+                    </span>
                     <span className="source-pill">Trust: {inboxBadges.trustBadge.label}</span>
                     <span className="source-pill">Risk: {inboxBadges.riskBadge.label}</span>
                     <span className="source-pill">{match.generatedBy}</span>
@@ -2568,8 +3805,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>No possible counterparties yet.</strong>
                   <p>
-                    Save a discoverable private wish profile. Matches are generated only when the
-                    safety filter clears the profile and broad previews suggest compatibility.
+                    Save a discoverable private wish profile. Matches appear only after the safety
+                    filter clears the profile and broad previews suggest compatibility.
                   </p>
                 </div>
               </div>
@@ -2577,11 +3814,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="notifications">
           <div className="section-head">
             <p className="eyebrow">Notifications</p>
-            <h2>Private match alerts</h2>
-            <p>Alerts say that a possible moral trade was found without exposing raw wish data.</p>
+            <h2>Match alerts</h2>
+            <p>Alerts tell you a possible trade was found without exposing raw wish data.</p>
           </div>
 
           <div className="data-grid">
@@ -2633,8 +3870,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-white" id="my-trades">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
-            <h2>Recent published commitments</h2>
-            <p>These recent offers are tied to your public profile and can be rated once agreements complete.</p>
+            <h2>Published offers</h2>
+            <p>Offers are tied to your public profile and can be rated after agreements complete.</p>
           </div>
 
           <div className="data-grid">
@@ -2683,13 +3920,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="incoming-responses">
           <div className="section-head">
             <p className="eyebrow">Incoming responses</p>
-            <h2>Recent responses to your offers</h2>
+            <h2>Responses to your offers</h2>
             <p>
-              These are the responses submitted on your offers, including signed-in members and
-              people who chose to participate without creating an account first.
+              Review responses from signed-in members and legacy guest records.
             </p>
           </div>
 
@@ -2769,11 +4005,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="outgoing-responses">
           <div className="section-head">
             <p className="eyebrow">Your interests</p>
-            <h2>Recent responses you lodged</h2>
-            <p>Each recent response remains tied to a live offer and a public counterparty record.</p>
+            <h2>Your responses</h2>
+            <p>Each response stays tied to a live offer and public counterparty record.</p>
           </div>
 
           <div className="data-grid">
@@ -2830,10 +4066,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="agreements">
           <div className="section-head">
             <p className="eyebrow">Transactions</p>
-            <h2>Agreements and ratings</h2>
+            <h2>Agreements</h2>
             <p>Each completed transaction can be rated from 1 to 10 by each party.</p>
           </div>
 
@@ -2884,6 +4120,46 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </Link>
                   </div>
                   {agreement.notes ? <p className="route-text">{agreement.notes}</p> : null}
+                  {agreement.performanceBonds.length ? (
+                    <div className="mini-list">
+                      {agreement.performanceBonds.map((bond) => {
+                        const viewerIsPledger = bond.party_id === viewer?.authUser.id;
+                        const viewerIsCounterparty = bond.counterparty_id === viewer?.authUser.id;
+
+                        return (
+                          <div className="mini-list-item" key={bond.id}>
+                            <strong>
+                              {viewerIsPledger
+                                ? "Your pledge bond"
+                                : viewerIsCounterparty
+                                  ? "Counterparty pledge bond"
+                                  : bond.side === "offerer"
+                                    ? "Offer-maker pledge bond"
+                                    : "Taker pledge bond"}
+                            </strong>
+                            <span>
+                              {formatPerformanceBondAmount(bond.amount_cents, bond.currency)} |{" "}
+                              {formatDashboardState(bond.status)} | funding{" "}
+                              {formatDashboardState(bond.funding_status)}
+                            </span>
+                            <span>
+                              Evidence due {formatDashboardDate(bond.evidence_due_at)}
+                              {bond.challenge_window_ends_at
+                                ? ` | challenge window ends ${formatDashboardDate(
+                                    bond.challenge_window_ends_at,
+                                  )}`
+                                : ""}
+                            </span>
+                            {bond.funding_status === "payment_pending" ? (
+                              <span>
+                                Manual-payment pending; no live custody is claimed for this bond.
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <div className="stack-form compact-form">
                     <h4>Payment and lifecycle</h4>
                     <form action={createAgreementPaymentCheckoutAction} className="stack-form compact-form">
@@ -3045,11 +4321,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" id="saved-offers">
           <div className="section-head">
             <p className="eyebrow">Saved offers</p>
-            <h2>Offers you are tracking</h2>
-            <p>Discounts or reduced burdens published by offer owners will appear here and on your saved-offers page.</p>
+            <h2>Tracked offers</h2>
+            <p>Discounts or reduced burdens appear here and on your saved-offers page.</p>
           </div>
 
           <div className="data-grid">
@@ -3102,6 +4378,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </section>
       </main>
 
+      <MarketplaceBottomNav active="account" />
       <SiteFooter />
     </div>
   );

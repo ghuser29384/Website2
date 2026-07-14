@@ -137,6 +137,8 @@ export async function recordMpgfPublicGoodsPledgeAction(input: {
   idempotencyKey: string;
   campaignId: string;
   amountDollars: number;
+  acceptableCounterpartBuckets?: string[] | string;
+  minimumCounterpartyClearedDollars?: number;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   captureMode: MpgfPublicGoodsCaptureMode;
   isRecurring: boolean;
@@ -156,6 +158,10 @@ export async function recordMpgfPublicGoodsPledgeAction(input: {
       idempotencyKey: input.idempotencyKey,
       campaignId: input.campaignId,
       amountCents: Math.max(1, centsFromDollars(input.amountDollars)),
+      acceptableCounterpartBuckets: input.acceptableCounterpartBuckets,
+      minimumCounterpartyClearedCents: input.minimumCounterpartyClearedDollars == null
+        ? undefined
+        : Math.max(100, centsFromDollars(input.minimumCounterpartyClearedDollars)),
       visibilityMode: input.visibilityMode,
       captureMode: input.captureMode,
       isRecurring: input.isRecurring,

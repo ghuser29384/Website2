@@ -1,30 +1,36 @@
 import aiGovernanceProfileSchemaJson from "../../../config/moral-trade/ai-governance-profile.schema.json";
+import aiGovernanceProfileJson from "../../../config/moral-trade/ai-governance-profile.json";
 import apiContractProfileSchemaJson from "../../../config/moral-trade/api-contract-profile.schema.json";
+import apiContractProfileJson from "../../../config/moral-trade/api-contract-profile.json";
 import copilotContractSchemaJson from "../../../config/moral-trade/copilot-contract.schema.json";
+import copilotContractJson from "../../../config/moral-trade/copilot-contract.json";
 import dataModelProfileSchemaJson from "../../../config/moral-trade/data-model-profile.schema.json";
+import dataModelProfileJson from "../../../config/moral-trade/data-model-profile.json";
 import evaluationProfileSchemaJson from "../../../config/moral-trade/evaluation-profile.schema.json";
+import evaluationProfileJson from "../../../config/moral-trade/evaluation-profile.json";
 import externalityProfileSchemaJson from "../../../config/moral-trade/externality-profile.schema.json";
+import externalityProfileJson from "../../../config/moral-trade/externality-profile.json";
 import incidentResponseProfileSchemaJson from "../../../config/moral-trade/incident-response-profile.schema.json";
+import incidentResponseProfileJson from "../../../config/moral-trade/incident-response-profile.json";
 import operationsProfileSchemaJson from "../../../config/moral-trade/operations-profile.schema.json";
+import operationsProfileJson from "../../../config/moral-trade/operations-profile.json";
 import performanceProfileSchemaJson from "../../../config/moral-trade/performance-profile.schema.json";
+import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 import protocolProfileSchemaJson from "../../../config/moral-trade/protocol-profile.schema.json";
+import protocolProfileJson from "../../../config/moral-trade/protocol-profile.json";
 import publicOfferListingSchemaJson from "../../../config/moral-trade/public-offer-listing.schema.json";
 import securityProfileSchemaJson from "../../../config/moral-trade/security-profile.schema.json";
+import securityProfileJson from "../../../config/moral-trade/security-profile.json";
+import { getPublicWorkedExampleOfferListings } from "../public-offers";
+import {
+  validateMoralTradeJsonSchemaSubset,
+  type MoralTradeJsonSchemaDocument,
+} from "./json-schema-subset";
 
 export const MORAL_TRADE_SCHEMA_REGISTRY_VERSION =
-  "moral-trade-schema-registry-v0.1-2026-05";
+  "moral-trade-schema-registry-v0.2-2026-05";
 export const MORAL_TRADE_SCHEMA_REGISTRY_VALIDATOR_VERSION =
-  "moral-trade-schema-registry-validator-v0.1";
-
-export type MoralTradeJsonSchemaDocument = Record<string, unknown> & {
-  $schema?: string;
-  $id?: string;
-  title?: string;
-  type?: string;
-  required?: string[];
-  properties?: Record<string, unknown>;
-  additionalProperties?: boolean;
-};
+  "moral-trade-schema-registry-validator-v0.2";
 
 export type MoralTradeSchemaRegistryEntry = {
   key: string;
@@ -35,7 +41,11 @@ export type MoralTradeSchemaRegistryEntry = {
   schemaId: string;
   title: string;
   topLevelRequiredFields: string[];
+  schemaPropertyKeys: string[];
+  profileTopLevelFields: string[];
   propertyCount: number;
+  sampleValidationCount: number;
+  sampleValidationFailureCount: number;
 };
 
 export type MoralTradeSchemaRegistry = {
@@ -67,6 +77,7 @@ type SchemaSource = {
   slug: string;
   profileKey: string;
   document: MoralTradeJsonSchemaDocument;
+  profileDocument: Record<string, unknown>;
 };
 
 const SCHEMA_SOURCES: SchemaSource[] = [
@@ -76,6 +87,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "ai-governance-profile.schema.json",
     profileKey: "ai_governance",
     document: aiGovernanceProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: aiGovernanceProfileJson as Record<string, unknown>,
   },
   {
     key: "api_contract_profile_schema",
@@ -83,6 +95,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "api-contract-profile.schema.json",
     profileKey: "api_contract",
     document: apiContractProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: apiContractProfileJson as Record<string, unknown>,
   },
   {
     key: "copilot_contract_schema",
@@ -90,6 +103,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "copilot-contract.schema.json",
     profileKey: "copilot_contract",
     document: copilotContractSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: copilotContractJson as Record<string, unknown>,
   },
   {
     key: "data_model_profile_schema",
@@ -97,6 +111,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "data-model-profile.schema.json",
     profileKey: "data_model",
     document: dataModelProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: dataModelProfileJson as Record<string, unknown>,
   },
   {
     key: "evaluation_profile_schema",
@@ -104,6 +119,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "evaluation-profile.schema.json",
     profileKey: "evaluation",
     document: evaluationProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: evaluationProfileJson as Record<string, unknown>,
   },
   {
     key: "externality_profile_schema",
@@ -111,6 +127,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "externality-profile.schema.json",
     profileKey: "externality",
     document: externalityProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: externalityProfileJson as Record<string, unknown>,
   },
   {
     key: "incident_response_profile_schema",
@@ -118,6 +135,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "incident-response-profile.schema.json",
     profileKey: "incident_response",
     document: incidentResponseProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: incidentResponseProfileJson as Record<string, unknown>,
   },
   {
     key: "operations_profile_schema",
@@ -125,6 +143,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "operations-profile.schema.json",
     profileKey: "operations",
     document: operationsProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: operationsProfileJson as Record<string, unknown>,
   },
   {
     key: "performance_profile_schema",
@@ -132,6 +151,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "performance-profile.schema.json",
     profileKey: "performance",
     document: performanceProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: performanceProfileJson as Record<string, unknown>,
   },
   {
     key: "protocol_profile_schema",
@@ -139,6 +159,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "protocol-profile.schema.json",
     profileKey: "protocol",
     document: protocolProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: protocolProfileJson as Record<string, unknown>,
   },
   {
     key: "public_offer_listing_schema",
@@ -146,6 +167,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "public-offer-listing.schema.json",
     profileKey: "public_offers",
     document: publicOfferListingSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: {},
   },
   {
     key: "security_profile_schema",
@@ -153,6 +175,7 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     slug: "security-profile.schema.json",
     profileKey: "security",
     document: securityProfileSchemaJson as MoralTradeJsonSchemaDocument,
+    profileDocument: securityProfileJson as Record<string, unknown>,
   },
 ];
 
@@ -192,6 +215,10 @@ function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function check(
   id: string,
   label: string,
@@ -206,7 +233,27 @@ function check(
   };
 }
 
+function publicSchemaSampleValues(source: SchemaSource) {
+  if (source.key !== "public_offer_listing_schema") {
+    return [];
+  }
+
+  return getPublicWorkedExampleOfferListings();
+}
+
+function publicSchemaSampleFailures(source: SchemaSource) {
+  return publicSchemaSampleValues(source).flatMap((sample, index) =>
+    validateMoralTradeJsonSchemaSubset(sample, source.document).map(
+      (failure) => `${source.key}[${index}]: ${failure}`,
+    ),
+  );
+}
+
 function getSchemaEntry(source: SchemaSource): MoralTradeSchemaRegistryEntry {
+  const schemaPropertyKeys = Object.keys(source.document.properties ?? {});
+  const sampleCount = publicSchemaSampleValues(source).length;
+  const sampleFailureCount = publicSchemaSampleFailures(source).length;
+
   return {
     key: source.key,
     label: source.label,
@@ -216,7 +263,11 @@ function getSchemaEntry(source: SchemaSource): MoralTradeSchemaRegistryEntry {
     schemaId: source.document.$id ?? "",
     title: source.document.title ?? source.label,
     topLevelRequiredFields: source.document.required ?? [],
-    propertyCount: Object.keys(source.document.properties ?? {}).length,
+    schemaPropertyKeys,
+    profileTopLevelFields: Object.keys(source.profileDocument),
+    propertyCount: schemaPropertyKeys.length,
+    sampleValidationCount: sampleCount,
+    sampleValidationFailureCount: sampleFailureCount,
   };
 }
 
@@ -281,6 +332,40 @@ export function validateMoralTradeSchemaRegistry(
       return null;
     })
     .filter((entry): entry is string => Boolean(entry));
+  const profileSchemaParityFailures = registry.schemaDocuments
+    .map((entry) => {
+      if (entry.key === "public_offer_listing_schema") {
+        return null;
+      }
+
+      const extraProfileKeys = entry.profileTopLevelFields.filter(
+        (key) => !entry.schemaPropertyKeys.includes(key),
+      );
+      const missingRequiredProfileKeys = entry.topLevelRequiredFields.filter(
+        (key) => !entry.profileTopLevelFields.includes(key),
+      );
+
+      if (extraProfileKeys.length || missingRequiredProfileKeys.length) {
+        return `${entry.key}: extra profile keys ${extraProfileKeys.join(",") || "none"}; missing required profile keys ${missingRequiredProfileKeys.join(",") || "none"}`;
+      }
+
+      return null;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+  const profileSchemaValidationFailures = registry.schemaDocuments
+    .flatMap((entry) => {
+      const source = sourcesByKey.get(entry.key);
+
+      if (!source || entry.key === "public_offer_listing_schema") {
+        return [];
+      }
+
+      return validateMoralTradeJsonSchemaSubset(
+        source.profileDocument,
+        source.document,
+      ).map((failure) => `${entry.key}: $.${entry.profileKey}${failure.slice(1)}`);
+    });
+  const publicSchemaValidationFailures = SCHEMA_SOURCES.flatMap(publicSchemaSampleFailures);
 
   const checks = [
     check(
@@ -309,6 +394,30 @@ export function validateMoralTradeSchemaRegistry(
       "Each schema has strict object shape, required fields, and top-level properties",
       schemaShapeFailures.length === 0,
       schemaShapeFailures.length ? schemaShapeFailures.join(", ") : "all schema shapes strict",
+    ),
+    check(
+      "profile-schema-parity",
+      "Each profile schema covers its current top-level profile contract",
+      profileSchemaParityFailures.length === 0,
+      profileSchemaParityFailures.length
+        ? profileSchemaParityFailures.join(", ")
+        : "all profile top-level contracts are covered by public JSON Schema properties",
+    ),
+    check(
+      "profile-json-schema-conformance",
+      "Each current profile JSON document conforms to its public schema subset",
+      profileSchemaValidationFailures.length === 0,
+      profileSchemaValidationFailures.length
+        ? profileSchemaValidationFailures.slice(0, 12).join(", ")
+        : "all profile JSON documents satisfy their published schema requirements",
+    ),
+    check(
+      "public-schema-sample-conformance",
+      "Executable public payload samples satisfy their published schemas",
+      publicSchemaValidationFailures.length === 0,
+      publicSchemaValidationFailures.length
+        ? publicSchemaValidationFailures.slice(0, 12).join(", ")
+        : "public offer listing samples satisfy the published public-offer JSON Schema",
     ),
     check(
       "data-model-schema",

@@ -1,0 +1,42 @@
+{
+  "profileVersion": "mpgf-public-experience-v1",
+  "enabled": true,
+  "baseUrl": "https://www.moraltrade.org",
+  "publicEntryRoute": "/mpgf",
+  "requiredRoutes": [
+    "/mpgf",
+    "/mpgf/about",
+    "/mpgf/contribute",
+    "/mpgf/pools",
+    "/mpgf/account/contributions",
+    "/mpgf/technical-spec"
+  ],
+  "requiredCopyKeys": [
+    "mpgf_plain_language_summary",
+    "moral_public_goods_explanation",
+    "moral_trade_coordination_explanation",
+    "pilot_status",
+    "non_real_money_status",
+    "pledge_only_explanation",
+    "monthly_pledge_only_explanation",
+    "pool_proposal_explanation",
+    "ballot_demo_explanation",
+    "visible_demo_pool_explanation",
+    "not_tax_advice",
+    "tax_deductibility_disabled_by_default",
+    "not_escrow",
+    "not_charity_evaluator",
+    "not_guaranteed_effectiveness",
+    "privacy_visibility",
+    "ballot_finality",
+    "allocation_not_disbursement",
+    "support_or_access"
+  ],
+  "requiredModeLabels": ["non-real-money", "pledge-only", "real-money disabled"],
+  "primaryActionRoutes": ["/mpgf/contribute", "/mpgf/pools/new"],
+  "primaryActionsMustAvoid": ["disabled", "admin-only", "real-money-only"],
+  "supportRouteOrEmail": "support@moraltrade.org",
+  "requireVisibleDemoOrdinaryPoolAlternative": true,
+  "allowCarryoverOnlyDemoComplete": false,
+  "requireMobileAndDesktopChecks": true
+}

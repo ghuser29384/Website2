@@ -1,7 +1,7 @@
 import aiGovernanceProfileJson from "../../../config/moral-trade/ai-governance-profile.json";
 
 export const MORAL_TRADE_AI_GOVERNANCE_VALIDATOR_VERSION =
-  "moral-trade-ai-governance-validator-v0.1";
+  "moral-trade-ai-governance-validator-v0.3";
 
 type GovernanceEntry = {
   key: string;
@@ -26,6 +26,16 @@ type MoralTradeDocumentationTemplate = {
   reviewRule: string;
 };
 
+type MoralTradeDocumentationValue = string | number | boolean | string[];
+
+type MoralTradeSampleDocumentationPacket = {
+  key: string;
+  reviewerStatus: "shadow_only" | "approved_for_pilot";
+  fields: Record<string, MoralTradeDocumentationValue>;
+  publicSummary: Record<string, MoralTradeDocumentationValue>;
+  redactionNotes: string[];
+};
+
 export type MoralTradeAiGovernanceProfile = {
   version: string;
   purpose: string;
@@ -34,6 +44,7 @@ export type MoralTradeAiGovernanceProfile = {
   mlEnabledForStateChanges: boolean;
   requiredDocumentationBeforeMl: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
   documentationTemplates: MoralTradeDocumentationTemplate[];
+  sampleDocumentationPackets: MoralTradeSampleDocumentationPacket[];
   permittedAutomation: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
   prohibitedUses: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
   fairnessDocumentation: MoralTradeFairnessDocumentation;
@@ -59,7 +70,7 @@ export interface MoralTradeAiGovernanceValidation {
   blockers: string[];
 }
 
-const aiGovernanceProfile = aiGovernanceProfileJson as MoralTradeAiGovernanceProfile;
+const aiGovernanceProfile = aiGovernanceProfileJson as unknown as MoralTradeAiGovernanceProfile;
 
 const REQUIRED_DOCUMENTATION = [
   "model_card",
@@ -114,6 +125,7 @@ const REQUIRED_EXPLANATION_CONTROLS = [
   "uncertainty_and_redaction_notice",
   "appealable_review_scope",
   "reversible_interaction",
+  "local_explanation_methods_gated",
 ] as const;
 
 const REQUIRED_EXTERNAL_STANDARDS = [
@@ -122,6 +134,7 @@ const REQUIRED_EXTERNAL_STANDARDS = [
   "model_cards",
   "datasheets_for_datasets",
   "fairness_tradeoff_literature",
+  "lime_shap_diagnostics",
 ] as const;
 
 const REQUIRED_HUMAN_CONTROLLED_DECISIONS = [
@@ -136,6 +149,7 @@ const REQUIRED_GOVERNANCE_TESTS = [
   "no_undocumented_ml_gate",
   "model_card_datasheet_required",
   "fairness_documentation_contract",
+  "sample_documentation_packet_contract",
   "health_route_contract_smoke",
 ] as const;
 
@@ -157,6 +171,94 @@ function check(
   };
 }
 
+function isDocumentationValuePresent(value: MoralTradeDocumentationValue | undefined) {
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.every((entry) => entry.trim().length > 0);
+  }
+
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  return value != null;
+}
+
+function sampleDocumentationPacketFailures(
+  profile: MoralTradeAiGovernanceProfile,
+) {
+  const templatesByKey = new Map(
+    profile.documentationTemplates.map((template) => [template.key, template]),
+  );
+  const packetsByKey = new Map(
+    profile.sampleDocumentationPackets.map((packet) => [packet.key, packet]),
+  );
+  const failures: string[] = [];
+
+  for (const documentationKey of REQUIRED_DOCUMENTATION) {
+    const template = templatesByKey.get(documentationKey);
+    const packet = packetsByKey.get(documentationKey);
+
+    if (!template) {
+      failures.push(`${documentationKey}: template missing`);
+      continue;
+    }
+
+    if (!packet) {
+      failures.push(`${documentationKey}: sample packet missing`);
+      continue;
+    }
+
+    const missingFields = template.requiredFields.filter(
+      (field) => !isDocumentationValuePresent(packet.fields[field]),
+    );
+    const disallowedPublicFields = Object.keys(packet.publicSummary).filter(
+      (field) => !template.publicSummaryFields.includes(field),
+    );
+    const redactedPublicFields = Object.keys(packet.publicSummary).filter((field) =>
+      template.redactedFields.includes(field),
+    );
+    const publicFieldsWithoutSource = Object.keys(packet.publicSummary).filter(
+      (field) => !Object.prototype.hasOwnProperty.call(packet.fields, field),
+    );
+    const missingRedactionNotes = REQUIRED_TEMPLATE_REDACTIONS.filter(
+      (redaction) =>
+        !packet.redactionNotes.some((note) =>
+          note.toLowerCase().includes(redaction.toLowerCase()),
+        ),
+    );
+
+    if (missingFields.length) {
+      failures.push(`${documentationKey}: missing required fields ${missingFields.join(",")}`);
+    }
+
+    if (disallowedPublicFields.length) {
+      failures.push(
+        `${documentationKey}: disallowed public summary fields ${disallowedPublicFields.join(",")}`,
+      );
+    }
+
+    if (redactedPublicFields.length) {
+      failures.push(
+        `${documentationKey}: redacted fields leaked in public summary ${redactedPublicFields.join(",")}`,
+      );
+    }
+
+    if (publicFieldsWithoutSource.length) {
+      failures.push(
+        `${documentationKey}: public summary fields missing source values ${publicFieldsWithoutSource.join(",")}`,
+      );
+    }
+
+    if (missingRedactionNotes.length) {
+      failures.push(
+        `${documentationKey}: missing redaction notes ${missingRedactionNotes.join(",")}`,
+      );
+    }
+  }
+
+  return failures;
+}
+
 export function getMoralTradeAiGovernanceProfile() {
   return aiGovernanceProfile;
 }
@@ -166,10 +268,14 @@ export function validateMoralTradeAiGovernanceProfile(
 ): MoralTradeAiGovernanceValidation {
   const documentationKeys = profile.requiredDocumentationBeforeMl.map((entry) => entry.key);
   const documentationTemplateKeys = profile.documentationTemplates.map((entry) => entry.key);
+  const sampleDocumentationPacketKeys = profile.sampleDocumentationPackets.map(
+    (entry) => entry.key,
+  );
   const permittedAutomationKeys = profile.permittedAutomation.map((entry) => entry.key);
   const prohibitedUseKeys = profile.prohibitedUses.map((entry) => entry.key);
   const explanationControlKeys = profile.explanationControls.map((entry) => entry.key);
   const externalStandardKeys = profile.externalStandards.map((entry) => entry.key);
+  const sampleDocumentationFailures = sampleDocumentationPacketFailures(profile);
   const checks = [
     check(
       "deterministic-decisioning",
@@ -210,6 +316,15 @@ export function validateMoralTradeAiGovernanceProfile(
         .join(", "),
     ),
     check(
+      "sample-documentation-packets",
+      "Required ML documentation templates have redacted sample packets",
+      hasAll(sampleDocumentationPacketKeys, REQUIRED_DOCUMENTATION) &&
+        sampleDocumentationFailures.length === 0,
+      sampleDocumentationFailures.length
+        ? sampleDocumentationFailures.slice(0, 8).join(" | ")
+        : sampleDocumentationPacketKeys.join(", "),
+    ),
+    check(
       "permitted-automation",
       "Permitted automation is limited to drafting, checks, explanations, and summaries",
       hasAll(permittedAutomationKeys, REQUIRED_PERMITTED_AUTOMATION) &&
@@ -237,7 +352,9 @@ export function validateMoralTradeAiGovernanceProfile(
       "NIST XAI and HCI explanation controls are explicit",
       hasAll(explanationControlKeys, REQUIRED_EXPLANATION_CONTROLS) &&
         profile.explanationControls.every((entry) =>
-          /factor|source|action|uncertain|redact|appeal|reversible|correct/i.test(entry.rule),
+          /factor|source|action|uncertain|redact|appeal|reversible|correct|LIME|SHAP|diagnostic/i.test(
+            entry.rule,
+          ),
         ),
       explanationControlKeys.join(", "),
     ),

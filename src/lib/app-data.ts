@@ -6,6 +6,8 @@ import {
   type DonationOffsetPoolProgress,
 } from "@/lib/donation-offsets";
 import {
+  BACKGROUND_PROFILE_INTERVIEW_SENSITIVE_TEXT_FIELDS,
+  BACKGROUND_SOURCE_SUMMARY_SENSITIVE_TEXT_FIELDS,
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
   SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
@@ -13,6 +15,10 @@ import {
   overlayBackgroundRecordSensitiveText,
   overlayEncryptedWishEntryBody,
 } from "@/lib/background-field-encryption";
+import {
+  serializeOpportunityBriefCard,
+  type BackgroundRequesterOpportunityBriefCard,
+} from "@/lib/background-opportunity-briefs";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -33,6 +39,13 @@ type AgreementPaymentScheduleRow = Database["public"]["Tables"]["agreement_payme
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
 type AgreementEvidenceItemRow = Database["public"]["Tables"]["agreement_evidence_items"]["Row"];
 type AgreementReviewCaseRow = Database["public"]["Tables"]["agreement_review_cases"]["Row"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BondEvidenceRow = Database["public"]["Tables"]["bond_evidence"]["Row"];
+type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
+type BondAdjudicationRow = Database["public"]["Tables"]["bond_adjudications"]["Row"];
+type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
+type PerformanceBondAuditEventRow =
+  Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
@@ -51,6 +64,22 @@ type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_ques
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
 type MatchExplanationSnapshotRow =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
+type BackgroundIntroPacketRow =
+  Database["public"]["Tables"]["background_intro_packets"]["Row"];
+type BackgroundSourceSummaryRow =
+  Database["public"]["Tables"]["background_source_summaries"]["Row"];
+type BackgroundProfileSignalRow =
+  Database["public"]["Tables"]["background_profile_signals"]["Row"];
+type BackgroundShadowRunRow =
+  Database["public"]["Tables"]["background_shadow_runs"]["Row"];
+type BackgroundGrantReceiptRow =
+  Database["public"]["Tables"]["background_grant_receipts"]["Row"];
+type BackgroundProfileInterviewAnswerRow =
+  Database["public"]["Tables"]["background_profile_interview_answers"]["Row"];
+type BackgroundCollectivePolicyRow =
+  Database["public"]["Tables"]["background_collective_policies"]["Row"];
+type BackgroundMuteRuleRow =
+  Database["public"]["Tables"]["background_mute_rules"]["Row"];
 type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_events"]["Row"];
 type BackgroundNotificationPreferenceRow =
   Database["public"]["Tables"]["background_notification_preferences"]["Row"];
@@ -63,6 +92,8 @@ type NetworkInviteRow = Database["public"]["Tables"]["network_invites"]["Row"];
 type PersonalDelegateRow = Database["public"]["Tables"]["personal_delegates"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
+type BackgroundIntentClaimRow =
+  Database["public"]["Tables"]["background_intent_claims"]["Row"];
 type HelperStrategyRow = Database["public"]["Tables"]["helper_strategies"]["Row"];
 type HelperRunRow = Database["public"]["Tables"]["helper_runs"]["Row"];
 type MatchIntroductionPlanRow =
@@ -141,6 +172,7 @@ export interface OfferRecord extends OfferRow {
   recommendationCount: number;
   commentCount: number;
   isInCart: boolean;
+  performanceBonds: PerformanceBondRow[];
   donationOffset: (DonationOffsetOfferRow & {
     compromiseCharity: RegisteredCharityRow | null;
     pool: DonationOffsetPoolRecord | null;
@@ -167,6 +199,7 @@ export interface IncomingResponseRecord {
   canCreateAgreement: boolean;
   memberInterestId: string | null;
   guestInterestId: string | null;
+  performanceBond: PerformanceBondRow | null;
 }
 
 export interface AgreementRatingRecord extends AgreementRatingRow {
@@ -185,6 +218,12 @@ export interface AgreementRecord extends AgreementRow {
   events: AgreementEventRow[];
   evidenceItems: AgreementEvidenceItemRow[];
   reviewCases: AgreementReviewCaseRow[];
+  performanceBonds: PerformanceBondRow[];
+  bondEvidence: BondEvidenceRow[];
+  bondChallenges: BondChallengeRow[];
+  bondAdjudications: BondAdjudicationRow[];
+  bondLedgerEntries: BondLedgerEntryRow[];
+  performanceBondAuditEvents: PerformanceBondAuditEventRow[];
 }
 
 export interface DonationOffsetMatchRecord extends DonationOffsetMatchRow {
@@ -263,6 +302,15 @@ export interface DashboardDataResult {
   wishNotifications: WishNotificationRecord[];
   backgroundRuns: BackgroundMatchRunRow[];
   matchExplanationSnapshots: MatchExplanationSnapshotRow[];
+  opportunityBriefs: BackgroundRequesterOpportunityBriefCard[];
+  introPackets: BackgroundIntroPacketRow[];
+  sourceSummaries: BackgroundSourceSummaryRow[];
+  profileSignals: BackgroundProfileSignalRow[];
+  shadowRuns: BackgroundShadowRunRow[];
+  grantReceipts: BackgroundGrantReceiptRow[];
+  profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[];
+  collectivePolicies: BackgroundCollectivePolicyRow[];
+  muteRules: BackgroundMuteRuleRow[];
   backgroundQueryEvents: BackgroundQueryEventRow[];
   backgroundNotificationPreferences: BackgroundNotificationPreferenceRow[];
   profileDataRightRequests: ProfileDataRightRequestRow[];
@@ -272,6 +320,7 @@ export interface DashboardDataResult {
   personalDelegate: PersonalDelegateRow | null;
   sourceConnections: SourceConnectionRow[];
   profileSynthesis: ProfileSynthesisRow | null;
+  intentClaims: BackgroundIntentClaimRow[];
   helperStrategies: HelperStrategyRow[];
   helperRuns: HelperRunRow[];
   introductionPlans: MatchIntroductionPlanRow[];
@@ -300,6 +349,15 @@ export interface DashboardDataResult {
     wishNotifications: string | null;
     backgroundRuns: string | null;
     matchExplanationSnapshots: string | null;
+    opportunityBriefs: string | null;
+    introPackets: string | null;
+    sourceSummaries: string | null;
+    profileSignals: string | null;
+    shadowRuns: string | null;
+    grantReceipts: string | null;
+    profileInterviewAnswers: string | null;
+    collectivePolicies: string | null;
+    muteRules: string | null;
     backgroundQueryEvents: string | null;
     backgroundNotificationPreferences: string | null;
     profileDataRightRequests: string | null;
@@ -309,6 +367,7 @@ export interface DashboardDataResult {
     personalDelegate: string | null;
     sourceConnections: string | null;
     profileSynthesis: string | null;
+    intentClaims: string | null;
     helperStrategies: string | null;
     helperRuns: string | null;
     introductionPlans: string | null;
@@ -758,6 +817,7 @@ async function hydrateOffers(
     { data: offsetOffers, error: offsetOffersError },
     { data: offsetPools, error: offsetPoolsError },
     { data: charities, error: charitiesError },
+    { data: performanceBonds, error: performanceBondsError },
   ] =
     await Promise.all([
       getProfileSummaryMap(viewerId, ownerIds),
@@ -769,6 +829,7 @@ async function hydrateOffers(
       supabase.from("donation_offset_offers").select("*").in("offer_id", offerIds),
       supabase.from("donation_offset_pools").select("*"),
       supabase.from("registered_charities").select("*"),
+      supabase.from("performance_bonds").select("*").in("offer_id", offerIds),
     ]);
 
   if (recommendationsError) {
@@ -788,6 +849,9 @@ async function hydrateOffers(
   }
   if (charitiesError) {
     throw new Error(charitiesError.message);
+  }
+  if (performanceBondsError) {
+    throw new Error(performanceBondsError.message);
   }
 
   const recommendationCounts = new Map<string, number>();
@@ -818,6 +882,7 @@ async function hydrateOffers(
       pool: DonationOffsetPoolRecord | null;
     }
   >();
+  const performanceBondsByOffer = new Map<string, PerformanceBondRow[]>();
 
   for (const row of (offsetOffers ?? []) as DonationOffsetOfferRow[]) {
     offsetOfferMap.set(row.offer_id, {
@@ -827,12 +892,19 @@ async function hydrateOffers(
     });
   }
 
+  for (const row of (performanceBonds ?? []) as PerformanceBondRow[]) {
+    const bucket = performanceBondsByOffer.get(row.offer_id) ?? [];
+    bucket.push(row);
+    performanceBondsByOffer.set(row.offer_id, bucket);
+  }
+
   return offers.map((offer) => ({
     ...offer,
     ownerProfile: profileMap.get(offer.owner_id) ?? null,
     recommendationCount: recommendationCounts.get(offer.id) ?? 0,
     commentCount: commentCounts.get(offer.id) ?? 0,
     isInCart: cartSet.has(offer.id),
+    performanceBonds: performanceBondsByOffer.get(offer.id) ?? [],
     donationOffset: offsetOfferMap.get(offer.id) ?? null,
   }));
 }
@@ -1152,7 +1224,7 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
   let moralPublicGoodsMatchCount = 0;
 
   for (const match of matchRows) {
-    if (match.status === "cancelled") {
+    if (match.status !== "completed") {
       continue;
     }
 
@@ -1359,6 +1431,27 @@ async function hydrateIncomingResponses(
   const profileMap = profileIds.length
     ? await getProfileSummaryMap(viewerId, profileIds)
     : new Map<string, PublicProfileSummary>();
+  const memberInterestIds = memberInterests.map((interest) => interest.id);
+  let performanceBondByInterest = new Map<string, PerformanceBondRow>();
+
+  if (memberInterestIds.length) {
+    const supabase = await createClient();
+    const { data: takerBonds, error: takerBondsError } = await supabase
+      .from("performance_bonds")
+      .select("*")
+      .in("interest_id", memberInterestIds)
+      .eq("side", "taker");
+
+    if (takerBondsError) {
+      throw new Error(takerBondsError.message);
+    }
+
+    performanceBondByInterest = new Map(
+      ((takerBonds ?? []) as PerformanceBondRow[])
+        .filter((bond) => bond.interest_id)
+        .map((bond) => [bond.interest_id as string, bond] as const),
+    );
+  }
 
   const combined: IncomingResponseRecord[] = [
     ...memberInterests.map((interest) => {
@@ -1381,6 +1474,7 @@ async function hydrateIncomingResponses(
         canCreateAgreement: true,
         memberInterestId: interest.id,
         guestInterestId: null,
+        performanceBond: performanceBondByInterest.get(interest.id) ?? null,
       } satisfies IncomingResponseRecord;
     }),
     ...guestInterests.map((interest) => {
@@ -1406,6 +1500,7 @@ async function hydrateIncomingResponses(
         canCreateAgreement: Boolean(interest.claimed_by_profile_id),
         memberInterestId: null,
         guestInterestId: interest.id,
+        performanceBond: null,
       } satisfies IncomingResponseRecord;
     }),
   ];
@@ -1902,6 +1997,7 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     { data: events, error: eventsError },
     { data: evidenceItems, error: evidenceItemsError },
     { data: reviewCases, error: reviewCasesError },
+    { data: performanceBonds, error: performanceBondsError },
     profileMap,
   ] =
     await Promise.all([
@@ -1934,6 +2030,11 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
         .select("*")
         .in("agreement_id", agreementIds)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .in("swap_id", agreementIds)
+        .order("created_at", { ascending: false }),
       getProfileSummaryMap(userId, profileIds),
     ]);
 
@@ -1958,15 +2059,83 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (reviewCasesError) {
     throw new Error(reviewCasesError.message);
   }
+  if (performanceBondsError) {
+    throw new Error(performanceBondsError.message);
+  }
 
   const hydratedOffers = await hydrateOffers((offers ?? []) as OfferRow[], userId);
   const offersById = new Map(hydratedOffers.map((offer) => [offer.id, offer]));
+  const performanceBondRows = (performanceBonds ?? []) as PerformanceBondRow[];
+  const performanceBondIds = performanceBondRows.map((bond) => bond.id);
+  const [
+    { data: bondEvidence, error: bondEvidenceError },
+    { data: bondChallenges, error: bondChallengesError },
+    { data: bondAdjudications, error: bondAdjudicationsError },
+    { data: bondLedgerEntries, error: bondLedgerEntriesError },
+    { data: performanceBondAuditEvents, error: performanceBondAuditEventsError },
+  ] = performanceBondIds.length
+    ? await Promise.all([
+        supabase
+          .from("bond_evidence")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("submitted_at", { ascending: false }),
+        supabase
+          .from("bond_challenges")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("challenged_at", { ascending: false }),
+        supabase
+          .from("bond_adjudications")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("decided_at", { ascending: false }),
+        supabase
+          .from("bond_ledger_entries")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("performance_bond_audit_events")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false }),
+      ])
+    : [
+        { data: [] as BondEvidenceRow[], error: null },
+        { data: [] as BondChallengeRow[], error: null },
+        { data: [] as BondAdjudicationRow[], error: null },
+        { data: [] as BondLedgerEntryRow[], error: null },
+        { data: [] as PerformanceBondAuditEventRow[], error: null },
+      ];
+
+  if (bondEvidenceError) {
+    throw new Error(bondEvidenceError.message);
+  }
+  if (bondChallengesError) {
+    throw new Error(bondChallengesError.message);
+  }
+  if (bondAdjudicationsError) {
+    throw new Error(bondAdjudicationsError.message);
+  }
+  if (bondLedgerEntriesError) {
+    throw new Error(bondLedgerEntriesError.message);
+  }
+  if (performanceBondAuditEventsError) {
+    throw new Error(performanceBondAuditEventsError.message);
+  }
   const ratingsByAgreement = new Map<string, AgreementRatingRecord[]>();
   const paymentsByAgreement = new Map<string, AgreementPaymentRow[]>();
   const paymentSchedulesByAgreement = new Map<string, AgreementPaymentScheduleRow[]>();
   const eventsByAgreement = new Map<string, AgreementEventRow[]>();
   const evidenceItemsByAgreement = new Map<string, AgreementEvidenceItemRow[]>();
   const reviewCasesByAgreement = new Map<string, AgreementReviewCaseRow[]>();
+  const performanceBondsByAgreement = new Map<string, PerformanceBondRow[]>();
+  const bondEvidenceByBond = new Map<string, BondEvidenceRow[]>();
+  const bondChallengesByBond = new Map<string, BondChallengeRow[]>();
+  const bondAdjudicationsByBond = new Map<string, BondAdjudicationRow[]>();
+  const bondLedgerByBond = new Map<string, BondLedgerEntryRow[]>();
+  const bondAuditByBond = new Map<string, PerformanceBondAuditEventRow[]>();
 
   for (const rating of (ratings ?? []) as AgreementRatingRow[]) {
     const bucket = ratingsByAgreement.get(rating.agreement_id) ?? [];
@@ -2008,12 +2177,53 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     reviewCasesByAgreement.set(reviewCase.agreement_id, bucket);
   }
 
+  for (const bond of performanceBondRows) {
+    if (!bond.swap_id) {
+      continue;
+    }
+
+    const bucket = performanceBondsByAgreement.get(bond.swap_id) ?? [];
+    bucket.push(bond);
+    performanceBondsByAgreement.set(bond.swap_id, bucket);
+  }
+
+  for (const row of (bondEvidence ?? []) as BondEvidenceRow[]) {
+    const bucket = bondEvidenceByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondEvidenceByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondChallenges ?? []) as BondChallengeRow[]) {
+    const bucket = bondChallengesByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondChallengesByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondAdjudications ?? []) as BondAdjudicationRow[]) {
+    const bucket = bondAdjudicationsByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondAdjudicationsByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondLedgerEntries ?? []) as BondLedgerEntryRow[]) {
+    const bucket = bondLedgerByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondLedgerByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (performanceBondAuditEvents ?? []) as PerformanceBondAuditEventRow[]) {
+    const bucket = bondAuditByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondAuditByBond.set(row.bond_id, bucket);
+  }
+
   return agreements.map((agreement) => {
     const ratingsForAgreement = ratingsByAgreement.get(agreement.id) ?? [];
     const viewerRating =
       ratingsForAgreement.find((rating) => rating.rater_id === userId) ?? null;
     const counterpartyId =
       agreement.proposer_id === userId ? agreement.responder_id : agreement.proposer_id;
+    const agreementPerformanceBonds = performanceBondsByAgreement.get(agreement.id) ?? [];
 
     return {
       ...agreement,
@@ -2027,6 +2237,12 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       events: eventsByAgreement.get(agreement.id) ?? [],
       evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
       reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
+      performanceBonds: agreementPerformanceBonds,
+      bondEvidence: agreementPerformanceBonds.flatMap((bond) => bondEvidenceByBond.get(bond.id) ?? []),
+      bondChallenges: agreementPerformanceBonds.flatMap((bond) => bondChallengesByBond.get(bond.id) ?? []),
+      bondAdjudications: agreementPerformanceBonds.flatMap((bond) => bondAdjudicationsByBond.get(bond.id) ?? []),
+      bondLedgerEntries: agreementPerformanceBonds.flatMap((bond) => bondLedgerByBond.get(bond.id) ?? []),
+      performanceBondAuditEvents: agreementPerformanceBonds.flatMap((bond) => bondAuditByBond.get(bond.id) ?? []),
     } satisfies AgreementRecord;
   });
 }
@@ -2263,6 +2479,204 @@ async function listMatchExplanationSnapshotsForUser(
   return (data ?? []) as MatchExplanationSnapshotRow[];
 }
 
+async function listOpportunityBriefsForUser(
+  userId: string,
+): Promise<BackgroundRequesterOpportunityBriefCard[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_opportunity_briefs")
+    .select(
+      "id, title, confidence_band, delivery_state, factor_codes, shared_counts, safe_summary, redacted_fields, why_text, next_step_type, hidden_fields_notice, human_review_required, reveal_consequence_notice, review_status, status, expires_at, purpose_code, purpose_policy_version, output_schema_version, redacted_receipt_id",
+    )
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((brief) => serializeOpportunityBriefCard(brief));
+}
+
+async function listIntroPacketsForUser(userId: string): Promise<BackgroundIntroPacketRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_intro_packets")
+    .select("*")
+    .or(`requester_profile_id.eq.${userId},counterparty_profile_id.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundIntroPacketRow[];
+}
+
+async function listBackgroundSourceSummariesForUser(
+  userId: string,
+): Promise<BackgroundSourceSummaryRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_source_summaries")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as BackgroundSourceSummaryRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, BACKGROUND_SOURCE_SUMMARY_SENSITIVE_TEXT_FIELDS),
+  );
+}
+
+async function listBackgroundProfileSignalsForUser(
+  userId: string,
+): Promise<BackgroundProfileSignalRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_profile_signals")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundProfileSignalRow[];
+}
+
+async function listBackgroundShadowRunsForUser(userId: string): Promise<BackgroundShadowRunRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_shadow_runs")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundShadowRunRow[];
+}
+
+async function listBackgroundGrantReceiptsForUser(
+  userId: string,
+): Promise<BackgroundGrantReceiptRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_grant_receipts")
+    .select("*")
+    .or(`profile_id.eq.${userId},counterparty_id.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundGrantReceiptRow[];
+}
+
+async function listProfileInterviewAnswersForUser(
+  userId: string,
+): Promise<BackgroundProfileInterviewAnswerRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_profile_interview_answers")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as BackgroundProfileInterviewAnswerRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, BACKGROUND_PROFILE_INTERVIEW_SENSITIVE_TEXT_FIELDS),
+  );
+}
+
+async function listBackgroundCollectivePoliciesForUser(
+  collectiveIds: string[],
+): Promise<BackgroundCollectivePolicyRow[]> {
+  if (!hasSupabaseEnv() || !collectiveIds.length) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_collective_policies")
+    .select("*")
+    .in("collective_id", collectiveIds)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundCollectivePolicyRow[];
+}
+
+async function listBackgroundMuteRulesForUser(userId: string): Promise<BackgroundMuteRuleRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_mute_rules")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundMuteRuleRow[];
+}
+
 async function listBackgroundQueryEventsForUser(
   userId: string,
 ): Promise<BackgroundQueryEventRow[]> {
@@ -2454,6 +2868,30 @@ async function getProfileSynthesisForUser(userId: string): Promise<ProfileSynthe
         PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
       )
     : null;
+}
+
+async function listBackgroundIntentClaimsForUser(
+  userId: string,
+): Promise<BackgroundIntentClaimRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_intent_claims")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("status", { ascending: true })
+    .order("claim_type", { ascending: true })
+    .order("updated_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundIntentClaimRow[];
 }
 
 async function listHelperStrategiesForUser(userId: string): Promise<HelperStrategyRow[]> {
@@ -2828,6 +3266,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       wishNotifications: [],
       backgroundRuns: [],
       matchExplanationSnapshots: [],
+      opportunityBriefs: [],
+      introPackets: [],
+      sourceSummaries: [],
+      profileSignals: [],
+      shadowRuns: [],
+      grantReceipts: [],
+      profileInterviewAnswers: [],
+      collectivePolicies: [],
+      muteRules: [],
       backgroundQueryEvents: [],
       backgroundNotificationPreferences: [],
       profileDataRightRequests: [],
@@ -2837,6 +3284,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       personalDelegate: null,
       sourceConnections: [],
       profileSynthesis: null,
+      intentClaims: [],
       helperStrategies: [],
       helperRuns: [],
       introductionPlans: [],
@@ -2865,6 +3313,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         wishNotifications: null,
         backgroundRuns: null,
         matchExplanationSnapshots: null,
+        opportunityBriefs: null,
+        introPackets: null,
+        sourceSummaries: null,
+        profileSignals: null,
+        shadowRuns: null,
+        grantReceipts: null,
+        profileInterviewAnswers: null,
+        collectivePolicies: null,
+        muteRules: null,
         backgroundQueryEvents: null,
         backgroundNotificationPreferences: null,
         profileDataRightRequests: null,
@@ -2874,6 +3331,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         personalDelegate: null,
         sourceConnections: null,
         profileSynthesis: null,
+        intentClaims: null,
         helperStrategies: null,
         helperRuns: null,
         introductionPlans: null,
@@ -2907,6 +3365,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications: null,
     backgroundRuns: null,
     matchExplanationSnapshots: null,
+    opportunityBriefs: null,
+    introPackets: null,
+    sourceSummaries: null,
+    profileSignals: null,
+    shadowRuns: null,
+    grantReceipts: null,
+    profileInterviewAnswers: null,
+    collectivePolicies: null,
+    muteRules: null,
     backgroundQueryEvents: null,
     backgroundNotificationPreferences: null,
     profileDataRightRequests: null,
@@ -2916,6 +3383,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     personalDelegate: null,
     sourceConnections: null,
     profileSynthesis: null,
+    intentClaims: null,
     helperStrategies: null,
     helperRuns: null,
     introductionPlans: null,
@@ -3159,6 +3627,79 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
   }
 
+  let opportunityBriefs: BackgroundRequesterOpportunityBriefCard[] = [];
+  try {
+    opportunityBriefs = await listOpportunityBriefsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load opportunity briefs.";
+    errors.opportunityBriefs = message;
+    console.error("[supabase] Failed to load opportunity briefs", { message, userId });
+  }
+
+  let introPackets: BackgroundIntroPacketRow[] = [];
+  try {
+    introPackets = await listIntroPacketsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load intro packets.";
+    errors.introPackets = message;
+    console.error("[supabase] Failed to load intro packets", { message, userId });
+  }
+
+  let sourceSummaries: BackgroundSourceSummaryRow[] = [];
+  try {
+    sourceSummaries = await listBackgroundSourceSummariesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load source summaries.";
+    errors.sourceSummaries = message;
+    console.error("[supabase] Failed to load source summaries", { message, userId });
+  }
+
+  let profileSignals: BackgroundProfileSignalRow[] = [];
+  try {
+    profileSignals = await listBackgroundProfileSignalsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load profile signals.";
+    errors.profileSignals = message;
+    console.error("[supabase] Failed to load profile signals", { message, userId });
+  }
+
+  let shadowRuns: BackgroundShadowRunRow[] = [];
+  try {
+    shadowRuns = await listBackgroundShadowRunsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load shadow source runs.";
+    errors.shadowRuns = message;
+    console.error("[supabase] Failed to load shadow source runs", { message, userId });
+  }
+
+  let grantReceipts: BackgroundGrantReceiptRow[] = [];
+  try {
+    grantReceipts = await listBackgroundGrantReceiptsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load grant receipts.";
+    errors.grantReceipts = message;
+    console.error("[supabase] Failed to load grant receipts", { message, userId });
+  }
+
+  let profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[] = [];
+  try {
+    profileInterviewAnswers = await listProfileInterviewAnswersForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load profile interview answers.";
+    errors.profileInterviewAnswers = message;
+    console.error("[supabase] Failed to load profile interview answers", { message, userId });
+  }
+
+  let muteRules: BackgroundMuteRuleRow[] = [];
+  try {
+    muteRules = await listBackgroundMuteRulesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load mute rules.";
+    errors.muteRules = message;
+    console.error("[supabase] Failed to load mute rules", { message, userId });
+  }
+
   let backgroundQueryEvents: BackgroundQueryEventRow[] = [];
   try {
     backgroundQueryEvents = await listBackgroundQueryEventsForUser(userId);
@@ -3245,6 +3786,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     const message = error instanceof Error ? error.message : "Unable to load profile synthesis.";
     errors.profileSynthesis = message;
     console.error("[supabase] Failed to load profile synthesis", { message, userId });
+  }
+
+  let intentClaims: BackgroundIntentClaimRow[] = [];
+  try {
+    intentClaims = await listBackgroundIntentClaimsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load intent claims.";
+    errors.intentClaims = message;
+    console.error("[supabase] Failed to load background intent claims", { message, userId });
   }
 
   let helperStrategies: HelperStrategyRow[] = [];
@@ -3360,6 +3910,21 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load collective decision responses", { message, userId });
   }
 
+  const collectivePolicyIds = [
+    ...new Set([
+      ...collectives.map((collective) => collective.id),
+      ...collectiveMemberships.map((membership) => membership.collective_id),
+    ]),
+  ];
+  let collectivePolicies: BackgroundCollectivePolicyRow[] = [];
+  try {
+    collectivePolicies = await listBackgroundCollectivePoliciesForUser(collectivePolicyIds);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load collective policies.";
+    errors.collectivePolicies = message;
+    console.error("[supabase] Failed to load collective policies", { message, userId });
+  }
+
   let paymentAccount: ProfilePaymentAccountRow | null = null;
   try {
     paymentAccount = await getPaymentAccountForUser(userId);
@@ -3395,6 +3960,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications,
     backgroundRuns,
     matchExplanationSnapshots,
+    opportunityBriefs,
+    introPackets,
+    sourceSummaries,
+    profileSignals,
+    shadowRuns,
+    grantReceipts,
+    profileInterviewAnswers,
+    collectivePolicies,
+    muteRules,
     backgroundQueryEvents,
     backgroundNotificationPreferences,
     profileDataRightRequests,
@@ -3404,6 +3978,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     personalDelegate,
     sourceConnections,
     profileSynthesis,
+    intentClaims,
     helperStrategies,
     helperRuns,
     introductionPlans,

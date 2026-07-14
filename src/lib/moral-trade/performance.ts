@@ -1,7 +1,10 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 
 export const MORAL_TRADE_PERFORMANCE_VALIDATOR_VERSION =
-  "moral-trade-performance-validator-v0.2";
+  "moral-trade-performance-validator-v0.5";
 
 export type MoralTradePerformanceThreshold = {
   operator: "lte" | "gte" | "eq";
@@ -78,6 +81,7 @@ export interface MoralTradeRouteRecoveryManifestEntry {
   serverRenderable: boolean;
   recoverySurfaces: string[];
   stateMutationOnFallback: boolean;
+  evidenceFile?: string;
 }
 
 export interface MoralTradeRouteRecoveryManifestAudit {
@@ -154,6 +158,10 @@ function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
 }
 
+function routeRecoveryEvidenceExists(evidenceFile: string) {
+  return existsSync(path.resolve(process.cwd(), evidenceFile));
+}
+
 function check(
   id: string,
   label: string,
@@ -181,8 +189,14 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
     routeFamilyKey: "core_protocol_contract",
     path: "/moral-trade/technical-spec",
     serverRenderable: true,
-    recoverySurfaces: ["global_error_boundary", "safe_navigation", "contract_links"],
+    recoverySurfaces: [
+      "route_segment_error_boundary",
+      "contract_json_fallbacks",
+      "global_error_boundary",
+      "safe_navigation",
+    ],
     stateMutationOnFallback: false,
+    evidenceFile: "src/app/moral-trade/technical-spec/error.tsx",
   },
   {
     routeFamilyKey: "core_protocol_contract",
@@ -245,11 +259,21 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
     path: "/reasoning-center",
     serverRenderable: true,
     recoverySurfaces: [
+      "route_segment_error_boundary",
       "route_specific_viewer_fallback",
+      "packet_generation_recovery_notice",
       "global_error_boundary",
       "packet_json_fallback",
       "safe_navigation",
     ],
+    stateMutationOnFallback: false,
+    evidenceFile: "src/app/reasoning-center/error.tsx",
+  },
+  {
+    routeFamilyKey: "reasoning_and_review",
+    path: "/api/moral-trade/reasoning/packets",
+    serverRenderable: true,
+    recoverySurfaces: ["validator_blockers", "packet_generation_failed_contract", "no_store_dynamic"],
     stateMutationOnFallback: false,
   },
   {
@@ -310,11 +334,19 @@ export function auditMoralTradeRouteRecoveryManifest({
       blockers.push(`route_recovery_mutates_state:${entry.path}`);
     }
 
+    const evidenceFilePresent =
+      !entry.evidenceFile || routeRecoveryEvidenceExists(entry.evidenceFile);
+
+    if (!evidenceFilePresent) {
+      blockers.push(`route_recovery_evidence_missing:${entry.path}:${entry.evidenceFile}`);
+    }
+
     if (
       entry.routeFamilyKey === expectedRoute.routeFamilyKey &&
       (entry.serverRenderable || entry.recoverySurfaces.includes("validator_blockers")) &&
       entry.recoverySurfaces.length >= 2 &&
-      !entry.stateMutationOnFallback
+      !entry.stateMutationOnFallback &&
+      evidenceFilePresent
     ) {
       coveredRouteCount += 1;
     }

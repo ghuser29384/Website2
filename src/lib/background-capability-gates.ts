@@ -201,6 +201,7 @@ export function getBackgroundCapabilityGateContract(): BackgroundCapabilityGateC
         publicEvidence: [
           "design_status_only",
           "published_gate_before_pilot",
+          "private_overlap_contract",
           "no_live_private_overlap_endpoint",
         ],
         releaseState: "design_only",

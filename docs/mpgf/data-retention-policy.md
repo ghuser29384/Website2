@@ -1,15 +1,22 @@
 # MPGF Data Retention Policy
 
-Status: config-backed direct-working policy.
+Status: retention framework for MPGF public-goods launch.
 
-The operative machine-readable policy is `config/mpgf/data-retention-policy.json`.
+## Payment and Provider Data
 
-| Data category | Retention |
-| --- | --- |
-| Private real-money evidence | disabled in direct-working mode |
-| Demo audit records | 365 days |
-| Private evidence retention | 0 days unless a later approved mode requires retention |
+- Raw card data is never stored by Moral Trade.
+- Provider identifiers hashed in MPGF tables should be used for Stripe, Every.org, fiscal-host, and manual evidence references wherever practical.
+- Receipt URLs private by default and excluded from public reports.
+- Provider payload bodies are retained only as hashes or redacted review records unless a restricted operator workflow requires temporary access.
 
-Any real-money launch must replace this direct-working policy with an approved privacy and retention policy that covers payment-provider records, receipts, refunds, chargebacks, recipient evidence, audit logs, and participant data rights.
+## Evidence and Audit Records
 
-Conformance rows: AC-COPY-001, AC-COMPLETION-008.
+- Public evidence summaries retain reason codes, status, amount buckets, and aggregate timing.
+- Private evidence artifacts retain access controls and do not appear in public allocation reports.
+- Audit log retention covers allocation hashes, webhook idempotency records, reviewer decisions, challenge status, and milestone release decisions.
+
+## Participant Rights
+
+- Deletion or revocation requests can remove or disable non-required profile, saved payment, and support-signal records where compatible with fraud prevention, audit, tax, refund, and dispute obligations.
+- Public aggregate metrics are not rewritten when individual private rows are deleted unless required by policy or law.
+- Saved payment methods can be revoked without changing historical aggregate allocation reports.

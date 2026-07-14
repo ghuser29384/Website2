@@ -11,6 +11,10 @@ import {
   validateMoralTradeTransparencyReportContract,
   validateMoralTradeTransparencyReportSnapshot,
 } from "@/lib/moral-trade/transparency-report";
+import {
+  BACKGROUND_PUBLIC_PAGE_SUMMARIES,
+  BACKGROUND_PUBLIC_TECHNICAL_LINKS,
+} from "@/lib/background-public-pages";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -77,7 +81,7 @@ export default async function TransparencyPage() {
             <h1>Public counts without public case files.</h1>
             <p className="hero-text">
               Moral Trade publishes aggregate review, disclosure, report, appeal, and operator
-              timing metrics so the pilot can be inspected without exposing private wishes,
+              timing metrics so the service can be inspected without exposing private wishes,
               counterparties, report bodies, source notes, or evidence artifacts.
             </p>
             <div className="hero-actions">
@@ -117,6 +121,30 @@ export default async function TransparencyPage() {
 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
+          <div className="panel data-card data-card-wide">
+            <p className="eyebrow">{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.eyebrow}</p>
+            <h2>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.heading}</h2>
+            <p>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.summary}</p>
+            <ul className="compact-list">
+              {BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.cards.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <details className="details-panel">
+              <summary>{BACKGROUND_PUBLIC_PAGE_SUMMARIES.transparency.technicalDetailsLabel}</summary>
+              <div className="details-content">
+                <div className="hero-actions">
+                  {BACKGROUND_PUBLIC_TECHNICAL_LINKS.map((link) => (
+                    <Link className="button button-secondary" href={link.href} key={link.href}>
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </div>
+        </section>
+        <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Aggregate metrics</p>
             <h2>Review outcomes, disclosures, appeals, and timing</h2>
@@ -124,6 +152,12 @@ export default async function TransparencyPage() {
               Counts below the publication threshold are intentionally suppressed. This
               small-sample suppression means a zero is shown as zero; a one- or two-case count is
               not made public.
+            </p>
+            <p>
+              Background-networking metrics are sourced from opportunity briefs, closed-code match
+              feedback, intro packets, and match concierge requests. The report publishes counts,
+              medians, and percentages only; it never publishes brief text, exact wishes, source
+              notes, contact details, requester notes, or private case files.
             </p>
           </div>
 
@@ -140,10 +174,15 @@ export default async function TransparencyPage() {
                 <h3>{metric.label}</h3>
                 <strong className="metric-value">{metric.displayValue}</strong>
                 <p className="route-text">{metric.description}</p>
-                <p className="route-text">
-                  Source table(s): {formatSourceTables(metric.sourceTables)}. Sample size:{" "}
-                  {metric.suppressed ? "suppressed" : metric.sampleSize}.
-                </p>
+                <details className="details-panel">
+                  <summary>Metric source details</summary>
+                  <div className="details-content">
+                    <p className="route-text">
+                      Source table(s): {formatSourceTables(metric.sourceTables)}. Sample size:{" "}
+                      {metric.suppressed ? "suppressed" : metric.sampleSize}.
+                    </p>
+                  </div>
+                </details>
                 {metric.suppressionReason ? (
                   <p className="route-text">{metric.suppressionReason}</p>
                 ) : null}
@@ -169,19 +208,24 @@ export default async function TransparencyPage() {
         </section>
 
         <section className="section section-white">
-          <div className="protocol-validator-card panel">
-            <div>
-              <p className="detail-kicker">Validator</p>
-              <h2>Report contract {contractValidation.status}</h2>
-              <p>
-                Contract blockers: {contractValidation.blockers.length}. Report blockers:{" "}
-                {reportValidation.blockers.length}.
-              </p>
+          <details className="details-panel">
+            <summary>Report validation details</summary>
+            <div className="details-content">
+              <div className="protocol-validator-card panel">
+                <div>
+                  <p className="detail-kicker">Validator</p>
+                  <h2>Report contract {contractValidation.status}</h2>
+                  <p>
+                    Contract blockers: {contractValidation.blockers.length}. Report blockers:{" "}
+                    {reportValidation.blockers.length}.
+                  </p>
+                </div>
+                <StatusBadge tone={hasBlockers ? "warning" : "default"}>
+                  {hasBlockers ? "review" : "pass"}
+                </StatusBadge>
+              </div>
             </div>
-            <StatusBadge tone={hasBlockers ? "warning" : "default"}>
-              {hasBlockers ? "review" : "pass"}
-            </StatusBadge>
-          </div>
+          </details>
         </section>
       </main>
       <SiteFooter />

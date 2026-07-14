@@ -11,7 +11,6 @@ import {
 import {
   allocateMpgfAssuranceRound,
   formatUsd,
-  getMpgfCampaignAssuranceStatus,
 } from "@/lib/mpgf/mechanism";
 import {
   loadMpgfPublicGoodsProofSummary,
@@ -76,7 +75,6 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
   const assuranceLine = campaign
     ? assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id)
     : null;
-  const assuranceStatus = campaign ? getMpgfCampaignAssuranceStatus(campaign) : null;
   const proofSummary = campaign
     ? await loadMpgfPublicGoodsProofSummary({
         campaign,
@@ -136,7 +134,7 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
           </dl>
         </article>
       </section>
-      {campaign && assuranceStatus && assuranceLine && proofSummary ? (
+      {campaign && assuranceLine && proofSummary ? (
         <section className="section section-subtle">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Verified assurance route</p>
@@ -145,22 +143,20 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
           </div>
           <section className="mpgf-detail-grid">
             <article className="mpgf-panel">
-              <p className="eyebrow">{assuranceStatus.status.replaceAll("_", " ")}</p>
+              <p className="eyebrow">Sealed public preview</p>
               <h3>Threshold, match, and QF bonus</h3>
               <dl className="mpgf-summary-grid">
                 <div>
-                  <dt>Amount threshold</dt>
-                  <dd>{formatUsd(campaign.thresholdAmountCents)}</dd>
+                  <dt>Threshold rules</dt>
+                  <dd>Published in round rules; exact live progress sealed before close</dd>
                 </div>
                 <div>
                   <dt>Eligible pledged</dt>
-                  <dd>{formatUsd(assuranceStatus.directEligibleCents)}</dd>
+                  <dd>Sealed before close</dd>
                 </div>
                 <div>
-                  <dt>Verified supporters</dt>
-                  <dd>
-                    {assuranceStatus.verifiedSupporterCount}/{campaign.thresholdSupporters}
-                  </dd>
+                  <dt>Supporter breadth</dt>
+                  <dd>Sealed before close</dd>
                 </div>
                 <div>
                   <dt>Deadline</dt>
@@ -174,30 +170,28 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Base match</dt>
-                  <dd>{formatUsd(assuranceLine.baseMatchCents)}</dd>
+                  <dd>Shown after close in final reports</dd>
                 </div>
                 <div>
                   <dt>Capped QF bonus</dt>
-                  <dd>{formatUsd(assuranceLine.qfBonusCents)}</dd>
+                  <dd>Shown after close in final reports</dd>
                 </div>
                 <div>
                   <dt>Total payable after gates</dt>
-                  <dd>{formatUsd(assuranceLine.status === "payable" ? assuranceLine.totalPayoutCents : 0)}</dd>
+                  <dd>Shown after close in final reports</dd>
                 </div>
               </dl>
               <div className="mpgf-allocation-row">
                 <div>
                   <span>Amount progress</span>
-                  <strong>{Math.round(assuranceStatus.amountProgressBps / 100)}%</strong>
+                  <strong>Sealed before close</strong>
                 </div>
-                <meter max={10_000} value={assuranceStatus.amountProgressBps} />
               </div>
               <div className="mpgf-allocation-row">
                 <div>
                   <span>Supporter progress</span>
-                  <strong>{Math.round(assuranceStatus.supporterProgressBps / 100)}%</strong>
+                  <strong>Sealed before close</strong>
                 </div>
-                <meter max={10_000} value={assuranceStatus.supporterProgressBps} />
               </div>
             </article>
             <article className="mpgf-panel">
@@ -262,7 +256,7 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Excluded pledges</dt>
-                  <dd>{assuranceStatus.excludedPledgeCount}</dd>
+                  <dd>Sealed before close</dd>
                 </div>
                 <div>
                   <dt>Latest reason code</dt>

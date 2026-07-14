@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-security-v0.2-2026-05",
+  "version": "moral-trade-security-v0.5-2026-06",
   "purpose": "Public security posture contract for Moral Trade headers, session boundaries, provider encryption assumptions, secret/key management, abuse throttling, and scale gates.",
   "controls": [
     {
@@ -13,8 +13,8 @@
       "key": "private_no_store_cache",
       "label": "Private no-store cache policy",
       "status": "implemented",
-      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, agreement rooms, saved offers, MPGF account/admin, profile/job APIs, saved-search writes, and wish-registry search private no-store.",
-      "publicClaim": "Authenticated and sensitive routes, including private match rooms and saved-user surfaces, should not be cached as public pages."
+      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, agreement rooms, saved offers, background networking, onboarding, password-update, MPGF account/admin, profile/background/job APIs, saved-search writes, and wish-registry search private no-store.",
+      "publicClaim": "Authenticated and sensitive routes, including private match rooms, background-networking helpers, onboarding, password-update, and saved-user surfaces, should not be cached as public pages."
     },
     {
       "key": "supabase_auth_cookies",
@@ -59,11 +59,25 @@
       "publicClaim": "Operator consoles and review mutations require an allowlisted admin account with an active authenticator MFA session."
     },
     {
+      "key": "participant_session_review_revocation",
+      "label": "Participant session review and revocation",
+      "status": "implemented",
+      "evidence": "src/lib/background-account-security.ts reads current Supabase JWT session_id/iat/exp/aal claims, the dashboard account-security panel shows a redacted current-session review, and src/app/background-networking/actions.ts exposes Supabase signOut({ scope: \"others\" }) to revoke other active sessions.",
+      "publicClaim": "Participants can inspect the current background-networking session window and revoke other active Supabase sessions from the dashboard."
+    },
+    {
+      "key": "contact_disclosure_mfa_step_up",
+      "label": "Contact disclosure MFA step-up",
+      "status": "implemented",
+      "evidence": "src/lib/background-disclosure.ts requires contact-level grants or contact_email field disclosure to pass requiresContactDisclosureStepUp; src/lib/background-disclosure.test.ts covers the contact disclosure step-up boundary.",
+      "publicClaim": "Contact-level introductions require an explicit disclosure stage and MFA step-up before contact details can be released."
+    },
+    {
       "key": "device_session_review_gate",
       "label": "Device/session review gate",
       "status": "required_before_scale",
-      "evidence": "The public pilot does not yet publish device inventory, session revocation, or anomalous-session review evidence.",
-      "publicClaim": "Sensitive admin scale requires a device/session review and revocation procedure."
+      "evidence": "Participant current-session review and other-session revocation are implemented, but the public pilot does not yet publish provider-wide device inventory, anomalous-session alerting, or completed operator session-review evidence.",
+      "publicClaim": "Sensitive admin scale requires provider-level device inventory and anomalous-session review evidence in addition to participant session revocation."
     },
     {
       "key": "key_rotation_gate",
@@ -117,6 +131,7 @@
       "requires": [
         "private_no_store_cache",
         "supabase_auth_cookies",
+        "contact_disclosure_mfa_step_up",
         "platform_abuse_throttling",
         "incident_response_reporting"
       ],

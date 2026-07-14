@@ -44,6 +44,16 @@ export const PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS = [
   "uncertainty",
 ] as const;
 
+export const BACKGROUND_SOURCE_SUMMARY_SENSITIVE_TEXT_FIELDS = [
+  "summary_text",
+  "purpose",
+] as const;
+
+export const BACKGROUND_PROFILE_INTERVIEW_SENSITIVE_TEXT_FIELDS = [
+  "answer",
+  "private_intent_update",
+] as const;
+
 export interface PreparedEncryptedFields {
   ciphertexts: SensitiveTextFieldMap;
   plaintextFields: SensitiveTextFieldMap;

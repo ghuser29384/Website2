@@ -9,6 +9,7 @@
     "dueDiligenceSteps",
     "triggerCodes",
     "reviewStandards",
+    "triggerStandardMatrix",
     "remedyControls",
     "allowedOutcomes",
     "externalityTests"
@@ -54,6 +55,30 @@
           "key": { "type": "string", "minLength": 1 },
           "label": { "type": "string", "minLength": 1 },
           "scope": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "triggerStandardMatrix": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["triggerCode", "requiredStandards", "evidenceExpectations"],
+        "properties": {
+          "triggerCode": { "type": "string", "minLength": 1 },
+          "requiredStandards": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "evidenceExpectations": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
         },
         "additionalProperties": false
       }

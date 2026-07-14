@@ -33,6 +33,11 @@ export async function GET(request: Request) {
       dueDiligenceSteps: profile.dueDiligenceSteps.map((step) => step.key),
       triggerCodes: profile.triggerCodes.map((trigger) => trigger.key),
       reviewStandards: profile.reviewStandards.map((standard) => standard.key),
+      triggerStandardMatrix: profile.triggerStandardMatrix.map((entry) => ({
+        triggerCode: entry.triggerCode,
+        requiredStandards: entry.requiredStandards,
+        evidenceExpectations: entry.evidenceExpectations,
+      })),
       remedyControls: profile.remedyControls.map((control) => control.key),
       allowedOutcomes: profile.allowedOutcomes,
       externalityTests: profile.externalityTests,

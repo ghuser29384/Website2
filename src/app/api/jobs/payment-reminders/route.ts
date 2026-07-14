@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isCronRequestAuthorized } from "@/lib/cron";
+import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -8,13 +9,6 @@ export const runtime = "nodejs";
 
 type PaymentScheduleRow = Database["public"]["Tables"]["agreement_payment_schedules"]["Row"];
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-
-function formatMoney(amountCents: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency.toUpperCase(),
-  }).format(amountCents / 100);
-}
 
 function advanceDueDate(schedule: PaymentScheduleRow) {
   const dueDate = new Date(schedule.next_due_at);
@@ -68,25 +62,26 @@ async function processPaymentReminders(request: Request) {
   for (const schedule of schedules) {
     const payer = profileMap.get(schedule.payer_id);
     const payee = profileMap.get(schedule.payee_id);
-    const amount = formatMoney(schedule.amount_cents, schedule.currency);
     const nextDueAt = advanceDueDate(schedule);
 
     if (payer?.email) {
+      const payerEmail = buildMoralTradeSafeEmailCopy("payment_reminder");
       await supabase.from("email_outbox").insert({
         profile_id: payer.id,
         recipient_email: payer.email,
-        subject: "Moral Trade payment reminder",
-        body: `A negotiated payment of ${amount} is due for one of your Moral Trade agreements. Sign in to review the agreement, pay through Stripe, or record a change.`,
+        subject: payerEmail.subject,
+        body: payerEmail.body,
       });
       remindersQueued += 1;
     }
 
     if (payee?.email) {
+      const payeeEmail = buildMoralTradeSafeEmailCopy("payment_schedule_update");
       await supabase.from("email_outbox").insert({
         profile_id: payee.id,
         recipient_email: payee.email,
-        subject: "Moral Trade payment schedule update",
-        body: `A scheduled ${amount} payment is due from your counterparty. Sign in to review the agreement record.`,
+        subject: payeeEmail.subject,
+        body: payeeEmail.body,
       });
       remindersQueued += 1;
     }

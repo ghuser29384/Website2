@@ -1,22 +1,24 @@
 # MPGF Launch Readiness Report
 
-Status: local direct-working readiness passed; production-domain direct-working launch not yet passed.
+Status: public readiness report for the CG-VQAF pilot.
 
-## Passed Locally
+## Current Launch State
 
-- Non-real-money pledge-only mechanism.
-- Visible demo pools.
-- Exact integer demo allocation.
-- Balanced non-real-money demo ledger transactions.
-- Safe public summary fields.
-- Profile/config validators for local direct-working readiness.
+- Production real money remains blocked.
+- The current public-goods round is a shadow round / demo round until real-money gates pass.
+- The public mechanism can publish thresholds, matching previews, allocation reports, identity-integrity summaries, threshold calibration, and public postmortem artifacts.
+- Production payout and sponsor-pool release remain disabled until partner and legal approvals are recorded.
 
-## Blocking Production Evidence
+## Required Before Real-Money Expansion
 
-- Browser-level production-domain direct-working verification.
-- Production auth/session verification.
-- Participant journey verification at `https://www.moraltrade.org`.
-- Production health monitor.
-- Formal mechanism source lock for full exact-pilot completion.
+- AML/KYC/sanctions screening framework must be approved by the custody, receipt, or payout partner.
+- External counsel approval required before real-money enablement.
+- Stripe SetupIntent and PaymentIntent webhook handling must pass signature, idempotency, replay, and ledger tests.
+- Every.org partner webhook import must pass redirect-pending, dedupe, and evidence-review tests.
+- Reviewer MFA, dual-control release, dispute freeze, refund, and receipt-template gates must pass.
 
-Conformance rows: AC-DEPLOY-009, AC-DEPLOY-014, AC-COMPLETION-008.
+## Post-Round Learning
+
+- A public postmortem is required after the first real-money round.
+- Parameter resets are next-round-only and cannot mutate the current round.
+- Funding KPIs and experiments must remain aggregate-only and privacy-safe.

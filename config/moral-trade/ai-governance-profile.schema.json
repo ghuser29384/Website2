@@ -11,6 +11,7 @@
     "mlEnabledForStateChanges",
     "requiredDocumentationBeforeMl",
     "documentationTemplates",
+    "sampleDocumentationPackets",
     "permittedAutomation",
     "prohibitedUses",
     "fairnessDocumentation",
@@ -74,6 +75,27 @@
             "uniqueItems": true
           },
           "reviewRule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sampleDocumentationPackets": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["key", "reviewerStatus", "fields", "publicSummary", "redactionNotes"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "reviewerStatus": { "enum": ["shadow_only", "approved_for_pilot"] },
+          "fields": { "type": "object" },
+          "publicSummary": { "type": "object" },
+          "redactionNotes": {
+            "type": "array",
+            "minItems": 2,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
         },
         "additionalProperties": false
       }

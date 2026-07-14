@@ -1,0 +1,28 @@
+{
+  "profileVersion": "mpgf-participant-onboarding-v1",
+  "enabled": true,
+  "onboardingMode": "public_signup",
+  "publicEntryRoute": "/mpgf",
+  "authEntryRoute": "/signup?returnTo=/mpgf",
+  "accessProvisioningEvidencePath": "docs/mpgf/www-participant-journey-verification.md",
+  "intendedParticipantAccessProcess": "Ordinary participants can view the non-real-money demo immediately and use existing sign-up routes for account-backed participation.",
+  "supportRouteOrEmail": "support@moraltrade.org",
+  "returnToMpgfSupported": true,
+  "termsRoute": "/terms",
+  "privacyRoute": "/privacy",
+  "requiredTermsVersion": "mpgf-demo-terms-v1",
+  "requiredPrivacyVersion": "mpgf-demo-privacy-v1",
+  "verificationMode": "clear_next_step_or_demo_verification",
+  "participantTestAccountPolicy": "fixture_owned_or_preexisting_non_real_money_only",
+  "allowedJourneyActions": [
+    "view_public_entry",
+    "start_signup_return_to_mpgf",
+    "create_non_real_money_pledge",
+    "create_monthly_non_real_money_pledge",
+    "view_account_contribution_state",
+    "draft_pool_proposal",
+    "simulate_ballot"
+  ],
+  "fixtureKeys": ["mpgf-cycle-demo-2026-05"],
+  "auditLogRequired": true
+}

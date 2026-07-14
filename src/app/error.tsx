@@ -18,7 +18,7 @@ const recoveryRoutes = [
     text: "Open the public validator contract and health links.",
   },
   {
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     label: "Worked examples",
     text: "Browse static examples while live data recovers.",
   },
