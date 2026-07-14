@@ -6,6 +6,9 @@ on:
       - payments/conditional-offset-settlement
     paths:
       - ".github/workflows/conditional-payments-runtime-preflight.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/conditional-payments-runtime-preflight.yml"
   workflow_dispatch:
 
 permissions:
