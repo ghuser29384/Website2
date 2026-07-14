@@ -44,12 +44,17 @@ const faqs = [
   {
     question: "Is this legal, tax, or escrow advice?",
     answer:
-      "No. The prototype does not provide legal, tax, escrow, custody, investment, or charity-evaluator services.",
+      "No. The service does not provide legal, tax, escrow, custody, investment, or charity-evaluator services.",
   },
   {
     question: "What gets blocked?",
     answer:
       "Threats, coercion, harassment, doxxing, fraud, illegal asks, and political campaign contribution offsets are outside the platform boundary.",
+  },
+  {
+    question: "Does Moral Trade decide which moral view is correct?",
+    answer:
+      "No. Each participant evaluates the proposed change by their own values. The service checks structure, evidence, safety, privacy, and review state rather than imposing a platform moral ranking.",
   },
 ] as const;
 
@@ -66,15 +71,11 @@ export default async function FaqPage() {
   return (
     <div className="page-shell">
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(faqStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
         type="application/ld+json"
       />
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
         type="application/ld+json"
       />
       <SiteTopbar
@@ -88,8 +89,8 @@ export default async function FaqPage() {
         <p className="eyebrow">FAQ</p>
         <h1>Common questions about Moral Trade</h1>
         <p>
-          Short answers for visitors who want to browse offers without first reading the full
-          methodology.
+          Short answers for visitors who want to understand the service without first reading the
+          full methodology.
         </p>
         <div className="faq-list">
           {faqs.map((item) => (

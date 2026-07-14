@@ -8,7 +8,7 @@ import { buildArticleJsonLd, buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const howItWorksDescription =
-  "A plain-language walkthrough of Moral Trade: start with one low-risk example, write the baseline, agree on proof, review risks, and decide whether to continue.";
+  "A plain-language walkthrough of Moral Trade: write the baseline, specify bounded terms, agree on proof, review risks, and accept only if both prefer the result.";
 
 export const metadata: Metadata = {
   title: "How It Works",
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "How Moral Trade works",
     description:
-      "Start with one low-risk example, write what would happen without the trade, agree on proof, review risks, and decide whether to continue.",
+      "Write what would happen without the trade, specify bounded terms, agree on proof, review risks, and accept only if both prefer the result.",
     url: getAbsoluteUrl("/how-it-works"),
     type: "website",
   },
@@ -27,24 +27,29 @@ export const metadata: Metadata = {
 
 const steps = [
   {
-    title: "Start with one low-risk example",
+    title: "Start with a concrete use case",
     detail:
-      "Use a worked example or cohort-supported draft before treating Moral Trade as a live marketplace.",
+      "Use a worked example, an existing counterparty, or a clearly stated public-good action rather than an abstract expression of interest.",
   },
   {
     title: "Write the no-trade baseline",
     detail:
-      "Say what each person would probably do without the trade, so threats and actions that would happen anyway do not get rewarded.",
+      "State what each person would probably do without the trade, so threats and actions that would happen anyway do not get rewarded.",
   },
   {
-    title: "Agree on proof",
+    title: "Specify bounded terms",
     detail:
-      "Name the receipt, public record, dated statement, log, or attestation that a reviewer could inspect later.",
+      "Name the actions, timing, privacy settings, exit conditions, evidence, and challenge window before anyone relies on the record.",
   },
   {
-    title: "Review risks before reliance",
+    title: "Review risks before acceptance",
     detail:
-      "Check coercion, fraud, privacy, third-party externalities, and conflicts before anyone relies on a claim.",
+      "Check coercion, fraud, privacy, third-party externalities, conflicts, and evidence scope before the parties accept.",
+  },
+  {
+    title: "Accept only if both prefer the result",
+    detail:
+      "Each participant decides by their own values. Moral Trade does not impose a hidden moral ranking or collapse disagreement into consensus.",
   },
 ] as const;
 
@@ -62,15 +67,11 @@ export default async function HowItWorksPage() {
   return (
     <div className="page-shell">
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(articleStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleStructuredData) }}
         type="application/ld+json"
       />
       <script
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbStructuredData),
-        }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
         type="application/ld+json"
       />
       <header className="hero">
@@ -86,24 +87,24 @@ export default async function HowItWorksPage() {
             <p className="eyebrow">How it works</p>
             <h1>One reviewable commitment at a time.</h1>
             <p className="hero-text">
-              Start with one low-risk example. Write what would happen without the trade. Agree
-              on proof. Review risks. Then decide whether to continue.
+              Record the default. Specify bounded terms. Agree on proof and privacy. Review risks.
+              Then move only if each participant prefers the result.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/worked-examples">
                 See a worked example
               </Link>
-              <Link className="button button-secondary" href="/validation">
-                Read evidence rules
+              <Link className="button button-secondary" href="/signup?returnTo=/onboarding">
+                Join the network
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Current boundary</p>
+            <p className="eyebrow">Operating boundary</p>
             <p className="hero-followup">
-              The pilot records terms, evidence expectations, and review states. It does not hold
-              funds, automate outreach, or promise legal enforceability.
+              Moral Trade records terms, evidence expectations, privacy grants, and review states.
+              It does not hold funds, autonomously disclose private data, or promise legal enforceability.
             </p>
           </aside>
         </div>
@@ -113,7 +114,7 @@ export default async function HowItWorksPage() {
         <section className="section section-white" aria-labelledby="how-steps-heading">
           <div className="section-head">
             <p className="eyebrow">Process</p>
-            <h2 id="how-steps-heading">The simplest version</h2>
+            <h2 id="how-steps-heading">The complete minimal workflow</h2>
           </div>
 
           <div className="data-grid">
@@ -130,23 +131,23 @@ export default async function HowItWorksPage() {
         <section className="section section-subtle" aria-labelledby="how-next-heading">
           <div className="section-head">
             <p className="eyebrow">Next action</p>
-            <h2 id="how-next-heading">Choose a low-friction first path</h2>
+            <h2 id="how-next-heading">Choose the route that matches your use case</h2>
           </div>
           <div className="data-grid">
             <Link className="panel data-card" href="/worked-examples">
-              <h3>Learn from an example</h3>
-              <p className="route-text">See complete terms without mistaking examples for live demand.</p>
+              <h3>Inspect complete terms</h3>
+              <p className="route-text">See how baselines, actions, evidence, and exit rules fit together.</p>
               <span className="inline-link">Open worked examples</span>
             </Link>
             <Link className="panel data-card" href="/cohort">
-              <h3>Join the founding cohort</h3>
-              <p className="route-text">Start with a small, reviewed action and one serious invite.</p>
-              <span className="inline-link">Read the cohort guide</span>
+              <h3>Join the network</h3>
+              <p className="route-text">Choose one first action and bring a serious use case or counterparty.</p>
+              <span className="inline-link">Open network onboarding</span>
             </Link>
-            <Link className="panel data-card" href="/donate">
-              <h3>Donate through a route</h3>
-              <p className="route-text">Use Every.org first; MPGF evidence can import by webhook or reviewed fallback.</p>
-              <span className="inline-link">Open donation routes</span>
+            <Link className="panel data-card" href="/moral-goods-group-buying">
+              <h3>Coordinate a public good</h3>
+              <p className="route-text">Use thresholded commitments, external evidence, and explicit participation rules.</p>
+              <span className="inline-link">Open public-good tools</span>
             </Link>
           </div>
         </section>

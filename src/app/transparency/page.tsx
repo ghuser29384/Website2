@@ -81,7 +81,7 @@ export default async function TransparencyPage() {
             <h1>Public counts without public case files.</h1>
             <p className="hero-text">
               Moral Trade publishes aggregate review, disclosure, report, appeal, and operator
-              timing metrics so the pilot can be inspected without exposing private wishes,
+              timing metrics so the service can be inspected without exposing private wishes,
               counterparties, report bodies, source notes, or evidence artifacts.
             </p>
             <div className="hero-actions">

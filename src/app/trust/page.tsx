@@ -27,14 +27,14 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "What You Can Rely On",
   description:
-    "A plain-language trust explainer for Moral Trade: prototype guarantees, review states, non-guarantees, and recourse routes.",
+    "A plain-language trust explainer for Moral Trade: operating commitments, review states, non-guarantees, and recourse routes.",
   alternates: {
     canonical: "/trust",
   },
   openGraph: {
     title: "What you can rely on today",
     description:
-      "Understand Moral Trade's current prototype guarantees, non-guarantees, review states, and recourse routes.",
+      "Understand Moral Trade's operating commitments, non-guarantees, review states, and recourse routes.",
     url: getAbsoluteUrl("/trust"),
     type: "website",
   },
@@ -178,8 +178,8 @@ export default async function TrustPage() {
             <p className="eyebrow">Guarantees</p>
             <h2>Current public commitments</h2>
             <p>
-              These are the operational claims the site is designed to support in the current
-              pilot phase.
+              These are the operational claims the service is designed to support on every relevant
+              route.
             </p>
           </div>
 
