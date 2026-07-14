@@ -56,17 +56,52 @@ async function beginWebhookEvent(input: {
   });
 
   if (!error) {
-    return { duplicate: false };
+    return { duplicate: false as const, replay: false as const };
   }
-  if (error.code === "23505") {
-    const { data: existing } = await supabase
+  if (error.code !== "23505") {
+    throw new Error(`Unable to record the Stripe webhook event: ${error.message}`);
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("conditional_payment_webhook_events")
+    .select("status, payload_sha256, event_type, livemode")
+    .eq("stripe_event_id", event.id)
+    .maybeSingle();
+  if (existingError || !existing) {
+    throw new Error(
+      `Unable to read the duplicate Stripe event: ${existingError?.message ?? event.id}`,
+    );
+  }
+  if (
+    existing.payload_sha256 !== rawBodyHash ||
+    existing.event_type !== event.type ||
+    Boolean(existing.livemode) !== event.livemode
+  ) {
+    throw new Error("A duplicate Stripe event ID arrived with different signed content.");
+  }
+
+  if (existing.status === "failed") {
+    const { error: retryError } = await supabase
       .from("conditional_payment_webhook_events")
-      .select("status")
+      .update({
+        status: "processing",
+        error_message: null,
+        processed_at: null,
+        received_at: new Date().toISOString(),
+      })
       .eq("stripe_event_id", event.id)
-      .maybeSingle();
-    return { duplicate: true, status: existing?.status ?? "processed" };
+      .eq("status", "failed");
+    if (retryError) {
+      throw new Error(`Unable to retry the failed Stripe event: ${retryError.message}`);
+    }
+    return { duplicate: false as const, replay: true as const };
   }
-  throw new Error(`Unable to record the Stripe webhook event: ${error.message}`);
+
+  return {
+    duplicate: true as const,
+    replay: false as const,
+    status: String(existing.status),
+  };
 }
 
 async function finishWebhookEvent(
@@ -155,9 +190,6 @@ async function reconcileTransfer(transfer: Stripe.Transfer, eventType: string) {
   };
   if (eventType === "transfer.reversed" || transfer.reversed) {
     update.status = "reversed";
-  } else if (eventType === "transfer.failed") {
-    update.status = "failed";
-    update.failure_code = "stripe_transfer_failed";
   } else {
     update.status = "transferred";
   }
@@ -277,11 +309,14 @@ async function processConditionalEvent(event: Stripe.Event) {
     return reconcileChargeRefunded(object as Stripe.Charge);
   }
 
-  if (event.type === "refund.created" || event.type === "refund.updated" || event.type === "refund.failed") {
+  if (
+    event.type === "refund.created" ||
+    event.type === "refund.updated" ||
+    event.type === "refund.failed"
+  ) {
     const refund = object as Stripe.Refund;
     if (!isConditionalMetadata(refund.metadata)) {
-      const result = await reconcileConditionalRefund(refund);
-      return result;
+      return reconcileConditionalRefund(refund);
     }
     await reconcileConditionalRefund(refund);
     return { handled: true as const };
@@ -298,8 +333,7 @@ async function processConditionalEvent(event: Stripe.Event) {
   if (
     event.type === "transfer.created" ||
     event.type === "transfer.updated" ||
-    event.type === "transfer.reversed" ||
-    event.type === "transfer.failed"
+    event.type === "transfer.reversed"
   ) {
     return reconcileTransfer(object as Stripe.Transfer, event.type);
   }
@@ -326,6 +360,16 @@ export async function handleConditionalStripeWebhookEvent(input: {
 
   const begun = await beginWebhookEvent(input);
   if (begun.duplicate) {
+    if (begun.status === "ignored") {
+      return {
+        handled: false,
+        duplicate: true,
+        status: "ignored",
+      };
+    }
+    if (begun.status === "processing") {
+      throw new Error("This signed Stripe event is already being processed; request a retry.");
+    }
     return {
       handled: true,
       duplicate: true,
@@ -341,11 +385,12 @@ export async function handleConditionalStripeWebhookEvent(input: {
     }
     return {
       handled: result.handled,
-      duplicate: false,
+      duplicate: begun.replay,
       status: result.handled ? "processed" : "ignored",
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown conditional-payment webhook error";
+    const message =
+      error instanceof Error ? error.message : "Unknown conditional-payment webhook error";
     await finishWebhookEvent(input.event.id, "failed", message);
     throw error;
   }
