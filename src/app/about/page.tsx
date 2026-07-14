@@ -116,7 +116,7 @@ export default async function AboutPage() {
               <p className="route-text">Review operator routes, reviewer responsibilities, decision rights, and governance gaps.</p>
               <span className="inline-link">Open team and governance</span>
             </Link>
-            <Link className="panel data-card" href="/pilot-updates">
+            <Link className="panel data-card" href="/updates">
               <h3>What changed recently?</h3>
               <p className="route-text">Read service changes, governance updates, and publication notes.</p>
               <span className="inline-link">Open updates</span>
