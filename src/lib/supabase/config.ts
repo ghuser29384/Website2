@@ -1,8 +1,19 @@
+const DEFAULT_PUBLIC_SUPABASE_URL = "https://jnpoxvalyjtdghnperyu.supabase.co";
+const DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY =
+  "sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT";
+
+function resolvePublicSupabaseEnv() {
+  return {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? DEFAULT_PUBLIC_SUPABASE_URL,
+    publishableKey:
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      DEFAULT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  };
+}
+
 export function hasSupabaseEnv() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  );
+  const { url, publishableKey } = resolvePublicSupabaseEnv();
+  return Boolean(url && publishableKey);
 }
 
 export function getSiteUrl() {
@@ -32,8 +43,7 @@ export function getSiteUrl() {
 }
 
 export function getSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const { url, publishableKey } = resolvePublicSupabaseEnv();
 
   if (!url || !publishableKey) {
     throw new Error(
