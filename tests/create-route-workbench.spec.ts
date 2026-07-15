@@ -93,6 +93,30 @@ test.describe("Create route workbench", () => {
     }
   });
 
+  test("shows a distinct hover color for each route", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/create");
+
+    const expectedHoverColors = [
+      ["trade", "rgb(220, 239, 253)"],
+      ["offset", "rgb(236, 234, 255)"],
+      ["pool", "rgb(241, 247, 204)"],
+      ["back", "rgb(231, 239, 229)"],
+    ] as const;
+    const observedHoverColors: string[] = [];
+
+    for (const [mode, expectedColor] of expectedHoverColors) {
+      const routeButton = page.locator(`[data-create-mode="${mode}"]`);
+      await routeButton.hover();
+      await expect(routeButton).toHaveCSS("background-color", expectedColor);
+      observedHoverColors.push(
+        await routeButton.evaluate((element) => getComputedStyle(element).backgroundColor),
+      );
+    }
+
+    expect(new Set(observedHoverColors).size).toBe(expectedHoverColors.length);
+  });
+
   test("keeps the route chooser usable without horizontal overflow on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/create?mode=offset");
