@@ -1,80 +1,105 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { DealReceipt, type DealReceiptRow } from "@/components/marketplace/deal-receipt";
-import { ThresholdField } from "@/components/marketplace/gain-field";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { MetricCard } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
-import { getMoralGoodsDiscoverySurface } from "@/lib/moral-trade/group-buying";
+import { loadLiveGroupBuyingSnapshot } from "@/lib/moral-trade/group-buying-live";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
+import liveStyles from "../moral-goods-group-buying/live-state.module.css";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
-  title: "Conditional pools",
+  title: "Live conditional pools",
   description:
-    "Pledge up to a maximum and fund a moral public good only when the published threshold and review conditions pass.",
+    "Browse current production conditional pools and see their actual financial state. Demo, test, sandbox, and simulated inventory is excluded.",
   alternates: { canonical: "/pools" },
   openGraph: {
-    title: "Conditional funding pools at Moral Trade",
+    title: "Live conditional pools at Moral Trade",
     description:
-      "Explore reviewed pools with explicit maximum exposure, threshold, deadline, recipient, settlement, evidence, and failure rules.",
+      "Current production pool inventory, conditional exposure, charges, refunds, transfers, and payment-readiness state.",
     url: getAbsoluteUrl("/pools"),
     type: "website",
   },
 };
 
-const receiptRows: readonly DealReceiptRow[] = [
-  {
-    label: "Without this pool",
-    value: "No conditional contribution is made through this record.",
-  },
-  {
-    label: "Your commitment",
-    value: "Pledge up to $0.50 to the named recipient under the frozen rules.",
-  },
-  {
-    label: "Other commitments",
-    value: "Enough eligible commitments to reach the published $10,000 funding condition.",
-  },
-  {
-    label: "Condition",
-    value: "The threshold and review gates pass by the stated deadline.",
-  },
-  {
-    label: "Maximum exposure",
-    value: "$0.50. No charge if the condition does not pass.",
-    emphasis: true,
-  },
-  {
-    label: "Evidence",
-    value: "Recipient, eligibility, authorization, threshold, settlement, and receipt records.",
-  },
-  {
-    label: "Exit",
-    value: "Withdrawal and expiry behavior follows the frozen pool terms shown before authorization.",
-  },
-];
-
 const mechanismFacts = [
   ["Maximum exposure", "Every person sees the most they can be charged before authorizing."],
-  ["Funding condition", "The threshold, eligible amount, deadline, and relevant gates are published together."],
-  ["Failure behavior", "No successful threshold means no settlement under the pool record."],
-  ["State vocabulary", "Pledged, authorized, active, completed, challenged, cancelled, and reversed remain distinct."],
+  ["Funding condition", "The threshold, eligible amount, deadline, and review gates are published together."],
+  ["Failure behavior", "A condition that does not pass creates no successful settlement record."],
+  ["State vocabulary", "Pledge, authorization, charge, refund, transfer, and outcome remain distinct."],
 ] as const;
 
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
+function formatMoney(amountCents: number, currency: string) {
+  const normalizedCurrency = currency.toUpperCase();
+  let formatter = moneyFormatters.get(normalizedCurrency);
+
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    moneyFormatters.set(normalizedCurrency, formatter);
+  }
+
+  return formatter.format(amountCents / 100);
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "No public deadline";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function readinessLabel(status: "ready" | "pending" | "blocked" | "unavailable") {
+  if (status === "ready") {
+    return "Ready";
+  }
+
+  if (status === "pending") {
+    return "Pending review";
+  }
+
+  if (status === "blocked") {
+    return "Blocked";
+  }
+
+  return "Unavailable";
+}
+
 export default async function PoolsPage() {
-  const viewer = await getViewer();
+  const [viewer, snapshot] = await Promise.all([getViewer(), loadLiveGroupBuyingSnapshot()]);
   const isAuthenticated = Boolean(viewer);
-  const surface = getMoralGoodsDiscoverySurface({});
-  const featuredCards = surface.cards.slice(0, 4);
+  const liveDataAvailable = snapshot.sourceStatus === "live";
+  const financial = snapshot.financial;
+  const readiness = snapshot.paymentReadiness;
 
   return (
     <div className="page-shell marketplace-product-shell">
       <div className="mt-beta-strip">
-        <span>Pool</span>
-        <span>A pledge is a maximum conditional exposure, not a completed donation.</span>
-        <Link href="/moral-goods-group-buying">Advanced tools</Link>
+        <span>Live pools</span>
+        <span>
+          {liveDataAvailable
+            ? "Production inventory and financial totals are current. Demo and test records are excluded."
+            : "Production data is unavailable. No demo fallback is being shown."}
+        </span>
+        <Link href="/status">Status</Link>
       </div>
 
       <header>
@@ -89,93 +114,243 @@ export default async function PoolsPage() {
       <main className="mt-product-main" id="main-content" tabIndex={-1}>
         <section className="mt-mechanism-hero" aria-labelledby="pools-heading">
           <div className="mt-mechanism-copy">
-            <p className="mt-product-kicker">Conditional pools</p>
-            <h1 id="pools-heading">Pledge a little. Fund it only when enough people join.</h1>
+            <p className="mt-product-kicker">Live conditional pools</p>
+            <h1 id="pools-heading">Only show pools that exist.</h1>
             <p>
-              Choose a named maximum exposure. The pool settles only when the threshold and the
-              published review conditions pass by the deadline.
+              Browse reviewed production inventory and the money states actually recorded for it.
+              An empty marketplace stays empty instead of being filled with examples.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href="#featured-pools">Explore pools</Link>
-              <Link className="button button-secondary" href="/mpgf">Build a public-good budget</Link>
+              <Link className="button button-primary" href="#live-pools">
+                Explore live pools
+              </Link>
+              <Link className="button button-secondary" href="/mpgf/pools/new">
+                Propose a pool
+              </Link>
             </div>
-            <ul className="mt-product-proof-line" aria-label="Pool terms">
-              <li>Maximum exposure</li>
-              <li>Funding condition</li>
-              <li>Deadline</li>
-              <li>Failure rule</li>
+            <ul className="mt-product-proof-line" aria-label="Pool data rules">
+              <li>Production records</li>
+              <li>Test rows excluded</li>
+              <li>Financial state separated</li>
+              <li>No demo demand</li>
             </ul>
           </div>
-          <div className="mt-mechanism-visual">
-            <ThresholdField progress={64} />
-          </div>
+
+          <aside className="hero-panel panel">
+            <p className="eyebrow">Production state</p>
+            <h2>{liveDataAvailable ? `${snapshot.routes.length} live routes` : "Data unavailable"}</h2>
+            <dl className="detail-grid">
+              <div>
+                <dt>Open cycles</dt>
+                <dd>{liveDataAvailable ? snapshot.openCycleCount : "—"}</dd>
+              </div>
+              <div>
+                <dt>Open exposure</dt>
+                <dd>
+                  {liveDataAvailable
+                    ? formatMoney(financial.openConditionalExposureCents, financial.currency)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>Net charged</dt>
+                <dd>
+                  {liveDataAvailable
+                    ? formatMoney(financial.netChargedCents, financial.currency)
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>Payment acceptance</dt>
+                <dd>{liveDataAvailable ? readinessLabel(readiness.status) : "Unavailable"}</dd>
+              </div>
+            </dl>
+          </aside>
         </section>
 
-        <section className="mt-product-section is-white" id="featured-pools" aria-labelledby="featured-pools-heading">
+        <section
+          className="mt-product-section is-white"
+          id="live-pools"
+          aria-labelledby="live-pools-heading"
+        >
           <div className="mt-product-section-head">
             <div>
               <p className="mt-product-kicker">Marketplace</p>
-              <h2 id="featured-pools-heading">Open a safe preview before authorizing.</h2>
+              <h2 id="live-pools-heading">Current production inventory.</h2>
             </div>
             <p>
-              Reviewed routes remain separate from completed funding. Every card shows its current
-              state, progress language, deadline, limit, and the next action that is actually available.
+              A route appears only after a reviewed proposal is attached to an open, non-demo
+              production cycle. Pledge-only routes may be live inventory without being financial
+              transactions.
             </p>
           </div>
 
-          <div className="mt-pool-list">
-            {featuredCards.length ? (
-              featuredCards.map((card) => (
-                <article className="mt-pool-row" key={card.envelopeId}>
-                  <div>
-                    <p className="mt-market-eyebrow">{card.routeLabel}</p>
-                    <h3>{card.title}</h3>
-                    <p>{card.statusSentence}</p>
-                  </div>
-                  <div className="mt-pool-row-meta">
-                    <strong>{card.priceLabel}</strong>
-                    <span>{card.targetLabel}</span>
-                    <span>{card.progressLabel}</span>
-                    <span>{card.deadlineLabel}</span>
-                    <span>{card.limitLabel}</span>
-                  </div>
-                  <Link className="button button-primary" href={card.href}>
-                    {card.ctaLabel}
-                  </Link>
-                </article>
-              ))
+          {liveDataAvailable ? (
+            snapshot.routes.length > 0 ? (
+              <div className="mt-pool-list">
+                {snapshot.routes.map((route) => (
+                  <article className="mt-pool-row" key={route.id}>
+                    <div>
+                      <p className="mt-market-eyebrow">{route.causeArea}</p>
+                      <h3>{route.title}</h3>
+                      <p>{route.statusSentence}</p>
+                    </div>
+                    <div className="mt-pool-row-meta">
+                      <strong>
+                        {route.minimumFundingCents
+                          ? `${formatMoney(route.minimumFundingCents, route.currency)} minimum`
+                          : "No minimum recorded"}
+                      </strong>
+                      <span>{formatMoney(route.targetFundingCents, route.currency)} maximum</span>
+                      <span>{formatDate(route.deadlineAt)}</span>
+                      <span>{route.fundingMode === "real_money" ? "Real-money" : "Pledge-only"}</span>
+                    </div>
+                    <Link className="button button-primary" href={route.href}>
+                      Request access
+                    </Link>
+                  </article>
+                ))}
+              </div>
             ) : (
-              <article className="mt-pool-row">
-                <div>
-                  <h3>No reviewed pool routes are available</h3>
-                  <p>The marketplace does not substitute demonstrations for open participant inventory.</p>
+              <article className={liveStyles.emptyState}>
+                <div className={liveStyles.stateHeader}>
+                  <div>
+                    <p className="eyebrow">Current production result</p>
+                    <h3>No live conditional pools are open.</h3>
+                  </div>
+                  <span className={liveStyles.liveBadge}>0 routes</span>
                 </div>
-                <Link className="button button-secondary" href="/moral-goods-group-buying">
-                  Review the mechanism
-                </Link>
+                <p>
+                  The database currently contains no approved, non-demo pool inventory. This is the
+                  actual marketplace state, not an error and not an invitation to infer demand from
+                  worked examples.
+                </p>
+                <div className="mt-product-actions">
+                  <Link className="button button-primary" href="/mpgf/pools/new">
+                    Propose a pool
+                  </Link>
+                  <Link className="button button-secondary" href="/contact">
+                    Contact the operator
+                  </Link>
+                </div>
               </article>
-            )}
-          </div>
-
-          <div className="mt-product-actions">
-            <Link className="button button-primary" href="/moral-goods-group-buying#deals">
-              Explore all reviewed routes
-            </Link>
-            <Link className="button button-secondary" href="/mpgf/pools">
-              Browse candidate pools
-            </Link>
-          </div>
+            )
+          ) : (
+            <article className={liveStyles.unavailableState}>
+              <div className={liveStyles.stateHeader}>
+                <div>
+                  <p className="eyebrow">Data source</p>
+                  <h3>Live inventory is temporarily unavailable.</h3>
+                </div>
+                <span className={liveStyles.unavailableBadge}>No fallback</span>
+              </div>
+              <p>
+                The page is withholding inventory rather than substituting seed or test records.
+              </p>
+              <div className="mt-product-actions">
+                <Link className="button button-secondary" href="/status">
+                  Check service status
+                </Link>
+              </div>
+            </article>
+          )}
         </section>
 
-        <section className="mt-product-section" aria-labelledby="pool-terms-heading">
+        <section className="mt-product-section" aria-labelledby="pool-financial-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">Financial state</p>
+              <h2 id="pool-financial-heading">Current production totals.</h2>
+            </div>
+            <p>
+              These totals come from live public-goods payment mandates, attempts, refunds,
+              transfers, and real-money recurring commitments. Pledge-only records are excluded.
+            </p>
+          </div>
+
+          <div className="pilot-metric-grid">
+            <MetricCard
+              label="Open conditional exposure"
+              value={
+                liveDataAvailable
+                  ? formatMoney(financial.openConditionalExposureCents, financial.currency)
+                  : "Unavailable"
+              }
+              detail="Uncharged maximums on open live mandates."
+            />
+            <MetricCard
+              label="Net charged"
+              value={
+                liveDataAvailable
+                  ? formatMoney(financial.netChargedCents, financial.currency)
+                  : "Unavailable"
+              }
+              detail="Successful live charges less recorded refunds."
+            />
+            <MetricCard
+              label="Transferred"
+              value={
+                liveDataAvailable
+                  ? formatMoney(financial.transferredCents, financial.currency)
+                  : "Unavailable"
+              }
+              detail="Settlement transfers in transferred state."
+            />
+            <MetricCard
+              label="Refunded"
+              value={
+                liveDataAvailable
+                  ? formatMoney(financial.refundedCents, financial.currency)
+                  : "Unavailable"
+              }
+              detail="Refunded amount recorded against payment attempts."
+            />
+          </div>
+
+          <article className={liveStyles.readinessPanel}>
+            <div className={liveStyles.readinessCopy}>
+              <p className="eyebrow">Payment acceptance</p>
+              <h3>{liveDataAvailable ? readinessLabel(readiness.status) : "Unavailable"}</h3>
+              <p>
+                {liveDataAvailable && readiness.status === "ready"
+                  ? "All recorded live payment gates pass. Route-specific review and participant acceptance still apply."
+                  : liveDataAvailable && readiness.status === "blocked"
+                    ? "One or more live payment gates are blocked. No authorization or settlement claim is offered here."
+                    : liveDataAvailable && readiness.status === "pending"
+                      ? "One or more required live reviews remain pending."
+                      : "Payment readiness could not be determined from the production source."}
+              </p>
+            </div>
+            <dl className={liveStyles.readinessFacts}>
+              <div>
+                <dt>Passed</dt>
+                <dd>{liveDataAvailable ? readiness.passedGateCount : "—"}</dd>
+              </div>
+              <div>
+                <dt>Pending</dt>
+                <dd>{liveDataAvailable ? readiness.pendingGateCount : "—"}</dd>
+              </div>
+              <div>
+                <dt>Blocked</dt>
+                <dd>{liveDataAvailable ? readiness.blockedGateCount : "—"}</dd>
+              </div>
+              <div>
+                <dt>Live mandates</dt>
+                <dd>{liveDataAvailable ? financial.liveMandateCount : "—"}</dd>
+              </div>
+            </dl>
+          </article>
+        </section>
+
+        <section className="mt-product-section is-white" aria-labelledby="pool-terms-heading">
           <div className="mt-product-section-head">
             <div>
               <p className="mt-product-kicker">Before you pledge</p>
               <h2 id="pool-terms-heading">The condition is part of the product.</h2>
             </div>
             <p>
-              Threshold progress is not enough. The recipient, settlement, evidence, authorization,
-              visibility, refund or release behavior, and challenge path must travel with it.
+              Threshold progress is not enough. Recipient, authorization, evidence, settlement,
+              refund or release behavior, visibility, and challenge rights travel with the route.
             </p>
           </div>
           <div className="mt-mechanism-facts">
@@ -187,55 +362,13 @@ export default async function PoolsPage() {
               </article>
             ))}
           </div>
-        </section>
-
-        <section className="mt-product-section is-white" aria-labelledby="pool-receipt-heading">
-          <div className="mt-receipt-layout">
-            <div className="mt-receipt-copy">
-              <p className="mt-product-kicker">Deal Receipt</p>
-              <h2 id="pool-receipt-heading">Conditionality, leverage, and pivotality are different claims.</h2>
-              <p>
-                Moral Trade can show the condition that controls settlement and the total amount
-                coordinated. It should not routinely claim that the outcome depended on one specific
-                pledge without separate counterfactual evidence.
-              </p>
-              <Link className="button button-secondary" href="/moral-goods-group-buying">
-                Review pool mechanics
-              </Link>
-            </div>
-            <DealReceipt
-              note="Illustrative pool. It is not an open funding round, payment authorization, completed donation, or pivotality claim."
-              rows={receiptRows}
-              state="Draft"
-              title="$0.50 → $10,000 condition"
-            />
-          </div>
-        </section>
-
-        <section className="mt-product-section" aria-labelledby="pool-claims-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Claim discipline</p>
-              <h2 id="pool-claims-heading">Say exactly what the mechanism establishes.</h2>
-            </div>
-            <p>
-              This keeps the product persuasive without converting a conditional funding rule into an
-              unsupported impact multiplier or individual pivotality claim.
-            </p>
-          </div>
-          <div className="mt-caveat-panel">
-            <article>
-              <h3>Conditionality</h3>
-              <p>“You are charged only if the published funding condition passes.”</p>
-            </article>
-            <article>
-              <h3>Coordination ratio</h3>
-              <p>“Your maximum pledge participates in a pool targeting this total coordinated amount.”</p>
-            </article>
-            <article>
-              <h3>Pivotality</h3>
-              <p>“The larger outcome would not have occurred without you” is a separate counterfactual claim.</p>
-            </article>
+          <div className="mt-product-actions">
+            <Link className="button button-primary" href="/moral-goods-group-buying">
+              Open full live state
+            </Link>
+            <Link className="button button-secondary" href="/trust">
+              Review safeguards
+            </Link>
           </div>
         </section>
       </main>
