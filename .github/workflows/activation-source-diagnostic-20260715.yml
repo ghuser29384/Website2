@@ -1,0 +1,35 @@
+name: Activation source diagnostic 2026-07-15
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/activation-source-diagnostic-20260715.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-diagnostic:
+    if: github.head_ref == 'activation-gate-20260715'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Capture relevant source and selector matches
+        run: |
+          mkdir -p activation-source-diagnostic
+          cp src/app/globals.css activation-source-diagnostic/globals.css
+          cp 'src/app/offers/[offerId]/page.tsx' activation-source-diagnostic/offer-page.tsx
+          grep -nEi 'marketplace-app-shell|marketplace-detail-section|detail-block|#respond|main-content|content-visibility|visibility:|opacity:|display:[[:space:]]*none|section-white' src/app/globals.css > activation-source-diagnostic/css-matches.txt || true
+          grep -RniE 'IntersectionObserver|contentVisibility|classList.*(visible|reveal)|data-reveal|opacity-0|hidden' src components scripts 2>/dev/null > activation-source-diagnostic/code-matches.txt || true
+
+      - name: Upload source diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: activation-source-diagnostic-${{ github.run_id }}
+          path: activation-source-diagnostic
+          retention-days: 3
