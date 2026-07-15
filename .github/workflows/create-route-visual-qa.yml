@@ -5,6 +5,7 @@ on:
     paths:
       - "src/app/create/**"
       - "src/app/marketplace-ui.css"
+      - "src/components/backing/**"
       - "src/components/create/**"
       - "src/components/marketplace/deal-receipt.tsx"
       - "src/lib/create-routes*"
@@ -36,6 +37,7 @@ jobs:
         run: |
           npx eslint \
             src/app/create/page.tsx \
+            src/components/backing/backing-create-form.tsx \
             src/components/create/create-route-chooser.tsx \
             src/lib/create-routes.ts \
             src/lib/create-routes.test.ts \
