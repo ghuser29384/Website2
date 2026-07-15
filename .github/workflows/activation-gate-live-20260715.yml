@@ -1,0 +1,50 @@
+name: Live production activation gate 2026-07-15
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/activation-gate-live-20260715.yml"
+      - "scripts/activation-gate-live-20260715.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  activation-gate:
+    if: github.head_ref == 'activation-gate-live-20260715' || github.ref_name == 'activation-gate-live-20260715'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ACTIVATION_BASE_URL: https://www.moraltrade.org
+      ACTIVATION_INJECT_OFFER_SURFACE_FIX: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise production activation path
+        run: node scripts/activation-gate-live-20260715.mjs
+
+      - name: Upload activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: activation-gate-output-${{ github.run_id }}
+          path: activation-gate-output
+          if-no-files-found: warn
+          retention-days: 3
