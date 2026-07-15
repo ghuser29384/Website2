@@ -6,239 +6,243 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
-  MORAL_GOODS_FEATURE_CAPABILITIES,
-  MORAL_GOODS_SEED_ENVELOPES,
-  buildDealCardModel,
-  formatMinorMoney,
-  getPrivateProposalIntakeFields,
-  type MoralGoodsPurchaseEnvelope,
-} from "@/lib/moral-trade/group-buying";
+  loadLiveGroupBuyingSnapshot,
+  type LiveGroupBuyingRoute,
+} from "@/lib/moral-trade/group-buying-live";
+import { getPrivateProposalIntakeFields } from "@/lib/moral-trade/group-buying";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
+import liveStyles from "./live-state.module.css";
 import styles from "./moral-goods-group-buying.module.css";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
-  title: "Fund verified actions together",
+  title: "Live group buying",
   description:
-    "Compare small, conditional ways to fund verified moral actions, with the action, consideration, deadline, evidence, and failure rule shown together.",
+    "View current production group-buying inventory and financial state. Demo, test, sandbox, and simulated records are excluded.",
   alternates: {
     canonical: "/moral-goods-group-buying",
   },
   openGraph: {
-    title: "Fund verified actions together | Moral Trade",
+    title: "Live group buying | Moral Trade",
     description:
-      "A clear preview of group-funded moral-action routes, recurring budgets, participant proof, and public reporting.",
+      "Current production inventory, conditional exposure, charges, refunds, transfers, and payment-readiness state for Moral Trade group buying.",
     url: getAbsoluteUrl("/moral-goods-group-buying"),
     type: "website",
   },
 };
 
-const routePresentation: Record<
-  string,
-  {
-    eyebrow: string;
-    title: string;
-    summary: string;
+const moneyFormatters = new Map<string, Intl.NumberFormat>();
+
+function formatMoney(amountCents: number, currency: string) {
+  const normalizedCurrency = currency.toUpperCase();
+  let formatter = moneyFormatters.get(normalizedCurrency);
+
+  if (!formatter) {
+    formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    moneyFormatters.set(normalizedCurrency, formatter);
   }
-> = {
-  "lot:no-meat-2-day-50": {
-    eyebrow: "Fund one verified action",
-    title: "Fund one 2-day no-meat pledge",
-    summary:
-      "One selected adult avoids meat and fish for two days. If the action verifies under the frozen rules, $50 is donated to an approved charity selected by the participant.",
-  },
-  "basket:no-meat-5x50": {
-    eyebrow: "Fund several similar actions",
-    title: "Fund a basket of five 2-day pledges",
-    summary:
-      "Five participant obligations are funded together, while each person keeps an independent acceptance, evidence, failure, and settlement record.",
-  },
-  "round:vegetarian-30-day": {
-    eyebrow: "Fund a reviewed round",
-    title: "Sponsor a 30-day vegetarian round",
-    summary:
-      "Selected adults complete a longer diet-shift window. Participant payouts depend on verified, protocol-adjusted action units rather than a single group-wide success claim.",
-  },
-  "standing-pool:animal-welfare-5-month": {
-    eyebrow: "Set a bounded recurring budget",
-    title: "Allocate up to $5 a month across eligible routes",
-    summary:
-      "A standing preference can direct small amounts to compatible lots or baskets. It is an allocation rule, not a stored wallet balance or an impact claim by itself.",
-  },
-};
 
-const routePriority = new Map([
-  ["lot:no-meat-2-day-50", 0],
-  ["basket:no-meat-5x50", 1],
-  ["round:vegetarian-30-day", 2],
-  ["standing-pool:animal-welfare-5-month", 3],
-]);
-
-const dateFormatter = new Intl.DateTimeFormat("en", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-  year: "numeric",
-});
+  return formatter.format(amountCents / 100);
+}
 
 function formatDate(value: string | null) {
-  return value ? dateFormatter.format(new Date(value)) : "No fixed deadline";
-}
-
-function formatStartingAmount(envelope: MoralGoodsPurchaseEnvelope) {
-  const amountMinor =
-    envelope.funding.microPledgeDefaultMinor ??
-    envelope.funding.providerMinimumMinor ??
-    envelope.funding.targetMinor;
-
-  return formatMinorMoney({
-    amountMinor,
-    currency: envelope.currency,
-  });
-}
-
-function statusClass(envelope: MoralGoodsPurchaseEnvelope) {
-  if (
-    envelope.stateGroup === "funding" ||
-    envelope.stateGroup === "funded_awaiting_acceptance" ||
-    envelope.stateGroup === "accepted_not_active"
-  ) {
-    return styles.statusFunding;
+  if (!value) {
+    return "No public deadline";
   }
 
-  if (
-    envelope.stateGroup === "active" ||
-    envelope.stateGroup === "evidence_due" ||
-    envelope.stateGroup === "under_review" ||
-    envelope.stateGroup === "settling" ||
-    envelope.stateGroup === "completed"
-  ) {
-    return styles.statusAction;
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatTimestamp(value: string | null) {
+  if (!value) {
+    return "No live financial activity recorded";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+    timeZoneName: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function readinessLabel(status: "ready" | "pending" | "blocked" | "unavailable") {
+  if (status === "ready") {
+    return "Ready";
+  }
+
+  if (status === "pending") {
+    return "Pending review";
+  }
+
+  if (status === "blocked") {
+    return "Blocked";
+  }
+
+  return "Unavailable";
+}
+
+function readinessBadgeClass(status: "ready" | "pending" | "blocked" | "unavailable") {
+  if (status === "ready") {
+    return liveStyles.readyBadge;
+  }
+
+  if (status === "pending") {
+    return liveStyles.pendingBadge;
+  }
+
+  if (status === "blocked") {
+    return liveStyles.blockedBadge;
+  }
+
+  return liveStyles.unavailableBadge;
+}
+
+function gateStatusClass(status: "passed" | "pending" | "blocked" | "unknown") {
+  if (status === "passed") {
+    return liveStyles.gateStatusPassed;
+  }
+
+  if (status === "pending") {
+    return liveStyles.gateStatusPending;
+  }
+
+  if (status === "blocked") {
+    return liveStyles.gateStatusBlocked;
   }
 
   return "";
 }
 
-function RouteCard({
-  envelope,
-  featured = false,
+function FinancialMetric({
+  detail,
+  label,
+  value,
 }: {
-  envelope: MoralGoodsPurchaseEnvelope;
-  featured?: boolean;
+  detail: string;
+  label: string;
+  value: string;
 }) {
-  const card = buildDealCardModel(envelope, "funder");
-  const presentation = routePresentation[envelope.id] ?? {
-    eyebrow: card.primaryLabel,
-    title: envelope.title,
-    summary: card.rows.statusSentence,
-  };
-  const targetAmount = formatMinorMoney({
-    amountMinor: envelope.funding.targetMinor,
-    currency: envelope.currency,
-  });
+  return (
+    <article className={liveStyles.financialMetric}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
+  );
+}
+
+function RouteCard({ route }: { route: LiveGroupBuyingRoute }) {
+  const minimum = route.minimumFundingCents
+    ? formatMoney(route.minimumFundingCents, route.currency)
+    : "No minimum recorded";
 
   return (
-    <article
-      className={[
-        styles.routeCard,
-        featured ? styles.routeCardFeatured : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      id={envelope.slug}
-    >
+    <article className={styles.routeCard} id={route.publicKey}>
       <header className={styles.routeCardHeader}>
         <div>
-          <p className={styles.cardKicker}>{presentation.eyebrow}</p>
-          <h3>{presentation.title}</h3>
+          <p className={styles.cardKicker}>{route.causeArea}</p>
+          <h3>{route.title}</h3>
         </div>
         <div className={styles.statusStack}>
-          <span className={styles.demoBadge}>Illustrative route</span>
-          <span
-            className={[styles.statusBadge, statusClass(envelope)]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {card.rows.status}
+          <span className={liveStyles.liveBadge}>Live inventory</span>
+          <span className={[styles.statusBadge, styles.statusFunding].join(" ")}>
+            {route.statusLabel}
           </span>
         </div>
       </header>
 
-      <p className={styles.routeSummary}>{presentation.summary}</p>
+      <p className={styles.routeSummary}>{route.summary}</p>
 
       <div className={styles.routeMetrics}>
         <div>
-          <span className={styles.routeMetaLabel}>Starting amount</span>
-          <strong>{formatStartingAmount(envelope)}</strong>
+          <span className={styles.routeMetaLabel}>Minimum condition</span>
+          <strong>{minimum}</strong>
         </div>
         <div>
-          <span className={styles.routeMetaLabel}>Route target</span>
-          <strong>{targetAmount}</strong>
+          <span className={styles.routeMetaLabel}>Maximum requested</span>
+          <strong>{formatMoney(route.targetFundingCents, route.currency)}</strong>
         </div>
         <div>
-          <span className={styles.routeMetaLabel}>Funding deadline</span>
-          <strong>{formatDate(envelope.deadlines.fundingAt)}</strong>
+          <span className={styles.routeMetaLabel}>Current deadline</span>
+          <strong>{formatDate(route.deadlineAt)}</strong>
         </div>
       </div>
 
       <dl className={styles.routeTerms}>
         <div>
-          <dt>Participant action</dt>
-          <dd>{card.rows.action}</dd>
+          <dt>Intervention</dt>
+          <dd>{route.intervention}</dd>
         </div>
         <div>
-          <dt>What funding provides</dt>
-          <dd>{card.rows.consideration}</dd>
+          <dt>Recipient</dt>
+          <dd>{route.recipientName}</dd>
         </div>
         <div>
           <dt>Current state</dt>
-          <dd>{card.rows.statusSentence}</dd>
+          <dd>{route.statusSentence}</dd>
         </div>
         <div>
           <dt>If it does not complete</dt>
-          <dd>{card.rows.failureBehavior}</dd>
+          <dd>{route.failureBehavior}</dd>
         </div>
       </dl>
 
       <div className={styles.cardFooter}>
         <p className={styles.cardNote}>
-          This is a route preview. Opening it does not authorize money, instruct a participant,
-          or create a completed impact claim.
+          This record comes from current production inventory. A pledge-only route records real
+          participant intent but is not a charge, donation, transfer, or completed impact claim.
         </p>
         <div className={styles.cardActions}>
-          <Link className="button button-primary" href="/contact">
-            Request pilot access
+          <Link className="button button-primary" href={route.href}>
+            Request route access
           </Link>
         </div>
       </div>
 
       <details className={styles.disclosure}>
-        <summary>Evidence, privacy, and settlement terms</summary>
+        <summary>Verification and public reporting terms</summary>
         <div className={styles.disclosureBody}>
           <div>
-            <strong>Evidence</strong>
-            <p>{card.details.verification}</p>
+            <strong>Verification</strong>
+            <p>{route.verificationSummary}</p>
           </div>
           <div>
-            <strong>Method</strong>
-            <p>{card.details.methodology}</p>
+            <strong>Expected effect</strong>
+            <p>{route.expectedEffect}</p>
           </div>
           <div>
-            <strong>Privacy</strong>
-            <p>{card.details.privacy}</p>
+            <strong>Timeline</strong>
+            <p>{route.timeline}</p>
           </div>
           <div>
-            <strong>Money and tax limits</strong>
-            <p>{card.details.donationTaxLimits}</p>
+            <strong>Funding mode</strong>
+            <p>{route.fundingMode === "real_money" ? "Live real-money" : "Live pledge-only"}</p>
           </div>
           <div>
-            <strong>Dispute window</strong>
-            <p>{card.details.disputes}</p>
+            <strong>Cause area</strong>
+            <p>{route.causeArea}</p>
           </div>
           <div>
-            <strong>Public record</strong>
-            <p className={styles.mono}>{card.details.snapshotIdentifier}</p>
+            <strong>Public key</strong>
+            <p className={styles.mono}>{route.publicKey}</p>
           </div>
         </div>
       </details>
@@ -247,21 +251,18 @@ function RouteCard({
 }
 
 export default async function MoralGoodsGroupBuyingPage() {
-  const viewer = await getViewer();
+  const [viewer, snapshot] = await Promise.all([getViewer(), loadLiveGroupBuyingSnapshot()]);
   const isAuthenticated = Boolean(viewer);
-  const routes = [...MORAL_GOODS_SEED_ENVELOPES].sort(
-    (a, b) => (routePriority.get(a.id) ?? 99) - (routePriority.get(b.id) ?? 99),
-  );
-  const reportRoutes = routes.filter((route) => route.publicReport.rawUnits > 0);
-  const productionCapability = MORAL_GOODS_FEATURE_CAPABILITIES.find(
-    (capability) => capability.featureModule === "production_real_money_movement",
-  );
-  const participantHref = isAuthenticated
-    ? "/contact"
-    : "/signup?returnTo=/onboarding";
+  const participantHref = isAuthenticated ? "/contact" : "/signup?returnTo=/onboarding";
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
     { href: "/moral-goods-group-buying", label: "Moral Goods Group Buying" },
   ]);
+  const financial = snapshot.financial;
+  const readiness = snapshot.paymentReadiness;
+  const liveDataAvailable = snapshot.sourceStatus === "live";
+  const stripMessage = liveDataAvailable
+    ? "Production inventory and financial totals are live. Demo, test, sandbox, and simulated rows are excluded."
+    : "Production inventory could not be read. No demo fallback is being shown.";
 
   return (
     <div className="page-shell marketplace-product-shell">
@@ -271,8 +272,8 @@ export default async function MoralGoodsGroupBuyingPage() {
       />
 
       <div className="mt-beta-strip">
-        <span>Preview</span>
-        <span>These group-buying records are illustrative. No live payment starts on this page.</span>
+        <span>Live state</span>
+        <span>{stripMessage}</span>
         <Link href="/status">Status</Link>
       </div>
 
@@ -297,26 +298,25 @@ export default async function MoralGoodsGroupBuyingPage() {
 
         <section className={styles.hero} aria-labelledby="group-buying-heading">
           <div className={styles.heroCopy}>
-            <p className={styles.kicker}>Conditional funding for verified action</p>
-            <h1 id="group-buying-heading">Fund verified actions together.</h1>
+            <p className={styles.kicker}>Production inventory and financial state</p>
+            <h1 id="group-buying-heading">Live group buying, without demo inventory.</h1>
             <p className={styles.heroText}>
-              Compare a small number of group-funded routes without reading a wall of policy
-              text. Each route keeps the participant action, consideration, deadline, evidence,
-              and failure rule together.
+              See only approved production routes and the money states actually recorded for them.
+              Empty inventory appears as empty inventory; test data is never substituted for demand.
             </p>
             <div className={styles.heroActions}>
               <Link className="button button-primary" href="#fund">
-                Browse funding routes
+                View live inventory
               </Link>
-              <Link className="button button-secondary" href="#participate">
-                Apply to participate
+              <Link className="button button-secondary" href="#financial-state">
+                View financial state
               </Link>
             </div>
-            <ul className={styles.proofLine} aria-label="Group-buying safeguards">
-              <li>Maximum exposure shown</li>
-              <li>No action before acceptance</li>
-              <li>Evidence before settlement</li>
-              <li>Failure rule published</li>
+            <ul className={styles.proofLine} aria-label="Live-data rules">
+              <li>Production records only</li>
+              <li>Test rows excluded</li>
+              <li>Money states separated</li>
+              <li>No inferred impact claims</li>
             </ul>
           </div>
 
@@ -324,32 +324,42 @@ export default async function MoralGoodsGroupBuyingPage() {
             <article className={styles.summaryPanel}>
               <header>
                 <div>
-                  <p className={styles.cardKicker}>At a glance</p>
-                  <h2>Four bounded ways to coordinate.</h2>
+                  <p className={styles.cardKicker}>Current state</p>
+                  <h2>{liveDataAvailable ? "Read from production." : "Live data unavailable."}</h2>
                 </div>
-                <span className={styles.previewBadge}>Demo data</span>
+                <span className={liveDataAvailable ? liveStyles.liveBadge : liveStyles.unavailableBadge}>
+                  {liveDataAvailable ? "Live data" : "Unavailable"}
+                </span>
               </header>
               <div className={styles.summaryMetrics}>
                 <div>
-                  <span className={styles.metricLabel}>Routes</span>
-                  <strong>{routes.length}</strong>
+                  <span className={styles.metricLabel}>Live routes</span>
+                  <strong>{liveDataAvailable ? snapshot.routes.length : "—"}</strong>
                 </div>
                 <div>
-                  <span className={styles.metricLabel}>One-off formats</span>
-                  <strong>3</strong>
+                  <span className={styles.metricLabel}>Open cycles</span>
+                  <strong>{liveDataAvailable ? snapshot.openCycleCount : "—"}</strong>
                 </div>
                 <div>
-                  <span className={styles.metricLabel}>Recurring format</span>
-                  <strong>1</strong>
+                  <span className={styles.metricLabel}>Open exposure</span>
+                  <strong>
+                    {liveDataAvailable
+                      ? formatMoney(financial.openConditionalExposureCents, financial.currency)
+                      : "—"}
+                  </strong>
                 </div>
                 <div>
-                  <span className={styles.metricLabel}>Charged here</span>
-                  <strong>$0</strong>
+                  <span className={styles.metricLabel}>Net charged</span>
+                  <strong>
+                    {liveDataAvailable
+                      ? formatMoney(financial.netChargedCents, financial.currency)
+                      : "—"}
+                  </strong>
                 </div>
               </div>
               <p className={styles.summaryNote}>
-                The preview separates interest, authorization, participant acceptance, proof,
-                and settlement. Those states are not interchangeable.
+                Checked {formatTimestamp(snapshot.checkedAt)}. Pledge-only records are inventory or
+                intent, not live financial transactions.
               </p>
             </article>
           </div>
@@ -358,15 +368,15 @@ export default async function MoralGoodsGroupBuyingPage() {
         <nav className={styles.routeNav} aria-label="Group-buying page sections">
           <Link href="#fund">
             <span>01</span>
-            <strong>Funding routes</strong>
+            <strong>Live inventory</strong>
+          </Link>
+          <Link href="#financial-state">
+            <span>02</span>
+            <strong>Financial state</strong>
           </Link>
           <Link href="#participate">
-            <span>02</span>
-            <strong>Participate</strong>
-          </Link>
-          <Link href="#results">
             <span>03</span>
-            <strong>Results</strong>
+            <strong>Participate</strong>
           </Link>
           <Link href="#how-it-works">
             <span>04</span>
@@ -381,135 +391,260 @@ export default async function MoralGoodsGroupBuyingPage() {
         >
           <div className={styles.sectionHead}>
             <div>
-              <p className={styles.sectionKicker}>Fund</p>
-              <h2 id="fund-heading">Choose a route.</h2>
+              <p className={styles.sectionKicker}>Live inventory</p>
+              <h2 id="fund-heading">Routes that exist now.</h2>
             </div>
             <p>
-              The most commonly requested route appears first. Additional evidence, privacy,
-              methodology, tax, and dispute detail stays available without dominating the card.
+              A route appears here only when a reviewed production proposal is attached to a
+              non-demo, non-test cycle. The absence of a route is not replaced by a worked example.
             </p>
           </div>
 
-          <div className={styles.routeList}>
-            {routes.map((route, index) => (
-              <RouteCard envelope={route} featured={index === 0} key={route.id} />
-            ))}
-          </div>
+          {liveDataAvailable ? (
+            snapshot.routes.length > 0 ? (
+              <div className={styles.routeList}>
+                {snapshot.routes.map((route) => (
+                  <RouteCard key={route.id} route={route} />
+                ))}
+              </div>
+            ) : (
+              <article className={liveStyles.emptyState}>
+                <div className={liveStyles.stateHeader}>
+                  <div>
+                    <p className={styles.cardKicker}>Current production result</p>
+                    <h3>No live group-funded routes are open.</h3>
+                  </div>
+                  <span className={liveStyles.liveBadge}>0 routes</span>
+                </div>
+                <p>
+                  The production database currently contains no approved, non-demo group-buying
+                  inventory. Demo cycles, test destinations, simulated pledges, and illustrative
+                  outcomes are intentionally omitted.
+                </p>
+                <div className={styles.cardActions}>
+                  <Link className="button button-primary" href="/mpgf/pools/new">
+                    Propose a pool
+                  </Link>
+                  <Link className="button button-secondary" href="/contact">
+                    Contact the operator
+                  </Link>
+                </div>
+              </article>
+            )
+          ) : (
+            <article className={liveStyles.unavailableState}>
+              <div className={liveStyles.stateHeader}>
+                <div>
+                  <p className={styles.cardKicker}>Data source</p>
+                  <h3>Live inventory is temporarily unavailable.</h3>
+                </div>
+                <span className={liveStyles.unavailableBadge}>No fallback</span>
+              </div>
+              <p>
+                The page could not read the production source. It is withholding inventory and
+                financial totals rather than presenting seed records as live activity.
+              </p>
+              <div className={styles.cardActions}>
+                <Link className="button button-secondary" href="/status">
+                  Check service status
+                </Link>
+              </div>
+            </article>
+          )}
         </section>
 
         <section
           className={styles.section}
+          id="financial-state"
+          aria-labelledby="financial-state-heading"
+        >
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionKicker}>Financial state</p>
+              <h2 id="financial-state-heading">Money that is actually recorded.</h2>
+            </div>
+            <p>
+              Conditional exposure, successful charges, refunds, transfers, and recurring
+              commitments are reported separately. Pledge-only intent is excluded from these totals.
+            </p>
+          </div>
+
+          {liveDataAvailable ? (
+            <>
+              <div className={liveStyles.financialGrid}>
+                <FinancialMetric
+                  label="Open conditional exposure"
+                  value={formatMoney(financial.openConditionalExposureCents, financial.currency)}
+                  detail="Uncharged maximums on open live public-goods payment mandates."
+                />
+                <FinancialMetric
+                  label="Net charged"
+                  value={formatMoney(financial.netChargedCents, financial.currency)}
+                  detail="Successful live payment attempts less recorded refunds."
+                />
+                <FinancialMetric
+                  label="Transferred"
+                  value={formatMoney(financial.transferredCents, financial.currency)}
+                  detail="Settlement transfers whose live state is transferred."
+                />
+                <FinancialMetric
+                  label="Refunded"
+                  value={formatMoney(financial.refundedCents, financial.currency)}
+                  detail="Refunded amount recorded against charged payment attempts."
+                />
+                <FinancialMetric
+                  label="Active monthly commitments"
+                  value={formatMoney(financial.activeRecurringMonthlyCents, financial.currency)}
+                  detail={`${financial.activeRecurringCommitmentCount} recurring commitment${
+                    financial.activeRecurringCommitmentCount === 1 ? "" : "s"
+                  } in real-money mode.`}
+                />
+                <FinancialMetric
+                  label="Live payment mandates"
+                  value={String(financial.liveMandateCount)}
+                  detail={`${financial.openMandateCount} currently open for setup, authorization, or charge.`}
+                />
+              </div>
+
+              <article className={liveStyles.readinessPanel}>
+                <div className={liveStyles.readinessCopy}>
+                  <div className={liveStyles.readinessHeader}>
+                    <div>
+                      <p className={styles.cardKicker}>Payment acceptance</p>
+                      <h3>{readinessLabel(readiness.status)}</h3>
+                    </div>
+                    <span className={readinessBadgeClass(readiness.status)}>
+                      {readinessLabel(readiness.status)}
+                    </span>
+                  </div>
+                  <p>
+                    {readiness.status === "ready"
+                      ? "All recorded live payment gates pass. Route-level review, terms, and participant acceptance still apply."
+                      : readiness.status === "blocked"
+                        ? "One or more live payment gates are blocked. This page does not offer authorization or claim that funds can settle."
+                        : readiness.status === "pending"
+                          ? "No live payment gate is blocked, but one or more required reviews are still pending."
+                          : "Live payment readiness could not be determined from the production source."}
+                  </p>
+                  <p className={liveStyles.truthNote}>
+                    Latest financial activity: {formatTimestamp(financial.latestFinancialActivityAt)}.
+                  </p>
+                </div>
+
+                <div>
+                  <dl className={liveStyles.readinessFacts}>
+                    <div>
+                      <dt>Passed gates</dt>
+                      <dd>{readiness.passedGateCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Pending gates</dt>
+                      <dd>{readiness.pendingGateCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Blocked gates</dt>
+                      <dd>{readiness.blockedGateCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Checked</dt>
+                      <dd>{formatTimestamp(snapshot.checkedAt)}</dd>
+                    </div>
+                  </dl>
+
+                  <details className={liveStyles.gateDisclosure}>
+                    <summary>Review live payment gates</summary>
+                    <div className={liveStyles.gateList}>
+                      {readiness.gates.length > 0 ? (
+                        readiness.gates.map((gate) => (
+                          <div className={liveStyles.gateRow} key={gate.key}>
+                            <strong>{gate.label}</strong>
+                            <span
+                              className={[
+                                liveStyles.gateStatus,
+                                gateStatusClass(gate.status),
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                            >
+                              {gate.status}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className={liveStyles.gateRow}>
+                          <strong>No live gate records available</strong>
+                          <span className={liveStyles.gateStatus}>unknown</span>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                </div>
+              </article>
+            </>
+          ) : (
+            <article className={liveStyles.unavailableState}>
+              <h3>Financial totals are withheld.</h3>
+              <p>
+                The production source could not be read. The page shows dashes in the summary and
+                does not convert missing data into zero-dollar claims.
+              </p>
+            </article>
+          )}
+        </section>
+
+        <section
+          className={[styles.section, styles.sectionWhite].join(" ")}
           id="participate"
           aria-labelledby="participate-heading"
         >
           <div className={styles.sectionHead}>
             <div>
               <p className={styles.sectionKicker}>Participate</p>
-              <h2 id="participate-heading">Apply first. Act only when invited.</h2>
+              <h2 id="participate-heading">Create the next reviewed route.</h2>
             </div>
             <p>
-              Participant eligibility, baseline, consideration, action window, evidence, and
-              withdrawal rights are reviewed before a person is told to begin.
+              A proposal, participant application, and payment authorization are different records.
+              None of them silently creates the others.
             </p>
           </div>
 
           <div className={styles.participantPanel}>
             <article className={styles.participantNotice}>
-              <p className={styles.cardKicker}>Your next instruction</p>
-              <h3>Do not start until your record says “Start now.”</h3>
+              <p className={styles.cardKicker}>Propose inventory</p>
+              <h3>Submit a pool for review.</h3>
               <p>
-                Funding interest alone does not activate an action. A selected participant must
-                accept the frozen terms and see the final action window, evidence request, and
-                failure consequences first.
+                A proposal becomes visible inventory only after review, assignment to a production
+                cycle, and publication of its funding and failure rules.
               </p>
               <div className={styles.sectionActions}>
-                <Link className="button button-primary" href={participantHref}>
-                  Apply to participate
+                <Link className="button button-primary" href="/mpgf/pools/new">
+                  Draft a pool proposal
                 </Link>
                 <Link className="button button-secondary" href="/trust">
-                  Review participant protections
+                  Review safeguards
                 </Link>
               </div>
             </article>
 
             <article className={styles.privateProposal}>
-              <p className={styles.cardKicker}>Suggest another action</p>
-              <h3>Private until reviewed.</h3>
+              <p className={styles.cardKicker}>Participant intake</p>
+              <h3>Do not start from a listing alone.</h3>
               <p>
-                A suggestion is not listed, funded, or treated as an obligation unless it passes
-                review and is converted into a bounded route.
+                A selected participant acts only after accepting the frozen action window,
+                consideration, evidence request, withdrawal rights, and failure consequences.
               </p>
               <details className={styles.disclosure}>
-                <summary>What the intake asks for</summary>
+                <summary>What the private intake asks for</summary>
                 <ul className={styles.privateFields}>
                   {getPrivateProposalIntakeFields().map((field) => (
                     <li key={field}>{field}</li>
                   ))}
                 </ul>
               </details>
-              <Link className="button button-secondary" href="/contact">
-                Suggest an action privately
+              <Link className="button button-secondary" href={participantHref}>
+                Apply to participate
               </Link>
             </article>
-          </div>
-        </section>
-
-        <section
-          className={[styles.section, styles.sectionWhite].join(" ")}
-          id="results"
-          aria-labelledby="results-heading"
-        >
-          <div className={styles.sectionHead}>
-            <div>
-              <p className={styles.sectionKicker}>Results</p>
-              <h2 id="results-heading">Report states separately.</h2>
-            </div>
-            <p>
-              These are illustrative reporting records. Raw actions, protocol-adjusted units,
-              and paid or donated amounts remain separate; none is presented as a universal moral
-              score.
-            </p>
-          </div>
-
-          <div className={styles.reportList}>
-            {reportRoutes.map((route) => {
-              const card = buildDealCardModel(route, "public");
-              const totalExecuted =
-                route.publicReport.participantPayoutTotalMinor +
-                route.publicReport.donationTotalMinor;
-
-              return (
-                <article className={styles.reportRow} key={route.id}>
-                  <div className={styles.reportIdentity}>
-                    <p className={styles.reportEyebrow}>Illustrative public report</p>
-                    <h3>{routePresentation[route.id]?.title ?? route.title}</h3>
-                    <p>{card.rows.status}</p>
-                  </div>
-                  <div className={styles.reportMetric}>
-                    <span className={styles.metricLabel}>Raw action units</span>
-                    <strong>{route.publicReport.rawUnits.toLocaleString("en-US")}</strong>
-                    <p>Counted under the route’s action definition.</p>
-                  </div>
-                  <div className={styles.reportMetric}>
-                    <span className={styles.metricLabel}>Protocol-adjusted</span>
-                    <strong>
-                      {(route.publicReport.adjustedUnitsMilli / 1000).toLocaleString("en-US")}
-                    </strong>
-                    <p>Method-relative, not a platform moral ranking.</p>
-                  </div>
-                  <div className={styles.reportMetric}>
-                    <span className={styles.metricLabel}>Paid or donated</span>
-                    <strong>
-                      {formatMinorMoney({
-                        amountMinor: totalExecuted,
-                        currency: route.currency,
-                      })}
-                    </strong>
-                    <p>{route.publicReport.smallCellSuppression}</p>
-                  </div>
-                </article>
-              );
-            })}
           </div>
         </section>
 
@@ -521,70 +656,71 @@ export default async function MoralGoodsGroupBuyingPage() {
           <div className={styles.sectionHead}>
             <div>
               <p className={styles.sectionKicker}>How it works</p>
-              <h2 id="how-it-works-heading">One route. Four explicit gates.</h2>
+              <h2 id="how-it-works-heading">Live means backed and state-specific.</h2>
             </div>
             <p>
-              The user journey stays short. The mechanism remains inspectable before anyone
-              relies on it.
+              Inventory, participant acceptance, payment state, verification, and settlement remain
+              separate so the page never upgrades an intention into a completed result.
             </p>
           </div>
 
           <ol className={styles.processGrid}>
             <li>
               <span>01</span>
-              <h3>Review the route</h3>
-              <p>See the action, consideration, maximum amount, deadline, and failure rule together.</p>
+              <h3>Publish reviewed inventory</h3>
+              <p>A non-demo proposal must be approved and attached to an open production cycle.</p>
             </li>
             <li>
               <span>02</span>
               <h3>Accept frozen terms</h3>
-              <p>Funding and participant acceptance remain separate. Neither silently activates the other.</p>
+              <p>Funders and participants see limits, deadlines, evidence, and failure rules first.</p>
             </li>
             <li>
               <span>03</span>
-              <h3>Complete and evidence</h3>
-              <p>The participant follows the stated window and submits only the evidence named in advance.</p>
+              <h3>Record each money state</h3>
+              <p>Exposure, charge, refund, transfer, and recurring commitment are not conflated.</p>
             </li>
             <li>
               <span>04</span>
-              <h3>Settle or release</h3>
-              <p>Successful records settle under the published rule; failed or expired records follow the stated release path.</p>
+              <h3>Report outcomes separately</h3>
+              <p>Verification and impact reporting require their own records after action completes.</p>
             </li>
           </ol>
 
           <div className={styles.safeguardGrid}>
             <article>
               <span>01</span>
-              <h3>Terms do not drift</h3>
-              <p>Material changes require a new review and renewed acceptance rather than silent edits.</p>
+              <h3>No demo substitution</h3>
+              <p>Seed, sandbox, simulated, and test-only records do not fill an empty marketplace.</p>
             </article>
             <article>
               <span>02</span>
-              <h3>Participants are not inventory</h3>
-              <p>Selection, welfare review, withdrawal rights, privacy, and action timing remain explicit.</p>
+              <h3>No money-state shortcuts</h3>
+              <p>A pledge is not a charge, and a charge is not a transfer or verified outcome.</p>
             </article>
             <article>
               <span>03</span>
-              <h3>Failure is a normal state</h3>
-              <p>Nothing is labelled completed merely because funding interest or an authorization exists.</p>
+              <h3>No false precision</h3>
+              <p>When the live source is unavailable, the page says so instead of inventing zeros.</p>
             </article>
           </div>
 
           <details className={styles.advancedPanel}>
-            <summary>Advanced mechanism and capability detail</summary>
+            <summary>What counts as live, and what is excluded</summary>
             <div className={styles.advancedContent}>
               <article>
-                <h3>Payment capability</h3>
+                <h3>Included</h3>
                 <p>
-                  {productionCapability?.publicReason ??
-                    "Payment capability is disclosed before a user can rely on it."}
+                  Reviewed non-demo inventory, live conditional payment mandates, successful payment
+                  attempts, recorded refunds, transferred settlements, and real-money recurring
+                  commitments.
                 </p>
               </article>
               <article>
-                <h3>Public records</h3>
+                <h3>Excluded</h3>
                 <p>
-                  Every route keeps a frozen public identifier, a separate evidence state, and a
-                  separate settlement state. Raw participant evidence stays private by default.
+                  Demo cycles, approved-demo alternatives, test destinations, sandbox payments,
+                  simulated reports, pledge-only amounts from financial totals, and inferred impact.
                 </p>
               </article>
             </div>
@@ -594,8 +730,8 @@ export default async function MoralGoodsGroupBuyingPage() {
             <Link className="button button-primary" href="/trust">
               What you can rely on
             </Link>
-            <Link className="button button-secondary" href="/methodology">
-              Review methodology
+            <Link className="button button-secondary" href="/mpgf/pools/new">
+              Propose a pool
             </Link>
             <Link className="button button-secondary" href="/status">
               Current capability status
