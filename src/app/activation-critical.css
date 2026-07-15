@@ -1,0 +1,12 @@
+/*
+ * Offer-detail routes render the section-based dossier beneath a hero.
+ * A marketplace shell rule hides direct child sections for newer app views;
+ * keep the offer dossier and response form visible on this route structure.
+ */
+.marketplace-app-shell > header.hero + main#main-content > .section {
+  display: block;
+}
+
+.marketplace-app-shell > header.hero + main#main-content > .marketplace-detail-section {
+  display: grid;
+}
