@@ -12,6 +12,7 @@ const RUN_TOKEN =
 const TEST_EMAIL = `caijun054+activation-gate-${RUN_TOKEN}@gmail.com`;
 const TEST_PASSWORD = `${randomBytes(24).toString("base64url")}aA1!`;
 const OUTPUT_DIR = "activation-gate-output";
+const INJECT_OFFER_SURFACE_FIX = process.env.ACTIVATION_INJECT_OFFER_SURFACE_FIX === "1";
 const MESSAGE = [
   "ACTIVATION-GATE TEST 2026-07-15.",
   "I have a real stalled collaboration about how to prioritize local public-health work versus long-term risk reduction.",
@@ -26,6 +27,7 @@ const result = {
   baseUrl: BASE_URL,
   offerId: OFFER_ID,
   testEmail: TEST_EMAIL,
+  injectedOfferSurfaceFix: INJECT_OFFER_SURFACE_FIX,
   stages: [],
   http5xx: [],
   consoleErrors: [],
@@ -163,6 +165,16 @@ try {
   stage("onboarding_complete", { routedTo: page.url() });
 
   await page.goto(`${BASE_URL}${OFFER_PATH}`, { waitUntil: "domcontentloaded" });
+  if (INJECT_OFFER_SURFACE_FIX) {
+    await page.addStyleTag({
+      content: `
+        .marketplace-app-shell > header.hero + main#main-content > .section { display: block; }
+        .marketplace-app-shell > header.hero + main#main-content > .marketplace-detail-section { display: grid; }
+      `,
+    });
+    stage("proposed_offer_surface_fix_injected");
+  }
+
   const respondSection = page.locator("#respond");
   await respondSection.waitFor({ state: "attached" });
   const offerTextContent = (await page.locator("main").textContent()) ?? "";
