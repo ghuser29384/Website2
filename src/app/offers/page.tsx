@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { EmptyState } from "@/components/ui/page-primitives";
@@ -12,6 +13,20 @@ import {
 } from "@/lib/app-data";
 import { categoryForOfferMode, type CredibilitySummary } from "@/lib/credibility";
 import { listPublicCredibilityForLookups } from "@/lib/credibility-search";
+import {
+  collectOfferCauseOptions,
+  CREDIT_FILTER_OPTIONS,
+  OFFER_ACTION_FILTER_OPTIONS,
+  OFFER_DISCOVERY_SORT_OPTIONS,
+  OFFER_PAYMENT_FILTER_OPTIONS,
+  offerMatchesFilters,
+  rankOffers,
+  type CreditFilter,
+  type OfferActionFilter,
+  type OfferDiscoveryFilters,
+  type OfferDiscoverySort,
+  type OfferPaymentFilter,
+} from "@/lib/discovery-ranking";
 import { getFormMessage } from "@/lib/form-state";
 import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import { formatMode } from "@/lib/offers";
@@ -40,6 +55,16 @@ interface OffersPageProps {
 
 type DirectoryView = "live" | "examples" | "templates" | "public-goods";
 
+interface OfferFilterState {
+  action: OfferActionFilter;
+  cause: string;
+  credit: CreditFilter;
+  payment: OfferPaymentFilter;
+  sort: OfferDiscoverySort;
+}
+
+const OFFER_DISCOVERY_LIMIT = 1_000;
+
 const directoryTabs: ReadonlyArray<{ label: string; value: DirectoryView }> = [
   { label: "Live", value: "live" },
   { label: "Examples", value: "examples" },
@@ -53,6 +78,14 @@ function readParam(
 ) {
   const value = searchParams[key];
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function normalizeOption<T extends string>(
+  value: string,
+  options: ReadonlyArray<{ value: T }>,
+  fallback: T,
+) {
+  return options.some((option) => option.value === value) ? (value as T) : fallback;
 }
 
 function parsePage(value: string | string[] | undefined) {
@@ -83,11 +116,24 @@ function matchesSearch(values: readonly string[], query: string) {
   return values.some((value) => value.toLowerCase().includes(normalized));
 }
 
+function paginate<T>(items: T[], page: number, pageSize: number) {
+  const offset = (page - 1) * pageSize;
+  return {
+    items: items.slice(offset, offset + pageSize),
+    page,
+    pageSize,
+    hasNextPage: items.length > offset + pageSize,
+    hasPreviousPage: page > 1,
+  };
+}
+
 function buildDirectoryHref({
+  filters,
   page,
   search,
   view,
 }: {
+  filters?: OfferFilterState;
   page?: number;
   search?: string;
   view: DirectoryView;
@@ -97,6 +143,24 @@ function buildDirectoryHref({
 
   if (search) {
     params.set("search", search);
+  }
+
+  if (view === "live" && filters) {
+    if (filters.cause) {
+      params.set("cause", filters.cause);
+    }
+    if (filters.payment !== "any") {
+      params.set("payment", filters.payment);
+    }
+    if (filters.action !== "all") {
+      params.set("action", filters.action);
+    }
+    if (filters.credit !== "any") {
+      params.set("credit", filters.credit);
+    }
+    if (filters.sort !== "match") {
+      params.set("sort", filters.sort);
+    }
   }
 
   if (page && page > 1) {
@@ -114,6 +178,26 @@ function formatCreditScore(credibility: CredibilitySummary | undefined) {
   return credibility.score === null
     ? `Credit score: ${credibility.level}`
     : `Credit score ${credibility.score}/100`;
+}
+
+function optionLabel<T extends string>(
+  value: T,
+  options: ReadonlyArray<{ value: T; label: string }>,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function rankingDescription(sort: OfferDiscoverySort, hasSearch: boolean) {
+  if (sort === "credit") {
+    return "Highest credit prioritizes the confidence-adjusted conservative score, then relevance, evidence completeness, and recency.";
+  }
+  if (sort === "recent") {
+    return "Newest remains primarily chronological; relevance and credit provide only small tie-breakers.";
+  }
+  if (hasSearch) {
+    return "Best match is 70% text relevance and 15% confidence-adjusted credit, with smaller recency and evidence-completeness signals.";
+  }
+  return "Without a query, Best match emphasizes recent, complete offers; confidence-adjusted credit contributes 20% of ranking.";
 }
 
 function LiveProposalCard({
@@ -219,32 +303,87 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const page = parsePage(resolvedSearchParams.page);
   const search = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
-  const [viewer, livePage] = await Promise.all([
+  const filters: OfferFilterState = {
+    cause: readParam(resolvedSearchParams, "cause").trim().slice(0, 120),
+    payment: normalizeOption(
+      readParam(resolvedSearchParams, "payment"),
+      OFFER_PAYMENT_FILTER_OPTIONS,
+      "any",
+    ),
+    action: normalizeOption(
+      readParam(resolvedSearchParams, "action"),
+      OFFER_ACTION_FILTER_OPTIONS,
+      "all",
+    ),
+    credit: normalizeOption(
+      readParam(resolvedSearchParams, "credit"),
+      CREDIT_FILTER_OPTIONS,
+      "any",
+    ),
+    sort: normalizeOption(
+      readParam(resolvedSearchParams, "sort"),
+      OFFER_DISCOVERY_SORT_OPTIONS,
+      "match",
+    ),
+  };
+  const [viewer, candidatePage] = await Promise.all([
     getViewer(),
     hasSupabaseEnv()
-      ? listOpenOffersPage(page, OFFERS_PAGE_SIZE, "all", search)
+      ? listOpenOffersPage(1, OFFER_DISCOVERY_LIMIT, "all", "")
       : Promise.resolve({
           items: [] as OfferRecord[],
-          page,
-          pageSize: OFFERS_PAGE_SIZE,
+          page: 1,
+          pageSize: OFFER_DISCOVERY_LIMIT,
           hasNextPage: false,
-          hasPreviousPage: page > 1,
+          hasPreviousPage: false,
         }),
   ]);
+  const liveCandidates = candidatePage.items;
   const isAuthenticated = Boolean(viewer);
-  const view = parseView(readParam(resolvedSearchParams, "view"), livePage.items.length > 0);
+  const view = parseView(readParam(resolvedSearchParams, "view"), liveCandidates.length > 0);
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
-  const credibilityByOffer = await listPublicCredibilityForLookups(
-    livePage.items.map((offer) => ({
-      key: offer.id,
-      profileId: offer.owner_id,
-      context: {
-        role: "committer",
-        category: categoryForOfferMode(offer.mode),
-      },
-    })),
+  const credibilityByOffer =
+    view === "live"
+      ? await listPublicCredibilityForLookups(
+          liveCandidates.map((offer) => ({
+            key: offer.id,
+            profileId: offer.owner_id,
+            context: {
+              role: "committer",
+              category: categoryForOfferMode(offer.mode),
+            },
+          })),
+        )
+      : new Map<string, CredibilitySummary>();
+  const discoveryFilters: OfferDiscoveryFilters = {
+    action: filters.action,
+    cause: filters.cause,
+    credit: filters.credit,
+    payment: filters.payment,
+    search,
+  };
+  const filteredLiveCandidates = liveCandidates.filter((offer) =>
+    offerMatchesFilters(offer, credibilityByOffer.get(offer.id), discoveryFilters),
   );
+  const rankedLiveCandidates = rankOffers(
+    filteredLiveCandidates,
+    credibilityByOffer,
+    search,
+    filters.sort,
+  );
+  const livePage = paginate(rankedLiveCandidates, page, OFFERS_PAGE_SIZE);
+  const causeOptions = collectOfferCauseOptions(liveCandidates);
+  const activeFilterLabels = [
+    filters.cause ? `Cause: ${filters.cause}` : null,
+    filters.payment !== "any"
+      ? optionLabel(filters.payment, OFFER_PAYMENT_FILTER_OPTIONS)
+      : null,
+    filters.action !== "all" ? optionLabel(filters.action, OFFER_ACTION_FILTER_OPTIONS) : null,
+    filters.credit !== "any" ? optionLabel(filters.credit, CREDIT_FILTER_OPTIONS) : null,
+    filters.sort !== "match" ? optionLabel(filters.sort, OFFER_DISCOVERY_SORT_OPTIONS) : null,
+  ].filter((label): label is string => Boolean(label));
+  const hasLiveFilters = Boolean(search || activeFilterLabels.length);
 
   const workedExamples = CANONICAL_WORKED_CASE_OFFERS.filter((example) =>
     matchesSearch(
@@ -274,7 +413,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   );
 
   const tabCounts: Record<DirectoryView, number | null> = {
-    live: livePage.items.length,
+    live: liveCandidates.length,
     examples: workedExamples.length,
     templates: templates.length,
     "public-goods": null,
@@ -340,8 +479,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <h2 id="directory-heading">Choose the record state you need.</h2>
             </div>
             <p>
-              Search within one state at a time. Live offer results show the offer owner&apos;s
-              contextual transaction credit score before you open the complete deal receipt.
+              Live results combine relevance with a bounded, confidence-adjusted credit signal.
+              Filters let you set the cause, money, action, and minimum-credit conditions directly.
             </p>
           </div>
 
@@ -350,7 +489,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {directoryTabs.map((tab) => (
                 <Link
                   aria-current={view === tab.value ? "page" : undefined}
-                  href={buildDirectoryHref({ search, view: tab.value })}
+                  href={buildDirectoryHref({
+                    filters: tab.value === "live" ? filters : undefined,
+                    search,
+                    view: tab.value,
+                  })}
                   key={tab.value}
                 >
                   <span>{tab.label}</span>
@@ -359,25 +502,105 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               ))}
             </nav>
 
-            <form action="/offers" className="mt-directory-search" method="get" role="search">
-              <input name="view" type="hidden" value={view} />
-              <label>
-                <span>Search</span>
-                <input
-                  defaultValue={search}
-                  name="search"
-                  placeholder="Cause, action, evidence, or template"
-                  type="search"
-                />
-              </label>
-              <button className="button button-primary" type="submit">Search</button>
-              {search ? (
-                <Link className="button button-secondary" href={buildDirectoryHref({ view })}>
-                  Clear
-                </Link>
-              ) : null}
-            </form>
+            {view !== "live" ? (
+              <form action="/offers" className="mt-directory-search" method="get" role="search">
+                <input name="view" type="hidden" value={view} />
+                <label>
+                  <span>Search</span>
+                  <input
+                    defaultValue={search}
+                    name="search"
+                    placeholder="Cause, action, evidence, or template"
+                    type="search"
+                  />
+                </label>
+                <button className="button button-primary" type="submit">Search</button>
+                {search ? (
+                  <Link className="button button-secondary" href={buildDirectoryHref({ view })}>
+                    Clear
+                  </Link>
+                ) : null}
+              </form>
+            ) : null}
           </div>
+
+          {view === "live" ? (
+            <form action="/offers" className={filterStyles.filterPanel} method="get" role="search">
+              <input name="view" type="hidden" value="live" />
+              <div className={filterStyles.filterGrid}>
+                <label className={filterStyles.field}>
+                  <span>Search offers</span>
+                  <input
+                    className={filterStyles.control}
+                    defaultValue={search}
+                    name="search"
+                    placeholder="Cause, action, evidence, or participant"
+                    type="search"
+                  />
+                </label>
+                <label className={filterStyles.field}>
+                  <span>Cause area</span>
+                  <select className={filterStyles.control} defaultValue={filters.cause} name="cause">
+                    <option value="">Any cause area</option>
+                    {causeOptions.map((cause) => (
+                      <option key={cause} value={cause}>{cause}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={filterStyles.field}>
+                  <span>Payment involved</span>
+                  <select className={filterStyles.control} defaultValue={filters.payment} name="payment">
+                    {OFFER_PAYMENT_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={filterStyles.field}>
+                  <span>Action involved</span>
+                  <select className={filterStyles.control} defaultValue={filters.action} name="action">
+                    {OFFER_ACTION_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={filterStyles.field}>
+                  <span>Credit score</span>
+                  <select className={filterStyles.control} defaultValue={filters.credit} name="credit">
+                    {CREDIT_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={filterStyles.field}>
+                  <span>Order by</span>
+                  <select className={filterStyles.control} defaultValue={filters.sort} name="sort">
+                    {OFFER_DISCOVERY_SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className={filterStyles.actions}>
+                <button className="button button-primary" type="submit">Apply filters</button>
+                {hasLiveFilters ? (
+                  <Link className="button button-secondary" href={buildDirectoryHref({ view: "live" })}>
+                    Clear all
+                  </Link>
+                ) : null}
+              </div>
+              <div className={filterStyles.filterMeta}>
+                <div className={filterStyles.activeFilters} aria-live="polite">
+                  <strong>{rankedLiveCandidates.length} matching offer(s)</strong>
+                  {activeFilterLabels.map((label) => (
+                    <span className={filterStyles.activeChip} key={label}>{label}</span>
+                  ))}
+                </div>
+                <p className={filterStyles.rankingNote}>
+                  {rankingDescription(filters.sort, Boolean(search))}
+                </p>
+              </div>
+            </form>
+          ) : null}
 
           {view === "live" ? (
             <div className="mt-directory-view">
@@ -405,14 +628,20 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <EmptyState
                   actions={
                     <>
-                      <Link className="button button-primary" href={createHref}>Create the first proposal</Link>
+                      {hasLiveFilters ? (
+                        <Link className="button button-primary" href={buildDirectoryHref({ view: "live" })}>
+                          Clear filters
+                        </Link>
+                      ) : (
+                        <Link className="button button-primary" href={createHref}>Create the first proposal</Link>
+                      )}
                       <Link className="button button-secondary" href={buildDirectoryHref({ search, view: "examples" })}>
                         Inspect examples
                       </Link>
                     </>
                   }
                   icon="marketplace"
-                  title={search ? "No live proposals match this search" : "No live proposals are open"}
+                  title={hasLiveFilters ? "No live proposals match these filters" : "No live proposals are open"}
                 >
                   The marketplace does not substitute examples or demo records when participant
                   inventory is empty.
@@ -421,13 +650,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {livePage.hasPreviousPage || livePage.hasNextPage ? (
                 <nav className="pagination" aria-label="Live proposal pages">
                   {livePage.hasPreviousPage ? (
-                    <Link className="button button-secondary button-mini" href={buildDirectoryHref({ page: page - 1, search, view })}>
+                    <Link
+                      className="button button-secondary button-mini"
+                      href={buildDirectoryHref({ filters, page: page - 1, search, view })}
+                    >
                       Previous
                     </Link>
                   ) : null}
                   <span>Page {page}</span>
                   {livePage.hasNextPage ? (
-                    <Link className="button button-secondary button-mini" href={buildDirectoryHref({ page: page + 1, search, view })}>
+                    <Link
+                      className="button button-secondary button-mini"
+                      href={buildDirectoryHref({ filters, page: page + 1, search, view })}
+                    >
                       Next
                     </Link>
                   ) : null}
