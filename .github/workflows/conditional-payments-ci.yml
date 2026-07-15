@@ -7,11 +7,14 @@ on:
   pull_request:
     paths:
       - "src/lib/payments/**"
+      - "src/lib/mpgf/real-money-operational.ts"
+      - "src/lib/mpgf/real-money-operational.test.ts"
       - "src/app/api/payments/conditional/**"
       - "src/app/donation-offsets/payments/**"
       - "supabase/migrations/*conditional_payment*"
       - "supabase/migrations/*conditional_payments*"
       - ".github/workflows/conditional-payments-ci.yml"
+      - "tsconfig.json"
       - "package.json"
       - "package-lock.json"
 
@@ -35,13 +38,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run conditional-payment tests
+      - name: Run conditional-payment and MPGF readiness tests
         id: tests
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          node --import tsx --test src/lib/payments/conditional-state.test.ts \
+          node --import tsx --test \
+            src/lib/payments/conditional-state.test.ts \
+            src/lib/mpgf/real-money-operational.test.ts \
             2>&1 | tee conditional-payments-test-output.txt
 
       - name: Upload test output
