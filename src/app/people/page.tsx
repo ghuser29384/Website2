@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { toggleFollowAction } from "@/app/actions";
+import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
@@ -10,10 +11,26 @@ import {
   getViewer,
   listPublicProfilesPage,
   PEOPLE_PAGE_SIZE,
-  type PeopleSort,
   type PublicProfileSummary,
 } from "@/lib/app-data";
 import { listPublicCredibilitySummaries } from "@/lib/credibility-data";
+import type { CredibilitySummary } from "@/lib/credibility";
+import {
+  collectPeopleCauseOptions,
+  CREDIT_FILTER_OPTIONS,
+  PEOPLE_DISCOVERY_SORT_OPTIONS,
+  PEOPLE_KIND_FILTER_OPTIONS,
+  PEOPLE_PARTICIPATION_FILTER_OPTIONS,
+  PEOPLE_PAYMENT_FILTER_OPTIONS,
+  profileMatchesFilters,
+  rankProfiles,
+  type CreditFilter,
+  type PeopleDiscoveryFilters,
+  type PeopleDiscoverySort,
+  type PeopleKindFilter,
+  type PeopleParticipationFilter,
+  type PeoplePaymentFilter,
+} from "@/lib/discovery-ranking";
 import { getPublicProfileMetaSummary } from "@/lib/public-profile-trust";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
@@ -35,16 +52,20 @@ export const metadata: Metadata = {
   },
 };
 
-const SORT_OPTIONS: Array<{ value: PeopleSort; label: string }> = [
-  { value: "reviewed", label: "Reviewed records" },
-  { value: "offers", label: "Open offers" },
-  { value: "newest", label: "Newest opt-ins" },
-];
-const PEOPLE_SEARCH_LIMIT = 1_000;
-
 interface PeoplePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+interface PeopleFilterState {
+  cause: string;
+  credit: CreditFilter;
+  kind: PeopleKindFilter;
+  participation: PeopleParticipationFilter;
+  payment: PeoplePaymentFilter;
+  sort: PeopleDiscoverySort;
+}
+
+const PEOPLE_DISCOVERY_LIMIT = 1_000;
 
 function readParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -54,12 +75,15 @@ function readParam(
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function normalizeSort(value: string | undefined): PeopleSort {
-  if (value === "offers" || value === "newest") {
-    return value;
+function normalizeOption<T extends string>(
+  value: string,
+  options: ReadonlyArray<{ value: T }>,
+  fallback: T,
+) {
+  if (value === "reviewed" && fallback === "match") {
+    return "match" as T;
   }
-
-  return "reviewed";
+  return options.some((option) => option.value === value) ? (value as T) : fallback;
 }
 
 function parsePage(value: string | string[] | undefined) {
@@ -69,18 +93,50 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function buildPeopleHref(sort: PeopleSort, page: number, search = "") {
+function paginate<T>(items: T[], page: number, pageSize: number) {
+  const offset = (page - 1) * pageSize;
+  return {
+    items: items.slice(offset, offset + pageSize),
+    page,
+    pageSize,
+    hasNextPage: items.length > offset + pageSize,
+    hasPreviousPage: page > 1,
+  };
+}
+
+function buildPeopleHref({
+  filters,
+  page,
+  search,
+}: {
+  filters: PeopleFilterState;
+  page?: number;
+  search?: string;
+}) {
   const params = new URLSearchParams();
 
-  if (sort !== "reviewed") {
-    params.set("sort", sort);
+  if (filters.sort !== "match") {
+    params.set("sort", filters.sort);
   }
-
   if (search) {
     params.set("search", search);
   }
-
-  if (page > 1) {
+  if (filters.cause) {
+    params.set("cause", filters.cause);
+  }
+  if (filters.payment !== "any") {
+    params.set("payment", filters.payment);
+  }
+  if (filters.participation !== "any") {
+    params.set("participation", filters.participation);
+  }
+  if (filters.kind !== "any") {
+    params.set("kind", filters.kind);
+  }
+  if (filters.credit !== "any") {
+    params.set("credit", filters.credit);
+  }
+  if (page && page > 1) {
     params.set("page", String(page));
   }
 
@@ -88,65 +144,27 @@ function buildPeopleHref(sort: PeopleSort, page: number, search = "") {
   return query ? `/people?${query}` : "/people";
 }
 
-function profileMatchesSearchQuery(profile: PublicProfileSummary, search: string) {
-  const tokens = search
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!tokens.length) {
-    return true;
-  }
-
-  const haystack = [
-    profile.resolvedName,
-    profile.display_name,
-    profile.bio,
-    formatPublicProfileLocation(profile),
-    profile.wishPreview,
-    profile.wishCollectiveName,
-    ...profile.wishCauses,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" ")
-    .toLowerCase();
-
-  return tokens.every((token) => haystack.includes(token));
+function optionLabel<T extends string>(
+  value: T,
+  options: ReadonlyArray<{ value: T; label: string }>,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
 }
 
-async function listSearchableProfilesPage({
-  page,
-  search,
-  sort,
-  viewerId,
-}: {
-  page: number;
-  search: string;
-  sort: PeopleSort;
-  viewerId?: string;
-}) {
-  if (!search) {
-    return listPublicProfilesPage(sort, page, PEOPLE_PAGE_SIZE, viewerId);
+function rankingDescription(sort: PeopleDiscoverySort, hasSearch: boolean) {
+  if (sort === "credit") {
+    return "Highest credit prioritizes the confidence-adjusted conservative score, then public activity, relevance, and recency.";
   }
-
-  const candidatePage = await listPublicProfilesPage(
-    sort,
-    1,
-    PEOPLE_SEARCH_LIMIT,
-    viewerId,
-  );
-  const matches = candidatePage.items.filter((profile) =>
-    profileMatchesSearchQuery(profile, search),
-  );
-  const offset = (page - 1) * PEOPLE_PAGE_SIZE;
-
-  return {
-    items: matches.slice(offset, offset + PEOPLE_PAGE_SIZE),
-    page,
-    pageSize: PEOPLE_PAGE_SIZE,
-    hasNextPage: matches.length > offset + PEOPLE_PAGE_SIZE,
-    hasPreviousPage: page > 1,
-  };
+  if (sort === "offers") {
+    return "Most open offers remains activity-led; confidence-adjusted credit contributes 12% so reliability can break close results.";
+  }
+  if (sort === "newest") {
+    return "Newest remains primarily chronological; credit contributes 10% and cannot overwhelm a large recency difference.";
+  }
+  if (hasSearch) {
+    return "Best match is 68% text relevance and 15% confidence-adjusted credit, with smaller activity and recency signals.";
+  }
+  return "Without a query, Best match emphasizes reviewed activity and recency; confidence-adjusted credit contributes 20%.";
 }
 
 function formatBadgeType(value: string) {
@@ -160,28 +178,90 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
-  const sort = normalizeSort(readParam(resolvedSearchParams, "sort"));
   const page = parsePage(resolvedSearchParams.page);
   const search = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
-  const profilesPage = hasSupabaseEnv()
-    ? await listSearchableProfilesPage({
-        page,
-        search,
-        sort,
-        viewerId: viewer?.authUser.id,
-      })
+  const filters: PeopleFilterState = {
+    cause: readParam(resolvedSearchParams, "cause").trim().slice(0, 120),
+    payment: normalizeOption(
+      readParam(resolvedSearchParams, "payment"),
+      PEOPLE_PAYMENT_FILTER_OPTIONS,
+      "any",
+    ),
+    participation: normalizeOption(
+      readParam(resolvedSearchParams, "participation"),
+      PEOPLE_PARTICIPATION_FILTER_OPTIONS,
+      "any",
+    ),
+    kind: normalizeOption(
+      readParam(resolvedSearchParams, "kind"),
+      PEOPLE_KIND_FILTER_OPTIONS,
+      "any",
+    ),
+    credit: normalizeOption(
+      readParam(resolvedSearchParams, "credit"),
+      CREDIT_FILTER_OPTIONS,
+      "any",
+    ),
+    sort: normalizeOption(
+      readParam(resolvedSearchParams, "sort"),
+      PEOPLE_DISCOVERY_SORT_OPTIONS,
+      "match",
+    ),
+  };
+  const candidatePage = hasSupabaseEnv()
+    ? await listPublicProfilesPage(
+        "reviewed",
+        1,
+        PEOPLE_DISCOVERY_LIMIT,
+        viewer?.authUser.id,
+      )
     : {
         items: [] as PublicProfileSummary[],
-        page,
-        pageSize: PEOPLE_PAGE_SIZE,
+        page: 1,
+        pageSize: PEOPLE_DISCOVERY_LIMIT,
         hasNextPage: false,
-        hasPreviousPage: page > 1,
+        hasPreviousPage: false,
       };
-  const profiles = profilesPage.items;
+  const candidates = candidatePage.items.map((profile) => ({
+    ...profile,
+    publicLocation: formatPublicProfileLocation(profile),
+  }));
   const credibilityByProfile = await listPublicCredibilitySummaries(
-    profiles.map((profile) => profile.id),
+    candidates.map((profile) => profile.id),
   );
-  const currentHref = buildPeopleHref(sort, page, search);
+  const discoveryFilters: PeopleDiscoveryFilters = {
+    cause: filters.cause,
+    credit: filters.credit,
+    kind: filters.kind,
+    participation: filters.participation,
+    payment: filters.payment,
+    search,
+  };
+  const filteredProfiles = candidates.filter((profile) =>
+    profileMatchesFilters(profile, credibilityByProfile.get(profile.id), discoveryFilters),
+  );
+  const rankedProfiles = rankProfiles(
+    filteredProfiles,
+    credibilityByProfile,
+    search,
+    filters.sort,
+  );
+  const profilesPage = paginate(rankedProfiles, page, PEOPLE_PAGE_SIZE);
+  const profiles = profilesPage.items;
+  const causeOptions = collectPeopleCauseOptions(candidates);
+  const activeFilterLabels = [
+    filters.cause ? `Cause: ${filters.cause}` : null,
+    filters.payment !== "any"
+      ? optionLabel(filters.payment, PEOPLE_PAYMENT_FILTER_OPTIONS)
+      : null,
+    filters.participation !== "any"
+      ? optionLabel(filters.participation, PEOPLE_PARTICIPATION_FILTER_OPTIONS)
+      : null,
+    filters.kind !== "any" ? optionLabel(filters.kind, PEOPLE_KIND_FILTER_OPTIONS) : null,
+    filters.credit !== "any" ? optionLabel(filters.credit, CREDIT_FILTER_OPTIONS) : null,
+  ].filter((label): label is string => Boolean(label));
+  const hasFilters = Boolean(search || activeFilterLabels.length);
+  const currentHref = buildPeopleHref({ filters, page, search });
   const peopleStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -196,7 +276,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         name: profile.resolvedName,
         description: truncateDescription(
           getPublicProfileMetaSummary(profile, {
-            publicLocation: formatPublicProfileLocation(profile),
+            publicLocation: profile.publicLocation,
           }),
           140,
         ),
@@ -226,8 +306,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <h1>Search public members and compare their transaction credit scores.</h1>
             <p className="hero-text">
               A Moral Trade credit score is the public contextual credibility estimate for completing
-              commitments. It does not rank moral views, popularity, wealth, or perceived virtue, and
-              sparse evidence remains visibly Unproven.
+              commitments. It modestly affects discovery, but does not rank moral views, popularity,
+              wealth, or perceived virtue. Sparse evidence remains visibly Unproven.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">
@@ -242,8 +322,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Score and context</strong>
-                  <p>Search results show the public score; passports separate role and trade class.</p>
+                  <strong>Relevance first</strong>
+                  <p>Best match gives text relevance most of the weight and uses credit as a bounded signal.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -256,8 +336,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Ratings are secondary</strong>
-                  <p>Objective reviewed events drive the score; free-form ratings provide context only.</p>
+                  <strong>Filters are explicit</strong>
+                  <p>Set cause, payment, participation, participant type, and minimum credit directly.</p>
                 </div>
               </div>
             </div>
@@ -286,45 +366,119 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Public directory</p>
-            <h2>{search ? `Results for “${search}”` : "Browse visible members"}</h2>
+            <h2>{hasFilters ? "Matching public members" : "Browse visible members"}</h2>
             <p>
               Search public names, biographies, locations, collective names, and broad opt-in cause
-              previews. The score helps users choose safeguards; it does not create a moral or social rank.
+              previews. Credit changes ordering within a bounded ranking formula and remains filterable.
             </p>
           </div>
 
-          <div className="mt-directory-toolbar">
-            <div className="sort-tabs">
-              {SORT_OPTIONS.map((option) => (
-                <Link
-                  key={option.value}
-                  className={`sort-tab ${sort === option.value ? "is-active" : ""}`}
-                  href={buildPeopleHref(option.value, 1, search)}
-                >
-                  {option.label}
-                </Link>
-              ))}
-            </div>
+          <div className="sort-tabs" aria-label="People result ordering">
+            {PEOPLE_DISCOVERY_SORT_OPTIONS.map((option) => (
+              <Link
+                key={option.value}
+                className={`sort-tab ${filters.sort === option.value ? "is-active" : ""}`}
+                href={buildPeopleHref({
+                  filters: { ...filters, sort: option.value },
+                  search,
+                })}
+              >
+                {option.label}
+              </Link>
+            ))}
+          </div>
 
-            <form action="/people" className="mt-directory-search" method="get" role="search">
-              {sort !== "reviewed" ? <input name="sort" type="hidden" value={sort} /> : null}
-              <label>
+          <form action="/people" className={filterStyles.filterPanel} method="get" role="search">
+            {filters.sort !== "match" ? <input name="sort" type="hidden" value={filters.sort} /> : null}
+            <div className={`${filterStyles.filterGrid} ${filterStyles.peopleGrid}`}>
+              <label className={filterStyles.field}>
                 <span>Search members</span>
                 <input
+                  className={filterStyles.control}
                   defaultValue={search}
                   name="search"
-                  placeholder="Name, location, bio, or cause"
+                  placeholder="Name, location, bio, collective, or cause"
                   type="search"
                 />
               </label>
-              <button className="button button-primary" type="submit">Search people</button>
-              {search ? (
-                <Link className="button button-secondary" href={buildPeopleHref(sort, 1)}>
-                  Clear
+              <label className={filterStyles.field}>
+                <span>Cause area</span>
+                <select className={filterStyles.control} defaultValue={filters.cause} name="cause">
+                  <option value="">Any cause area</option>
+                  {causeOptions.map((cause) => (
+                    <option key={cause} value={cause}>{cause}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Payment preference</span>
+                <select className={filterStyles.control} defaultValue={filters.payment} name="payment">
+                  {PEOPLE_PAYMENT_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Action and participation</span>
+                <select
+                  className={filterStyles.control}
+                  defaultValue={filters.participation}
+                  name="participation"
+                >
+                  {PEOPLE_PARTICIPATION_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Participant type</span>
+                <select className={filterStyles.control} defaultValue={filters.kind} name="kind">
+                  {PEOPLE_KIND_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Credit score</span>
+                <select className={filterStyles.control} defaultValue={filters.credit} name="credit">
+                  {CREDIT_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className={filterStyles.actions}>
+              <button className="button button-primary" type="submit">Apply filters</button>
+              {hasFilters ? (
+                <Link
+                  className="button button-secondary"
+                  href={buildPeopleHref({
+                    filters: {
+                      cause: "",
+                      credit: "any",
+                      kind: "any",
+                      participation: "any",
+                      payment: "any",
+                      sort: filters.sort,
+                    },
+                  })}
+                >
+                  Clear filters
                 </Link>
               ) : null}
-            </form>
-          </div>
+            </div>
+            <div className={filterStyles.filterMeta}>
+              <div className={filterStyles.activeFilters} aria-live="polite">
+                <strong>{rankedProfiles.length} matching member(s)</strong>
+                {activeFilterLabels.map((label) => (
+                  <span className={filterStyles.activeChip} key={label}>{label}</span>
+                ))}
+              </div>
+              <p className={filterStyles.rankingNote}>
+                {rankingDescription(filters.sort, Boolean(search))}
+              </p>
+            </div>
+          </form>
 
           <div className="directory-grid">
             {profiles.length ? (
@@ -342,7 +496,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                         <p className="detail-kicker">Public profile</p>
                         <h3>{profile.resolvedName}</h3>
                         <p className="route-text">
-                          {formatPublicProfileLocation(profile) || "Location not listed"}
+                          {profile.publicLocation || "Location not listed"}
                         </p>
                       </div>
                       <span
@@ -450,19 +604,31 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="empty-state">
                 <div>
                   <strong>
-                    {search
-                      ? `No public member records match “${search}”.`
+                    {hasFilters
+                      ? "No public member records match the current search and filters."
                       : "Public member records will appear after participants publish offers or opt into public profiles."}
                   </strong>
                   <p>
-                    {search
-                      ? "Try a shorter name, location, cause, or biography term. Only opt-in public profile fields are searchable."
+                    {hasFilters
+                      ? "Broaden the cause, participation, payment, participant-type, or credit threshold. Only opt-in public profile fields are searchable."
                       : "New participants begin as Unproven and can build a record through small, reviewable commitments with independent evidence."}
                   </p>
                   <div className="hero-actions">
-                    {search ? (
-                      <Link className="button button-secondary" href={buildPeopleHref(sort, 1)}>
-                        Clear search
+                    {hasFilters ? (
+                      <Link
+                        className="button button-secondary"
+                        href={buildPeopleHref({
+                          filters: {
+                            cause: "",
+                            credit: "any",
+                            kind: "any",
+                            participation: "any",
+                            payment: "any",
+                            sort: filters.sort,
+                          },
+                        })}
+                      >
+                        Clear filters
                       </Link>
                     ) : (
                       <Link className="button button-secondary" href="/worked-examples">
@@ -483,7 +649,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               {profilesPage.hasPreviousPage ? (
                 <Link
                   className="button button-secondary"
-                  href={buildPeopleHref(sort, profilesPage.page - 1, search)}
+                  href={buildPeopleHref({ filters, page: profilesPage.page - 1, search })}
                 >
                   Previous page
                 </Link>
@@ -494,7 +660,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               {profilesPage.hasNextPage ? (
                 <Link
                   className="button button-secondary"
-                  href={buildPeopleHref(sort, profilesPage.page + 1, search)}
+                  href={buildPeopleHref({ filters, page: profilesPage.page + 1, search })}
                 >
                   Next page
                 </Link>

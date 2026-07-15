@@ -1,0 +1,143 @@
+.filterPanel {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) repeat(5, minmax(135px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.peopleGrid {
+  grid-template-columns: minmax(220px, 1.6fr) repeat(6, minmax(125px, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 0.38rem;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.field span {
+  line-height: 1.25;
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.66rem 0.72rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.control:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+  border-color: var(--accent-deep);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.filterMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.filterMeta strong {
+  color: var(--ink);
+}
+
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.activeChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0.25rem 0.58rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.rankingNote {
+  max-width: 74ch;
+  margin: 0;
+}
+
+@media (max-width: 1320px) {
+  .filterGrid,
+  .peopleGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .field:first-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .filterPanel {
+    padding: 0.82rem;
+  }
+
+  .filterGrid,
+  .peopleGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .field:first-child {
+    grid-column: auto;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filterMeta {
+    align-items: flex-start;
+  }
+}
