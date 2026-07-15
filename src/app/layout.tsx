@@ -6,6 +6,7 @@ import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL 
 
 import "./globals.css";
 import "./marketplace-ui.css";
+import "./activation-critical.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
