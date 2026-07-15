@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 const BASE_URL = "https://www.moraltrade.org";
 const OFFER_ID = "eab45baa-8b83-408f-9afd-ff4e3caab801";
 const OFFER_PATH = `/offers/${OFFER_ID}`;
-const TEST_EMAIL = "caijun054+activation-gate-20260715-0321@gmail.com";
+const TEST_EMAIL = "caijun054+activation-gate-20260715-0325@gmail.com";
 const TEST_PASSWORD = `${randomBytes(24).toString("base64url")}aA1!`;
 const OUTPUT_DIR = "activation-gate-output";
 const MESSAGE = [
@@ -76,6 +76,25 @@ async function attemptLogin() {
   return hasOnboardingForm();
 }
 
+async function elementState(locator) {
+  return locator.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return {
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      contentVisibility: style.contentVisibility,
+      rect: {
+        top: Math.round(rect.top),
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+    };
+  });
+}
+
 try {
   stage("signup_page_open");
   await page.goto(`${BASE_URL}/signup?returnTo=%2Fonboarding&method=email`, {
@@ -140,21 +159,34 @@ try {
   stage("onboarding_complete", { routedTo: page.url() });
 
   await page.goto(`${BASE_URL}${OFFER_PATH}`, { waitUntil: "domcontentloaded" });
-  const offerMainText = await page.locator("main").innerText();
-  if (!offerMainText.includes("45-minute structured working session")) {
-    throw new Error("Structured cross-view working-session terms were not present on the offer page.");
+  const respondSection = page.locator("#respond");
+  await respondSection.waitFor({ state: "attached" });
+  const offerTextContent = (await page.locator("main").textContent()) ?? "";
+  if (!offerTextContent.includes("45-minute structured working session")) {
+    throw new Error("Structured cross-view working-session terms were not present in the offer DOM.");
   }
 
-  const messageField = page.locator('textarea[name="message"]:visible').first();
+  const respondBeforeScroll = await elementState(respondSection);
+  await respondSection.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+  await page.waitForTimeout(1600);
+  const respondAfterScroll = await elementState(respondSection);
+
+  const messageField = respondSection.locator('textarea[name="message"]').first();
+  await messageField.scrollIntoViewIfNeeded();
   await messageField.waitFor({ state: "visible" });
-  stage("structured_offer_open", { url: page.url() });
+  stage("structured_offer_open", {
+    respondBeforeScroll,
+    respondAfterScroll,
+    url: page.url(),
+  });
 
   const responseForm = messageField.locator("xpath=ancestor::form[1]");
   await messageField.fill(MESSAGE);
   await responseForm.getByRole("button", { name: "Express interest" }).click();
   await page.waitForTimeout(2500);
 
-  const responseStatus = page.locator(".status-chip-row:visible").getByText(/Your response is/i).first();
+  const responseStatus = page.locator(".status-chip-row").getByText(/Your response is/i).first();
+  await responseStatus.scrollIntoViewIfNeeded();
   await responseStatus.waitFor({ state: "visible" });
   const responseStatusText = (await responseStatus.textContent())?.trim() ?? "";
   if (!/interested|accepted|pending/i.test(responseStatusText)) {
