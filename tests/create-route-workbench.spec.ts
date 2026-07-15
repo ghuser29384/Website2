@@ -27,6 +27,9 @@ test.describe("Create route workbench", () => {
       page.getByRole("heading", { level: 1, name: "Choose the coordination move." }),
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Trade preview" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Make the default explicit first." }),
+    ).toHaveCount(0);
     await expect(page.locator('[data-create-mode="trade"]')).toHaveAttribute(
       "aria-pressed",
       "true",
