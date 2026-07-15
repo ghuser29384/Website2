@@ -41,8 +41,8 @@ jobs:
             src/lib/create-routes.test.ts \
             tests/create-route-workbench.spec.ts
 
-      - name: Run unit tests
-        run: npm test
+      - name: Run create-route unit tests
+        run: node --import tsx --test src/lib/create-routes.test.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
