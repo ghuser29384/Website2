@@ -11,6 +11,7 @@ import {
   listPublicProfilesPage,
   PEOPLE_PAGE_SIZE,
   type PeopleSort,
+  type PublicProfileSummary,
 } from "@/lib/app-data";
 import { listPublicCredibilitySummaries } from "@/lib/credibility-data";
 import { getPublicProfileMetaSummary } from "@/lib/public-profile-trust";
@@ -21,14 +22,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "People",
   description:
-    "Browse opt-in Moral Trade member records with contextual credibility, reviewed evidence, open offers, and explicit uncertainty.",
+    "Search opt-in Moral Trade member records and compare public transaction credit scores, reviewed evidence, open offers, and explicit uncertainty.",
   alternates: {
     canonical: "/people",
   },
   openGraph: {
     title: "People directory",
     description:
-      "Browse opt-in Moral Trade member profiles, contextual reliability, reviewed proof, and public offers.",
+      "Search opt-in Moral Trade member profiles and compare contextual transaction credit scores, reviewed proof, and public offers.",
     url: getAbsoluteUrl("/people"),
     type: "website",
   },
@@ -39,9 +40,18 @@ const SORT_OPTIONS: Array<{ value: PeopleSort; label: string }> = [
   { value: "offers", label: "Open offers" },
   { value: "newest", label: "Newest opt-ins" },
 ];
+const PEOPLE_SEARCH_LIMIT = 1_000;
 
 interface PeoplePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function readParam(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+) {
+  const value = searchParams[key];
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 function normalizeSort(value: string | undefined): PeopleSort {
@@ -59,12 +69,84 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function buildPeopleHref(sort: PeopleSort, page: number) {
-  if (sort === "reviewed" && page === 1) {
-    return "/people";
+function buildPeopleHref(sort: PeopleSort, page: number, search = "") {
+  const params = new URLSearchParams();
+
+  if (sort !== "reviewed") {
+    params.set("sort", sort);
   }
 
-  return page === 1 ? `/people?sort=${sort}` : `/people?sort=${sort}&page=${page}`;
+  if (search) {
+    params.set("search", search);
+  }
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  const query = params.toString();
+  return query ? `/people?${query}` : "/people";
+}
+
+function profileMatchesSearchQuery(profile: PublicProfileSummary, search: string) {
+  const tokens = search
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return true;
+  }
+
+  const haystack = [
+    profile.resolvedName,
+    profile.display_name,
+    profile.bio,
+    formatPublicProfileLocation(profile),
+    profile.wishPreview,
+    profile.wishCollectiveName,
+    ...profile.wishCauses,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
+async function listSearchableProfilesPage({
+  page,
+  search,
+  sort,
+  viewerId,
+}: {
+  page: number;
+  search: string;
+  sort: PeopleSort;
+  viewerId?: string;
+}) {
+  if (!search) {
+    return listPublicProfilesPage(sort, page, PEOPLE_PAGE_SIZE, viewerId);
+  }
+
+  const candidatePage = await listPublicProfilesPage(
+    sort,
+    1,
+    PEOPLE_SEARCH_LIMIT,
+    viewerId,
+  );
+  const matches = candidatePage.items.filter((profile) =>
+    profileMatchesSearchQuery(profile, search),
+  );
+  const offset = (page - 1) * PEOPLE_PAGE_SIZE;
+
+  return {
+    items: matches.slice(offset, offset + PEOPLE_PAGE_SIZE),
+    page,
+    pageSize: PEOPLE_PAGE_SIZE,
+    hasNextPage: matches.length > offset + PEOPLE_PAGE_SIZE,
+    hasPreviousPage: page > 1,
+  };
 }
 
 function formatBadgeType(value: string) {
@@ -78,30 +160,33 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
-  const sort = normalizeSort(
-    Array.isArray(resolvedSearchParams.sort)
-      ? resolvedSearchParams.sort[0]
-      : resolvedSearchParams.sort,
-  );
+  const sort = normalizeSort(readParam(resolvedSearchParams, "sort"));
   const page = parsePage(resolvedSearchParams.page);
+  const search = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
   const profilesPage = hasSupabaseEnv()
-    ? await listPublicProfilesPage(sort, page, PEOPLE_PAGE_SIZE, viewer?.authUser.id)
-    : { items: [], page, pageSize: PEOPLE_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
+    ? await listSearchableProfilesPage({
+        page,
+        search,
+        sort,
+        viewerId: viewer?.authUser.id,
+      })
+    : {
+        items: [] as PublicProfileSummary[],
+        page,
+        pageSize: PEOPLE_PAGE_SIZE,
+        hasNextPage: false,
+        hasPreviousPage: page > 1,
+      };
   const profiles = profilesPage.items;
   const credibilityByProfile = await listPublicCredibilitySummaries(
     profiles.map((profile) => profile.id),
   );
+  const currentHref = buildPeopleHref(sort, page, search);
   const peopleStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Moral Trade people directory",
-    url: getAbsoluteUrl(
-      `/people${
-        sort === "reviewed" && page === 1
-          ? ""
-          : `?sort=${sort}${page === 1 ? "" : `&page=${page}`}`
-      }`,
-    ),
+    url: getAbsoluteUrl(currentHref),
     mainEntity: {
       "@type": "ItemList",
       itemListElement: profiles.slice(0, 24).map((profile, index) => ({
@@ -138,15 +223,15 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">People directory</p>
-            <h1>Public records with contextual reliability and explicit uncertainty.</h1>
+            <h1>Search public members and compare their transaction credit scores.</h1>
             <p className="hero-text">
-              Public profiles appear after participants publish offers or explicitly opt into
-              visibility. Credibility estimates predict transaction performance by role and trade
-              class; they do not rank moral views, popularity, wealth, or perceived virtue.
+              A Moral Trade credit score is the public contextual credibility estimate for completing
+              commitments. It does not rank moral views, popularity, wealth, or perceived virtue, and
+              sparse evidence remains visibly Unproven.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">
-                How credibility is calculated
+                How credit scores are calculated
               </Link>
             </div>
           </section>
@@ -157,8 +242,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Context first</strong>
-                  <p>Donation, payment, verification, and behavioural commitments remain distinct.</p>
+                  <strong>Score and context</strong>
+                  <p>Search results show the public score; passports separate role and trade class.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -172,7 +257,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                 <span className="flow-number">03</span>
                 <div>
                   <strong>Ratings are secondary</strong>
-                  <p>Objective reviewed events drive credibility; free-form ratings provide context only.</p>
+                  <p>Objective reviewed events drive the score; free-form ratings provide context only.</p>
                 </div>
               </div>
             </div>
@@ -183,7 +268,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       <main id="main-content" tabIndex={-1}>
         {!hasSupabaseEnv() ? (
           <div className="status-banner status-banner-error">
-            The public data service is unavailable. Credibility fails closed to Unproven until the
+            The public data service is unavailable. Credit scores fail closed to Unproven until the
             connection is restored.
           </div>
         ) : null}
@@ -201,29 +286,54 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Public directory</p>
-            <h2>Browse visible members</h2>
+            <h2>{search ? `Results for “${search}”` : "Browse visible members"}</h2>
             <p>
-              Sorting still prioritizes reviewed public records, open offers, and recent opt-ins.
-              Credibility is used to choose safeguards, not to create a follower-driven social rank.
+              Search public names, biographies, locations, collective names, and broad opt-in cause
+              previews. The score helps users choose safeguards; it does not create a moral or social rank.
             </p>
           </div>
 
-          <div className="sort-tabs">
-            {SORT_OPTIONS.map((option) => (
-              <Link
-                key={option.value}
-                className={`sort-tab ${sort === option.value ? "is-active" : ""}`}
-                href={buildPeopleHref(option.value, 1)}
-              >
-                {option.label}
-              </Link>
-            ))}
+          <div className="mt-directory-toolbar">
+            <div className="sort-tabs">
+              {SORT_OPTIONS.map((option) => (
+                <Link
+                  key={option.value}
+                  className={`sort-tab ${sort === option.value ? "is-active" : ""}`}
+                  href={buildPeopleHref(option.value, 1, search)}
+                >
+                  {option.label}
+                </Link>
+              ))}
+            </div>
+
+            <form action="/people" className="mt-directory-search" method="get" role="search">
+              {sort !== "reviewed" ? <input name="sort" type="hidden" value={sort} /> : null}
+              <label>
+                <span>Search members</span>
+                <input
+                  defaultValue={search}
+                  name="search"
+                  placeholder="Name, location, bio, or cause"
+                  type="search"
+                />
+              </label>
+              <button className="button button-primary" type="submit">Search people</button>
+              {search ? (
+                <Link className="button button-secondary" href={buildPeopleHref(sort, 1)}>
+                  Clear
+                </Link>
+              ) : null}
+            </form>
           </div>
 
           <div className="directory-grid">
             {profiles.length ? (
               profiles.map((profile) => {
                 const credibility = credibilityByProfile.get(profile.id);
+                const scoreLabel =
+                  credibility?.score !== null && credibility?.score !== undefined
+                    ? `Credit score ${credibility.score}/100 · ${credibility.level}`
+                    : `Credit score: ${credibility?.level ?? "Unproven"}`;
 
                 return (
                   <article key={profile.id} className="panel profile-card">
@@ -235,10 +345,11 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                           {formatPublicProfileLocation(profile) || "Location not listed"}
                         </p>
                       </div>
-                      <span className="badge">
-                        {credibility?.score !== null && credibility?.score !== undefined
-                          ? `${credibility.score}/100 · ${credibility.level}`
-                          : credibility?.level ?? "Unproven"}
+                      <span
+                        className="badge"
+                        title="Contextual transaction credibility, not a financial credit or moral-worth score"
+                      >
+                        {scoreLabel}
                       </span>
                     </div>
 
@@ -246,7 +357,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
 
                     {credibility ? (
                       <div className="profile-preview-block">
-                        <p className="detail-kicker">Contextual credibility</p>
+                        <p className="detail-kicker">Contextual credit score</p>
                         <p className="route-text">{credibility.explanation}</p>
                         <div className="tag-row">
                           <span className="source-pill">{credibility.confidence} confidence</span>
@@ -324,7 +435,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                         {viewer && viewer.authUser.id !== profile.id ? (
                           <form action={toggleFollowAction}>
                             <input name="profile_id" type="hidden" value={profile.id} />
-                            <input name="return_to" type="hidden" value={`/people?sort=${sort}`} />
+                            <input name="return_to" type="hidden" value={currentHref} />
                             <button className="button button-secondary button-mini" type="submit">
                               {profile.isFollowedByViewer ? "Following" : "Follow"}
                             </button>
@@ -339,17 +450,25 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="empty-state">
                 <div>
                   <strong>
-                    Public member records will appear after participants publish offers or opt into
-                    public profiles.
+                    {search
+                      ? `No public member records match “${search}”.`
+                      : "Public member records will appear after participants publish offers or opt into public profiles."}
                   </strong>
                   <p>
-                    New participants begin as Unproven and can build a record through small,
-                    reviewable commitments with independent evidence.
+                    {search
+                      ? "Try a shorter name, location, cause, or biography term. Only opt-in public profile fields are searchable."
+                      : "New participants begin as Unproven and can build a record through small, reviewable commitments with independent evidence."}
                   </p>
                   <div className="hero-actions">
-                    <Link className="button button-secondary" href="/worked-examples">
-                      View worked examples
-                    </Link>
+                    {search ? (
+                      <Link className="button button-secondary" href={buildPeopleHref(sort, 1)}>
+                        Clear search
+                      </Link>
+                    ) : (
+                      <Link className="button button-secondary" href="/worked-examples">
+                        View worked examples
+                      </Link>
+                    )}
                     <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
                       {viewer ? "Open dashboard" : "Create account"}
                     </Link>
@@ -364,7 +483,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               {profilesPage.hasPreviousPage ? (
                 <Link
                   className="button button-secondary"
-                  href={buildPeopleHref(sort, profilesPage.page - 1)}
+                  href={buildPeopleHref(sort, profilesPage.page - 1, search)}
                 >
                   Previous page
                 </Link>
@@ -375,7 +494,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               {profilesPage.hasNextPage ? (
                 <Link
                   className="button button-secondary"
-                  href={buildPeopleHref(sort, profilesPage.page + 1)}
+                  href={buildPeopleHref(sort, profilesPage.page + 1, search)}
                 >
                   Next page
                 </Link>

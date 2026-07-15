@@ -10,6 +10,8 @@ import {
   OFFERS_PAGE_SIZE,
   type OfferRecord,
 } from "@/lib/app-data";
+import { categoryForOfferMode, type CredibilitySummary } from "@/lib/credibility";
+import { listPublicCredibilityForLookups } from "@/lib/credibility-search";
 import { getFormMessage } from "@/lib/form-state";
 import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import { formatMode } from "@/lib/offers";
@@ -104,7 +106,27 @@ function buildDirectoryHref({
   return `/offers?${params.toString()}`;
 }
 
-function LiveProposalCard({ offer }: { offer: OfferRecord }) {
+function formatCreditScore(credibility: CredibilitySummary | undefined) {
+  if (!credibility) {
+    return "Credit score: Unproven";
+  }
+
+  return credibility.score === null
+    ? `Credit score: ${credibility.level}`
+    : `Credit score ${credibility.score}/100`;
+}
+
+function LiveProposalCard({
+  credibility,
+  offer,
+}: {
+  credibility: CredibilitySummary | undefined;
+  offer: OfferRecord;
+}) {
+  const category = categoryForOfferMode(offer.mode);
+  const participantName =
+    offer.owner_alias || offer.ownerProfile?.resolvedName || "Participant";
+
   return (
     <article className="mt-market-card">
       <div className="mt-market-card-head">
@@ -116,9 +138,23 @@ function LiveProposalCard({ offer }: { offer: OfferRecord }) {
         <span aria-hidden="true">↔</span>
         {offer.requested_cause}
       </h3>
-      <p className="listing-alias">
-        By {offer.owner_alias || offer.ownerProfile?.resolvedName || "Participant"}
-      </p>
+      <p className="listing-alias">By {participantName}</p>
+      <div
+        className="tag-row"
+        aria-label={`Transaction credit score for ${participantName}`}
+        title="Contextual transaction credibility, not a financial credit or moral-worth score"
+      >
+        <span className="badge">{formatCreditScore(credibility)}</span>
+        <span className="source-pill">
+          {credibility?.level ?? "Unproven"} · {credibility?.confidence ?? "limited"} confidence
+        </span>
+        <Link
+          className="text-button"
+          href={`/people/${offer.owner_id}/credibility?role=committer&category=${category}`}
+        >
+          View score
+        </Link>
+      </div>
       <dl>
         <div>
           <dt>Offers</dt>
@@ -199,6 +235,16 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const view = parseView(readParam(resolvedSearchParams, "view"), livePage.items.length > 0);
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
+  const credibilityByOffer = await listPublicCredibilityForLookups(
+    livePage.items.map((offer) => ({
+      key: offer.id,
+      profileId: offer.owner_id,
+      context: {
+        role: "committer",
+        category: categoryForOfferMode(offer.mode),
+      },
+    })),
+  );
 
   const workedExamples = CANONICAL_WORKED_CASE_OFFERS.filter((example) =>
     matchesSearch(
@@ -294,8 +340,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <h2 id="directory-heading">Choose the record state you need.</h2>
             </div>
             <p>
-              Search within one state at a time. The marketplace does not blend demos, templates,
-              open participant proposals, and public-good coordination into one activity number.
+              Search within one state at a time. Live offer results show the offer owner&apos;s
+              contextual transaction credit score before you open the complete deal receipt.
             </p>
           </div>
 
@@ -341,14 +387,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <h2>Open proposals</h2>
                 </div>
                 <p>
-                  Inspect the baseline, terms, evidence, privacy, externality, review, and settlement
-                  state before expressing interest.
+                  Compare the owner&apos;s score, baseline, terms, evidence, privacy, externality,
+                  review, and settlement state before expressing interest.
                 </p>
               </div>
               {livePage.items.length ? (
                 <div className="mt-market-grid">
                   {livePage.items.map((offer) => (
-                    <LiveProposalCard key={offer.id} offer={offer} />
+                    <LiveProposalCard
+                      credibility={credibilityByOffer.get(offer.id)}
+                      key={offer.id}
+                      offer={offer}
+                    />
                   ))}
                 </div>
               ) : (
