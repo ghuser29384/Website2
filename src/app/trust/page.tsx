@@ -3,120 +3,98 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
-import {
-  getMoralTradeChallengeAppealContract,
-  validateMoralTradeChallengeAppealContract,
-} from "@/lib/moral-trade/challenge-appeal";
-import {
-  getMoralTradeDisclosureContract,
-  validateMoralTradeDisclosureContract,
-} from "@/lib/moral-trade/disclosure";
-import {
-  getMoralTradeExternalityProfile,
-  validateMoralTradeExternalityProfile,
-} from "@/lib/moral-trade/externality";
-import {
-  getMoralTradeIncidentResponseProfile,
-  validateMoralTradeIncidentResponseProfile,
-} from "@/lib/moral-trade/incident-response";
-import { getActiveCredibilityModel } from "@/lib/credibility-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "What You Can Rely On",
+  title: "Trust",
   description:
-    "A plain-language trust explainer for Moral Trade: contextual credibility, operating commitments, review states, non-guarantees, and recourse routes.",
+    "A plain-language guide to what Moral Trade checks, what reviewed status means, and what the service does not guarantee.",
   alternates: {
     canonical: "/trust",
   },
   openGraph: {
-    title: "What you can rely on today",
+    title: "Trust should be specific",
     description:
-      "Understand Moral Trade's contextual credibility model, operating commitments, non-guarantees, review states, and recourse routes.",
+      "See what Moral Trade records and reviews, how to read proposal status, and where the service's limits are.",
     url: getAbsoluteUrl("/trust"),
     type: "website",
   },
 };
 
-const reviewStates = [
+const trustChecks = [
   {
-    title: "Worked example",
+    title: "Clear terms",
     detail:
-      "Illustrative terms only. It can be cloned, but nobody should rely on it as an active agreement.",
+      "The action, no-deal baseline, timing, evidence requirements, maximum exposure, and exit terms should be visible before anyone relies on a proposal.",
   },
   {
-    title: "Draft proposal",
+    title: "Named evidence",
     detail:
-      "A participant-stated proposal that still needs baseline, evidence, safety, and counterparty review.",
+      "Receipts, logs, attestations, or public records are identified in advance. Review applies only to the evidence and scope that were actually checked.",
   },
   {
-    title: "Evidence submitted",
+    title: "Contextual reliability",
     detail:
-      "Receipts, logs, attestations, or public statements have been named for reviewer inspection.",
-  },
-  {
-    title: "Reviewed record",
-    detail:
-      "A reviewer has checked the named scope, conflicts, proof uniqueness, and challenge window.",
+      "Reliability is shown for a particular role and type of commitment. Moral Trade does not assign a universal score for virtue, status, or social worth.",
   },
 ] as const;
 
-function formatTrustToken(value: string) {
-  return value.replaceAll("_", " ");
-}
+const reviewStates = [
+  {
+    title: "Worked example",
+    detail: "Illustrative only. It is not an active agreement.",
+  },
+  {
+    title: "Draft",
+    detail: "Participant-stated terms that have not been reviewed.",
+  },
+  {
+    title: "Evidence submitted",
+    detail: "Proof has been named for inspection, but no review conclusion is implied.",
+  },
+  {
+    title: "Reviewed",
+    detail:
+      "A human reviewer checked the named scope and evidence. Reviewed does not mean guaranteed.",
+  },
+] as const;
+
+const limits = [
+  "No escrow, custody, or payment protection.",
+  "No legal, tax, or investment advice.",
+  "No objective ranking of moral views or people.",
+  "Reviewed status does not guarantee performance.",
+  "Bilateral agreement does not eliminate possible harms to third parties.",
+] as const;
+
+const recourseRoutes = [
+  {
+    title: "Challenge evidence or a baseline",
+    detail:
+      "Use this when proof appears incomplete, duplicated, or out of scope, or when the claimed no-deal baseline looks wrong.",
+    href: "mailto:support@moraltrade.org?subject=Challenge%20evidence%20or%20baseline",
+    action: "Email a review challenge",
+  },
+  {
+    title: "Report a safety or privacy concern",
+    detail:
+      "Use this for threats, coercion, harassment, fraud, identity misuse, account compromise, or inappropriate disclosure.",
+    href: "mailto:support@moraltrade.org?subject=Safety%20or%20privacy%20concern",
+    action: "Email a safety concern",
+  },
+  {
+    title: "Raise a third-party harm",
+    detail:
+      "Use this when a proposal may impose material costs on people, groups, animals, or values not represented by the parties.",
+    href: "mailto:support@moraltrade.org?subject=Externality%20or%20third-party%20harm",
+    action: "Request externality review",
+  },
+] as const;
 
 export default async function TrustPage() {
-  const [viewer, credibilityModel] = await Promise.all([
-    getViewer(),
-    getActiveCredibilityModel(),
-  ]);
-  const challengeAppealContract = getMoralTradeChallengeAppealContract();
-  const challengeAppealValidation =
-    validateMoralTradeChallengeAppealContract(challengeAppealContract);
-  const disclosureContract = getMoralTradeDisclosureContract();
-  const disclosureValidation = validateMoralTradeDisclosureContract(disclosureContract);
-  const externalityProfile = getMoralTradeExternalityProfile();
-  const externalityValidation = validateMoralTradeExternalityProfile(externalityProfile);
-  const incidentResponseProfile = getMoralTradeIncidentResponseProfile();
-  const incidentResponseValidation =
-    validateMoralTradeIncidentResponseProfile(incidentResponseProfile);
-  const recourseRoutes = [
-    {
-      title: "Challenge reviewed evidence or baseline",
-      href: "/api/moral-trade/challenge-appeal/contract",
-      status: challengeAppealValidation.status,
-      detail: `Appeals cover ${challengeAppealContract.subjects.length} reviewed subject types, ${challengeAppealContract.standingCategories.length} standing categories, and ${challengeAppealContract.allowedOutcomes.length} human-reviewed outcomes.`,
-      chips: challengeAppealContract.appealTriggers.slice(0, 4),
-      action: "View appeal contract",
-    },
-    {
-      title: "Request disclosure review",
-      href: "/api/moral-trade/disclosure/contract",
-      status: disclosureValidation.status,
-      detail: `Disclosure grants cover ${disclosureContract.disclosureFields.length} field types across ${disclosureContract.audienceStages.length} audience stages, with raw source notes and contact details redacted by default.`,
-      chips: disclosureContract.searchPrivacyControls.map((control) => control.key).slice(0, 4),
-      action: "View disclosure contract",
-    },
-    {
-      title: "Request externality remedy",
-      href: "/api/moral-trade/externality/health",
-      status: externalityValidation.status,
-      detail: `Externality review names ${externalityProfile.triggerCodes.length} trigger codes, ${externalityProfile.reviewStandards.length} review standards, and ${externalityProfile.remedyControls.length} remedy controls before reliance.`,
-      chips: externalityProfile.remedyControls.map((control) => control.key),
-      action: "View externality health",
-    },
-    {
-      title: "Report safety or privacy incident",
-      href: "/api/moral-trade/incident-response/health",
-      status: incidentResponseValidation.status,
-      detail: `Incident response covers ${incidentResponseProfile.incidentCategories.length} incident categories and ${incidentResponseProfile.severityLevels.length} severity levels, with public summaries kept aggregate and redacted.`,
-      chips: incidentResponseProfile.intakeChannels.map((channel) => channel.key).slice(0, 4),
-      action: "View incident response",
-    },
-  ] as const;
+  const viewer = await getViewer();
 
   return (
     <div className="page-shell">
@@ -130,55 +108,43 @@ export default async function TrustPage() {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Trust explainer</p>
-            <h1>What you can rely on today.</h1>
+            <h1>Trust should be specific.</h1>
             <p className="hero-text">
-              Moral Trade makes proposal terms, evidence expectations, contextual reliability,
-              safety boundaries, and review status legible. It does not rank moral views, hold funds,
-              automate outreach, or promise legal enforceability.
+              Moral Trade records what was promised, what evidence counts, and what has been
+              reviewed. It does not guarantee outcomes, hold funds, or decide which moral views
+              are right.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/credibility">
-                Inspect credibility model
+              <Link className="button button-primary" href="/offers">
+                Explore proposals
               </Link>
-              <Link className="button button-secondary" href="/safety">
-                Review safety policy
-              </Link>
-              <Link className="button button-secondary" href="/contact">
-                Contact operators
+              <Link className="button button-secondary" href="/credibility">
+                Read the methodology
               </Link>
             </div>
           </section>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Trust split</p>
+          <aside className="hero-panel panel" aria-label="Trust at a glance">
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Action evidence</strong>
-                  <p>Did someone do what they said? Look for receipts, logs, attestations, or records.</p>
+                  <strong>Terms are visible</strong>
+                  <p>See the baseline, commitment, evidence, timing, and exit conditions.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Contextual credibility</strong>
-                  <p>How reliable is this participant for this role and this kind of commitment?</p>
+                  <strong>Review is scoped</strong>
+                  <p>A review covers named evidence and a defined role, not the whole person.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Baseline confidence</strong>
-                  <p>Would they have done it anyway? This stays separate from factual proof.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">04</span>
-                <div>
-                  <strong>Externality review</strong>
-                  <p>Who might object, and could the trade harm values not represented by the parties?</p>
+                  <strong>Decisions can be challenged</strong>
+                  <p>Evidence, baselines, privacy, safety, and externalities have review routes.</p>
                 </div>
               </div>
             </div>
@@ -189,150 +155,89 @@ export default async function TrustPage() {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Guarantees</p>
-            <h2>Current public commitments</h2>
+            <h2>What Moral Trade checks</h2>
             <p>
-              These are the operational claims the service is designed to support on every relevant
-              route.
+              Trust is attached to a specific proposal, type of evidence, and role. Evidence asks
+              whether the action happened; baseline confidence asks what would likely have happened
+              without the agreement. Those questions remain separate.
             </p>
           </div>
 
           <div className="data-grid">
-            <article className="panel data-card">
-              <h3>Boundaries are explicit</h3>
-              <p className="route-text">
-                Public pages must state no escrow, no custody, no legal advice, no tax advice, and
-                no hidden automation where those boundaries matter.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Examples are labeled</h3>
-              <p className="route-text">
-                Worked examples are separated from live proposals so visitors can learn the format
-                without mistaking examples for liquidity.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Threats are rejected</h3>
-              <p className="route-text">
-                Baseline integrity rules reject pay-me-or-I-will-do-harm offers and compensation
-                for stopping newly escalated harmful behavior.
-              </p>
-            </article>
+            {trustChecks.map((check) => (
+              <article className="panel data-card" key={check.title}>
+                <h3>{check.title}</h3>
+                <p className="route-text">{check.detail}</p>
+              </article>
+            ))}
           </div>
         </section>
 
         <section className="section section-subtle">
           <div className="section-head">
-            <p className="eyebrow">Credibility model</p>
-            <h2>Reliability evidence without moral or social ranking</h2>
-            <p>
-              Model {credibilityModel.version} is active. It combines verified outcomes with Bayesian
-              uncertainty and discounts old, repeated, weakly verified, or contextually unrelated
-              evidence.
-            </p>
-          </div>
-
-          <div className="data-grid">
-            <article className="panel data-card">
-              <h3>Context-specific</h3>
-              <p className="route-text">
-                Paying, performing, verifying, and resolving disputes are distinct. Donation history
-                does not automatically establish reliability for a long behavioural commitment.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Uncertainty-first</h3>
-              <p className="route-text">
-                Fewer than {credibilityModel.minimumEffectiveObservations} effective observations
-                displays “Unproven.” Public scores use the lower{" "}
-                {Math.round(credibilityModel.lowerQuantile * 100)}th percentile, not the optimistic
-                mean.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>Safety is non-compensatory</h3>
-              <p className="route-text">
-                Fraud, forged evidence, coercion, threats, duplicate identity, and account compromise
-                enter a separate eligibility system that successful micro-transactions cannot erase.
-              </p>
-            </article>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-secondary" href="/credibility">
-              Read full methodology
-            </Link>
-            <Link className="button button-secondary" href="/api/credibility/model">
-              View model JSON
-            </Link>
-          </div>
-        </section>
-
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Review states</p>
             <h2>How to read proposal status</h2>
-          </div>
-
-          <div className="data-grid">
-            {reviewStates.map((state) => (
-              <article className="panel data-card" key={state.title}>
-                <h3>{state.title}</h3>
-                <p className="route-text">{state.detail}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="recourse-heading">
-          <div className="section-head">
-            <p className="eyebrow">Recourse</p>
-            <h2 id="recourse-heading">When something looks wrong</h2>
             <p>
-              Challenges, privacy complaints, third-party harms, and safety incidents should enter
-              scoped review lanes. These routes do not mutate live proposal state by themselves;
-              they publish what humans need to review.
+              Status communicates how far a record has moved through the review process. It
+              should never be read as a blanket guarantee.
             </p>
           </div>
 
-          <div className="data-grid">
-            {recourseRoutes.map((route) => (
-              <article className="panel data-card" key={route.title}>
-                <div className="protocol-workflow-card-head">
-                  <h3>{route.title}</h3>
-                  <StatusBadge tone={route.status === "pass" ? "default" : "warning"}>
-                    {route.status}
-                  </StatusBadge>
+          <div className="panel data-card data-card-wide">
+            <div className="flow-card">
+              {reviewStates.map((state, index) => (
+                <div className="flow-step" key={state.title}>
+                  <span className="flow-number">{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{state.title}</strong>
+                    <p>{state.detail}</p>
+                  </div>
                 </div>
-                <p className="route-text">{route.detail}</p>
-                <div className="protocol-factor-list" aria-label={`${route.title} codes`}>
-                  {route.chips.map((chip) => (
-                    <span key={chip}>{formatTrustToken(chip)}</span>
-                  ))}
-                </div>
-                <Link className="text-button" href={route.href}>
-                  {route.action}
-                </Link>
-              </article>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" aria-labelledby="limits-heading">
           <div className="section-head">
-            <p className="eyebrow">Non-guarantees</p>
-            <h2>What the site does not currently promise</h2>
+            <h2 id="limits-heading">What Moral Trade does not guarantee</h2>
+            <p>These limits should remain visible before a visitor relies on a proposal.</p>
           </div>
 
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
-              <li>No objective platform ranking of moral value, virtue, popularity, or social worth.</li>
-              <li>No claim that version-one deal probabilities are statistically calibrated yet.</li>
-              <li>No custody, escrow, tax, legal, investment, or payment-protection service.</li>
-              <li>No autonomous scraping, private-feed mining, or surprise counterparty exposure.</li>
-              <li>No claim that bilateral gains eliminate third-party moral externalities.</li>
-              <li>No claim that live marketplace liquidity already exists.</li>
+              {limits.map((limit) => (
+                <li key={limit}>{limit}</li>
+              ))}
             </ul>
+          </div>
+
+          <div className="section-head">
+            <h2 id="recourse-heading">When something looks wrong</h2>
+            <p>
+              Choose the route that matches the problem. Technical contracts and aggregate
+              governance data remain available on the transparency page.
+            </p>
+          </div>
+
+          <div className="data-grid" aria-labelledby="recourse-heading">
+            {recourseRoutes.map((route) => (
+              <article className="panel data-card" key={route.title}>
+                <h3>{route.title}</h3>
+                <p className="route-text">{route.detail}</p>
+                <a className="text-button" href={route.href}>
+                  {route.action}
+                </a>
+              </article>
+            ))}
+          </div>
+
+          <div className="hero-actions">
+            <Link className="button button-secondary" href="/transparency">
+              View transparency details
+            </Link>
+            <Link className="button button-secondary" href="/contact">
+              Contact the team
+            </Link>
           </div>
         </section>
       </main>
