@@ -3,632 +3,603 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, IconMark, PageHero, StatusBadge, type IconName } from "@/components/ui/page-primitives";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
-  MORAL_GOODS_FAILURE_MESSAGE_TEMPLATES,
   MORAL_GOODS_FEATURE_CAPABILITIES,
   MORAL_GOODS_SEED_ENVELOPES,
-  buildCommitmentCard,
   buildDealCardModel,
-  buildSettlementPlan,
   formatMinorMoney,
-  getMoralGoodsDiscoverySurface,
-  getGuidedStandingBudgetSteps,
   getPrivateProposalIntakeFields,
-  MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL,
-  MORAL_GOODS_SEED_CREDITED_UNITS,
-  MORAL_GOODS_SEED_FUNDING_SOURCES,
-  MORAL_GOODS_SEED_OBLIGATIONS,
+  type MoralGoodsPurchaseEnvelope,
 } from "@/lib/moral-trade/group-buying";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
+import styles from "./moral-goods-group-buying.module.css";
+
 export const metadata: Metadata = {
-  title: "Moral Goods Group Buying",
+  title: "Fund verified actions together",
   description:
-    "Fund verified moral actions, apply to participate, set small recurring budgets, and view aggregate results under frozen rules.",
+    "Compare small, conditional ways to fund verified moral actions, with the action, consideration, deadline, evidence, and failure rule shown together.",
   alternates: {
     canonical: "/moral-goods-group-buying",
   },
   openGraph: {
-    title: "Moral Goods Group Buying",
+    title: "Fund verified actions together | Moral Trade",
     description:
-      "A first-class Moral Trade mechanism for adjusted-impact rounds, crowdfunded pledge-swap lots, baskets, standing budgets, and private proposal review.",
+      "A clear preview of group-funded moral-action routes, recurring budgets, participant proof, and public reporting.",
     url: getAbsoluteUrl("/moral-goods-group-buying"),
     type: "website",
   },
 };
 
-const navigationTabs = ["Fund", "Participate", "Results"] as const;
-
-interface MoralGoodsGroupBuyingPageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-type DiscoverySurface = ReturnType<typeof getMoralGoodsDiscoverySurface>;
-type DiscoveryCard = DiscoverySurface["cards"][number];
-type DiscoveryCategory = DiscoverySurface["categories"][number];
-
-const discoveryCategoryIcons: Record<DiscoveryCategory["key"], IconName> = {
-  all: "marketplace",
-  baskets: "fund",
-  budgets: "payment",
-  lots: "swap",
-  results: "evidence",
-  rounds: "review",
+const routePresentation: Record<
+  string,
+  {
+    eyebrow: string;
+    title: string;
+    summary: string;
+  }
+> = {
+  "lot:no-meat-2-day-50": {
+    eyebrow: "Fund one verified action",
+    title: "Fund one 2-day no-meat pledge",
+    summary:
+      "One selected adult avoids meat and fish for two days. If the action verifies under the frozen rules, $50 is donated to an approved charity selected by the participant.",
+  },
+  "basket:no-meat-5x50": {
+    eyebrow: "Fund several similar actions",
+    title: "Fund a basket of five 2-day pledges",
+    summary:
+      "Five participant obligations are funded together, while each person keeps an independent acceptance, evidence, failure, and settlement record.",
+  },
+  "round:vegetarian-30-day": {
+    eyebrow: "Fund a reviewed round",
+    title: "Sponsor a 30-day vegetarian round",
+    summary:
+      "Selected adults complete a longer diet-shift window. Participant payouts depend on verified, protocol-adjusted action units rather than a single group-wide success claim.",
+  },
+  "standing-pool:animal-welfare-5-month": {
+    eyebrow: "Set a bounded recurring budget",
+    title: "Allocate up to $5 a month across eligible routes",
+    summary:
+      "A standing preference can direct small amounts to compatible lots or baskets. It is an allocation rule, not a stored wallet balance or an impact claim by itself.",
+  },
 };
 
-function readSearchParam(
-  searchParams: Record<string, string | string[] | undefined>,
-  key: string,
-) {
-  const value = searchParams[key];
-  return Array.isArray(value) ? value[0] : value;
+const routePriority = new Map([
+  ["lot:no-meat-2-day-50", 0],
+  ["basket:no-meat-5x50", 1],
+  ["round:vegetarian-30-day", 2],
+  ["standing-pool:animal-welfare-5-month", 3],
+]);
+
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  year: "numeric",
+});
+
+function formatDate(value: string | null) {
+  return value ? dateFormatter.format(new Date(value)) : "No fixed deadline";
 }
 
-function buildChipHref(label: string) {
-  const params = new URLSearchParams({ q: label });
-  return `/moral-goods-group-buying?${params.toString()}#deals`;
+function formatStartingAmount(envelope: MoralGoodsPurchaseEnvelope) {
+  const amountMinor =
+    envelope.funding.microPledgeDefaultMinor ??
+    envelope.funding.providerMinimumMinor ??
+    envelope.funding.targetMinor;
+
+  return formatMinorMoney({
+    amountMinor,
+    currency: envelope.currency,
+  });
 }
 
-function DiscoveryShortcut({
-  active,
-  category,
-}: {
-  active: boolean;
-  category: DiscoveryCategory;
-}) {
-  return (
-    <Link
-      className={["moral-goods-shortcut", active ? "is-active" : ""].filter(Boolean).join(" ")}
-      href={category.href}
-    >
-      <IconMark name={discoveryCategoryIcons[category.key]} />
-      <span>
-        <strong>{category.label}</strong>
-        <small>
-          {category.count} {category.count === 1 ? "route" : "routes"}
-        </small>
-      </span>
-      <em>{category.description}</em>
-    </Link>
-  );
+function statusClass(envelope: MoralGoodsPurchaseEnvelope) {
+  if (
+    envelope.stateGroup === "funding" ||
+    envelope.stateGroup === "funded_awaiting_acceptance" ||
+    envelope.stateGroup === "accepted_not_active"
+  ) {
+    return styles.statusFunding;
+  }
+
+  if (
+    envelope.stateGroup === "active" ||
+    envelope.stateGroup === "evidence_due" ||
+    envelope.stateGroup === "under_review" ||
+    envelope.stateGroup === "settling" ||
+    envelope.stateGroup === "completed"
+  ) {
+    return styles.statusAction;
+  }
+
+  return "";
 }
 
-function DiscoveryDealRow({ card }: { card: DiscoveryCard }) {
-  return (
-    <article className="moral-goods-deal-row">
-      <div className="moral-goods-deal-media">
-        <IconMark name={discoveryCategoryIcons[card.categoryKey]} />
-        <span>{card.primaryLabel}</span>
-      </div>
-      <div className="moral-goods-deal-main">
-        <p className="eyebrow">{card.routeLabel}</p>
-        <h3>
-          <Link href={card.href}>{card.title}</Link>
-        </h3>
-        <p>{card.statusSentence}</p>
-        <div className="moral-goods-proof-row" aria-label={`${card.title} review signals`}>
-          {card.proofTags.map((tag) => (
-            <span key={`${card.envelopeId}-${tag}`}>{tag}</span>
-          ))}
-        </div>
-        <div className="moral-goods-progress" aria-label={card.progressLabel}>
-          <span style={{ width: `${card.progressBps / 100}%` }} />
-        </div>
-        <div className="moral-goods-deal-meta">
-          <span>{card.progressLabel}</span>
-          <span>{card.deadlineLabel}</span>
-          <span>{card.limitLabel}</span>
-        </div>
-        <p className="panel-note">{card.safeActionNote}</p>
-      </div>
-      <div className="moral-goods-price-block">
-        <strong>{card.priceLabel}</strong>
-        <span>{card.targetLabel}</span>
-        <Link className="button button-primary button-mini" href={card.href}>
-          {card.ctaLabel}
-        </Link>
-      </div>
-    </article>
-  );
-}
-
-function CommitmentPreview({ surface }: { surface: DiscoverySurface }) {
-  return (
-    <aside className="moral-goods-commitment-preview panel" aria-label="Safe commitment preview">
-      <p className="eyebrow">Commitment preview</p>
-      <h2>{surface.commitmentPreview.title}</h2>
-      <strong className="moral-goods-preview-amount">{surface.commitmentPreview.amountLabel}</strong>
-      <p>{surface.commitmentPreview.noChargeLabel}</p>
-      <dl className="moral-goods-preview-lines">
-        {surface.commitmentPreview.lines.map((line) => (
-          <div key={line.label}>
-            <dt>{line.label}</dt>
-            <dd>{line.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <Link className="button button-primary" href={surface.commitmentPreview.ctaHref}>
-        {surface.commitmentPreview.ctaLabel}
-      </Link>
-      <p className="panel-note">Review, reserve, payment, proof, dispute, and receipt gates stay visible before reliance.</p>
-    </aside>
-  );
-}
-
-function DiscoverySection({ surface }: { surface: DiscoverySurface }) {
-  return (
-    <section className="section section-white moral-goods-discovery" id="deals" aria-labelledby="deals-heading">
-      <div className="moral-goods-discovery-head">
-        <div>
-          <p className="eyebrow">Discovery</p>
-          <h2 id="deals-heading">Browse reviewed routes</h2>
-          <p>
-            Search moral-action routes, compare review signals, and open a safe commitment preview before
-            any authorization or participant instruction.
-          </p>
-        </div>
-        <form action="/moral-goods-group-buying#deals" className="moral-goods-search" method="get" role="search">
-          {surface.activeCategory !== "all" ? (
-            <input name="category" type="hidden" value={surface.activeCategory} />
-          ) : null}
-          <label className="sr-only" htmlFor="moral-goods-search-input">
-            Search group-buying routes
-          </label>
-          <input
-            defaultValue={surface.query}
-            id="moral-goods-search-input"
-            name="q"
-            placeholder="Search action, proof, or consideration"
-            type="search"
-          />
-          <button className="button button-primary" type="submit">
-            Search
-          </button>
-        </form>
-      </div>
-
-      <div className="moral-goods-shortcut-grid" aria-label="Group-buying discovery categories">
-        {surface.categories.map((category) => (
-          <DiscoveryShortcut
-            active={category.key === surface.activeCategory}
-            category={category}
-            key={category.key}
-          />
-        ))}
-      </div>
-
-      <div className="moral-goods-chip-row" aria-label="Quick filters">
-        {surface.filterChips.map((chip) => (
-          <Link href={buildChipHref(chip)} key={chip}>
-            {chip}
-          </Link>
-        ))}
-      </div>
-
-      <div className="moral-goods-discovery-layout">
-        <div className="moral-goods-deal-list">
-          <div className="moral-goods-result-count" role="status">
-            {surface.resultCount} {surface.resultCount === 1 ? "route" : "routes"} shown
-            {surface.query ? ` for "${surface.query}"` : ""}
-          </div>
-          {surface.cards.length ? (
-            surface.cards.map((card) => <DiscoveryDealRow card={card} key={card.envelopeId} />)
-          ) : (
-            <article className="panel detail-block">
-              <h3>No reviewed route matches this search</h3>
-              <p>Try a broader action, proof, consideration, or review-state term.</p>
-              <Link className="button button-secondary" href="/moral-goods-group-buying#deals">
-                Clear filters
-              </Link>
-            </article>
-          )}
-        </div>
-        <CommitmentPreview surface={surface} />
-      </div>
-    </section>
-  );
-}
-
-function DealCard({
+function RouteCard({
   envelope,
-  role,
+  featured = false,
 }: {
-  envelope: (typeof MORAL_GOODS_SEED_ENVELOPES)[number];
-  role: "public" | "funder" | "participant" | "sponsor";
+  envelope: MoralGoodsPurchaseEnvelope;
+  featured?: boolean;
 }) {
-  const card = buildDealCardModel(envelope, role);
+  const card = buildDealCardModel(envelope, "funder");
+  const presentation = routePresentation[envelope.id] ?? {
+    eyebrow: card.primaryLabel,
+    title: envelope.title,
+    summary: card.rows.statusSentence,
+  };
+  const targetAmount = formatMinorMoney({
+    amountMinor: envelope.funding.targetMinor,
+    currency: envelope.currency,
+  });
 
   return (
-    <article className="panel detail-block">
-      <p className="eyebrow">{card.primaryLabel}</p>
-      <h3>{card.title}</h3>
-      <p className="panel-note">{card.secondaryLabel}</p>
-      <dl className="detail-grid">
+    <article
+      className={[
+        styles.routeCard,
+        featured ? styles.routeCardFeatured : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      id={envelope.slug}
+    >
+      <header className={styles.routeCardHeader}>
         <div>
-          <dt>Action</dt>
+          <p className={styles.cardKicker}>{presentation.eyebrow}</p>
+          <h3>{presentation.title}</h3>
+        </div>
+        <div className={styles.statusStack}>
+          <span className={styles.demoBadge}>Illustrative route</span>
+          <span
+            className={[styles.statusBadge, statusClass(envelope)]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            {card.rows.status}
+          </span>
+        </div>
+      </header>
+
+      <p className={styles.routeSummary}>{presentation.summary}</p>
+
+      <div className={styles.routeMetrics}>
+        <div>
+          <span className={styles.routeMetaLabel}>Starting amount</span>
+          <strong>{formatStartingAmount(envelope)}</strong>
+        </div>
+        <div>
+          <span className={styles.routeMetaLabel}>Route target</span>
+          <strong>{targetAmount}</strong>
+        </div>
+        <div>
+          <span className={styles.routeMetaLabel}>Funding deadline</span>
+          <strong>{formatDate(envelope.deadlines.fundingAt)}</strong>
+        </div>
+      </div>
+
+      <dl className={styles.routeTerms}>
+        <div>
+          <dt>Participant action</dt>
           <dd>{card.rows.action}</dd>
         </div>
         <div>
-          <dt>Consideration</dt>
+          <dt>What funding provides</dt>
           <dd>{card.rows.consideration}</dd>
         </div>
         <div>
-          <dt>Your role</dt>
-          <dd>{card.rows.role}</dd>
+          <dt>Current state</dt>
+          <dd>{card.rows.statusSentence}</dd>
         </div>
         <div>
-          <dt>Status</dt>
-          <dd>{card.rows.status}</dd>
+          <dt>If it does not complete</dt>
+          <dd>{card.rows.failureBehavior}</dd>
         </div>
       </dl>
-      <p>{card.rows.statusSentence}</p>
-      <div className="hero-actions">
-        <Link className="button-primary" href={`/moral-goods-group-buying#${envelope.slug}`}>
-          {MORAL_GOODS_PUBLIC_REVIEW_CTA_LABEL}
-        </Link>
+
+      <div className={styles.cardFooter}>
+        <p className={styles.cardNote}>
+          This is a route preview. Opening it does not authorize money, instruct a participant,
+          or create a completed impact claim.
+        </p>
+        <div className={styles.cardActions}>
+          <Link className="button button-primary" href="/contact">
+            Request pilot access
+          </Link>
+        </div>
       </div>
-      <p className="panel-note">{card.rows.failureBehavior}</p>
-      <details className="home-deep-dive">
-        <summary>Details</summary>
-        <div>
-          <p>{card.details.methodology}</p>
-          <p>{card.details.verification}</p>
-          <p>{card.details.fees}</p>
-          <p>{card.details.privacy}</p>
-          <p>{card.details.disputes}</p>
-          <p>{card.details.donationTaxLimits}</p>
-          <p>Public snapshot identifier: {card.details.snapshotIdentifier}</p>
+
+      <details className={styles.disclosure}>
+        <summary>Evidence, privacy, and settlement terms</summary>
+        <div className={styles.disclosureBody}>
+          <div>
+            <strong>Evidence</strong>
+            <p>{card.details.verification}</p>
+          </div>
+          <div>
+            <strong>Method</strong>
+            <p>{card.details.methodology}</p>
+          </div>
+          <div>
+            <strong>Privacy</strong>
+            <p>{card.details.privacy}</p>
+          </div>
+          <div>
+            <strong>Money and tax limits</strong>
+            <p>{card.details.donationTaxLimits}</p>
+          </div>
+          <div>
+            <strong>Dispute window</strong>
+            <p>{card.details.disputes}</p>
+          </div>
+          <div>
+            <strong>Public record</strong>
+            <p className={styles.mono}>{card.details.snapshotIdentifier}</p>
+          </div>
         </div>
       </details>
     </article>
   );
 }
 
-function Timeline() {
-  const items = [
-    "Terms accepted under frozen snapshot",
-    "Authorization or allocation recorded",
-    "Participant selected, invited, or told not to start yet",
-    "Action window opens after reserve and compliance checks",
-    "Proof submitted and reviewed",
-    "Settlement plan approved",
-    "Charge, release, donation, payout, or hold recorded",
-    "Receipt and public report updated",
-  ];
-
-  return (
-    <ol className="detail-grid">
-      {items.map((item) => (
-        <li key={item} className="panel detail-block">
-          {item}
-        </li>
-      ))}
-    </ol>
+export default async function MoralGoodsGroupBuyingPage() {
+  const viewer = await getViewer();
+  const isAuthenticated = Boolean(viewer);
+  const routes = [...MORAL_GOODS_SEED_ENVELOPES].sort(
+    (a, b) => (routePriority.get(a.id) ?? 99) - (routePriority.get(b.id) ?? 99),
   );
-}
-
-export default async function MoralGoodsGroupBuyingPage({ searchParams }: MoralGoodsGroupBuyingPageProps) {
-  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
-  const discoverySurface = getMoralGoodsDiscoverySurface({
-    category: readSearchParam(resolvedSearchParams, "category"),
-    query: readSearchParam(resolvedSearchParams, "q"),
-  });
-  const topbarActions = getTopbarActions(Boolean(viewer));
-  const lot = MORAL_GOODS_SEED_ENVELOPES.find(
-    (envelope) => envelope.envelopeType === "crowdfunded_pledge_swap_lot",
-  )!;
-  const settlementPlan = buildSettlementPlan({
-    creditedUnits: MORAL_GOODS_SEED_CREDITED_UNITS,
-    envelope: lot,
-    fundingSources: MORAL_GOODS_SEED_FUNDING_SOURCES,
-    obligations: MORAL_GOODS_SEED_OBLIGATIONS,
-  });
-  const commitmentCard = buildCommitmentCard({
-    deadlineSummary:
-      "Cancel, withdrawal, evidence, dispute, and support windows are shown before commitment.",
-    failureBehavior:
-      "If this expires or the participant does not verify the action, money is released or handled under the frozen cancellation policy.",
-    moneyVerb: "authorized",
-    receiptSummary: "Your receipt keeps the frozen snapshot identifier and timeline.",
-    startsSummary:
-      "Your card is authorized now; it is charged only if this clears and settles under the frozen rules.",
-    userAgreement: "You may fund up to $0.50 of this pledge-swap basket.",
-  });
+  const reportRoutes = routes.filter((route) => route.publicReport.rawUnits > 0);
+  const productionCapability = MORAL_GOODS_FEATURE_CAPABILITIES.find(
+    (capability) => capability.featureModule === "production_real_money_movement",
+  );
+  const participantHref = isAuthenticated
+    ? "/contact"
+    : "/signup?returnTo=/onboarding";
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
     { href: "/moral-goods-group-buying", label: "Moral Goods Group Buying" },
   ]);
 
   return (
-    <div className="page-shell">
+    <div className="page-shell marketplace-product-shell">
       <script
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
         type="application/ld+json"
       />
-      <SiteTopbar
-        authLink={topbarActions.authLink}
-        brandHref="/"
-        links={getPrimaryNavLinks(Boolean(viewer))}
-        primaryAction={topbarActions.primaryAction}
-      />
 
-      <main>
+      <div className="mt-beta-strip">
+        <span>Preview</span>
+        <span>These group-buying records are illustrative. No live payment starts on this page.</span>
+        <Link href="/status">Status</Link>
+      </div>
+
+      <header>
+        <SiteTopbar
+          brandHref="/"
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
+        />
+      </header>
+
+      <main className={styles.main} id="main-content" tabIndex={-1}>
         <Breadcrumbs
           items={[
-            { href: "/", label: "Home" },
-            { href: "/moral-goods-group-buying", label: "Moral Goods Group Buying" },
+            {
+              href: "/moral-goods-group-buying",
+              label: "Moral Goods Group Buying",
+            },
           ]}
         />
 
-        <PageHero
-          eyebrow="Moral Goods Group Buying"
-          title="Fund verified actions"
-          description="Group buying lets many funders conditionally buy additional, verified moral-impact units or jointly fund fixed pledge-swap consideration. Participants do not start until frozen terms, reserve, acceptance, and verification rules are ready."
-          actions={
-            <>
-              <Link className="button-primary" href="#fund">
-                Fund verified actions
+        <section className={styles.hero} aria-labelledby="group-buying-heading">
+          <div className={styles.heroCopy}>
+            <p className={styles.kicker}>Conditional funding for verified action</p>
+            <h1 id="group-buying-heading">Fund verified actions together.</h1>
+            <p className={styles.heroText}>
+              Compare a small number of group-funded routes without reading a wall of policy
+              text. Each route keeps the participant action, consideration, deadline, evidence,
+              and failure rule together.
+            </p>
+            <div className={styles.heroActions}>
+              <Link className="button button-primary" href="#fund">
+                Browse funding routes
               </Link>
-              <Link className="button-secondary" href="#participate">
+              <Link className="button button-secondary" href="#participate">
                 Apply to participate
               </Link>
-              <Link className="button-secondary" href="#results">
-                View results
-              </Link>
-            </>
-          }
-        />
+            </div>
+            <ul className={styles.proofLine} aria-label="Group-buying safeguards">
+              <li>Maximum exposure shown</li>
+              <li>No action before acceptance</li>
+              <li>Evidence before settlement</li>
+              <li>Failure rule published</li>
+            </ul>
+          </div>
 
-        <DiscoverySection surface={discoverySurface} />
-
-        <section className="section section-white" aria-labelledby="entry-heading">
-          <div className="section-head" id="entry-heading">
-            <h2>Start Here</h2>
-            <p>Choose by what you want to do, not by internal mechanism names.</p>
-          </div>
-          <div className="data-grid">
-            {[
-              "Fund verified actions",
-              "Apply to participate",
-              "Set a small recurring budget",
-              "View results",
-              "Suggest an action privately",
-            ].map((entry) => (
-              <article className="panel detail-block" key={entry}>
-                <h3>{entry}</h3>
-                <p>
-                  {entry === "Suggest an action privately"
-                    ? "Private until reviewed. Submitting it does not list it for funding or create an obligation."
-                    : "One primary next step, with methodology, fees, privacy, tax, dispute, and receipt details available before commitment."}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="tabs-heading">
-          <div className="section-head" id="tabs-heading">
-            <h2>Fund, Participate, Results</h2>
-            <p>Public navigation uses three main tabs and keeps recurring budgets under Fund.</p>
-          </div>
-          <div className="status-chip-row" role="list">
-            {navigationTabs.map((tab) => (
-              <StatusBadge key={tab} tone="default">
-                {tab}
-              </StatusBadge>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white" id="fund" aria-labelledby="fund-heading">
-          <div className="section-head" id="fund-heading">
-            <h2>Fund</h2>
-            <p>
-              Cards show the action, consideration, your role, status, next step, what happens if it
-              does not complete, and one Details disclosure.
-            </p>
-          </div>
-          <div className="data-grid">
-            {MORAL_GOODS_SEED_ENVELOPES.map((envelope) => (
-              <DealCard envelope={envelope} key={envelope.id} role="funder" />
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" id="participate" aria-labelledby="participate-heading">
-          <div className="section-head" id="participate-heading">
-            <h2>Participate</h2>
-            <p>
-              Participant flow is eligibility, baseline, consideration or charity choice, terms,
-              wait for selection, action instructions, proof, result, and payout or donation status.
-            </p>
-          </div>
-          <div className="data-grid">
-            <article className="panel detail-block">
-              <h3>Next Instruction</h3>
-              <p>Do not start yet unless your dashboard says Start now.</p>
-              <p>Withdrawal remains visible and explains payment or donation consequences.</p>
-            </article>
-            <article className="panel detail-block">
-              <h3>Private Proposal</h3>
-              <p>This is private until reviewed. Submitting it does not list it for funding and does not create an obligation.</p>
-              <ul>
-                {getPrivateProposalIntakeFields().map((field) => (
-                  <li key={field}>{field}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" id="results" aria-labelledby="results-heading">
-          <div className="section-head" id="results-heading">
-            <h2>Results</h2>
-            <p>
-              Reports separate consideration accounting, protocol impact accounting, and optional
-              net-impact claims.
-            </p>
-          </div>
-          <div className="data-grid">
-            {MORAL_GOODS_SEED_ENVELOPES.slice(0, 3).map((envelope) => (
-              <article className="panel detail-block" id={envelope.slug} key={envelope.id}>
-                <p className="eyebrow">{envelope.publicReport.publicSnapshotIdentifier}</p>
-                <h3>{envelope.title}</h3>
-                <p>{envelope.publicReport.noTradeBaselineSummary}</p>
-                <dl className="detail-grid">
-                  <div>
-                    <dt>Raw units</dt>
-                    <dd>{envelope.publicReport.rawUnits.toLocaleString("en-US")}</dd>
-                  </div>
-                  <div>
-                    <dt>Adjusted units</dt>
-                    <dd>{(envelope.publicReport.adjustedUnitsMilli / 1000).toLocaleString("en-US")}</dd>
-                  </div>
-                  <div>
-                    <dt>Paid or donated</dt>
-                    <dd>
-                      {formatMinorMoney({
-                        amountMinor:
-                          envelope.publicReport.participantPayoutTotalMinor +
-                          envelope.publicReport.donationTotalMinor,
-                        currency: envelope.currency,
-                      })}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Released</dt>
-                    <dd>
-                      {formatMinorMoney({
-                        amountMinor: envelope.publicReport.releasedMinor,
-                        currency: envelope.currency,
-                      })}
-                    </dd>
-                  </div>
-                </dl>
-                <p className="panel-note">{envelope.publicReport.smallCellSuppression}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="budget-heading">
-          <div className="section-head" id="budget-heading">
-            <h2>Small Recurring Budget</h2>
-            <p>Guided setup uses safe defaults and keeps advanced constraints available.</p>
-          </div>
-          <ol className="detail-grid">
-            {getGuidedStandingBudgetSteps().map((step) => (
-              <li className="panel detail-block" key={step}>
-                {step}
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="section section-white" aria-labelledby="commitment-heading">
-          <div className="section-head" id="commitment-heading">
-            <h2>Commitment Card</h2>
-            <p>Every material user action ends with the same five-part confirmation order.</p>
-          </div>
-          <div className="data-grid">
-            {Object.entries(commitmentCard).map(([key, value]) => (
-              <article className="panel detail-block" key={key}>
-                <h3>{key.replaceAll(/([A-Z])/g, " $1")}</h3>
-                <p>{value}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="receipt-heading">
-          <div className="section-head" id="receipt-heading">
-            <h2>Receipt Timeline</h2>
-            <p>User-facing support shows one chronological timeline per commitment.</p>
-          </div>
-          <Timeline />
-        </section>
-
-        <section className="section section-white" aria-labelledby="ops-heading">
-          <div className="section-head" id="ops-heading">
-            <h2>Controls</h2>
-            <p>
-              Admin and reviewer views start with checklists and blockers before raw policy JSON.
-            </p>
-          </div>
-          <div className="data-grid">
-            {[
-              "Publication readiness",
-              "Launch readiness",
-              "Reserve readiness",
-              "Evidence readiness",
-              "Settlement readiness",
-              "Public-report readiness",
-              "Feature capability gates",
-              "Operational pause and repair",
-            ].map((item) => (
-              <article className="panel detail-block" key={item}>
-                <h3>{item}</h3>
-                <p>Checked from server state, frozen snapshots, receipts, and reconciliation records.</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="failure-heading">
-          <div className="section-head" id="failure-heading">
-            <h2>Failure Messages</h2>
-            <p>Reusable templates are non-blaming and specific about money, action, and receipts.</p>
-          </div>
-          <div className="data-grid">
-            {MORAL_GOODS_FAILURE_MESSAGE_TEMPLATES.slice(0, 6).map((template) => (
-              <article className="panel detail-block" key={template.key}>
-                <h3>{template.title}</h3>
-                <p>{template.message}</p>
-                <p className="panel-note">{template.moneyConsequence}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="settlement-heading">
-          <div className="section-head" id="settlement-heading">
-            <h2>Settlement Preview</h2>
-            <p>
-              The preview binds funding sources, credited units, obligations, fees, release
-              operations, and ledger entries under plan hashes.
-            </p>
-          </div>
-          <div className="data-grid">
-            <article className="panel detail-block">
-              <h3>Plan Status</h3>
-              <p>{settlementPlan.planStatus}</p>
-              <p className="panel-note">{settlementPlan.blockers.join(", ") || "No blockers"}</p>
-            </article>
-            <article className="panel detail-block">
-              <h3>Fixed Consideration</h3>
-              <p>
-                {formatMinorMoney({
-                  amountMinor: settlementPlan.fixedConsiderationEarnedMinor,
-                  currency: settlementPlan.currency,
-                })}
+          <div className={styles.heroSummary}>
+            <article className={styles.summaryPanel}>
+              <header>
+                <div>
+                  <p className={styles.cardKicker}>At a glance</p>
+                  <h2>Four bounded ways to coordinate.</h2>
+                </div>
+                <span className={styles.previewBadge}>Demo data</span>
+              </header>
+              <div className={styles.summaryMetrics}>
+                <div>
+                  <span className={styles.metricLabel}>Routes</span>
+                  <strong>{routes.length}</strong>
+                </div>
+                <div>
+                  <span className={styles.metricLabel}>One-off formats</span>
+                  <strong>3</strong>
+                </div>
+                <div>
+                  <span className={styles.metricLabel}>Recurring format</span>
+                  <strong>1</strong>
+                </div>
+                <div>
+                  <span className={styles.metricLabel}>Charged here</span>
+                  <strong>$0</strong>
+                </div>
+              </div>
+              <p className={styles.summaryNote}>
+                The preview separates interest, authorization, participant acceptance, proof,
+                and settlement. Those states are not interchangeable.
               </p>
             </article>
-            <article className="panel detail-block">
-              <h3>Input Hash</h3>
-              <p>{settlementPlan.calculationInputHash.slice(0, 24)}...</p>
+          </div>
+        </section>
+
+        <nav className={styles.routeNav} aria-label="Group-buying page sections">
+          <Link href="#fund">
+            <span>01</span>
+            <strong>Funding routes</strong>
+          </Link>
+          <Link href="#participate">
+            <span>02</span>
+            <strong>Participate</strong>
+          </Link>
+          <Link href="#results">
+            <span>03</span>
+            <strong>Results</strong>
+          </Link>
+          <Link href="#how-it-works">
+            <span>04</span>
+            <strong>How it works</strong>
+          </Link>
+        </nav>
+
+        <section
+          className={[styles.section, styles.sectionWhite].join(" ")}
+          id="fund"
+          aria-labelledby="fund-heading"
+        >
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionKicker}>Fund</p>
+              <h2 id="fund-heading">Choose a route.</h2>
+            </div>
+            <p>
+              The most commonly requested route appears first. Additional evidence, privacy,
+              methodology, tax, and dispute detail stays available without dominating the card.
+            </p>
+          </div>
+
+          <div className={styles.routeList}>
+            {routes.map((route, index) => (
+              <RouteCard envelope={route} featured={index === 0} key={route.id} />
+            ))}
+          </div>
+        </section>
+
+        <section
+          className={styles.section}
+          id="participate"
+          aria-labelledby="participate-heading"
+        >
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionKicker}>Participate</p>
+              <h2 id="participate-heading">Apply first. Act only when invited.</h2>
+            </div>
+            <p>
+              Participant eligibility, baseline, consideration, action window, evidence, and
+              withdrawal rights are reviewed before a person is told to begin.
+            </p>
+          </div>
+
+          <div className={styles.participantPanel}>
+            <article className={styles.participantNotice}>
+              <p className={styles.cardKicker}>Your next instruction</p>
+              <h3>Do not start until your record says “Start now.”</h3>
+              <p>
+                Funding interest alone does not activate an action. A selected participant must
+                accept the frozen terms and see the final action window, evidence request, and
+                failure consequences first.
+              </p>
+              <div className={styles.sectionActions}>
+                <Link className="button button-primary" href={participantHref}>
+                  Apply to participate
+                </Link>
+                <Link className="button button-secondary" href="/trust">
+                  Review participant protections
+                </Link>
+              </div>
             </article>
-            <article className="panel detail-block">
-              <h3>Capability Gates</h3>
-              <ul>
-                {MORAL_GOODS_FEATURE_CAPABILITIES.slice(0, 5).map((capability) => (
-                  <li key={capability.id}>
-                    {capability.featureModule}: {capability.status}
-                  </li>
-                ))}
-              </ul>
+
+            <article className={styles.privateProposal}>
+              <p className={styles.cardKicker}>Suggest another action</p>
+              <h3>Private until reviewed.</h3>
+              <p>
+                A suggestion is not listed, funded, or treated as an obligation unless it passes
+                review and is converted into a bounded route.
+              </p>
+              <details className={styles.disclosure}>
+                <summary>What the intake asks for</summary>
+                <ul className={styles.privateFields}>
+                  {getPrivateProposalIntakeFields().map((field) => (
+                    <li key={field}>{field}</li>
+                  ))}
+                </ul>
+              </details>
+              <Link className="button button-secondary" href="/contact">
+                Suggest an action privately
+              </Link>
             </article>
+          </div>
+        </section>
+
+        <section
+          className={[styles.section, styles.sectionWhite].join(" ")}
+          id="results"
+          aria-labelledby="results-heading"
+        >
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionKicker}>Results</p>
+              <h2 id="results-heading">Report states separately.</h2>
+            </div>
+            <p>
+              These are illustrative reporting records. Raw actions, protocol-adjusted units,
+              and paid or donated amounts remain separate; none is presented as a universal moral
+              score.
+            </p>
+          </div>
+
+          <div className={styles.reportList}>
+            {reportRoutes.map((route) => {
+              const card = buildDealCardModel(route, "public");
+              const totalExecuted =
+                route.publicReport.participantPayoutTotalMinor +
+                route.publicReport.donationTotalMinor;
+
+              return (
+                <article className={styles.reportRow} key={route.id}>
+                  <div className={styles.reportIdentity}>
+                    <p className={styles.reportEyebrow}>Illustrative public report</p>
+                    <h3>{routePresentation[route.id]?.title ?? route.title}</h3>
+                    <p>{card.rows.status}</p>
+                  </div>
+                  <div className={styles.reportMetric}>
+                    <span className={styles.metricLabel}>Raw action units</span>
+                    <strong>{route.publicReport.rawUnits.toLocaleString("en-US")}</strong>
+                    <p>Counted under the route’s action definition.</p>
+                  </div>
+                  <div className={styles.reportMetric}>
+                    <span className={styles.metricLabel}>Protocol-adjusted</span>
+                    <strong>
+                      {(route.publicReport.adjustedUnitsMilli / 1000).toLocaleString("en-US")}
+                    </strong>
+                    <p>Method-relative, not a platform moral ranking.</p>
+                  </div>
+                  <div className={styles.reportMetric}>
+                    <span className={styles.metricLabel}>Paid or donated</span>
+                    <strong>
+                      {formatMinorMoney({
+                        amountMinor: totalExecuted,
+                        currency: route.currency,
+                      })}
+                    </strong>
+                    <p>{route.publicReport.smallCellSuppression}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section
+          className={[styles.section, styles.sectionDark].join(" ")}
+          id="how-it-works"
+          aria-labelledby="how-it-works-heading"
+        >
+          <div className={styles.sectionHead}>
+            <div>
+              <p className={styles.sectionKicker}>How it works</p>
+              <h2 id="how-it-works-heading">One route. Four explicit gates.</h2>
+            </div>
+            <p>
+              The user journey stays short. The mechanism remains inspectable before anyone
+              relies on it.
+            </p>
+          </div>
+
+          <ol className={styles.processGrid}>
+            <li>
+              <span>01</span>
+              <h3>Review the route</h3>
+              <p>See the action, consideration, maximum amount, deadline, and failure rule together.</p>
+            </li>
+            <li>
+              <span>02</span>
+              <h3>Accept frozen terms</h3>
+              <p>Funding and participant acceptance remain separate. Neither silently activates the other.</p>
+            </li>
+            <li>
+              <span>03</span>
+              <h3>Complete and evidence</h3>
+              <p>The participant follows the stated window and submits only the evidence named in advance.</p>
+            </li>
+            <li>
+              <span>04</span>
+              <h3>Settle or release</h3>
+              <p>Successful records settle under the published rule; failed or expired records follow the stated release path.</p>
+            </li>
+          </ol>
+
+          <div className={styles.safeguardGrid}>
+            <article>
+              <span>01</span>
+              <h3>Terms do not drift</h3>
+              <p>Material changes require a new review and renewed acceptance rather than silent edits.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Participants are not inventory</h3>
+              <p>Selection, welfare review, withdrawal rights, privacy, and action timing remain explicit.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Failure is a normal state</h3>
+              <p>Nothing is labelled completed merely because funding interest or an authorization exists.</p>
+            </article>
+          </div>
+
+          <details className={styles.advancedPanel}>
+            <summary>Advanced mechanism and capability detail</summary>
+            <div className={styles.advancedContent}>
+              <article>
+                <h3>Payment capability</h3>
+                <p>
+                  {productionCapability?.publicReason ??
+                    "Payment capability is disclosed before a user can rely on it."}
+                </p>
+              </article>
+              <article>
+                <h3>Public records</h3>
+                <p>
+                  Every route keeps a frozen public identifier, a separate evidence state, and a
+                  separate settlement state. Raw participant evidence stays private by default.
+                </p>
+              </article>
+            </div>
+          </details>
+
+          <div className={styles.resourceLinks}>
+            <Link className="button button-primary" href="/trust">
+              What you can rely on
+            </Link>
+            <Link className="button button-secondary" href="/methodology">
+              Review methodology
+            </Link>
+            <Link className="button button-secondary" href="/status">
+              Current capability status
+            </Link>
           </div>
         </section>
       </main>
