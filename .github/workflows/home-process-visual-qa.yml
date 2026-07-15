@@ -1,0 +1,53 @@
+name: Homepage process visual QA
+
+on:
+  pull_request:
+    paths:
+      - "src/app/home-process-polish.css"
+      - "src/app/layout.tsx"
+      - "tests/home-process-section.spec.ts"
+      - ".github/workflows/home-process-visual-qa.yml"
+  push:
+    branches:
+      - polish-home-process-section
+
+permissions:
+  contents: read
+
+jobs:
+  home-process-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint changed TypeScript
+        run: npx eslint src/app/layout.tsx tests/home-process-section.spec.ts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run homepage process interaction and visual QA
+        env:
+          HOME_PROCESS_CAPTURE: "1"
+        run: npm run test:e2e -- tests/home-process-section.spec.ts
+
+      - name: Upload visual comparison artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-process-visual-qa
+          path: test-results/home-process-visual
+          if-no-files-found: error
+          retention-days: 7
