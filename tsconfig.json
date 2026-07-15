@@ -25,6 +25,9 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "@/lib/mpgf/real-money": [
+        "./src/lib/mpgf/real-money-operational.ts"
+      ],
       "@/*": [
         "./src/*"
       ]
