@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ACTIVATION_BASE_URL: https://moraltrade-site-git-fix-activation-offer-surface-d4e052-ellen-s.vercel.app
+      ACTIVATION_BASE_URL: https://www.moraltrade.org
       ACTIVATION_INJECT_OFFER_SURFACE_FIX: "0"
 
     steps:
@@ -37,7 +37,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Exercise hotfix preview activation path
+      - name: Exercise deployed production activation path
         run: node scripts/activation-gate-live-20260715.mjs
 
       - name: Upload activation evidence
