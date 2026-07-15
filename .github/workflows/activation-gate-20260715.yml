@@ -17,6 +17,9 @@ jobs:
     if: github.head_ref == 'activation-gate-20260715' || github.ref_name == 'activation-gate-20260715'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ACTIVATION_BASE_URL: https://www.moraltrade.org
+      ACTIVATION_INJECT_OFFER_SURFACE_FIX: "1"
 
     steps:
       - name: Check out repository
