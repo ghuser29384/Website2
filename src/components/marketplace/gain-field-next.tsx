@@ -74,7 +74,7 @@ function StaticField({ className, caption }: Pick<GainFieldProps, "className" | 
   </figure>;
 }
 
-function InteractiveField({ className, caption }: Pick<GainFieldProps, "className" | "caption">) {
+function InteractiveField({ className }: Pick<GainFieldProps, "className">) {
   const id = useId().replace(/:/g, "");
   const svg = useRef<SVGSVGElement>(null);
   const frame = useRef<number | null>(null);
@@ -171,13 +171,11 @@ function InteractiveField({ className, caption }: Pick<GainFieldProps, "classNam
       <div className={styles.controls}><div className={styles.controlsIntro}><strong>{pinned ? "Point fixed at this proposal" : "Move your cursor across the field"}</strong><span>{pinned ? "Click again to release · Escape also works" : "Click once to fix · arrow keys also work"}</span></div><label className={styles.axisControl}><span>Paul’s relative ranking</span><output>{output(gain.paul)}</output><input aria-label="Paul’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.paul)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, paul: Number(e.target.value) }, true)} step="1" type="range" value={Math.round(gain.paul)} /></label><label className={styles.axisControl}><span>Victoria’s relative ranking</span><output>{output(gain.victoria)}</output><input aria-label="Victoria’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.victoria)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, victoria: Number(e.target.value) }, true)} step="1" type="range" value={Math.round(gain.victoria)} /></label></div>
     </div>
     <div className={styles.options} aria-label="Illustrative proposals"><button aria-pressed={atDefault} className={[styles.optionButton, atDefault ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} onClick={() => custom({ paul: 0, victoria: 0 }, true)} type="button">No deal</button>{OPTIONS.map((o) => <button aria-pressed={active === o.id} className={[styles.optionButton, active === o.id ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} key={o.id} onClick={() => select(o)} type="button">{o.short}</button>)}</div>
-    <details className={styles.explainer}><summary>How to read the field</summary><div className={styles.explainerGrid}><div><strong>1 · Start at no deal</strong><p>The cross is what each person expects without an agreement.</p></div><div><strong>2 · Require mutual gain</strong><p>A voluntary trade is possible only above and to the right—better by each party’s own lights.</p></div><div><strong>3 · Bargain on the frontier</strong><p>Undominated options preserve more surplus. Side payments or lotteries can create additional options.</p></div></div></details>
-    <figcaption className={styles.caption}><strong>{caption}</strong><span>This field tests default-relative mutual gain only. It does not certify consent, evidence, legality, side constraints, effects on third parties, trustworthiness, or freedom from threats.</span></figcaption>
   </figure>;
 }
 
 export function GainField({ className, compact = false, caption = "A moral trade is possible only when every participant prefers the proposal to the no-deal default." }: GainFieldProps) {
-  return compact ? <StaticField caption={caption} className={className} /> : <InteractiveField caption={caption} className={className} />;
+  return compact ? <StaticField caption={caption} className={className} /> : <InteractiveField className={className} />;
 }
 
 interface OffsetFlowFigureProps { className?: string }
