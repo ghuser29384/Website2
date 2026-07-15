@@ -1,6 +1,7 @@
 name: Back lint diagnostics
 
 on:
+  pull_request:
   push:
     branches:
       - feature/develop-back-create-flow
