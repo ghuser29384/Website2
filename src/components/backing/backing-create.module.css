@@ -1,0 +1,472 @@
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.68fr);
+  border: 1px solid var(--ink);
+  border-top: 0;
+  background: var(--surface);
+}
+
+.heroCopy,
+.heroReceipt {
+  display: grid;
+  align-content: center;
+  gap: 1.25rem;
+  padding: clamp(2rem, 5vw, 5rem);
+}
+
+.heroCopy {
+  border-right: 1px solid var(--ink);
+}
+
+.heroCopy h1 {
+  max-width: 10ch;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(3.6rem, 6.4vw, 6.8rem);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+
+.heroBody {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: clamp(1.02rem, 1.35vw, 1.22rem);
+  line-height: 1.58;
+}
+
+.viewerLine {
+  margin: 0;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.heroReceipt {
+  background: var(--surface-muted);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.heroMeta li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.heroMeta li + li::before {
+  margin-right: 1rem;
+  color: var(--accent);
+  content: "·";
+}
+
+.section {
+  display: grid;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  padding: clamp(2.5rem, 6vw, 5.5rem) clamp(0.85rem, 2.5vw, 2rem);
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.sectionWhite {
+  background: var(--surface);
+}
+
+.sectionMuted {
+  background: rgba(238, 240, 235, 0.88);
+}
+
+.sectionHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(280px, 0.55fr);
+  gap: 2rem;
+  align-items: end;
+}
+
+.sectionHeader h2 {
+  max-width: 15ch;
+  margin: 0.65rem 0 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2.75rem, 5vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
+}
+
+.sectionHeader > p {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.principleGrid,
+.safeguardGrid {
+  display: grid;
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+}
+
+.principleGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.safeguardGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.principle,
+.safeguard {
+  display: grid;
+  min-height: 13rem;
+  align-content: start;
+  gap: 0.85rem;
+  padding: 1.2rem;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.principle span,
+.safeguard span {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.principle h3,
+.safeguard h3,
+.receiptIntro h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 2.6vw, 2.35rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.principle p,
+.safeguard p,
+.receiptIntro p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.52;
+}
+
+.formLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.58fr);
+  gap: clamp(1rem, 2.5vw, 2.25rem);
+  align-items: start;
+}
+
+.formPanel {
+  min-width: 0;
+  border: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.step {
+  display: grid;
+  gap: 1.35rem;
+  margin: 0;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 0;
+  border-bottom: 1px solid var(--ink);
+}
+
+.lastStep {
+  border-bottom: 0;
+}
+
+.stepHeading {
+  display: grid;
+  grid-template-columns: 2.8rem minmax(0, 1fr);
+  gap: 0.9rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.stepHeading > span:first-child {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.stepHeading > span:last-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.stepHeading strong {
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 2.8vw, 2.5rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.stepHeading small {
+  max-width: 62ch;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.fieldGrid,
+.moneyGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.fieldGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.moneyGrid {
+  grid-template-columns: minmax(110px, 0.36fr) repeat(3, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.field > span {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.field input,
+.field select {
+  min-height: 3rem;
+  padding: 0.72rem 0.78rem;
+}
+
+.field textarea {
+  min-height: 7rem;
+  padding: 0.78rem;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  outline-offset: 1px;
+}
+
+.field small {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.42;
+}
+
+.spanTwo {
+  grid-column: span 2;
+}
+
+.moneyGrid .spanTwo {
+  grid-column: 1 / -1;
+}
+
+.attestations {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-muted);
+}
+
+.attestation {
+  display: grid;
+  grid-template-columns: 1.15rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.attestation:last-child {
+  border-bottom: 0;
+}
+
+.attestation input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.18rem;
+  accent-color: var(--accent);
+}
+
+.submitBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-top: 1px solid var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.submitBar p {
+  max-width: 62ch;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.receiptColumn {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.receiptIntro {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--ink);
+}
+
+.receiptIntro :global(.mt-product-kicker) {
+  margin: 0;
+}
+
+.status {
+  margin: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--ink);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.statusError {
+  border-color: var(--danger-ink);
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+.statusSuccess {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+@media (max-width: 1080px) {
+  .hero,
+  .formLayout,
+  .sectionHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .heroCopy {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .receiptColumn {
+    position: static;
+  }
+
+  .safeguardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .heroCopy,
+  .heroReceipt {
+    padding: 1.35rem;
+  }
+
+  .heroCopy h1 {
+    font-size: clamp(3.1rem, 17vw, 5.2rem);
+  }
+
+  .section {
+    padding-inline: 0.55rem;
+  }
+
+  .principleGrid,
+  .safeguardGrid,
+  .fieldGrid,
+  .moneyGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .spanTwo,
+  .moneyGrid .spanTwo {
+    grid-column: auto;
+  }
+
+  .principle,
+  .safeguard {
+    min-height: 0;
+  }
+
+  .step {
+    padding: 1rem;
+  }
+
+  .stepHeading {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .submitBar {
+    align-items: stretch;
+  }
+
+  .submitBar :global(.button) {
+    width: 100%;
+    justify-content: center;
+  }
+}
