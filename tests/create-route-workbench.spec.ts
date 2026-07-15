@@ -103,9 +103,9 @@ test.describe("Create route workbench", () => {
     );
     await page.locator('[data-create-mode="back"]').click();
     await expect(page.getByRole("heading", { name: "Back preview" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Request review" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Draft reviewed request" })).toHaveAttribute(
       "href",
-      "/background-networking",
+      "/create?mode=back",
     );
 
     const hasHorizontalOverflow = await page.evaluate(
@@ -119,6 +119,38 @@ test.describe("Create route workbench", () => {
       await page.screenshot({
         fullPage: true,
         path: path.join(captureDirectory, "implementation-mobile.png"),
+      });
+    }
+  });
+
+  test("opens a bounded Back intake without publishing or authorizing it", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/create?mode=back");
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Close a verified compensation gap." }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Back preview" })).toBeVisible();
+    await expect(page.getByLabel("No-deal baseline")).toBeVisible();
+    await expect(page.getByLabel("Maximum backing requested")).toBeVisible();
+    await expect(page.getByLabel("Exit and fallback rule")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create account before drafting" })).toHaveAttribute(
+      "href",
+      "/signup?returnTo=%2Fcreate%3Fmode%3Dback",
+    );
+    await expect(page.getByRole("button", { name: "Request operator review" })).toHaveCount(0);
+
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(hasHorizontalOverflow).toBe(false);
+
+    if (captureVisuals) {
+      await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
+      await page.screenshot({
+        fullPage: true,
+        path: path.join(captureDirectory, "back-draft-mobile.png"),
       });
     }
   });

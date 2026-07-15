@@ -64,7 +64,6 @@ export function OfferPlaneInlineMount() {
 
   useEffect(() => {
     if (!queryState.shouldShow) {
-      setHost(null);
       return;
     }
 
@@ -107,7 +106,6 @@ export function OfferPlaneInlineMount() {
     if (!queryState.shouldShow) return;
 
     const controller = new AbortController();
-    setError(null);
 
     fetch("/api/offers/plane", {
       cache: "no-store",
@@ -150,7 +148,15 @@ export function OfferPlaneInlineMount() {
       <div className={styles.loadError} role="alert">
         <strong>The challenge-return plane could not be loaded.</strong>
         <p>{error}</p>
-        <button type="button" onClick={() => setAttempt((value) => value + 1)}>Try again</button>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Try again
+        </button>
       </div>
     ) : (
       <div className={styles.loading} role="status" aria-live="polite">
