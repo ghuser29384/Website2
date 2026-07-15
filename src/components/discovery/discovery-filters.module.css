@@ -11,13 +11,13 @@
 
 .filterGrid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.7fr) repeat(4, minmax(150px, 1fr));
+  grid-template-columns: minmax(220px, 1.7fr) repeat(5, minmax(135px, 1fr));
   gap: 0.75rem;
   align-items: end;
 }
 
 .peopleGrid {
-  grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(135px, 1fr));
+  grid-template-columns: minmax(220px, 1.6fr) repeat(6, minmax(125px, 1fr));
 }
 
 .field {
@@ -102,7 +102,7 @@
   margin: 0;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   .filterGrid,
   .peopleGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
