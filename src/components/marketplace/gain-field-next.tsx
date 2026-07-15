@@ -79,8 +79,10 @@ function InteractiveField({ className, caption }: Pick<GainFieldProps, "classNam
   const svg = useRef<SVGSVGElement>(null);
   const frame = useRef<number | null>(null);
   const pending = useRef<{ x: number; y: number } | null>(null);
+  const pinnedRef = useRef(false);
   const [gain, setGain] = useState<Gain>(INITIAL.gain);
   const [active, setActive] = useState<string | null>(INITIAL.id);
+  const [pinned, setPinned] = useState(false);
   useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
   const activeOption = useMemo(() => OPTIONS.find((o) => o.id === active), [active]);
   const status = useMemo(() => statusFor(gain, active), [gain, active]);
@@ -90,40 +92,58 @@ function InteractiveField({ className, caption }: Pick<GainFieldProps, "classNam
   const detail = activeOption?.detail ?? "Move through the field to test how each party ranks the proposal.";
   const frontier = OPTIONS.filter((o) => o.frontier).sort((a, b) => a.gain.paul - b.gain.paul).map((o, i) => `${i ? "L" : "M"}${toPoint(o.gain).x.toFixed(1)} ${toPoint(o.gain).y.toFixed(1)}`).join(" ");
   const tone = { mutual: styles.statusMutual, caution: styles.statusCaution, blocked: styles.statusBlocked, neutral: styles.statusNeutral }[status.tone];
-  const select = (o: Option) => { setGain(o.gain); setActive(o.id); };
-  const custom = (g: Gain) => { setGain({ paul: clamp(g.paul, MIN, MAX), victoria: clamp(g.victoria, MIN, MAX) }); setActive(null); };
+  const setPinnedState = (nextPinned: boolean) => { pinnedRef.current = nextPinned; setPinned(nextPinned); };
+  const cancelScheduledMove = () => {
+    pending.current = null;
+    if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
+  };
+  const select = (o: Option) => { cancelScheduledMove(); setGain(o.gain); setActive(o.id); setPinnedState(true); };
+  const custom = (g: Gain, fixPoint = false) => {
+    if (fixPoint) { cancelScheduledMove(); setPinnedState(true); }
+    setGain({ paul: clamp(g.paul, MIN, MAX), victoria: clamp(g.victoria, MIN, MAX) });
+    setActive(null);
+  };
+  const releasePoint = () => { cancelScheduledMove(); setPinnedState(false); };
+  const togglePoint = () => {
+    if (pinnedRef.current) releasePoint();
+    else { cancelScheduledMove(); setPinnedState(true); }
+  };
   const fromClient = (clientX: number, clientY: number) => {
     if (!svg.current) return gain;
     const b = svg.current.getBoundingClientRect();
     return toGain(((clientX - b.left) / b.width) * 720, ((clientY - b.top) / b.height) * 520);
   };
   const schedule = (clientX: number, clientY: number) => {
+    if (pinnedRef.current) return;
     pending.current = { x: clientX, y: clientY };
     if (frame.current !== null) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = null;
       const p = pending.current;
-      if (p) custom(fromClient(p.x, p.y));
+      pending.current = null;
+      if (p && !pinnedRef.current) custom(fromClient(p.x, p.y));
     });
   };
-  const move = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.pointerType !== "touch" || e.buttons !== 0) schedule(e.clientX, e.clientY); };
-  const down = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.pointerType === "touch") { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); schedule(e.clientX, e.clientY); } };
-  const end = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.pointerType === "touch" && e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); };
+  const move = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.pointerType !== "touch" && e.buttons === 0) schedule(e.clientX, e.clientY); };
+  const down = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.button === 0) { e.preventDefault(); custom(fromClient(e.clientX, e.clientY), true); } };
   const key = (e: ReactKeyboardEvent<SVGGElement>) => {
+    if (e.key === "Escape") { e.preventDefault(); releasePoint(); return; }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); togglePoint(); return; }
     const step = e.shiftKey ? 10 : 3;
     const next = e.key === "ArrowRight" ? { ...gain, paul: gain.paul + step } : e.key === "ArrowLeft" ? { ...gain, paul: gain.paul - step } : e.key === "ArrowUp" ? { ...gain, victoria: gain.victoria + step } : e.key === "ArrowDown" ? { ...gain, victoria: gain.victoria - step } : e.key === "Home" ? { paul: 0, victoria: 0 } : null;
-    if (next) { e.preventDefault(); custom(next); }
+    if (next) { e.preventDefault(); custom(next, true); }
   };
   const anchor = point.x > 555 ? "end" : "start";
   const labelX = point.x > 555 ? point.x - 13 : point.x + 13;
   const labelY = point.y < 92 ? point.y + 26 : point.y - 15;
+  const selectedAction = pinned ? "It is fixed. Activate the dot or press Escape to resume pointer tracking." : "It follows pointer movement. Activate the dot or click the field to fix it.";
 
   return <figure className={[styles.field, className].filter(Boolean).join(" ")}>
-    <div className={styles.header}><div className={styles.headerCopy}><span className={styles.kicker}>Mutual-gain field</span><h3>{status.label}</h3></div><div className={styles.headerMeta}><span className={[styles.statusChip, tone].join(" ")}>Compared with no deal</span></div></div>
+    <div className={styles.header}><div className={styles.headerCopy}><span className={styles.kicker}>Mutual-gain field</span><h3>{status.label}</h3></div><div className={styles.headerMeta}><span className={[styles.statusChip, tone].join(" ")}>{pinned ? "Point fixed" : "Compared with no deal"}</span></div></div>
     <div className={styles.stage}>
-      <svg aria-labelledby={`interactive-gain-title-${id} interactive-gain-desc-${id}`} className={styles.canvas} onPointerCancel={end} onPointerDown={down} onPointerMove={move} onPointerUp={end} ref={svg} role="img" style={{ cursor: "crosshair" }} viewBox="0 0 720 520">
+      <svg aria-labelledby={`interactive-gain-title-${id} interactive-gain-desc-${id}`} className={styles.canvas} onPointerDown={down} onPointerMove={move} ref={svg} role="img" style={{ cursor: "crosshair" }} viewBox="0 0 720 520">
         <title id={`interactive-gain-title-${id}`}>Mutual-gain field</title>
-        <desc id={`interactive-gain-desc-${id}`}>The proposal follows the pointer inside the field. It qualifies only above and to the right of the no-deal default.</desc>
+        <desc id={`interactive-gain-desc-${id}`}>The proposal follows pointer movement until selected. Click anywhere in the field to fix it at that point; activate the selected dot or press Escape to resume tracking. It qualifies only above and to the right of the no-deal default.</desc>
         <rect className={styles.paper} height="520" width="720" />
         <rect className={styles.mutualWash} height={P.y0 - P.top} width={P.right - P.x0} x={P.x0} y={P.top} />
         <line className={styles.axis} x1={P.left} x2={P.right} y1={P.y0} y2={P.y0} /><line className={styles.axis} x1={P.x0} x2={P.x0} y1={P.bottom} y2={P.top} />
@@ -134,14 +154,14 @@ function InteractiveField({ className, caption }: Pick<GainFieldProps, "classNam
         {OPTIONS.map((o) => { const q = toPoint(o.gain); const endLabel = q.x > 540; return <g aria-label={`${o.label}. ${comparison(o.gain.victoria)} for Victoria; ${comparison(o.gain.paul)} for Paul.`} className={styles.candidate} key={o.id} onClick={() => select(o)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(o); } }} onPointerDown={(e) => e.stopPropagation()} role="button" tabIndex={0} transform={`translate(${q.x} ${q.y})`}><title>{o.label}</title><circle className={[styles.candidateDot, o.frontier ? styles.candidateFrontier : ""].filter(Boolean).join(" ")} r={o.frontier ? 6.5 : 5} /><text className={styles.candidateLabel} textAnchor={endLabel ? "end" : "start"} x={endLabel ? -11 : 11} y={q.y < 92 ? 22 : -11}>{o.short}</text></g>; })}
         <line className={styles.projection} x1={point.x} x2={point.x} y1={point.y} y2={P.y0} /><line className={styles.projection} x1={P.x0} x2={point.x} y1={point.y} y2={point.y} /><path className={styles.vector} d={`M${P.x0} ${P.y0}L${point.x} ${point.y}`} />
         <g className={styles.defaultPoint} transform={`translate(${P.x0} ${P.y0})`}><rect height="18" width="18" x="-9" y="-9" /><path d="M-5-5L5 5M5-5L-5 5" /></g><text className={styles.defaultLabel} x={P.x0 + 12} y={P.y0 + 28}>No-deal default</text>
-        <g aria-label={`Proposed agreement. ${comparison(gain.victoria)} for Victoria; ${comparison(gain.paul)} for Paul. It follows pointer movement; use arrow keys for keyboard control.`} className={[styles.selected, status.mutual ? "" : styles.selectedBlocked].filter(Boolean).join(" ")} onKeyDown={key} role="button" style={{ cursor: "crosshair" }} tabIndex={0} transform={`translate(${point.x} ${point.y})`}><circle className={styles.selectedPulse} r="30" /><circle className={styles.selectedOuter} r="19" /><circle className={styles.selectedInner} r="6" /></g>
+        <g aria-label={`Proposed agreement. ${comparison(gain.victoria)} for Victoria; ${comparison(gain.paul)} for Paul. ${selectedAction}`} aria-pressed={pinned} className={[styles.selected, status.mutual ? "" : styles.selectedBlocked].filter(Boolean).join(" ")} onClick={togglePoint} onKeyDown={key} onPointerDown={(e) => e.stopPropagation()} role="button" style={{ cursor: "pointer" }} tabIndex={0} transform={`translate(${point.x} ${point.y})`}><title>{pinned ? "Fixed proposal; activate to resume tracking" : "Activate to fix proposal"}</title><circle className={styles.selectedPulse} r="30" /><circle className={styles.selectedOuter} r="19" /><circle className={styles.selectedInner} r="6" /></g>
         <text className={styles.selectedLabel} textAnchor={anchor} x={labelX} y={labelY}>{name}</text><text className={styles.axisLabel} textAnchor="end" x={P.right} y="494">Better by Paul’s lights →</text><text className={styles.axisLabel} textAnchor="end" transform="rotate(-90 38 64)" x="38" y="64">Better by Victoria’s lights ↑</text>
       </svg>
     </div>
     <div className={styles.inspector}><div className={styles.readout} aria-live="polite"><div className={styles.readoutTitle}><span>Selected proposal</span><strong>{name}</strong></div><p>{detail}</p><p>{status.detail}</p><div className={styles.partyResults}><div className={styles.partyResult}><span>Victoria’s view</span><strong className={comparisonClass(gain.victoria)}>{comparison(gain.victoria)}</strong></div><div className={styles.partyResult}><span>Paul’s view</span><strong className={comparisonClass(gain.paul)}>{comparison(gain.paul)}</strong></div></div></div>
-      <div className={styles.controls}><div className={styles.controlsIntro}><strong>Move your cursor across the field</strong><span>Arrow keys also work</span></div><label className={styles.axisControl}><span>Paul’s relative ranking</span><output>{output(gain.paul)}</output><input aria-label="Paul’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.paul)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, paul: Number(e.target.value) })} step="1" type="range" value={Math.round(gain.paul)} /></label><label className={styles.axisControl}><span>Victoria’s relative ranking</span><output>{output(gain.victoria)}</output><input aria-label="Victoria’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.victoria)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, victoria: Number(e.target.value) })} step="1" type="range" value={Math.round(gain.victoria)} /></label></div>
+      <div className={styles.controls}><div className={styles.controlsIntro}><strong>{pinned ? "Point fixed at this proposal" : "Move your cursor across the field"}</strong><span>{pinned ? "Click elsewhere to move · click the dot to release" : "Click to fix · arrow keys also work"}</span></div><label className={styles.axisControl}><span>Paul’s relative ranking</span><output>{output(gain.paul)}</output><input aria-label="Paul’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.paul)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, paul: Number(e.target.value) }, true)} step="1" type="range" value={Math.round(gain.paul)} /></label><label className={styles.axisControl}><span>Victoria’s relative ranking</span><output>{output(gain.victoria)}</output><input aria-label="Victoria’s ranking of the proposal relative to no deal" aria-valuetext={comparison(gain.victoria)} max={MAX} min={MIN} onChange={(e) => custom({ ...gain, victoria: Number(e.target.value) }, true)} step="1" type="range" value={Math.round(gain.victoria)} /></label></div>
     </div>
-    <div className={styles.options} aria-label="Illustrative proposals"><button aria-pressed={atDefault} className={[styles.optionButton, atDefault ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} onClick={() => custom({ paul: 0, victoria: 0 })} type="button">No deal</button>{OPTIONS.map((o) => <button aria-pressed={active === o.id} className={[styles.optionButton, active === o.id ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} key={o.id} onClick={() => select(o)} type="button">{o.short}</button>)}</div>
+    <div className={styles.options} aria-label="Illustrative proposals"><button aria-pressed={atDefault} className={[styles.optionButton, atDefault ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} onClick={() => custom({ paul: 0, victoria: 0 }, true)} type="button">No deal</button>{OPTIONS.map((o) => <button aria-pressed={active === o.id} className={[styles.optionButton, active === o.id ? styles.optionButtonActive : ""].filter(Boolean).join(" ")} key={o.id} onClick={() => select(o)} type="button">{o.short}</button>)}</div>
     <details className={styles.explainer}><summary>How to read the field</summary><div className={styles.explainerGrid}><div><strong>1 · Start at no deal</strong><p>The cross is what each person expects without an agreement.</p></div><div><strong>2 · Require mutual gain</strong><p>A voluntary trade is possible only above and to the right—better by each party’s own lights.</p></div><div><strong>3 · Bargain on the frontier</strong><p>Undominated options preserve more surplus. Side payments or lotteries can create additional options.</p></div></div></details>
     <figcaption className={styles.caption}><strong>{caption}</strong><span>This field tests default-relative mutual gain only. It does not certify consent, evidence, legality, side constraints, effects on third parties, trustworthiness, or freedom from threats.</span></figcaption>
   </figure>;
