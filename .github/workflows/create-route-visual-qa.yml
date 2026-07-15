@@ -1,0 +1,44 @@
+name: Create route visual QA
+
+on:
+  push:
+    branches:
+      - develop-create-route-workbench
+
+permissions:
+  contents: read
+
+jobs:
+  create-route-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run create-route interaction and visual QA
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npm run test:e2e -- tests/create-route-workbench.spec.ts
+
+      - name: Upload visual comparison artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-route-visual-qa
+          path: test-results/create-route-visual
+          if-no-files-found: error
+          retention-days: 7
