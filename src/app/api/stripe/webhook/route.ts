@@ -7,7 +7,7 @@ import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { handleConditionalStripeWebhookEvent } from "@/lib/payments/conditional-webhook";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
+import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 
@@ -157,18 +157,20 @@ function isPotentialMpgfStripeEvent(event: Stripe.Event) {
 }
 
 export async function POST(request: Request) {
-  const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
+
+  if (!hasStripeEnv() || !webhookSecret) {
+    return NextResponse.json(
+      { error: "Stripe webhook processing is disabled until the required Stripe environment variables are configured." },
+      { status: 503 },
+    );
+  }
+
+  const stripe = getStripe();
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
   const rawBodyHash = hashStripeWebhookBody(rawBody);
 
-  if (!webhookSecret) {
-    return NextResponse.json(
-      { error: "Stripe webhook processing is disabled until STRIPE_WEBHOOK_SECRET is configured." },
-      { status: 503 },
-    );
-  }
   if (!signature) {
     return NextResponse.json({ error: "Missing Stripe-Signature header." }, { status: 400 });
   }
