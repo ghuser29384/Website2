@@ -2,10 +2,14 @@ import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 
-const BASE_URL = "https://www.moraltrade.org";
+const BASE_URL = (process.env.ACTIVATION_BASE_URL ?? "https://www.moraltrade.org").replace(/\/$/, "");
 const OFFER_ID = "eab45baa-8b83-408f-9afd-ff4e3caab801";
 const OFFER_PATH = `/offers/${OFFER_ID}`;
-const TEST_EMAIL = "caijun054+activation-gate-20260715-0325@gmail.com";
+const RUN_TOKEN =
+  process.env.ACTIVATION_RUN_TOKEN ??
+  [process.env.GITHUB_RUN_ID, process.env.GITHUB_RUN_ATTEMPT].filter(Boolean).join("-") ??
+  String(Date.now());
+const TEST_EMAIL = `caijun054+activation-gate-${RUN_TOKEN}@gmail.com`;
 const TEST_PASSWORD = `${randomBytes(24).toString("base64url")}aA1!`;
 const OUTPUT_DIR = "activation-gate-output";
 const MESSAGE = [
