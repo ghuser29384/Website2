@@ -1,0 +1,62 @@
+name: Create route visual QA
+
+on:
+  pull_request:
+    paths:
+      - "src/app/create/**"
+      - "src/app/marketplace-ui.css"
+      - "src/components/create/**"
+      - "src/components/marketplace/deal-receipt.tsx"
+      - "src/lib/create-routes*"
+      - "tests/create-route-workbench.spec.ts"
+      - ".github/workflows/create-route-visual-qa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  create-route-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint create-route changes
+        run: |
+          npx eslint \
+            src/app/create/page.tsx \
+            src/components/create/create-route-chooser.tsx \
+            src/lib/create-routes.ts \
+            src/lib/create-routes.test.ts \
+            tests/create-route-workbench.spec.ts
+
+      - name: Run create-route unit tests
+        run: node --import tsx --test src/lib/create-routes.test.ts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run create-route interaction and visual QA
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npm run test:e2e -- tests/create-route-workbench.spec.ts
+
+      - name: Upload visual comparison artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-route-visual-qa
+          path: test-results/create-route-visual
+          if-no-files-found: error
+          retention-days: 7
