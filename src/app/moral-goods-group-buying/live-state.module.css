@@ -1,0 +1,307 @@
+.liveBadge,
+.unavailableBadge,
+.readyBadge,
+.pendingBadge,
+.blockedBadge,
+.gateStatus {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  padding: 0.25rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.liveBadge,
+.readyBadge {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.pendingBadge {
+  border-color: var(--signal-ink);
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.blockedBadge,
+.unavailableBadge {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.emptyState,
+.unavailableState,
+.readinessPanel {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: clamp(1.35rem, 3vw, 2.2rem);
+  border: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.emptyState {
+  border-left: 7px solid var(--accent);
+}
+
+.unavailableState {
+  border-left: 7px solid var(--line-strong);
+}
+
+.emptyState h3,
+.unavailableState h3,
+.readinessPanel h3 {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.emptyState p,
+.unavailableState p,
+.readinessPanel p {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.58;
+}
+
+.stateHeader,
+.readinessHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.financialGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
+}
+
+.financialMetric {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  min-width: 0;
+  min-height: 10.5rem;
+  padding: 1.1rem;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+
+.financialMetric span {
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.financialMetric strong {
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 3vw, 2.55rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.financialMetric p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+  line-height: 1.48;
+}
+
+.readinessPanel {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.5fr);
+  align-items: start;
+}
+
+.readinessCopy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.readinessCopy h3 {
+  max-width: 18ch;
+}
+
+.readinessFacts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.readinessFacts > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.6fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.9rem;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.readinessFacts dt {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.readinessFacts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.gateDisclosure {
+  border-top: 1px solid var(--line);
+  padding-top: 0.85rem;
+}
+
+.gateDisclosure summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+  list-style: none;
+}
+
+.gateDisclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.gateDisclosure summary::after {
+  float: right;
+  color: var(--accent-deep);
+  content: "+";
+}
+
+.gateDisclosure[open] summary::after {
+  content: "−";
+}
+
+.gateList {
+  display: grid;
+  gap: 1px;
+  margin-top: 0.85rem;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.gateRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.85rem;
+  background: var(--surface-muted);
+}
+
+.gateRow strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.gateStatus {
+  min-height: 1.55rem;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.gateStatusPassed {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+
+.gateStatusPending {
+  border-color: var(--signal-ink);
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.gateStatusBlocked {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.truthNote {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .financialGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .readinessPanel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .financialGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .financialMetric {
+    min-height: auto;
+  }
+
+  .stateHeader,
+  .readinessHeader,
+  .gateRow {
+    grid-template-columns: 1fr;
+  }
+
+  .gateRow {
+    align-items: start;
+  }
+
+  .gateStatus {
+    justify-self: start;
+  }
+
+  .readinessFacts > div {
+    grid-template-columns: 1fr;
+  }
+}
