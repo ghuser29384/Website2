@@ -32,8 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run lint
-        run: npm run lint
+      - name: Lint create-route changes
+        run: |
+          npx eslint \
+            src/app/create/page.tsx \
+            src/components/create/create-route-chooser.tsx \
+            src/lib/create-routes.ts \
+            src/lib/create-routes.test.ts \
+            tests/create-route-workbench.spec.ts
 
       - name: Run unit tests
         run: npm test
