@@ -17,9 +17,8 @@
   min-width: 0;
 }
 
-/* Breadcrumbs already inject Home. Hide an accidental second Home supplied by older routes. */
-.breadcrumbs li:first-child + li:has(> a[href="/"]),
-.breadcrumbs li:first-child + li:has(> span[aria-current="page"]) {
+/* Breadcrumbs already inject Home. Hide only an accidental second Home link. */
+.breadcrumbs li:first-child + li:has(> a[href="/"]) {
   display: none;
 }
 
