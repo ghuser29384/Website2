@@ -17,7 +17,7 @@ export function getTopbarActions(isAuthenticated = false) {
           label: "Create",
         }
       : {
-          href: "/signup?returnTo=/onboarding",
+          href: "/pilot",
           label: "Get started",
         },
   };
