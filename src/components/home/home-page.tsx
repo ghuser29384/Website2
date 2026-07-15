@@ -68,7 +68,7 @@ const processSteps = [
   {
     number: "03",
     title: "Match only on mutual gain.",
-    description: "Each side judges the proposal by their own priorities. No shared moral score is required.",
+    description: "Each side judges the proposal by their own priorities.",
   },
   {
     number: "04",
