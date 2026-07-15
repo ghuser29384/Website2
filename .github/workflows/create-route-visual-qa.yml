@@ -1,6 +1,13 @@
 name: Create route visual QA
 
 on:
+  pull_request:
+    paths:
+      - "src/app/create/**"
+      - "src/components/create/**"
+      - "src/lib/create-routes*"
+      - "tests/create-route-workbench.spec.ts"
+      - ".github/workflows/create-route-visual-qa.yml"
   push:
     branches:
       - develop-create-route-workbench
