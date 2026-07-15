@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 const BASE_URL = "https://www.moraltrade.org";
 const OFFER_ID = "eab45baa-8b83-408f-9afd-ff4e3caab801";
 const OFFER_PATH = `/offers/${OFFER_ID}`;
-const TEST_EMAIL = "caijun054+activation-gate-20260715-0306@gmail.com";
+const TEST_EMAIL = "caijun054+activation-gate-20260715-0321@gmail.com";
 const TEST_PASSWORD = `${randomBytes(24).toString("base64url")}aA1!`;
 const OUTPUT_DIR = "activation-gate-output";
 const MESSAGE = [
@@ -89,12 +89,15 @@ try {
   await page.getByRole("button", { name: "Create account with Email" }).click();
   await page.waitForTimeout(2200);
   console.log(`ACTIVATION_TEST_EMAIL=${TEST_EMAIL}`);
-  stage("signup_submitted", { url: page.url() });
+  const signupBanners = (await page.locator(".status-banner").allTextContents())
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  stage("signup_submitted", { banners: signupBanners, url: page.url() });
 
   let authenticated = await hasOnboardingForm();
   if (!authenticated) {
-    stage("awaiting_email_confirmation");
-    console.log("ACTIVATION_GATE_CONFIRMATION_REQUIRED=true");
+    stage("signup_requires_followup_login");
+    console.log("ACTIVATION_GATE_CONFIRMATION_OR_LOGIN_REQUIRED=true");
     for (let attempt = 1; attempt <= 30 && !authenticated; attempt += 1) {
       await page.waitForTimeout(attempt === 1 ? 5_000 : 20_000);
       try {
@@ -137,16 +140,22 @@ try {
   stage("onboarding_complete", { routedTo: page.url() });
 
   await page.goto(`${BASE_URL}${OFFER_PATH}`, { waitUntil: "domcontentloaded" });
-  await page.getByText("I will run one 45-minute structured working session", { exact: false }).first().waitFor();
+  const offerMainText = await page.locator("main").innerText();
+  if (!offerMainText.includes("45-minute structured working session")) {
+    throw new Error("Structured cross-view working-session terms were not present on the offer page.");
+  }
+
+  const messageField = page.locator('textarea[name="message"]:visible').first();
+  await messageField.waitFor({ state: "visible" });
   stage("structured_offer_open", { url: page.url() });
 
-  const responseForm = page.locator('form:has(textarea[name="message"])');
-  await responseForm.locator('textarea[name="message"]').fill(MESSAGE);
+  const responseForm = messageField.locator("xpath=ancestor::form[1]");
+  await messageField.fill(MESSAGE);
   await responseForm.getByRole("button", { name: "Express interest" }).click();
   await page.waitForTimeout(2500);
 
-  const responseStatus = page.getByText(/Your response is/i).first();
-  await responseStatus.waitFor();
+  const responseStatus = page.locator(".status-chip-row:visible").getByText(/Your response is/i).first();
+  await responseStatus.waitFor({ state: "visible" });
   const responseStatusText = (await responseStatus.textContent())?.trim() ?? "";
   if (!/interested|accepted|pending/i.test(responseStatusText)) {
     throw new Error(`Unexpected response status: ${responseStatusText}`);
