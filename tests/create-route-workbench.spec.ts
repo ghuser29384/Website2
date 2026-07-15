@@ -1,9 +1,22 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 const captureVisuals = process.env.CREATE_ROUTE_CAPTURE === "1";
 const captureDirectory = path.join("test-results", "create-route-visual");
+
+async function prepareForVisualCapture(page: Page) {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    document.querySelectorAll("nextjs-portal").forEach((portal) => portal.remove());
+  });
+  await page.addStyleTag({
+    content: ".skip-link, nextjs-portal { display: none !important; }",
+  });
+}
 
 test.describe("Create route workbench", () => {
   test("compares routes without creating a commitment", async ({ browser, page }) => {
@@ -18,6 +31,15 @@ test.describe("Create route workbench", () => {
       "aria-pressed",
       "true",
     );
+
+    if (captureVisuals) {
+      await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
+      await page.screenshot({
+        fullPage: true,
+        path: path.join(captureDirectory, "implementation-default-desktop.png"),
+      });
+    }
 
     await page.locator('[data-create-mode="offset"]').click();
 
@@ -50,15 +72,16 @@ test.describe("Create route workbench", () => {
     expect(createsCommitment).toBe(true);
 
     if (captureVisuals) {
-      await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
       await page.screenshot({
         fullPage: true,
-        path: path.join(captureDirectory, "implementation-desktop.png"),
+        path: path.join(captureDirectory, "implementation-selected-pool-desktop.png"),
       });
 
       const liveContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       const livePage = await liveContext.newPage();
       await livePage.goto("https://moraltrade.org/create", { waitUntil: "domcontentloaded" });
+      await prepareForVisualCapture(livePage);
       await livePage.screenshot({
         fullPage: true,
         path: path.join(captureDirectory, "production-reference-desktop.png"),
@@ -89,6 +112,7 @@ test.describe("Create route workbench", () => {
 
     if (captureVisuals) {
       await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
       await page.screenshot({
         fullPage: true,
         path: path.join(captureDirectory, "implementation-mobile.png"),
