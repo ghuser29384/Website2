@@ -49,7 +49,7 @@ test("authenticated users continue directly to every selected route", () => {
     "/offers/new?entry=draft&mode=offset",
   );
   assert.equal(buildCreateTargetHref("pool", true), "/pools");
-  assert.equal(buildCreateTargetHref("back", true), "/background-networking");
+  assert.equal(buildCreateTargetHref("back", true), "/create?mode=back");
 });
 
 test("signed-out users are gated only for routes that create a private draft", () => {
@@ -62,5 +62,5 @@ test("signed-out users are gated only for routes that create a private draft", (
     "/signup?returnTo=%2Foffers%2Fnew%3Fentry%3Ddraft%26mode%3Doffset",
   );
   assert.equal(buildCreateTargetHref("pool", false), "/pools");
-  assert.equal(buildCreateTargetHref("back", false), "/background-networking");
+  assert.equal(buildCreateTargetHref("back", false), "/create?mode=back");
 });
