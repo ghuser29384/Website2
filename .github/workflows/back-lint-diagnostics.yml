@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   lint-diagnostics:
@@ -41,3 +43,17 @@ jobs:
           path: lint-output.txt
           if-no-files-found: error
           retention-days: 1
+
+      - name: Post lint output to pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo "<!-- back-lint-diagnostics -->"
+            echo "### Back lint diagnostics"
+            echo '```text'
+            cat lint-output.txt
+            echo '```'
+          } > lint-comment.md
+          gh pr comment 30 --body-file lint-comment.md
