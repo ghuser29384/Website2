@@ -19,6 +19,13 @@ interface CreateRouteChooserProps {
   isAuthenticated: boolean;
 }
 
+const ROUTE_HOVER_COLORS: Record<CreateMode, string> = {
+  trade: "#dceffd",
+  offset: "#eceaff",
+  pool: "#f1f7cc",
+  back: "#e7efe5",
+};
+
 function buildPreviewRows(route: CreateRouteDefinition): readonly DealReceiptRow[] {
   return [
     { label: "Without this deal", value: route.receipt.baseline },
@@ -86,6 +93,7 @@ function RouteGlyph({ mode }: { mode: CreateMode }) {
 
 export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRouteChooserProps) {
   const [selectedMode, setSelectedMode] = useState<CreateMode>(initialMode);
+  const [hoveredMode, setHoveredMode] = useState<CreateMode | null>(null);
   const selectedRoute = getCreateRoute(selectedMode);
   const targetHref = buildCreateTargetHref(selectedMode, isAuthenticated);
   const primaryLabel =
@@ -155,6 +163,7 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
         <div className={styles.routeGrid}>
           {CREATE_ROUTE_DEFINITIONS.map((route) => {
             const isSelected = route.key === selectedMode;
+            const isHovered = route.key === hoveredMode;
 
             return (
               <button
@@ -170,6 +179,9 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
                 data-create-mode={route.key}
                 key={route.key}
                 onClick={() => selectMode(route.key)}
+                onMouseEnter={() => setHoveredMode(route.key)}
+                onMouseLeave={() => setHoveredMode(null)}
+                style={isHovered ? { backgroundColor: ROUTE_HOVER_COLORS[route.key] } : undefined}
                 type="button"
               >
                 <span className={styles.routeMeta}>
