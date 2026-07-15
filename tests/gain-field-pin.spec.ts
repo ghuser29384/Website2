@@ -39,6 +39,25 @@ test.describe("Mutual-gain field", () => {
     await page.mouse.move(third.x, third.y);
     await expect.poll(() => selected.getAttribute("transform")).not.toBe(pinnedTransform);
   });
+
+  test("does not render the removed reading guide", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+
+    await expect(page.getByText("How to read the field", { exact: true })).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "A moral trade is possible only when every participant prefers the proposal to the no-deal default.",
+        { exact: true },
+      ),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "This field tests default-relative mutual gain only. It does not certify consent, evidence, legality, side constraints, effects on third parties, trustworthiness, or freedom from threats.",
+        { exact: true },
+      ),
+    ).toHaveCount(0);
+  });
 });
 
 test.describe("Mutual-gain field touch input", () => {
