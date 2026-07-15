@@ -33,7 +33,7 @@ jobs:
         run: npm ci
 
       - name: Lint changed TypeScript
-        run: npm run lint -- src/app/layout.tsx tests/home-process-section.spec.ts
+        run: npx eslint src/app/layout.tsx tests/home-process-section.spec.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
