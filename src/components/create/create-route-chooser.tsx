@@ -19,39 +19,6 @@ interface CreateRouteChooserProps {
   isAuthenticated: boolean;
 }
 
-const CREATE_FLOW = [
-  {
-    description:
-      "Record what would happen without the proposal. If the baseline is not credible, the proposal should stop.",
-    number: "01",
-    title: "Default",
-  },
-  {
-    description:
-      "Make the exchange concrete: actions, amounts, timing, conditions, and maximum exposure.",
-    number: "02",
-    title: "Terms",
-  },
-  {
-    description:
-      "Choose the least intrusive proof that can demonstrate performance and name who reviews it.",
-    number: "03",
-    title: "Evidence",
-  },
-  {
-    description:
-      "Read one frozen summary of the terms, evidence, settlement, externalities, and exit rules.",
-    number: "04",
-    title: "Receipt",
-  },
-  {
-    description:
-      "Only then move from a draft to a separately confirmed authorization state.",
-    number: "05",
-    title: "Authorize",
-  },
-] as const;
-
 function buildPreviewRows(route: CreateRouteDefinition): readonly DealReceiptRow[] {
   return [
     { label: "Without this deal", value: route.receipt.baseline },
@@ -293,29 +260,6 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
             </small>
           </article>
         </div>
-      </section>
-
-      <section className={`${styles.section} ${styles.flowSection}`} aria-labelledby="create-flow-heading">
-        <div className={styles.sectionHead}>
-          <div>
-            <p className="mt-product-kicker">The creation flow</p>
-            <h2 id="create-flow-heading">Make the default explicit first.</h2>
-          </div>
-          <p>
-            The interface exposes the fields that determine whether a proposal is voluntary,
-            additional, reviewable, and safe before anyone is asked to rely on it.
-          </p>
-        </div>
-
-        <ol className={styles.flowGrid}>
-          {CREATE_FLOW.map((step) => (
-            <li key={step.number}>
-              <span>{step.number}</span>
-              <strong>{step.title}</strong>
-              <p>{step.description}</p>
-            </li>
-          ))}
-        </ol>
       </section>
     </>
   );
