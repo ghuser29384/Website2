@@ -1,0 +1,286 @@
+/*
+ * Public-site readability safeguards.
+ *
+ * The marketplace surfaces use their own components. These rules keep older public pages
+ * legible while they are progressively migrated: no duplicate breadcrumb, no empty hero
+ * column, no text-only pseudo-buttons, and no two-column data definitions inside narrow cards.
+ */
+
+.page-shell,
+.page-shell main,
+.page-shell section,
+.page-shell article,
+.page-shell aside,
+.page-shell form,
+.page-shell dl,
+.page-shell dd {
+  min-width: 0;
+}
+
+/* Breadcrumbs already inject Home. Hide only an accidental second Home link. */
+.breadcrumbs li:first-child + li:has(> a[href="/"]) {
+  display: none;
+}
+
+.breadcrumbs ol {
+  row-gap: 0.2rem;
+}
+
+.breadcrumbs li,
+.breadcrumbs a,
+.breadcrumbs span {
+  overflow-wrap: anywhere;
+}
+
+/* PageHero used to reserve a blank second column when no visual child was provided. */
+.page-hero-content:not(:has(> :nth-child(2))) {
+  grid-template-columns: minmax(0, 58rem);
+}
+
+.page-hero-content:not(:has(> :nth-child(2))) .hero-copy {
+  max-width: 58rem;
+}
+
+.page-hero-content h1,
+.section-head h2,
+.data-card h3,
+.detail-block h3,
+.listing-card h3,
+.concept-card h3 {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.hero-text,
+.section-head > p,
+.section-head-compact > p,
+.data-card p,
+.detail-block p,
+.data-card dd,
+.detail-block dd,
+.listing-card p,
+.listing-card dd {
+  text-wrap: pretty;
+}
+
+.section-head > p,
+.section-head-compact > p,
+.hero-text {
+  max-width: 70ch;
+}
+
+/* Some older links used only the colour class and therefore rendered as highlighted text. */
+a.button-primary:not(.button),
+a.button-secondary:not(.button),
+button.button-primary:not(.button),
+button.button-secondary:not(.button) {
+  display: inline-flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 0.72rem 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+a.button-primary:not(.button):hover,
+a.button-secondary:not(.button):hover,
+button.button-primary:not(.button):hover,
+button.button-secondary:not(.button):hover {
+  transform: translateY(-1px);
+}
+
+.data-grid {
+  align-items: stretch;
+}
+
+.data-grid > .data-card,
+.data-grid > .detail-block,
+.data-grid > .panel {
+  align-content: start;
+  min-width: 0;
+}
+
+/* Dense cards should not become three newspaper columns. */
+@media (min-width: 901px) {
+  .data-grid:has(> .detail-block .detail-grid),
+  .data-grid:has(> .detail-block details),
+  .data-grid:has(> .data-card .detail-grid),
+  .data-grid:has(> .data-card details) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A definition grid inside a card gets one readable measure; page-level grids can stay two-column. */
+.data-grid > .detail-block .detail-grid,
+.data-grid > .data-card .detail-grid,
+.listing-card .detail-grid {
+  grid-template-columns: 1fr;
+}
+
+.data-grid > .detail-block .detail-grid > div,
+.data-grid > .data-card .detail-grid > div,
+.listing-card .detail-grid > div {
+  min-width: 0;
+}
+
+.data-card,
+.detail-block,
+.listing-card,
+.concept-card,
+.stat-card {
+  overflow-wrap: anywhere;
+}
+
+.data-card > :last-child,
+.detail-block > :last-child,
+.listing-card > :last-child,
+.concept-card > :last-child {
+  margin-bottom: 0;
+}
+
+.detail-block details,
+.data-card details,
+.listing-card details,
+.home-deep-dive {
+  width: 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+
+.detail-block details > summary,
+.data-card details > summary,
+.listing-card details > summary,
+.home-deep-dive > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+  list-style: none;
+}
+
+.detail-block details > summary::-webkit-details-marker,
+.data-card details > summary::-webkit-details-marker,
+.listing-card details > summary::-webkit-details-marker,
+.home-deep-dive > summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-block details > summary::after,
+.data-card details > summary::after,
+.listing-card details > summary::after,
+.home-deep-dive > summary::after {
+  float: right;
+  color: var(--accent-deep);
+  content: "+";
+}
+
+.detail-block details[open] > summary::after,
+.data-card details[open] > summary::after,
+.listing-card details[open] > summary::after,
+.home-deep-dive[open] > summary::after {
+  content: "−";
+}
+
+.detail-block details > div,
+.data-card details > div,
+.listing-card details > div,
+.home-deep-dive > div {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+}
+
+.detail-block details p,
+.data-card details p,
+.listing-card details p,
+.home-deep-dive p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.status-chip-row,
+.hero-actions,
+.offer-card-actions,
+.pilot-note-links {
+  row-gap: 0.55rem;
+}
+
+pre,
+code,
+.mono,
+.receipt-hash,
+.policy-hash {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  overflow-x: auto;
+}
+
+.section[id],
+article[id],
+details[id] {
+  scroll-margin-top: 1rem;
+}
+
+@media (max-width: 900px) {
+  .data-grid:has(> .detail-block .detail-grid),
+  .data-grid:has(> .detail-block details),
+  .data-grid:has(> .data-card .detail-grid),
+  .data-grid:has(> .data-card details) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-hero-content,
+  .page-hero-content:not(:has(> :nth-child(2))) {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    padding-top: 2rem;
+  }
+
+  .section-head,
+  .section-head-compact {
+    gap: 0.75rem;
+  }
+
+  .hero-actions > a,
+  .hero-actions > button,
+  .offer-card-actions > a,
+  .offer-card-actions > button {
+    width: 100%;
+  }
+
+  .breadcrumbs {
+    font-size: 0.76rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.button-primary:not(.button),
+  a.button-secondary:not(.button),
+  button.button-primary:not(.button),
+  button.button-secondary:not(.button) {
+    transition: none;
+  }
+
+  a.button-primary:not(.button):hover,
+  a.button-secondary:not(.button):hover,
+  button.button-primary:not(.button):hover,
+  button.button-secondary:not(.button):hover {
+    transform: none;
+  }
+}
