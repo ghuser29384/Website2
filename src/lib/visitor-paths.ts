@@ -13,48 +13,48 @@ type VisitorPathConfig = {
 
 export const VISITOR_PATHS = [
   {
-    key: "learn",
-    title: "Learn the idea",
-    homeTitle: "Understand the service",
+    key: "fund",
+    title: "Make a payment",
+    homeTitle: "Fund a public good",
     description:
-      "See what Moral Trade supports, what it does not claim, and why baselines, evidence, and review matter.",
-    href: "/what-is-moral-trade",
-    icon: "source",
-    actionLabel: "Read the plain-language primer",
-    fit: "Best if you are new to moral trade and want the plain-language version first.",
-  },
-  {
-    key: "test",
-    title: "Inspect an example",
-    homeTitle: "See complete terms",
-    description:
-      "Inspect a complete, non-live example before drafting or relying on a participant record.",
-    href: "/worked-examples",
-    icon: "example",
-    actionLabel: "Open worked examples",
-    fit: "Best if you want to understand the mechanism through concrete terms.",
-  },
-  {
-    key: "donate",
-    title: "Use a donation route",
-    homeTitle: "Donate through a vetted route",
-    description:
-      "Choose a cause, pay through an external provider, and submit reviewed evidence when a public-good workflow requires it.",
+      "Choose a reviewed destination and complete a real donation through Every.org. The payment stays with the external provider.",
     href: "/donate",
-    icon: "fund",
-    actionLabel: "Open donation routes",
-    fit: "Best if you want a low-friction public-good action before creating a trade.",
+    icon: "payment",
+    actionLabel: "Choose a funding route",
+    fit: "The fastest available financial action on Moral Trade.",
   },
   {
-    key: "join-build",
-    title: "Join the network",
-    homeTitle: "Create one concrete record",
+    key: "create",
+    title: "Create a trade",
+    homeTitle: "Write a bounded proposal",
     description:
-      "Create an account, choose one first action, and invite one serious counterparty or collaborator.",
-    href: "/cohort",
-    icon: "profile",
-    actionLabel: "Join the network",
-    fit: "Best if you can bring a concrete use case, counterparty, research question, or community.",
+      "State the no-deal default, each commitment, the maximum exposure, evidence, deadline, and exit rule.",
+    href: "/create",
+    icon: "swap",
+    actionLabel: "Create a proposal",
+    fit: "Use this when you already have a concrete action or counterparty in mind.",
+  },
+  {
+    key: "pool",
+    title: "Join a conditional pool",
+    homeTitle: "Coordinate shared funding",
+    description:
+      "Review current production pools and pledge only where a reviewed route, threshold, recipient, and payment state are available.",
+    href: "/pools",
+    icon: "publicGoods",
+    actionLabel: "Review live pools",
+    fit: "Use this when the action should happen only after enough people participate.",
+  },
+  {
+    key: "explore",
+    title: "Explore live proposals",
+    homeTitle: "Find an existing opportunity",
+    description:
+      "Browse participant proposals and current records without treating explanatory material as marketplace activity.",
+    href: "/offers",
+    icon: "marketplace",
+    actionLabel: "Explore the marketplace",
+    fit: "Use this when you want to respond to an existing proposal rather than create one.",
   },
 ] as const satisfies ReadonlyArray<VisitorPathConfig>;
 
