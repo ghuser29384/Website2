@@ -1,18 +1,12 @@
 import Link from "next/link";
 
 import {
-  DealReceipt,
-  VICTORIA_PAUL_RECEIPT_ROWS,
-} from "@/components/marketplace/deal-receipt";
-import {
   GainField,
   OffsetFlowFigure,
   ThresholdField,
 } from "@/components/marketplace/gain-field";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { formatMode } from "@/lib/offers";
-import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface HomePageProps {
@@ -22,35 +16,76 @@ interface HomePageProps {
 const productModes = [
   {
     index: "01",
-    label: "Trade",
-    description: "Exchange actions or commitments that each side values differently.",
-    href: "/create?mode=trade",
-    status: "Available",
-    later: false,
+    label: "Fund",
+    description: "Complete a real donation through a reviewed external payment route.",
+    href: "/donate",
+    status: "Payment available",
   },
   {
     index: "02",
-    label: "Offset",
-    description: "Redirect matched opposed donations into a shared destination.",
-    href: "/offsets",
-    status: "Available",
-    later: false,
+    label: "Trade",
+    description: "Exchange actions or commitments that each side values differently.",
+    href: "/create?mode=trade",
+    status: "Create",
   },
   {
     index: "03",
-    label: "Pool",
-    description: "Pledge up to a maximum and fund only when the published condition passes.",
-    href: "/pools",
-    status: "Available",
-    later: false,
+    label: "Offset",
+    description: "Redirect matched opposed donations into a shared destination.",
+    href: "/offsets",
+    status: "Coordinate",
   },
   {
     index: "04",
-    label: "Back",
-    description: "Help close a compensation gap for a more impactful path.",
-    href: "/create?mode=back",
-    status: "Later lane",
-    later: true,
+    label: "Pool",
+    description: "Pledge up to a maximum and fund only when the published condition passes.",
+    href: "/pools",
+    status: "Live-backed",
+  },
+] as const;
+
+const actionRoutes = [
+  {
+    key: "fund",
+    eyebrow: "Financial",
+    state: "Available now",
+    title: "Complete a real donation",
+    details: [
+      ["Route", "Reviewed Every.org destination"],
+      ["Payment", "Provider-hosted checkout"],
+      ["Boundary", "No Moral Trade custody or escrow"],
+    ],
+    foot: "Payment methods set by provider",
+    href: "/donate",
+    linkLabel: "Choose a funding route ↗",
+  },
+  {
+    key: "trade",
+    eyebrow: "Coordination",
+    state: "Create",
+    title: "Write a bounded trade",
+    details: [
+      ["Default", "What each side would otherwise do"],
+      ["Terms", "Action, cap, deadline, evidence, and exit"],
+      ["Decision", "Each side evaluates the proposal independently"],
+    ],
+    foot: "Account required to save",
+    href: "/create",
+    linkLabel: "Create a proposal ↗",
+  },
+  {
+    key: "pool",
+    eyebrow: "Public goods",
+    state: "Production state",
+    title: "Review current pools",
+    details: [
+      ["Condition", "Published threshold and deadline"],
+      ["Exposure", "Maximum amount visible before authorization"],
+      ["Inventory", "No demo fallback when no live route exists"],
+    ],
+    foot: "Route-specific payment readiness",
+    href: "/pools",
+    linkLabel: "Open live pools ↗",
   },
 ] as const;
 
@@ -72,8 +107,26 @@ const processSteps = [
   },
   {
     number: "04",
-    title: "Authorize, evidence, settle.",
-    description: "The record moves through explicit states and produces a Deal Receipt rather than a vague success claim.",
+    title: "Authorize, evidence, resolve.",
+    description: "Move through explicit states and produce a Deal Receipt rather than a vague success claim.",
+  },
+] as const;
+
+const paymentSteps = [
+  {
+    number: "01",
+    title: "Choose a reviewed destination",
+    description: "Select a configured Every.org route that matches the public good you want to fund.",
+  },
+  {
+    number: "02",
+    title: "Pay with the provider",
+    description: "Every.org presents the payment flow and supported methods. Moral Trade does not hold the donation.",
+  },
+  {
+    number: "03",
+    title: "Attach evidence when needed",
+    description: "A linked workflow can use provider import or a reviewed fallback without turning a receipt into an automatic verification claim.",
   },
 ] as const;
 
@@ -97,14 +150,16 @@ const trustCards = [
 
 export function HomePage({ isAuthenticated }: HomePageProps) {
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
-  const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
 
   return (
     <div className="page-shell marketplace-product-shell">
       <div className="mt-beta-strip">
-        <span>Beta</span>
-        <span>Review current payment and settlement capabilities before relying on a record.</span>
-        <Link href="/status">Status</Link>
+        <span>Financial route available</span>
+        <span>
+          Complete a real donation through reviewed Every.org destinations. Conditional payment and
+          settlement remain route-specific.
+        </span>
+        <Link href="/donate">Fund now</Link>
       </div>
 
       <header>
@@ -119,29 +174,29 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       <main className="mt-product-main" id="main-content" tabIndex={-1}>
         <section className="mt-product-hero" aria-labelledby="home-hero-heading">
           <div className="mt-product-hero-copy">
-            <p className="mt-product-kicker">A marketplace for productive difference</p>
+            <p className="mt-product-kicker">Coordination for productive difference</p>
             <h1 id="home-hero-heading">
               Do more good
               <span>without agreeing.</span>
             </h1>
             <p className="mt-product-hero-text">
-              Swap commitments, redirect offsetting donations, or join a conditional funding pool.
-              Every proposal keeps the no-deal default and the complete terms visible before anyone
-              relies on it.
+              Make a financial contribution, exchange bounded commitments, redirect offsetting
+              donations, or join a conditional funding pool. Every route keeps the material terms and
+              operating boundaries visible before anyone relies on it.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href="/offers">
-                Explore the marketplace
+              <Link className="button button-primary" href="/start">
+                Choose a real action
               </Link>
               <Link className="button button-secondary" href={createHref}>
                 Create a proposal
               </Link>
             </div>
             <ul className="mt-product-proof-line" aria-label="Core operating principles">
+              <li>Real payment route</li>
               <li>Clear terms</li>
-              <li>Conditional settlement</li>
+              <li>No platform custody</li>
               <li>Reviewable evidence</li>
-              <li>No moral ranking</li>
             </ul>
           </div>
           <div className="mt-product-hero-visual">
@@ -151,11 +206,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <nav className="mt-mode-rail" aria-label="Ways to use Moral Trade">
           {productModes.map((mode) => (
-            <Link
-              className={["mt-mode-card", mode.later ? "is-later" : ""].filter(Boolean).join(" ")}
-              href={mode.href}
-              key={mode.label}
-            >
+            <Link className="mt-mode-card" href={mode.href} key={mode.label}>
               <span className="mt-mode-card-index">
                 <span>{mode.index}</span>
                 <span>{mode.status}</span>
@@ -169,59 +220,43 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           ))}
         </nav>
 
-        <section className="mt-product-section is-white" aria-labelledby="marketplace-heading">
+        <section className="mt-product-section is-white" aria-labelledby="action-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">Explore</p>
-              <h2 id="marketplace-heading">Understand one complete deal in under a minute.</h2>
+              <p className="mt-product-kicker">Act</p>
+              <h2 id="action-heading">Start with a live route, not a walkthrough.</h2>
             </div>
             <p>
-              Live participant proposals remain separate from worked examples. These examples show
-              the shape of the terms without pretending that a counterparty or liquidity exists.
+              Choose the action that fits the current need. Financial payment is available through a
+              reviewed external provider; trades and pools keep their own authorization and review
+              states.
             </p>
           </div>
 
           <div className="mt-market-grid">
-            {featuredExamples.map((example) => (
-              <article className="mt-market-card" key={example.id}>
+            {actionRoutes.map((action) => (
+              <article className="mt-market-card" key={action.key}>
                 <div className="mt-market-card-head">
-                  <span className="mt-market-eyebrow">{formatMode(example.mode)}</span>
-                  <span className="mt-market-state">Worked example</span>
+                  <span className="mt-market-eyebrow">{action.eyebrow}</span>
+                  <span className="mt-market-state">{action.state}</span>
                 </div>
-                <h3>
-                  {example.offeredCause}
-                  <span aria-hidden="true">↔</span>
-                  {example.requestedCause}
-                </h3>
+                <h3>{action.title}</h3>
                 <dl>
-                  <div>
-                    <dt>Offers</dt>
-                    <dd>{example.offerAction}</dd>
-                  </div>
-                  <div>
-                    <dt>Requests</dt>
-                    <dd>{example.requestAction}</dd>
-                  </div>
-                  <div>
-                    <dt>Evidence</dt>
-                    <dd>{example.verification}</dd>
-                  </div>
+                  {action.details.map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
                 </dl>
                 <div className="mt-market-card-foot">
-                  <span>{example.duration}</span>
-                  <Link href={`/offers/examples/${example.id}`}>Inspect terms ↗</Link>
+                  <span>{action.foot}</span>
+                  <Link href={action.key === "trade" ? createHref : action.href}>
+                    {action.linkLabel}
+                  </Link>
                 </div>
               </article>
             ))}
-          </div>
-
-          <div className="mt-product-actions">
-            <Link className="button button-primary" href="/offers">
-              Explore all records
-            </Link>
-            <Link className="button button-secondary" href="/worked-examples">
-              View worked examples
-            </Link>
           </div>
         </section>
 
@@ -261,8 +296,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               </p>
               <div className="mt-product-actions">
                 <Link className="button button-primary" href="/offsets">Open offsets</Link>
-                <Link className="button button-secondary" href="/offers?view=examples&search=offset">
-                  Inspect an example
+                <Link className="button button-secondary" href="/donate">
+                  Open funding routes
                 </Link>
               </div>
             </div>
@@ -292,26 +327,34 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
-        <section className="mt-product-section is-white" aria-labelledby="receipt-heading">
-          <div className="mt-receipt-layout">
-            <div className="mt-receipt-copy">
-              <p className="mt-product-kicker">The trust object</p>
-              <h2 id="receipt-heading">Every proposal becomes a Deal Receipt.</h2>
-              <p>
-                The receipt is the stable interface across trades, offsets, and pools. It separates
-                the default, commitments, condition, maximum exposure, evidence, settlement, exit,
-                externalities, and state.
-              </p>
-              <Link className="button button-secondary" href="/trust">
-                Review trust boundaries
-              </Link>
+        <section className="mt-product-section is-white" aria-labelledby="payment-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">Financial contribution</p>
+              <h2 id="payment-heading">A real payment path is available now.</h2>
             </div>
-            <DealReceipt
-              note="Illustrative worked example. It is not a live proposal or completed transaction."
-              rows={VICTORIA_PAUL_RECEIPT_ROWS}
-              state="Draft"
-              title="Victoria ↔ Paul"
-            />
+            <p>
+              The current path deliberately avoids pretending that Moral Trade is an escrow or
+              custodian. Payment occurs with Every.org, while Moral Trade provides routing and
+              optional workflow evidence.
+            </p>
+          </div>
+          <ol className="mt-how-grid">
+            {paymentSteps.map((step) => (
+              <li className="mt-how-step" key={step.number}>
+                <span>{step.number}</span>
+                <h3>{step.title}</h3>
+                <p>{step.description}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-product-actions">
+            <Link className="button button-primary" href="/donate">
+              Make a financial contribution
+            </Link>
+            <Link className="button button-secondary" href="/status">
+              Review payment capabilities
+            </Link>
           </div>
         </section>
 
