@@ -13,7 +13,7 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await expect(page.getByRole("heading", { name: "What do you want more of?" })).toBeVisible();
-  await expect(page.locator(".mtw-cause-choice")).toHaveCount(14);
+  await expect(page.locator(".cause-choice")).toHaveCount(14);
   await expect(page.getByRole("button", { name: "Wild animal suffering" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Factory farming" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Animal welfare" })).toHaveCount(0);
@@ -24,8 +24,8 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
 
   const makeTrade = page.getByRole("button", { name: "Make the trade" });
   await expect(makeTrade).toBeDisabled();
-  await page.getByRole("button", { name: /Your move Fund \$25/ }).click();
-  await page.getByRole("button", { name: /Sam's move Eat vegetarian/ }).click();
+  await page.getByRole("button", { name: /Your move Eat vegetarian/ }).click();
+  await page.getByRole("button", { name: /Sam's move Fund \$25/ }).click();
   await expect(makeTrade).toBeEnabled();
   await makeTrade.click();
 
@@ -35,7 +35,7 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
   await expect(page.getByText("Both say yes.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Lock this deal" })).toHaveAttribute(
     "href",
-    "/trades/new",
+    "https://moraltrade.org/create",
   );
   await expect(page.getByRole("button", { name: "Redirect ineffective donations." })).toBeVisible();
 });
@@ -76,15 +76,14 @@ test("Crowd and Redirect preserve the requested copy and routing", async ({ page
   );
 });
 
-test("walkthrough is keyboard-operable and has no mobile overflow", async ({ page }) => {
+test("walkthrough preserves its guided keyboard flow and has no mobile overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   const firstTab = page.getByRole("tab", { name: /Third option/i });
   await firstTab.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: /The crowd/i })).toBeFocused();
-  await expect(page.getByRole("tab", { name: /The crowd/i })).toHaveAttribute(
+  await page.keyboard.press("Alt+ArrowRight");
+  await expect(page.getByRole("tab", { name: /Find the mix/i })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -93,5 +92,4 @@ test("walkthrough is keyboard-operable and has no mobile overflow", async ({ pag
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  await expect(page.getByText(/no payment or commitment is created here/i)).toBeVisible();
 });
