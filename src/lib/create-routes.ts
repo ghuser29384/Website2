@@ -51,7 +51,7 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     key: "trade",
     later: false,
     nextNote: "Enter both actions, the proof, the deadline, and the exit rule.",
-    nextTitle: "Draft the agreement.",
+    nextTitle: "Open the draft.",
     proposition: "You state what you will do and what you want the other person to do in return.",
     receipt: {
       baseline: "The explicit status quo for both participants.",
