@@ -28,6 +28,9 @@ interface OnboardingPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+const actionFirstGoals = ONBOARDING_GOALS.filter((goal) => goal.value !== "browse_examples");
+const actionFirstActions = FIRST_ACTIONS.filter((action) => action.value !== "clone_example");
+
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -101,7 +104,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <fieldset className="field onboarding-fieldset">
                     <legend>Primary goal</legend>
                     <div className="onboarding-choice-grid">
-                      {ONBOARDING_GOALS.map((goal, index) => (
+                      {actionFirstGoals.map((goal, index) => (
                         <label className="onboarding-choice panel" key={goal.value}>
                           <input
                             defaultChecked={index === 0}
@@ -155,7 +158,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <fieldset className="field onboarding-fieldset">
                     <legend>First action</legend>
                     <div className="onboarding-choice-grid">
-                      {FIRST_ACTIONS.map((action, index) => (
+                      {actionFirstActions.map((action, index) => (
                         <label className="onboarding-choice panel" key={action.value}>
                           <input
                             defaultChecked={index === 0}

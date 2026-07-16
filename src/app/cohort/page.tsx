@@ -7,14 +7,13 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Join the network",
   description: truncateDescription(
-    "Join the Moral Trade network, choose one concrete first action, and use reviewed workflows for pledge swaps, donation offsets, private matching, and moral public goods.",
+    "Join the Moral Trade network, choose one concrete first action, and use reviewed workflows for financial contributions, bounded trades, private matching, and moral public goods.",
   ),
   alternates: {
     canonical: "/cohort",
@@ -38,14 +37,25 @@ function formatOptionalCount(value: number | null) {
 
 const startPaths = [
   {
-    title: "Adapt a worked example",
+    key: "fund",
+    title: "Make a financial contribution",
     description:
-      "Start from complete terms for a pledge swap, donation offset, or shared public-good commitment.",
-    href: "/worked-examples",
-    icon: "example",
-    actionLabel: "Open worked examples",
+      "Choose a reviewed Every.org destination and complete payment with the provider without Moral Trade taking custody.",
+    href: "/donate",
+    icon: "payment",
+    actionLabel: "Choose a funding route",
   },
   {
+    key: "create",
+    title: "Create a bounded trade",
+    description:
+      "State the baseline, commitments, maximum exposure, deadline, evidence, and exit rule for a real proposal.",
+    href: "/create",
+    icon: "swap",
+    actionLabel: "Create a proposal",
+  },
+  {
+    key: "matching",
     title: "Request a private introduction",
     description:
       "Share a broad preview first. Exact wishes, identities, and contact details remain consent-gated.",
@@ -53,26 +63,18 @@ const startPaths = [
     icon: "profile",
     actionLabel: "Request an introduction",
   },
-  {
-    title: "Create a public-good action",
-    description:
-      "Coordinate around thresholded commitments and external evidence without platform custody.",
-    href: "/moral-goods-group-buying",
-    icon: "fund",
-    actionLabel: "Open public-good tools",
-  },
 ] as const;
 
 const activationTargets = [
   {
     label: "Account activated",
     value: "One concrete action",
-    detail: "Create, adapt, log, or request something that produces a reviewable record.",
+    detail: "Create, fund, log, or request something that produces a reviewable record.",
   },
   {
     label: "Terms made legible",
     value: "One bounded artifact",
-    detail: "A complete example, broad preview, submitted offer, or evidence-backed action.",
+    detail: "A submitted offer, provider payment record, broad preview, or evidence-backed action.",
   },
   {
     label: "Network expanded",
@@ -86,6 +88,7 @@ export default async function NetworkPage({ searchParams }: NetworkPageProps) {
   const formMessage = getFormMessage(resolvedSearchParams);
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
   const signupHref = viewer ? "/onboarding" : "/signup?returnTo=/onboarding";
+  const createHref = viewer ? "/create" : "/signup?returnTo=/create";
 
   return (
     <div className="page-shell page-shell-focused cohort-shell">
@@ -114,9 +117,9 @@ export default async function NetworkPage({ searchParams }: NetworkPageProps) {
             <p className="eyebrow">Moral Trade network</p>
             <h1 id="network-heading">Put one real disagreement into a usable structure.</h1>
             <p className="hero-text">
-              Create a bounded trade, request a consent-gated introduction, or coordinate a shared
-              public-good action. Start with one concrete record rather than a general expression of
-              interest.
+              Make a financial contribution, create a bounded trade, request a consent-gated
+              introduction, or coordinate a shared public-good action. Start with one concrete record
+              rather than a general expression of interest.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={signupHref}>
@@ -175,7 +178,11 @@ export default async function NetworkPage({ searchParams }: NetworkPageProps) {
           </div>
           <div className="growth-start-grid">
             {startPaths.map((path) => (
-              <Link className="growth-path-card panel" href={path.href} key={path.title}>
+              <Link
+                className="growth-path-card panel"
+                href={path.key === "create" ? createHref : path.href}
+                key={path.title}
+              >
                 <IconMark name={path.icon} />
                 <div>
                   <h3>{path.title}</h3>
@@ -256,14 +263,14 @@ export default async function NetworkPage({ searchParams }: NetworkPageProps) {
             <h2>Network activity</h2>
             <div className="cohort-progress-list">
               <div>
+                <IconMark name="payment" />
+                <span>Financial route</span>
+                <strong>Available</strong>
+              </div>
+              <div>
                 <IconMark name="marketplace" />
                 <span>Open proposals</span>
                 <strong>{formatOptionalCount(overview.openOfferCount)}</strong>
-              </div>
-              <div>
-                <IconMark name="example" />
-                <span>Worked examples</span>
-                <strong>{CANONICAL_WORKED_CASE_COUNT}</strong>
               </div>
               <div>
                 <IconMark name="profile" />
@@ -302,8 +309,8 @@ export default async function NetworkPage({ searchParams }: NetworkPageProps) {
         </section>
 
         <p className="cohort-disclaimer">
-          Activity metrics count backed records. Examples, invitations, and stated intentions are
-          not counted as completed agreements.
+          Activity metrics count backed records. Invitations, explanatory material, and stated
+          intentions are not counted as completed agreements.
         </p>
       </main>
 
