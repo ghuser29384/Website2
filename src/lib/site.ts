@@ -45,6 +45,7 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Learn",
     links: [
+      { href: "/walkthrough", label: "Interactive walkthrough" },
       { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
       { href: "/research", label: "Research" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
