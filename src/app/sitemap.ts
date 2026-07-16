@@ -146,12 +146,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.56,
     },
     {
-      url: getAbsoluteUrl("/trust"),
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.9,
-    },
-    {
       url: getAbsoluteUrl("/contact"),
       lastModified: now,
       changeFrequency: "monthly",
