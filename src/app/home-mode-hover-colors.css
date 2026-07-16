@@ -1,0 +1,32 @@
+/* Homepage mechanism rail — distinct, low-chroma hover and keyboard-focus colors. */
+.marketplace-product-shell .mt-mode-rail .mt-mode-card {
+  --mt-mode-hover: var(--accent-soft);
+  transition: background-color 140ms ease;
+}
+
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(1) {
+  --mt-mode-hover: var(--route-hover-trade);
+}
+
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(2) {
+  --mt-mode-hover: var(--route-hover-offset);
+}
+
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(3) {
+  --mt-mode-hover: var(--route-hover-pool);
+}
+
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(4) {
+  --mt-mode-hover: var(--route-hover-back);
+}
+
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:hover,
+.marketplace-product-shell .mt-mode-rail .mt-mode-card:focus-visible {
+  background: var(--mt-mode-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketplace-product-shell .mt-mode-rail .mt-mode-card {
+    transition: none;
+  }
+}
