@@ -1,0 +1,371 @@
+/*
+ * Editorial marketplace colour system.
+ *
+ * This file is intentionally imported after the existing application styles. It narrows the
+ * visual language to warm paper neutrals, warm charcoal, one muted terracotta accent, and
+ * low-chroma status tones while preserving the marketplace layout and interaction model.
+ */
+
+:root {
+  --bg: #f3f0e9;
+  --surface: #fbfaf6;
+  --surface-muted: #eee9e1;
+  --surface-soft: #e7e0d7;
+  --surface-strong: #d9d1c6;
+  --line: #d8d1c6;
+  --line-strong: #aaa195;
+  --ink: #282621;
+  --ink-soft: #58554e;
+  --ink-muted: #77736a;
+  --accent: #995743;
+  --accent-deep: #744335;
+  --accent-soft: #eadbd5;
+  --danger-soft: #f0e2dd;
+  --danger-ink: #7c493e;
+  --success-soft: #e6eadf;
+  --success-ink: #485641;
+  --signal: #e4d6bd;
+  --signal-ink: #5a4d35;
+  --shadow-soft: 0 1px 2px rgba(42, 38, 31, 0.03);
+  --shadow-card: 0 16px 40px rgba(42, 38, 31, 0.05);
+  --route-hover-trade: #e7ecea;
+  --route-hover-offset: #eee5e1;
+  --route-hover-pool: #eee9dc;
+  --route-hover-back: #e4e8df;
+}
+
+html,
+body {
+  background: var(--bg);
+}
+
+::selection {
+  background: #e3d0c8;
+  color: var(--ink);
+}
+
+.mpgf-shell {
+  --mpgf-accent: var(--accent);
+  --mpgf-accent-strong: var(--accent-deep);
+  --mpgf-accent-soft: var(--accent-soft);
+  --mpgf-warm: var(--surface-muted);
+  --mpgf-line: var(--line);
+}
+
+.button-primary,
+.button.button-primary,
+.button-nav {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.button-primary:hover,
+.button.button-primary:hover,
+.button-nav:hover {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+  color: #ffffff;
+}
+
+.button-secondary,
+.button.button-secondary {
+  border-color: var(--line-strong);
+  background: rgba(251, 250, 246, 0.46);
+  color: var(--ink);
+}
+
+.button-secondary:hover,
+.button.button-secondary:hover {
+  border-color: var(--ink-soft);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.mt-site-topbar {
+  border-bottom-color: var(--line);
+}
+
+.mt-site-topbar .topbar-search-box,
+.mt-site-topbar .topbar-menu-panel,
+.mt-site-topbar .topbar-search-results {
+  border-color: var(--line);
+  box-shadow: 0 18px 42px rgba(42, 38, 31, 0.06);
+}
+
+.mt-site-footer,
+.mt-deal-receipt-footer {
+  background: #38352f;
+}
+
+.marketplace-product-shell {
+  background:
+    linear-gradient(rgba(40, 38, 33, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 38, 33, 0.022) 1px, transparent 1px),
+    var(--bg);
+  background-size: 28px 28px;
+}
+
+.mt-beta-strip {
+  border-bottom-color: var(--line-strong);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+}
+
+.mt-beta-strip span:first-child {
+  color: var(--accent-deep);
+}
+
+.mt-product-hero,
+.mt-mode-rail,
+.mt-feature-split,
+.mt-market-grid,
+.mt-deal-receipt,
+.mt-explore-hero,
+.mt-directory-toolbar {
+  border-color: var(--line-strong);
+}
+
+.mt-product-hero-copy,
+.mt-mode-card,
+.mt-market-card,
+.mt-feature-copy,
+.mt-gain-field svg,
+.mt-offset-flow svg,
+.mt-threshold-field,
+.mt-deal-receipt-header,
+.mt-deal-receipt-rows > div,
+.mt-product-section {
+  border-color: var(--line);
+}
+
+.mt-product-hero-copy {
+  background: rgba(243, 240, 233, 0.94);
+}
+
+.mt-product-hero-visual {
+  background: rgba(251, 250, 246, 0.88);
+}
+
+.mt-product-section {
+  background: rgba(243, 240, 233, 0.95);
+}
+
+.mt-product-section.is-white {
+  background: rgba(251, 250, 246, 0.94);
+}
+
+.mt-market-card:hover {
+  background: #f7f2ed;
+}
+
+.mt-product-section.is-dark {
+  border-color: var(--line-strong);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.mt-product-section.is-dark .mt-product-section-head > p,
+.mt-product-section.is-dark .mt-product-section-head > div > p:last-child,
+.mt-trust-card p {
+  color: var(--ink-soft);
+}
+
+.mt-trust-grid,
+.mt-trust-card {
+  border-color: var(--line-strong);
+}
+
+.mt-trust-card span {
+  color: var(--accent-deep);
+}
+
+.mt-product-section.is-dark .button-secondary,
+.mt-product-section.is-dark .button.button-secondary {
+  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+
+.mt-product-section.is-dark .button-secondary:hover,
+.mt-product-section.is-dark .button.button-secondary:hover {
+  border-color: var(--ink-soft);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.marketplace-app-shell .mt-v77-endorsement {
+  border-color: var(--line);
+  background: linear-gradient(145deg, var(--surface) 0%, var(--surface-muted) 100%);
+  box-shadow: none;
+}
+
+.marketplace-app-shell .mt-v77-endorsement::after {
+  color: rgba(153, 87, 67, 0.08);
+}
+
+.marketplace-app-shell .mt-v77-endorsement-label {
+  color: var(--accent-deep);
+}
+
+.marketplace-app-shell .mt-v77-endorsement figcaption span {
+  background: var(--accent);
+}
+
+/* Keep the homepage process composition, but move it from black-and-neon to tonal paper. */
+.marketplace-product-shell .mt-product-section:has(#process-heading) {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-kicker {
+  color: var(--accent-deep);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-kicker::before {
+  background: var(--accent);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head h2 {
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head > p {
+  color: var(--ink-soft);
+}
+
+.marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-grid {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:nth-child(even) {
+  background: var(--surface-muted);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child {
+  background: var(--accent-soft);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step > span {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-deep);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child > span {
+  border-color: var(--line-strong);
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:not(:last-child)::after {
+  background: var(--line-strong);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  > .button {
+  border-top-color: var(--line-strong);
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  > .button:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  > .button:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* The Create workbench uses CSS modules; semantic hooks keep its contrast aligned globally. */
+section:has(#create-heading),
+section:has(#route-heading),
+#selected-route-panel {
+  border-color: var(--line-strong);
+}
+
+section:has(#create-heading) > div:first-child,
+div:has(> [data-create-mode]),
+[data-create-mode],
+#selected-route-panel > div:last-child,
+#selected-route-panel > div:last-child > article {
+  border-color: var(--line-strong);
+}
+
+section:has(#route-heading) {
+  background: rgba(251, 250, 246, 0.94);
+}
+
+#selected-route-panel {
+  background: rgba(243, 240, 233, 0.96);
+}
+
+#selected-route-panel > div:last-child > article:last-child {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+#selected-route-panel > div:last-child > article:last-child > span:first-child {
+  color: var(--accent-deep);
+}
+
+#selected-route-panel > div:last-child > article:last-child h3 {
+  color: var(--ink);
+}
+
+#selected-route-panel > div:last-child > article:last-child > p {
+  color: var(--ink-soft);
+}
+
+#selected-route-panel > div:last-child > article:last-child > small {
+  color: var(--ink-muted);
+}
+
+#selected-route-panel > div:last-child > article:last-child .button-secondary {
+  border-color: var(--line-strong);
+  background: transparent;
+  color: var(--ink);
+}
+
+#selected-route-panel > div:last-child > article:last-child .button-secondary:hover {
+  border-color: var(--ink-soft);
+  background: var(--surface);
+  color: var(--ink);
+}
