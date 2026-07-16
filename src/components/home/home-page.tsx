@@ -134,24 +134,6 @@ const paymentSteps = [
   },
 ] as const;
 
-const trustCards = [
-  {
-    number: "01",
-    title: "The default is visible",
-    description: "A proposal is compared with a stated no-deal alternative, not an invented threat or undefined status quo.",
-  },
-  {
-    number: "02",
-    title: "Exposure is capped",
-    description: "Money, time, action burden, deadlines, and cancellation rules are inspectable before authorization.",
-  },
-  {
-    number: "03",
-    title: "Safety is non-compensatory",
-    description: "Threats, coercion, fraud, forged evidence, and identity abuse are eligibility blockers, not low points in a score.",
-  },
-] as const;
-
 export function HomePage({ isAuthenticated }: HomePageProps) {
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
 
@@ -359,32 +341,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <Link className="button button-secondary" href="/status">
               Review payment capabilities
             </Link>
-          </div>
-        </section>
-
-        <section className="mt-product-section is-dark" aria-labelledby="trust-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Trust infrastructure</p>
-              <h2 id="trust-heading">The mechanism is the ornament.</h2>
-            </div>
-            <p>
-              Safety, evidence, payment, dispute, and exit states are part of the product surface—not
-              a compliance appendix hidden after the conversion.
-            </p>
-          </div>
-          <div className="mt-trust-grid">
-            {trustCards.map((card) => (
-              <article className="mt-trust-card" key={card.number}>
-                <span>{card.number}</span>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-              </article>
-            ))}
-          </div>
-          <div className="mt-product-actions">
-            <Link className="button button-primary" href="/status">Service status</Link>
-            <Link className="button button-secondary" href="/safety">Safety and anti-threat rules</Link>
           </div>
         </section>
 
