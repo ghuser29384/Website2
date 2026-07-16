@@ -1,7 +1,8 @@
 export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
-    { href: "/offers", label: "Explore" },
+    { href: "/offers?view=live", label: "Explore" },
     { href: "/create", label: "Create" },
+    { href: "/donate", label: "Fund" },
     { href: "/pools", label: "Pools" },
     { href: "/how-it-works", label: "How it works" },
   ];
@@ -16,7 +17,7 @@ export function getTopbarActions(isAuthenticated = false) {
           label: "Create",
         }
       : {
-          href: "/pilot",
+          href: "/start",
           label: "Get started",
         },
   };
@@ -26,8 +27,9 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Marketplace",
     links: [
-      { href: "/offers", label: "Explore trades" },
+      { href: "/offers?view=live", label: "Explore trades" },
       { href: "/create", label: "Create" },
+      { href: "/donate", label: "Fund a public good" },
       { href: "/offsets", label: "Donation offsets" },
       { href: "/pools", label: "Conditional pools" },
       { href: "/background-networking", label: "Private matching" },
@@ -47,9 +49,9 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/how-it-works", label: "How it works" },
       { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
-      { href: "/worked-examples", label: "Worked examples" },
       { href: "/research", label: "Research" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
+      { href: "/worked-examples", label: "Worked examples" },
     ],
   },
   {
