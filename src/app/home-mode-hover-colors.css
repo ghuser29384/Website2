@@ -1,4 +1,4 @@
-/* Homepage mechanism rail — distinct but deliberately low-chroma interaction states. */
+/* Mechanism cards — distinct but deliberately low-chroma interaction states. */
 .marketplace-product-shell .mt-mode-rail .mt-mode-card {
   --mt-mode-hover: var(--surface-muted);
   transition: background-color 120ms ease;
@@ -23,6 +23,26 @@
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:hover,
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:focus-visible {
   background: var(--mt-mode-hover);
+}
+
+[data-create-mode="trade"]:hover,
+[data-create-mode="trade"]:focus-visible {
+  background: var(--route-hover-trade) !important;
+}
+
+[data-create-mode="offset"]:hover,
+[data-create-mode="offset"]:focus-visible {
+  background: var(--route-hover-offset) !important;
+}
+
+[data-create-mode="pool"]:hover,
+[data-create-mode="pool"]:focus-visible {
+  background: var(--route-hover-pool) !important;
+}
+
+[data-create-mode="back"]:hover,
+[data-create-mode="back"]:focus-visible {
+  background: var(--route-hover-back) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
