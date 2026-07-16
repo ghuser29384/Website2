@@ -231,7 +231,7 @@ export async function listTradeInvitationsForOffer(offerId: string, senderId: st
   return (data ?? []) as CoreInvitation[];
 }
 
-export async function listReciprocalMatches(offer: CoreOffer) {
+export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {
   const supabase = createServiceClient() as any;
   const { data } = await supabase
     .from("offers")
