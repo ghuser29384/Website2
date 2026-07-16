@@ -45,6 +45,18 @@ const nextConfig: NextConfig = {
     "/mpgf": mpgfRuntimeArtifacts,
     "/mpgf/**/*": mpgfRuntimeArtifacts,
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/walkthrough",
+          destination: "/moral-trade-interactive-walkthroughs.html",
+        },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       {
