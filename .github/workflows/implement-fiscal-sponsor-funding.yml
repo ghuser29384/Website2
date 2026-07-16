@@ -89,6 +89,31 @@ jobs:
               body: `Fiscal-sponsor test suite failed:\n\n\`\`\`text\n${concise || 'No concise failure lines found.'}\n\`\`\``,
             });
 
+      - name: Persist concise test failure
+        if: failure() && github.event_name == 'pull_request'
+        run: |
+          mkdir -p diagnostics
+          node <<'NODE'
+          const fs = require('fs');
+          const lines = fs.readFileSync('/tmp/fiscal-sponsor-tests.log', 'utf8').split(/\r?\n/);
+          const interesting = [];
+          for (let index = 0; index < lines.length; index += 1) {
+            const line = lines[index];
+            if (/^not ok\b|AssertionError|ERR_ASSERTION|at TestContext|^# (tests|pass|fail|duration_ms)\b/.test(line)) {
+              interesting.push(...lines.slice(Math.max(0, index - 2), Math.min(lines.length, index + 8)));
+            }
+          }
+          fs.writeFileSync(
+            'diagnostics/fiscal-sponsor-test-failure.txt',
+            [...new Set(interesting)].slice(-400).join('\n') || 'No concise failure lines found.\n',
+          );
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f diagnostics/fiscal-sponsor-test-failure.txt
+          git commit -m "Record fiscal-sponsor test failure" -- diagnostics/fiscal-sponsor-test-failure.txt
+          git push origin HEAD:feat/fiscal-sponsor-funding-20260716
+
       - name: Lint changed funding surfaces
         run: |
           set -o pipefail
@@ -152,6 +177,7 @@ jobs:
 
       - name: Commit verified funding posture
         run: |
+          rm -f diagnostics/fiscal-sponsor-test-failure.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
