@@ -1,0 +1,29 @@
+name: Export working source
+
+on:
+  push:
+    branches:
+      - work/transaction-first-payments-20260716
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository source
+        uses: actions/checkout@v4
+      - name: Upload working tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-working-source
+          path: |
+            .
+            !.git/**
+            !node_modules/**
+            !.next/**
+          if-no-files-found: error
+          retention-days: 1
