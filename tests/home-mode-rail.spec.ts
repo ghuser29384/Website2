@@ -6,14 +6,14 @@ const captureVisuals = process.env.HOME_MODE_CAPTURE === "1";
 const captureDirectory = path.join("test-results", "home-mode-visual");
 
 const expectedHoverColors = [
-  ["trade", "rgb(220, 239, 253)"],
-  ["offset", "rgb(236, 234, 255)"],
-  ["pool", "rgb(241, 247, 204)"],
-  ["back", "rgb(231, 239, 229)"],
+  ["trade", "rgb(231, 236, 234)"],
+  ["offset", "rgb(238, 229, 225)"],
+  ["pool", "rgb(238, 233, 220)"],
+  ["back", "rgb(228, 232, 223)"],
 ] as const;
 
 test.describe("Homepage mode rail", () => {
-  test("shows a distinct hover color for every route", async ({ page }) => {
+  test("shows a distinct restrained hover color for every route", async ({ page }) => {
     await page.setViewportSize({ width: 1560, height: 960 });
     await page.goto("/");
 
