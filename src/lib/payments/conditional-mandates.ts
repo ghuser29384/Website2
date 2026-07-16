@@ -339,7 +339,8 @@ export async function createDonationOffsetMandateCheckout(input: {
       mode: "setup",
       customer: stripeCustomerId,
       client_reference_id: String(mandate.id),
-      payment_method_types: ["card"],
+      // Stripe dynamically selects eligible Dashboard-enabled methods for this setup flow.
+      // Card wallets, Link, and PayPal appear only when supported for the account and flow.
       success_url: `${normalizedOrigin}/donation-offsets/payments?setup=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${normalizedOrigin}/donation-offsets/payments?setup=cancelled`,
       expires_at: expiresAt,
@@ -351,7 +352,7 @@ export async function createDonationOffsetMandateCheckout(input: {
         submit: {
           message:
             environment.livemode
-              ? `Your card will not be charged now. Moral Trade may later charge exactly ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} off-session only if the frozen offset condition clears. If paired settlement cannot complete, successful charges are reversed or refunded.`
+              ? `Your selected payment method will not be charged now. Moral Trade may later charge exactly ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} off-session only if the frozen offset condition clears. If paired settlement cannot complete, successful charges are reversed or refunded.`
               : `TEST MODE — no real money moves. This saves a test payment method for a ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} conditional offset authorization.`,
         },
       },

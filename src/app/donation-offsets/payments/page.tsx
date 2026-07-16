@@ -16,7 +16,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 export const metadata: Metadata = {
   title: "Conditional offset payments",
   description:
-    "Save a payment method, inspect frozen donation-offset conditions, and monitor compensated settlement.",
+    "Save an eligible payment method through Stripe Checkout, inspect frozen donation-offset conditions, and monitor compensated settlement.",
   robots: {
     index: false,
     follow: false,
@@ -165,7 +165,7 @@ export default async function PaymentWorkspacePage({
         <PageHero
           eyebrow={readiness.livemode ? "Live conditional payments" : "Stripe test mode"}
           title="Authorize now. Charge only when the frozen offset clears."
-          description="Moral Trade saves a Stripe payment method without charging it. When both participants have matching mandates and the reviewed terms are unchanged, the platform charges each side off-session and transfers both amounts to the approved destination. If paired capture or transfer fails, successful charges are reversed or refunded."
+          description="Stripe Checkout dynamically offers Card, Apple Pay, Google Pay, and Link when eligible; PayPal appears only for supported Stripe account regions and flows. Moral Trade saves the selected method without charging it. When both participants have matching mandates and the reviewed terms are unchanged, the platform charges each side off-session and transfers both amounts to the approved destination. If paired capture or transfer fails, successful charges are reversed or refunded."
           actions={
             <>
               <Link className="button button-secondary" href="/donation-offsets">
@@ -407,13 +407,20 @@ export default async function PaymentWorkspacePage({
           />
           <div className="concept-grid">
             <article className="panel concept-card">
+              <h3>Methods selected by Stripe</h3>
+              <p>
+                Card, Apple Pay, Google Pay, and Link appear when eligible. PayPal requires a
+                supported Stripe account region and, for Connect, Stripe approval.
+              </p>
+            </article>
+            <article className="panel concept-card">
               <h3>No charge at setup</h3>
               <p>Stripe Checkout creates a reusable payment mandate. It does not reserve funds for months.</p>
             </article>
             <article className="panel concept-card">
               <h3>Compensated, not magically atomic</h3>
               <p>
-                Card networks cannot make two independent charges and two transfers one database
+                Payment networks cannot make two independent charges and two transfers one database
                 transaction. Moral Trade uses idempotency, a settlement lock, transfer reversal, and
                 compensating refunds.
               </p>
