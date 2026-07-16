@@ -169,18 +169,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           ))}
         </nav>
 
-        <section className="mt-product-section is-white" aria-labelledby="marketplace-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Explore</p>
-              <h2 id="marketplace-heading">Understand one complete deal in under a minute.</h2>
-            </div>
-            <p>
-              Live participant proposals remain separate from worked examples. These examples show
-              the shape of the terms without pretending that a counterparty or liquidity exists.
-            </p>
-          </div>
-
+        <section className="mt-product-section is-white" aria-label="Worked examples">
           <div className="mt-market-grid">
             {featuredExamples.map((example) => (
               <article className="mt-market-card" key={example.id}>
