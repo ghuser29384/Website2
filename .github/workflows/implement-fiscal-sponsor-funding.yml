@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: feat/fiscal-sponsor-funding-20260716
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
