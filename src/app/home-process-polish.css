@@ -19,7 +19,7 @@
   align-content: stretch;
   gap: 0;
   min-width: 0;
-  padding: clamp(2.75rem, 5vw, 5.25rem);
+  padding: clamp(2.5rem, 4vw, 4rem);
   background: var(--ink);
   color: #ffffff;
 }
