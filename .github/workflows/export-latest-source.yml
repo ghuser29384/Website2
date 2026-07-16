@@ -1,0 +1,31 @@
+name: Export latest source
+
+on:
+  push:
+    branches:
+      - tmp/export-core-trade-loop-20260716
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out latest source
+        uses: actions/checkout@v4
+      - name: Upload latest source
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-latest-source
+          path: |
+            .
+            !.git/**
+            !node_modules/**
+            !.next/**
+          if-no-files-found: error
+          retention-days: 1
