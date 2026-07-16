@@ -23,13 +23,11 @@ test.describe("Create route workbench", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/create");
 
+    await expect(page.getByRole("heading", { level: 1, name: "Create." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Swap commitments." })).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 1, name: "What do you want to create?" }),
+      page.getByText("Choose a route. Nothing happens until you confirm.", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Swap one clear commitment for another." }),
-    ).toBeVisible();
-    await expect(page.getByText("Nothing happens on this page.", { exact: true })).toBeVisible();
     await expect(page.locator('[data-create-mode="trade"]')).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -51,11 +49,9 @@ test.describe("Create route workbench", () => {
       "aria-pressed",
       "true",
     );
-    await expect(
-      page.getByRole("heading", { name: "Redirect two planned donations to one shared cause." }),
-    ).toBeVisible();
-    await expect(page.getByText("The original plans stay.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create account to continue" })).toHaveAttribute(
+    await expect(page.getByRole("heading", { name: "Redirect planned gifts." })).toBeVisible();
+    await expect(page.getByText("Plans stay", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sign up to draft" })).toHaveAttribute(
       "href",
       "/signup?returnTo=%2Foffers%2Fnew%3Fentry%3Ddraft%26mode%3Doffset",
     );
@@ -63,22 +59,27 @@ test.describe("Create route workbench", () => {
     await page.locator('[data-create-mode="pool"]').click();
 
     await expect(page).toHaveURL(/\?mode=pool$/);
-    await expect(
-      page.getByRole("heading", { name: "Pledge now. Pay only if the target is reached." }),
-    ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();
-    await expect(page.getByText("You are charged up to your cap.", { exact: true })).toBeVisible();
-    await expect(page.getByText("You pay nothing.", { exact: true })).toBeVisible();
-    await expect(page.getByText("A specific public good and eligible destination")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Pay only if the pool fills." })).toBeVisible();
+    await expect(page.getByLabel("Pool process")).toBeVisible();
+    await expect(page.getByText("Set your cap", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pay ≤ cap", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pay $0", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Explore pools" })).toHaveAttribute(
       "href",
       "/pools",
     );
 
+    const selectedRouteWords = (await page.locator("#selected-route-panel").innerText())
+      .trim()
+      .split(/\s+/);
+    expect(selectedRouteWords.length).toBeLessThanOrEqual(40);
+
+    await expect(page.getByText("How it works", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Who this is for", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Next step", { exact: true })).toHaveCount(0);
+
     const preservesDraftBoundary = await page.evaluate(() =>
-      document.body.textContent?.includes(
-        "No charge, publication, or commitment until a later confirmation.",
-      ),
+      document.body.textContent?.includes("Nothing happens until you confirm."),
     );
     expect(preservesDraftBoundary).toBe(true);
 
@@ -134,11 +135,9 @@ test.describe("Create route workbench", () => {
       "true",
     );
     await page.locator('[data-create-mode="back"]').click();
-    await expect(
-      page.getByRole("heading", { name: "Fund a verified compensation gap." }),
-    ).toBeVisible();
-    await expect(page.getByText("No funds move.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Draft reviewed request" })).toHaveAttribute(
+    await expect(page.getByRole("heading", { name: "Fund a verified gap." })).toBeVisible();
+    await expect(page.getByText("No funds move", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Start review" })).toHaveAttribute(
       "href",
       "/create?mode=back",
     );
