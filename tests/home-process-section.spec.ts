@@ -30,7 +30,7 @@ test.describe("Homepage process section", () => {
       page.getByRole("heading", { level: 2, name: "Agree on the deal, not the values." }),
     ).toBeVisible();
     await expect(section.locator(".mt-how-step")).toHaveCount(4);
-    await expect(section.locator(":scope > .button")).toHaveAttribute("href", "/how-it-works");
+    await expect(section.locator('a[href="/how-it-works"]')).toHaveCount(0);
 
     const gridColumnCount = await section.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
