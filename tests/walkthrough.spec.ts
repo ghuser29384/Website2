@@ -12,8 +12,21 @@ async function expectFullyInViewport(page: Page, locator: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
 }
 
-test("homepage opens the immersive walkthrough", async ({ page }) => {
+test("a first homepage visit opens the walkthrough once", async ({ context, page }) => {
+  await context.clearCookies();
+  await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
+
+  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite$/);
+  await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
+
+  const cookies = await context.cookies();
+  expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({
+    httpOnly: true,
+    value: "1",
+  });
+
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/$/);
 
   await expect(page.getByRole("link", { name: "Try the walkthrough" })).toHaveAttribute(
     "href",
@@ -102,6 +115,12 @@ test("Crowd and Redirect preserve the requested copy and routing", async ({ page
     "aria-selected",
     "true",
   );
+
+  await page.getByRole("tab", { name: /Your match/i }).click();
+  await expect(
+    page.getByRole("heading", { name: "Offer value to gain more value." }),
+  ).toBeVisible();
+  await expect(page.getByText("What could you happily put on the table?")).toHaveCount(0);
 });
 
 test("walkthrough preserves its guided keyboard flow and has no mobile overflow", async ({ page }) => {

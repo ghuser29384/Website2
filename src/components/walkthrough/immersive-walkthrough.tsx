@@ -522,10 +522,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           <div className="mtw-cause-sun" aria-hidden="true" />
           <div className="mtw-cause-intro">
             <div className="mtw-scene-prompt">Click one</div>
-            <h1 className="mtw-scene-title" tabIndex={-1}>What do you want more of?</h1>
-            <p className="mtw-scene-line">
-              Start with your values. Nobody will ask you to rank everyone else&apos;s.
-            </p>
+            <h1 className="mtw-scene-title" tabIndex={-1}>What do you value?</h1>
           </div>
           <div className="mtw-cause-grid" role="group" aria-label="Choose a cause">
             {causeOptions.map((item) => (
@@ -889,7 +886,6 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
         <div className="mtw-mix-layout">
           <div>
             <div className="mtw-scene-prompt">Click a bargain</div>
-            <h1 className="mtw-scene-title" tabIndex={-1}>Find the mix where both say yes.</h1>
             <div className="mtw-meters">
               {[
                 ["You", waiting ? 50 : values.you, "#5368a5"],
@@ -964,7 +960,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           <div className="mtw-scene-head">
             <div className="mtw-scene-prompt">Click what feels easy to offer</div>
             <h1 className="mtw-scene-title is-sans" tabIndex={-1}>
-              What could you happily put on the table?
+              Offer value to gain more value.
             </h1>
           </div>
           <div className="mtw-choice-row mtw-offer-choices">
