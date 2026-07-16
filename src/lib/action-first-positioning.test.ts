@@ -8,6 +8,7 @@ const offers = readFileSync("src/app/offers/page.tsx", "utf8");
 const status = readFileSync("src/app/status/page.tsx", "utf8");
 const cohort = readFileSync("src/app/cohort/page.tsx", "utf8");
 const onboarding = readFileSync("src/app/onboarding/page.tsx", "utf8");
+const notFound = readFileSync("src/app/not-found.tsx", "utf8");
 const site = readFileSync("src/lib/site.ts", "utf8");
 const visitorPaths = readFileSync("src/lib/visitor-paths.ts", "utf8");
 const legacyPilot = readFileSync("src/app/pilot/page.tsx", "utf8");
@@ -59,7 +60,10 @@ test("the financial action has a real external payment handoff and explicit boun
 
 test("examples remain available only as a secondary learning resource", () => {
   assert.doesNotMatch(primaryAcquisitionCopy, /\/worked-examples/);
+  assert.doesNotMatch(notFound, /\/worked-examples|View examples/);
   assert.doesNotMatch(offers, /CANONICAL_WORKED_CASE_OFFERS|view=examples|Inspect example/);
+  assert.match(notFound, /href="\/offers\?view=live"/);
+  assert.match(notFound, /href="\/donate"/);
   assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);
   assert.doesNotMatch(routeBaseline, /"path": "\/worked-examples"/);
   assert.doesNotMatch(routeBaseline, /"path": "\/trust"/);
