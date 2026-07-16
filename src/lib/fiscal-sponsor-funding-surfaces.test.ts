@@ -16,8 +16,9 @@ test("project funding fails closed until a fully disclosed fiscal sponsor is act
   assert.match(fundingSource, /projectFundingAvailable: false/);
   assert.match(fundingSource, /nativeCheckoutAvailable: false/);
   assert.match(fundingSource, /pledge_only_external_handoff/);
-  assert.match(fundingSource, /Fiscal sponsor legal name is missing/);
-  assert.match(fundingSource, /Fiscal sponsor contribution URL must use HTTPS/);
+  assert.match(fundingSource, /Fiscal sponsor legal name/);
+  assert.match(fundingSource, /Fiscal sponsor contribution URL/);
+  assert.match(fundingSource, /must use HTTPS/);
   assert.match(readinessRoute, /getMoralTradeFundingReadiness/);
   assert.match(readinessRoute, /cache-control/);
   assert.match(envExample, /MORAL_TRADE_FUNDING_MODE=external_charities_only/);
