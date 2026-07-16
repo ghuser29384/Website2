@@ -1,0 +1,373 @@
+.section {
+  overflow: clip;
+}
+
+.layout {
+  align-items: stretch;
+}
+
+.copy {
+  align-content: center;
+  gap: clamp(1rem, 2vw, 1.45rem);
+}
+
+.copy h2 {
+  max-width: 13ch;
+  text-wrap: balance;
+}
+
+.intro {
+  max-width: 31rem;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: clamp(1rem, 1.3vw, 1.16rem);
+  line-height: 1.55;
+  text-wrap: balance;
+}
+
+.steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 34rem);
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps::before {
+  position: absolute;
+  top: 1.05rem;
+  right: 13%;
+  left: 13%;
+  height: 1px;
+  background: var(--line-strong);
+  content: "";
+}
+
+.step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  color: var(--ink);
+  text-align: center;
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.step strong {
+  max-width: 8.5rem;
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.actions {
+  align-items: center;
+}
+
+.learnLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid transparent;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.learnLink:hover {
+  border-bottom-color: currentColor;
+  color: var(--accent-deep);
+}
+
+.learnLink:focus-visible {
+  border-radius: 0.2rem;
+  outline: 3px solid var(--accent-deep);
+  outline-offset: 4px;
+}
+
+.visual {
+  display: grid;
+  place-items: center;
+}
+
+.poolCard {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.4rem);
+  width: min(100%, 39rem);
+  margin: 0;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgba(23, 24, 21, 0.08);
+}
+
+.cardHeader,
+.progressSummary,
+.unlockRow,
+.poolRules div {
+  display: flex;
+  align-items: center;
+}
+
+.cardHeader {
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.openState {
+  padding: 0.38rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--success-ink) 35%, transparent);
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success-ink);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.progressSummary {
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: end;
+}
+
+.progressSummary div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.progressSummary strong {
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(2.8rem, 6vw, 4.7rem);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 0.9;
+}
+
+.progressSummary strong span {
+  color: var(--ink-muted);
+  font-size: 0.46em;
+  letter-spacing: -0.025em;
+}
+
+.progressSummary p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.progressPercent {
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.pledgeGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: clamp(0.3rem, 0.7vw, 0.55rem);
+  padding: 0.25rem 0;
+}
+
+.pledgeGrid > span {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--line-strong);
+}
+
+.pledgeGrid > span::before,
+.pledgeGrid > span::after {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: currentColor;
+  content: "";
+}
+
+.pledgeGrid > span::before {
+  top: 23%;
+  width: 24%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+
+.pledgeGrid > span::after {
+  bottom: 20%;
+  width: 45%;
+  height: 24%;
+  border-radius: 999px 999px 45% 45%;
+}
+
+.pledgeGrid > .isJoined {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.unlockRow {
+  gap: 0.85rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: var(--accent-soft);
+}
+
+.lockMark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent-deep);
+}
+
+.lockMark svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.unlockRow div {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.unlockRow strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.unlockRow div span {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.poolRules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.poolRules div {
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.9rem 0;
+}
+
+.poolRules div + div {
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
+.poolRules dt {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.poolRules dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: right;
+}
+
+.poolCard figcaption {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .copy h2 {
+    max-width: 15ch;
+  }
+
+  .steps {
+    width: 100%;
+  }
+
+  .step strong {
+    font-size: 0.8rem;
+  }
+
+  .poolCard {
+    padding: 1.15rem;
+    box-shadow: none;
+  }
+
+  .pledgeGrid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    row-gap: 0.55rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .progressSummary {
+    align-items: center;
+  }
+
+  .progressSummary strong {
+    font-size: 3.2rem;
+  }
+
+  .poolRules {
+    grid-template-columns: 1fr;
+  }
+
+  .poolRules div + div {
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learnLink {
+    transition: none;
+  }
+}
