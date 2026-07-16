@@ -23,15 +23,16 @@ jobs:
         with:
           ref: feat/fiscal-sponsor-funding-20260716
           fetch-depth: 1
+          show-progress: false
+
+      - name: Apply fiscal-sponsor funding posture
+        run: python scripts/apply-fiscal-sponsor-funding.py
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Apply fiscal-sponsor funding posture
-        run: python scripts/apply-fiscal-sponsor-funding.py
 
       - name: Install dependencies
         run: npm ci
