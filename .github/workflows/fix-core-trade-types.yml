@@ -7,6 +7,7 @@ on:
     paths:
       - "src/lib/core-trade.ts"
       - "src/app/core-trade-actions.ts"
+      - ".github/core-trade-trigger"
       - ".github/workflows/fix-core-trade-types.yml"
 
 permissions:
