@@ -10,18 +10,27 @@ export interface CreateRouteReceiptCopy {
   exit: string;
 }
 
+export interface CreateRouteOutcomeCopy {
+  label: string;
+  value: string;
+}
+
 export interface CreateRouteDefinition {
   authRequired: boolean;
   bestFor: string;
   boundary: string;
   cta: string;
+  fallback: CreateRouteOutcomeCopy;
   headline: string;
   index: string;
   key: CreateMode;
   later: boolean;
+  nextNote: string;
+  nextTitle: string;
   proposition: string;
   receipt: CreateRouteReceiptCopy;
   requirements: readonly string[];
+  success: CreateRouteOutcomeCopy;
   summary: string;
   target: string;
   title: string;
@@ -33,10 +42,16 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     bestFor: "Two people who already have a concrete exchange in mind.",
     boundary: "Not ordinary paid services, threats, or open-ended obligations.",
     cta: "Draft a trade",
-    headline: "Swap two bounded commitments.",
+    fallback: {
+      label: "No match",
+      value: "No deal",
+    },
+    headline: "You do X. They do Y.",
     index: "01",
     key: "trade",
     later: false,
+    nextNote: "Nothing is binding yet.",
+    nextTitle: "Open the draft.",
     proposition: "I will do X if you do Y.",
     receipt: {
       baseline: "The explicit status quo for both participants.",
@@ -47,12 +62,12 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
       evidence: "A named proof type, reviewer, deadline, and privacy scope.",
       exit: "Withdrawal before lock; cancellation, expiry, and challenge rules after.",
     },
-    requirements: [
-      "The no-deal default for both sides",
-      "Your exact action and the action requested",
-      "A duration, evidence rule, and mutual exit",
-    ],
-    summary: "Exchange actions or commitments that each side values differently.",
+    requirements: ["Your action", "Their action", "Proof + deadline"],
+    success: {
+      label: "Both confirm",
+      value: "Trade starts",
+    },
+    summary: "Swap bounded commitments.",
     target: "/offers/new?entry=draft&mode=pledge",
     title: "Trade",
   },
@@ -61,10 +76,16 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     bestFor: "Two real, opposed giving plans that can be redirected into a shared destination.",
     boundary: "Not a way to manufacture or escalate donations merely to demand a match.",
     cta: "Draft an offset",
-    headline: "Redirect opposed planned giving.",
+    fallback: {
+      label: "No match",
+      value: "Plans stay",
+    },
+    headline: "Two donations. One shared cause.",
     index: "02",
     key: "offset",
     later: false,
+    nextNote: "Nothing moves until both plans verify.",
+    nextTitle: "Open the draft.",
     proposition: "We redirect the matched amount to something we both value.",
     receipt: {
       baseline: "Each participant's pre-existing intended donation and destination.",
@@ -75,12 +96,12 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
       evidence: "Prior-intent evidence and narrow proof of the external donation.",
       exit: "No match, failed review, or missing evidence returns the proposal to the stated fallback.",
     },
-    requirements: [
-      "Evidence that both planned donations predate the offer",
-      "A match amount, ratio, and shared destination",
-      "Rules for surplus, failed matching, and receipts",
-    ],
-    summary: "Redirect a matched amount of two opposed planned donations.",
+    requirements: ["Both planned gifts", "Match amount", "Shared cause"],
+    success: {
+      label: "Both verify",
+      value: "Funds redirect",
+    },
+    summary: "Redirect opposed donations.",
     target: "/offers/new?entry=draft&mode=offset",
     title: "Offset",
   },
@@ -89,10 +110,16 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     bestFor: "A group that values the same public good but needs a threshold before anyone contributes.",
     boundary: "Not an immediate donation, an uncapped pledge, or a guarantee that the pool will clear.",
     cta: "Explore pools",
-    headline: "Fund only when the threshold clears.",
+    fallback: {
+      label: "Misses deadline",
+      value: "$0 charged",
+    },
+    headline: "Join now. Pay only if it fills.",
     index: "03",
     key: "pool",
     later: false,
+    nextNote: "No charge unless a target clears.",
+    nextTitle: "See live pools.",
     proposition: "Charge me only if enough support joins by the deadline.",
     receipt: {
       baseline: "The public good remains unfunded or funded below the stated level.",
@@ -103,12 +130,12 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
       evidence: "Published pool totals, threshold status, destination, and settlement record.",
       exit: "Expiry, failed assurance, cancellation, refund, and challenge rules are stated in advance.",
     },
-    requirements: [
-      "A specific public good and eligible destination",
-      "A pledge cap, threshold, and deadline",
-      "Settlement, refund, and unmatched-funds rules",
-    ],
-    summary: "Pledge up to a maximum and fund only when a published condition passes.",
+    requirements: ["Public good", "Target + deadline", "Cap + refund"],
+    success: {
+      label: "Target reached",
+      value: "Charged ≤ cap",
+    },
+    summary: "Pay only at the target.",
     target: "/pools",
     title: "Pool",
   },
@@ -117,10 +144,16 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     bestFor: "A reviewed case where compensation is the remaining barrier to a more impactful path.",
     boundary: "Not general fundraising, recruitment, or a blanket promise that a career move is impactful.",
     cta: "Draft reviewed request",
-    headline: "Close a reviewed compensation gap.",
+    fallback: {
+      label: "Facts change",
+      value: "Back to review",
+    },
+    headline: "Back a verified gap.",
     index: "04",
     key: "back",
     later: true,
+    nextNote: "Private intake. No funds move.",
+    nextTitle: "Open review.",
     proposition: "Backers conditionally fund part of a verified gap.",
     receipt: {
       baseline: "The candidate remains on the current path or declines the reviewed alternative.",
@@ -131,12 +164,12 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
       evidence: "Role, compensation, decision, and impact evidence under an explicit privacy scope.",
       exit: "The request expires or returns to review when the role, gap, or material facts change.",
     },
-    requirements: [
-      "A concrete role or path and a documented compensation gap",
-      "A reviewable impact case without outcome guarantees",
-      "A cap, decision deadline, evidence plan, and exit",
-    ],
-    summary: "Help close a verified compensation gap for a more impactful path.",
+    requirements: ["Role + gap", "Impact review", "Cap + deadline"],
+    success: {
+      label: "Review passes",
+      value: "Funding opens",
+    },
+    summary: "Close a verified gap.",
     target: "/create?mode=back",
     title: "Back",
   },

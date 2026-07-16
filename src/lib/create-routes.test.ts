@@ -36,6 +36,12 @@ test("each supported mode resolves to one complete route definition", () => {
     assert.equal(route.requirements.length, 3);
     assert.ok(route.receipt.baseline.length > 0);
     assert.ok(route.receipt.exposure.length > 0);
+    assert.ok(route.success.label.length > 0);
+    assert.ok(route.success.value.length > 0);
+    assert.ok(route.fallback.label.length > 0);
+    assert.ok(route.fallback.value.length > 0);
+    assert.ok(route.nextTitle.length > 0);
+    assert.ok(route.nextNote.length > 0);
   }
 });
 

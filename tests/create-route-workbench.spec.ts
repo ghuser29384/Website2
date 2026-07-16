@@ -23,9 +23,7 @@ test.describe("Create route workbench", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/create");
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Choose the coordination move." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Choose a route." })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Trade preview" })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Make the default explicit first." }),
@@ -53,7 +51,7 @@ test.describe("Create route workbench", () => {
     );
     await expect(page.getByRole("heading", { name: "Offset preview" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Redirect opposed planned giving." }),
+      page.getByRole("heading", { name: "Two donations. One shared cause." }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Create account to continue" })).toHaveAttribute(
       "href",
@@ -64,15 +62,19 @@ test.describe("Create route workbench", () => {
 
     await expect(page).toHaveURL(/\?mode=pool$/);
     await expect(page.getByRole("heading", { name: "Pool preview" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Join now. Pay only if it fills." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Set 3 things." })).toBeVisible();
+    await expect(page.getByText("$0 charged", { exact: true })).toBeVisible();
+    await expect(page.getByText("A specific public good and eligible destination")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Explore pools" })).toHaveAttribute(
       "href",
       "/pools",
     );
 
-    const createsCommitment = await page.evaluate(() =>
-      document.body.textContent?.includes("Selecting a route creates no commitment."),
+    const preservesDraftBoundary = await page.evaluate(() =>
+      document.body.textContent?.includes("Nothing is binding until final confirmation."),
     );
-    expect(createsCommitment).toBe(true);
+    expect(preservesDraftBoundary).toBe(true);
 
     if (captureVisuals) {
       await prepareForVisualCapture(page);
@@ -127,6 +129,7 @@ test.describe("Create route workbench", () => {
     );
     await page.locator('[data-create-mode="back"]').click();
     await expect(page.getByRole("heading", { name: "Back preview" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Back a verified gap." })).toBeVisible();
     await expect(page.getByRole("link", { name: "Draft reviewed request" })).toHaveAttribute(
       "href",
       "/create?mode=back",
