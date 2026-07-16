@@ -4,7 +4,6 @@ export function getPrimaryNavLinks(_isAuthenticated = false) {
     { href: "/create", label: "Create" },
     { href: "/pools", label: "Pools" },
     { href: "/how-it-works", label: "How it works" },
-    { href: "/trust", label: "Trust" },
   ];
 }
 
@@ -37,7 +36,6 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Trust",
     links: [
-      { href: "/trust", label: "What you can rely on" },
       { href: "/credibility", label: "Contextual credibility" },
       { href: "/status", label: "Service status" },
       { href: "/safety", label: "Safety and anti-threat rules" },
