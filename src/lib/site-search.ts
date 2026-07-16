@@ -185,6 +185,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["privacy", "consent", "cookies", "analytics", "processors", "retention", "deletion", "export"],
   },
   {
+    href: "/walkthrough",
+    label: "Interactive Moral Trade walkthrough",
+    summary: "Learn moral trade by making a small deal, tuning terms, redirecting opposed donations, and crossing a public-good threshold.",
+    kind: "learn",
+    keywords: ["walkthrough", "interactive", "learn", "third option", "find the mix", "crowd", "redirect", "moral trade"],
+  },
+  {
     href: "/what-is-moral-trade",
     label: "What is Moral Trade?",
     summary: "A concise explanation of how different priorities can create voluntary mutual gains.",

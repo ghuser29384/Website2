@@ -171,8 +171,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               operating boundaries visible before anyone relies on it.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href="/start">
-                Choose a real action
+              <Link className="button button-primary" href="/walkthrough">
+                Try the walkthrough
               </Link>
               <Link className="button button-secondary" href={createHref}>
                 Create a proposal
