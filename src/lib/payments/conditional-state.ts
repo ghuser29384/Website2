@@ -122,9 +122,21 @@ export function getConditionalPaymentsEnvironment(
   if (configuredMode === "test" || configuredMode === "live" || configuredMode === "disabled") {
     mode = configuredMode;
   } else if (!configuredMode && secretKey.startsWith("sk_test_")) {
-    // A Stripe test key cannot move live money. Inferring test mode here keeps every
-    // deployment operable in a clearly labelled sandbox without weakening the live gate.
+    // A Stripe test key cannot move live money. Infer test mode for local and preview
+    // environments; the production guard below blocks it on the public site.
     mode = "test";
+  }
+
+  const deploymentEnvironment = environment.VERCEL_ENV?.trim().toLowerCase();
+
+  if (deploymentEnvironment === "production" && mode === "test") {
+    return {
+      enabled: false,
+      livemode: false,
+      mode: "disabled",
+      reason:
+        "Stripe test mode is blocked on the production site. Complete live account verification and configure Stripe live keys before enabling conditional payments.",
+    };
   }
 
   if (mode === "disabled") {

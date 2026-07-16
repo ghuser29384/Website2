@@ -119,16 +119,24 @@ test("participant amounts are derived from the frozen role", () => {
   assert.equal(participantAmountForDonationOffset(snapshot, "counterparty"), 750);
 });
 
-test("a test key safely enables sandbox mode in every deployment environment", () => {
+test("Stripe test mode is available in preview and blocked on the production site", () => {
+  const previewSandbox = getConditionalPaymentsEnvironment({
+    VERCEL_ENV: "preview",
+    STRIPE_SECRET_KEY: "sk_test_example",
+  } as NodeJS.ProcessEnv);
+  assert.equal(previewSandbox.enabled, true);
+  assert.equal(previewSandbox.mode, "test");
+  assert.equal(previewSandbox.livemode, false);
+
   const productionSandbox = getConditionalPaymentsEnvironment({
-    NODE_ENV: "production",
+    CONDITIONAL_PAYMENTS_MODE: "test",
     VERCEL_ENV: "production",
     STRIPE_SECRET_KEY: "sk_test_example",
   } as NodeJS.ProcessEnv);
-
-  assert.equal(productionSandbox.enabled, true);
-  assert.equal(productionSandbox.mode, "test");
+  assert.equal(productionSandbox.enabled, false);
+  assert.equal(productionSandbox.mode, "disabled");
   assert.equal(productionSandbox.livemode, false);
+  assert.match(productionSandbox.reason, /blocked on the production site/);
 });
 
 test("explicit disable wins and live mode requires a live key", () => {
