@@ -108,6 +108,12 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
+  await page.getByRole("tab", { name: /Redirect/i }).click();
+  const mobileDemocratsMarker = page.locator(".stream-a .stream-label");
+  await expect(mobileDemocratsMarker).toBeVisible();
+  await expectFullyInViewport(page, mobileDemocratsMarker);
+
+  await page.getByRole("tab", { name: /Third option/i }).click();
   const firstTab = page.getByRole("tab", { name: /Third option/i });
   await firstTab.focus();
   await page.keyboard.press("Alt+ArrowRight");
