@@ -1,9 +1,9 @@
 import Link from "next/link";
 
+import { PoolSection } from "@/components/home/pool-section";
 import {
   GainField,
   OffsetFlowFigure,
-  ThresholdField,
 } from "@/components/marketplace/gain-field";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -131,24 +131,6 @@ const paymentSteps = [
     number: "03",
     title: "Attach evidence when needed",
     description: "A linked workflow can use provider import or a reviewed fallback without turning a receipt into an automatic verification claim.",
-  },
-] as const;
-
-const trustCards = [
-  {
-    number: "01",
-    title: "The default is visible",
-    description: "A proposal is compared with a stated no-deal alternative, not an invented threat or undefined status quo.",
-  },
-  {
-    number: "02",
-    title: "Exposure is capped",
-    description: "Money, time, action burden, deadlines, and cancellation rules are inspectable before authorization.",
-  },
-  {
-    number: "03",
-    title: "Safety is non-compensatory",
-    description: "Threats, coercion, fraud, forged evidence, and identity abuse are eligibility blockers, not low points in a score.",
   },
 ] as const;
 
@@ -312,25 +294,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
-        <section className="mt-product-section" aria-labelledby="pool-heading">
-          <div className="mt-feature-split">
-            <div className="mt-feature-copy">
-              <p className="mt-product-kicker">Pool</p>
-              <h2 id="pool-heading">Pledge a little. Fund it only when enough people join.</h2>
-              <p>
-                A pool shows each person&apos;s maximum exposure, the funding condition, deadline,
-                recipient, settlement rule, progress visibility, and failure behavior.
-              </p>
-              <div className="mt-product-actions">
-                <Link className="button button-primary" href="/pools">Explore pools</Link>
-                <Link className="button button-secondary" href="/mpgf">Open public-goods tools</Link>
-              </div>
-            </div>
-            <div className="mt-feature-visual">
-              <ThresholdField progress={64} />
-            </div>
-          </div>
-        </section>
+        <PoolSection />
 
         <section className="mt-product-section is-white" aria-labelledby="payment-heading">
           <div className="mt-product-section-head">
@@ -359,32 +323,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <Link className="button button-secondary" href="/status">
               Review payment capabilities
             </Link>
-          </div>
-        </section>
-
-        <section className="mt-product-section is-dark" aria-labelledby="trust-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Trust infrastructure</p>
-              <h2 id="trust-heading">The mechanism is the ornament.</h2>
-            </div>
-            <p>
-              Safety, evidence, payment, dispute, and exit states are part of the product surface—not
-              a compliance appendix hidden after the conversion.
-            </p>
-          </div>
-          <div className="mt-trust-grid">
-            {trustCards.map((card) => (
-              <article className="mt-trust-card" key={card.number}>
-                <span>{card.number}</span>
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-              </article>
-            ))}
-          </div>
-          <div className="mt-product-actions">
-            <Link className="button button-primary" href="/status">Service status</Link>
-            <Link className="button button-secondary" href="/safety">Safety and anti-threat rules</Link>
           </div>
         </section>
 
