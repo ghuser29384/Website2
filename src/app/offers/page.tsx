@@ -28,23 +28,21 @@ import {
   type OfferPaymentFilter,
 } from "@/lib/discovery-ranking";
 import { getFormMessage } from "@/lib/form-state";
-import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import { formatMode } from "@/lib/offers";
-import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Explore",
+  title: "Explore live proposals",
   description:
-    "Explore live Moral Trade proposals, worked examples, reviewed templates, donation offsets, and conditional funding pools without mixing their states.",
-  alternates: { canonical: "/offers" },
+    "Explore live Moral Trade proposals with explicit baselines, terms, evidence, payment boundaries, and current review states.",
+  alternates: { canonical: "/offers?view=live" },
   openGraph: {
-    title: "Explore Moral Trade",
+    title: "Explore live Moral Trade proposals",
     description:
-      "Browse a marketplace of live proposals and inspect complete examples, templates, offsets, and pools with explicit terms and states.",
-    url: getAbsoluteUrl("/offers"),
+      "Browse participant proposals and open their complete terms without mixing examples or explanatory records into marketplace inventory.",
+    url: getAbsoluteUrl("/offers?view=live"),
     type: "website",
   },
 };
@@ -52,8 +50,6 @@ export const metadata: Metadata = {
 interface OffersPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
-
-type DirectoryView = "live" | "examples" | "templates" | "public-goods";
 
 interface OfferFilterState {
   action: OfferActionFilter;
@@ -64,13 +60,6 @@ interface OfferFilterState {
 }
 
 const OFFER_DISCOVERY_LIMIT = 1_000;
-
-const directoryTabs: ReadonlyArray<{ label: string; value: DirectoryView }> = [
-  { label: "Live", value: "live" },
-  { label: "Examples", value: "examples" },
-  { label: "Templates", value: "templates" },
-  { label: "Pools", value: "public-goods" },
-];
 
 function readParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -94,28 +83,6 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function parseView(value: string, hasLiveOffers: boolean): DirectoryView {
-  if (
-    value === "live" ||
-    value === "examples" ||
-    value === "templates" ||
-    value === "public-goods"
-  ) {
-    return value;
-  }
-
-  return hasLiveOffers ? "live" : "examples";
-}
-
-function matchesSearch(values: readonly string[], query: string) {
-  if (!query) {
-    return true;
-  }
-
-  const normalized = query.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(normalized));
-}
-
 function paginate<T>(items: T[], page: number, pageSize: number) {
   const offset = (page - 1) * pageSize;
   return {
@@ -127,42 +94,36 @@ function paginate<T>(items: T[], page: number, pageSize: number) {
   };
 }
 
-function buildDirectoryHref({
+function buildLiveHref({
   filters,
   page,
   search,
-  view,
 }: {
   filters?: OfferFilterState;
   page?: number;
   search?: string;
-  view: DirectoryView;
 }) {
-  const params = new URLSearchParams();
-  params.set("view", view);
+  const params = new URLSearchParams({ view: "live" });
 
   if (search) {
     params.set("search", search);
   }
 
-  if (view === "live" && filters) {
-    if (filters.cause) {
-      params.set("cause", filters.cause);
-    }
-    if (filters.payment !== "any") {
-      params.set("payment", filters.payment);
-    }
-    if (filters.action !== "all") {
-      params.set("action", filters.action);
-    }
-    if (filters.credit !== "any") {
-      params.set("credit", filters.credit);
-    }
-    if (filters.sort !== "match") {
-      params.set("sort", filters.sort);
-    }
+  if (filters?.cause) {
+    params.set("cause", filters.cause);
   }
-
+  if (filters && filters.payment !== "any") {
+    params.set("payment", filters.payment);
+  }
+  if (filters && filters.action !== "all") {
+    params.set("action", filters.action);
+  }
+  if (filters && filters.credit !== "any") {
+    params.set("credit", filters.credit);
+  }
+  if (filters && filters.sort !== "match") {
+    params.set("sort", filters.sort);
+  }
   if (page && page > 1) {
     params.set("page", String(page));
   }
@@ -255,45 +216,7 @@ function LiveProposalCard({
       </dl>
       <div className="mt-market-card-foot">
         <span>{offer.duration}</span>
-        <Link href={`/offers/${offer.id}`}>Inspect Deal Receipt ↗</Link>
-      </div>
-    </article>
-  );
-}
-
-function WorkedExampleCard({
-  example,
-}: {
-  example: (typeof CANONICAL_WORKED_CASE_OFFERS)[number];
-}) {
-  return (
-    <article className="mt-market-card">
-      <div className="mt-market-card-head">
-        <span className="mt-market-eyebrow">{formatMode(example.mode)}</span>
-        <span className="mt-market-state">Worked example</span>
-      </div>
-      <h3>
-        {example.offeredCause}
-        <span aria-hidden="true">↔</span>
-        {example.requestedCause}
-      </h3>
-      <dl>
-        <div>
-          <dt>Offers</dt>
-          <dd>{example.offerAction}</dd>
-        </div>
-        <div>
-          <dt>Requests</dt>
-          <dd>{example.requestAction}</dd>
-        </div>
-        <div>
-          <dt>Evidence</dt>
-          <dd>{example.verification}</dd>
-        </div>
-      </dl>
-      <div className="mt-market-card-foot">
-        <span>{example.duration}</span>
-        <Link href={`/offers/examples/${example.id}`}>Inspect example ↗</Link>
+        <Link href={`/offers/${offer.id}`}>Open proposal ↗</Link>
       </div>
     </article>
   );
@@ -340,22 +263,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   ]);
   const liveCandidates = candidatePage.items;
   const isAuthenticated = Boolean(viewer);
-  const view = parseView(readParam(resolvedSearchParams, "view"), liveCandidates.length > 0);
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
-  const credibilityByOffer =
-    view === "live"
-      ? await listPublicCredibilityForLookups(
-          liveCandidates.map((offer) => ({
-            key: offer.id,
-            profileId: offer.owner_id,
-            context: {
-              role: "committer",
-              category: categoryForOfferMode(offer.mode),
-            },
-          })),
-        )
-      : new Map<string, CredibilitySummary>();
+  const credibilityByOffer = await listPublicCredibilityForLookups(
+    liveCandidates.map((offer) => ({
+      key: offer.id,
+      profileId: offer.owner_id,
+      context: {
+        role: "committer",
+        category: categoryForOfferMode(offer.mode),
+      },
+    })),
+  );
   const discoveryFilters: OfferDiscoveryFilters = {
     action: filters.action,
     cause: filters.cause,
@@ -379,52 +298,20 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     filters.payment !== "any"
       ? optionLabel(filters.payment, OFFER_PAYMENT_FILTER_OPTIONS)
       : null,
-    filters.action !== "all" ? optionLabel(filters.action, OFFER_ACTION_FILTER_OPTIONS) : null,
+    filters.action !== "all"
+      ? optionLabel(filters.action, OFFER_ACTION_FILTER_OPTIONS)
+      : null,
     filters.credit !== "any" ? optionLabel(filters.credit, CREDIT_FILTER_OPTIONS) : null,
     filters.sort !== "match" ? optionLabel(filters.sort, OFFER_DISCOVERY_SORT_OPTIONS) : null,
   ].filter((label): label is string => Boolean(label));
   const hasLiveFilters = Boolean(search || activeFilterLabels.length);
 
-  const workedExamples = CANONICAL_WORKED_CASE_OFFERS.filter((example) =>
-    matchesSearch(
-      [
-        example.alias,
-        example.offeredCause,
-        example.requestedCause,
-        example.offerAction,
-        example.requestAction,
-        example.verification,
-      ],
-      search,
-    ),
-  );
-  const templates = REVIEWED_MARKETPLACE_SEED_TEMPLATES.filter((template) =>
-    matchesSearch(
-      [
-        template.prefill.title,
-        template.prefill.description,
-        template.prefill.offeredCause,
-        template.prefill.requestedCause,
-        template.publicSummary,
-        template.formatLabel,
-      ],
-      search,
-    ),
-  );
-
-  const tabCounts: Record<DirectoryView, number | null> = {
-    live: liveCandidates.length,
-    examples: workedExamples.length,
-    templates: templates.length,
-    "public-goods": null,
-  };
-
   return (
     <div className="page-shell marketplace-product-shell">
       <div className="mt-beta-strip">
-        <span>Explore</span>
-        <span>Live proposals, examples, templates, and pools are separate record types.</span>
-        <Link href="/status">Current status</Link>
+        <span>Live marketplace</span>
+        <span>Only participant proposals count as marketplace inventory on this route.</span>
+        <Link href="/donate">Financial route available</Link>
       </div>
 
       <header>
@@ -440,24 +327,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <section className="mt-explore-hero" aria-labelledby="explore-heading">
           <div className="mt-explore-copy">
             <p className="mt-product-kicker">Marketplace</p>
-            <h1 id="explore-heading">Find a deal, offset, or pool you can understand quickly.</h1>
+            <h1 id="explore-heading">Find a live proposal you can evaluate quickly.</h1>
             <p>
-              Browse by current state, inspect the no-deal default and maximum exposure, then open
-              the complete terms before expressing interest or authorizing anything.
+              Filter participant records, compare the no-deal default and maximum exposure, then
+              open the complete terms before expressing interest or authorizing anything.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href={createHref}>Create</Link>
-              <Link className="button button-secondary" href="/background-networking">
-                Request private matching
+              <Link className="button button-primary" href={createHref}>Create a proposal</Link>
+              <Link className="button button-secondary" href="/donate">
+                Make a financial contribution
               </Link>
             </div>
           </div>
           <aside className="mt-explore-side">
             <p className="mt-product-kicker">Directory rule</p>
-            <strong>Examples are not liquidity.</strong>
+            <strong>Participant records only.</strong>
             <p>
-              Worked examples and reviewed templates make the mechanism legible. They are never
-              presented as live counterparty demand, completed trade volume, or participant inventory.
+              Explanatory material is kept in the learning layer. It is not presented here as live
+              demand, completed trade volume, or available counterparties.
             </p>
           </aside>
         </section>
@@ -475,312 +362,189 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <section className="mt-product-section is-white" aria-labelledby="directory-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">Directory</p>
-              <h2 id="directory-heading">Choose the record state you need.</h2>
+              <p className="mt-product-kicker">Live directory</p>
+              <h2 id="directory-heading">Open participant proposals</h2>
             </div>
             <p>
-              Live results combine relevance with a bounded, confidence-adjusted credit signal.
-              Filters let you set the cause, money, action, and minimum-credit conditions directly.
+              Results combine relevance with a bounded, confidence-adjusted credit signal. Set the
+              cause, money, action, and minimum-credit conditions directly.
             </p>
           </div>
 
-          <div className="mt-directory-toolbar">
-            <nav className="mt-directory-tabs" aria-label="Marketplace record types">
-              {directoryTabs.map((tab) => (
-                <Link
-                  aria-current={view === tab.value ? "page" : undefined}
-                  href={buildDirectoryHref({
-                    filters: tab.value === "live" ? filters : undefined,
-                    search,
-                    view: tab.value,
-                  })}
-                  key={tab.value}
-                >
-                  <span>{tab.label}</span>
-                  <span>{tabCounts[tab.value] !== null ? tabCounts[tab.value] : "→"}</span>
+          <form action="/offers" className={filterStyles.filterPanel} method="get" role="search">
+            <input name="view" type="hidden" value="live" />
+            <div className={filterStyles.filterGrid}>
+              <label className={filterStyles.field}>
+                <span>Search offers</span>
+                <input
+                  className={filterStyles.control}
+                  defaultValue={search}
+                  name="search"
+                  placeholder="Cause, action, evidence, or participant"
+                  type="search"
+                />
+              </label>
+              <label className={filterStyles.field}>
+                <span>Cause area</span>
+                <select className={filterStyles.control} defaultValue={filters.cause} name="cause">
+                  <option value="">Any cause area</option>
+                  {causeOptions.map((cause) => (
+                    <option key={cause} value={cause}>{cause}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Payment involved</span>
+                <select className={filterStyles.control} defaultValue={filters.payment} name="payment">
+                  {OFFER_PAYMENT_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Action involved</span>
+                <select className={filterStyles.control} defaultValue={filters.action} name="action">
+                  {OFFER_ACTION_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Credit score</span>
+                <select className={filterStyles.control} defaultValue={filters.credit} name="credit">
+                  {CREDIT_FILTER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className={filterStyles.field}>
+                <span>Order by</span>
+                <select className={filterStyles.control} defaultValue={filters.sort} name="sort">
+                  {OFFER_DISCOVERY_SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className={filterStyles.actions}>
+              <button className="button button-primary" type="submit">Apply filters</button>
+              {hasLiveFilters ? (
+                <Link className="button button-secondary" href={buildLiveHref({})}>
+                  Clear all
                 </Link>
-              ))}
-            </nav>
-
-            {view !== "live" ? (
-              <form action="/offers" className="mt-directory-search" method="get" role="search">
-                <input name="view" type="hidden" value={view} />
-                <label>
-                  <span>Search</span>
-                  <input
-                    defaultValue={search}
-                    name="search"
-                    placeholder="Cause, action, evidence, or template"
-                    type="search"
-                  />
-                </label>
-                <button className="button button-primary" type="submit">Search</button>
-                {search ? (
-                  <Link className="button button-secondary" href={buildDirectoryHref({ view })}>
-                    Clear
-                  </Link>
-                ) : null}
-              </form>
-            ) : null}
-          </div>
-
-          {view === "live" ? (
-            <form action="/offers" className={filterStyles.filterPanel} method="get" role="search">
-              <input name="view" type="hidden" value="live" />
-              <div className={filterStyles.filterGrid}>
-                <label className={filterStyles.field}>
-                  <span>Search offers</span>
-                  <input
-                    className={filterStyles.control}
-                    defaultValue={search}
-                    name="search"
-                    placeholder="Cause, action, evidence, or participant"
-                    type="search"
-                  />
-                </label>
-                <label className={filterStyles.field}>
-                  <span>Cause area</span>
-                  <select className={filterStyles.control} defaultValue={filters.cause} name="cause">
-                    <option value="">Any cause area</option>
-                    {causeOptions.map((cause) => (
-                      <option key={cause} value={cause}>{cause}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={filterStyles.field}>
-                  <span>Payment involved</span>
-                  <select className={filterStyles.control} defaultValue={filters.payment} name="payment">
-                    {OFFER_PAYMENT_FILTER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={filterStyles.field}>
-                  <span>Action involved</span>
-                  <select className={filterStyles.control} defaultValue={filters.action} name="action">
-                    {OFFER_ACTION_FILTER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={filterStyles.field}>
-                  <span>Credit score</span>
-                  <select className={filterStyles.control} defaultValue={filters.credit} name="credit">
-                    {CREDIT_FILTER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={filterStyles.field}>
-                  <span>Order by</span>
-                  <select className={filterStyles.control} defaultValue={filters.sort} name="sort">
-                    {OFFER_DISCOVERY_SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className={filterStyles.actions}>
-                <button className="button button-primary" type="submit">Apply filters</button>
-                {hasLiveFilters ? (
-                  <Link className="button button-secondary" href={buildDirectoryHref({ view: "live" })}>
-                    Clear all
-                  </Link>
-                ) : null}
-              </div>
-              <div className={filterStyles.filterMeta}>
-                <div className={filterStyles.activeFilters} aria-live="polite">
-                  <strong>{rankedLiveCandidates.length} matching offer(s)</strong>
-                  {activeFilterLabels.map((label) => (
-                    <span className={filterStyles.activeChip} key={label}>{label}</span>
-                  ))}
-                </div>
-                <p className={filterStyles.rankingNote}>
-                  {rankingDescription(filters.sort, Boolean(search))}
-                </p>
-              </div>
-            </form>
-          ) : null}
-
-          {view === "live" ? (
-            <div className="mt-directory-view">
-              <div className="mt-directory-view-head">
-                <div>
-                  <p className="mt-market-eyebrow">Live participant records</p>
-                  <h2>Open proposals</h2>
-                </div>
-                <p>
-                  Compare the owner&apos;s score, baseline, terms, evidence, privacy, externality,
-                  review, and settlement state before expressing interest.
-                </p>
-              </div>
-              {livePage.items.length ? (
-                <div className="mt-market-grid">
-                  {livePage.items.map((offer) => (
-                    <LiveProposalCard
-                      credibility={credibilityByOffer.get(offer.id)}
-                      key={offer.id}
-                      offer={offer}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  actions={
-                    <>
-                      {hasLiveFilters ? (
-                        <Link className="button button-primary" href={buildDirectoryHref({ view: "live" })}>
-                          Clear filters
-                        </Link>
-                      ) : (
-                        <Link className="button button-primary" href={createHref}>Create the first proposal</Link>
-                      )}
-                      <Link className="button button-secondary" href={buildDirectoryHref({ search, view: "examples" })}>
-                        Inspect examples
-                      </Link>
-                    </>
-                  }
-                  icon="marketplace"
-                  title={hasLiveFilters ? "No live proposals match these filters" : "No live proposals are open"}
-                >
-                  The marketplace does not substitute examples or demo records when participant
-                  inventory is empty.
-                </EmptyState>
-              )}
-              {livePage.hasPreviousPage || livePage.hasNextPage ? (
-                <nav className="pagination" aria-label="Live proposal pages">
-                  {livePage.hasPreviousPage ? (
-                    <Link
-                      className="button button-secondary button-mini"
-                      href={buildDirectoryHref({ filters, page: page - 1, search, view })}
-                    >
-                      Previous
-                    </Link>
-                  ) : null}
-                  <span>Page {page}</span>
-                  {livePage.hasNextPage ? (
-                    <Link
-                      className="button button-secondary button-mini"
-                      href={buildDirectoryHref({ filters, page: page + 1, search, view })}
-                    >
-                      Next
-                    </Link>
-                  ) : null}
-                </nav>
               ) : null}
             </div>
-          ) : null}
-
-          {view === "examples" ? (
-            <div className="mt-directory-view">
-              <div className="mt-directory-view-head">
-                <div>
-                  <p className="mt-market-eyebrow">Instructional records</p>
-                  <h2>Worked examples</h2>
-                </div>
-                <p>
-                  Complete sample terms show the shape of a proposal without implying a real
-                  counterparty, current demand, or completed transaction.
-                </p>
+            <div className={filterStyles.filterMeta}>
+              <div className={filterStyles.activeFilters} aria-live="polite">
+                <strong>{rankedLiveCandidates.length} matching offer(s)</strong>
+                {activeFilterLabels.map((label) => (
+                  <span className={filterStyles.activeChip} key={label}>{label}</span>
+                ))}
               </div>
-              {workedExamples.length ? (
-                <div className="mt-market-grid">
-                  {workedExamples.map((example) => (
-                    <WorkedExampleCard example={example} key={example.id} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState icon="example" title="No worked examples match this search">
-                  Clear the search or inspect the reviewed templates instead.
-                </EmptyState>
-              )}
+              <p className={filterStyles.rankingNote}>
+                {rankingDescription(filters.sort, Boolean(search))}
+              </p>
             </div>
-          ) : null}
+          </form>
 
-          {view === "templates" ? (
-            <div className="mt-directory-view">
-              <div className="mt-directory-view-head">
-                <div>
-                  <p className="mt-market-eyebrow">Drafting aids</p>
-                  <h2>Reviewed templates</h2>
-                </div>
-                <p>
-                  A template supplies structure only. It remains a draft until a participant provides
-                  a real baseline, edits the terms, and submits the resulting proposal.
-                </p>
+          <div className="mt-directory-view">
+            {livePage.items.length ? (
+              <div className="mt-market-grid">
+                {livePage.items.map((offer) => (
+                  <LiveProposalCard
+                    credibility={credibilityByOffer.get(offer.id)}
+                    key={offer.id}
+                    offer={offer}
+                  />
+                ))}
               </div>
-              {templates.length ? (
-                <div className="mt-template-grid">
-                  {templates.map((template) => {
-                    const target = template.templateHref;
-                    const href = isAuthenticated
-                      ? target
-                      : `/signup?returnTo=${encodeURIComponent(target)}`;
+            ) : (
+              <EmptyState
+                actions={
+                  <>
+                    {hasLiveFilters ? (
+                      <Link className="button button-primary" href={buildLiveHref({})}>
+                        Clear filters
+                      </Link>
+                    ) : (
+                      <Link className="button button-primary" href={createHref}>
+                        Create the first proposal
+                      </Link>
+                    )}
+                    <Link className="button button-secondary" href="/donate">
+                      Fund a public good
+                    </Link>
+                  </>
+                }
+                icon="marketplace"
+                title={hasLiveFilters ? "No live proposals match these filters" : "No live proposals are open"}
+              >
+                The marketplace does not substitute examples or demo records when participant
+                inventory is empty.
+              </EmptyState>
+            )}
 
-                    return (
-                      <article className="mt-template-card" key={template.id}>
-                        <div>
-                          <p className="mt-market-eyebrow">{template.formatLabel}</p>
-                          <h3>{template.prefill.title}</h3>
-                        </div>
-                        <p>{template.publicSummary}</p>
-                        <div>
-                          <p><strong>Baseline prompt:</strong> {template.prefill.baselineStatement}</p>
-                          <p><strong>Exit rule:</strong> {template.prefill.exitCondition}</p>
-                        </div>
-                        <Link className="button button-primary" href={href}>Adapt template</Link>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyState icon="review" title="No reviewed templates match this search">
-                  Clear the search or start from a worked example.
-                </EmptyState>
-              )}
+            {livePage.hasPreviousPage || livePage.hasNextPage ? (
+              <nav className="pagination" aria-label="Live proposal pages">
+                {livePage.hasPreviousPage ? (
+                  <Link
+                    className="button button-secondary button-mini"
+                    href={buildLiveHref({ filters, page: page - 1, search })}
+                  >
+                    Previous
+                  </Link>
+                ) : null}
+                <span>Page {page}</span>
+                {livePage.hasNextPage ? (
+                  <Link
+                    className="button button-secondary button-mini"
+                    href={buildLiveHref({ filters, page: page + 1, search })}
+                  >
+                    Next
+                  </Link>
+                ) : null}
+              </nav>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="mt-product-section" aria-labelledby="other-routes-heading">
+          <div className="mt-product-section-head">
+            <div>
+              <p className="mt-product-kicker">Other live routes</p>
+              <h2 id="other-routes-heading">Coordinate without a bilateral listing</h2>
             </div>
-          ) : null}
-
-          {view === "public-goods" ? (
-            <div className="mt-directory-view">
-              <div className="mt-directory-view-head">
-                <div>
-                  <p className="mt-market-eyebrow">Conditional coordination</p>
-                  <h2>Pools and public goods</h2>
-                </div>
-                <p>
-                  Pools use their own threshold, authorization, evidence, governance, settlement,
-                  and failure rules. They are linked here without being mixed into bilateral offer counts.
-                </p>
+            <p>
+              Use an offset, conditional pool, or consent-gated introduction when a standard public
+              proposal is not the right structure.
+            </p>
+          </div>
+          <div className="mt-pool-link-grid">
+            <Link className="mt-pool-link-card" href="/offsets">
+              <div>
+                <p className="mt-market-eyebrow">Opposed donations</p>
+                <h3>Donation offsets</h3>
               </div>
-              <div className="mt-pool-link-grid">
-                <Link className="mt-pool-link-card" href="/pools">
-                  <div>
-                    <p className="mt-market-eyebrow">Consumer route</p>
-                    <h3>Conditional pools</h3>
-                  </div>
-                  <p>Review maximum exposure, threshold, deadline, recipient, progress, and failure behavior.</p>
-                  <span>Explore pools ↗</span>
-                </Link>
-                <Link className="mt-pool-link-card" href="/mpgf">
-                  <div>
-                    <p className="mt-market-eyebrow">Allocation tools</p>
-                    <h3>Common Ground Budget</h3>
-                  </div>
-                  <p>Build a bounded budget and inspect frozen contribution and allocation rules.</p>
-                  <span>Open budget tools ↗</span>
-                </Link>
-                <Link className="mt-pool-link-card" href="/moral-goods-group-buying">
-                  <div>
-                    <p className="mt-market-eyebrow">Advanced mechanism</p>
-                    <h3>Group buying</h3>
-                  </div>
-                  <p>Open reviewed rounds, lots, baskets, standing budgets, and settlement detail.</p>
-                  <span>Open advanced tools ↗</span>
-                </Link>
+              <p>Redirect matched planned donations toward a destination both participants prefer.</p>
+              <span>Open offsets ↗</span>
+            </Link>
+            <Link className="mt-pool-link-card" href="/pools">
+              <div>
+                <p className="mt-market-eyebrow">Conditional funding</p>
+                <h3>Funding pools</h3>
               </div>
-            </div>
-          ) : null}
+              <p>Review maximum exposure, threshold, deadline, recipient, and failure behavior.</p>
+              <span>Open pools ↗</span>
+            </Link>
+            <Link className="mt-pool-link-card" href="/background-networking">
+              <div>
+                <p className="mt-market-eyebrow">Private matching</p>
+                <h3>Consent-gated introductions</h3>
+              </div>
+              <p>Share a broad preview without publishing exact wishes or contact details.</p>
+              <span>Request matching ↗</span>
+            </Link>
+          </div>
         </section>
       </main>
 
