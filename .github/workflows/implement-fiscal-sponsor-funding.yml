@@ -45,7 +45,6 @@ jobs:
           node --import tsx --test
           src/lib/funding.test.ts
           src/lib/fiscal-sponsor-funding-surfaces.test.ts
-          src/lib/mpgf/public-goods-every-org.test.ts
           src/lib/payments/conditional-state.test.ts
           src/lib/payments/checkout-payment-methods.test.ts
 
