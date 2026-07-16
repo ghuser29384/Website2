@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/block-stripe-test-mode-in-production-20260716
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
