@@ -886,7 +886,6 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
         <div className="mtw-mix-layout">
           <div>
             <div className="mtw-scene-prompt">Click a bargain</div>
-            <h1 className="mtw-scene-title" tabIndex={-1}>Find the mix where both say yes.</h1>
             <div className="mtw-meters">
               {[
                 ["You", waiting ? 50 : values.you, "#5368a5"],
