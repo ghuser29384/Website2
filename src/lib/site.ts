@@ -1,6 +1,6 @@
 export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
-    { href: "/pledge-swaps", label: "Pledge Swap" },
+    { href: "/pledge-swaps", label: "Trade" },
     { href: "/moral-goods-group-buying", label: "Moral Public Goods" },
     { href: "/donation-offsets", label: "Donation Offsets" },
   ];
