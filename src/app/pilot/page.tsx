@@ -91,8 +91,9 @@ export default async function PilotPage() {
         <section className="mt-product-section" aria-labelledby="pilot-action-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">Choose one</p>
-              <h2 id="pilot-action-heading">Finish with a real artifact.</h2>
+              <p className="mt-product-kicker" id="pilot-action-heading">
+                Choose one
+              </p>
             </div>
           </div>
 
@@ -151,7 +152,7 @@ export default async function PilotPage() {
                 <span className="mt-market-eyebrow">Network action</span>
                 <span className="mt-market-state">Specific person</span>
               </div>
-              <h3>Draft one serious invitation</h3>
+              <h3>Draft one tailored invitation</h3>
               <dl>
                 <div>
                   <dt>Action</dt>
