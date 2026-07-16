@@ -1,99 +1,49 @@
-.hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.55fr);
+.workbench {
   border-right: 1px solid var(--ink);
   border-bottom: 1px solid var(--ink);
   border-left: 1px solid var(--ink);
   background: var(--surface);
 }
 
-.heroCopy {
+.intro {
   display: grid;
-  min-height: 29rem;
-  align-content: center;
-  gap: 1.4rem;
-  padding: clamp(2.5rem, 6vw, 6rem);
-  border-right: 1px solid var(--ink);
+  min-height: 13rem;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+  gap: 2rem;
+  align-items: end;
+  padding: clamp(2rem, 4.5vw, 4.5rem);
 }
 
-.heroCopy h1 {
-  max-width: 11ch;
+.intro h1 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(3.7rem, 6.4vw, 6.8rem);
+  font-size: clamp(4.2rem, 7.4vw, 7.6rem);
   font-weight: 500;
-  letter-spacing: -0.06em;
-  line-height: 0.9;
+  letter-spacing: -0.065em;
+  line-height: 0.84;
 }
 
-.heroCopy p {
-  max-width: 45ch;
+.intro p {
+  max-width: 29ch;
   margin: 0;
   color: var(--ink-soft);
-  font-size: clamp(1rem, 1.25vw, 1.16rem);
-  line-height: 1.55;
-}
-
-.heroBoundary {
-  display: grid;
-  align-content: center;
-  gap: 0.9rem;
-  padding: clamp(2rem, 4vw, 4rem);
-  background: var(--surface-muted);
-}
-
-.heroBoundary strong {
-  max-width: 13ch;
-  font-family: var(--font-heading);
-  font-size: clamp(2.1rem, 3.3vw, 3.6rem);
-  font-weight: 500;
-  letter-spacing: -0.045em;
-  line-height: 0.95;
-}
-
-.heroBoundary span {
-  max-width: 30ch;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: clamp(0.96rem, 1.2vw, 1.1rem);
   line-height: 1.5;
-}
-
-.section {
-  padding: clamp(3rem, 5.5vw, 5.8rem) clamp(1.25rem, 4vw, 4.5rem);
-  border-right: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-  border-left: 1px solid var(--ink);
-}
-
-.routeSection {
-  display: grid;
-  gap: clamp(1.5rem, 3vw, 2.5rem);
-  background: rgba(255, 255, 255, 0.97);
-}
-
-.routeHeading {
-  margin: 0;
-  font-family: var(--font-heading);
-  font-size: clamp(2.5rem, 4.2vw, 4.5rem);
-  font-weight: 500;
-  letter-spacing: -0.05em;
-  line-height: 0.94;
 }
 
 .routeGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid var(--ink);
-  border-left: 1px solid var(--ink);
 }
 
 .routeButton {
   display: grid;
   min-width: 0;
-  min-height: 15.5rem;
-  grid-template-rows: auto 1fr auto auto;
-  gap: 0.9rem;
-  align-items: start;
+  min-height: 10.5rem;
+  grid-template-columns: minmax(4.6rem, 0.44fr) minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
   padding: 1.15rem;
   border: 0;
   border-right: 1px solid var(--ink);
@@ -105,17 +55,20 @@
   text-align: left;
   transition:
     background-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    box-shadow 140ms ease;
+}
+
+.routeButton:last-child {
+  border-right: 0;
 }
 
 .routeButton:hover {
-  transform: translateY(-2px);
+  box-shadow: inset 0 -4px 0 var(--accent);
 }
 
 .routeButton:focus-visible {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
@@ -129,28 +82,10 @@
   box-shadow: inset 0 -5px 0 var(--accent);
 }
 
-.routeMeta {
-  display: flex;
-  min-height: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.routeMeta small {
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-}
-
 .routeGlyph {
   width: 100%;
-  max-width: 7.8rem;
+  max-width: 5.5rem;
   height: auto;
-  align-self: center;
   color: var(--ink);
   overflow: visible;
 }
@@ -183,42 +118,45 @@
 
 .routeCopy {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.35rem;
 }
 
 .routeCopy strong {
   font-family: var(--font-heading);
-  font-size: clamp(1.9rem, 2.5vw, 2.8rem);
+  font-size: clamp(1.8rem, 2.3vw, 2.5rem);
   font-weight: 500;
   letter-spacing: -0.043em;
   line-height: 0.96;
 }
 
 .routeCopy > span {
-  max-width: 24ch;
+  max-width: 19ch;
   color: var(--ink-soft);
-  font-size: 0.84rem;
-  line-height: 1.4;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .routeChoice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
   color: var(--accent-deep);
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
 }
 
-.routeChoice > span {
-  font-family: var(--font-body);
-  font-size: 1rem;
+.choiceGlyph {
+  width: 100%;
+  height: 100%;
+}
+
+.choiceGlyph circle,
+.choiceGlyph path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
 }
 
 .liveRegion {
@@ -231,37 +169,29 @@
   white-space: nowrap;
 }
 
-.selectedSection {
-  background: rgba(243, 245, 240, 0.97);
-}
-
-.decisionPanel {
+.routeDetail {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(290px, 0.62fr);
-  border-top: 1px solid var(--ink);
-  border-left: 1px solid var(--ink);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.3fr);
+  background: var(--surface-muted);
 }
 
-.explanationPanel,
-.actionPanel {
+.mechanismPanel {
+  display: grid;
+  gap: clamp(1.4rem, 2.8vw, 2.5rem);
   min-width: 0;
-  border-right: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-}
-
-.explanationPanel {
-  display: grid;
-  gap: clamp(2rem, 4vw, 3.4rem);
-  padding: clamp(1.5rem, 3.6vw, 3.4rem);
+  padding: clamp(1.5rem, 3.8vw, 3.6rem);
   background: var(--surface);
 }
 
-.selectedHeader {
+.detailHeader {
   display: grid;
-  gap: 0.85rem;
+  grid-template-columns: minmax(4.8rem, 0.18fr) minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: end;
 }
 
-.selectedHeader > span {
+.detailHeader > span {
+  padding-bottom: 0.4rem;
   color: var(--accent-deep);
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -270,35 +200,14 @@
   text-transform: uppercase;
 }
 
-.selectedHeader h2 {
+.detailHeader h2 {
   max-width: 16ch;
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(3rem, 5vw, 5.4rem);
+  font-size: clamp(2.8rem, 5vw, 5.2rem);
   font-weight: 500;
   letter-spacing: -0.057em;
-  line-height: 0.91;
-}
-
-.selectedHeader p {
-  max-width: 54ch;
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: clamp(1rem, 1.3vw, 1.16rem);
-  line-height: 1.55;
-}
-
-.flowBlock {
-  display: grid;
-  gap: 1rem;
-}
-
-.flowBlock h3 {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
+  line-height: 0.9;
 }
 
 .flowList {
@@ -312,33 +221,55 @@
 }
 
 .flowList li {
+  position: relative;
   display: grid;
-  min-height: 9.5rem;
-  align-content: start;
-  gap: 1.1rem;
-  padding: 1.1rem;
+  min-height: 6.4rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 1rem;
   border-right: 1px solid var(--ink);
   border-bottom: 1px solid var(--ink);
 }
 
 .flowList li > span {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 1.8rem;
+  height: 1.8rem;
   place-items: center;
   border: 1px solid var(--ink);
   border-radius: 50%;
   color: var(--accent-deep);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 700;
 }
 
-.flowList p {
-  margin: 0;
-  font-size: 0.96rem;
-  font-weight: 700;
-  line-height: 1.38;
+.flowList strong {
+  font-size: clamp(0.95rem, 1.2vw, 1.08rem);
+  line-height: 1.25;
+}
+
+.flowArrow {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: -0.82rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0.18rem;
+  background: var(--surface);
+  color: var(--accent-deep);
+  transform: translateY(-50%);
+}
+
+.flowArrow path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 .outcomeBlock {
@@ -351,27 +282,55 @@
 .successOutcome,
 .fallbackOutcome {
   display: grid;
-  min-height: 7.4rem;
+  min-width: 0;
+  min-height: 5.8rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon label"
+    "icon value";
+  gap: 0.18rem 0.8rem;
   align-content: center;
-  gap: 0.5rem;
-  padding: 1.15rem;
+  padding: 1rem;
   border-right: 1px solid var(--ink);
   border-bottom: 1px solid var(--ink);
 }
 
 .successOutcome {
-  background: color-mix(in srgb, var(--signal) 28%, var(--surface));
+  background: color-mix(in srgb, var(--signal) 32%, var(--surface));
 }
 
 .fallbackOutcome {
   background: var(--surface-muted);
 }
 
+.outcomeGlyph {
+  grid-area: icon;
+  width: 2rem;
+  height: 2rem;
+  align-self: center;
+  color: var(--ink-muted);
+}
+
+.successOutcome .outcomeGlyph {
+  color: var(--signal-ink);
+}
+
+.outcomeGlyph circle,
+.outcomeGlyph path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
 .successOutcome span,
 .fallbackOutcome span {
+  grid-area: label;
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -379,8 +338,9 @@
 
 .successOutcome strong,
 .fallbackOutcome strong {
+  grid-area: value;
   font-family: var(--font-heading);
-  font-size: clamp(1.45rem, 2.2vw, 2.25rem);
+  font-size: clamp(1.4rem, 2.1vw, 2rem);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -395,10 +355,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem 0;
+  padding: 0.85rem 0;
   color: var(--ink-soft);
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
   list-style: none;
 }
@@ -426,74 +386,68 @@
 
 .fitDetails p {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.3rem;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.8rem;
-  line-height: 1.5;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .fitDetails p strong {
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .actionPanel {
-  display: flex;
-  min-height: 100%;
-  flex-direction: column;
-  gap: 1.15rem;
-  padding: clamp(1.5rem, 3.2vw, 3rem);
+  display: grid;
+  min-width: 0;
+  grid-template-rows: minmax(8rem, 1fr) auto auto auto;
+  gap: 0.9rem;
+  align-items: end;
+  padding: clamp(1.25rem, 2.7vw, 2.4rem);
+  border-left: 1px solid var(--ink);
   background: var(--ink);
   color: #ffffff;
 }
 
-.actionPanel > span {
-  color: var(--signal);
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
-}
-
-.actionPanel h3 {
-  max-width: 10ch;
-  margin: 0.4rem 0 0;
+.actionPanel .routeGlyph {
+  max-width: 9rem;
+  align-self: center;
+  justify-self: center;
   color: #ffffff;
-  font-family: var(--font-heading);
-  font-size: clamp(2.5rem, 3.8vw, 4rem);
-  font-weight: 500;
-  letter-spacing: -0.05em;
-  line-height: 0.94;
 }
 
-.actionPanel > p {
-  max-width: 31ch;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.9rem;
-  line-height: 1.55;
+.actionPanel .routeGlyph .glyphAccent {
+  stroke: var(--signal);
+}
+
+.actionPanel .routeGlyph rect.glyphSignal,
+.actionPanel .routeGlyph circle.glyphSignal {
+  fill: var(--signal);
+  stroke: #ffffff;
+}
+
+.actionPanel .routeGlyph path.glyphSignal {
+  stroke: var(--signal);
 }
 
 .actionPanel :global(.button) {
   width: 100%;
   justify-content: center;
-  margin-top: auto;
 }
 
-.actionPanel small {
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 0.72rem;
-  line-height: 1.45;
+.boundaryNote {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .safetyLink {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
@@ -504,141 +458,160 @@
 }
 
 @media (max-width: 1080px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-
-  .heroCopy {
-    min-height: 25rem;
-    border-right: 0;
-    border-bottom: 1px solid var(--ink);
-  }
-
-  .heroBoundary {
-    min-height: 12rem;
-  }
-
   .routeGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .decisionPanel {
+  .routeButton:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .routeDetail {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.34fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .routeDetail {
     grid-template-columns: 1fr;
   }
 
   .actionPanel {
-    min-height: 23rem;
+    min-height: 10rem;
+    grid-template-columns: minmax(7rem, 1fr) minmax(220px, 0.72fr);
+    grid-template-rows: auto auto auto;
+    border-top: 1px solid var(--ink);
+    border-left: 0;
   }
 
-  .actionPanel h3 {
-    max-width: 14ch;
+  .actionPanel .routeGlyph {
+    grid-row: 1 / 4;
+    max-width: 7rem;
+    justify-self: start;
+  }
+
+  .actionPanel :global(.button),
+  .boundaryNote,
+  .safetyLink {
+    grid-column: 2;
   }
 }
 
-@media (max-width: 760px) {
-  .heroCopy {
+@media (max-width: 680px) {
+  .intro {
     min-height: auto;
-    padding: 3.2rem 1.2rem;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 2.7rem 1.2rem;
   }
 
-  .heroCopy h1 {
-    max-width: 10ch;
-    font-size: clamp(3.25rem, 15vw, 5rem);
+  .intro h1 {
+    font-size: clamp(3.8rem, 20vw, 5.4rem);
   }
 
-  .heroBoundary {
-    min-height: auto;
-    padding: 2rem 1.2rem;
-  }
-
-  .heroBoundary strong {
-    font-size: 2.35rem;
-  }
-
-  .section {
-    padding: 3rem 1rem;
-  }
-
-  .routeHeading {
-    font-size: clamp(2.5rem, 12vw, 3.8rem);
+  .intro p {
+    max-width: 31ch;
   }
 
   .routeGrid {
     grid-template-columns: 1fr;
   }
 
-  .routeButton {
-    min-height: 10.5rem;
-    grid-template-columns: 5.2rem minmax(0, 1fr) auto;
-    grid-template-rows: auto 1fr;
-    column-gap: 0.9rem;
-    align-items: center;
-  }
-
-  .routeMeta {
-    grid-column: 1 / -1;
+  .routeButton,
+  .routeButton:nth-child(2n) {
+    min-height: 6.8rem;
+    grid-template-columns: 4rem minmax(0, 1fr) auto;
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
+    border-right: 0;
   }
 
   .routeGlyph {
-    grid-column: 1;
-    grid-row: 2;
-    max-width: 5.2rem;
-  }
-
-  .routeCopy {
-    grid-column: 2;
-    grid-row: 2;
+    max-width: 4rem;
   }
 
   .routeCopy strong {
-    font-size: 2rem;
+    font-size: 1.9rem;
   }
 
-  .routeChoice {
-    grid-column: 3;
-    grid-row: 2;
-    align-self: stretch;
-    flex-direction: column;
-    justify-content: center;
-    padding: 0 0 0 0.75rem;
-    border-top: 0;
-    border-left: 1px solid var(--line);
-    font-size: 0.56rem;
+  .routeCopy > span {
+    max-width: none;
+    font-size: 0.74rem;
   }
 
-  .explanationPanel,
-  .actionPanel {
-    padding: 1.35rem;
+  .mechanismPanel {
+    gap: 1.25rem;
+    padding: 1.2rem;
   }
 
-  .selectedHeader h2 {
-    font-size: clamp(2.8rem, 13vw, 4.2rem);
+  .detailHeader {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
   }
 
-  .flowList,
-  .outcomeBlock,
-  .fitDetails > div {
+  .detailHeader > span {
+    padding-bottom: 0;
+  }
+
+  .detailHeader h2 {
+    max-width: 12ch;
+    font-size: clamp(2.8rem, 13vw, 4rem);
+  }
+
+  .flowList {
     grid-template-columns: 1fr;
   }
 
   .flowList li {
-    min-height: auto;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: 0.85rem;
+    min-height: 4.4rem;
   }
 
-  .outcomeBlock {
-    gap: 0;
+  .flowArrow {
+    top: auto;
+    right: auto;
+    bottom: -0.82rem;
+    left: 50%;
+    transform: translateX(-50%) rotate(90deg);
   }
 
   .successOutcome,
   .fallbackOutcome {
-    min-height: 6.6rem;
+    min-height: 5.4rem;
+    gap: 0.15rem 0.65rem;
+    padding: 0.85rem;
+  }
+
+  .outcomeGlyph {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .successOutcome strong,
+  .fallbackOutcome strong {
+    font-size: clamp(1.2rem, 5vw, 1.55rem);
+  }
+
+  .fitDetails > div {
+    grid-template-columns: 1fr;
+    gap: 0.85rem;
   }
 
   .actionPanel {
-    min-height: 20rem;
+    min-height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 0.8rem;
+    padding: 1.2rem;
+  }
+
+  .actionPanel .routeGlyph {
+    display: none;
+  }
+
+  .actionPanel :global(.button),
+  .boundaryNote,
+  .safetyLink {
+    grid-column: 1;
   }
 }
 

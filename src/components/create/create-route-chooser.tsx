@@ -77,15 +77,50 @@ function RouteGlyph({ mode }: { mode: CreateMode }) {
   );
 }
 
+function ChoiceGlyph({ selected }: { selected: boolean }) {
+  return selected ? (
+    <svg aria-hidden="true" className={styles.choiceGlyph} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="m7.8 12.2 2.8 2.8 5.8-6" />
+    </svg>
+  ) : (
+    <svg aria-hidden="true" className={styles.choiceGlyph} viewBox="0 0 24 24">
+      <path d="M4 12h15" />
+      <path d="m14 7 5 5-5 5" />
+    </svg>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <svg aria-hidden="true" className={styles.flowArrow} viewBox="0 0 28 28">
+      <path d="M3 14h20" />
+      <path d="m17 8 6 6-6 6" />
+    </svg>
+  );
+}
+
+function OutcomeGlyph({ positive }: { positive: boolean }) {
+  return positive ? (
+    <svg aria-hidden="true" className={styles.outcomeGlyph} viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" />
+      <path d="m9 16 5 5 9-10" />
+    </svg>
+  ) : (
+    <svg aria-hidden="true" className={styles.outcomeGlyph} viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="13" />
+      <path d="M10 16h12" />
+    </svg>
+  );
+}
+
 export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRouteChooserProps) {
   const [selectedMode, setSelectedMode] = useState<CreateMode>(initialMode);
   const [hoveredMode, setHoveredMode] = useState<CreateMode | null>(null);
   const selectedRoute = getCreateRoute(selectedMode);
   const targetHref = buildCreateTargetHref(selectedMode, isAuthenticated);
   const primaryLabel =
-    selectedRoute.authRequired && !isAuthenticated
-      ? "Create account to continue"
-      : selectedRoute.cta;
+    selectedRoute.authRequired && !isAuthenticated ? "Sign up to draft" : selectedRoute.cta;
 
   function selectMode(mode: CreateMode) {
     setSelectedMode(mode);
@@ -96,145 +131,119 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
   }
 
   return (
-    <>
-      <section className={styles.hero} aria-labelledby="create-heading">
-        <div className={styles.heroCopy}>
-          <h1 id="create-heading">What do you want to create?</h1>
-          <p>
-            Choose one route. The page will show what happens when it succeeds and what happens
-            when it does not.
-          </p>
-        </div>
+    <section className={styles.workbench} aria-labelledby="create-heading">
+      <header className={styles.intro}>
+        <h1 id="create-heading">Create.</h1>
+        <p>Choose a route. Nothing happens until you confirm.</p>
+      </header>
 
-        <div className={styles.heroBoundary}>
-          <strong>Nothing happens on this page.</strong>
-          <span>No charge, publication, or commitment until a later confirmation.</span>
-        </div>
-      </section>
+      <div className={styles.routeGrid} role="group" aria-label="Creation routes">
+        {CREATE_ROUTE_DEFINITIONS.map((route) => {
+          const isSelected = route.key === selectedMode;
+          const isHovered = route.key === hoveredMode;
 
-      <section className={`${styles.section} ${styles.routeSection}`} aria-labelledby="route-heading">
-        <h2 className={styles.routeHeading} id="route-heading">
-          Choose one.
-        </h2>
+          return (
+            <button
+              aria-controls="selected-route-panel"
+              aria-pressed={isSelected}
+              className={[
+                styles.routeButton,
+                isSelected ? styles.routeButtonSelected : "",
+                route.later ? styles.routeButtonLater : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-create-mode={route.key}
+              key={route.key}
+              onClick={() => selectMode(route.key)}
+              onMouseEnter={() => setHoveredMode(route.key)}
+              onMouseLeave={() => setHoveredMode(null)}
+              style={isHovered ? { backgroundColor: ROUTE_HOVER_COLORS[route.key] } : undefined}
+              type="button"
+            >
+              <RouteGlyph mode={route.key} />
+              <span className={styles.routeCopy}>
+                <strong>{route.title}</strong>
+                <span>{route.summary}</span>
+              </span>
+              <span className={styles.routeChoice}>
+                <ChoiceGlyph selected={isSelected} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-        <div className={styles.routeGrid}>
-          {CREATE_ROUTE_DEFINITIONS.map((route) => {
-            const isSelected = route.key === selectedMode;
-            const isHovered = route.key === hoveredMode;
+      <p className={styles.liveRegion} aria-live="polite">
+        {selectedRoute.title} selected. {selectedRoute.summary}
+      </p>
 
-            return (
-              <button
-                aria-controls="selected-route-panel"
-                aria-pressed={isSelected}
-                className={[
-                  styles.routeButton,
-                  isSelected ? styles.routeButtonSelected : "",
-                  route.later ? styles.routeButtonLater : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                data-create-mode={route.key}
-                key={route.key}
-                onClick={() => selectMode(route.key)}
-                onMouseEnter={() => setHoveredMode(route.key)}
-                onMouseLeave={() => setHoveredMode(null)}
-                style={isHovered ? { backgroundColor: ROUTE_HOVER_COLORS[route.key] } : undefined}
-                type="button"
-              >
-                <span className={styles.routeMeta}>
-                  <small>{route.index}</small>
-                  {route.later ? <small>Reviewed</small> : null}
-                </span>
-                <RouteGlyph mode={route.key} />
-                <span className={styles.routeCopy}>
-                  <strong>{route.title}</strong>
-                  <span>{route.summary}</span>
-                </span>
-                <span className={styles.routeChoice}>
-                  {isSelected ? "Selected" : "Choose"}
-                  <span aria-hidden="true">{isSelected ? "✓" : "→"}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <p className={styles.liveRegion} aria-live="polite">
-          {selectedRoute.title} selected. {selectedRoute.summary}
-        </p>
-      </section>
-
-      <section
+      <div
         aria-labelledby="selected-route-heading"
-        className={`${styles.section} ${styles.selectedSection}`}
+        className={styles.routeDetail}
         id="selected-route-panel"
       >
-        <div className={styles.decisionPanel}>
-          <article className={styles.explanationPanel}>
-            <div className={styles.selectedHeader}>
-              <span>{selectedRoute.title}</span>
-              <h2 id="selected-route-heading">{selectedRoute.headline}</h2>
-              <p>{selectedRoute.proposition}</p>
+        <article className={styles.mechanismPanel}>
+          <header className={styles.detailHeader}>
+            <span>{selectedRoute.title}</span>
+            <h2 id="selected-route-heading">{selectedRoute.headline}</h2>
+          </header>
+
+          <ol className={styles.flowList} aria-label={`${selectedRoute.title} process`}>
+            {selectedRoute.requirements.map((step, index) => (
+              <li key={step}>
+                <span>{index + 1}</span>
+                <strong>{step}</strong>
+                {index < selectedRoute.requirements.length - 1 ? <FlowArrow /> : null}
+              </li>
+            ))}
+          </ol>
+
+          <div className={styles.outcomeBlock} aria-label={`${selectedRoute.title} outcomes`}>
+            <div className={styles.successOutcome}>
+              <OutcomeGlyph positive />
+              <span>{selectedRoute.success.label}</span>
+              <strong>{selectedRoute.success.value}</strong>
             </div>
-
-            <div className={styles.flowBlock}>
-              <h3>How it works</h3>
-              <ol className={styles.flowList}>
-                {selectedRoute.requirements.map((step, index) => (
-                  <li key={step}>
-                    <span>{index + 1}</span>
-                    <p>{step}</p>
-                  </li>
-                ))}
-              </ol>
+            <div className={styles.fallbackOutcome}>
+              <OutcomeGlyph positive={false} />
+              <span>{selectedRoute.fallback.label}</span>
+              <strong>{selectedRoute.fallback.value}</strong>
             </div>
+          </div>
 
-            <div className={styles.outcomeBlock} aria-label={`${selectedRoute.title} outcomes`}>
-              <div className={styles.successOutcome}>
-                <span>If {selectedRoute.success.label.toLowerCase()}</span>
-                <strong>{selectedRoute.success.value}</strong>
-              </div>
-              <div className={styles.fallbackOutcome}>
-                <span>If {selectedRoute.fallback.label.toLowerCase()}</span>
-                <strong>{selectedRoute.fallback.value}</strong>
-              </div>
+          <details className={styles.fitDetails}>
+            <summary>
+              Details <span aria-hidden="true">+</span>
+            </summary>
+            <div>
+              <p>
+                <strong>Best for</strong>
+                {selectedRoute.bestFor}
+              </p>
+              <p>
+                <strong>Not for</strong>
+                {selectedRoute.boundary}
+              </p>
             </div>
+          </details>
+        </article>
 
-            <details className={styles.fitDetails}>
-              <summary>
-                Who this is for <span aria-hidden="true">+</span>
-              </summary>
-              <div>
-                <p>
-                  <strong>Good fit</strong>
-                  {selectedRoute.bestFor}
-                </p>
-                <p>
-                  <strong>Not for</strong>
-                  {selectedRoute.boundary}
-                </p>
-              </div>
-            </details>
-          </article>
-
-          <aside className={styles.actionPanel} aria-labelledby="next-step-heading">
-            <span>Next step</span>
-            <h3 id="next-step-heading">{selectedRoute.nextTitle}</h3>
-            <p>{selectedRoute.nextNote}</p>
-            <Link className="button button-primary" href={targetHref}>
-              {primaryLabel}
-            </Link>
-            <small>
-              {selectedRoute.authRequired && !isAuthenticated
-                ? "Sign in, then return to this route."
-                : "No charge or commitment yet."}
-            </small>
-            <Link className={styles.safetyLink} href="/safety">
-              Read the safety rules
-            </Link>
-          </aside>
-        </div>
-      </section>
-    </>
+        <aside className={styles.actionPanel} aria-label={`${selectedRoute.title} next action`}>
+          <RouteGlyph mode={selectedRoute.key} />
+          <Link className="button button-primary" href={targetHref}>
+            {primaryLabel}
+          </Link>
+          <span className={styles.boundaryNote}>
+            {selectedRoute.authRequired && !isAuthenticated
+              ? "Sign in, then return here."
+              : "No charge yet."}
+          </span>
+          <Link className={styles.safetyLink} href="/safety">
+            Safety rules
+          </Link>
+        </aside>
+      </div>
+    </section>
   );
 }
