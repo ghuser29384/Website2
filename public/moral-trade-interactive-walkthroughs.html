@@ -876,6 +876,8 @@
 
     .stream-label strong { font-family: var(--serif); font-size: 50px; font-weight: 400; }
 
+    .stream-a .stream-label { left: 60%; }
+
     .stream-a { --stream-top: 28%; --stream-angle: 7deg; --stream-color: #536bc8; }
     .stream-b { --stream-top: 60%; --stream-angle: -7deg; --stream-color: #d67d55; }
 
@@ -1241,6 +1243,8 @@
       .concept-switcher { order: 3; flex-basis: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; }
       .concept-tab { flex: 0 0 auto; }
       .experience, .stage { min-height: 720px; }
+      .experience[data-concept="mix"],
+      .experience[data-concept="mix"] .stage { min-height: 900px; }
       .meeting-scene, .mix-layout, .cause-picker-scene { grid-template-columns: 1fr; }
       .cause-picker-scene { align-content: start; }
       .cause-intro .scene-title { max-width: 10ch; font-size: clamp(48px, 9vw, 78px); }
@@ -1306,6 +1310,7 @@
       .stream { height: 62px; }
       .stream-label { font-size: 14px; }
       .stream-label strong { font-size: 31px; }
+      .stream-a .stream-label { left: 38%; }
       .collision { width: 92px; font-size: 20px; }
       .stream-copy { left: 20px; bottom: 36px; right: 20px; }
       .shared-causes { grid-template-columns: 1fr; margin-top: 24px; }
@@ -1651,7 +1656,7 @@
 
     function renderTwoMoves() {
       if (state.step === 0) {
-        stage.innerHTML = '<div class="scene cause-picker-scene">' + stepMark(0, 4) + '<div class="cause-sun" aria-hidden="true"></div><div class="cause-intro"><div class="scene-prompt">Click one</div><h1 class="scene-title">What do you want more of?</h1><p class="scene-line">Start with your values. Nobody will ask you to rank everyone else\'s.</p></div>' + causePickerMarkup() + '</div>';
+        stage.innerHTML = '<div class="scene cause-picker-scene">' + stepMark(0, 4) + '<div class="cause-sun" aria-hidden="true"></div><div class="cause-intro"><div class="scene-prompt">Click one</div><h1 class="scene-title">What do you value?</h1></div>' + causePickerMarkup() + '</div>';
         return;
       }
 
@@ -1740,7 +1745,7 @@
     function renderMix() {
       const values = mixValues();
       const actions = state.mix === "three" ? '<div class="mix-actions"><a class="primary-action" href="https://moraltrade.org/create" target="_blank" rel="noreferrer"><span>Lock this deal</span><span aria-hidden="true">↗</span></a><button class="mix-alternative" type="button" data-action="open-redirect">Redirect ineffective donations.</button></div>' : "";
-      stage.innerHTML = '<div class="scene mix-scene">' + stepMark(0, 1) + equalizerMarkup() + '<div class="mix-layout"><div><div class="scene-prompt">Click a bargain</div><h1 class="scene-title">Find the mix where both say yes.</h1><div class="meters"><div><div class="meter-head"><strong>You</strong><span>' + (values.you > 50 ? "Yes" : values.you < 50 ? "No" : "Waiting") + '</span></div><div class="meter-track"><div class="meter-fill" style="--meter:' + values.you + '%;--meter-color:#5368a5"></div><span class="meter-mid"></span></div></div><div><div class="meter-head"><strong>Sam</strong><span>' + (values.them > 50 ? "Yes" : values.them < 50 ? "No" : "Waiting") + '</span></div><div class="meter-track"><div class="meter-fill" style="--meter:' + values.them + '%;--meter-color:#c77f5f"></div><span class="meter-mid"></span></div></div></div><div class="mix-verdict" aria-live="polite">' + values.verdict + '</div>' + actions + '</div><div class="mixes"><button class="mix-card ' + (state.mixAttempt === 1 && state.mix === "one" ? "is-shaking" : "") + '" type="button" data-action="choose-mix" data-value="one" aria-pressed="' + (state.mix === "one") + '"><span class="mix-number">A</span><div class="mix-side"><span>You give</span><strong>$5 to global health</strong></div><div class="mix-side"><span>Sam gives</span><strong>12 vegetarian months</strong></div></button><button class="mix-card ' + (state.mixAttempt === 1 && state.mix === "two" ? "is-shaking" : "") + '" type="button" data-action="choose-mix" data-value="two" aria-pressed="' + (state.mix === "two") + '"><span class="mix-number">B</span><div class="mix-side"><span>You give</span><strong>5% of income</strong></div><div class="mix-side"><span>Sam gives</span><strong>1 vegetarian month</strong></div></button><button class="mix-card" type="button" data-action="choose-mix" data-value="three" aria-pressed="' + (state.mix === "three") + '"><span class="mix-number">C</span><div class="mix-side"><span>You give</span><strong>1% to global health</strong></div><div class="mix-side"><span>Sam gives</span><strong>12 vegetarian months</strong></div></button></div></div></div>';
+      stage.innerHTML = '<div class="scene mix-scene">' + stepMark(0, 1) + equalizerMarkup() + '<div class="mix-layout"><div><div class="scene-prompt">Click a bargain</div><div class="meters"><div><div class="meter-head"><strong>You</strong><span>' + (values.you > 50 ? "Yes" : values.you < 50 ? "No" : "Waiting") + '</span></div><div class="meter-track"><div class="meter-fill" style="--meter:' + values.you + '%;--meter-color:#5368a5"></div><span class="meter-mid"></span></div></div><div><div class="meter-head"><strong>Sam</strong><span>' + (values.them > 50 ? "Yes" : values.them < 50 ? "No" : "Waiting") + '</span></div><div class="meter-track"><div class="meter-fill" style="--meter:' + values.them + '%;--meter-color:#c77f5f"></div><span class="meter-mid"></span></div></div></div><div class="mix-verdict" aria-live="polite">' + values.verdict + '</div>' + actions + '</div><div class="mixes"><button class="mix-card ' + (state.mixAttempt === 1 && state.mix === "one" ? "is-shaking" : "") + '" type="button" data-action="choose-mix" data-value="one" aria-pressed="' + (state.mix === "one") + '"><span class="mix-number">A</span><div class="mix-side"><span>You give</span><strong>$5 to global health</strong></div><div class="mix-side"><span>Sam gives</span><strong>12 vegetarian months</strong></div></button><button class="mix-card ' + (state.mixAttempt === 1 && state.mix === "two" ? "is-shaking" : "") + '" type="button" data-action="choose-mix" data-value="two" aria-pressed="' + (state.mix === "two") + '"><span class="mix-number">B</span><div class="mix-side"><span>You give</span><strong>5% of income</strong></div><div class="mix-side"><span>Sam gives</span><strong>1 vegetarian month</strong></div></button><button class="mix-card" type="button" data-action="choose-mix" data-value="three" aria-pressed="' + (state.mix === "three") + '"><span class="mix-number">C</span><div class="mix-side"><span>You give</span><strong>1% to global health</strong></div><div class="mix-side"><span>Sam gives</span><strong>12 vegetarian months</strong></div></button></div></div></div>';
     }
 
     function renderMatchCards(matches) {
@@ -1820,6 +1825,10 @@
         state.mix = control.dataset.value;
         state.mixAttempt = state.mix === "three" ? 0 : 1;
         render();
+        if (state.mix === "three") {
+          const mixActions = stage.querySelector(".mix-actions");
+          if (mixActions) mixActions.scrollIntoView({ block: "center" });
+        }
         if (state.mix !== "three") schedule(function() { state.mixAttempt = 0; render(); }, 480);
       }
       if (action === "open-redirect") switchToConcept("redirect");
