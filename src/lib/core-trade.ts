@@ -209,7 +209,7 @@ export async function getCoreOfferForOwner(offerId: string, ownerId: string) {
   return toCoreOffer(data);
 }
 
-export async function listCoreOffersForOwner(ownerId: string) {
+export async function listCoreOffersForOwner(ownerId: string): Promise<CoreOffer[]> {
   const supabase = createServiceClient() as any;
   const { data } = await supabase
     .from("offers")
