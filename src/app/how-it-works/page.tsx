@@ -8,7 +8,7 @@ import { buildArticleJsonLd, buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const howItWorksDescription =
-  "A plain-language walkthrough of Moral Trade: write the baseline, specify bounded terms, agree on proof, review risks, and accept only if both prefer the result.";
+  "Create a bounded Moral Trade agreement: state the no-deal default, specify commitments and limits, agree on evidence, review risks, and accept only if both parties prefer the result.";
 
 export const metadata: Metadata = {
   title: "How It Works",
@@ -18,8 +18,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "How Moral Trade works",
-    description:
-      "Write what would happen without the trade, specify bounded terms, agree on proof, review risks, and accept only if both prefer the result.",
+    description: howItWorksDescription,
     url: getAbsoluteUrl("/how-it-works"),
     type: "website",
   },
@@ -27,34 +26,36 @@ export const metadata: Metadata = {
 
 const steps = [
   {
-    title: "Start with a concrete use case",
+    title: "State the no-deal default",
     detail:
-      "Use a worked example, an existing counterparty, or a clearly stated public-good action rather than an abstract expression of interest.",
+      "Record what each person would probably do without an agreement, so threats and actions that would happen anyway do not get rewarded.",
   },
   {
-    title: "Write the no-trade baseline",
+    title: "Specify bounded commitments",
     detail:
-      "State what each person would probably do without the trade, so threats and actions that would happen anyway do not get rewarded.",
+      "Name each action, the maximum exposure, timing, privacy settings, cancellation terms, and exit conditions.",
   },
   {
-    title: "Specify bounded terms",
+    title: "Agree on evidence",
     detail:
-      "Name the actions, timing, privacy settings, exit conditions, evidence, and challenge window before anyone relies on the record.",
+      "Set the proof requirement, reviewer, challenge window, and the outcome when evidence is missing or disputed.",
   },
   {
-    title: "Review risks before acceptance",
+    title: "Review risks",
     detail:
-      "Check coercion, fraud, privacy, third-party externalities, conflicts, and evidence scope before the parties accept.",
+      "Check coercion, fraud, identity abuse, privacy, third-party externalities, conflicts, and payment boundaries before acceptance.",
   },
   {
-    title: "Accept only if both prefer the result",
+    title: "Accept only on mutual gain",
     detail:
-      "Each participant decides by their own values. Moral Trade does not impose a hidden moral ranking or collapse disagreement into consensus.",
+      "Each participant decides by their own priorities. Moral Trade does not impose a shared moral ranking.",
   },
 ] as const;
 
 export default async function HowItWorksPage() {
   const viewer = await getViewer();
+  const isAuthenticated = Boolean(viewer);
+  const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const articleStructuredData = buildArticleJsonLd({
     headline: "How Moral Trade works",
     description: howItWorksDescription,
@@ -77,46 +78,42 @@ export default async function HowItWorksPage() {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
         />
 
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">How it works</p>
-            <h1>One reviewable commitment at a time.</h1>
+            <h1>One reviewable agreement at a time.</h1>
             <p className="hero-text">
-              Record the default. Specify bounded terms. Agree on proof and privacy. Review risks.
-              Then move only if each participant prefers the result.
+              State the default, write bounded commitments, agree on evidence, review risks, and
+              accept only when each party prefers the result.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/worked-examples">
-                See a worked example
+              <Link className="button button-primary" href={createHref}>
+                Create an agreement
               </Link>
-              <Link className="button button-secondary" href="/signup?returnTo=/onboarding">
-                Join the network
+              <Link className="button button-secondary" href="/offers">
+                Browse active offers
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Operating boundary</p>
             <p className="hero-followup">
-              Moral Trade records terms, evidence expectations, privacy grants, and review states.
-              It does not hold funds, autonomously disclose private data, or promise legal enforceability.
+              Moral Trade records terms, evidence expectations, privacy grants, and review states. It
+              does not hold donations, offer escrow, autonomously disclose private data, or promise
+              legal enforceability.
             </p>
           </aside>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" aria-labelledby="how-steps-heading">
-          <div className="section-head">
-            <p className="eyebrow">Process</p>
-            <h2 id="how-steps-heading">The complete minimal workflow</h2>
-          </div>
-
+        <section className="section section-white" aria-labelledby="agreement-steps-heading">
+          <h2 className="sr-only" id="agreement-steps-heading">Agreement steps</h2>
           <div className="data-grid">
             {steps.map((step, index) => (
               <article className="panel data-card" key={step.title}>
@@ -128,26 +125,24 @@ export default async function HowItWorksPage() {
           </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="how-next-heading">
-          <div className="section-head">
-            <p className="eyebrow">Next action</p>
-            <h2 id="how-next-heading">Choose the route that matches your use case</h2>
-          </div>
+        <section className="section section-subtle" aria-label="Available actions">
           <div className="data-grid">
-            <Link className="panel data-card" href="/worked-examples">
-              <h3>Inspect complete terms</h3>
-              <p className="route-text">See how baselines, actions, evidence, and exit rules fit together.</p>
-              <span className="inline-link">Open worked examples</span>
+            <Link className="panel data-card" href={createHref}>
+              <h3>Create an agreement</h3>
+              <p className="route-text">Write the default, commitments, cap, evidence, and exit rule.</p>
+              <span className="inline-link">Create</span>
             </Link>
-            <Link className="panel data-card" href="/cohort">
-              <h3>Join the network</h3>
-              <p className="route-text">Choose one first action and bring a serious use case or counterparty.</p>
-              <span className="inline-link">Open network onboarding</span>
+            <Link className="panel data-card" href="/donate">
+              <h3>Fund a public good</h3>
+              <p className="route-text">
+                Choose a reviewed destination and complete payment with Every.org.
+              </p>
+              <span className="inline-link">Choose a funding route</span>
             </Link>
-            <Link className="panel data-card" href="/moral-goods-group-buying">
-              <h3>Coordinate a public good</h3>
-              <p className="route-text">Use thresholded commitments, external evidence, and explicit participation rules.</p>
-              <span className="inline-link">Open public-good tools</span>
+            <Link className="panel data-card" href="/pools">
+              <h3>Join a conditional pool</h3>
+              <p className="route-text">Review the threshold, recipient, maximum exposure, and state.</p>
+              <span className="inline-link">Review pools</span>
             </Link>
           </div>
         </section>

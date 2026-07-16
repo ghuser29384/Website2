@@ -5,22 +5,21 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { VISITOR_PATHS } from "@/lib/visitor-paths";
 
 export const metadata: Metadata = {
-  title: "Choose Your Path",
+  title: "Start",
   description:
-    "Route yourself through Moral Trade by intent: learn the idea, inspect a worked example, use a donation route, or join the network.",
+    "Create a bounded agreement, browse active offers, fund a public good, or join a conditional pool on Moral Trade.",
   alternates: {
     canonical: "/start",
   },
   openGraph: {
-    title: "Choose your Moral Trade path",
+    title: "Start on Moral Trade",
     description:
-      "A four-path router for new visitors: learn, inspect an example, donate, or join and build.",
+      "Create an agreement, browse active offers, fund a public good, or review conditional pools.",
     url: getAbsoluteUrl("/start"),
     type: "website",
   },
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "ItemList",
-  name: "Moral Trade visitor paths",
+  name: "Moral Trade actions",
   url: getAbsoluteUrl("/start"),
   itemListElement: VISITOR_PATHS.map((path, index) => ({
     "@type": "ListItem",
@@ -49,6 +48,8 @@ export default async function StartPage() {
     getViewer(),
     getMarketplaceOverview(),
   ]);
+  const isAuthenticated = Boolean(viewer);
+  const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const serviceSnapshot = [
     {
       icon: "marketplace",
@@ -56,9 +57,9 @@ export default async function StartPage() {
       value: formatOptionalCount(marketplaceOverview.openOfferCount),
     },
     {
-      icon: "example",
-      label: "Worked examples",
-      value: String(CANONICAL_WORKED_CASE_COUNT),
+      icon: "payment",
+      label: "External donation route",
+      value: "Available",
     },
     {
       icon: "profile",
@@ -76,31 +77,36 @@ export default async function StartPage() {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
         />
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Visitor router</p>
-            <h1>Choose the right first path.</h1>
+            <p className="eyebrow">Start</p>
+            <h1>Create an agreement or act on one.</h1>
             <p className="hero-text">
-              Moral Trade is easier to understand when you start from your intent. Choose whether
-              you want to learn, inspect an example, use a donation route, or join the network.
+              Create bounded terms, browse active offers, fund a public good, or join a conditional
+              pool.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/worked-examples">
-                Inspect a worked example
+              <Link className="button button-primary" href={createHref}>
+                Create an agreement
               </Link>
-              <Link className="button button-secondary" href="/what-is-moral-trade">
-                Read the primer
+              <Link className="button button-secondary" href="/offers">
+                Browse active offers
               </Link>
             </div>
+            <ul className="hero-signals" aria-label="Core action boundaries">
+              <li>No-deal default</li>
+              <li>Bounded exposure</li>
+              <li>Reviewable evidence</li>
+              <li>Provider-hosted payment</li>
+            </ul>
           </section>
 
-          <aside className="growth-progress-card panel" aria-label="Service inventory">
-            <p className="eyebrow">Backed inventory</p>
+          <aside className="growth-progress-card panel" aria-label="Current service state">
             {serviceSnapshot.map((item) => (
               <div className="growth-progress-stat" key={item.label}>
                 <IconMark name={item.icon} />
@@ -108,28 +114,19 @@ export default async function StartPage() {
                 <strong>{item.value}</strong>
               </div>
             ))}
-            <p className="hero-followup">
-              Worked examples and live participant records remain clearly separated. No liquidity
-              claim is implied by the existence of the service.
-            </p>
           </aside>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="growth-start-section section section-white" aria-labelledby="visitor-paths-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Four paths</p>
-            <h2 id="visitor-paths-heading">Learn, inspect, donate, or join</h2>
-            <p>
-              Each path lands on a concrete next step and keeps the relevant operating boundaries
-              visible before asking you to publish or rely on a record.
-            </p>
-          </div>
-
+        <section className="growth-start-section section section-white" aria-label="Available actions">
           <div className="growth-start-grid">
             {VISITOR_PATHS.map((path) => (
-              <Link className="growth-path-card panel" href={path.href} key={path.key}>
+              <Link
+                className="growth-path-card panel"
+                href={path.key === "create" ? createHref : path.href}
+                key={path.key}
+              >
                 <IconMark name={path.icon} />
                 <div>
                   <p className="detail-kicker">{path.title}</p>
@@ -140,59 +137,6 @@ export default async function StartPage() {
                 <span className="inline-link">{path.actionLabel}</span>
               </Link>
             ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="path-boundaries-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Routing discipline</p>
-            <h2 id="path-boundaries-heading">What this page prevents</h2>
-            <p>
-              It keeps new visitors from confusing examples with live activity and separates
-              first-time learning from signed-in member workflows.
-            </p>
-          </div>
-          <div className="data-grid">
-            <article className="panel data-card">
-              <h3>No liquidity assumption</h3>
-              <p className="route-text">
-                Worked examples explain the mechanism before you infer demand from open proposals.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>No account pressure</h3>
-              <p className="route-text">
-                The primer, examples, research, and donation routes are readable before signup.
-              </p>
-            </article>
-            <article className="panel data-card">
-              <h3>No hidden automation</h3>
-              <p className="route-text">
-                Private matching depends on broad previews, consent gates, and reviewable disclosure.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="visitor-actions-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Still unsure?</p>
-            <h2 id="visitor-actions-heading">Start where the evidence is clearest</h2>
-            <p>
-              The fastest way to understand Moral Trade is to inspect one complete example and its
-              baseline, proof rule, privacy settings, and review boundaries.
-            </p>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/worked-examples">
-              Browse worked examples
-            </Link>
-            <Link className="button button-secondary" href="/trust">
-              Read what you can rely on
-            </Link>
-            <Link className="button button-secondary" href="/contact">
-              Contact the team
-            </Link>
           </div>
         </section>
       </main>
