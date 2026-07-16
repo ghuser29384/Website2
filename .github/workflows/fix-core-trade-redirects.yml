@@ -1,4 +1,4 @@
-name: Fix core trade redirect propagation
+name: Fix core trade action safeguards
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[core-redirect-fixed]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[core-security-fixed]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -22,67 +22,62 @@ jobs:
           ref: feat/core-trade-loop
           fetch-depth: 0
 
-      - name: Preserve successful redirects across action error handling
+      - name: Apply invitation and confirmation safeguards
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path("src/app/core-trade-actions.ts")
           source = path.read_text()
-          old = '''function redirectWithMessage(
-            path: string,
-            key: "error" | "message",
-            message: string,
-          ): never {
-            const target = new URL(path, "https://www.moraltrade.org");
-            target.searchParams.set(key, message);
-            redirect(`${target.pathname}${target.search}${target.hash}`);
-          }
-          '''
-          new = '''const CORE_REDIRECT_MARKER = "__CORE_TRADE_REDIRECT__:";
 
-          function redirectWithMessage(
-            path: string,
-            key: "error" | "message",
-            message: string,
-          ): never {
-            if (message.startsWith(CORE_REDIRECT_MARKER)) {
-              const encoded = message.slice(CORE_REDIRECT_MARKER.length);
-              const payload = JSON.parse(decodeURIComponent(encoded)) as {
-                path: string;
-                key: "error" | "message";
-                message: string;
-              };
-              const target = new URL(payload.path, "https://www.moraltrade.org");
-              target.searchParams.set(payload.key, payload.message);
-              redirect(`${target.pathname}${target.search}${target.hash}`);
+          invitation_old = '''    if (String(invitation.sender_id) === viewer.authUser.id) {
+              throw new Error("The sender cannot respond to their own invitation.");
             }
 
-            const target = new URL(path, "https://www.moraltrade.org");
-            target.searchParams.set(key, message);
+            if (decision === "decline") {'''
+          invitation_new = '''    if (String(invitation.sender_id) === viewer.authUser.id) {
+              throw new Error("The sender cannot respond to their own invitation.");
+            }
 
-            try {
-              redirect(`${target.pathname}${target.search}${target.hash}`);
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                typeof (error as Error & { digest?: unknown }).digest === "string" &&
-                String((error as Error & { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
-              ) {
-                error.message = `${CORE_REDIRECT_MARKER}${encodeURIComponent(
-                  JSON.stringify({ path, key, message }),
-                )}`;
+            const intendedUserId = invitation.recipient_user_id
+              ? String(invitation.recipient_user_id)
+              : "";
+            const intendedEmail = String(invitation.recipient_email ?? "").trim().toLowerCase();
+            const viewerEmail = String(viewer.authUser.email ?? "").trim().toLowerCase();
+            if (intendedUserId && intendedUserId !== viewer.authUser.id) {
+              throw new Error("This invitation was addressed to another account.");
+            }
+            if (!intendedUserId && intendedEmail && intendedEmail !== viewerEmail) {
+              throw new Error("Sign in with the email address that received this invitation.");
+            }
+
+            if (decision === "decline") {'''
+          if invitation_old in source:
+              source = source.replace(invitation_old, invitation_new, 1)
+          elif "This invitation was addressed to another account." not in source:
+              raise SystemExit("Expected invitation authorization block was not found.")
+
+          function_marker = "export async function confirmAgreementVersionAction(formData: FormData) {"
+          marker_index = source.find(function_marker)
+          if marker_index < 0:
+              raise SystemExit("Confirmation action marker was not found.")
+          confirmation_old = '''  try {
+              const { data: agreement } = await supabase'''
+          confirmation_new = '''  try {
+              if (!readCheckbox(formData, "terms_reviewed")) {
+                throw new Error("Confirm that you reviewed this exact frozen agreement version.");
               }
-              throw error;
-            }
-          }
-          '''
-          if old not in source:
-              if "CORE_REDIRECT_MARKER" in source:
-                  print("Redirect helper is already fixed.")
-                  raise SystemExit(0)
-              raise SystemExit("Expected redirect helper was not found; refusing an unsafe patch.")
-          path.write_text(source.replace(old, new, 1))
+              const { data: agreement } = await supabase'''
+          confirmation_index = source.find(confirmation_old, marker_index)
+          existing_index = source.find("Confirm that you reviewed this exact frozen agreement version.", marker_index)
+          if confirmation_index >= 0 and (existing_index < 0 or existing_index > confirmation_index):
+              source = source[:confirmation_index] + source[confirmation_index:].replace(
+                  confirmation_old, confirmation_new, 1
+              )
+          elif existing_index < 0:
+              raise SystemExit("Expected agreement confirmation block was not found.")
+
+          path.write_text(source)
           PY
 
       - name: Commit the source change
@@ -94,5 +89,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/core-trade-actions.ts
-          git commit -m "Preserve successful core trade redirects [core-redirect-fixed]"
+          git commit -m "Enforce invitation recipient and agreement review [core-security-fixed]"
           git push origin HEAD:feat/core-trade-loop
