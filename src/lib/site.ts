@@ -1,9 +1,10 @@
 export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
-    { href: "/pledge-swaps", label: "Trade" },
-    { href: "/moral-goods-group-buying", label: "Moral Public Goods" },
-    { href: "/donation-offsets", label: "Donation Offsets" },
-    { href: "/donate", label: "Fund" },
+    { href: "/offers?view=live", label: "Explore" },
+    { href: "/trades/new", label: "Create" },
+    { href: "/messages", label: "Messages" },
+    { href: "/commitments", label: "Commitments" },
+    { href: "/safety", label: "Safety" },
   ];
 }
 
@@ -12,7 +13,7 @@ export function getTopbarActions(isAuthenticated = false) {
     authLink: isAuthenticated ? undefined : { href: "/login", label: "Sign in" },
     primaryAction: isAuthenticated
       ? {
-          href: "/create",
+          href: "/trades/new",
           label: "Create",
         }
       : {
@@ -27,11 +28,9 @@ export const FOOTER_LINK_GROUPS = [
     title: "Marketplace",
     links: [
       { href: "/offers?view=live", label: "Explore trades" },
-      { href: "/create", label: "Create" },
-      { href: "/donate", label: "Fund a public good" },
-      { href: "/offsets", label: "Donation offsets" },
-      { href: "/pools", label: "Conditional pools" },
-      { href: "/background-networking", label: "Private matching" },
+      { href: "/trades/new", label: "Create a trade" },
+      { href: "/messages", label: "Private messages" },
+      { href: "/commitments", label: "Track commitments" },
     ],
   },
   {
