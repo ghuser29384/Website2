@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - "src/app/home-process-polish.css"
+      - "src/app/home-mode-hover-colors.css"
       - "src/app/layout.tsx"
       - "tests/home-process-section.spec.ts"
+      - "tests/home-mode-rail.spec.ts"
       - ".github/workflows/home-process-visual-qa.yml"
   push:
     branches:
@@ -33,21 +35,31 @@ jobs:
         run: npm ci
 
       - name: Lint changed TypeScript
-        run: npx eslint src/app/layout.tsx tests/home-process-section.spec.ts
+        run: |
+          npx eslint \
+            src/app/layout.tsx \
+            tests/home-process-section.spec.ts \
+            tests/home-mode-rail.spec.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run homepage process interaction and visual QA
+      - name: Run homepage interaction and visual QA
         env:
+          HOME_MODE_CAPTURE: "1"
           HOME_PROCESS_CAPTURE: "1"
-        run: npm run test:e2e -- tests/home-process-section.spec.ts
+        run: |
+          npm run test:e2e -- \
+            tests/home-process-section.spec.ts \
+            tests/home-mode-rail.spec.ts
 
       - name: Upload visual comparison artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: home-process-visual-qa
-          path: test-results/home-process-visual
+          name: homepage-visual-qa
+          path: |
+            test-results/home-process-visual
+            test-results/home-mode-visual
           if-no-files-found: error
           retention-days: 7
