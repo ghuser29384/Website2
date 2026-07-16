@@ -43,6 +43,22 @@ function statusLabel(status: string | null | undefined) {
   return (status || "not started").replaceAll("_", " ");
 }
 
+function paymentModeEyebrow(mode: string) {
+  if (mode === "live") return "Live conditional payments";
+  if (mode === "test") return "Stripe test mode";
+  return "Conditional payments unavailable";
+}
+
+function paymentPostureMessage(mode: string) {
+  if (mode === "live") {
+    return "Live mode moves real money and uses compensating refunds rather than claiming impossible payment-level atomicity.";
+  }
+  if (mode === "test") {
+    return "TEST MODE — Stripe test objects only. No real charge, donation, tax receipt, or charitable transfer occurs.";
+  }
+  return "Stripe payments are disabled on the production site until a verified live account, live keys, signed webhook, recipient destination, and settlement gates are ready.";
+}
+
 function latestByRole(rows: Array<Record<string, any>>) {
   const result = new Map<string, Record<string, any>>();
   for (const row of [...rows].sort((left, right) =>
@@ -163,7 +179,7 @@ export default async function PaymentWorkspacePage({
           ]}
         />
         <PageHero
-          eyebrow={readiness.livemode ? "Live conditional payments" : "Stripe test mode"}
+          eyebrow={paymentModeEyebrow(readiness.mode)}
           title="Authorize now. Charge only when the frozen offset clears."
           description="Stripe Checkout dynamically offers Card, Apple Pay, Google Pay, and Link when eligible; PayPal appears only for supported Stripe account regions and flows. Moral Trade saves the selected method without charging it. When both participants have matching mandates and the reviewed terms are unchanged, the platform charges each side off-session and transfers both amounts to the approved destination. If paired capture or transfer fails, successful charges are reversed or refunded."
           actions={
@@ -180,11 +196,7 @@ export default async function PaymentWorkspacePage({
           <aside className="hero-panel panel">
             <p className="eyebrow">Settlement posture</p>
             <h2>{readiness.canSettle ? "Capture path ready" : "Capture path gated"}</h2>
-            <p>
-              {readiness.livemode
-                ? "Live mode moves real money and uses compensating refunds rather than claiming impossible card-level atomicity."
-                : "TEST MODE — Stripe test objects only. No real card charge, donation, tax receipt, or charitable transfer occurs."}
-            </p>
+            <p>{paymentPostureMessage(readiness.mode)}</p>
           </aside>
         </PageHero>
       </header>

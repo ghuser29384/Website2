@@ -24,4 +24,4 @@ The conditional authorization flow remains a Checkout Session in `setup` mode. I
 
 ## Current live-money boundary
 
-`CONDITIONAL_PAYMENTS_MODE` remains `disabled` by default, and the existing live acceptance gates remain fail-closed. This deployment does not claim that a Hong Kong Stripe account can offer PayPal through Stripe, does not enable live money, and does not alter the separate Every.org donation handoff.
+`CONDITIONAL_PAYMENTS_MODE` remains `disabled` by default. Stripe test mode is allowed only in local and preview environments; the application blocks it when `VERCEL_ENV=production`. Production conditional payments remain disabled until a verified live account, live API keys, signed webhook, approved destination, and settlement gates are ready. This deployment does not claim that a Hong Kong Stripe account can offer PayPal through Stripe and does not alter the separate Every.org donation handoff.
