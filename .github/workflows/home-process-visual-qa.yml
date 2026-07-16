@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/app/clear-marketplace.css"
+      - "src/app/clear-marketplace-finishing.css"
       - "src/app/home-process-polish.css"
       - "src/app/home-mode-hover-colors.css"
       - "src/app/layout.tsx"
