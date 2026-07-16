@@ -350,8 +350,8 @@ export function buildMpgfEveryOrgDonateLink({
     : undefined;
   const href = withDonateLinkParams(getEveryOrgDonationHref(resolvedTarget), {
     amount: amountCents ? formatAmountCents(amountCents) : undefined,
-    description: `Moral Trade Public Goods Fund fast-route donation for ${campaign.title}`,
-    designation: `Moral Trade MPGF: ${campaign.title}`,
+    description: `External charity donation selected through Moral Trade MPGF for ${campaign.title}`,
+    designation: `External recipient for MPGF campaign: ${campaign.title}`,
     exit_url: exitUrl,
     frequency: "ONCE",
     partner_donation_id: partnerDonationId,

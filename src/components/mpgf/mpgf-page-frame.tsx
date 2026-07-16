@@ -48,7 +48,7 @@ export function MpgfPageFrame({
               <span>Every.org fast route</span>
               <span>Webhook before counting</span>
               <span>Reviewer verification</span>
-              <span>{realMoneyReady ? "Integrated checkout available" : "External-payment route active"}</span>
+              <span>{realMoneyReady ? "Approved external checkout available" : "Direct-to-charity or pledge-only"}</span>
             </div>
             {actions ? <div className="hero-actions">{actions}</div> : null}
           </section>
@@ -58,7 +58,7 @@ export function MpgfPageFrame({
             <dl>
               <div>
                 <dt>1. Choose route</dt>
-                <dd>Use the Every.org fast route, saved commitment path, or fallback evidence flow.</dd>
+                <dd>Use Every.org, a sponsor-backed route when active, or a non-custodial pledge intent.</dd>
               </div>
               <div>
                 <dt>2. Wait for import</dt>
@@ -72,8 +72,8 @@ export function MpgfPageFrame({
                 <dt>Payment route</dt>
                 <dd>
                   {realMoneyReady
-                    ? "Integrated checkout is available for eligible signed-in participants"
-                    : "External provider payment and reviewed evidence remain available"}
+                    ? "An approved external provider route is available for eligible signed-in participants"
+                    : "Direct-to-charity payment, pledge intent, and reviewed external evidence only"}
                 </dd>
               </div>
             </dl>

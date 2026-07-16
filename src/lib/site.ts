@@ -57,6 +57,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/team-and-governance", label: "Team and governance" },
       { href: "/cohort", label: "Join the network" },
+      { href: "/support", label: "Support" },
       { href: "/contact", label: "Contact" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },

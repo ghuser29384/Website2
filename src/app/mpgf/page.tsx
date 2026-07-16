@@ -30,7 +30,7 @@ const workflow = [
     number: "01",
     title: "Choose a maximum budget",
     detail:
-      "Set the most you are willing to contribute and define fallback treatment before any payment authorization is requested.",
+      "Set the most you are willing to contribute and define fallback treatment before any external payment handoff is opened.",
   },
   {
     number: "02",
@@ -48,7 +48,7 @@ const workflow = [
     number: "04",
     title: "Clear only after gates pass",
     detail:
-      "Threshold, identity, review, challenge, authorization, destination, and settlement checks must pass before a contribution counts.",
+      "Threshold, identity, review, challenge, destination, external-payment, and evidence checks must pass before a contribution counts.",
   },
 ] as const;
 
@@ -100,6 +100,7 @@ const serviceRoutes = [
 const operatingBoundaries = [
   "A preview is not a contribution, charge, match, payout, or certificate.",
   "Moral Trade does not hold participant funds or provide legal escrow.",
+  "Project support requires an active fiscal sponsor or another legally approved external recipient.",
   "External payment evidence shows that a transaction occurred; it does not by itself prove why it occurred.",
   "Projects do not clear while threshold, review, challenge, destination, authorization, or settlement blockers remain.",
   "Public progress may remain sealed before close to reduce strategic manipulation and privacy leakage.",
@@ -199,7 +200,7 @@ export default async function MpgfPage() {
             Open current round
           </Link>
           <Link className="button button-secondary" href="/mpgf/real-money-terms">
-            Review real-money terms
+            Review funding terms
           </Link>
           <Link className="button button-secondary" href="/status">
             Check service status

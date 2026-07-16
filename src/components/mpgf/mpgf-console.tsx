@@ -173,7 +173,7 @@ export function MpgfConsole({
     "Every.org fast-route donations return to a pending state until webhook import and review.",
   );
   const [savedCommitmentMessage, setSavedCommitmentMessage] = useState(
-    "Saved commitments use Stripe SetupIntent first. PaymentIntent creation waits for threshold, review, and challenge gates.",
+    "Production participation is pledge-only and uses external handoff. Moral Trade does not store a payment method.",
   );
   const [proposalTitle, setProposalTitle] = useState("Community public-goods evaluation reserve");
   const [proposalSummary, setProposalSummary] = useState("");
@@ -221,8 +221,8 @@ export function MpgfConsole({
   const [ballotReviewOpen, setBallotReviewOpen] = useState(false);
   const [realMoneyMessage, setRealMoneyMessage] = useState(
     realMoneyReadiness?.ready
-      ? "Legacy direct checkout remains behind production readiness gates; saved commitments use SetupIntent above."
-      : "Direct checkout is not the default MPGF flow and remains gated behind provider approval.",
+      ? "An approved external checkout route is available behind the published readiness gates."
+      : "Native checkout is disabled. Use Every.org, a future sponsor-backed route, or pledge-only external handoff.",
   );
   const [manualEvidenceMessage, setManualEvidenceMessage] = useState(
     !viewerPresent
@@ -270,6 +270,7 @@ export function MpgfConsole({
   const selectedPublicGoodsCampaign =
     demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === publicGoodsCampaignId) ??
     demoMpgfPublicGoodsCampaigns[0];
+  const storedPaymentCommitmentsEnabled = Boolean(realMoneyReadiness?.ready);
   const persistenceLabel = viewerPresent
     ? persistedState?.status === "authenticated"
       ? "Persisted to your MPGF participant account."
@@ -803,9 +804,9 @@ export function MpgfConsole({
             <p className="eyebrow">2. Saved commitment</p>
             <h2>Save a conditional commitment</h2>
             <p>
-              If the fast route is not the right fit, save a contribution intent or a Stripe
-              SetupIntent commitment. PaymentIntent creation waits for supporter, identity,
-              threshold, review, provider-event, and challenge gates.
+              Save a non-custodial pledge intent. When the published conditions clear, the
+              participant pays the approved external recipient through Every.org or a sponsor-backed
+              route. Moral Trade does not store a payment method in the current production posture.
             </p>
             <div className="mpgf-form-grid">
               <label>
@@ -900,17 +901,19 @@ export function MpgfConsole({
                 />
                 <span>Also create an optional monthly sponsor-pool refill pledge</span>
               </label>
-              <label className="checkbox-label">
-                <input
-                  checked={futureUseConsentAccepted}
-                  type="checkbox"
-                  onChange={(event) => setFutureUseConsentAccepted(event.currentTarget.checked)}
-                />
-                <span>
-                  I consent to save this payment method for one future MPGF charge only after
-                  threshold, review, challenge, and parameter-lock gates clear.
-                </span>
-              </label>
+              {storedPaymentCommitmentsEnabled ? (
+                <label className="checkbox-label">
+                  <input
+                    checked={futureUseConsentAccepted}
+                    type="checkbox"
+                    onChange={(event) => setFutureUseConsentAccepted(event.currentTarget.checked)}
+                  />
+                  <span>
+                    I consent to save this payment method for one future MPGF charge only after
+                    threshold, review, challenge, and parameter-lock gates clear.
+                  </span>
+                </label>
+              ) : null}
             </div>
             <dl className="mpgf-summary-grid">
               <div>
@@ -923,7 +926,7 @@ export function MpgfConsole({
               </div>
               <div>
                 <dt>Saved path</dt>
-                <dd>SetupIntent first</dd>
+                <dd>{storedPaymentCommitmentsEnabled ? "SetupIntent first" : "external handoff or pledge-only"}</dd>
               </div>
               <div>
                 <dt>Max exposure</dt>
@@ -954,21 +957,23 @@ export function MpgfConsole({
               </div>
             </dl>
             <div className="mpgf-inline-actions">
+              {storedPaymentCommitmentsEnabled ? (
+                <button
+                  className="button button-secondary"
+                  disabled={
+                    !viewerPresent ||
+                    pendingAction === "savedCommitment" ||
+                    publicGoodsPledgeAmount < 1 ||
+                    !futureUseConsentAccepted
+                  }
+                  type="button"
+                  onClick={startSavedCommitment}
+                >
+                  Save provider commitment
+                </button>
+              ) : null}
               <button
-                className="button button-primary"
-                disabled={
-                  !viewerPresent ||
-                  pendingAction === "savedCommitment" ||
-                  publicGoodsPledgeAmount < 1 ||
-                  !futureUseConsentAccepted
-                }
-                type="button"
-                onClick={startSavedCommitment}
-              >
-                Save Stripe commitment
-              </button>
-              <button
-                className="button button-secondary"
+                className={storedPaymentCommitmentsEnabled ? "button button-secondary" : "button button-primary"}
                 disabled={pendingAction === "publicGoodsPledge" || publicGoodsPledgeAmount < 1}
                 type="button"
                 onClick={recordPublicGoodsAssurancePledge}
@@ -1155,54 +1160,55 @@ export function MpgfConsole({
           </section>
 
           <section className="mpgf-panel">
-            <p className="eyebrow">Provider checkout gate</p>
-            <h2>Legacy direct checkout remains gated</h2>
+            <p className="eyebrow">Project funding gate</p>
+            <h2>{realMoneyReadiness?.ready ? "Approved external checkout is available" : "Native checkout is disabled"}</h2>
             <p>{MPGF_COPY.realMoneyContribution}</p>
             <div className="mpgf-confirmation" role="status">
               {realMoneyReadiness?.ready
-                ? "All configured real-money acceptance gates are passed, but saved commitments remain the CG-VQAF default."
-                : "Direct checkout is planned only after provider approval and production gates."}
+                ? "All configured provider and acceptance gates are passed. The external provider remains the payment and refund source of truth."
+                : "Moral Trade is not accepting project funds through native checkout. Direct-to-charity Every.org routes and pledge-only participation remain available."}
             </div>
-            <div className="mpgf-inline-actions">
-              <button
-                className="button button-primary"
-                disabled={
-                  !viewerPresent ||
-                  !realMoneyReadiness?.ready ||
-                  pendingAction === "checkout" ||
-                  !Number.isFinite(oneTimePledge) ||
-                  oneTimePledge < 1
-                }
-                type="button"
-                onClick={() => startRealMoneyCheckout("one_time")}
-              >
-                Open one-time checkout
-              </button>
-              <button
-                className="button button-secondary"
-                disabled={
-                  !viewerPresent ||
-                  !realMoneyReadiness?.ready ||
-                  pendingAction === "checkout" ||
-                  !Number.isFinite(monthlyPledge) ||
-                  monthlyPledge < 1
-                }
-                type="button"
-                onClick={() => startRealMoneyCheckout("monthly")}
-              >
-                Open monthly checkout
-              </button>
-            </div>
+            {realMoneyReadiness?.ready ? (
+              <div className="mpgf-inline-actions">
+                <button
+                  className="button button-primary"
+                  disabled={
+                    !viewerPresent ||
+                    pendingAction === "checkout" ||
+                    !Number.isFinite(oneTimePledge) ||
+                    oneTimePledge < 1
+                  }
+                  type="button"
+                  onClick={() => startRealMoneyCheckout("one_time")}
+                >
+                  Open one-time checkout
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={
+                    !viewerPresent ||
+                    pendingAction === "checkout" ||
+                    !Number.isFinite(monthlyPledge) ||
+                    monthlyPledge < 1
+                  }
+                  type="button"
+                  onClick={() => startRealMoneyCheckout("monthly")}
+                >
+                  Open monthly checkout
+                </button>
+              </div>
+            ) : (
+              <div className="mpgf-inline-actions">
+                <Link className="button button-primary" href="/support">
+                  Review support routes
+                </Link>
+              </div>
+            )}
             <p className="mpgf-small" role="status">
               {realMoneyMessage}
             </p>
-            {!viewerPresent ? (
-              <Link className="inline-link" href="/login?returnTo=/mpgf/contribute">
-                Sign in before creating a Stripe Checkout session.
-              </Link>
-            ) : null}
             <Link className="inline-link" href="/mpgf/real-money-terms">
-              Review real-money terms and refund policy
+              Review funding terms and refund boundaries
             </Link>
           </section>
 

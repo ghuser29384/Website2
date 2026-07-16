@@ -4,7 +4,9 @@ import Link from "next/link";
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { getMoralTradeFundingReadiness } from "@/lib/funding";
 import {
   EVERY_ORG_CURATED_TARGETS,
   EVERY_ORG_UNCURATED_CAUSES,
@@ -17,18 +19,20 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Donate",
   description:
-    "Donate through vetted Every.org routes from Moral Trade in three steps: choose a cause, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
+    "Donate directly to established charities through vetted Every.org routes. These donations do not fund Moral Trade itself.",
   alternates: {
     canonical: "/donate",
   },
   openGraph: {
-    title: "Donate through Every.org",
+    title: "Donate directly through Every.org",
     description:
-      "Choose a vetted route, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
+      "Choose a vetted external recipient and complete the donation on Every.org. Moral Trade does not receive the gift.",
     url: getAbsoluteUrl("/donate"),
     type: "website",
   },
 };
+
+export const dynamic = "force-dynamic";
 
 interface DonatePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -51,6 +55,7 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = hasSupabaseEnv() ? await getViewer() : null;
   const returnedTarget = readParam(resolvedSearchParams.target);
+  const fundingReadiness = getMoralTradeFundingReadiness();
 
   return (
     <div className="page-shell">
@@ -65,28 +70,28 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Donate</p>
-            <h1>Donate through a vetted route in three steps.</h1>
+            <h1>Donate directly to an existing charity through Every.org.</h1>
             <p className="hero-text">
-              Choose a cause, complete payment securely on Every.org, and use MPGF webhook
-              import or reviewed fallback where a funding workflow needs evidence.
+              Choose a reviewed external recipient, complete payment on Every.org, and use optional
+              evidence reconciliation only when a Moral Trade workflow needs it.
             </p>
             <p className="hero-followup">
-              The payment happens off-site. Moral Trade does not hold donations, provide escrow,
-              or decide tax treatment.
+              The recipient shown by Every.org receives the donation. These gifts do not fund Moral
+              Trade itself, and Moral Trade does not hold funds or decide tax treatment.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="#direct-routes">
                 Choose a donation route
               </Link>
-              <Link className="button button-secondary" href="/donation-offsets">
-                Review donation offsets
+              <Link className="button button-secondary" href="/support">
+                Support Moral Trade
               </Link>
             </div>
             <ul className="hero-signals" aria-label="Donation trust notes">
               <li>Payment on Every.org</li>
-              <li>Webhook import when available</li>
-              <li>No custody or escrow</li>
-              <li>Reviewed fallback only</li>
+              <li>Existing charity is the recipient</li>
+              <li>No Moral Trade custody</li>
+              <li>Not project-support funding</li>
             </ul>
           </section>
 
@@ -126,6 +131,46 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
             if webhook import cannot match this gift to a Moral Trade workflow.
           </div>
         ) : null}
+
+        <section className="section section-subtle" aria-labelledby="funding-paths-heading">
+          <div className="section-head">
+            <p className="eyebrow">Separate funding paths</p>
+            <h2 id="funding-paths-heading">Charity gifts and project support are not the same transaction</h2>
+            <p>
+              Direct gifts can proceed now. Moral Trade project support appears only after a fiscal
+              sponsor is active and its legal and financial disclosures are configured.
+            </p>
+          </div>
+          <div className="data-grid">
+            <article className="panel data-card">
+              <div className="protocol-workflow-card-head">
+                <h3>Donate to an existing charity</h3>
+                <StatusBadge>available</StatusBadge>
+              </div>
+              <p className="route-text">
+                Every.org receives and processes the gift for the named external recipient.
+              </p>
+              <a className="text-button" href="#direct-routes">
+                Choose a direct route
+              </a>
+            </article>
+            <article className="panel data-card">
+              <div className="protocol-workflow-card-head">
+                <h3>Support Moral Trade operations</h3>
+                <StatusBadge tone={fundingReadiness.projectFundingAvailable ? "default" : "warning"}>
+                  {fundingReadiness.projectFundingAvailable ? "sponsor-backed" : "not accepting funds"}
+                </StatusBadge>
+              </div>
+              <p className="route-text">
+                Project support is available only through the legal fiscal sponsor disclosed on the
+                support page. No personal or native checkout route is used.
+              </p>
+              <Link className="text-button" href="/support">
+                Review project funding
+              </Link>
+            </article>
+          </div>
+        </section>
 
         <section className="section section-white" id="direct-routes">
           <div className="section-head">

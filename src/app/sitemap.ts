@@ -140,6 +140,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.78,
     },
     {
+      url: getAbsoluteUrl("/support"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.76,
+    },
+    {
       url: getAbsoluteUrl("/pilot-updates"),
       lastModified: now,
       changeFrequency: "weekly",
