@@ -1,0 +1,186 @@
+/* Keep the global search compact, integrated, and visually aligned with the top bar. */
+.mt-site-topbar .topbar-search {
+  display: block;
+  width: min(100%, 40rem);
+  max-width: 40rem;
+  min-width: 0;
+  justify-self: center;
+}
+
+.mt-site-topbar .topbar-search-box {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.125rem;
+  min-height: 3rem;
+  padding: 0.25rem;
+  overflow: visible;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(42, 38, 31, 0.035);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background-color 140ms ease;
+}
+
+.mt-site-topbar .topbar-search-box:hover {
+  border-color: var(--ink-muted);
+  background: var(--surface);
+}
+
+.mt-site-topbar .topbar-search-box:focus-within {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow:
+    0 0 0 3px rgba(153, 87, 67, 0.12),
+    0 6px 18px rgba(42, 38, 31, 0.07);
+}
+
+.mt-site-topbar .topbar-search-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0 0 0 0.7rem;
+  color: var(--ink-muted);
+}
+
+.mt-site-topbar .topbar-search input {
+  width: 100%;
+  min-width: 0;
+  height: 2.5rem;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  font-size: 0.94rem;
+  line-height: 1;
+  appearance: none;
+}
+
+.mt-site-topbar .topbar-search input:focus {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.mt-site-topbar .topbar-search input::placeholder {
+  color: var(--ink-muted);
+  opacity: 1;
+}
+
+.mt-site-topbar .topbar-search input::-webkit-search-cancel-button,
+.mt-site-topbar .topbar-search input::-webkit-search-decoration {
+  appearance: none;
+}
+
+.mt-site-topbar .topbar-search-clear,
+.mt-site-topbar .topbar-search-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-left: 0;
+  font-family: var(--font-body);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mt-site-topbar .topbar-search-clear {
+  height: 2rem;
+  padding: 0 0.55rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.mt-site-topbar .topbar-search-clear:focus-visible,
+.mt-site-topbar .topbar-search-clear:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+  outline: none;
+}
+
+.mt-site-topbar .topbar-search-submit {
+  height: 2.5rem;
+  min-width: 3.65rem;
+  padding: 0 0.9rem;
+  border-radius: 0.55rem;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 3px 9px rgba(116, 67, 53, 0.14);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.mt-site-topbar .topbar-search-submit:focus-visible,
+.mt-site-topbar .topbar-search-submit:hover {
+  background: var(--accent-deep);
+  box-shadow: 0 5px 12px rgba(116, 67, 53, 0.18);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.mt-site-topbar .topbar-search-submit:active {
+  box-shadow: 0 2px 6px rgba(116, 67, 53, 0.12);
+  transform: translateY(0);
+}
+
+.mt-site-topbar .topbar-search-results {
+  top: calc(100% + 0.55rem);
+  padding: 0.45rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 0 14px 34px rgba(42, 38, 31, 0.09);
+}
+
+@media (max-width: 1120px) {
+  .mt-site-topbar .topbar-search {
+    width: min(100%, 42rem);
+    max-width: 42rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .mt-site-topbar .topbar-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .mt-site-topbar .topbar-search-box {
+    min-height: 2.85rem;
+    border-radius: 0.7rem;
+  }
+
+  .mt-site-topbar .topbar-search input {
+    height: 2.35rem;
+    font-size: 0.9rem;
+  }
+
+  .mt-site-topbar .topbar-search-submit {
+    height: 2.35rem;
+    min-width: 3.4rem;
+    padding-inline: 0.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-site-topbar .topbar-search-box,
+  .mt-site-topbar .topbar-search-submit {
+    transition: none;
+  }
+
+  .mt-site-topbar .topbar-search-submit:focus-visible,
+  .mt-site-topbar .topbar-search-submit:hover {
+    transform: none;
+  }
+}
