@@ -1,4 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+async function expectFullyInViewport(page: Page, locator: Locator) {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+}
 
 test("homepage opens the immersive walkthrough", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -12,7 +24,10 @@ test("homepage opens the immersive walkthrough", async ({ page }) => {
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("heading", { name: "What do you want more of?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
+  await expect(
+    page.getByText("Start with your values. Nobody will ask you to rank everyone else's."),
+  ).toHaveCount(0);
   await expect(page.locator(".cause-choice")).toHaveCount(14);
   await expect(page.getByRole("button", { name: "Wild animal suffering" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Factory farming" })).toBeVisible();
@@ -30,7 +45,7 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
   await makeTrade.click();
 
   await page.getByRole("button", { name: "Continue to Find the Mix" }).click();
-  await expect(page.getByRole("heading", { name: "Find the mix where both say yes." })).toBeVisible();
+  await expect(page.getByText("Find the mix where both say yes.")).toHaveCount(0);
   await page.getByRole("button", { name: /C You give 1% to global health/ }).click();
   await expect(page.getByText("Both say yes.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Lock this deal" })).toHaveAttribute(
@@ -58,7 +73,20 @@ test("Crowd and Redirect preserve the requested copy and routing", async ({ page
   await expect(page.getByRole("button", { name: "Offer trade" })).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Redirect/i }).click();
-  await expect(page.getByText("Democrats")).toBeVisible();
+  const democratsMarker = page.locator(".stream-a .stream-label");
+  await expect(democratsMarker).toContainText("$100Democrats");
+  await expect(democratsMarker).toBeVisible();
+  await expectFullyInViewport(page, democratsMarker);
+  expect(
+    await democratsMarker.evaluate((element) => {
+      const bounds = element.getBoundingClientRect();
+      const topElement = document.elementFromPoint(
+        bounds.left + bounds.width / 2,
+        bounds.top + bounds.height / 2,
+      );
+      return topElement === element || element.contains(topElement);
+    }),
+  ).toBe(true);
   await expect(page.getByText("Republicans")).toBeVisible();
   await page.getByRole("button", { name: "Pause the tug-of-war" }).click();
   await page.getByRole("button", { name: /Malaria prevention/ }).click();
@@ -87,6 +115,17 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
     "aria-selected",
     "true",
   );
+  await expect(page.getByText("Find the mix where both say yes.")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /C You give 1% to global health/ }).click();
+  const lockDeal = page.getByRole("link", { name: "Lock this deal" });
+  const redirectDonations = page.getByRole("button", {
+    name: "Redirect ineffective donations.",
+  });
+  await expect(lockDeal).toBeVisible();
+  await expect(redirectDonations).toBeVisible();
+  await expectFullyInViewport(page, lockDeal);
+  await expectFullyInViewport(page, redirectDonations);
 
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
