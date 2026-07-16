@@ -20,26 +20,40 @@ async function prepareForVisualCapture(page: Page) {
 }
 
 test.describe("Homepage process section", () => {
-  test("uses a deliberate split layout on desktop", async ({ browser, page }) => {
+  test("shows the mechanism as an icon-led four-step flow on desktop", async ({ browser, page }) => {
     await page.setViewportSize({ width: 1560, height: 960 });
     await page.goto("/");
 
     const section = page.locator("section:has(#process-heading)");
+    const flow = section.locator(".mt-how-grid");
 
     await expect(
-      page.getByRole("heading", { level: 2, name: "Agree on the deal, not the values." }),
+      page.getByRole("heading", { level: 2, name: "Trade actions. Keep your values." }),
     ).toBeVisible();
     await expect(section.locator(".mt-how-step")).toHaveCount(4);
+    await expect(section.locator(".mt-process-icon")).toHaveCount(4);
+    await expect(section.locator(".mt-process-cta")).toHaveAttribute(
+      "href",
+      "/signup?returnTo=/create",
+    );
     await expect(section.locator('a[href="/how-it-works"]')).toHaveCount(0);
 
-    const gridColumnCount = await section.evaluate((element) =>
+    const stepLabels = await section.locator(".mt-how-step h3").allTextContents();
+    expect(stepLabels).toEqual(["No deal", "Clear offer", "Both say yes", "Deal receipt"]);
+
+    const sectionColumnCount = await section.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
     );
-    expect(gridColumnCount).toBe(2);
+    expect(sectionColumnCount).toBe(2);
+
+    const flowColumnCount = await flow.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+    );
+    expect(flowColumnCount).toBe(4);
 
     const sectionBox = await section.boundingBox();
     expect(sectionBox).not.toBeNull();
-    expect(sectionBox!.height).toBeLessThan(850);
+    expect(sectionBox!.height).toBeLessThan(700);
 
     if (captureVisuals) {
       await mkdir(captureDirectory, { recursive: true });
@@ -59,18 +73,26 @@ test.describe("Homepage process section", () => {
     }
   });
 
-  test("stacks cleanly without horizontal overflow on mobile", async ({ page }) => {
+  test("stacks the visual flow cleanly on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
 
     const section = page.locator("section:has(#process-heading)");
+    const flow = section.locator(".mt-how-grid");
+
     await expect(section).toBeVisible();
     await expect(section.locator(".mt-how-step")).toHaveCount(4);
+    await expect(section.locator(".mt-process-icon")).toHaveCount(4);
 
-    const gridColumnCount = await section.evaluate((element) =>
+    const sectionColumnCount = await section.evaluate((element) =>
       getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
     );
-    expect(gridColumnCount).toBe(1);
+    expect(sectionColumnCount).toBe(1);
+
+    const flowColumnCount = await flow.evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length,
+    );
+    expect(flowColumnCount).toBe(1);
 
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
