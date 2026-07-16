@@ -1,9 +1,9 @@
 import Link from "next/link";
 
+import { PoolSection } from "@/components/home/pool-section";
 import {
   GainField,
   OffsetFlowFigure,
-  ThresholdField,
 } from "@/components/marketplace/gain-field";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -312,25 +312,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
-        <section className="mt-product-section" aria-labelledby="pool-heading">
-          <div className="mt-feature-split">
-            <div className="mt-feature-copy">
-              <p className="mt-product-kicker">Pool</p>
-              <h2 id="pool-heading">Pledge a little. Fund it only when enough people join.</h2>
-              <p>
-                A pool shows each person&apos;s maximum exposure, the funding condition, deadline,
-                recipient, settlement rule, progress visibility, and failure behavior.
-              </p>
-              <div className="mt-product-actions">
-                <Link className="button button-primary" href="/pools">Explore pools</Link>
-                <Link className="button button-secondary" href="/mpgf">Open public-goods tools</Link>
-              </div>
-            </div>
-            <div className="mt-feature-visual">
-              <ThresholdField progress={64} />
-            </div>
-          </div>
-        </section>
+        <PoolSection />
 
         <section className="mt-product-section is-white" aria-labelledby="payment-heading">
           <div className="mt-product-section-head">
