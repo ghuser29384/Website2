@@ -93,6 +93,11 @@ body {
   box-shadow: 0 18px 42px rgba(42, 38, 31, 0.06);
 }
 
+.mt-mutual-step-point-end {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .mt-site-footer,
 .mt-deal-receipt-footer {
   background: #38352f;
