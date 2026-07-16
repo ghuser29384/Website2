@@ -2,7 +2,7 @@ from pathlib import Path
 
 path = Path("scripts/apply-fiscal-sponsor-funding.py")
 source = path.read_text()
-old = '''replace_exact(
+metadata_old = '''replace_exact(
     "src/app/mpgf/contribute/page.tsx",
     \'\'\'  description: "Use the Every.org fast route, save a conditional commitment, or fall back to reviewed manual evidence.",
 \'\'\',
@@ -18,7 +18,7 @@ replace_exact(
 \'\'\',
 )
 '''
-new = '''replace_exact(
+metadata_new = '''replace_exact(
     "src/app/mpgf/contribute/page.tsx",
     \'\'\'export const metadata: Metadata = {
   title: "Contribute to MPGF",
@@ -42,7 +42,26 @@ replace_exact(
 \'\'\',
 )
 '''
-count = source.count(old)
+count = source.count(metadata_old)
 if count != 1:
     raise SystemExit(f"Expected one MPGF metadata patch block, found {count}")
-path.write_text(source.replace(old, new))
+source = source.replace(metadata_old, metadata_new)
+
+frame_old = '''    \'\'\'       description="Start with the Every.org fast route when available, save a conditional commitment for threshold-cleared rounds, or use manual evidence only as fallback."
+       title="Contribute through fast-route or conditional verification."
+\'\'\',
+    \'\'\'       description="Start with a direct-to-charity Every.org route, save a pledge-only intent for threshold-cleared rounds, or use reviewed external evidence as fallback."
+       title="Contribute through an external route or pledge intent."
+\'\'\',
+'''
+frame_new = '''    \'\'\'      description="Start with the Every.org fast route when available, save a conditional commitment for threshold-cleared rounds, or use manual evidence only as fallback."
+      title="Contribute through fast-route or conditional verification."
+\'\'\',
+    \'\'\'      description="Start with a direct-to-charity Every.org route, save a pledge-only intent for threshold-cleared rounds, or use reviewed external evidence as fallback."
+      title="Contribute through an external route or pledge intent."
+\'\'\',
+'''
+count = source.count(frame_old)
+if count != 1:
+    raise SystemExit(f"Expected one MPGF frame patch block, found {count}")
+path.write_text(source.replace(frame_old, frame_new))
