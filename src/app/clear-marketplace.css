@@ -1,0 +1,965 @@
+/*
+ * Clear marketplace art direction.
+ *
+ * The visual system is intentionally simple: white and warm paper, crisp charcoal type,
+ * one coral graphic accent, fine rules, and restrained grids. The marketplace remains the
+ * product; the graphic language supports navigation and comparison rather than becoming
+ * the dominant content.
+ */
+
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-muted: #f1f0eb;
+  --surface-soft: #ebe9e3;
+  --surface-strong: #dedbd3;
+  --line: #ddd9d1;
+  --line-strong: #b8b2a8;
+  --ink: #22221f;
+  --ink-soft: #56544e;
+  --ink-muted: #77736c;
+  --accent: #f06a4b;
+  --accent-deep: #c84b32;
+  --accent-soft: #fff0eb;
+  --danger-soft: #f5e7e3;
+  --danger-ink: #843d32;
+  --success-soft: #e9eee7;
+  --success-ink: #405442;
+  --signal: #f7d7cc;
+  --signal-ink: #6d3529;
+  --shadow-soft: none;
+  --shadow-card: none;
+  --radius-xl: 2px;
+  --radius-lg: 2px;
+  --radius-md: 2px;
+  --radius-sm: 2px;
+  --content-width: 1200px;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-heading: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --route-hover-fund: #f1f0eb;
+  --route-hover-trade: #fff0eb;
+  --route-hover-offset: #eef1f0;
+  --route-hover-pool: #f2f0e8;
+  --route-hover-back: #edf0eb;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline-color: var(--accent-deep);
+}
+
+.button,
+button,
+input,
+select,
+textarea {
+  border-radius: 2px;
+}
+
+.button {
+  min-height: 2.8rem;
+  box-shadow: none;
+  letter-spacing: -0.01em;
+}
+
+.button-primary,
+.button.button-primary,
+.button-nav {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.button-primary:hover,
+.button.button-primary:hover,
+.button-nav:hover {
+  border-color: #393833;
+  background: #393833;
+  color: #ffffff;
+}
+
+.button-secondary,
+.button.button-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.button-secondary:hover,
+.button.button-secondary:hover {
+  border-color: var(--ink-soft);
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.eyebrow,
+.detail-kicker,
+.mt-product-kicker,
+.mt-market-eyebrow {
+  color: var(--accent-deep);
+  letter-spacing: 0.075em;
+}
+
+/* Navigation: compact, white, and integrated with the page. */
+.mt-site-topbar {
+  width: min(calc(100% - 2rem), var(--content-width));
+  min-height: 4.5rem;
+  border-bottom-color: var(--line);
+  background: var(--surface);
+}
+
+.mt-site-topbar .topbar-links > a,
+.mt-site-topbar .topbar-menu-trigger,
+.mt-site-topbar .topbar-utility {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.mt-site-topbar .topbar-links > a:hover,
+.mt-site-topbar .topbar-links > a.is-active,
+.mt-site-topbar .topbar-menu-trigger:hover,
+.mt-site-topbar .topbar-menu.is-active .topbar-menu-trigger {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.mt-site-topbar .topbar-links > a.is-active,
+.mt-site-topbar .topbar-menu.is-active .topbar-menu-trigger {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.mt-site-topbar .topbar-search-box,
+.mt-site-topbar .topbar-menu-panel,
+.mt-site-topbar .topbar-search-results {
+  border-color: var(--line);
+  border-radius: 2px;
+  box-shadow: 0 14px 32px rgba(34, 34, 31, 0.07);
+}
+
+.mt-site-topbar .topbar-search-box {
+  min-height: 2.75rem;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.mt-site-topbar .topbar-search-box:hover {
+  border-color: var(--ink-muted);
+  background: var(--surface);
+}
+
+.mt-site-topbar .topbar-search-box:focus-within {
+  border-color: var(--accent-deep);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px rgba(240, 106, 75, 0.16);
+}
+
+.mt-site-topbar .topbar-search-submit {
+  border-radius: 2px;
+  background: var(--ink);
+  box-shadow: none;
+}
+
+.mt-site-topbar .topbar-search-submit:hover,
+.mt-site-topbar .topbar-search-submit:focus-visible {
+  background: #393833;
+  box-shadow: none;
+}
+
+.mt-site-topbar .topbar-search-clear {
+  border-radius: 2px;
+}
+
+.mt-mutual-step-point-end {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+/* Product shell: reserve the grid for diagrams rather than applying it to every surface. */
+.marketplace-product-shell {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.mt-product-main {
+  width: min(calc(100% - 2rem), var(--content-width));
+}
+
+.mt-beta-strip {
+  min-height: 2.2rem;
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  letter-spacing: 0.025em;
+  text-transform: none;
+}
+
+.mt-beta-strip span:first-child,
+.mt-beta-strip a {
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
+/* Homepage hero. */
+.mt-product-hero {
+  grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.82fr);
+  min-height: 39rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mt-product-hero-copy {
+  gap: 1.25rem;
+  padding: clamp(4rem, 7vw, 7rem) clamp(2rem, 5vw, 5rem) clamp(4rem, 7vw, 7rem) 0;
+  border-right: 0;
+  background: var(--surface);
+}
+
+.mt-product-hero h1 {
+  max-width: 10ch;
+  font-size: clamp(3.65rem, 6.5vw, 6rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+
+.mt-product-hero h1 span {
+  color: var(--ink);
+}
+
+.mt-product-hero-text {
+  max-width: 55ch;
+  color: var(--ink-soft);
+  font-size: clamp(1.02rem, 1.35vw, 1.2rem);
+  line-height: 1.6;
+}
+
+.mt-product-hero-visual,
+.mt-feature-visual,
+section:has(#create-heading) > div:last-child {
+  border-left: 1px solid var(--line);
+  background-color: var(--surface-muted);
+  background-image:
+    linear-gradient(rgba(34, 34, 31, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 34, 31, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.mt-product-proof-line {
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 0.77rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mt-product-proof-line li + li::before {
+  color: var(--accent);
+}
+
+/* Mechanism rail: marketplace taxonomy, not four promotional billboards. */
+.mt-mode-rail {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mt-mode-card {
+  min-height: 12.5rem;
+  padding: 1.35rem 1.25rem;
+  border-right-color: var(--line);
+  background: var(--surface);
+  transition: background-color 120ms ease;
+}
+
+.mt-mode-card h2,
+.mt-mode-card h3 {
+  font-size: clamp(2rem, 2.9vw, 2.75rem);
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+}
+
+.mt-mode-card p {
+  max-width: 27ch;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.mt-mode-card-index {
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.065em;
+}
+
+.mt-mode-card-arrow {
+  color: var(--accent-deep);
+}
+
+/* Homepage sections: white space and fine rules rather than alternating slabs. */
+.mt-product-section,
+.mt-product-section.is-white,
+.mt-product-section.is-dark {
+  gap: clamp(2rem, 4vw, 3.5rem);
+  padding: clamp(5rem, 8vw, 8rem) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.mt-product-section-head {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.55fr);
+  gap: clamp(2rem, 6vw, 6rem);
+}
+
+.mt-product-section-head h2 {
+  max-width: 13ch;
+  font-size: clamp(2.85rem, 4.7vw, 4.35rem);
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.mt-product-section-head > p,
+.mt-product-section-head > div > p:last-child,
+.mt-product-section.is-dark .mt-product-section-head > p,
+.mt-product-section.is-dark .mt-product-section-head > div > p:last-child {
+  color: var(--ink-soft);
+  line-height: 1.62;
+}
+
+.mt-market-grid {
+  gap: 1rem;
+  border: 0;
+}
+
+.mt-market-card {
+  min-height: 22rem;
+  padding: 1.35rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.mt-market-card:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.mt-market-card h3 {
+  font-size: clamp(1.8rem, 2.35vw, 2.35rem);
+  letter-spacing: -0.03em;
+  line-height: 1.03;
+}
+
+.mt-market-state {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.mt-market-state.is-live,
+.mt-market-state.is-authorized,
+.mt-market-state.is-completed {
+  border-color: color-mix(in srgb, var(--success-ink) 42%, var(--line));
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.mt-market-card dl,
+.mt-market-card dl div {
+  border-color: var(--line);
+}
+
+.mt-market-card dl div {
+  grid-template-columns: 5.7rem minmax(0, 1fr);
+  gap: 0.8rem;
+}
+
+.mt-market-card-foot a {
+  color: var(--accent-deep);
+}
+
+/* Process: retain a single graphic moment, but keep the information calm and readable. */
+.marketplace-product-shell .mt-product-section:has(#process-heading) {
+  grid-template-columns: minmax(0, 0.84fr) minmax(480px, 1.16fr);
+  grid-template-rows: auto;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  overflow: hidden;
+  padding: clamp(3.2rem, 6vw, 5.5rem);
+  background-color: var(--surface-muted);
+  background-image:
+    linear-gradient(rgba(34, 34, 31, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 34, 31, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head::after {
+  position: absolute;
+  right: -8%;
+  bottom: -12%;
+  width: 78%;
+  height: 52%;
+  background:
+    linear-gradient(17deg, transparent 49.65%, rgba(240, 106, 75, 0.9) 49.8%, rgba(240, 106, 75, 0.9) 50.2%, transparent 50.35%),
+    linear-gradient(21deg, transparent 49.65%, rgba(240, 106, 75, 0.8) 49.8%, rgba(240, 106, 75, 0.8) 50.2%, transparent 50.35%),
+    linear-gradient(25deg, transparent 49.65%, rgba(240, 106, 75, 0.7) 49.8%, rgba(240, 106, 75, 0.7) 50.2%, transparent 50.35%);
+  content: "";
+  pointer-events: none;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head > * {
+  position: relative;
+  z-index: 1;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-kicker {
+  color: var(--accent-deep);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-kicker::before {
+  background: var(--accent);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head h2 {
+  max-width: 10ch;
+  color: var(--ink);
+  font-size: clamp(3rem, 5vw, 4.8rem);
+  line-height: 0.96;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-product-section-head > p {
+  max-width: 38ch;
+  color: var(--ink-soft);
+}
+
+.marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-grid {
+  grid-column: 2;
+  grid-row: 1;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step,
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:nth-child(even) {
+  min-height: 8.8rem;
+  padding: 1.45rem clamp(1.5rem, 3vw, 2.4rem);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child {
+  border-bottom: 0;
+  background: var(--accent-soft);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step > span {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--accent-deep);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child > span {
+  border-color: var(--accent-deep);
+  background: var(--surface);
+  color: var(--accent-deep);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:not(:last-child)::after {
+  display: none;
+}
+
+.marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step h3 {
+  font-size: clamp(1.55rem, 2vw, 2rem);
+  line-height: 1.04;
+}
+
+/* Feature blocks. */
+.mt-feature-split {
+  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+  gap: clamp(2rem, 6vw, 6rem);
+  border: 0;
+  background: var(--surface);
+}
+
+.mt-feature-copy {
+  gap: 1.15rem;
+  padding: 0;
+  border: 0;
+}
+
+.mt-feature-copy h2,
+.mt-feature-copy h3 {
+  max-width: 12ch;
+  font-size: clamp(2.8rem, 4.6vw, 4.35rem);
+  line-height: 0.98;
+}
+
+.mt-feature-visual {
+  padding: clamp(1.5rem, 3vw, 2.75rem);
+  border: 1px solid var(--line);
+}
+
+.mt-gain-field svg,
+.mt-offset-flow svg,
+.mt-threshold-field,
+.mt-deal-receipt {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.mt-gain-field,
+.mt-offset-flow,
+.mt-threshold-field {
+  color: var(--accent);
+}
+
+.mt-threshold-progress {
+  background: var(--accent-deep);
+}
+
+.mt-threshold-participants span.is-pledged,
+.mt-deal-receipt-rows > div.is-emphasis {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.mt-deal-receipt-footer {
+  background: var(--ink);
+}
+
+/* Trust is an operating layer, not a dramatic black campaign panel. */
+.mt-trust-grid {
+  gap: 1rem;
+  border: 0;
+}
+
+.mt-trust-card {
+  min-height: 13rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.mt-trust-card span {
+  color: var(--accent-deep);
+}
+
+.mt-trust-card h3 {
+  color: var(--ink);
+}
+
+.mt-trust-card p,
+.mt-product-section.is-dark .mt-trust-card p {
+  color: var(--ink-soft);
+}
+
+.mt-product-section.is-dark .button-secondary,
+.mt-product-section.is-dark .button.button-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* Create route: compact decision workspace rather than stacked campaign sections. */
+section:has(#create-heading) {
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.72fr);
+  min-height: 32rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+section:has(#create-heading) > div:first-child {
+  gap: 1.2rem;
+  padding: clamp(3.5rem, 6vw, 6rem) clamp(2rem, 5vw, 5rem) clamp(3.5rem, 6vw, 6rem) 0;
+  border-right: 0;
+}
+
+#create-heading {
+  max-width: 9ch;
+  font-size: clamp(3.5rem, 6.2vw, 5.8rem);
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+}
+
+section:has(#create-heading) ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  max-width: none;
+  margin-top: 0.65rem;
+  border: 0;
+}
+
+section:has(#create-heading) ol li {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  color: var(--ink-soft);
+}
+
+section:has(#create-heading) ol li span {
+  border-color: var(--line-strong);
+  color: var(--accent-deep);
+}
+
+section:has(#route-heading) {
+  gap: 1.75rem;
+  padding: clamp(4rem, 7vw, 6.5rem) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+#route-heading {
+  font-size: clamp(2.4rem, 4vw, 3.7rem);
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+section:has(#route-heading) div:has(> [data-create-mode]) {
+  gap: 0.8rem;
+  border: 0;
+}
+
+[data-create-mode] {
+  min-height: 14rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line) !important;
+  background: var(--surface);
+  transform: none !important;
+}
+
+[data-create-mode]:hover {
+  border-color: var(--line-strong) !important;
+}
+
+[data-create-mode][aria-pressed="true"] {
+  border-color: var(--ink) !important;
+  background: var(--accent-soft);
+  box-shadow: inset 0 -3px 0 var(--accent-deep);
+}
+
+[data-create-mode] > svg {
+  max-width: 7rem;
+}
+
+[data-create-mode] > span:nth-of-type(2) > strong {
+  font-size: clamp(1.7rem, 2.25vw, 2.35rem);
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+[data-create-mode] > span:nth-of-type(2) > span {
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+[data-create-mode] > span:last-child {
+  color: var(--accent-deep);
+}
+
+#selected-route-panel {
+  padding: clamp(4.5rem, 7vw, 7rem) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+#selected-route-panel > div {
+  gap: 1rem;
+  border: 0;
+}
+
+#selected-route-panel > div > article {
+  min-height: 27rem;
+  padding: clamp(1.35rem, 2.4vw, 2.2rem);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+#selected-route-panel > div > article:nth-child(2) {
+  background: var(--surface-muted);
+}
+
+#selected-route-panel > div > article:last-child {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+#selected-route-panel h2,
+#selected-route-panel h3 {
+  color: var(--ink);
+}
+
+#selected-route-panel > div > article:first-child h2 {
+  max-width: 11ch;
+  font-size: clamp(2.55rem, 3.8vw, 4rem);
+  line-height: 0.96;
+}
+
+#selected-route-panel > div > article:last-child > p,
+#selected-route-panel > div > article:last-child > small {
+  color: var(--ink-soft);
+}
+
+#selected-route-panel > div > article:last-child .button-primary {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+#selected-route-panel > div > article:last-child .button-secondary {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* Public-goods and older marketplace pages inherit the same disciplined palette. */
+.mpgf-shell {
+  --mpgf-accent: var(--accent-deep);
+  --mpgf-accent-strong: #8f3c2b;
+  --mpgf-accent-soft: var(--accent-soft);
+  --mpgf-warm: var(--surface-muted);
+  --mpgf-line: var(--line);
+}
+
+.panel,
+.data-card,
+.concept-card,
+.detail-block,
+.listing-card,
+.stat-card {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+/* Footer: quiet and useful rather than a large dark visual event. */
+.mt-site-footer {
+  margin-top: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.mt-site-footer .mt-footer-lead,
+.mt-site-footer .mt-footer-grid,
+.mt-site-footer .mt-footer-meta {
+  width: min(calc(100% - 2rem), var(--content-width));
+}
+
+.mt-site-footer .mt-footer-lead {
+  border-bottom-color: var(--line);
+}
+
+.mt-site-footer .mt-footer-brand,
+.mt-site-footer .mt-footer-brand *,
+.mt-site-footer .mt-footer-mark,
+.mt-site-footer .mt-footer-mark * {
+  color: var(--ink);
+}
+
+.mt-site-footer .mt-footer-mark .mt-mutual-step-point-end {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.mt-site-footer .mt-footer-intro h2,
+.mt-site-footer .footer-column h3 {
+  color: var(--ink);
+}
+
+.mt-site-footer .mt-footer-intro p,
+.mt-site-footer .mt-footer-meta,
+.mt-site-footer .footer-links a,
+.mt-site-footer .mt-footer-legal a {
+  color: var(--ink-soft);
+}
+
+.mt-site-footer .footer-links a:hover,
+.mt-site-footer .mt-footer-legal a:hover {
+  color: var(--accent-deep);
+}
+
+.mt-site-footer .mt-footer-meta {
+  border-top-color: var(--line);
+}
+
+@media (max-width: 1080px) {
+  .mt-product-hero,
+  section:has(#create-heading) {
+    grid-template-columns: 1fr;
+  }
+
+  .mt-product-hero-copy,
+  section:has(#create-heading) > div:first-child {
+    padding-inline: clamp(1.5rem, 5vw, 3.5rem);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mt-product-hero-visual,
+  section:has(#create-heading) > div:last-child {
+    border-left: 0;
+  }
+
+  .marketplace-product-shell .mt-product-section:has(#process-heading) {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-grid {
+    grid-column: 1;
+    grid-row: 2;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .mt-feature-split {
+    grid-template-columns: 1fr;
+  }
+
+  .mt-feature-visual {
+    min-height: 24rem;
+  }
+
+  #selected-route-panel > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #selected-route-panel > div > article:last-child {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .mt-site-topbar,
+  .mt-product-main,
+  .mt-site-footer .mt-footer-lead,
+  .mt-site-footer .mt-footer-grid,
+  .mt-site-footer .mt-footer-meta {
+    width: min(calc(100% - 1rem), var(--content-width));
+  }
+
+  .mt-product-hero-copy,
+  section:has(#create-heading) > div:first-child {
+    padding: 3.5rem 1.25rem;
+  }
+
+  .mt-product-hero h1,
+  #create-heading {
+    font-size: clamp(3.1rem, 14vw, 4.7rem);
+  }
+
+  .mt-mode-rail {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mt-mode-card {
+    min-height: 11rem;
+  }
+
+  .mt-product-section,
+  .mt-product-section.is-white,
+  .mt-product-section.is-dark,
+  section:has(#route-heading),
+  #selected-route-panel {
+    padding-block: 4rem;
+  }
+
+  .mt-product-section-head {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
+
+  .mt-market-grid,
+  .mt-trust-grid,
+  section:has(#route-heading) div:has(> [data-create-mode]),
+  #selected-route-panel > div {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-product-section-head {
+    min-height: 28rem;
+    padding: 3rem 1.35rem;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-product-section-head::after {
+    width: 95%;
+  }
+
+  [data-create-mode],
+  #selected-route-panel > div > article,
+  #selected-route-panel > div > article:last-child {
+    grid-column: auto;
+    min-height: auto;
+  }
+
+  section:has(#create-heading) ol {
+    gap: 0.8rem 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-mode-card,
+  .mt-market-card,
+  [data-create-mode] {
+    transition: none;
+  }
+}
