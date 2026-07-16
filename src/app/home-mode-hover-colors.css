@@ -1,23 +1,23 @@
-/* Homepage mechanism rail — each route gets a distinct hover and keyboard-focus color. */
+/* Homepage mechanism rail — each route gets a distinct, low-chroma hover and focus color. */
 .marketplace-product-shell .mt-mode-rail .mt-mode-card {
   --mt-mode-hover: var(--accent-soft);
   transition: background-color 140ms ease;
 }
 
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(1) {
-  --mt-mode-hover: #dceffd;
+  --mt-mode-hover: var(--route-hover-trade);
 }
 
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(2) {
-  --mt-mode-hover: #eceaff;
+  --mt-mode-hover: var(--route-hover-offset);
 }
 
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(3) {
-  --mt-mode-hover: #f1f7cc;
+  --mt-mode-hover: var(--route-hover-pool);
 }
 
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:nth-child(4) {
-  --mt-mode-hover: #e7efe5;
+  --mt-mode-hover: var(--route-hover-back);
 }
 
 .marketplace-product-shell .mt-mode-rail .mt-mode-card:hover,
