@@ -228,28 +228,6 @@ export default async function PilotPage() {
             </Link>
           </div>
         </section>
-
-        <section className="mt-product-section is-white" aria-labelledby="guided-heading">
-          <div className="mt-feature-split">
-            <div className="mt-feature-copy">
-              <p className="mt-product-kicker">Guided onboarding</p>
-              <h2 id="guided-heading">Use the invitation thread as the support channel.</h2>
-              <p>
-                Reply to the person who invited you with the point where you stopped, the action you
-                were trying to complete, and any term or safeguard that was unclear. Pilot feedback
-                is treated as conversion-critical product evidence.
-              </p>
-              <div className="mt-product-actions">
-                <Link className="button button-primary" href={startHref}>
-                  {isAuthenticated ? "Choose the first action" : "Join the founding pilot"}
-                </Link>
-                <Link className="button button-secondary" href="/contact">
-                  Contact support
-                </Link>
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
       <SiteFooter />
