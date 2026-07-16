@@ -38,13 +38,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["pool", "threshold", "conditional", "pledge", "maximum exposure", "public good", "deadline", "assurance"],
   },
   {
-    href: "/trust",
-    label: "What you can rely on",
-    summary: "Inspect current guarantees, non-guarantees, Deal Receipt fields, review states, and recourse routes.",
-    kind: "learn",
-    keywords: ["trust", "deal receipt", "guarantees", "non-guarantees", "review states", "recourse", "rely"],
-  },
-  {
     href: "/status",
     label: "Service status",
     summary: "See which payment, settlement, evidence, review, and marketplace capabilities are operational now.",
