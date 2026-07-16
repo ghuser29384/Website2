@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[core-types-fixed]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[core-offers-types-fixed]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -29,12 +29,21 @@ jobs:
 
           path = Path("src/lib/core-trade.ts")
           source = path.read_text()
-          old = "export async function listReciprocalMatches(offer: CoreOffer) {"
-          new = "export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {"
-          if old in source:
-              source = source.replace(old, new, 1)
-          elif new not in source:
-              raise SystemExit("Expected listReciprocalMatches signature was not found.")
+          replacements = [
+              (
+                  "export async function listCoreOffersForOwner(ownerId: string) {",
+                  "export async function listCoreOffersForOwner(ownerId: string): Promise<CoreOffer[]> {",
+              ),
+              (
+                  "export async function listReciprocalMatches(offer: CoreOffer) {",
+                  "export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {",
+              ),
+          ]
+          for old, new in replacements:
+              if old in source:
+                  source = source.replace(old, new, 1)
+              elif new not in source:
+                  raise SystemExit(f"Expected signature was not found: {old}")
           path.write_text(source)
           PY
 
@@ -47,5 +56,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/lib/core-trade.ts
-          git commit -m "Type reciprocal core trade matches [core-types-fixed]"
+          git commit -m "Type core offer collections [core-offers-types-fixed]"
           git push origin HEAD:feat/core-trade-loop
