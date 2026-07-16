@@ -11,7 +11,11 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
-import { listTradeReviewQueue } from "@/lib/core-trade";
+import {
+  listTradeReviewQueue,
+  type CoreOffer,
+  type CoreProfile,
+} from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -26,6 +30,11 @@ export const metadata: Metadata = {
 interface TradeReviewPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+type ReviewQueueOffer = {
+  offer: CoreOffer;
+  owner: CoreProfile | null;
+};
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
@@ -126,7 +135,7 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
 
               <div className="data-grid">
                 {queue.offers.length ? (
-                  queue.offers.map(({ offer, owner }) => (
+                  queue.offers.map(({ offer, owner }: ReviewQueueOffer) => (
                     <article className="panel data-card data-card-wide" key={offer.id}>
                       <div className="profile-card-head">
                         <div>
