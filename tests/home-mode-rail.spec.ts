@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,14 +6,27 @@ const captureVisuals = process.env.HOME_MODE_CAPTURE === "1";
 const captureDirectory = path.join("test-results", "home-mode-visual");
 
 const expectedHoverColors = [
-  ["trade", "rgb(220, 239, 253)"],
-  ["offset", "rgb(236, 234, 255)"],
-  ["pool", "rgb(241, 247, 204)"],
-  ["back", "rgb(231, 239, 229)"],
+  ["fund", "rgb(241, 240, 235)"],
+  ["trade", "rgb(255, 240, 235)"],
+  ["offset", "rgb(238, 241, 240)"],
+  ["pool", "rgb(242, 240, 232)"],
 ] as const;
 
+async function prepareForVisualCapture(page: Page) {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    document.querySelectorAll("nextjs-portal").forEach((portal) => portal.remove());
+  });
+  await page.addStyleTag({
+    content: ".skip-link, nextjs-portal { display: none !important; }",
+  });
+}
+
 test.describe("Homepage mode rail", () => {
-  test("shows a distinct hover color for every route", async ({ page }) => {
+  test("shows a distinct restrained hover color for every route", async ({ page }) => {
     await page.setViewportSize({ width: 1560, height: 960 });
     await page.goto("/");
 
@@ -43,5 +56,22 @@ test.describe("Homepage mode rail", () => {
     }
 
     expect(new Set(observedColors).size).toBe(expectedHoverColors.length);
+
+    if (captureVisuals) {
+      await page.mouse.move(0, 0);
+      await prepareForVisualCapture(page);
+      await page.screenshot({
+        fullPage: true,
+        path: path.join(captureDirectory, "homepage-desktop.png"),
+      });
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto("/");
+      await prepareForVisualCapture(page);
+      await page.screenshot({
+        fullPage: true,
+        path: path.join(captureDirectory, "homepage-mobile.png"),
+      });
+    }
   });
 });
