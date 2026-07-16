@@ -4,6 +4,7 @@ import test from "node:test";
 
 const home = readFileSync("src/components/home/home-page.tsx", "utf8");
 const start = readFileSync("src/app/start/page.tsx", "utf8");
+const offers = readFileSync("src/app/offers/page.tsx", "utf8");
 const howItWorks = readFileSync("src/app/how-it-works/page.tsx", "utf8");
 const status = readFileSync("src/app/status/page.tsx", "utf8");
 const cohort = readFileSync("src/app/cohort/page.tsx", "utf8");
@@ -25,6 +26,7 @@ const routeBaseline = readFileSync(
 const primaryAcquisitionCopy = [
   home,
   start,
+  offers,
   howItWorks,
   status,
   cohort,
@@ -59,6 +61,7 @@ test("the financial action has a real external payment handoff and explicit boun
 
 test("examples remain available only as a secondary learning resource", () => {
   assert.doesNotMatch(primaryAcquisitionCopy, /\/worked-examples/);
+  assert.doesNotMatch(offers, /CANONICAL_WORKED_CASE_OFFERS|view=examples|Inspect example/);
   assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);
   assert.doesNotMatch(routeBaseline, /"path": "\/worked-examples"/);
   assert.doesNotMatch(routeBaseline, /"path": "\/trust"/);
