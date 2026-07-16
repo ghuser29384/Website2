@@ -73,12 +73,20 @@ jobs:
           script: |
             const fs = require('fs');
             if (!fs.existsSync('/tmp/fiscal-sponsor-tests.log')) return;
-            const output = fs.readFileSync('/tmp/fiscal-sponsor-tests.log', 'utf8');
+            const lines = fs.readFileSync('/tmp/fiscal-sponsor-tests.log', 'utf8').split(/\r?\n/);
+            const interesting = [];
+            for (let index = 0; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (/^not ok\b|AssertionError|ERR_ASSERTION|at TestContext|^# (tests|pass|fail|duration_ms)\b/.test(line)) {
+                interesting.push(...lines.slice(Math.max(0, index - 2), Math.min(lines.length, index + 5)));
+              }
+            }
+            const concise = [...new Set(interesting)].slice(-240).join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `Fiscal-sponsor test suite failed:\n\n\`\`\`text\n${output.slice(-12000)}\n\`\`\``,
+              body: `Fiscal-sponsor test suite failed:\n\n\`\`\`text\n${concise || 'No concise failure lines found.'}\n\`\`\``,
             });
 
       - name: Lint changed funding surfaces
