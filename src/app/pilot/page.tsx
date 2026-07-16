@@ -36,8 +36,7 @@ const safeguards = [
   {
     number: "03",
     title: "No payments in this pilot",
-    description:
-      "The founding-user journey tests understanding, drafting, matching, and safeguards; it does not require custody, escrow, or real-money settlement.",
+    description: "This pilot does not require custody, escrow, or real-money settlement.",
   },
 ] as const;
 
@@ -119,13 +118,10 @@ export default async function PilotPage() {
         <section className="mt-product-section" aria-labelledby="pilot-action-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">Choose one</p>
-              <h2 id="pilot-action-heading">Finish with a real artifact.</h2>
+              <p className="mt-product-kicker" id="pilot-action-heading">
+                Choose one
+              </p>
             </div>
-            <p>
-              Saving one of these creates enough evidence to distinguish a serious first user from a
-              visitor who only opened the site.
-            </p>
           </div>
 
           <div className="mt-market-grid">
@@ -178,7 +174,7 @@ export default async function PilotPage() {
                 <span className="mt-market-eyebrow">Network action</span>
                 <span className="mt-market-state">Specific person</span>
               </div>
-              <h3>Draft one serious invitation</h3>
+              <h3>Draft one tailored invitation</h3>
               <dl>
                 <div>
                   <dt>Action</dt>
@@ -236,8 +232,7 @@ export default async function PilotPage() {
               <h2 id="guided-heading">Use the invitation thread as the support channel.</h2>
               <p>
                 Reply to the person who invited you with the point where you stopped, the action you
-                were trying to complete, and any term or safeguard that was unclear. Pilot feedback
-                is treated as conversion-critical product evidence.
+                were trying to complete, and any term or safeguard that was unclear.
               </p>
               <div className="mt-product-actions">
                 <Link className="button button-primary" href={startHref}>
