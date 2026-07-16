@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { DealReceipt, type DealReceiptRow } from "@/components/marketplace/deal-receipt";
 import {
   CREATE_ROUTE_DEFINITIONS,
   buildCreateTargetHref,
   getCreateRoute,
   type CreateMode,
-  type CreateRouteDefinition,
 } from "@/lib/create-routes";
 
 import styles from "./create-route-chooser.module.css";
@@ -25,15 +23,6 @@ const ROUTE_HOVER_COLORS: Record<CreateMode, string> = {
   pool: "#f1f7cc",
   back: "#e7efe5",
 };
-
-function buildPreviewRows(route: CreateRouteDefinition): readonly DealReceiptRow[] {
-  return [
-    { label: "Default", value: route.receipt.baseline },
-    { label: "You", value: route.receipt.commitment },
-    { label: "Condition", value: route.receipt.condition },
-    { label: "Maximum", value: route.receipt.exposure, emphasis: true },
-  ];
-}
 
 function RouteGlyph({ mode }: { mode: CreateMode }) {
   if (mode === "offset") {
@@ -88,70 +77,6 @@ function RouteGlyph({ mode }: { mode: CreateMode }) {
   );
 }
 
-function SetupGlyph({ index }: { index: number }) {
-  if (index === 0) {
-    return (
-      <svg aria-hidden="true" className={styles.stepGlyph} viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="14" />
-        <circle className={styles.stepGlyphSignal} cx="24" cy="24" r="4" />
-        <path d="M24 4v6M24 38v6M4 24h6M38 24h6" />
-      </svg>
-    );
-  }
-
-  if (index === 1) {
-    return (
-      <svg aria-hidden="true" className={styles.stepGlyph} viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="17" />
-        <path d="M24 13v12l8 5" />
-        <path className={styles.stepGlyphSignal} d="M17 8h14" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg aria-hidden="true" className={styles.stepGlyph} viewBox="0 0 48 48">
-      <path d="M24 5 39 11v11c0 10-6 17-15 21C15 39 9 32 9 22V11l15-6Z" />
-      <path className={styles.stepGlyphSignal} d="m16 24 5 5 11-12" />
-    </svg>
-  );
-}
-
-function OutcomeGlyph({ positive }: { positive: boolean }) {
-  return positive ? (
-    <svg aria-hidden="true" className={styles.outcomeGlyph} viewBox="0 0 32 32">
-      <circle cx="16" cy="16" r="13" />
-      <path d="m9 16 5 5 9-10" />
-    </svg>
-  ) : (
-    <svg aria-hidden="true" className={styles.outcomeGlyph} viewBox="0 0 32 32">
-      <circle cx="16" cy="16" r="13" />
-      <path d="M10 16h12" />
-    </svg>
-  );
-}
-
-function ContinueGlyph() {
-  return (
-    <svg aria-hidden="true" className={styles.continueGlyph} viewBox="0 0 180 150">
-      <path d="M37 24h68v102H37z" />
-      <path d="m37 24 39 17v68l-39 17z" />
-      <circle cx="67" cy="75" r="3" />
-      <path className={styles.continueGlyphAccent} d="M91 75h54" />
-      <path className={styles.continueGlyphAccent} d="m127 57 18 18-18 18" />
-    </svg>
-  );
-}
-
-function SafetyGlyph() {
-  return (
-    <svg aria-hidden="true" className={styles.safetyGlyph} viewBox="0 0 24 24">
-      <path d="M12 3 20 6v6c0 5-3.2 8.3-8 10-4.8-1.7-8-5-8-10V6l8-3Z" />
-      <path d="m8.5 12 2.2 2.2 4.8-5" />
-    </svg>
-  );
-}
-
 export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRouteChooserProps) {
   const [selectedMode, setSelectedMode] = useState<CreateMode>(initialMode);
   const [hoveredMode, setHoveredMode] = useState<CreateMode | null>(null);
@@ -174,42 +99,22 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
     <>
       <section className={styles.hero} aria-labelledby="create-heading">
         <div className={styles.heroCopy}>
-          <h1 id="create-heading">Choose a route.</h1>
-          <p className={styles.heroText}>
-            Pick a mechanism. Review the cap and fallback. Nothing is binding until final
-            confirmation.
+          <h1 id="create-heading">What do you want to create?</h1>
+          <p>
+            Choose one route. The page will show what happens when it succeeds and what happens
+            when it does not.
           </p>
-
-          <ol className={styles.routePath} aria-label="Creation flow">
-            <li>
-              <span>1</span>
-              <strong>Pick</strong>
-            </li>
-            <li>
-              <span>2</span>
-              <strong>Set terms</strong>
-            </li>
-            <li>
-              <span>3</span>
-              <strong>Confirm</strong>
-            </li>
-          </ol>
         </div>
 
-        <div className={styles.heroPreview}>
-          <DealReceipt
-            className={styles.receipt}
-            note="Preview only."
-            rows={buildPreviewRows(selectedRoute)}
-            state="Draft"
-            title={`${selectedRoute.title} preview`}
-          />
+        <div className={styles.heroBoundary}>
+          <strong>Nothing happens on this page.</strong>
+          <span>No charge, publication, or commitment until a later confirmation.</span>
         </div>
       </section>
 
       <section className={`${styles.section} ${styles.routeSection}`} aria-labelledby="route-heading">
         <h2 className={styles.routeHeading} id="route-heading">
-          Pick one.
+          Choose one.
         </h2>
 
         <div className={styles.routeGrid}>
@@ -238,15 +143,16 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
               >
                 <span className={styles.routeMeta}>
                   <small>{route.index}</small>
-                  {route.later ? <small>Review</small> : null}
+                  {route.later ? <small>Reviewed</small> : null}
                 </span>
                 <RouteGlyph mode={route.key} />
                 <span className={styles.routeCopy}>
                   <strong>{route.title}</strong>
                   <span>{route.summary}</span>
                 </span>
-                <span className={styles.routeAction} aria-hidden="true">
-                  {isSelected ? "✓" : "→"}
+                <span className={styles.routeChoice}>
+                  {isSelected ? "Selected" : "Choose"}
+                  <span aria-hidden="true">{isSelected ? "✓" : "→"}</span>
                 </span>
               </button>
             );
@@ -264,34 +170,43 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
         id="selected-route-panel"
       >
         <div className={styles.decisionPanel}>
-          <article className={styles.decisionIntro}>
-            <div className={styles.mechanismMeta}>
-              <span>{selectedRoute.index}</span>
-              <strong>{selectedRoute.title}</strong>
+          <article className={styles.explanationPanel}>
+            <div className={styles.selectedHeader}>
+              <span>{selectedRoute.title}</span>
+              <h2 id="selected-route-heading">{selectedRoute.headline}</h2>
+              <p>{selectedRoute.proposition}</p>
             </div>
-            <RouteGlyph mode={selectedRoute.key} />
-            <h2 id="selected-route-heading">{selectedRoute.headline}</h2>
 
-            <div className={styles.outcomeGrid} aria-label={`${selectedRoute.title} outcomes`}>
-              <div className={`${styles.outcomeCard} ${styles.outcomeCardPositive}`}>
-                <OutcomeGlyph positive />
-                <span>{selectedRoute.success.label}</span>
+            <div className={styles.flowBlock}>
+              <h3>How it works</h3>
+              <ol className={styles.flowList}>
+                {selectedRoute.requirements.map((step, index) => (
+                  <li key={step}>
+                    <span>{index + 1}</span>
+                    <p>{step}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className={styles.outcomeBlock} aria-label={`${selectedRoute.title} outcomes`}>
+              <div className={styles.successOutcome}>
+                <span>If {selectedRoute.success.label.toLowerCase()}</span>
                 <strong>{selectedRoute.success.value}</strong>
               </div>
-              <div className={styles.outcomeCard}>
-                <OutcomeGlyph positive={false} />
-                <span>{selectedRoute.fallback.label}</span>
+              <div className={styles.fallbackOutcome}>
+                <span>If {selectedRoute.fallback.label.toLowerCase()}</span>
                 <strong>{selectedRoute.fallback.value}</strong>
               </div>
             </div>
 
             <details className={styles.fitDetails}>
               <summary>
-                Fit &amp; limits <span aria-hidden="true">+</span>
+                Who this is for <span aria-hidden="true">+</span>
               </summary>
               <div>
                 <p>
-                  <strong>Works for</strong>
+                  <strong>Good fit</strong>
                   {selectedRoute.bestFor}
                 </p>
                 <p>
@@ -302,38 +217,22 @@ export function CreateRouteChooser({ initialMode, isAuthenticated }: CreateRoute
             </details>
           </article>
 
-          <article className={styles.requirementsPanel}>
-            <h3>Set 3 things.</h3>
-            <ol>
-              {selectedRoute.requirements.map((requirement, index) => (
-                <li key={requirement}>
-                  <SetupGlyph index={index} />
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{requirement}</strong>
-                </li>
-              ))}
-            </ol>
-          </article>
-
-          <article className={styles.continuePanel}>
-            <ContinueGlyph />
-            <h3>{selectedRoute.nextTitle}</h3>
+          <aside className={styles.actionPanel} aria-labelledby="next-step-heading">
+            <span>Next step</span>
+            <h3 id="next-step-heading">{selectedRoute.nextTitle}</h3>
             <p>{selectedRoute.nextNote}</p>
-            <div className={styles.actions}>
-              <Link className="button button-primary" href={targetHref}>
-                {primaryLabel}
-              </Link>
-              <Link className={styles.safetyLink} href="/safety">
-                <SafetyGlyph />
-                <span>Safety</span>
-              </Link>
-            </div>
-            <span className={styles.actionHint}>
+            <Link className="button button-primary" href={targetHref}>
+              {primaryLabel}
+            </Link>
+            <small>
               {selectedRoute.authRequired && !isAuthenticated
-                ? "Sign in, then return here."
+                ? "Sign in, then return to this route."
                 : "No charge or commitment yet."}
-            </span>
-          </article>
+            </small>
+            <Link className={styles.safetyLink} href="/safety">
+              Read the safety rules
+            </Link>
+          </aside>
         </div>
       </section>
     </>
