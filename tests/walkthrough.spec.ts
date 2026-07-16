@@ -150,6 +150,59 @@ test("Crowd and Redirect preserve the requested copy and routing", async ({ page
   await expect(page.getByText("What could you happily put on the table?")).toHaveCount(0);
 });
 
+test("The Crowd can close a verified salary gap for a higher-impact job", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 895 });
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("tab", { name: /The crowd/i }).click();
+  await page.getByRole("button", { name: "$10", exact: true }).click();
+  await page.getByRole("button", { name: "Pledge conditionally" }).click();
+
+  const showCareerGap = page.getByRole("button", {
+    name: "See what the crowd can unlock",
+  });
+  await expect(showCareerGap).toBeVisible({ timeout: 5_000 });
+  await showCareerGap.click();
+
+  await expect(page.getByRole("heading", { name: "Maya has two verified offers." })).toBeVisible();
+  await expect(page.getByText("Higher-paying job")).toBeVisible();
+  await expect(page.getByText("$115,000")).toBeVisible();
+  await expect(page.getByText("$30,000")).toBeVisible();
+
+  const impactJob = page.getByRole("button", {
+    name: /Higher-impact job.*\$85,000.*Pandemic-prevention lab/i,
+  });
+  await expect(impactJob).toBeVisible();
+  await impactJob.click();
+
+  await expect(page.getByRole("heading", { name: "The crowd is only $10 away." })).toBeVisible();
+  await expect(
+    page.getByText(
+      "In this salary-gap pool, your $10 pledge activates only if the full $30,000 gap is funded and Maya takes the higher-impact job. Otherwise nobody is charged.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("$29,990")).toBeVisible();
+
+  const closeGap = page.getByRole("button", { name: "Close the gap with $10" });
+  await expect(closeGap).toBeVisible();
+  await expectFullyInViewport(page, closeGap);
+  await expectFullyInside(closeGap, page.locator(".experience"));
+  await closeGap.click();
+
+  await expect(page.getByRole("heading", { name: "Your $10 closes the last $10." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Maya can take the higher-impact job." }),
+  ).toBeVisible({ timeout: 4_000 });
+  await expect(page.getByRole("link", { name: /Start a career backing request/ })).toHaveAttribute(
+    "href",
+    "https://moraltrade.org/create?mode=back",
+  );
+  await expect(page.getByRole("link", { name: /Explore conditional pools/ })).toHaveAttribute(
+    "href",
+    "https://moraltrade.org/pools",
+  );
+});
+
 test("walkthrough preserves its guided keyboard flow and has no mobile overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
@@ -158,6 +211,21 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
   const mobileDemocratsMarker = page.locator(".stream-a .stream-label");
   await expect(mobileDemocratsMarker).toBeVisible();
   await expectFullyInViewport(page, mobileDemocratsMarker);
+
+  await page.getByRole("tab", { name: /The crowd/i }).click();
+  await page.getByRole("button", { name: "$5", exact: true }).click();
+  await page.getByRole("button", { name: "Pledge conditionally" }).click();
+  await page.getByRole("button", { name: "See what the crowd can unlock" }).click({ timeout: 5_000 });
+  await page.getByRole("button", { name: /Higher-impact job/ }).click();
+  const mobileCloseGap = page.getByRole("button", { name: "Close the gap with $5" });
+  await expect(mobileCloseGap).toBeVisible();
+  await expectFullyInside(mobileCloseGap, page.locator(".experience"));
+  await mobileCloseGap.scrollIntoViewIfNeeded();
+  await expectFullyInViewport(page, mobileCloseGap);
+  await mobileCloseGap.click();
+  await expect(
+    page.getByRole("heading", { name: "Maya can take the higher-impact job." }),
+  ).toBeVisible({ timeout: 4_000 });
 
   await page.getByRole("tab", { name: /Third option/i }).click();
   const firstTab = page.getByRole("tab", { name: /Third option/i });
@@ -183,4 +251,23 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("salary-gap actions fit the mid-size walkthrough layout", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("tab", { name: /The crowd/i }).click();
+  await page.getByRole("button", { name: "$25", exact: true }).click();
+  await page.getByRole("button", { name: "Pledge conditionally" }).click();
+  await page.getByRole("button", { name: "See what the crowd can unlock" }).click({
+    timeout: 5_000,
+  });
+  await page.getByRole("button", { name: /Higher-impact job/ }).click();
+
+  const closeGap = page.getByRole("button", { name: "Close the gap with $25" });
+  await expect(closeGap).toBeVisible();
+  await closeGap.scrollIntoViewIfNeeded();
+  await expectFullyInViewport(page, closeGap);
+  await expectFullyInside(closeGap, page.locator(".experience"));
 });
