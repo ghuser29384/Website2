@@ -20,10 +20,10 @@ interface CreateRouteChooserProps {
 }
 
 const ROUTE_HOVER_COLORS: Record<CreateMode, string> = {
-  trade: "#dceffd",
-  offset: "#eceaff",
-  pool: "#f1f7cc",
-  back: "#e7efe5",
+  trade: "var(--route-hover-trade)",
+  offset: "var(--route-hover-offset)",
+  pool: "var(--route-hover-pool)",
+  back: "var(--route-hover-back)",
 };
 
 function buildPreviewRows(route: CreateRouteDefinition): readonly DealReceiptRow[] {
