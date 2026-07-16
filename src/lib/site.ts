@@ -3,6 +3,7 @@ export function getPrimaryNavLinks(_isAuthenticated = false) {
     { href: "/pledge-swaps", label: "Pledge Swap" },
     { href: "/moral-goods-group-buying", label: "Moral Public Goods" },
     { href: "/donation-offsets", label: "Donation Offsets" },
+    { href: "/donate", label: "Fund" },
   ];
 }
 
@@ -15,7 +16,7 @@ export function getTopbarActions(isAuthenticated = false) {
           label: "Create",
         }
       : {
-          href: "/pilot",
+          href: "/start",
           label: "Get started",
         },
   };
@@ -25,8 +26,9 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Marketplace",
     links: [
-      { href: "/offers", label: "Explore trades" },
+      { href: "/offers?view=live", label: "Explore trades" },
       { href: "/create", label: "Create" },
+      { href: "/donate", label: "Fund a public good" },
       { href: "/offsets", label: "Donation offsets" },
       { href: "/pools", label: "Conditional pools" },
       { href: "/background-networking", label: "Private matching" },
@@ -45,9 +47,9 @@ export const FOOTER_LINK_GROUPS = [
     title: "Learn",
     links: [
       { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
-      { href: "/worked-examples", label: "Worked examples" },
       { href: "/research", label: "Research" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
+      { href: "/worked-examples", label: "Worked examples" },
     ],
   },
   {
