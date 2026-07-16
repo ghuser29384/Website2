@@ -38,12 +38,6 @@ export default async function PilotPage() {
 
   return (
     <div className="page-shell marketplace-product-shell">
-      <div className="mt-beta-strip">
-        <span>Founding-user pilot</span>
-        <span>One example, one account, one saved action, and explicit safeguards.</span>
-        <Link href="/trust">Safeguards</Link>
-      </div>
-
       <header>
         <SiteTopbar
           brandHref="/"
@@ -66,8 +60,7 @@ export default async function PilotPage() {
               <span>from idea to saved action.</span>
             </h1>
             <p className="mt-product-hero-text">
-              In roughly ten minutes, inspect a complete worked example, create an account, choose
-              one first action, and review what the platform does—and does not—ask you to rely on.
+              Inspect a complete worked example, create an account, and save one action.
             </p>
             <div className="mt-product-actions">
               <Link className="button button-primary" href={startHref}>
@@ -114,7 +107,10 @@ export default async function PilotPage() {
               <dl>
                 <div>
                   <dt>Action</dt>
-                  <dd>Adapt the commitments, duration, evidence, and exit terms to something you could actually consider.</dd>
+                  <dd>
+                    Adapt the commitments, duration, evidence, and exit terms to something you could
+                    actually consider.
+                  </dd>
                 </div>
                 <div>
                   <dt>Completion</dt>
@@ -136,7 +132,9 @@ export default async function PilotPage() {
               <dl>
                 <div>
                   <dt>Action</dt>
-                  <dd>Name what you would do, what you would request, and the explicit no-deal default.</dd>
+                  <dd>
+                    Name what you would do, what you would request, and the explicit no-deal default.
+                  </dd>
                 </div>
                 <div>
                   <dt>Completion</dt>
@@ -158,7 +156,10 @@ export default async function PilotPage() {
               <dl>
                 <div>
                   <dt>Action</dt>
-                  <dd>Name a researcher, builder, donor, organizer, or institution that could test a concrete use case.</dd>
+                  <dd>
+                    Name a researcher, builder, donor, organizer, or institution that could test a
+                    concrete use case.
+                  </dd>
                 </div>
                 <div>
                   <dt>Completion</dt>
