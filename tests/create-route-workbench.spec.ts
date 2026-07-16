@@ -95,15 +95,15 @@ test.describe("Create route workbench", () => {
     }
   });
 
-  test("shows a distinct hover color for each route", async ({ page }) => {
+  test("shows a distinct restrained hover color for each route", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/create");
 
     const expectedHoverColors = [
-      ["trade", "rgb(220, 239, 253)"],
-      ["offset", "rgb(236, 234, 255)"],
-      ["pool", "rgb(241, 247, 204)"],
-      ["back", "rgb(231, 239, 229)"],
+      ["trade", "rgb(255, 240, 235)"],
+      ["offset", "rgb(238, 241, 240)"],
+      ["pool", "rgb(242, 240, 232)"],
+      ["back", "rgb(237, 240, 235)"],
     ] as const;
     const observedHoverColors: string[] = [];
 
