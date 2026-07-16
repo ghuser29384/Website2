@@ -1,4 +1,4 @@
-name: Fix core trade type repairs
+name: Fix remaining core trade safeguards
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - feat/core-trade-loop
     paths:
       - "src/lib/core-trade.ts"
+      - "src/app/core-trade-actions.ts"
       - ".github/workflows/fix-core-trade-types.yml"
 
 permissions:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[core-offers-types-fixed]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[core-safeguards-fixed]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -22,14 +23,14 @@ jobs:
           ref: feat/core-trade-loop
           fetch-depth: 0
 
-      - name: Apply focused type annotations
+      - name: Apply focused source safeguards
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/lib/core-trade.ts")
-          source = path.read_text()
-          replacements = [
+          core_path = Path("src/lib/core-trade.ts")
+          core_source = core_path.read_text()
+          signature_replacements = [
               (
                   "export async function listCoreOffersForOwner(ownerId: string) {",
                   "export async function listCoreOffersForOwner(ownerId: string): Promise<CoreOffer[]> {",
@@ -39,22 +40,74 @@ jobs:
                   "export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {",
               ),
           ]
-          for old, new in replacements:
-              if old in source:
-                  source = source.replace(old, new, 1)
-              elif new not in source:
+          for old, new in signature_replacements:
+              if old in core_source:
+                  core_source = core_source.replace(old, new, 1)
+              elif new not in core_source:
                   raise SystemExit(f"Expected signature was not found: {old}")
-          path.write_text(source)
+          core_path.write_text(core_source)
+
+          action_path = Path("src/app/core-trade-actions.ts")
+          source = action_path.read_text()
+
+          invitation_old = '''    if (String(invitation.sender_id) === viewer.authUser.id) {
+              throw new Error("The sender cannot respond to their own invitation.");
+            }
+
+            if (decision === "decline") {'''
+          invitation_new = '''    if (String(invitation.sender_id) === viewer.authUser.id) {
+              throw new Error("The sender cannot respond to their own invitation.");
+            }
+
+            const intendedUserId = invitation.recipient_user_id
+              ? String(invitation.recipient_user_id)
+              : "";
+            const intendedEmail = String(invitation.recipient_email ?? "").trim().toLowerCase();
+            const viewerEmail = String(viewer.authUser.email ?? "").trim().toLowerCase();
+            if (intendedUserId && intendedUserId !== viewer.authUser.id) {
+              throw new Error("This invitation was addressed to another account.");
+            }
+            if (!intendedUserId && intendedEmail && intendedEmail !== viewerEmail) {
+              throw new Error("Sign in with the email address that received this invitation.");
+            }
+
+            if (decision === "decline") {'''
+          if invitation_old in source:
+              source = source.replace(invitation_old, invitation_new, 1)
+          elif "This invitation was addressed to another account." not in source:
+              raise SystemExit("Expected invitation authorization block was not found.")
+
+          function_marker = "export async function confirmAgreementVersionAction(formData: FormData) {"
+          marker_index = source.find(function_marker)
+          if marker_index < 0:
+              raise SystemExit("Confirmation action marker was not found.")
+          confirmation_old = '''  try {
+              const { data: agreement } = await supabase'''
+          confirmation_new = '''  try {
+              if (!readCheckbox(formData, "terms_reviewed")) {
+                throw new Error("Confirm that you reviewed this exact frozen agreement version.");
+              }
+              const { data: agreement } = await supabase'''
+          confirmation_index = source.find(confirmation_old, marker_index)
+          existing_index = source.find("Confirm that you reviewed this exact frozen agreement version.", marker_index)
+          if confirmation_index >= 0 and (existing_index < 0 or existing_index > confirmation_index):
+              source = source[:confirmation_index] + source[confirmation_index:].replace(
+                  confirmation_old, confirmation_new, 1
+              )
+          elif existing_index < 0:
+              raise SystemExit("Expected agreement confirmation block was not found.")
+
+          action_path.write_text(source)
           PY
 
-      - name: Commit the source change
+      - name: Commit the source changes
         run: |
-          if git diff --quiet -- src/lib/core-trade.ts; then
+          if git diff --quiet -- src/lib/core-trade.ts src/app/core-trade-actions.ts; then
             echo "No source change required."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/core-trade.ts
-          git commit -m "Type core offer collections [core-offers-types-fixed]"
+          git add src/lib/core-trade.ts src/app/core-trade-actions.ts
+          git commit -m "Enforce remaining core trade safeguards [core-safeguards-fixed]"
           git push origin HEAD:feat/core-trade-loop
