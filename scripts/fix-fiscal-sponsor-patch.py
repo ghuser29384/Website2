@@ -79,4 +79,34 @@ saved_path_new = '''    \'\'\'                <dd>SetupIntent first</dd>
 count = source.count(saved_path_old)
 if count != 1:
     raise SystemExit(f"Expected one saved-path patch block, found {count}")
-path.write_text(source.replace(saved_path_old, saved_path_new))
+source = source.replace(saved_path_old, saved_path_new)
+
+workflow_text_old = '''    \'\'\'       "Set the most you are willing to contribute and define fallback treatment before any payment authorization is requested.",
+\'\'\',
+    \'\'\'       "Set the most you are willing to contribute and define fallback treatment before any external payment handoff is opened.",
+\'\'\',
+'''
+workflow_text_new = '''    \'\'\'      "Set the most you are willing to contribute and define fallback treatment before any payment authorization is requested.",
+\'\'\',
+    \'\'\'      "Set the most you are willing to contribute and define fallback treatment before any external payment handoff is opened.",
+\'\'\',
+'''
+count = source.count(workflow_text_old)
+if count != 1:
+    raise SystemExit(f"Expected one MPGF workflow text patch block, found {count}")
+source = source.replace(workflow_text_old, workflow_text_new)
+
+workflow_gate_old = '''    \'\'\'       "Threshold, identity, review, challenge, authorization, destination, and settlement checks must pass before a contribution counts.",
+\'\'\',
+    \'\'\'       "Threshold, identity, review, challenge, destination, external-payment, and evidence checks must pass before a contribution counts.",
+\'\'\',
+'''
+workflow_gate_new = '''    \'\'\'      "Threshold, identity, review, challenge, authorization, destination, and settlement checks must pass before a contribution counts.",
+\'\'\',
+    \'\'\'      "Threshold, identity, review, challenge, destination, external-payment, and evidence checks must pass before a contribution counts.",
+\'\'\',
+'''
+count = source.count(workflow_gate_old)
+if count != 1:
+    raise SystemExit(f"Expected one MPGF workflow gate patch block, found {count}")
+path.write_text(source.replace(workflow_gate_old, workflow_gate_new))
