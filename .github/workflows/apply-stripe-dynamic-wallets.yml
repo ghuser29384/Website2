@@ -153,22 +153,33 @@ jobs:
 
           Path(".github/workflows/apply-stripe-dynamic-wallets.yml").unlink()
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run unit tests
-        run: npm test
-
-      - name: Run lint
-        run: npm run lint
-
-      - name: Build production application
-        run: npm run build
-
-      - name: Commit verified implementation
+      - name: Commit implementation to the feature branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
           git commit -m "Enable Stripe dynamic payment methods"
           git push origin HEAD:feat/stripe-dynamic-wallets-20260716
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: |
+          mkdir -p .workflow-artifacts
+          set -o pipefail
+          npm test 2>&1 | tee .workflow-artifacts/npm-test.log
+
+      - name: Upload unit-test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stripe-dynamic-wallets-test-log
+          path: .workflow-artifacts/npm-test.log
+          if-no-files-found: ignore
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build production application
+        run: npm run build
