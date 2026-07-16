@@ -187,9 +187,9 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/walkthrough",
     label: "Interactive Moral Trade walkthrough",
-    summary: "Learn moral trade by making a small deal, tuning terms, redirecting opposed donations, and crossing a public-good threshold.",
+    summary: "Learn moral trade by making a small deal, redirecting opposed donations, crossing a public-good threshold, and conditionally funding a higher-impact job's salary gap.",
     kind: "learn",
-    keywords: ["walkthrough", "interactive", "learn", "third option", "find the mix", "crowd", "redirect", "moral trade"],
+    keywords: ["walkthrough", "interactive", "learn", "third option", "find the mix", "crowd", "redirect", "moral trade", "salary gap", "career funding", "higher-impact job"],
   },
   {
     href: "/what-is-moral-trade",
