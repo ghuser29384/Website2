@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/fiscal-sponsor-funding-20260716
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
