@@ -21,11 +21,11 @@ export default function NotFound() {
           <p>The route is not available as a backed Moral Trade record.</p>
           <p className="v72-receipt-fragment">Unavailable · Terms changed</p>
           <div className="hero-actions">
-            <Link className="button button-primary" href="/offers">
-              Browse offers
+            <Link className="button button-primary" href="/offers?view=live">
+              Explore live proposals
             </Link>
-            <Link className="button button-secondary" href="/worked-examples">
-              View examples
+            <Link className="button button-secondary" href="/donate">
+              Fund a public good
             </Link>
           </div>
         </section>
