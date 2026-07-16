@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { getMoralTradeFundingReadiness } from "@/lib/funding";
 import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -30,11 +31,11 @@ function formatStatusCount(value: number | null) {
 
 const supportedCapabilities = [
   {
-    title: "Provider-hosted financial contributions",
+    title: "Direct-to-charity financial contributions",
     detail:
-      "Choose a reviewed Every.org destination, complete payment with the provider, and use imported or reviewed evidence when a linked workflow requires it. Moral Trade does not hold the donation.",
+      "Choose a reviewed Every.org destination and complete payment with the provider. The named external charity receives the gift; Moral Trade does not.",
     href: "/donate",
-    action: "Choose a funding route",
+    action: "Choose a charity route",
   },
   {
     title: "Accounts and guided onboarding",
@@ -139,6 +140,7 @@ const serviceBoundaries = [
 export default async function StatusPage() {
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
   const isAuthenticated = Boolean(viewer);
+  const fundingReadiness = getMoralTradeFundingReadiness();
   const statusStructuredData = buildWebPageJsonLd({
     name: "Moral Trade service status",
     description:
@@ -173,13 +175,13 @@ export default async function StatusPage() {
             <p className="eyebrow">Service status</p>
             <h1>What Moral Trade supports today.</h1>
             <p className="hero-text">
-              Moral Trade is an operating coordination service with a provider-hosted financial
-              contribution route plus backed account, offer, onboarding, matching, evidence, review,
-              and public-good workflows. This page states the limits that remain in force.
+              Moral Trade is an operating coordination service with direct-to-charity Every.org
+              routes plus backed account, offer, onboarding, matching, evidence, review, and public-good
+              workflows. Project funding remains sponsor-gated. This page states the limits in force.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/donate">
-                Make a financial contribution
+              <Link className="button button-primary" href="/support">
+                Review funding routes
               </Link>
               <Link className="button button-secondary" href="/safety">
                 Read safety rules
@@ -192,7 +194,7 @@ export default async function StatusPage() {
             <dl className="profile-stats profile-stats-hero">
               <div>
                 <dt>Financial route</dt>
-                <dd>Available</dd>
+                <dd>{fundingReadiness.projectFundingAvailable ? "Sponsor-backed" : "Direct-to-charity only"}</dd>
               </div>
               <div>
                 <dt>Open proposals</dt>
@@ -231,6 +233,22 @@ export default async function StatusPage() {
                 </Link>
               </article>
             ))}
+            <article className="panel data-card">
+              <div className="protocol-workflow-card-head">
+                <h3>Moral Trade project funding</h3>
+                <StatusBadge tone={fundingReadiness.projectFundingAvailable ? "default" : "warning"}>
+                  {fundingReadiness.projectFundingAvailable ? "sponsor-backed" : "pending sponsor"}
+                </StatusBadge>
+              </div>
+              <p className="route-text">
+                {fundingReadiness.projectFundingAvailable
+                  ? "Project support is routed through the disclosed fiscal sponsor; native checkout remains disabled."
+                  : "Moral Trade is not accepting project-support funds until a fiscal sponsor is contractually active and fully disclosed."}
+              </p>
+              <Link className="text-button" href="/support">
+                Review funding posture
+              </Link>
+            </article>
           </div>
         </section>
 

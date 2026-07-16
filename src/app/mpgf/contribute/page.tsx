@@ -11,13 +11,13 @@ import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Contribute to MPGF",
-  description: "Use the Every.org fast route, save a conditional commitment, or fall back to reviewed manual evidence.",
+  description: "Use a direct-to-charity Every.org route, save a non-custodial pledge intent, or submit reviewed external evidence.",
   alternates: {
     canonical: "/mpgf/contribute",
   },
   openGraph: {
     title: "Contribute to MPGF",
-    description: "Use the Every.org fast route, save a conditional commitment, or fall back to reviewed manual evidence.",
+    description: "Use a direct-to-charity Every.org route, save a non-custodial pledge intent, or submit reviewed external evidence.",
     url: getAbsoluteUrl("/mpgf/contribute"),
     type: "website",
   },
@@ -43,8 +43,8 @@ export default async function MpgfContributePage() {
           <Link className="button button-secondary" href="/login?returnTo=/mpgf/contribute">Sign in to contribute</Link>
         )
       }
-      description="Start with the Every.org fast route when available, save a conditional commitment for threshold-cleared rounds, or use manual evidence only as fallback."
-      title="Contribute through fast-route or conditional verification."
+      description="Start with a direct-to-charity Every.org route, save a pledge-only intent for threshold-cleared rounds, or use reviewed external evidence as fallback."
+      title="Contribute through an external route or pledge intent."
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
