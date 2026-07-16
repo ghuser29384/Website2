@@ -6,7 +6,7 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import "./walkthrough.css";
 
 const description = truncateDescription(
-  "Try an interactive Moral Trade walkthrough: find a deal across different priorities, tune terms both sides accept, redirect opposed donations, and explore conditional public-goods funding.",
+  "Try an interactive Moral Trade walkthrough: find a deal across different priorities, redirect opposed donations, and use all-or-nothing funding to close a higher-impact job's salary gap.",
 );
 
 export const metadata: Metadata = {
