@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const captureVisuals = process.env.HOME_PROCESS_CAPTURE === "1";
@@ -26,6 +26,43 @@ test.describe("Homepage process section", () => {
 
     const section = page.locator("section:has(#process-heading)");
     const flow = section.locator(".mt-how-grid");
+
+    await expect(section).toBeVisible();
+
+    if (captureVisuals) {
+      await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
+
+      const metrics = await section.evaluate((element) => {
+        const flowElement = element.querySelector<HTMLElement>(".mt-how-grid");
+        const cta = element.querySelector<HTMLAnchorElement>(".mt-process-cta");
+        const box = element.getBoundingClientRect();
+
+        return {
+          ctaHref: cta?.getAttribute("href") ?? null,
+          flowColumns: flowElement
+            ? getComputedStyle(flowElement).gridTemplateColumns.split(" ").filter(Boolean).length
+            : null,
+          iconCount: element.querySelectorAll(".mt-process-icon").length,
+          sectionColumns: getComputedStyle(element).gridTemplateColumns
+            .split(" ")
+            .filter(Boolean).length,
+          sectionHeight: box.height,
+          stepLabels: Array.from(element.querySelectorAll(".mt-how-step h3"), (heading) =>
+            heading.textContent?.trim(),
+          ),
+        };
+      });
+
+      await writeFile(
+        path.join(captureDirectory, "desktop-metrics.json"),
+        `${JSON.stringify(metrics, null, 2)}\n`,
+        "utf8",
+      );
+      await section.screenshot({
+        path: path.join(captureDirectory, "implementation-desktop.png"),
+      });
+    }
 
     await expect(
       page.getByRole("heading", { level: 2, name: "Trade actions. Keep your values." }),
@@ -56,12 +93,6 @@ test.describe("Homepage process section", () => {
     expect(sectionBox!.height).toBeLessThan(700);
 
     if (captureVisuals) {
-      await mkdir(captureDirectory, { recursive: true });
-      await prepareForVisualCapture(page);
-      await section.screenshot({
-        path: path.join(captureDirectory, "implementation-desktop.png"),
-      });
-
       const liveContext = await browser.newContext({ viewport: { width: 1560, height: 960 } });
       const livePage = await liveContext.newPage();
       await livePage.goto("https://moraltrade.org", { waitUntil: "domcontentloaded" });
