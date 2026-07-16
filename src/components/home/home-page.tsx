@@ -325,18 +325,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             </Link>
           </div>
         </section>
-
-        <section className="mt-product-section is-white" aria-label="Research role">
-          <div className="mt-research-footnote">
-            <strong>5%</strong>
-            <p>
-              Research supplies the theory, tests mechanism claims, and records uncertainty. The
-              other 95% of the public experience is marketplace discovery, coordination, terms,
-              authorization, evidence, settlement, and recourse.
-            </p>
-            <Link href="/research">Research layer →</Link>
-          </div>
-        </section>
       </main>
 
       <SiteFooter />
