@@ -12,6 +12,18 @@ async function expectFullyInViewport(page: Page, locator: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
 }
 
+async function expectFullyInside(locator: Locator, container: Locator) {
+  const box = await locator.boundingBox();
+  const containerBox = await container.boundingBox();
+
+  expect(box).not.toBeNull();
+  expect(containerBox).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(containerBox!.x);
+  expect(box!.y).toBeGreaterThanOrEqual(containerBox!.y);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(containerBox!.x + containerBox!.width);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(containerBox!.y + containerBox!.height);
+}
+
 test("a first homepage visit opens the walkthrough once", async ({ context, page }) => {
   await context.clearCookies();
   await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
@@ -66,6 +78,21 @@ test("Third Option leads to Find the Mix and a real trade draft handoff", async 
     "https://moraltrade.org/create",
   );
   await expect(page.getByRole("button", { name: "Redirect ineffective donations." })).toBeVisible();
+});
+
+test("Make the trade stays fully visible on a wide, short screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 895 });
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+
+  await page.getByRole("button", { name: "AI safety" }).click();
+  await page.getByRole("button", { name: "See what you can trade" }).click();
+  await page.getByRole("button", { name: /Your move Eat vegetarian/ }).click();
+  await page.getByRole("button", { name: /Sam's move Fund \$25/ }).click();
+
+  const makeTrade = page.getByRole("button", { name: "Make the trade" });
+  await expect(makeTrade).toBeEnabled();
+  await expectFullyInViewport(page, makeTrade);
+  await expectFullyInside(makeTrade, page.locator(".experience"));
 });
 
 test("Crowd and Redirect preserve the requested copy and routing", async ({ page }) => {
