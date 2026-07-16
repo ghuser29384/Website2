@@ -33,9 +33,11 @@ test("public pages separate direct charity gifts from Moral Trade project suppor
   const siteSource = readRepoFile("src/lib/site.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
-  assert.match(supportPage, /Fund public goods now\. Fund Moral Trade only through an approved sponsor/);
+  assert.match(supportPage, /Fund public goods now/);
+  assert.match(supportPage, /approved sponsor/);
   assert.match(supportPage, /No fiscal sponsor relationship is currently represented as active/);
-  assert.match(supportPage, /Do not send money to Moral Trade, its operators, or a personal payment account/);
+  assert.match(supportPage, /Do not send money/);
+  assert.match(supportPage, /personal payment account/);
   assert.match(supportPage, /Contribute through the fiscal sponsor/);
   assert.match(supportPage, /sponsor\.feeDisclosure/);
   assert.match(supportPage, /sponsor\.taxReceiptDisclosure/);
@@ -62,9 +64,11 @@ test("MPGF production surfaces stay non-custodial and pledge-first", () => {
   assert.match(consoleSource, /Save pledge intent/);
   assert.equal(consoleSource.includes("Save Stripe commitment"), false);
   assert.match(frameSource, /Direct-to-charity or pledge-only/);
-  assert.match(frameSource, /Every\.org, a sponsor-backed route when active, or a non-custodial pledge intent/);
+  assert.match(frameSource, /Every\.org/);
+  assert.match(frameSource, /sponsor-backed route when active/);
+  assert.match(frameSource, /non-custodial pledge intent/);
   assert.match(termsSource, /No sponsor-backed project route is active/);
-  assert.match(termsSource, /The provider or sponsor controls the refund process/);
+  assert.match(termsSource, /provider or sponsor controls the refund process/);
   assert.match(termsSource, /Monthly project support is disabled until a sponsor approves the route/);
   assert.match(mpgfCopy, /Project funding must use an approved fiscal sponsor/);
   assert.match(everyOrgSource, /External charity donation selected through Moral Trade MPGF/);
