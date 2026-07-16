@@ -1,0 +1,51 @@
+name: Fix core trade type repairs
+
+on:
+  push:
+    branches:
+      - feat/core-trade-loop
+    paths:
+      - "src/lib/core-trade.ts"
+      - ".github/workflows/fix-core-trade-types.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[core-types-fixed]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/core-trade-loop
+          fetch-depth: 0
+
+      - name: Apply focused type annotations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/core-trade.ts")
+          source = path.read_text()
+          old = "export async function listReciprocalMatches(offer: CoreOffer) {"
+          new = "export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {"
+          if old in source:
+              source = source.replace(old, new, 1)
+          elif new not in source:
+              raise SystemExit("Expected listReciprocalMatches signature was not found.")
+          path.write_text(source)
+          PY
+
+      - name: Commit the source change
+        run: |
+          if git diff --quiet -- src/lib/core-trade.ts; then
+            echo "No source change required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/core-trade.ts
+          git commit -m "Type reciprocal core trade matches [core-types-fixed]"
+          git push origin HEAD:feat/core-trade-loop
