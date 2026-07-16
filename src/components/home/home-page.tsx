@@ -234,9 +234,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               </li>
             ))}
           </ol>
-          <Link className="button button-secondary" href="/how-it-works">
-            Review the full process
-          </Link>
         </section>
 
         <section className="mt-product-section is-white" aria-labelledby="offset-heading">

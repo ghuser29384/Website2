@@ -38,13 +38,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["pool", "threshold", "conditional", "pledge", "maximum exposure", "public good", "deadline", "assurance"],
   },
   {
-    href: "/how-it-works",
-    label: "How it works",
-    summary: "Follow the path from explicit default through terms, evidence, authorization, settlement, and exit.",
-    kind: "learn",
-    keywords: ["how it works", "steps", "default", "baseline", "evidence", "authorization", "settlement", "exit"],
-  },
-  {
     href: "/trust",
     label: "What you can rely on",
     summary: "Inspect current guarantees, non-guarantees, Deal Receipt fields, review states, and recourse routes.",

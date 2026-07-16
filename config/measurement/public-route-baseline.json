@@ -25,7 +25,6 @@
     { "path": "/create", "family": "creation", "stage": "activation" },
     { "path": "/offsets", "family": "donation_offsets", "stage": "coordination" },
     { "path": "/pools", "family": "conditional_pools", "stage": "coordination" },
-    { "path": "/how-it-works", "family": "mechanism", "stage": "orientation" },
     { "path": "/trust", "family": "trust", "stage": "trust" },
     { "path": "/worked-examples", "family": "worked_examples", "stage": "orientation" },
     { "path": "/signup", "family": "account", "stage": "activation" },
