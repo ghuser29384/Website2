@@ -130,7 +130,7 @@ export default async function StartPage() {
                 <IconMark name={path.icon} />
                 <div>
                   <p className="detail-kicker">{path.title}</p>
-                  <h2>{path.homeTitle}</h2>
+                  <h3>{path.homeTitle}</h3>
                   <p>{path.description}</p>
                   <p className="route-text">{path.fit}</p>
                 </div>
