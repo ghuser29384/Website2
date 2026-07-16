@@ -98,10 +98,10 @@ test.describe("Create route workbench", () => {
     await page.goto("/create");
 
     const expectedHoverColors = [
-      ["trade", "rgb(220, 239, 253)"],
-      ["offset", "rgb(236, 234, 255)"],
-      ["pool", "rgb(241, 247, 204)"],
-      ["back", "rgb(231, 239, 229)"],
+      ["trade", "rgb(231, 236, 234)"],
+      ["offset", "rgb(238, 229, 225)"],
+      ["pool", "rgb(238, 233, 220)"],
+      ["back", "rgb(228, 232, 223)"],
     ] as const;
     const observedHoverColors: string[] = [];
 
