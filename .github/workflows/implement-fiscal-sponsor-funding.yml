@@ -26,7 +26,10 @@ jobs:
           show-progress: false
 
       - name: Apply fiscal-sponsor funding posture
-        run: python scripts/apply-fiscal-sponsor-funding.py
+        run: |
+          python scripts/fix-fiscal-sponsor-patch.py
+          python scripts/apply-fiscal-sponsor-funding.py
+          rm scripts/fix-fiscal-sponsor-patch.py
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
