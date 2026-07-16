@@ -15,14 +15,14 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Live conditional pools",
+  title: "Conditional pools",
   description:
-    "Browse current production conditional pools and see their actual financial state. Demo, test, sandbox, and simulated inventory is excluded.",
+    "Browse open conditional pools, funding limits, deadlines, and payment readiness.",
   alternates: { canonical: "/pools" },
   openGraph: {
-    title: "Live conditional pools at Moral Trade",
+    title: "Conditional pools at Moral Trade",
     description:
-      "Current production pool inventory, conditional exposure, charges, refunds, transfers, and payment-readiness state.",
+      "Browse open conditional pools, funding limits, deadlines, and payment readiness.",
     url: getAbsoluteUrl("/pools"),
     type: "website",
   },
@@ -30,9 +30,15 @@ export const metadata: Metadata = {
 
 const mechanismFacts = [
   ["Maximum exposure", "Every person sees the most they can be charged before authorizing."],
-  ["Funding condition", "The threshold, eligible amount, deadline, and review gates are published together."],
+  [
+    "Funding condition",
+    "The threshold, eligible amount, deadline, and review gates are published together.",
+  ],
   ["Failure behavior", "A condition that does not pass creates no successful settlement record."],
-  ["State vocabulary", "Pledge, authorization, charge, refund, transfer, and outcome remain distinct."],
+  [
+    "State vocabulary",
+    "Pledge, authorization, charge, refund, transfer, and outcome remain distinct.",
+  ],
 ] as const;
 
 const moneyFormatters = new Map<string, Intl.NumberFormat>();
@@ -92,16 +98,6 @@ export default async function PoolsPage() {
 
   return (
     <div className="page-shell marketplace-product-shell">
-      <div className="mt-beta-strip">
-        <span>Live pools</span>
-        <span>
-          {liveDataAvailable
-            ? "Production inventory and financial totals are current. Demo and test records are excluded."
-            : "Production data is unavailable. No demo fallback is being shown."}
-        </span>
-        <Link href="/status">Status</Link>
-      </div>
-
       <header>
         <SiteTopbar
           brandHref="/"
@@ -114,12 +110,7 @@ export default async function PoolsPage() {
       <main className="mt-product-main" id="main-content" tabIndex={-1}>
         <section className="mt-mechanism-hero" aria-labelledby="pools-heading">
           <div className="mt-mechanism-copy">
-            <p className="mt-product-kicker">Live conditional pools</p>
-            <h1 id="pools-heading">Only show pools that exist.</h1>
-            <p>
-              Browse reviewed production inventory and the money states actually recorded for it.
-              An empty marketplace stays empty instead of being filled with examples.
-            </p>
+            <h1 id="pools-heading">Live conditional pools.</h1>
             <div className="mt-product-actions">
               <Link className="button button-primary" href="#live-pools">
                 Explore live pools
@@ -128,17 +119,14 @@ export default async function PoolsPage() {
                 Propose a pool
               </Link>
             </div>
-            <ul className="mt-product-proof-line" aria-label="Pool data rules">
-              <li>Production records</li>
-              <li>Test rows excluded</li>
-              <li>Financial state separated</li>
-              <li>No demo demand</li>
-            </ul>
           </div>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Production state</p>
-            <h2>{liveDataAvailable ? `${snapshot.routes.length} live routes` : "Data unavailable"}</h2>
+          <aside className="hero-panel panel" aria-label="Pool summary">
+            <h2>
+              {liveDataAvailable
+                ? `${snapshot.routes.length} open route${snapshot.routes.length === 1 ? "" : "s"}`
+                : "Unavailable"}
+            </h2>
             <dl className="detail-grid">
               <div>
                 <dt>Open cycles</dt>
@@ -171,20 +159,8 @@ export default async function PoolsPage() {
         <section
           className="mt-product-section is-white"
           id="live-pools"
-          aria-labelledby="live-pools-heading"
+          aria-label="Live pools"
         >
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Marketplace</p>
-              <h2 id="live-pools-heading">Current production inventory.</h2>
-            </div>
-            <p>
-              A route appears only after a reviewed proposal is attached to an open, non-demo
-              production cycle. Pledge-only routes may be live inventory without being financial
-              transactions.
-            </p>
-          </div>
-
           {liveDataAvailable ? (
             snapshot.routes.length > 0 ? (
               <div className="mt-pool-list">
@@ -203,7 +179,9 @@ export default async function PoolsPage() {
                       </strong>
                       <span>{formatMoney(route.targetFundingCents, route.currency)} maximum</span>
                       <span>{formatDate(route.deadlineAt)}</span>
-                      <span>{route.fundingMode === "real_money" ? "Real-money" : "Pledge-only"}</span>
+                      <span>
+                        {route.fundingMode === "real_money" ? "Real-money" : "Pledge-only"}
+                      </span>
                     </div>
                     <Link className="button button-primary" href={route.href}>
                       Request access
@@ -214,17 +192,9 @@ export default async function PoolsPage() {
             ) : (
               <article className={liveStyles.emptyState}>
                 <div className={liveStyles.stateHeader}>
-                  <div>
-                    <p className="eyebrow">Current production result</p>
-                    <h3>No live conditional pools are open.</h3>
-                  </div>
-                  <span className={liveStyles.liveBadge}>0 routes</span>
+                  <h3>No open pools.</h3>
+                  <span className={liveStyles.liveBadge}>0</span>
                 </div>
-                <p>
-                  The database currently contains no approved, non-demo pool inventory. This is the
-                  actual marketplace state, not an error and not an invitation to infer demand from
-                  worked examples.
-                </p>
                 <div className="mt-product-actions">
                   <Link className="button button-primary" href="/mpgf/pools/new">
                     Propose a pool
@@ -238,15 +208,9 @@ export default async function PoolsPage() {
           ) : (
             <article className={liveStyles.unavailableState}>
               <div className={liveStyles.stateHeader}>
-                <div>
-                  <p className="eyebrow">Data source</p>
-                  <h3>Live inventory is temporarily unavailable.</h3>
-                </div>
-                <span className={liveStyles.unavailableBadge}>No fallback</span>
+                <h3>Pool inventory unavailable.</h3>
+                <span className={liveStyles.unavailableBadge}>Unavailable</span>
               </div>
-              <p>
-                The page is withholding inventory rather than substituting seed or test records.
-              </p>
               <div className="mt-product-actions">
                 <Link className="button button-secondary" href="/status">
                   Check service status
@@ -259,13 +223,8 @@ export default async function PoolsPage() {
         <section className="mt-product-section" aria-labelledby="pool-financial-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">Financial state</p>
-              <h2 id="pool-financial-heading">Current production totals.</h2>
+              <h2 id="pool-financial-heading">Financial state</h2>
             </div>
-            <p>
-              These totals come from live public-goods payment mandates, attempts, refunds,
-              transfers, and real-money recurring commitments. Pledge-only records are excluded.
-            </p>
           </div>
 
           <div className="pilot-metric-grid">
@@ -274,7 +233,7 @@ export default async function PoolsPage() {
               value={
                 liveDataAvailable
                   ? formatMoney(financial.openConditionalExposureCents, financial.currency)
-                  : "Unavailable"
+                  : "—"
               }
               detail="Uncharged maximums on open live mandates."
             />
@@ -283,7 +242,7 @@ export default async function PoolsPage() {
               value={
                 liveDataAvailable
                   ? formatMoney(financial.netChargedCents, financial.currency)
-                  : "Unavailable"
+                  : "—"
               }
               detail="Successful live charges less recorded refunds."
             />
@@ -292,7 +251,7 @@ export default async function PoolsPage() {
               value={
                 liveDataAvailable
                   ? formatMoney(financial.transferredCents, financial.currency)
-                  : "Unavailable"
+                  : "—"
               }
               detail="Settlement transfers in transferred state."
             />
@@ -301,7 +260,7 @@ export default async function PoolsPage() {
               value={
                 liveDataAvailable
                   ? formatMoney(financial.refundedCents, financial.currency)
-                  : "Unavailable"
+                  : "—"
               }
               detail="Refunded amount recorded against payment attempts."
             />
@@ -311,15 +270,6 @@ export default async function PoolsPage() {
             <div className={liveStyles.readinessCopy}>
               <p className="eyebrow">Payment acceptance</p>
               <h3>{liveDataAvailable ? readinessLabel(readiness.status) : "Unavailable"}</h3>
-              <p>
-                {liveDataAvailable && readiness.status === "ready"
-                  ? "All recorded live payment gates pass. Route-specific review and participant acceptance still apply."
-                  : liveDataAvailable && readiness.status === "blocked"
-                    ? "One or more live payment gates are blocked. No authorization or settlement claim is offered here."
-                    : liveDataAvailable && readiness.status === "pending"
-                      ? "One or more required live reviews remain pending."
-                      : "Payment readiness could not be determined from the production source."}
-              </p>
             </div>
             <dl className={liveStyles.readinessFacts}>
               <div>
@@ -356,7 +306,6 @@ export default async function PoolsPage() {
           <div className="mt-mechanism-facts">
             {mechanismFacts.map(([title, description]) => (
               <article className="mt-mechanism-fact" key={title}>
-                <span>Required field</span>
                 <strong>{title}</strong>
                 <p>{description}</p>
               </article>
@@ -364,7 +313,7 @@ export default async function PoolsPage() {
           </div>
           <div className="mt-product-actions">
             <Link className="button button-primary" href="/moral-goods-group-buying">
-              Open full live state
+              Group-buying details
             </Link>
             <Link className="button button-secondary" href="/trust">
               Review safeguards
