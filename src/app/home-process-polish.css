@@ -39,7 +39,7 @@
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-section-head h2 {
-  max-width: 9ch;
+  max-width: 10.5ch;
   margin-top: 1.35rem;
   color: #ffffff;
   font-size: clamp(3.15rem, 5vw, 5.25rem);
