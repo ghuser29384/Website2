@@ -5,21 +5,20 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Service status",
   description:
-    "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
+    "Current Moral Trade workflows, provider-hosted donation route, public health checks, and operating boundaries.",
   alternates: {
     canonical: "/status",
   },
   openGraph: {
     title: "Moral Trade service status",
     description:
-      "See the workflows Moral Trade supports, inspect public health endpoints, and review the service boundaries.",
+      "Review current workflows, the provider-hosted donation route, public health endpoints, and service boundaries.",
     url: getAbsoluteUrl("/status"),
     type: "website",
   },
@@ -31,18 +30,32 @@ function formatStatusCount(value: number | null) {
 
 const supportedCapabilities = [
   {
-    title: "Accounts and guided onboarding",
+    title: "Provider-hosted donations",
     detail:
-      "Email-based accounts, structured onboarding, role and cause selection, referral attribution, and one-action activation routing.",
-    href: "/signup?returnTo=/onboarding",
+      "Choose a reviewed Every.org destination, complete payment with the provider, and attach imported or reviewed evidence when a linked workflow requires it. Moral Trade does not hold the donation.",
+    href: "/donate",
+    action: "Choose a funding route",
+  },
+  {
+    title: "Accounts",
+    detail:
+      "Create an account, select roles and causes, manage profile visibility, and save participant records.",
+    href: "/signup?returnTo=/create",
     action: "Create account",
   },
   {
-    title: "Bounded trade records",
+    title: "Bounded agreements",
     detail:
-      "Create and inspect pledge swaps and donation offsets with explicit baselines, terms, evidence requirements, timing, and exit rules.",
+      "Create pledge swaps and donation offsets with explicit defaults, commitments, maximum exposure, evidence, timing, and exit rules.",
+    href: "/create",
+    action: "Create an agreement",
+  },
+  {
+    title: "Active offers",
+    detail:
+      "Browse participant proposals and inspect their complete terms before responding.",
     href: "/offers",
-    action: "Explore trades",
+    action: "Browse active offers",
   },
   {
     title: "Consent-gated matching",
@@ -52,7 +65,7 @@ const supportedCapabilities = [
     action: "Open private matching",
   },
   {
-    title: "Moral public-good coordination",
+    title: "Public-good coordination",
     detail:
       "Structure shared actions, contribution records, external payment evidence, candidate pools, and governance review without platform custody.",
     href: "/moral-goods-group-buying",
@@ -61,16 +74,9 @@ const supportedCapabilities = [
   {
     title: "Evidence and review",
     detail:
-      "Store evidence states, reviewer decisions, challenges, appeals, disputes, and completion records without collapsing claims into verified facts.",
+      "Store submitted, reviewed, disputed, unavailable, and completed evidence states without collapsing them into one success claim.",
     href: "/validation",
     action: "Review validation rules",
-  },
-  {
-    title: "Member workspace",
-    detail:
-      "Signed-in participants can manage their offers, interests, wish profile, private matching state, agreements, invitations, and data portability.",
-    href: "/dashboard",
-    action: "Open workspace",
   },
 ] as const;
 
@@ -109,9 +115,9 @@ const publicHealthChecks = [
 
 const serviceBoundaries = [
   {
-    title: "No liquidity claim",
+    title: "Participant records only",
     detail:
-      "The service may have few open proposals. Worked examples are clearly separated from live participant records.",
+      "Open-proposal counts include participant records. Illustrative material is not counted as marketplace activity.",
   },
   {
     title: "No escrow or custody",
@@ -132,10 +138,11 @@ const serviceBoundaries = [
 
 export default async function StatusPage() {
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
+  const isAuthenticated = Boolean(viewer);
   const statusStructuredData = buildWebPageJsonLd({
     name: "Moral Trade service status",
     description:
-      "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
+      "Current Moral Trade workflows, provider-hosted donation route, public health checks, and operating boundaries.",
     path: "/status",
   });
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
@@ -156,40 +163,38 @@ export default async function StatusPage() {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
         />
 
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Service status</p>
-            <h1>What Moral Trade supports today.</h1>
+            <h1>Available workflows and current limits.</h1>
             <p className="hero-text">
-              Moral Trade is an operating coordination service with backed account, offer,
-              onboarding, matching, evidence, review, and public-good workflows. This page states
-              the limits that remain in force.
+              Create agreements, browse participant offers, fund through the external donation route,
+              coordinate public goods, and review evidence states.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/worked-examples">
-                Inspect worked examples
+              <Link className="button button-primary" href="/donate">
+                Fund a public good
               </Link>
-              <Link className="button button-secondary" href="/trust">
-                Read reliance rules
+              <Link className="button button-secondary" href="/offers">
+                Browse active offers
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Backed records</p>
             <dl className="profile-stats profile-stats-hero">
+              <div>
+                <dt>Donation route</dt>
+                <dd>Available</dd>
+              </div>
               <div>
                 <dt>Open proposals</dt>
                 <dd>{formatStatusCount(overview.openOfferCount)}</dd>
-              </div>
-              <div>
-                <dt>Worked examples</dt>
-                <dd>{CANONICAL_WORKED_CASE_COUNT}</dd>
               </div>
               <div>
                 <dt>Public profiles</dt>
@@ -205,17 +210,12 @@ export default async function StatusPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Available now</p>
-            <h2>Supported workflows</h2>
-            <p>These routes create or read backed records rather than simulated marketplace activity.</p>
-          </div>
+        <section className="section section-white" aria-label="Supported workflows">
           <div className="data-grid">
             {supportedCapabilities.map((capability) => (
               <article className="panel data-card" key={capability.title}>
                 <div className="protocol-workflow-card-head">
-                  <h3>{capability.title}</h3>
+                  <h2>{capability.title}</h2>
                   <StatusBadge tone="default">available</StatusBadge>
                 </div>
                 <p className="route-text">{capability.detail}</p>
@@ -229,12 +229,7 @@ export default async function StatusPage() {
 
         <section className="section section-subtle" aria-labelledby="health-heading">
           <div className="section-head">
-            <p className="eyebrow">Machine-readable checks</p>
             <h2 id="health-heading">Public health and governance endpoints</h2>
-            <p>
-              These endpoints expose protocol, operations, performance, incident, externality, and
-              transparency contracts for direct inspection.
-            </p>
           </div>
           <div className="data-grid">
             {publicHealthChecks.map((check) => (
@@ -252,14 +247,9 @@ export default async function StatusPage() {
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" aria-labelledby="limits-heading">
           <div className="section-head">
-            <p className="eyebrow">Operating boundaries</p>
-            <h2>What the service does not claim</h2>
-            <p>
-              These limits are product controls, not temporary disclaimers. Any change requires an
-              explicit operational and governance update.
-            </p>
+            <h2 id="limits-heading">Operating limits</h2>
           </div>
           <div className="data-grid">
             {serviceBoundaries.map((boundary) => (
