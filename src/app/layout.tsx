@@ -9,6 +9,7 @@ import "./marketplace-ui.css";
 import "./readability-cleanup.css";
 import "./activation-critical.css";
 import "./home-process-polish.css";
+import "./home-mode-hover-colors.css";
 import "./editorial-colorway.css";
 
 export const metadata: Metadata = {
