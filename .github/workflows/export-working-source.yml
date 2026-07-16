@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out repository
+      - name: Check out repository source
         uses: actions/checkout@v4
       - name: Upload working tree
         uses: actions/upload-artifact@v4
