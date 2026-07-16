@@ -146,8 +146,7 @@ export default async function PilotPage() {
         <section className="mt-product-section is-white" aria-labelledby="pilot-steps-heading">
           <div className="mt-product-section-head">
             <div>
-              <p className="mt-product-kicker">The path</p>
-              <h2 id="pilot-steps-heading">A complete first-user journey, not a site tour.</h2>
+              <p className="mt-product-kicker" id="pilot-steps-heading">The path</p>
             </div>
             <p>
               The acquisition metric is intentionally conservative: an account counts only after a
