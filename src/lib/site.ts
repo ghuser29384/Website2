@@ -2,8 +2,8 @@ export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
     { href: "/offers", label: "Explore" },
     { href: "/create", label: "Create" },
+    { href: "/donate", label: "Fund" },
     { href: "/pools", label: "Pools" },
-    { href: "/how-it-works", label: "How it works" },
   ];
 }
 
@@ -16,8 +16,8 @@ export function getTopbarActions(isAuthenticated = false) {
           label: "Create",
         }
       : {
-          href: "/pilot",
-          label: "Get started",
+          href: "/start",
+          label: "Start",
         },
   };
 }
@@ -28,6 +28,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/offers", label: "Explore trades" },
       { href: "/create", label: "Create" },
+      { href: "/donate", label: "Fund a public good" },
       { href: "/offsets", label: "Donation offsets" },
       { href: "/pools", label: "Conditional pools" },
       { href: "/background-networking", label: "Private matching" },
