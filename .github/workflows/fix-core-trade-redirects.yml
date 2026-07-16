@@ -1,0 +1,98 @@
+name: Fix core trade redirect propagation
+
+on:
+  push:
+    branches:
+      - feat/core-trade-loop
+    paths:
+      - "src/app/core-trade-actions.ts"
+      - ".github/workflows/fix-core-trade-redirects.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[core-redirect-fixed]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/core-trade-loop
+          fetch-depth: 0
+
+      - name: Preserve successful redirects across action error handling
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/core-trade-actions.ts")
+          source = path.read_text()
+          old = '''function redirectWithMessage(
+            path: string,
+            key: "error" | "message",
+            message: string,
+          ): never {
+            const target = new URL(path, "https://www.moraltrade.org");
+            target.searchParams.set(key, message);
+            redirect(`${target.pathname}${target.search}${target.hash}`);
+          }
+          '''
+          new = '''const CORE_REDIRECT_MARKER = "__CORE_TRADE_REDIRECT__:";
+
+          function redirectWithMessage(
+            path: string,
+            key: "error" | "message",
+            message: string,
+          ): never {
+            if (message.startsWith(CORE_REDIRECT_MARKER)) {
+              const encoded = message.slice(CORE_REDIRECT_MARKER.length);
+              const payload = JSON.parse(decodeURIComponent(encoded)) as {
+                path: string;
+                key: "error" | "message";
+                message: string;
+              };
+              const target = new URL(payload.path, "https://www.moraltrade.org");
+              target.searchParams.set(payload.key, payload.message);
+              redirect(`${target.pathname}${target.search}${target.hash}`);
+            }
+
+            const target = new URL(path, "https://www.moraltrade.org");
+            target.searchParams.set(key, message);
+
+            try {
+              redirect(`${target.pathname}${target.search}${target.hash}`);
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                typeof (error as Error & { digest?: unknown }).digest === "string" &&
+                String((error as Error & { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
+              ) {
+                error.message = `${CORE_REDIRECT_MARKER}${encodeURIComponent(
+                  JSON.stringify({ path, key, message }),
+                )}`;
+              }
+              throw error;
+            }
+          }
+          '''
+          if old not in source:
+              if "CORE_REDIRECT_MARKER" in source:
+                  print("Redirect helper is already fixed.")
+                  raise SystemExit(0)
+              raise SystemExit("Expected redirect helper was not found; refusing an unsafe patch.")
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+      - name: Commit the source change
+        run: |
+          if git diff --quiet -- src/app/core-trade-actions.ts; then
+            echo "No source change required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/core-trade-actions.ts
+          git commit -m "Preserve successful core trade redirects [core-redirect-fixed]"
+          git push origin HEAD:feat/core-trade-loop
