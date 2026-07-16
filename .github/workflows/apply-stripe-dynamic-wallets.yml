@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/stripe-dynamic-wallets-20260716
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
