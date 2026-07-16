@@ -64,4 +64,19 @@ frame_new = '''    \'\'\'      description="Start with the Every.org fast route 
 count = source.count(frame_old)
 if count != 1:
     raise SystemExit(f"Expected one MPGF frame patch block, found {count}")
-path.write_text(source.replace(frame_old, frame_new))
+source = source.replace(frame_old, frame_new)
+
+saved_path_old = '''    \'\'\'                 <dd>SetupIntent first</dd>
+\'\'\',
+    \'\'\'                 <dd>{storedPaymentCommitmentsEnabled ? "SetupIntent first" : "external handoff or pledge-only"}</dd>
+\'\'\',
+'''
+saved_path_new = '''    \'\'\'                <dd>SetupIntent first</dd>
+\'\'\',
+    \'\'\'                <dd>{storedPaymentCommitmentsEnabled ? "SetupIntent first" : "external handoff or pledge-only"}</dd>
+\'\'\',
+'''
+count = source.count(saved_path_old)
+if count != 1:
+    raise SystemExit(f"Expected one saved-path patch block, found {count}")
+path.write_text(source.replace(saved_path_old, saved_path_new))
