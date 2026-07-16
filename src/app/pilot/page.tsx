@@ -20,33 +20,6 @@ export const metadata: Metadata = {
   },
 };
 
-const pilotSteps = [
-  {
-    number: "01",
-    title: "Understand the mechanism.",
-    description:
-      "Moral Trade helps people with different priorities exchange bounded commitments that each side prefers to the no-deal default.",
-  },
-  {
-    number: "02",
-    title: "Inspect one complete example.",
-    description:
-      "Read the Victoria–Paul Deal Receipt: default, commitments, condition, exposure, evidence, and exit are visible together.",
-  },
-  {
-    number: "03",
-    title: "Complete one meaningful action.",
-    description:
-      "Create an account, finish onboarding, then save a cloned example, a bounded draft, or a serious counterparty invite.",
-  },
-  {
-    number: "04",
-    title: "Check the safeguards.",
-    description:
-      "Review the voluntary-participation, anti-threat, privacy, evidence, cancellation, and non-financial pilot boundaries.",
-  },
-] as const;
-
 const safeguards = [
   {
     number: "01",
@@ -141,28 +114,6 @@ export default async function PilotPage() {
               title="Victoria ↔ Paul"
             />
           </div>
-        </section>
-
-        <section className="mt-product-section is-white" aria-labelledby="pilot-steps-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker" id="pilot-steps-heading">The path</p>
-            </div>
-            <p>
-              The acquisition metric is intentionally conservative: an account counts only after a
-              substantive product action is saved. Visits and unfinished onboarding do not count.
-            </p>
-          </div>
-
-          <ol className="mt-how-grid">
-            {pilotSteps.map((step) => (
-              <li className="mt-how-step" key={step.number}>
-                <span>{step.number}</span>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
-              </li>
-            ))}
-          </ol>
         </section>
 
         <section className="mt-product-section" aria-labelledby="pilot-action-heading">
