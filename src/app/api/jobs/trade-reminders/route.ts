@@ -46,8 +46,11 @@ async function processTradeReminders(request: Request) {
   const { data: profiles } = profileIds.length
     ? await supabase.from("profiles").select("id,email").in("id", profileIds)
     : { data: [] };
-  const emailById = new Map(
-    (profiles ?? []).map((profile: any) => [String(profile.id), String(profile.email ?? "")]),
+  const emailById = new Map<string, string>(
+    (profiles ?? []).map((profile: any): [string, string] => [
+      String(profile.id),
+      String(profile.email ?? ""),
+    ]),
   );
 
   let notificationsCreated = 0;
