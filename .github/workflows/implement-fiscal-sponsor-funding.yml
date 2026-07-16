@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   apply-and-verify:
@@ -41,12 +43,30 @@ jobs:
         run: npm ci
 
       - name: Run focused funding tests
-        run: >-
-          node --import tsx --test
-          src/lib/funding.test.ts
-          src/lib/fiscal-sponsor-funding-surfaces.test.ts
-          src/lib/payments/conditional-state.test.ts
-          src/lib/payments/checkout-payment-methods.test.ts
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/funding.test.ts \
+            src/lib/fiscal-sponsor-funding-surfaces.test.ts \
+            src/lib/payments/conditional-state.test.ts \
+            src/lib/payments/checkout-payment-methods.test.ts \
+            2>&1 | tee /tmp/fiscal-sponsor-focused-tests.log
+
+      - name: Report focused test failure
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.existsSync('/tmp/fiscal-sponsor-focused-tests.log')
+              ? fs.readFileSync('/tmp/fiscal-sponsor-focused-tests.log', 'utf8')
+              : 'Focused tests failed without a captured log.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Focused fiscal-sponsor tests failed:\n\n\`\`\`text\n${output.slice(-12000)}\n\`\`\``,
+            });
 
       - name: Lint changed funding surfaces
         run: >-
