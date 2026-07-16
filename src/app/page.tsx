@@ -5,7 +5,7 @@ import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade is a marketplace and coordination mechanism for swapping commitments, redirecting offsetting donations, and joining conditional funding pools.",
+  "Moral Trade is a marketplace and coordination mechanism for completing real donations through reviewed payment routes, swapping commitments, redirecting offsets, and joining conditional funding pools.",
 );
 
 export const metadata: Metadata = {
