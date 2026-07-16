@@ -10,6 +10,7 @@ import "./readability-cleanup.css";
 import "./activation-critical.css";
 import "./home-process-polish.css";
 import "./home-mode-hover-colors.css";
+import "./search-bar-polish.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
