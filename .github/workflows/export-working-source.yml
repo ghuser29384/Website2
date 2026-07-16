@@ -5,8 +5,6 @@ on:
     branches:
       - work/transaction-first-payments-20260716
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
