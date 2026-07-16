@@ -23,11 +23,13 @@ test.describe("Create route workbench", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/create");
 
-    await expect(page.getByRole("heading", { level: 1, name: "Choose a route." })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Trade preview" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Make the default explicit first." }),
-    ).toHaveCount(0);
+      page.getByRole("heading", { level: 1, name: "What do you want to create?" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Swap one clear commitment for another." }),
+    ).toBeVisible();
+    await expect(page.getByText("Nothing happens on this page.", { exact: true })).toBeVisible();
     await expect(page.locator('[data-create-mode="trade"]')).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -49,10 +51,10 @@ test.describe("Create route workbench", () => {
       "aria-pressed",
       "true",
     );
-    await expect(page.getByRole("heading", { name: "Offset preview" })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Two donations. One shared cause." }),
+      page.getByRole("heading", { name: "Redirect two planned donations to one shared cause." }),
     ).toBeVisible();
+    await expect(page.getByText("The original plans stay.", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Create account to continue" })).toHaveAttribute(
       "href",
       "/signup?returnTo=%2Foffers%2Fnew%3Fentry%3Ddraft%26mode%3Doffset",
@@ -61,10 +63,12 @@ test.describe("Create route workbench", () => {
     await page.locator('[data-create-mode="pool"]').click();
 
     await expect(page).toHaveURL(/\?mode=pool$/);
-    await expect(page.getByRole("heading", { name: "Pool preview" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Join now. Pay only if it fills." })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Set 3 things." })).toBeVisible();
-    await expect(page.getByText("$0 charged", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Pledge now. Pay only if the target is reached." }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();
+    await expect(page.getByText("You are charged up to your cap.", { exact: true })).toBeVisible();
+    await expect(page.getByText("You pay nothing.", { exact: true })).toBeVisible();
     await expect(page.getByText("A specific public good and eligible destination")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Explore pools" })).toHaveAttribute(
       "href",
@@ -72,7 +76,9 @@ test.describe("Create route workbench", () => {
     );
 
     const preservesDraftBoundary = await page.evaluate(() =>
-      document.body.textContent?.includes("Nothing is binding until final confirmation."),
+      document.body.textContent?.includes(
+        "No charge, publication, or commitment until a later confirmation.",
+      ),
     );
     expect(preservesDraftBoundary).toBe(true);
 
@@ -128,8 +134,10 @@ test.describe("Create route workbench", () => {
       "true",
     );
     await page.locator('[data-create-mode="back"]').click();
-    await expect(page.getByRole("heading", { name: "Back preview" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Back a verified gap." })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Fund a verified compensation gap." }),
+    ).toBeVisible();
+    await expect(page.getByText("No funds move.", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Draft reviewed request" })).toHaveAttribute(
       "href",
       "/create?mode=back",
