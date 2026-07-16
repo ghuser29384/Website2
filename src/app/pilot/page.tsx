@@ -20,26 +20,6 @@ export const metadata: Metadata = {
   },
 };
 
-const safeguards = [
-  {
-    number: "01",
-    title: "Voluntary and reversible before lock",
-    description:
-      "A draft creates no obligation. Each side can decline, and the no-deal default remains explicit.",
-  },
-  {
-    number: "02",
-    title: "Bounded exposure",
-    description:
-      "A proposal must state the maximum money, time, action burden, duration, evidence scope, and exit rule.",
-  },
-  {
-    number: "03",
-    title: "No payments in this pilot",
-    description: "No custody, escrow, or real-money settlement is used.",
-  },
-] as const;
-
 export default async function PilotPage() {
   const viewer = await getViewer();
   const isAuthenticated = Boolean(viewer);
@@ -190,38 +170,6 @@ export default async function PilotPage() {
                 <Link href={inviteHref}>Draft an invite ↗</Link>
               </div>
             </article>
-          </div>
-        </section>
-
-        <section className="mt-product-section is-dark" aria-labelledby="pilot-safeguards-heading">
-          <div className="mt-product-section-head">
-            <div>
-              <p className="mt-product-kicker">Before reliance</p>
-              <h2 id="pilot-safeguards-heading">The safeguards are part of the journey.</h2>
-            </div>
-            <p>
-              Moral Trade is useful only when cooperation remains voluntary, legible, bounded, and
-              contestable. The pilot does not ask users to trust hidden settlement or enforcement.
-            </p>
-          </div>
-
-          <div className="mt-trust-grid">
-            {safeguards.map((safeguard) => (
-              <article className="mt-trust-card" key={safeguard.number}>
-                <span>{safeguard.number}</span>
-                <h3>{safeguard.title}</h3>
-                <p>{safeguard.description}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="mt-product-actions">
-            <Link className="button button-primary" href="/trust">
-              Review what you can rely on
-            </Link>
-            <Link className="button button-secondary" href="/safety">
-              Read anti-threat rules
-            </Link>
           </div>
         </section>
       </main>
