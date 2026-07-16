@@ -288,8 +288,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 the default, commitments, condition, maximum exposure, evidence, settlement, exit,
                 externalities, and state.
               </p>
-              <Link className="button button-secondary" href="/trust">
-                Review trust boundaries
+              <Link className="button button-secondary" href="/validation">
+                Review evidence standards
               </Link>
             </div>
             <DealReceipt
@@ -322,7 +322,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             ))}
           </div>
           <div className="mt-product-actions">
-            <Link className="button button-primary" href="/trust">What you can rely on</Link>
+            <Link className="button button-primary" href="/transparency">Transparency</Link>
             <Link className="button button-secondary" href="/safety">Safety and anti-threat rules</Link>
           </div>
         </section>
