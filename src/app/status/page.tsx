@@ -5,21 +5,20 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Service status",
   description:
-    "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
+    "Current Moral Trade service status, supported workflows, provider-hosted payment route, public health checks, and operating boundaries.",
   alternates: {
     canonical: "/status",
   },
   openGraph: {
     title: "Moral Trade service status",
     description:
-      "See the workflows Moral Trade supports, inspect public health endpoints, and review the service boundaries.",
+      "See the workflows Moral Trade supports, including the current financial contribution route, public health endpoints, and service boundaries.",
     url: getAbsoluteUrl("/status"),
     type: "website",
   },
@@ -30,6 +29,13 @@ function formatStatusCount(value: number | null) {
 }
 
 const supportedCapabilities = [
+  {
+    title: "Provider-hosted financial contributions",
+    detail:
+      "Choose a reviewed Every.org destination, complete payment with the provider, and use imported or reviewed evidence when a linked workflow requires it. Moral Trade does not hold the donation.",
+    href: "/donate",
+    action: "Choose a funding route",
+  },
   {
     title: "Accounts and guided onboarding",
     detail:
@@ -111,7 +117,7 @@ const serviceBoundaries = [
   {
     title: "No liquidity claim",
     detail:
-      "The service may have few open proposals. Worked examples are clearly separated from live participant records.",
+      "The service may have few open proposals. Explanatory material does not count as participant demand or marketplace activity.",
   },
   {
     title: "No escrow or custody",
@@ -132,10 +138,11 @@ const serviceBoundaries = [
 
 export default async function StatusPage() {
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
+  const isAuthenticated = Boolean(viewer);
   const statusStructuredData = buildWebPageJsonLd({
     name: "Moral Trade service status",
     description:
-      "Current Moral Trade service status, supported workflows, public health checks, and operating boundaries.",
+      "Current Moral Trade service status, supported workflows, provider-hosted payment route, public health checks, and operating boundaries.",
     path: "/status",
   });
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
@@ -156,9 +163,9 @@ export default async function StatusPage() {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
+          links={getPrimaryNavLinks(isAuthenticated)}
+          {...getTopbarActions(isAuthenticated)}
+          showLogout={isAuthenticated}
         />
 
         <div className="hero-grid">
@@ -166,13 +173,13 @@ export default async function StatusPage() {
             <p className="eyebrow">Service status</p>
             <h1>What Moral Trade supports today.</h1>
             <p className="hero-text">
-              Moral Trade is an operating coordination service with backed account, offer,
-              onboarding, matching, evidence, review, and public-good workflows. This page states
-              the limits that remain in force.
+              Moral Trade is an operating coordination service with a provider-hosted financial
+              contribution route plus backed account, offer, onboarding, matching, evidence, review,
+              and public-good workflows. This page states the limits that remain in force.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/worked-examples">
-                Inspect worked examples
+              <Link className="button button-primary" href="/donate">
+                Make a financial contribution
               </Link>
               <Link className="button button-secondary" href="/trust">
                 Read reliance rules
@@ -181,15 +188,15 @@ export default async function StatusPage() {
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Backed records</p>
+            <p className="eyebrow">Backed state</p>
             <dl className="profile-stats profile-stats-hero">
+              <div>
+                <dt>Financial route</dt>
+                <dd>Available</dd>
+              </div>
               <div>
                 <dt>Open proposals</dt>
                 <dd>{formatStatusCount(overview.openOfferCount)}</dd>
-              </div>
-              <div>
-                <dt>Worked examples</dt>
-                <dd>{CANONICAL_WORKED_CASE_COUNT}</dd>
               </div>
               <div>
                 <dt>Public profiles</dt>
@@ -209,7 +216,7 @@ export default async function StatusPage() {
           <div className="section-head">
             <p className="eyebrow">Available now</p>
             <h2>Supported workflows</h2>
-            <p>These routes create or read backed records rather than simulated marketplace activity.</p>
+            <p>These routes create, read, or hand off to backed services rather than simulated activity.</p>
           </div>
           <div className="data-grid">
             {supportedCapabilities.map((capability) => (
