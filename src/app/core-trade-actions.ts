@@ -33,14 +33,42 @@ function safeInternalPath(value: string | null | undefined, fallback: string) {
   return path.startsWith("/") && !path.startsWith("//") ? path : fallback;
 }
 
+const CORE_REDIRECT_MARKER = "__CORE_TRADE_REDIRECT__:";
+
 function redirectWithMessage(
   path: string,
   key: "error" | "message",
   message: string,
 ): never {
+  if (message.startsWith(CORE_REDIRECT_MARKER)) {
+    const encoded = message.slice(CORE_REDIRECT_MARKER.length);
+    const payload = JSON.parse(decodeURIComponent(encoded)) as {
+      path: string;
+      key: "error" | "message";
+      message: string;
+    };
+    const target = new URL(payload.path, "https://www.moraltrade.org");
+    target.searchParams.set(payload.key, payload.message);
+    redirect(`${target.pathname}${target.search}${target.hash}`);
+  }
+
   const target = new URL(path, "https://www.moraltrade.org");
   target.searchParams.set(key, message);
-  redirect(`${target.pathname}${target.search}${target.hash}`);
+
+  try {
+    redirect(`${target.pathname}${target.search}${target.hash}`);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      typeof (error as Error & { digest?: unknown }).digest === "string" &&
+      String((error as Error & { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
+    ) {
+      error.message = `${CORE_REDIRECT_MARKER}${encodeURIComponent(
+        JSON.stringify({ path, key, message }),
+      )}`;
+    }
+    throw error;
+  }
 }
 
 function normalized(value: string) {
