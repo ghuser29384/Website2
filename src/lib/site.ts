@@ -1,8 +1,8 @@
 export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
-    { href: "/offers", label: "Explore" },
-    { href: "/create", label: "Create" },
-    { href: "/pools", label: "Pools" },
+    { href: "/pledge-swaps", label: "Pledge Swap" },
+    { href: "/moral-goods-group-buying", label: "Moral Public Goods" },
+    { href: "/donation-offsets", label: "Donation Offsets" },
   ];
 }
 
