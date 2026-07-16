@@ -33,7 +33,7 @@ export const FOOTER_LINK_GROUPS = [
     ],
   },
   {
-    title: "Trust",
+    title: "Safety & transparency",
     links: [
       { href: "/credibility", label: "Contextual credibility" },
       { href: "/status", label: "Service status" },
