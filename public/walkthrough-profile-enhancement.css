@@ -1,0 +1,115 @@
+.mt-profile-draft {
+  position: relative;
+  z-index: 7;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  width: min(760px, 100%);
+  margin-top: clamp(22px, 3.5vh, 34px);
+  padding: 18px 20px;
+  border: 1px solid currentColor;
+  background: rgba(242, 238, 230, 0.96);
+  color: #132019;
+  box-shadow: 0 18px 48px rgba(19, 32, 25, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.mt-profile-draft-copy {
+  min-width: 0;
+}
+
+.mt-profile-draft-kicker {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.mt-profile-draft h2 {
+  max-width: 27ch;
+  margin: 0;
+  font-family: var(--sans, system-ui, sans-serif);
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+
+.mt-profile-draft p {
+  max-width: 60ch;
+  margin: 9px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: 0.72;
+}
+
+.mt-profile-draft-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.mt-profile-draft-tags span {
+  padding: 6px 8px;
+  border: 1px solid rgba(19, 32, 25, 0.24);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.mt-profile-draft-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 196px;
+  min-height: 56px;
+  padding: 0 17px;
+  border: 1px solid #132019;
+  background: #132019;
+  color: #f2eee6;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.mt-profile-draft-action:hover,
+.mt-profile-draft-action:focus-visible {
+  background: #4f66c4;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 900px) {
+  .mt-profile-draft {
+    grid-template-columns: 1fr;
+  }
+
+  .mt-profile-draft-action {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 640px) {
+  .mt-profile-draft {
+    gap: 14px;
+    margin-top: 20px;
+    padding: 15px;
+  }
+
+  .mt-profile-draft h2 {
+    font-size: 22px;
+  }
+
+  .mt-profile-draft p {
+    font-size: 13px;
+  }
+}
