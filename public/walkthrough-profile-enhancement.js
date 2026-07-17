@@ -110,7 +110,7 @@
       match_get: draft.matchGet,
       match_give: draft.matchGive
     });
-    draft.onboardingPath = `/onboarding?${query.toString()}`;
+    draft.completeProfilePath = `/complete-profile?${query.toString()}`;
     return draft;
   }
 
@@ -166,7 +166,7 @@
 
     const heading = document.createElement("h2");
     heading.id = "mt-profile-draft-title";
-    heading.textContent = "Finish the missing details and create your account.";
+    heading.textContent = "Review the carried-over choices and finish your profile.";
 
     const description = document.createElement("p");
     description.textContent =
@@ -183,8 +183,8 @@
 
     const action = document.createElement("a");
     action.className = "mt-profile-draft-action";
-    action.href = draft.onboardingPath;
-    action.innerHTML = "<span>Complete profile</span><span aria-hidden=\"true\">→</span>";
+    action.href = draft.completeProfilePath;
+    action.innerHTML = "<span>Review & refine</span><span aria-hidden=\"true\">→</span>";
 
     card.append(copy, action);
     successCopy.appendChild(card);

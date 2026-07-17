@@ -1,0 +1,130 @@
+import type { WalkthroughOfferType } from "@/lib/walkthrough-profile";
+
+export const COMPLETE_PROFILE_MAX_COMMITMENTS = [25, 50, 100, 250, 500] as const;
+export const COMPLETE_PROFILE_MONTHLY_TIMES = [
+  "1 hour",
+  "2 hours",
+  "4 hours",
+  "8+ hours",
+] as const;
+export const COMPLETE_PROFILE_CONTACT_RULES = [
+  "Introductions only",
+  "Verified members",
+  "Open proposals",
+] as const;
+
+export type CompleteProfileMaxCommitment =
+  (typeof COMPLETE_PROFILE_MAX_COMMITMENTS)[number];
+export type CompleteProfileMonthlyTime = (typeof COMPLETE_PROFILE_MONTHLY_TIMES)[number];
+export type CompleteProfileContactRule = (typeof COMPLETE_PROFILE_CONTACT_RULES)[number];
+
+export interface CompleteProfileSubmission {
+  displayName: string;
+  role: string;
+  bio: string;
+  maxCommitment: CompleteProfileMaxCommitment;
+  monthlyTime: CompleteProfileMonthlyTime;
+  contactRule: CompleteProfileContactRule;
+  privateProfile: boolean;
+  offerType: WalkthroughOfferType;
+  causeArea: string;
+  matchGet: string;
+}
+
+const offerTypeSet = new Set<WalkthroughOfferType>(["Money", "Time", "A pledge"]);
+const maxCommitmentSet = new Set<number>(COMPLETE_PROFILE_MAX_COMMITMENTS);
+const monthlyTimeSet = new Set<string>(COMPLETE_PROFILE_MONTHLY_TIMES);
+const contactRuleSet = new Set<string>(COMPLETE_PROFILE_CONTACT_RULES);
+
+function clean(value: unknown, maxLength: number) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+export function normalizeCompleteProfileSubmission(input: {
+  displayName?: unknown;
+  role?: unknown;
+  bio?: unknown;
+  maxCommitment?: unknown;
+  monthlyTime?: unknown;
+  contactRule?: unknown;
+  privateProfile?: unknown;
+  offerType?: unknown;
+  causeArea?: unknown;
+  matchGet?: unknown;
+}): CompleteProfileSubmission | null {
+  const displayName = clean(input.displayName, 80);
+  const role = clean(input.role, 100);
+  const bio = clean(input.bio, 500);
+  const maxCommitmentNumber = Number(input.maxCommitment);
+  const monthlyTime = clean(input.monthlyTime, 40);
+  const contactRule = clean(input.contactRule, 40);
+  const offerType = clean(input.offerType, 40);
+  const causeArea = clean(input.causeArea, 80);
+
+  if (
+    displayName.length < 2 ||
+    role.length < 2 ||
+    !offerTypeSet.has(offerType as WalkthroughOfferType) ||
+    !causeArea
+  ) {
+    return null;
+  }
+
+  return {
+    displayName,
+    role,
+    bio,
+    maxCommitment: (maxCommitmentSet.has(maxCommitmentNumber)
+      ? maxCommitmentNumber
+      : 100) as CompleteProfileMaxCommitment,
+    monthlyTime: (monthlyTimeSet.has(monthlyTime)
+      ? monthlyTime
+      : "2 hours") as CompleteProfileMonthlyTime,
+    contactRule: (contactRuleSet.has(contactRule)
+      ? contactRule
+      : "Introductions only") as CompleteProfileContactRule,
+    privateProfile:
+      input.privateProfile === true ||
+      input.privateProfile === "true" ||
+      input.privateProfile === "1" ||
+      input.privateProfile === "on",
+    offerType: offerType as WalkthroughOfferType,
+    causeArea,
+    matchGet: clean(input.matchGet, 180),
+  };
+}
+
+export function getCompleteProfilePrivacyStage(
+  privateProfile: boolean,
+  contactRule: CompleteProfileContactRule,
+): "strict" | "limited" | "broad" {
+  if (privateProfile || contactRule === "Introductions only") return "strict";
+  if (contactRule === "Verified members") return "limited";
+  return "broad";
+}
+
+export function getCompleteProfileOfferOpenness(offerType: WalkthroughOfferType) {
+  return {
+    openToPayment: offerType === "Money",
+    openToPledges: offerType === "A pledge",
+  };
+}
+
+export function buildCompleteProfileCapabilityText(input: CompleteProfileSubmission) {
+  return `${input.role}. Can contribute ${input.offerType.toLowerCase()} with about ${input.monthlyTime} available each month.`;
+}
+
+export function buildCompleteProfileConstraintText(input: CompleteProfileSubmission) {
+  return `Maximum one-time commitment: $${input.maxCommitment}. Contact rule: ${input.contactRule}.`;
+}
+
+export function buildCompleteProfilePublicPreview(input: CompleteProfileSubmission) {
+  const introduction = input.bio ? ` ${input.bio}` : "";
+  return `${input.displayName} — ${input.role}. Prioritizes ${input.causeArea}.${introduction}`.slice(
+    0,
+    420,
+  );
+}
