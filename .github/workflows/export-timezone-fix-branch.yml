@@ -1,0 +1,28 @@
+name: Export timezone fix branch source
+
+on:
+  pull_request:
+    branches:
+      - feat/returning-homepage-match-deck
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: timezone-fix-branch-source
+          path: |
+            .
+            !.git/**
+            !node_modules/**
+            !.next/**
+          if-no-files-found: error
+          retention-days: 1
