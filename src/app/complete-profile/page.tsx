@@ -45,6 +45,12 @@ function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
   return `/complete-profile?${query.toString()}`;
 }
 
+function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+  return cookieStore
+    .getAll()
+    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
+}
+
 export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
@@ -58,7 +64,8 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   }
 
   const supabaseReady = hasSupabaseEnv();
-  const viewer = supabaseReady ? await getViewer() : null;
+  const viewer =
+    supabaseReady && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
   const returnTo = buildCompleteProfilePath(walkthroughDraft);
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
