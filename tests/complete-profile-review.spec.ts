@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const completeProfilePath =
-  "/complete-profile?source=walkthrough&cause_area=Civic%20infrastructure&walkthrough_cause=Open%20governance&offer_type=Money&match_name=Mina%20Park&match_get=Fund%20open%20civic%20infrastructure&match_give=Replace%20eight%20car%20trips%20with%20transit";
+  "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Mina%20Park&match_get=Fund%20a%20verified%20animal-welfare%20review&match_give=Replace%20eight%20car%20trips%20with%20transit";
 
 test("review and refine preserves walkthrough context and routes to account creation", async ({
   page,
@@ -11,7 +11,7 @@ test("review and refine preserves walkthrough context and routes to account crea
   await expect(
     page.getByRole("heading", { name: "Turn your walkthrough into a profile." }),
   ).toBeVisible();
-  await expect(page.getByText("Civic infrastructure", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Animal welfare", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Mina Park match", { exact: true })).toBeVisible();
 
   await page.getByLabel("Display name").fill("Alex Morgan");
