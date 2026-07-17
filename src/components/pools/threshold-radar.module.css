@@ -1,9 +1,8 @@
 .viewport {
   position: fixed;
   inset: 0;
-  display: grid;
+  display: block;
   overflow: hidden;
-  place-items: start center;
   background: #f8f4ed;
 }
 
@@ -16,9 +15,12 @@
   --blue-soft: #8cb2ff;
   --green: #9caf07;
   --orange: #ef6a08;
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 50%;
   width: 1487px;
   height: 1058px;
+  margin-left: -743.5px;
   min-width: 1487px;
   min-height: 1058px;
   overflow: hidden;
@@ -1327,8 +1329,10 @@
 
   .shell {
     position: relative;
+    left: auto;
     width: 100%;
     height: auto;
+    margin-left: 0;
     min-width: 0;
     min-height: 0;
     overflow: visible;
