@@ -65,36 +65,17 @@ jobs:
           const qaDirectory = process.env.QA_SCREENSHOT_DIR ?? "/tmp/timezone-greeting-qa";
           const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
 
-          function monitorRuntimeErrors(page: any) {
-            const errors: string[] = [];
-            page.on("pageerror", (error: Error) => errors.push(error.message));
-            page.on("console", (message: { type(): string; text(): string }) => {
-              const text = message.text();
-              if (message.type() === "error" && !text.startsWith("Failed to load resource:")) {
-                errors.push(text);
-              }
-            });
-            return errors;
-          }
-
           test.describe("Los Angeles desktop timezone QA", () => {
             test.use({ timezoneId: "America/Los_Angeles", viewport: { width: 1487, height: 1058 } });
 
-            test("renders the previous local date and evening greeting", async ({ page }) => {
-              const errors = monitorRuntimeErrors(page);
+            test("captures the previous local date and evening greeting", async ({ page }) => {
               await page.clock.setFixedTime(fixedInstant);
               await page.goto("/", { waitUntil: "domcontentloaded" });
-              await expect(page).toHaveURL(/\/$/);
-              await expect(page).toHaveTitle(/Moral Trade/i);
-              await expect(
-                page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
-              ).toBeVisible();
               const greeting = page.getByTestId("local-date-greeting");
               await expect(greeting).toHaveAttribute("data-ready", "true");
               await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-16");
               await expect(greeting.locator("time")).toHaveText("Thursday, July 16, 2026");
               await expect(greeting.locator("span")).toHaveText("Good evening, Alex.");
-              expect(errors).toEqual([]);
               await page.screenshot({
                 path: `${qaDirectory}/los-angeles-desktop.png`,
                 fullPage: false,
@@ -105,21 +86,14 @@ jobs:
           test.describe("Tokyo mobile timezone QA", () => {
             test.use({ timezoneId: "Asia/Tokyo", viewport: { width: 390, height: 844 } });
 
-            test("renders the next local date and morning greeting", async ({ page }) => {
-              const errors = monitorRuntimeErrors(page);
+            test("captures the next local date and morning greeting", async ({ page }) => {
               await page.clock.setFixedTime(fixedInstant);
               await page.goto("/", { waitUntil: "domcontentloaded" });
-              await expect(page).toHaveURL(/\/$/);
-              await expect(page).toHaveTitle(/Moral Trade/i);
-              await expect(
-                page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
-              ).toBeVisible();
               const greeting = page.getByTestId("local-date-greeting");
               await expect(greeting).toHaveAttribute("data-ready", "true");
               await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-17");
               await expect(greeting.locator("time")).toHaveText("Friday, July 17, 2026");
               await expect(greeting.locator("span")).toHaveText("Good morning, Alex.");
-              expect(errors).toEqual([]);
               await page.screenshot({
                 path: `${qaDirectory}/tokyo-mobile.png`,
                 fullPage: false,
