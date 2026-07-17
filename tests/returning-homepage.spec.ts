@@ -33,9 +33,7 @@ test.describe("Returning-user homepage", () => {
     );
     await expect(page.getByRole("button", { name: "Open account menu" })).toContainText("AJ");
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
-    ).toBeVisible();
+    await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
     await expect(
       page.getByText(
         "Your best match right now, based on your commitments and priorities.",
@@ -196,9 +194,7 @@ test.describe("Returning-user homepage", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
-    ).toBeVisible();
+    await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
     await expect(page.getByRole("region", { name: "Recommended moral trade" }).locator("article"))
       .toHaveCount(2);
