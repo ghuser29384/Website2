@@ -52,6 +52,10 @@ const nextConfig: NextConfig = {
           source: "/walkthrough",
           destination: "/moral-trade-production.html",
         },
+        {
+          source: "/discover",
+          destination: "/moral-trade-discover.html",
+        },
       ],
       afterFiles: [],
       fallback: [],
