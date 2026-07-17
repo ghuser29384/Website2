@@ -28,6 +28,18 @@
         if (!html.includes(oldConcept)) throw new Error("Walkthrough concept marker was not found");
 
         html = html.replace(oldConcept, newConcept);
+
+        const walkthroughRoutes = [
+          ['href: "https://moraltrade.org/create?mode=back"', 'href: "/create?source=walkthrough&mode=back"'],
+          ['href: "https://moraltrade.org/create"', 'href: "/create?source=walkthrough&mode=trade"'],
+          ['href: "https://moraltrade.org/offers"', 'href: "/discover?source=walkthrough&domain=offers&view=list"'],
+          ['href: "https://moraltrade.org/pools"', 'href: "/discover?source=walkthrough&domain=pools&view=threshold"']
+        ];
+        walkthroughRoutes.forEach(([from, to]) => {
+          html = html.replaceAll(from, to);
+        });
+        html = html.replaceAll(' target="_blank" rel="noreferrer"', '');
+
         html = html.replace(
           "</head>",
           '<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"></head>'
