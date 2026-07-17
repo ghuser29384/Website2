@@ -43,7 +43,6 @@ test("primary acquisition routes lead with real actions instead of pilot languag
   assert.match(site, /href: "\/start",\s*label: "Get started"/);
   assert.match(site, /href: "\/donate", label: "Fund"/);
   assert.match(site, /href: "\/offers\?view=live", label: "Explore trades"/);
-  assert.match(home, /Financial route available/);
   assert.match(start, /Make a financial contribution/);
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
@@ -54,8 +53,14 @@ test("the financial action has a real external payment handoff and explicit boun
   assert.match(donate, /Moral Trade does not hold donations, provide escrow/);
   assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
   assert.match(donateButton, /everyDotOrgDonateButton/);
-  assert.match(home, /No Moral Trade custody or escrow/);
   assert.match(start, /No platform custody/);
+});
+
+test("the returning homepage keeps the action-first screenshot contract", () => {
+  assert.match(home, /A trade worth considering\./);
+  assert.match(home, /Offer this trade/);
+  assert.match(home, /Verifiable financial contribution/);
+  assert.match(home, /Proof method/);
 });
 
 test("examples remain available only as a secondary learning resource", () => {

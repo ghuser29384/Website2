@@ -39,11 +39,9 @@ test("a first homepage visit opens the walkthrough once", async ({ context, page
 
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/$/);
-
-  await expect(page.getByRole("link", { name: "Try the walkthrough" })).toHaveAttribute(
-    "href",
-    "/walkthrough",
-  );
+  await expect(
+    page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
+  ).toBeVisible();
 });
 
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {

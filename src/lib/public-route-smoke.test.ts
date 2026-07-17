@@ -458,12 +458,16 @@ test("public copy does not claim escrow-backed payment protection", () => {
   assert.match(publicSources, /not legal escrow/i);
 });
 
-test("home page exposes a single primary nav source", () => {
-  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+test("returning home page exposes the screenshot navigation contract", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
 
-  assert.match(topbarSource, /aria-label="Primary"/);
-  assert.equal(homeSource.includes("topbar-floating-shell"), false);
+  assert.match(homeSource, /aria-label="Primary"/);
+  assert.match(homeSource, />\s*Now\s*</);
+  assert.match(homeSource, /href="\/offers">Discover/);
+  assert.match(homeSource, /href="\/create">Offer/);
+  assert.match(homeSource, /href="\/commitments">Activity/);
+  assert.match(homeSource, /href="\/profile">Account/);
+  assert.doesNotMatch(homeSource, /SiteTopbar/);
 });
 
 test("global search and offers search expose real marketplace discovery", () => {
@@ -524,66 +528,33 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("home page is an editorial pilot landing page with a separate marketplace destination", () => {
+test("returning home page matches the recommended-trade decision screen", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const pageSource = readRepoFile("src/app/page.tsx");
-  const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
-  const heroIndex = homeSource.indexOf("Cooperate");
-  const thesisIndex = homeSource.indexOf("Disagreement can create gains.");
-  const mechanismIndex = homeSource.indexOf("A small protocol for a hard problem.");
-  const laneIndex = homeSource.indexOf("Start with something bounded.");
-  const pilotIndex = homeSource.indexOf("See the institution as it is.");
-  const examplesIndex = homeSource.indexOf("Read the terms before the theory.");
-  const relianceIndex = homeSource.indexOf("Trust comes from legible limits.");
-  const startIndex = homeSource.indexOf("Enter at the right depth.");
-  const finalIndex = homeSource.indexOf("Bring one real disagreement.");
 
-  assert.ok(heroIndex > -1);
-  assert.ok(thesisIndex > heroIndex);
-  assert.ok(mechanismIndex > thesisIndex);
-  assert.ok(laneIndex > mechanismIndex);
-  assert.ok(pilotIndex > laneIndex);
-  assert.ok(examplesIndex > pilotIndex);
-  assert.ok(relianceIndex > examplesIndex);
-  assert.ok(startIndex > relianceIndex);
-  assert.ok(finalIndex > startIndex);
-  assert.equal(homeSource.includes("<MarketplaceHome"), false);
-  assert.equal(homeSource.includes("MarketplaceBottomNav"), false);
-  assert.equal(homeSource.includes("marketplaceSurface"), false);
-  assert.equal(pageSource.includes("buildMarketplaceDeals"), false);
-  assert.equal(pageSource.includes("buildMarketplaceSurface"), false);
-  assert.equal(pageSource.includes("listOpenOffersPage"), false);
-  assert.equal(pageSource.includes("demoMpgfPublicGoodsCampaigns"), false);
-  assert.match(homeSource, /See how it works/);
-  assert.match(homeSource, /Browse worked examples/);
-  assert.match(homeSource, /Open the coordination feed/);
-  assert.match(homeSource, /Join the founding cohort/);
-  assert.match(homeSource, /Moral Trade helps people with different values exchange small, reviewable/);
-  assert.match(homeSource, /VISITOR_PATHS/);
-  assert.match(visitorPathsSource, /Learn the idea/);
-  assert.match(visitorPathsSource, /Test an example/);
-  assert.match(visitorPathsSource, /Donate through a vetted route/);
-  assert.match(visitorPathsSource, /Join the founding cohort/);
-  assert.match(visitorPathsSource, /Open worked examples/);
-  assert.match(homeSource, /marketplaceOverview/);
-  assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
-  assert.match(homeSource, /Worked examples/);
-  assert.match(homeSource, /No custody or escrow/);
-  assert.match(homeSource, /Completed agreements/);
-  assert.match(homeSource, /IconMark/);
-  assert.match(homeSource, /MutualStepFigure/);
-  assert.match(homeSource, /Explicit baselines/);
-  assert.match(homeSource, /Consent-gated disclosure/);
-  assert.match(homeSource, /no liquidity or impact total is implied/);
-  assert.equal(homeSource.includes("opening-sequence"), false);
-  assert.equal(homeSource.includes("OfferComposer"), false);
-  assert.equal(homeSource.includes("ParetoChart"), false);
-  assert.equal(homeSource.includes("MoralTradeHeroVisual"), false);
-  assert.equal(homeSource.includes("delegate heartbeats"), false);
-  assert.equal(homeSource.includes("manual source consent ledger"), false);
-  assert.equal(homeSource.includes("deterministic synthesis layer"), false);
-  assert.equal(homeSource.includes("As featured in"), false);
-  assert.equal(homeSource.includes("Hear their stories"), false);
+  assert.match(pageSource, /return <HomePage \/>/);
+  assert.match(homeSource, /A trade worth considering\./);
+  assert.match(homeSource, /Your best match right now, based on your commitments and priorities\./);
+  assert.match(homeSource, /Good afternoon, Alex\./);
+  assert.match(homeSource, /Replace eight/);
+  assert.match(homeSource, /car trips with transit\./);
+  assert.match(homeSource, /Fund \$20 of open/);
+  assert.match(homeSource, /civic infrastructure\./);
+  assert.match(homeSource, /You could offer/);
+  assert.match(homeSource, /Mina would offer/);
+  assert.match(homeSource, /Both say yes/);
+  assert.match(homeSource, /Complementary priorities/);
+  assert.match(homeSource, /96% on-time verification/);
+  assert.match(homeSource, /Proof method/);
+  assert.match(homeSource, /Offer this trade/);
+  assert.match(homeSource, /Counter this trade/);
+  assert.match(homeSource, /saved \? "Saved" : "Save"/);
+  assert.match(homeSource, /<span>Pass<\/span>/);
+  assert.match(homeSource, /useState\(14\)/);
+  assert.match(homeSource, /\{remainingMatches\} more matches/);
+  assert.match(homeSource, /Focus areas/);
+  assert.match(homeSource, /Commitment types/);
+  assert.doesNotMatch(homeSource, /Worked examples|founding cohort|Pilot inventory/);
 });
 
 test("visitor router exposes four intent paths before deeper marketplace mechanics", () => {
@@ -665,17 +636,17 @@ test("moral trade animation typology remains accessible as a reference surface",
   assert.match(globalCss, /--mt-purple/);
 });
 
-test("homepage metrics use live counts when available and avoid fake impact totals", () => {
+test("returning homepage keeps the screenshot match facts explicit and bounded", () => {
   const pageSource = readRepoFile("src/app/page.tsx");
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const appDataSource = readRepoFile("src/lib/app-data.ts");
 
-  assert.match(pageSource, /getMarketplaceOverview/);
-  assert.match(homeSource, /Live offers/);
-  assert.match(homeSource, /Public profiles/);
-  assert.match(homeSource, /No custody or escrow/);
-  assert.match(appDataSource, /openOfferCount/);
-  assert.match(appDataSource, /completedAgreementCount/);
+  assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
+  assert.match(homeSource, /11 completed/);
+  assert.match(homeSource, /96% on-time verification/);
+  assert.match(homeSource, /Jul 23, 2026/);
+  assert.match(homeSource, /7 days left/);
+  assert.match(homeSource, /setRemainingMatches/);
+  assert.match(homeSource, /Math\.max\(0, count - 1\)/);
   assert.equal(homeSource.includes("total value traded"), false);
   assert.equal(homeSource.includes("registered users"), false);
 });
