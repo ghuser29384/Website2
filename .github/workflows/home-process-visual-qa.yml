@@ -1,8 +1,10 @@
-name: Homepage process visual QA
+name: Homepage visual QA
 
 on:
   pull_request:
     paths:
+      - "src/app/clear-marketplace.css"
+      - "src/app/clear-marketplace-finishing.css"
       - "src/app/home-process-polish.css"
       - "src/app/home-mode-hover-colors.css"
       - "src/app/layout.tsx"
@@ -11,13 +13,13 @@ on:
       - ".github/workflows/home-process-visual-qa.yml"
   push:
     branches:
-      - polish-home-process-section
+      - redesign/clear-marketplace-20260716
 
 permissions:
   contents: read
 
 jobs:
-  home-process-qa:
+  homepage-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
