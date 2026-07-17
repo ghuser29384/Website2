@@ -16,6 +16,9 @@
   <script>
     (async function loadMoralTrade() {
       try {
+        const firstVisit =
+          window.location.pathname === "/walkthrough" &&
+          new URLSearchParams(window.location.search).get("first_visit") === "1";
         const response = await fetch("/moral-trade-interactive-walkthroughs.html", {
           cache: "no-store",
           credentials: "same-origin"
@@ -40,10 +43,24 @@
         });
         html = html.replaceAll(' target="_blank" rel="noreferrer"', '');
 
+        const firstVisitStyles = firstVisit
+          ? `<style>
+              .mtw-first-visit-skip-form{position:fixed;top:19px;right:72px;z-index:200;margin:0}
+              .mtw-first-visit-skip-button{min-width:64px;min-height:42px;padding:0 16px;border:1px solid rgba(244,240,232,.34);border-radius:999px;background:rgba(17,18,15,.88);color:#f4f0e8;box-shadow:0 10px 28px rgba(0,0,0,.18);backdrop-filter:blur(14px);font:650 14px/1 system-ui,sans-serif;cursor:pointer}
+              .mtw-first-visit-skip-button:hover{border-color:rgba(244,240,232,.72);background:rgba(39,40,35,.96)}
+              .mtw-first-visit-skip-button:focus-visible{outline:3px solid #9db0ff;outline-offset:4px}
+              @media(max-width:740px){.mtw-first-visit-skip-form{top:13px;right:61px}.mtw-first-visit-skip-button{min-width:58px;padding:0 12px;font-size:13px}}
+            </style>`
+          : "";
+        const firstVisitControl = firstVisit
+          ? '<form action="/" class="mtw-first-visit-skip-form" method="get"><button aria-label="Skip walkthrough" class="mtw-first-visit-skip-button" type="submit">Skip</button></form>'
+          : "";
+
         html = html.replace(
           "</head>",
-          '<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"></head>'
+          `${firstVisitStyles}<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"></head>`
         );
+        html = html.replace("<body>", `<body>${firstVisitControl}`);
         html = html.replace(
           "</body>",
           '<script src="/walkthrough-profile-enhancement.js"><\/script></body>'
