@@ -5,15 +5,16 @@ import {
   ArrowRight,
   ArrowsClockwise,
   Bank,
+  Barn,
   BookmarkSimple,
   Briefcase,
   CalendarBlank,
   CaretDown,
   CheckCircle,
-  HouseLine,
   type Icon,
   Info,
   LockSimple,
+  LockSimpleOpen,
   Microscope,
   Pulse,
   ShieldCheck,
@@ -166,7 +167,7 @@ const campaigns: Record<CampaignId, Campaign> = {
     remainingValue: 34800,
     contributors: 61,
     deadline: "Jul 18",
-    icon: HouseLine,
+    icon: Barn,
     views: ["contributions"],
     cause: "animals",
     verification: "verified",
@@ -260,7 +261,7 @@ export function ThresholdRadar() {
 
   const pledgeContents = (
     <>
-      <LockSimple aria-hidden="true" size={35} weight="thin" />
+      <LockSimpleOpen aria-hidden="true" size={35} weight="thin" />
       <span>
         <strong>Pledge ${pledgeAmount} conditionally.</strong>
         <small>No charge unless conditions are met.</small>
