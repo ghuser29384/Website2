@@ -28,8 +28,12 @@ test("a first homepage visit opens the walkthrough once", async ({ context, page
   await context.clearCookies();
   await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
 
-  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite$/);
+  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite&first_visit=1$/);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
+
+  const skipWalkthrough = page.getByRole("button", { name: "Skip walkthrough" });
+  await expect(skipWalkthrough).toBeVisible();
+  await expectFullyInViewport(page, skipWalkthrough);
 
   const cookies = await context.cookies();
   expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({
@@ -37,7 +41,7 @@ test("a first homepage visit opens the walkthrough once", async ({ context, page
     value: "1",
   });
 
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await skipWalkthrough.click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
     page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
@@ -47,6 +51,7 @@ test("a first homepage visit opens the walkthrough once", async ({ context, page
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
+  await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
   await expect(
     page.getByText("Start with your values. Nobody will ask you to rank everyone else's."),

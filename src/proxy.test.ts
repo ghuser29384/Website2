@@ -24,7 +24,7 @@ test("a first human homepage visit redirects once to the walkthrough", () => {
   assert.equal(response.status, 307);
   assert.equal(
     response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite",
+    "https://moraltrade.org/walkthrough?utm_source=invite&first_visit=1",
   );
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
   assert.equal(response.headers.get("cache-control"), "private, no-store");
