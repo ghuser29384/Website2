@@ -20,6 +20,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "next": "^16.2.4",

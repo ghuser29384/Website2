@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { HomePage } from "@/components/home/home-page";
-import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
@@ -27,8 +26,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function Page() {
-  const viewer = await getViewer();
-
-  return <HomePage isAuthenticated={Boolean(viewer)} />;
+export default function Page() {
+  return <HomePage />;
 }
