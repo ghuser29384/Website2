@@ -1,0 +1,234 @@
+diff --git a/src/components/home/home-page.tsx b/src/components/home/home-page.tsx
+index d730141..acc4f62 100644
+--- a/src/components/home/home-page.tsx
++++ b/src/components/home/home-page.tsx
+@@ -23,6 +23,7 @@ import { useState } from "react";
+ 
+ import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
+ 
++import { LocalDateGreeting } from "./local-date-greeting";
+ import styles from "./returning-home.module.css";
+ 
+ const focusAreas = [
+@@ -142,10 +143,7 @@ export function HomePage() {
+             <h1 id="home-heading">A trade worth considering.</h1>
+             <p>Your best match right now, based on your commitments and priorities.</p>
+           </div>
+-          <div className={styles.greeting}>
+-            <time dateTime="2026-07-16">Thursday, July 16, 2026</time>
+-            <span>Good afternoon, Alex.</span>
+-          </div>
++          <LocalDateGreeting name="Alex" />
+         </section>
+ 
+         <section className={styles.tradePair} aria-label="Recommended moral trade">
+diff --git a/src/components/home/local-date-greeting.tsx b/src/components/home/local-date-greeting.tsx
+new file mode 100644
+index 0000000..9c9f8cf
+--- /dev/null
++++ b/src/components/home/local-date-greeting.tsx
+@@ -0,0 +1,97 @@
++"use client";
++
++import { useEffect, useState } from "react";
++
++import styles from "./returning-home.module.css";
++
++interface LocalDateGreetingProps {
++  name: string;
++}
++
++interface LocalGreeting {
++  dateLabel: string;
++  dateTime: string;
++  timeOfDay: "Good morning" | "Good afternoon" | "Good evening";
++}
++
++function getTimeOfDayGreeting(hour: number): LocalGreeting["timeOfDay"] {
++  if (hour < 12) return "Good morning";
++  if (hour < 18) return "Good afternoon";
++  return "Good evening";
++}
++
++function getLocalDateTimeAttribute(now: Date) {
++  const year = now.getFullYear();
++  const month = String(now.getMonth() + 1).padStart(2, "0");
++  const day = String(now.getDate()).padStart(2, "0");
++  return `${year}-${month}-${day}`;
++}
++
++function getLocalGreeting(now: Date): LocalGreeting {
++  return {
++    dateLabel: new Intl.DateTimeFormat("en-US", {
++      weekday: "long",
++      month: "long",
++      day: "numeric",
++      year: "numeric",
++    }).format(now),
++    dateTime: getLocalDateTimeAttribute(now),
++    timeOfDay: getTimeOfDayGreeting(now.getHours()),
++  };
++}
++
++export function LocalDateGreeting({ name }: LocalDateGreetingProps) {
++  const [localGreeting, setLocalGreeting] = useState<LocalGreeting | null>(null);
++
++  useEffect(() => {
++    const refresh = () => {
++      const next = getLocalGreeting(new Date());
++      setLocalGreeting((current) =>
++        current?.dateTime === next.dateTime && current.timeOfDay === next.timeOfDay
++          ? current
++          : next,
++      );
++    };
++
++    const animationFrameId = window.requestAnimationFrame(refresh);
++    const intervalId = window.setInterval(refresh, 60_000);
++    const refreshWhenVisible = () => {
++      if (document.visibilityState === "visible") refresh();
++    };
++
++    window.addEventListener("focus", refresh);
++    document.addEventListener("visibilitychange", refreshWhenVisible);
++
++    return () => {
++      window.cancelAnimationFrame(animationFrameId);
++      window.clearInterval(intervalId);
++      window.removeEventListener("focus", refresh);
++      document.removeEventListener("visibilitychange", refreshWhenVisible);
++    };
++  }, []);
++
++  return (
++    <div
++      aria-atomic="true"
++      aria-busy={localGreeting === null}
++      aria-live="polite"
++      className={styles.greeting}
++      data-ready={localGreeting === null ? "false" : "true"}
++      data-testid="local-date-greeting"
++    >
++      {localGreeting ? (
++        <>
++          <time dateTime={localGreeting.dateTime}>{localGreeting.dateLabel}</time>
++          <span>
++            {localGreeting.timeOfDay}, {name}.
++          </span>
++        </>
++      ) : (
++        <>
++          <time aria-hidden="true">&nbsp;</time>
++          <span aria-hidden="true">&nbsp;</span>
++        </>
++      )}
++    </div>
++  );
++}
+diff --git a/tests/returning-homepage.spec.ts b/tests/returning-homepage.spec.ts
+index d898093..f4167e0 100644
+--- a/tests/returning-homepage.spec.ts
++++ b/tests/returning-homepage.spec.ts
+@@ -13,6 +13,11 @@ async function expectFullyInViewport(page: Page, locator: Locator) {
+ }
+ 
+ test.describe("Returning-user homepage", () => {
++  test.use({ timezoneId: "UTC" });
++
++  test.beforeEach(async ({ page }) => {
++    await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
++  });
+   test("matches the approved desktop trade-deck contract", async ({ page }) => {
+     await page.setViewportSize({ width: 1487, height: 1058 });
+     await page.goto("/", { waitUntil: "domcontentloaded" });
+@@ -42,10 +47,14 @@ test.describe("Returning-user homepage", () => {
+         { exact: true },
+       ),
+     ).toBeVisible();
+-    await expect(page.locator('time[datetime="2026-07-16"]')).toHaveText(
++    const localGreeting = page.getByTestId("local-date-greeting");
++    await expect(localGreeting).toHaveAttribute("data-ready", "true");
++    await expect(localGreeting.locator('time[datetime="2026-07-16"]')).toHaveText(
+       "Thursday, July 16, 2026",
+     );
+-    await expect(page.getByText("Good afternoon, Alex.", { exact: true })).toBeVisible();
++    await expect(
++      localGreeting.getByText("Good afternoon, Alex.", { exact: true }),
++    ).toBeVisible();
+ 
+     const recommendation = page.getByRole("region", { name: "Recommended moral trade" });
+     const tradeCards = recommendation.locator("article");
+diff --git a/tests/returning-homepage-timezone.spec.ts b/tests/returning-homepage-timezone.spec.ts
+new file mode 100644
+index 0000000..e6bca9b
+--- /dev/null
++++ b/tests/returning-homepage-timezone.spec.ts
+@@ -0,0 +1,68 @@
++import { expect, test, type Page } from "@playwright/test";
++
++const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
++
++async function expectLocalGreeting(
++  page: Page,
++  expected: { dateTime: string; dateLabel: string; greeting: string },
++) {
++  const localGreeting = page.getByTestId("local-date-greeting");
++  await expect(localGreeting).toHaveAttribute("data-ready", "true");
++  await expect(localGreeting.locator("time")).toHaveAttribute("datetime", expected.dateTime);
++  await expect(localGreeting.locator("time")).toHaveText(expected.dateLabel);
++  await expect(localGreeting.getByText(expected.greeting, { exact: true })).toBeVisible();
++}
++
++test.describe("Returning homepage in America/Los_Angeles", () => {
++  test.use({ timezoneId: "America/Los_Angeles" });
++
++  test("uses the visitor's previous local date and evening greeting", async ({ page }) => {
++    await page.clock.setFixedTime(fixedInstant);
++    await page.goto("/", { waitUntil: "domcontentloaded" });
++
++    await expectLocalGreeting(page, {
++      dateTime: "2026-07-16",
++      dateLabel: "Thursday, July 16, 2026",
++      greeting: "Good evening, Alex.",
++    });
++  });
++});
++
++test.describe("Returning homepage in Asia/Tokyo", () => {
++  test.use({ timezoneId: "Asia/Tokyo" });
++
++  test("uses the visitor's next local date and morning greeting", async ({ page }) => {
++    await page.clock.setFixedTime(fixedInstant);
++    await page.goto("/", { waitUntil: "domcontentloaded" });
++
++    await expectLocalGreeting(page, {
++      dateTime: "2026-07-17",
++      dateLabel: "Friday, July 17, 2026",
++      greeting: "Good morning, Alex.",
++    });
++  });
++});
++
++test.describe("Returning homepage local-time refresh", () => {
++  test.use({ timezoneId: "UTC" });
++
++  test("refreshes after the local date and greeting period change", async ({ page }) => {
++    await page.clock.setFixedTime(new Date("2026-07-16T17:59:00.000Z"));
++    await page.goto("/", { waitUntil: "domcontentloaded" });
++
++    await expectLocalGreeting(page, {
++      dateTime: "2026-07-16",
++      dateLabel: "Thursday, July 16, 2026",
++      greeting: "Good afternoon, Alex.",
++    });
++
++    await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
++    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
++
++    await expectLocalGreeting(page, {
++      dateTime: "2026-07-17",
++      dateLabel: "Friday, July 17, 2026",
++      greeting: "Good morning, Alex.",
++    });
++  });
++});
