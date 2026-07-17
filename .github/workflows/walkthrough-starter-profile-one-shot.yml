@@ -1,0 +1,1005 @@
+name: Implement walkthrough starter profile
+
+on:
+  push:
+    branches:
+      - feat/walkthrough-starter-profile-20260717
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feat/walkthrough-starter-profile-20260717
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply production walkthrough and onboarding changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          html_path = Path("public/moral-trade-interactive-walkthroughs.html")
+          html = html_path.read_text()
+
+          html = replace_once(
+              html,
+              '{ id: "two-moves", short: "Third option", title: "The Third Option", caption: "A cinematic two-person exchange" },',
+              '{ id: "two-moves", short: "Third option", title: "Welcome to Moral Trade", caption: "A cinematic two-person exchange" },',
+              "footer title",
+          )
+
+          profile_css = r'''
+    .profile-draft-card {
+      position: relative;
+      z-index: 7;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      width: min(680px, 100%);
+      margin-top: 26px;
+      padding: 18px 20px;
+      border: 1px solid currentColor;
+      background: rgba(242, 238, 230, .94);
+      color: #132019;
+      box-shadow: 0 18px 48px rgba(19, 32, 25, .12);
+      backdrop-filter: blur(10px);
+    }
+
+    .profile-draft-copy { min-width: 0; }
+
+    .profile-draft-kicker {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      opacity: .58;
+    }
+
+    .profile-draft-card h2 {
+      max-width: 25ch;
+      margin: 0;
+      font-family: var(--sans);
+      font-size: clamp(20px, 2.2vw, 28px);
+      font-weight: 650;
+      letter-spacing: -.035em;
+      line-height: 1.05;
+    }
+
+    .profile-draft-card p {
+      max-width: 58ch;
+      margin: 9px 0 0;
+      font-size: 14px;
+      line-height: 1.45;
+      opacity: .72;
+    }
+
+    .profile-draft-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .profile-draft-tags span {
+      padding: 6px 8px;
+      border: 1px solid rgba(19, 32, 25, .24);
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .profile-draft-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-width: 196px;
+      min-height: 56px;
+      padding: 0 17px;
+      border: 1px solid #132019;
+      background: #132019;
+      color: #f2eee6;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      transition: transform 180ms ease, background 180ms ease;
+    }
+
+    .profile-draft-action:hover,
+    .profile-draft-action:focus-visible {
+      background: #4f66c4;
+      transform: translateY(-2px);
+    }
+
+'''
+          html = replace_once(html, "    .toast {", profile_css + "    .toast {", "profile CSS")
+
+          html = replace_once(
+              html,
+              '      offer: null,\n      match: null\n',
+              '      offer: null,\n      match: null,\n      profileCause: null,\n      profileDraft: null\n',
+              "profile state",
+          )
+
+          html = replace_once(
+              html,
+              '      state.offer = null;\n      state.match = null;\n',
+              '      state.offer = null;\n      state.match = null;\n      state.profileDraft = null;\n',
+              "profile reset",
+          )
+
+          mobile_css = r'''
+      .profile-draft-card { grid-template-columns: 1fr; padding: 16px; }
+      .profile-draft-action { width: 100%; min-width: 0; }
+'''
+          html = replace_once(
+              html,
+              '      .match-orbit { width: 90vw; right: -38%; top: -8%; opacity: .55; }\n      .labfooter',
+              '      .match-orbit { width: 90vw; right: -38%; top: -8%; opacity: .55; }\n' + mobile_css + '      .labfooter',
+              "mobile profile CSS",
+          )
+
+          profile_helpers = r'''
+    const WALKTHROUGH_PROFILE_STORAGE_KEY = "mt_walkthrough_profile_draft";
+    const WALKTHROUGH_PROFILE_COOKIE_NAME = "mt_walkthrough_profile_draft";
+    const WALKTHROUGH_PROFILE_MAX_AGE = 60 * 60 * 24 * 7;
+    const causeAreaMap = {
+      "Wild animal suffering": "Animal welfare",
+      "Factory farming": "Animal welfare",
+      "Global health": "Public health",
+      "Climate": "Climate",
+      "Existential risk": "Existential risk",
+      "Future flourishing": "Future flourishing",
+      "S-risks": "Future flourishing",
+      "Global poverty": "Global poverty",
+      "Concentration of power": "Cause prioritization",
+      "Priorities research": "Cause prioritization",
+      "Biological risks": "Existential risk",
+      "AI safety": "Existential risk",
+      "Space governance": "Future flourishing",
+      "Building altruism": "Community service"
+    };
+
+    function escapeMarkup(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function buildStarterProfile(selected) {
+      const originalCause = state.profileCause || "Cause prioritization";
+      const causeArea = causeAreaMap[originalCause] || "Cause prioritization";
+      const draft = {
+        version: 1,
+        source: "walkthrough",
+        originalCause: originalCause,
+        causeArea: causeArea,
+        offerType: state.offer,
+        matchName: selected.name,
+        matchGet: selected.get,
+        matchGive: selected.give,
+        participantKind: "individual",
+        primaryGoal: "find_counterparty",
+        firstAction: "create_broad_preview",
+        createdAt: new Date().toISOString()
+      };
+      const query = new URLSearchParams({
+        source: "walkthrough",
+        cause_area: draft.causeArea,
+        walkthrough_cause: draft.originalCause,
+        offer_type: draft.offerType,
+        match_name: draft.matchName,
+        match_get: draft.matchGet,
+        match_give: draft.matchGive
+      });
+      draft.onboardingPath = "/onboarding?" + query.toString();
+      return draft;
+    }
+
+    function persistStarterProfile(selected) {
+      const draft = buildStarterProfile(selected);
+      state.profileDraft = draft;
+      try {
+        window.localStorage.setItem(WALKTHROUGH_PROFILE_STORAGE_KEY, JSON.stringify(draft));
+      } catch (error) {
+        console.warn("Unable to save the walkthrough profile draft in local storage.", error);
+      }
+      try {
+        const secure = window.location.protocol === "https:" ? "; Secure" : "";
+        document.cookie = WALKTHROUGH_PROFILE_COOKIE_NAME + "=" + encodeURIComponent(JSON.stringify(draft)) + "; Path=/; Max-Age=" + WALKTHROUGH_PROFILE_MAX_AGE + "; SameSite=Lax" + secure;
+      } catch (error) {
+        console.warn("Unable to save the walkthrough profile draft cookie.", error);
+      }
+      return draft;
+    }
+
+    function profileDraftMarkup(selected) {
+      const draft = state.profileDraft || persistStarterProfile(selected);
+      return '<section class="profile-draft-card" aria-labelledby="profile-draft-title"><div class="profile-draft-copy"><span class="profile-draft-kicker">Starter profile created</span><h2 id="profile-draft-title">Finish the missing details and create your account.</h2><p>We added your cause, offer type, and this illustrative match. Nothing is public until you review and save it.</p><div class="profile-draft-tags" aria-label="Profile draft contents"><span>' + escapeMarkup(draft.causeArea) + '</span><span>' + escapeMarkup(draft.offerType) + '</span><span>' + escapeMarkup(draft.matchName) + ' match</span></div></div><a class="profile-draft-action" href="' + escapeMarkup(draft.onboardingPath) + '"><span>Complete profile</span><span aria-hidden="true">→</span></a></section>';
+    }
+
+'''
+          html = replace_once(html, "    function renderMatch() {", profile_helpers + "    function renderMatch() {", "profile helpers")
+
+          old_final = "      stage.innerHTML = '<div class=\"scene success-scene match-scene\">' + stepMark(2, 3) + '<div class=\"match-success-visual\" aria-hidden=\"true\"></div><div class=\"success-copy\"><div class=\"scene-prompt\">Your possible match · ' + selected.name + '</div><h1 class=\"scene-title is-sans\">The market starts with one thing you can offer.</h1><p class=\"scene-line\">You get ' + selected.get.toLowerCase() + '. You offer ' + selected.give.toLowerCase() + '.</p>' + conversionDeck(\"join\") + '</div></div>';"
+          new_final = "      stage.innerHTML = '<div class=\"scene success-scene match-scene\">' + stepMark(2, 3) + '<div class=\"match-success-visual\" aria-hidden=\"true\"></div><div class=\"success-copy\"><div class=\"scene-prompt\">Your possible match · ' + selected.name + '</div><h1 class=\"scene-title is-sans\">The market starts with one thing you can offer.</h1><p class=\"scene-line\">You get ' + selected.get.toLowerCase() + '. You offer ' + selected.give.toLowerCase() + '.</p>' + profileDraftMarkup(selected) + '</div></div>';"
+          html = replace_once(html, old_final, new_final, "final match profile prompt")
+
+          html = replace_once(
+              html,
+              '      if (action === "choose-cause") { state.cause = control.dataset.value; state.step = 1; render(); }',
+              '      if (action === "choose-cause") { state.cause = control.dataset.value; state.profileCause = control.dataset.value; state.step = 1; render(); }',
+              "cause capture",
+          )
+          html = replace_once(
+              html,
+              '      if (action === "choose-offer") { state.offer = control.dataset.value; state.step = 1; render(); }\n      if (action === "choose-match") { state.match = control.dataset.value; render(); }\n      if (action === "open-match") { state.step = 2; render(); }',
+              '      if (action === "choose-offer") { state.offer = control.dataset.value; state.profileDraft = null; state.step = 1; render(); }\n      if (action === "choose-match") { state.match = control.dataset.value; state.profileDraft = null; render(); }\n      if (action === "open-match") { const selected = offerMatches[state.offer][Number(state.match)]; persistStarterProfile(selected); state.step = 2; render(); }',
+              "match profile creation",
+          )
+          html_path.write_text(html)
+
+          proxy_path = Path("src/proxy.ts")
+          proxy = proxy_path.read_text()
+          proxy = replace_once(
+              proxy,
+              '    liveUrl.pathname = "/moral-trade-live.html";',
+              '    liveUrl.pathname = "/moral-trade-interactive-walkthroughs.html";',
+              "production walkthrough source",
+          )
+          proxy_path.write_text(proxy)
+
+          Path("src/lib/walkthrough-profile.ts").write_text(r'''import {
+  COHORT_CAUSES,
+  FIRST_ACTIONS,
+  ONBOARDING_GOALS,
+  PARTICIPANT_KINDS,
+} from "@/lib/growth";
+
+export const WALKTHROUGH_PROFILE_COOKIE_NAME = "mt_walkthrough_profile_draft";
+export const WALKTHROUGH_PROFILE_STORAGE_KEY = "mt_walkthrough_profile_draft";
+export const WALKTHROUGH_PROFILE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+const WALKTHROUGH_OFFER_TYPES = ["Money", "Time", "A pledge"] as const;
+const causeAreaSet = new Set<string>(COHORT_CAUSES);
+const offerTypeSet = new Set<string>(WALKTHROUGH_OFFER_TYPES);
+const participantKindSet = new Set<string>(PARTICIPANT_KINDS.map((item) => item.value));
+const goalSet = new Set<string>(ONBOARDING_GOALS.map((item) => item.value));
+const firstActionSet = new Set<string>(FIRST_ACTIONS.map((item) => item.value));
+
+const WALKTHROUGH_CAUSE_AREA_MAP: Record<string, (typeof COHORT_CAUSES)[number]> = {
+  "Wild animal suffering": "Animal welfare",
+  "Factory farming": "Animal welfare",
+  "Global health": "Public health",
+  Climate: "Climate",
+  "Existential risk": "Existential risk",
+  "Future flourishing": "Future flourishing",
+  "S-risks": "Future flourishing",
+  "Global poverty": "Global poverty",
+  "Concentration of power": "Cause prioritization",
+  "Priorities research": "Cause prioritization",
+  "Biological risks": "Existential risk",
+  "AI safety": "Existential risk",
+  "Space governance": "Future flourishing",
+  "Building altruism": "Community service",
+};
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+export type WalkthroughOfferType = (typeof WALKTHROUGH_OFFER_TYPES)[number];
+export type WalkthroughCauseArea = (typeof COHORT_CAUSES)[number];
+
+export interface WalkthroughProfileDraft {
+  version: 1;
+  source: "walkthrough";
+  originalCause: string;
+  causeArea: WalkthroughCauseArea;
+  offerType: WalkthroughOfferType;
+  matchName: string;
+  matchGet: string;
+  matchGive: string;
+  participantKind: (typeof PARTICIPANT_KINDS)[number]["value"];
+  primaryGoal: (typeof ONBOARDING_GOALS)[number]["value"];
+  firstAction: (typeof FIRST_ACTIONS)[number]["value"];
+  createdAt: string;
+}
+
+function clean(value: unknown, maxLength = 160) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function readSearchParam(searchParams: SearchParams | undefined, key: string) {
+  const value = searchParams?.[key];
+  return Array.isArray(value) ? clean(value[0]) : clean(value);
+}
+
+export function mapWalkthroughCauseToCauseArea(cause: string): WalkthroughCauseArea {
+  return WALKTHROUGH_CAUSE_AREA_MAP[clean(cause)] ?? "Cause prioritization";
+}
+
+export function createWalkthroughProfileDraft(input: {
+  originalCause?: unknown;
+  causeArea?: unknown;
+  offerType?: unknown;
+  matchName?: unknown;
+  matchGet?: unknown;
+  matchGive?: unknown;
+  participantKind?: unknown;
+  primaryGoal?: unknown;
+  firstAction?: unknown;
+  createdAt?: unknown;
+}): WalkthroughProfileDraft | null {
+  const originalCause = clean(input.originalCause) || "Cause prioritization";
+  const explicitCauseArea = clean(input.causeArea);
+  const causeArea = (causeAreaSet.has(explicitCauseArea)
+    ? explicitCauseArea
+    : mapWalkthroughCauseToCauseArea(originalCause)) as WalkthroughCauseArea;
+  const offerType = clean(input.offerType);
+  const matchName = clean(input.matchName);
+
+  if (!offerTypeSet.has(offerType) || !matchName) {
+    return null;
+  }
+
+  const participantKind = clean(input.participantKind);
+  const primaryGoal = clean(input.primaryGoal);
+  const firstAction = clean(input.firstAction);
+  const createdAt = clean(input.createdAt, 64);
+
+  return {
+    version: 1,
+    source: "walkthrough",
+    originalCause,
+    causeArea,
+    offerType: offerType as WalkthroughOfferType,
+    matchName,
+    matchGet: clean(input.matchGet),
+    matchGive: clean(input.matchGive),
+    participantKind: (participantKindSet.has(participantKind)
+      ? participantKind
+      : "individual") as WalkthroughProfileDraft["participantKind"],
+    primaryGoal: (goalSet.has(primaryGoal)
+      ? primaryGoal
+      : "find_counterparty") as WalkthroughProfileDraft["primaryGoal"],
+    firstAction: (firstActionSet.has(firstAction)
+      ? firstAction
+      : "create_broad_preview") as WalkthroughProfileDraft["firstAction"],
+    createdAt: createdAt || new Date().toISOString(),
+  };
+}
+
+export function encodeWalkthroughProfileDraft(draft: WalkthroughProfileDraft) {
+  return encodeURIComponent(JSON.stringify(draft));
+}
+
+export function parseWalkthroughProfileDraft(value: string | null | undefined) {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value)) as Record<string, unknown>;
+    return createWalkthroughProfileDraft(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function getWalkthroughProfileDraft({
+  cookieValue,
+  searchParams,
+}: {
+  cookieValue?: string | null;
+  searchParams?: SearchParams;
+}) {
+  const source = readSearchParam(searchParams, "source");
+  const hasQueryDraft =
+    source === "walkthrough" ||
+    Boolean(readSearchParam(searchParams, "offer_type")) ||
+    Boolean(readSearchParam(searchParams, "match_name"));
+
+  if (hasQueryDraft) {
+    const queryDraft = createWalkthroughProfileDraft({
+      originalCause: readSearchParam(searchParams, "walkthrough_cause"),
+      causeArea: readSearchParam(searchParams, "cause_area"),
+      offerType: readSearchParam(searchParams, "offer_type"),
+      matchName: readSearchParam(searchParams, "match_name"),
+      matchGet: readSearchParam(searchParams, "match_get"),
+      matchGive: readSearchParam(searchParams, "match_give"),
+    });
+
+    if (queryDraft) return queryDraft;
+  }
+
+  return parseWalkthroughProfileDraft(cookieValue);
+}
+
+export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {
+  const query = new URLSearchParams({
+    source: "walkthrough",
+    cause_area: draft.causeArea,
+    walkthrough_cause: draft.originalCause,
+    offer_type: draft.offerType,
+    match_name: draft.matchName,
+    match_get: draft.matchGet,
+    match_give: draft.matchGive,
+  });
+
+  return `/onboarding?${query.toString()}`;
+}
+''')
+
+          Path("src/lib/walkthrough-profile.test.ts").write_text(r'''import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildWalkthroughOnboardingPath,
+  createWalkthroughProfileDraft,
+  encodeWalkthroughProfileDraft,
+  getWalkthroughProfileDraft,
+  mapWalkthroughCauseToCauseArea,
+  parseWalkthroughProfileDraft,
+} from "@/lib/walkthrough-profile";
+
+test("maps walkthrough causes to onboarding cause areas", () => {
+  assert.equal(mapWalkthroughCauseToCauseArea("AI safety"), "Existential risk");
+  assert.equal(mapWalkthroughCauseToCauseArea("Factory farming"), "Animal welfare");
+  assert.equal(mapWalkthroughCauseToCauseArea("Global health"), "Public health");
+});
+
+test("round-trips a private walkthrough starter profile", () => {
+  const draft = createWalkthroughProfileDraft({
+    originalCause: "AI safety",
+    offerType: "Money",
+    matchName: "Rae",
+    matchGet: "30 vegetarian days",
+    matchGive: "$20 to malaria prevention",
+    createdAt: "2026-07-17T16:00:00.000Z",
+  });
+
+  assert.ok(draft);
+  assert.equal(draft.causeArea, "Existential risk");
+  assert.deepEqual(parseWalkthroughProfileDraft(encodeWalkthroughProfileDraft(draft)), draft);
+  assert.match(buildWalkthroughOnboardingPath(draft), /^\/onboarding\?source=walkthrough&/);
+});
+
+test("query values take precedence over an older cookie draft", () => {
+  const cookieDraft = createWalkthroughProfileDraft({
+    originalCause: "Climate",
+    offerType: "Time",
+    matchName: "Asha",
+  });
+  assert.ok(cookieDraft);
+
+  const draft = getWalkthroughProfileDraft({
+    cookieValue: encodeWalkthroughProfileDraft(cookieDraft),
+    searchParams: {
+      source: "walkthrough",
+      cause_area: "Animal welfare",
+      walkthrough_cause: "Factory farming",
+      offer_type: "A pledge",
+      match_name: "Noor",
+    },
+  });
+
+  assert.equal(draft?.causeArea, "Animal welfare");
+  assert.equal(draft?.offerType, "A pledge");
+  assert.equal(draft?.matchName, "Noor");
+});
+''')
+
+          Path("src/app/onboarding/page.tsx").write_text(r'''import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import Link from "next/link";
+
+import { saveOnboardingAction } from "@/app/actions";
+import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteTopbar } from "@/components/layout/site-topbar";
+import { IconMark } from "@/components/ui/page-primitives";
+import { getViewer } from "@/lib/app-data";
+import { getFormMessage } from "@/lib/form-state";
+import {
+  COHORT_CAUSES,
+  FIRST_ACTIONS,
+  ONBOARDING_GOALS,
+  PARTICIPANT_KINDS,
+} from "@/lib/growth";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
+import {
+  buildWalkthroughOnboardingPath,
+  getWalkthroughProfileDraft,
+  WALKTHROUGH_PROFILE_COOKIE_NAME,
+} from "@/lib/walkthrough-profile";
+
+export const metadata: Metadata = {
+  title: "Onboarding",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
+interface OnboardingPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+const actionFirstGoals = ONBOARDING_GOALS.filter((goal) => goal.value !== "browse_examples");
+const actionFirstActions = FIRST_ACTIONS.filter((action) => action.value !== "clone_example");
+
+export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const formMessage = getFormMessage(resolvedSearchParams);
+  const supabaseReady = hasSupabaseEnv();
+  const viewer = supabaseReady ? await getViewer() : null;
+  const cookieStore = await cookies();
+  const walkthroughDraft = getWalkthroughProfileDraft({
+    cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
+    searchParams: resolvedSearchParams,
+  });
+  const isWalkthroughProfile = Boolean(walkthroughDraft);
+  const onboardingReturnTo = walkthroughDraft
+    ? buildWalkthroughOnboardingPath(walkthroughDraft)
+    : "/onboarding";
+  const signupHref = `/signup?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
+  const loginHref = `/login?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
+  const defaultGoal = walkthroughDraft?.primaryGoal ?? actionFirstGoals[0]?.value;
+  const defaultParticipantKind = walkthroughDraft?.participantKind ?? PARTICIPANT_KINDS[0]?.value;
+  const defaultCauseAreas = new Set(
+    walkthroughDraft ? [walkthroughDraft.causeArea] : COHORT_CAUSES.slice(0, 2),
+  );
+  const defaultFirstAction = walkthroughDraft?.firstAction ?? actionFirstActions[0]?.value;
+
+  return (
+    <div className="page-shell page-shell-focused">
+      <header className="simple-header">
+        <SiteTopbar
+          brandHref="/"
+          links={getPrimaryNavLinks(Boolean(viewer))}
+          {...getTopbarActions(Boolean(viewer))}
+          showLogout={Boolean(viewer)}
+        />
+      </header>
+
+      <main id="main-content" tabIndex={-1}>
+        {formMessage ? (
+          <div
+            className={`status-banner ${
+              formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
+            }`}
+          >
+            {formMessage.text}
+          </div>
+        ) : null}
+
+        {!supabaseReady ? (
+          <div className="status-banner status-banner-error">
+            Account storage is unavailable. Contact support before continuing.
+          </div>
+        ) : null}
+
+        <section className="cohort-hero onboarding-hero" aria-labelledby="onboarding-heading">
+          <div className="cohort-hero-copy">
+            <p className="eyebrow">
+              {isWalkthroughProfile ? "Starter profile" : "Network onboarding"}
+            </p>
+            <h1 id="onboarding-heading">
+              {isWalkthroughProfile
+                ? "Your walkthrough profile is ready to complete."
+                : "Pick one role, one cause, and one first action."}
+            </h1>
+            <p className="hero-text">
+              {isWalkthroughProfile
+                ? "Moral Trade inferred a cause area, an offer type, and a first action from the walkthrough. Confirm the structured fields and add any missing context before saving."
+                : "A useful account starts with a concrete next step rather than a vague profile. Your choices are saved so Moral Trade can route you directly to the action you selected."}
+            </p>
+          </div>
+
+          <aside
+            className="panel cohort-demo-card"
+            data-testid={isWalkthroughProfile ? "walkthrough-profile-summary" : undefined}
+          >
+            <IconMark name="review" />
+            <h2>{isWalkthroughProfile ? "Already added" : "What gets saved"}</h2>
+            {walkthroughDraft ? (
+              <div className="clean-stack">
+                <p>
+                  <strong>Cause:</strong> {walkthroughDraft.causeArea}
+                </p>
+                <p>
+                  <strong>Offer:</strong> {walkthroughDraft.offerType}
+                </p>
+                <p>
+                  <strong>Illustrative match:</strong> {walkthroughDraft.matchName}
+                </p>
+                <p>Nothing is public until you review and save the completed profile.</p>
+              </div>
+            ) : (
+              <p>
+                Role, cause areas, referral context, and your chosen first action. This step does not
+                publish your identity, exact wishes, or contact details.
+              </p>
+            )}
+          </aside>
+        </section>
+
+        <section className="section section-white" aria-labelledby="onboarding-form-heading">
+          <div className="auth-grid onboarding-grid">
+            {viewer ? (
+              <article className="panel auth-card">
+                <div className="section-head auth-head">
+                  <p className="eyebrow">
+                    {isWalkthroughProfile ? "Complete your starter profile" : "Activation wizard"}
+                  </p>
+                  <h2 id="onboarding-form-heading">
+                    {isWalkthroughProfile ? "Review the missing details" : "Choose your starting point"}
+                  </h2>
+                  <p>
+                    Signed in as <strong>{viewer.displayName}</strong>. Confirm the selections below,
+                    then save the profile to your account.
+                  </p>
+                </div>
+
+                <form action={saveOnboardingAction} className="compact-form onboarding-form">
+                  <input name="return_to" type="hidden" value={onboardingReturnTo} />
+
+                  <fieldset className="field onboarding-fieldset">
+                    <legend>Primary goal</legend>
+                    <div className="onboarding-choice-grid">
+                      {actionFirstGoals.map((goal) => (
+                        <label className="onboarding-choice panel" key={goal.value}>
+                          <input
+                            defaultChecked={goal.value === defaultGoal}
+                            name="primary_goal"
+                            type="radio"
+                            value={goal.value}
+                          />
+                          <span>
+                            <strong>{goal.label}</strong>
+                            <small>{goal.description}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="field onboarding-fieldset">
+                    <legend>Your role</legend>
+                    <div className="onboarding-inline-grid">
+                      {PARTICIPANT_KINDS.map((kind) => (
+                        <label className="onboarding-radio" key={kind.value}>
+                          <input
+                            defaultChecked={kind.value === defaultParticipantKind}
+                            name="participant_kind"
+                            type="radio"
+                            value={kind.value}
+                          />
+                          <span>{kind.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="field onboarding-fieldset">
+                    <legend>Cause areas</legend>
+                    <div className="onboarding-inline-grid">
+                      {COHORT_CAUSES.map((cause) => (
+                        <label className="onboarding-radio" key={cause}>
+                          <input
+                            defaultChecked={defaultCauseAreas.has(cause)}
+                            name="cause_area"
+                            type="checkbox"
+                            value={cause}
+                          />
+                          <span>{cause}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="field onboarding-fieldset">
+                    <legend>First action</legend>
+                    <div className="onboarding-choice-grid">
+                      {actionFirstActions.map((action) => (
+                        <label className="onboarding-choice panel" key={action.value}>
+                          <input
+                            defaultChecked={action.value === defaultFirstAction}
+                            name="first_action"
+                            type="radio"
+                            value={action.value}
+                          />
+                          <span>
+                            <strong>{action.label}</strong>
+                            <small>{action.actionLabel}</small>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+
+                  <label className="field">
+                    <span>Counterparty, collaborator, or community</span>
+                    <input
+                      name="invite_target"
+                      placeholder="Optional: one person, team, meetup, or partner group"
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Referral source</span>
+                    <input
+                      defaultValue={isWalkthroughProfile ? "Moral Trade walkthrough" : undefined}
+                      name="referral_source"
+                      placeholder="Optional: who invited you or where you heard about Moral Trade"
+                    />
+                  </label>
+
+                  <button className="button button-primary" type="submit">
+                    {isWalkthroughProfile ? "Save completed profile" : "Save and start"}
+                  </button>
+                </form>
+              </article>
+            ) : (
+              <article className="panel auth-side-card auth-gate-card">
+                <p className="eyebrow">
+                  {isWalkthroughProfile ? "Starter profile created" : "Account required"}
+                </p>
+                <h2 id="onboarding-form-heading">
+                  {isWalkthroughProfile
+                    ? "Create an account, then complete the missing details."
+                    : "Create an account to save onboarding."}
+                </h2>
+                <p>
+                  {isWalkthroughProfile
+                    ? "Your private draft already contains a cause area, offer type, and suggested first action. After account creation, confirm your role and add any optional collaborator or referral context."
+                    : "The wizard is persisted to your account so referral context, role, and next action stay connected."}
+                </p>
+                <div className="hero-actions">
+                  <Link className="button button-primary" href={signupHref}>
+                    Create account and continue
+                  </Link>
+                  <Link className="button button-secondary" href={loginHref}>
+                    Sign in
+                  </Link>
+                </div>
+              </article>
+            )}
+
+            <article className="panel auth-side-card">
+              <p className="eyebrow">
+                {isWalkthroughProfile ? "Still missing" : "Why this exists"}
+              </p>
+              <div className="clean-stack">
+                <div>
+                  <h3>{isWalkthroughProfile ? "Account identity" : "It is persisted"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Create or sign in to an account so the draft can become a durable profile."
+                      : "Your selections are stored as an onboarding record, not just held in browser state."}
+                  </p>
+                </div>
+                <div>
+                  <h3>{isWalkthroughProfile ? "Role confirmation" : "It is attributable"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Confirm whether you are participating as an individual, collective, institution, or organizer."
+                      : "Referral and partner context remain connected to the account when provided."}
+                  </p>
+                </div>
+                <div>
+                  <h3>{isWalkthroughProfile ? "Optional context" : "It points to action"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Add a collaborator, community, or referral source only when it is useful."
+                      : "Submitting routes you directly to the first action you selected."}
+                  </p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <SiteFooter />
+    </div>
+  );
+}
+''')
+
+          Path("src/proxy.test.ts").write_text(r'''import assert from "node:assert/strict";
+import test from "node:test";
+
+import { NextRequest } from "next/server";
+
+import { proxy, WALKTHROUGH_SEEN_COOKIE } from "@/proxy";
+
+const desktopUserAgent =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+
+function makeRequest(path: string, headers: Record<string, string> = {}) {
+  return new NextRequest(`https://moraltrade.org${path}`, {
+    headers: {
+      "user-agent": desktopUserAgent,
+      ...headers,
+    },
+  });
+}
+
+test("the homepage serves the production walkthrough directly", () => {
+  const response = proxy(makeRequest("/?utm_source=invite"));
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("x-middleware-rewrite"),
+    "https://moraltrade.org/moral-trade-interactive-walkthroughs.html?utm_source=invite",
+  );
+});
+
+test("opening the walkthrough directly records the visit once", () => {
+  const response = proxy(makeRequest("/walkthrough"));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+});
+
+test("returning walkthrough visitors do not receive a second cookie", () => {
+  const response = proxy(
+    makeRequest("/walkthrough", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
+});
+
+test("bots and prefetches do not consume the walkthrough visit", () => {
+  const botResponse = proxy(
+    makeRequest("/walkthrough", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
+  );
+  const prefetchResponse = proxy(
+    makeRequest("/walkthrough", { "next-router-prefetch": "1", purpose: "prefetch" }),
+  );
+
+  for (const response of [botResponse, prefetchResponse]) {
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-middleware-next"), "1");
+    assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
+  }
+});
+
+test("the offers directory still defaults to its live view", () => {
+  const response = proxy(makeRequest("/offers"));
+
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get("location"), "https://moraltrade.org/offers?view=live");
+});
+''')
+
+          e2e_path = Path("tests/walkthrough.spec.ts")
+          e2e = e2e_path.read_text()
+          first_test_pattern = re.compile(
+              r'test\("a first homepage visit opens the walkthrough once".*?\n\}\);\n\n(?=test\("Third Option)',
+              re.S,
+          )
+          first_test_replacement = r'''test("the homepage opens the live walkthrough interface", async ({ page }) => {
+  await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
+
+  await expect(page).toHaveURL(/\/?utm_source=invite$/);
+  await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
+  await expect(page.locator("#concept-caption strong")).toHaveText("Welcome to Moral Trade");
+});
+
+'''
+          e2e, count = first_test_pattern.subn(first_test_replacement, e2e, count=1)
+          if count != 1:
+              raise RuntimeError(f"homepage e2e replacement: expected one match, found {count}")
+
+          starter_test = r'''test("the walkthrough creates a starter profile and carries it into account onboarding", async ({ page }) => {
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+
+  await expect(page.locator("#concept-caption strong")).toHaveText("Welcome to Moral Trade");
+  await page.getByRole("button", { name: "AI safety" }).click();
+  await page.getByRole("tab", { name: /Your match/i }).click();
+  await page.getByRole("button", { name: "Money", exact: true }).click();
+  await page.locator(".match-card").first().click();
+  await page.getByRole("button", { name: "Open this match" }).click();
+
+  await expect(page.getByText("Starter profile created", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "Finish the missing details and create your account.",
+    }),
+  ).toBeVisible();
+
+  const storedDraft = await page.evaluate(() =>
+    JSON.parse(window.localStorage.getItem("mt_walkthrough_profile_draft") || "null"),
+  );
+  expect(storedDraft).toMatchObject({
+    causeArea: "Existential risk",
+    offerType: "Money",
+    source: "walkthrough",
+  });
+
+  const completeProfile = page.getByRole("link", { name: "Complete profile" });
+  await expect(completeProfile).toHaveAttribute("href", /\/onboarding\?source=walkthrough/);
+  await completeProfile.click();
+
+  await expect(page).toHaveURL(/\/onboarding\?source=walkthrough/);
+  await expect(page.getByTestId("walkthrough-profile-summary")).toContainText("Existential risk");
+  await expect(
+    page.getByRole("heading", { name: "Create an account, then complete the missing details." }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Create account and continue" })).toHaveAttribute(
+    "href",
+    /\/signup\?returnTo=/,
+  );
+});
+
+'''
+          marker = 'test("Make the trade stays fully visible on a wide, short screen"'
+          if marker not in e2e:
+              raise RuntimeError("starter profile e2e insertion marker not found")
+          e2e = e2e.replace(marker, starter_test + marker, 1)
+          e2e_path.write_text(e2e)
+          PY
+
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint changed TypeScript
+        run: npx eslint src/app/onboarding/page.tsx src/lib/walkthrough-profile.ts src/lib/walkthrough-profile.test.ts src/proxy.ts src/proxy.test.ts tests/walkthrough.spec.ts
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered walkthrough checks
+        run: npx playwright test tests/walkthrough.spec.ts --grep "homepage opens the live walkthrough interface|creates a starter profile"
+
+      - name: Commit implementation and remove one-shot workflow
+        if: success()
+        shell: bash
+        run: |
+          rm .github/workflows/walkthrough-starter-profile-one-shot.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/moral-trade-interactive-walkthroughs.html src/proxy.ts src/proxy.test.ts src/lib/walkthrough-profile.ts src/lib/walkthrough-profile.test.ts src/app/onboarding/page.tsx tests/walkthrough.spec.ts .github/workflows/walkthrough-starter-profile-one-shot.yml
+          git commit -m "Create walkthrough starter profiles"
+          git push origin HEAD:feat/walkthrough-starter-profile-20260717
