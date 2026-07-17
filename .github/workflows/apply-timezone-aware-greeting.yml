@@ -1,0 +1,385 @@
+name: Apply timezone-aware greeting fix
+
+on:
+  push:
+    branches:
+      - fix/timezone-aware-home-greeting-20260717
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/timezone-aware-home-greeting-20260717
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply the browser-local date and greeting implementation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          component = '''"use client";
+
+          import { useEffect, useState } from "react";
+
+          import styles from "./returning-home.module.css";
+
+          interface LocalDateGreetingProps {
+            name: string;
+          }
+
+          interface LocalGreeting {
+            dateLabel: string;
+            dateTime: string;
+            timeOfDay: "Good morning" | "Good afternoon" | "Good evening";
+          }
+
+          function getTimeOfDayGreeting(hour: number): LocalGreeting["timeOfDay"] {
+            if (hour < 12) return "Good morning";
+            if (hour < 18) return "Good afternoon";
+            return "Good evening";
+          }
+
+          function getLocalDateTimeAttribute(now: Date) {
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            const day = String(now.getDate()).padStart(2, "0");
+            return `${year}-${month}-${day}`;
+          }
+
+          function getLocalGreeting(now: Date): LocalGreeting {
+            return {
+              dateLabel: new Intl.DateTimeFormat("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              }).format(now),
+              dateTime: getLocalDateTimeAttribute(now),
+              timeOfDay: getTimeOfDayGreeting(now.getHours()),
+            };
+          }
+
+          export function LocalDateGreeting({ name }: LocalDateGreetingProps) {
+            const [localGreeting, setLocalGreeting] = useState<LocalGreeting | null>(null);
+
+            useEffect(() => {
+              const refresh = () => {
+                const next = getLocalGreeting(new Date());
+                setLocalGreeting((current) =>
+                  current?.dateTime === next.dateTime && current.timeOfDay === next.timeOfDay
+                    ? current
+                    : next,
+                );
+              };
+
+              const animationFrameId = window.requestAnimationFrame(refresh);
+              const intervalId = window.setInterval(refresh, 60_000);
+              const refreshWhenVisible = () => {
+                if (document.visibilityState === "visible") refresh();
+              };
+
+              window.addEventListener("focus", refresh);
+              document.addEventListener("visibilitychange", refreshWhenVisible);
+
+              return () => {
+                window.cancelAnimationFrame(animationFrameId);
+                window.clearInterval(intervalId);
+                window.removeEventListener("focus", refresh);
+                document.removeEventListener("visibilitychange", refreshWhenVisible);
+              };
+            }, []);
+
+            return (
+              <div
+                aria-atomic="true"
+                aria-busy={localGreeting === null}
+                aria-live="polite"
+                className={styles.greeting}
+                data-ready={localGreeting === null ? "false" : "true"}
+                data-testid="local-date-greeting"
+              >
+                {localGreeting ? (
+                  <>
+                    <time dateTime={localGreeting.dateTime}>{localGreeting.dateLabel}</time>
+                    <span>
+                      {localGreeting.timeOfDay}, {name}.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <time aria-hidden="true">&nbsp;</time>
+                    <span aria-hidden="true">&nbsp;</span>
+                  </>
+                )}
+              </div>
+            );
+          }
+          '''
+
+          home_path = Path("src/components/home/home-page.tsx")
+          home = home_path.read_text()
+          import_needle = 'import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";\n\nimport styles from "./returning-home.module.css";'
+          import_replacement = 'import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";\n\nimport { LocalDateGreeting } from "./local-date-greeting";\nimport styles from "./returning-home.module.css";'
+          if import_needle not in home:
+              raise SystemExit("Could not locate the returning-home import block")
+          home = home.replace(import_needle, import_replacement, 1)
+
+          greeting_needle = '''          <div className={styles.greeting}>
+                    <time dateTime="2026-07-16">Thursday, July 16, 2026</time>
+                    <span>Good afternoon, Alex.</span>
+                  </div>'''
+          greeting_replacement = '          <LocalDateGreeting name="Alex" />'
+          if greeting_needle not in home:
+              raise SystemExit("Could not locate the hard-coded greeting block")
+          home = home.replace(greeting_needle, greeting_replacement, 1)
+          home_path.write_text(home)
+
+          Path("src/components/home/local-date-greeting.tsx").write_text(component)
+
+          existing_test_path = Path("tests/returning-homepage.spec.ts")
+          existing_test = existing_test_path.read_text()
+          describe_needle = 'test.describe("Returning-user homepage", () => {\n'
+          describe_replacement = '''test.describe("Returning-user homepage", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test.beforeEach(async ({ page }) => {
+              await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
+            });
+          '''
+          if describe_needle not in existing_test:
+              raise SystemExit("Could not locate the returning-home test describe block")
+          existing_test = existing_test.replace(describe_needle, describe_replacement, 1)
+
+          assertion_needle = '''    await expect(page.locator('time[datetime="2026-07-16"]')).toHaveText(
+                "Thursday, July 16, 2026",
+              );
+              await expect(page.getByText("Good afternoon, Alex.", { exact: true })).toBeVisible();'''
+          assertion_replacement = '''    const localGreeting = page.getByTestId("local-date-greeting");
+              await expect(localGreeting).toHaveAttribute("data-ready", "true");
+              await expect(localGreeting.locator('time[datetime="2026-07-16"]')).toHaveText(
+                "Thursday, July 16, 2026",
+              );
+              await expect(
+                localGreeting.getByText("Good afternoon, Alex.", { exact: true }),
+              ).toBeVisible();'''
+          if assertion_needle not in existing_test:
+              raise SystemExit("Could not locate the hard-coded greeting assertions")
+          existing_test = existing_test.replace(assertion_needle, assertion_replacement, 1)
+          existing_test_path.write_text(existing_test)
+
+          timezone_test = '''import { expect, test, type Page } from "@playwright/test";
+
+          const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
+
+          async function expectLocalGreeting(
+            page: Page,
+            expected: { dateTime: string; dateLabel: string; greeting: string },
+          ) {
+            const localGreeting = page.getByTestId("local-date-greeting");
+            await expect(localGreeting).toHaveAttribute("data-ready", "true");
+            await expect(localGreeting.locator("time")).toHaveAttribute("datetime", expected.dateTime);
+            await expect(localGreeting.locator("time")).toHaveText(expected.dateLabel);
+            await expect(localGreeting.getByText(expected.greeting, { exact: true })).toBeVisible();
+          }
+
+          test.describe("Returning homepage in America/Los_Angeles", () => {
+            test.use({ timezoneId: "America/Los_Angeles" });
+
+            test("uses the visitor's previous local date and evening greeting", async ({ page }) => {
+              await page.clock.setFixedTime(fixedInstant);
+              await page.goto("/", { waitUntil: "domcontentloaded" });
+
+              await expectLocalGreeting(page, {
+                dateTime: "2026-07-16",
+                dateLabel: "Thursday, July 16, 2026",
+                greeting: "Good evening, Alex.",
+              });
+            });
+          });
+
+          test.describe("Returning homepage in Asia/Tokyo", () => {
+            test.use({ timezoneId: "Asia/Tokyo" });
+
+            test("uses the visitor's next local date and morning greeting", async ({ page }) => {
+              await page.clock.setFixedTime(fixedInstant);
+              await page.goto("/", { waitUntil: "domcontentloaded" });
+
+              await expectLocalGreeting(page, {
+                dateTime: "2026-07-17",
+                dateLabel: "Friday, July 17, 2026",
+                greeting: "Good morning, Alex.",
+              });
+            });
+          });
+
+          test.describe("Returning homepage local-time refresh", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test("refreshes after the local date and greeting period change", async ({ page }) => {
+              await page.clock.setFixedTime(new Date("2026-07-16T17:59:00.000Z"));
+              await page.goto("/", { waitUntil: "domcontentloaded" });
+
+              await expectLocalGreeting(page, {
+                dateTime: "2026-07-16",
+                dateLabel: "Thursday, July 16, 2026",
+                greeting: "Good afternoon, Alex.",
+              });
+
+              await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
+              await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+
+              await expectLocalGreeting(page, {
+                dateTime: "2026-07-17",
+                dateLabel: "Friday, July 17, 2026",
+                greeting: "Good morning, Alex.",
+              });
+            });
+          });
+          '''
+          Path("tests/returning-homepage-timezone.spec.ts").write_text(timezone_test)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint changed files
+        run: >-
+          npx eslint
+          src/components/home/home-page.tsx
+          src/components/home/local-date-greeting.tsx
+          tests/returning-homepage.spec.ts
+          tests/returning-homepage-timezone.spec.ts
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Run returning-homepage regressions
+        run: >-
+          npx playwright test
+          tests/returning-homepage.spec.ts
+          tests/returning-homepage-timezone.spec.ts
+          --reporter=line
+
+      - name: Capture desktop and mobile timezone evidence
+        run: |
+          mkdir -p /tmp/timezone-greeting-qa
+          npm start -- -H 127.0.0.1 -p 3210 > /tmp/timezone-greeting-qa/server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3210/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          node <<'NODE'
+          const { chromium } = require("@playwright/test");
+
+          async function capture(browser, options) {
+            const context = await browser.newContext({
+              timezoneId: options.timezoneId,
+              viewport: options.viewport,
+            });
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                url: "http://127.0.0.1:3210",
+              },
+            ]);
+            const page = await context.newPage();
+            const errors = [];
+            page.on("console", (message) => {
+              if (message.type() === "error") errors.push(message.text());
+            });
+            page.on("pageerror", (error) => errors.push(error.message));
+            await page.clock.setFixedTime(new Date(options.instant));
+            await page.goto("http://127.0.0.1:3210/", { waitUntil: "networkidle" });
+
+            const greeting = page.getByTestId("local-date-greeting");
+            await greeting.waitFor({ state: "visible" });
+            if ((await greeting.getAttribute("data-ready")) !== "true") {
+              throw new Error(`${options.label}: greeting did not hydrate`);
+            }
+            const actualDate = await greeting.locator("time").textContent();
+            const actualGreeting = await greeting.locator("span").textContent();
+            if (actualDate !== options.expectedDate || actualGreeting !== options.expectedGreeting) {
+              throw new Error(
+                `${options.label}: expected ${options.expectedDate} / ${options.expectedGreeting}, got ${actualDate} / ${actualGreeting}`,
+              );
+            }
+            if (errors.length) {
+              throw new Error(`${options.label}: console errors: ${errors.join(" | ")}`);
+            }
+            await page.screenshot({ path: options.path, fullPage: false });
+            await context.close();
+          }
+
+          (async () => {
+            const browser = await chromium.launch();
+            try {
+              await capture(browser, {
+                label: "Los Angeles desktop",
+                timezoneId: "America/Los_Angeles",
+                viewport: { width: 1487, height: 1058 },
+                instant: "2026-07-17T01:30:00.000Z",
+                expectedDate: "Thursday, July 16, 2026",
+                expectedGreeting: "Good evening, Alex.",
+                path: "/tmp/timezone-greeting-qa/los-angeles-desktop.png",
+              });
+              await capture(browser, {
+                label: "Tokyo mobile",
+                timezoneId: "Asia/Tokyo",
+                viewport: { width: 390, height: 844 },
+                instant: "2026-07-17T01:30:00.000Z",
+                expectedDate: "Friday, July 17, 2026",
+                expectedGreeting: "Good morning, Alex.",
+                path: "/tmp/timezone-greeting-qa/tokyo-mobile.png",
+              });
+            } finally {
+              await browser.close();
+            }
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: timezone-greeting-qa
+          path: /tmp/timezone-greeting-qa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Commit the verified fix
+        run: |
+          rm .github/workflows/apply-timezone-aware-greeting.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/home/home-page.tsx \
+            src/components/home/local-date-greeting.tsx \
+            tests/returning-homepage.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            .github/workflows/apply-timezone-aware-greeting.yml
+          git commit -m "Fix returning homepage timezone greeting"
+          git push origin HEAD:fix/timezone-aware-home-greeting-20260717
