@@ -113,3 +113,112 @@
     font-size: 13px;
   }
 }
+
+/*
+ * The walkthrough's desktop scenes are normally vertically centered inside an
+ * overflow-hidden stage. The Your Match results are taller than that stage on
+ * shorter desktop viewports, which clips the heading and the card actions.
+ * Keep this scene top-aligned and compact while preserving the approved design.
+ */
+@media (min-width: 901px) and (max-height: 960px) {
+  .experience[data-concept="match"] .match-scene {
+    align-content: start;
+    padding-top: clamp(30px, 4vh, 42px);
+    padding-bottom: clamp(20px, 2.8vh, 30px);
+  }
+
+  .experience[data-concept="match"] .scene-head {
+    width: min(900px, 100%);
+  }
+
+  .experience[data-concept="match"] .scene-title {
+    max-width: 15ch;
+    font-size: clamp(58px, 7vh, 70px);
+    line-height: 0.88;
+  }
+
+  .experience[data-concept="match"] .scene-prompt {
+    margin-bottom: 10px;
+  }
+
+  .experience[data-concept="match"] .match-stack {
+    margin-top: 18px;
+  }
+
+  .experience[data-concept="match"] .match-card {
+    min-height: 350px;
+    padding: 16px;
+  }
+
+  .experience[data-concept="match"] .avatar-mini {
+    width: 46px;
+    height: 46px;
+    font-size: 22px;
+  }
+
+  .experience[data-concept="match"] .match-name {
+    margin-top: 10px;
+    font-size: 23px;
+  }
+
+  .experience[data-concept="match"] .match-exchange {
+    margin-top: 24px;
+  }
+
+  .experience[data-concept="match"] .match-exchange div + div {
+    margin-top: 14px;
+    padding-top: 12px;
+  }
+
+  .experience[data-concept="match"] .match-exchange strong {
+    font-size: clamp(23px, 2.15vw, 30px);
+    line-height: 0.96;
+  }
+
+  .experience[data-concept="match"] .match-card small {
+    left: 16px;
+    bottom: 14px;
+    font-size: 12px;
+  }
+
+  .experience[data-concept="match"] .match-scene > .primary-action {
+    min-height: 48px;
+    margin-top: 16px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 820px) {
+  .experience[data-concept="match"] .match-scene {
+    padding-top: 26px;
+    padding-bottom: 18px;
+  }
+
+  .experience[data-concept="match"] .scene-title {
+    font-size: 52px;
+  }
+
+  .experience[data-concept="match"] .scene-prompt {
+    margin-bottom: 8px;
+  }
+
+  .experience[data-concept="match"] .match-stack {
+    margin-top: 14px;
+  }
+
+  .experience[data-concept="match"] .match-card {
+    min-height: 330px;
+  }
+
+  .experience[data-concept="match"] .match-exchange {
+    margin-top: 18px;
+  }
+
+  .experience[data-concept="match"] .match-exchange strong {
+    font-size: 27px;
+  }
+
+  .experience[data-concept="match"] .match-scene > .primary-action {
+    min-height: 44px;
+    margin-top: 12px;
+  }
+}
