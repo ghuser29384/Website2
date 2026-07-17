@@ -30,16 +30,14 @@ test("a first human homepage visit redirects once to the walkthrough", () => {
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("a returning visitor receives the production homepage", () => {
+test("a returning visitor receives the normal application homepage", () => {
   const response = proxy(
     makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
   );
 
   assert.equal(response.status, 200);
-  assert.equal(
-    response.headers.get("x-middleware-rewrite"),
-    "https://moraltrade.org/moral-trade-production.html?utm_source=invite",
-  );
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("x-middleware-rewrite"), null);
   assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
 });
@@ -63,10 +61,8 @@ test("bots and prefetches receive the homepage without consuming the walkthrough
 
   for (const response of [botResponse, prefetchResponse]) {
     assert.equal(response.status, 200);
-    assert.equal(
-      response.headers.get("x-middleware-rewrite"),
-      "https://moraltrade.org/moral-trade-production.html",
-    );
+    assert.equal(response.headers.get("x-middleware-next"), "1");
+    assert.equal(response.headers.get("x-middleware-rewrite"), null);
     assert.equal(response.headers.get("location"), null);
     assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
   }
