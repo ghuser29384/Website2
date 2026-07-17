@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
       beforeFiles: [
         {
           source: "/walkthrough",
-          destination: "/moral-trade-interactive-walkthroughs.html",
+          destination: "/moral-trade-production.html",
         },
       ],
       afterFiles: [],

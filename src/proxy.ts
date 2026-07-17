@@ -43,7 +43,7 @@ export function proxy(request: NextRequest) {
 
   if (pathname === "/") {
     const liveUrl = request.nextUrl.clone();
-    liveUrl.pathname = "/moral-trade-live.html";
+    liveUrl.pathname = "/moral-trade-production.html";
 
     return NextResponse.rewrite(liveUrl);
   }
