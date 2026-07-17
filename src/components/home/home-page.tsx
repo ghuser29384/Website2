@@ -23,6 +23,7 @@ import { useState } from "react";
 
 import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
 
+import { LocalDateGreeting } from "./local-date-greeting";
 import styles from "./returning-home.module.css";
 
 const focusAreas = [
@@ -141,10 +142,7 @@ export function HomePage() {
           <div>
             <p>Your best match right now, based on your commitments and priorities.</p>
           </div>
-          <div className={styles.greeting}>
-            <time dateTime="2026-07-16">Thursday, July 16, 2026</time>
-            <span>Good afternoon, Alex.</span>
-          </div>
+          <LocalDateGreeting name="Alex" />
         </section>
 
         <section className={styles.tradePair} aria-label="Recommended moral trade">

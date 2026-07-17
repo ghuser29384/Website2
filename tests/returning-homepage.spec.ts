@@ -13,6 +13,11 @@ async function expectFullyInViewport(page: Page, locator: Locator) {
 }
 
 test.describe("Returning-user homepage", () => {
+  test.use({ timezoneId: "UTC" });
+
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
+  });
   test("matches the approved desktop trade-deck contract", async ({ page }) => {
     await page.setViewportSize({ width: 1487, height: 1058 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -40,10 +45,14 @@ test.describe("Returning-user homepage", () => {
         { exact: true },
       ),
     ).toBeVisible();
-    await expect(page.locator('time[datetime="2026-07-16"]')).toHaveText(
+    const localGreeting = page.getByTestId("local-date-greeting");
+    await expect(localGreeting).toHaveAttribute("data-ready", "true");
+    await expect(localGreeting.locator('time[datetime="2026-07-16"]')).toHaveText(
       "Thursday, July 16, 2026",
     );
-    await expect(page.getByText("Good afternoon, Alex.", { exact: true })).toBeVisible();
+    await expect(
+      localGreeting.getByText("Good afternoon, Alex.", { exact: true }),
+    ).toBeVisible();
 
     const recommendation = page.getByRole("region", { name: "Recommended moral trade" });
     const tradeCards = recommendation.locator("article");
