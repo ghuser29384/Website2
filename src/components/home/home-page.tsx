@@ -137,9 +137,8 @@ export function HomePage() {
       </header>
 
       <main className={styles.main} id="main-content" tabIndex={-1}>
-        <section className={styles.intro} aria-labelledby="home-heading">
+        <section className={styles.intro}>
           <div>
-            <h1 id="home-heading">A trade worth considering.</h1>
             <p>Your best match right now, based on your commitments and priorities.</p>
           </div>
           <div className={styles.greeting}>
