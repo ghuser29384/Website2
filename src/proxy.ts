@@ -50,10 +50,7 @@ export function proxy(request: NextRequest) {
       return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
     }
 
-    const liveUrl = request.nextUrl.clone();
-    liveUrl.pathname = "/moral-trade-production.html";
-
-    return NextResponse.rewrite(liveUrl);
+    return NextResponse.next();
   }
 
   if (pathname === "/walkthrough") {
