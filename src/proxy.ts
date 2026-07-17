@@ -42,15 +42,10 @@ export function proxy(request: NextRequest) {
     isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
 
   if (pathname === "/") {
-    if (shouldRecordVisit) {
-      const walkthroughUrl = request.nextUrl.clone();
-      walkthroughUrl.pathname = "/walkthrough";
-      walkthroughUrl.searchParams.set("first_visit", "1");
+    const liveUrl = request.nextUrl.clone();
+    liveUrl.pathname = "/moral-trade-live.html";
 
-      return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
-    }
-
-    return NextResponse.next();
+    return NextResponse.rewrite(liveUrl);
   }
 
   if (pathname === "/walkthrough") {
