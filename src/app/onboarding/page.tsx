@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 
 import { saveOnboardingAction } from "@/app/actions";
@@ -15,6 +16,11 @@ import {
 } from "@/lib/growth";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import {
+  buildWalkthroughOnboardingPath,
+  getWalkthroughProfileDraft,
+  WALKTHROUGH_PROFILE_COOKIE_NAME,
+} from "@/lib/walkthrough-profile";
 
 export const metadata: Metadata = {
   title: "Onboarding",
@@ -36,6 +42,23 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await getViewer() : null;
+  const cookieStore = await cookies();
+  const walkthroughDraft = getWalkthroughProfileDraft({
+    cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
+    searchParams: resolvedSearchParams,
+  });
+  const isWalkthroughProfile = Boolean(walkthroughDraft);
+  const onboardingReturnTo = walkthroughDraft
+    ? buildWalkthroughOnboardingPath(walkthroughDraft)
+    : "/onboarding";
+  const signupHref = `/signup?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
+  const loginHref = `/login?returnTo=${encodeURIComponent(onboardingReturnTo)}`;
+  const defaultGoal = walkthroughDraft?.primaryGoal ?? actionFirstGoals[0]?.value;
+  const defaultParticipantKind = walkthroughDraft?.participantKind ?? PARTICIPANT_KINDS[0]?.value;
+  const defaultCauseAreas = new Set(
+    walkthroughDraft ? [walkthroughDraft.causeArea] : COHORT_CAUSES.slice(0, 2),
+  );
+  const defaultFirstAction = walkthroughDraft?.firstAction ?? actionFirstActions[0]?.value;
 
   return (
     <div className="page-shell page-shell-focused">
@@ -67,21 +90,46 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
         <section className="cohort-hero onboarding-hero" aria-labelledby="onboarding-heading">
           <div className="cohort-hero-copy">
-            <p className="eyebrow">Network onboarding</p>
-            <h1 id="onboarding-heading">Pick one role, one cause, and one first action.</h1>
+            <p className="eyebrow">
+              {isWalkthroughProfile ? "Starter profile" : "Network onboarding"}
+            </p>
+            <h1 id="onboarding-heading">
+              {isWalkthroughProfile
+                ? "Your walkthrough profile is ready to complete."
+                : "Pick one role, one cause, and one first action."}
+            </h1>
             <p className="hero-text">
-              A useful account starts with a concrete next step rather than a vague profile. Your
-              choices are saved so Moral Trade can route you directly to the action you selected.
+              {isWalkthroughProfile
+                ? "Moral Trade inferred a cause area, an offer type, and a first action from the walkthrough. Confirm the structured fields and add any missing context before saving."
+                : "A useful account starts with a concrete next step rather than a vague profile. Your choices are saved so Moral Trade can route you directly to the action you selected."}
             </p>
           </div>
 
-          <aside className="panel cohort-demo-card">
+          <aside
+            className="panel cohort-demo-card"
+            data-testid={isWalkthroughProfile ? "walkthrough-profile-summary" : undefined}
+          >
             <IconMark name="review" />
-            <h2>What gets saved</h2>
-            <p>
-              Role, cause areas, referral context, and your chosen first action. This step does not
-              publish your identity, exact wishes, or contact details.
-            </p>
+            <h2>{isWalkthroughProfile ? "Already added" : "What gets saved"}</h2>
+            {walkthroughDraft ? (
+              <div className="clean-stack">
+                <p>
+                  <strong>Cause:</strong> {walkthroughDraft.causeArea}
+                </p>
+                <p>
+                  <strong>Offer:</strong> {walkthroughDraft.offerType}
+                </p>
+                <p>
+                  <strong>Illustrative match:</strong> {walkthroughDraft.matchName}
+                </p>
+                <p>Nothing is public until you review and save the completed profile.</p>
+              </div>
+            ) : (
+              <p>
+                Role, cause areas, referral context, and your chosen first action. This step does not
+                publish your identity, exact wishes, or contact details.
+              </p>
+            )}
           </aside>
         </section>
 
@@ -90,24 +138,28 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             {viewer ? (
               <article className="panel auth-card">
                 <div className="section-head auth-head">
-                  <p className="eyebrow">Activation wizard</p>
-                  <h2 id="onboarding-form-heading">Choose your starting point</h2>
+                  <p className="eyebrow">
+                    {isWalkthroughProfile ? "Complete your starter profile" : "Activation wizard"}
+                  </p>
+                  <h2 id="onboarding-form-heading">
+                    {isWalkthroughProfile ? "Review the missing details" : "Choose your starting point"}
+                  </h2>
                   <p>
-                    Signed in as <strong>{viewer.displayName}</strong>. Select the action you are
-                    prepared to complete first.
+                    Signed in as <strong>{viewer.displayName}</strong>. Confirm the selections below,
+                    then save the profile to your account.
                   </p>
                 </div>
 
                 <form action={saveOnboardingAction} className="compact-form onboarding-form">
-                  <input name="return_to" type="hidden" value="/onboarding" />
+                  <input name="return_to" type="hidden" value={onboardingReturnTo} />
 
                   <fieldset className="field onboarding-fieldset">
                     <legend>Primary goal</legend>
                     <div className="onboarding-choice-grid">
-                      {actionFirstGoals.map((goal, index) => (
+                      {actionFirstGoals.map((goal) => (
                         <label className="onboarding-choice panel" key={goal.value}>
                           <input
-                            defaultChecked={index === 0}
+                            defaultChecked={goal.value === defaultGoal}
                             name="primary_goal"
                             type="radio"
                             value={goal.value}
@@ -124,10 +176,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <fieldset className="field onboarding-fieldset">
                     <legend>Your role</legend>
                     <div className="onboarding-inline-grid">
-                      {PARTICIPANT_KINDS.map((kind, index) => (
+                      {PARTICIPANT_KINDS.map((kind) => (
                         <label className="onboarding-radio" key={kind.value}>
                           <input
-                            defaultChecked={index === 0}
+                            defaultChecked={kind.value === defaultParticipantKind}
                             name="participant_kind"
                             type="radio"
                             value={kind.value}
@@ -141,10 +193,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <fieldset className="field onboarding-fieldset">
                     <legend>Cause areas</legend>
                     <div className="onboarding-inline-grid">
-                      {COHORT_CAUSES.map((cause, index) => (
+                      {COHORT_CAUSES.map((cause) => (
                         <label className="onboarding-radio" key={cause}>
                           <input
-                            defaultChecked={index < 2}
+                            defaultChecked={defaultCauseAreas.has(cause)}
                             name="cause_area"
                             type="checkbox"
                             value={cause}
@@ -158,10 +210,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <fieldset className="field onboarding-fieldset">
                     <legend>First action</legend>
                     <div className="onboarding-choice-grid">
-                      {actionFirstActions.map((action, index) => (
+                      {actionFirstActions.map((action) => (
                         <label className="onboarding-choice panel" key={action.value}>
                           <input
-                            defaultChecked={index === 0}
+                            defaultChecked={action.value === defaultFirstAction}
                             name="first_action"
                             type="radio"
                             value={action.value}
@@ -186,29 +238,37 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                   <label className="field">
                     <span>Referral source</span>
                     <input
+                      defaultValue={isWalkthroughProfile ? "Moral Trade walkthrough" : undefined}
                       name="referral_source"
                       placeholder="Optional: who invited you or where you heard about Moral Trade"
                     />
                   </label>
 
                   <button className="button button-primary" type="submit">
-                    Save and start
+                    {isWalkthroughProfile ? "Save completed profile" : "Save and start"}
                   </button>
                 </form>
               </article>
             ) : (
               <article className="panel auth-side-card auth-gate-card">
-                <p className="eyebrow">Account required</p>
-                <h2>Create an account to save onboarding.</h2>
+                <p className="eyebrow">
+                  {isWalkthroughProfile ? "Starter profile created" : "Account required"}
+                </p>
+                <h2 id="onboarding-form-heading">
+                  {isWalkthroughProfile
+                    ? "Create an account, then complete the missing details."
+                    : "Create an account to save onboarding."}
+                </h2>
                 <p>
-                  The wizard is persisted to your account so referral context, role, and next action
-                  stay connected.
+                  {isWalkthroughProfile
+                    ? "Your private draft already contains a cause area, offer type, and suggested first action. After account creation, confirm your role and add any optional collaborator or referral context."
+                    : "The wizard is persisted to your account so referral context, role, and next action stay connected."}
                 </p>
                 <div className="hero-actions">
-                  <Link className="button button-primary" href="/signup?returnTo=/onboarding">
-                    Create account
+                  <Link className="button button-primary" href={signupHref}>
+                    Create account and continue
                   </Link>
-                  <Link className="button button-secondary" href="/login?returnTo=/onboarding">
+                  <Link className="button button-secondary" href={loginHref}>
                     Sign in
                   </Link>
                 </div>
@@ -216,19 +276,33 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             )}
 
             <article className="panel auth-side-card">
-              <p className="eyebrow">Why this exists</p>
+              <p className="eyebrow">
+                {isWalkthroughProfile ? "Still missing" : "Why this exists"}
+              </p>
               <div className="clean-stack">
                 <div>
-                  <h3>It is persisted</h3>
-                  <p>Your selections are stored as an onboarding record, not just held in browser state.</p>
+                  <h3>{isWalkthroughProfile ? "Account identity" : "It is persisted"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Create or sign in to an account so the draft can become a durable profile."
+                      : "Your selections are stored as an onboarding record, not just held in browser state."}
+                  </p>
                 </div>
                 <div>
-                  <h3>It is attributable</h3>
-                  <p>Referral and partner context remain connected to the account when provided.</p>
+                  <h3>{isWalkthroughProfile ? "Role confirmation" : "It is attributable"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Confirm whether you are participating as an individual, collective, institution, or organizer."
+                      : "Referral and partner context remain connected to the account when provided."}
+                  </p>
                 </div>
                 <div>
-                  <h3>It points to action</h3>
-                  <p>Submitting routes you directly to the first action you selected.</p>
+                  <h3>{isWalkthroughProfile ? "Optional context" : "It points to action"}</h3>
+                  <p>
+                    {isWalkthroughProfile
+                      ? "Add a collaborator, community, or referral source only when it is useful."
+                      : "Submitting routes you directly to the first action you selected."}
+                  </p>
                 </div>
               </div>
             </article>
