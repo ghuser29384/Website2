@@ -454,7 +454,10 @@ export function ThresholdRadar() {
               onClick={() => setSelectedId("priya")}
               type="button"
             >
-              <span className={styles.selectedStatus}>Near threshold</span>
+              <span className={styles.selectedStatus}>
+                <strong>Near threshold</strong>
+                <small>1–3 campaigns</small>
+              </span>
               <strong className={styles.selectedTitle}>
                 <span>Help Priya take</span>
                 <span>the biosecurity role.</span>

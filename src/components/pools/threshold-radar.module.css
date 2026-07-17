@@ -734,7 +734,22 @@
 .selectedStatus {
   position: absolute;
   top: 35px;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
   color: var(--green);
+}
+
+.selectedStatus strong {
+  font-weight: 500;
+}
+
+.selectedStatus small {
+  color: #504e4a;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .selectedTitle {
