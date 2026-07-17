@@ -206,13 +206,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["technical", "spec", "validator", "protocol", "schema", "factor codes", "state machine"],
   },
   {
-    href: "/research",
-    label: "Research layer",
-    summary: "Read the theory and uncertainty that support the marketplace and coordination mechanisms.",
-    kind: "learn",
-    keywords: ["research", "theory", "moral trade", "moral public goods", "uncertainty", "papers", "governance"],
-  },
-  {
     href: "/sources",
     label: "Sources",
     summary: "Primary references and source-specific limits behind product claims.",
