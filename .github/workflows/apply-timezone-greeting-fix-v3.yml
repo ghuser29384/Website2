@@ -1,0 +1,155 @@
+name: Apply verified timezone greeting fix
+
+on:
+  pull_request:
+    branches:
+      - feat/returning-homepage-match-deck
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the pull request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply the timezone source patch
+        run: git apply scripts/timezone-greeting.patch
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint changed files
+        run: >-
+          npx eslint
+          src/components/home/home-page.tsx
+          src/components/home/local-date-greeting.tsx
+          tests/returning-homepage.spec.ts
+          tests/returning-homepage-timezone.spec.ts
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Run returning-homepage regressions
+        run: >-
+          npx playwright test
+          tests/returning-homepage.spec.ts
+          tests/returning-homepage-timezone.spec.ts
+          --reporter=line
+
+      - name: Create screenshot QA test
+        run: |
+          cat > tests/timezone-greeting-qa.tmp.spec.ts <<'SPEC'
+          import { expect, test } from "@playwright/test";
+
+          const qaDirectory = process.env.QA_SCREENSHOT_DIR ?? "/tmp/timezone-greeting-qa";
+          const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
+
+          function monitorRuntimeErrors(page: Parameters<typeof test>[0] extends never ? never : any) {
+            const errors: string[] = [];
+            page.on("pageerror", (error: Error) => errors.push(error.message));
+            page.on("console", (message: { type(): string; text(): string }) => {
+              const text = message.text();
+              if (message.type() === "error" && !text.startsWith("Failed to load resource:")) {
+                errors.push(text);
+              }
+            });
+            return errors;
+          }
+
+          test.describe("Los Angeles desktop timezone QA", () => {
+            test.use({ timezoneId: "America/Los_Angeles", viewport: { width: 1487, height: 1058 } });
+
+            test("renders the previous local date and evening greeting", async ({ page }) => {
+              const errors = monitorRuntimeErrors(page);
+              await page.clock.setFixedTime(fixedInstant);
+              await page.goto("/", { waitUntil: "domcontentloaded" });
+              await expect(page).toHaveURL(/\/$/);
+              await expect(page).toHaveTitle(/Moral Trade/i);
+              await expect(
+                page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
+              ).toBeVisible();
+              const greeting = page.getByTestId("local-date-greeting");
+              await expect(greeting).toHaveAttribute("data-ready", "true");
+              await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-16");
+              await expect(greeting.locator("time")).toHaveText("Thursday, July 16, 2026");
+              await expect(greeting.locator("span")).toHaveText("Good evening, Alex.");
+              await expect(page.locator("nextjs-portal")).toHaveCount(0);
+              expect(errors).toEqual([]);
+              await page.screenshot({
+                path: `${qaDirectory}/los-angeles-desktop.png`,
+                fullPage: false,
+              });
+            });
+          });
+
+          test.describe("Tokyo mobile timezone QA", () => {
+            test.use({ timezoneId: "Asia/Tokyo", viewport: { width: 390, height: 844 } });
+
+            test("renders the next local date and morning greeting", async ({ page }) => {
+              const errors = monitorRuntimeErrors(page);
+              await page.clock.setFixedTime(fixedInstant);
+              await page.goto("/", { waitUntil: "domcontentloaded" });
+              await expect(page).toHaveURL(/\/$/);
+              await expect(page).toHaveTitle(/Moral Trade/i);
+              await expect(
+                page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
+              ).toBeVisible();
+              const greeting = page.getByTestId("local-date-greeting");
+              await expect(greeting).toHaveAttribute("data-ready", "true");
+              await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-17");
+              await expect(greeting.locator("time")).toHaveText("Friday, July 17, 2026");
+              await expect(greeting.locator("span")).toHaveText("Good morning, Alex.");
+              await expect(page.locator("nextjs-portal")).toHaveCount(0);
+              expect(errors).toEqual([]);
+              await page.screenshot({
+                path: `${qaDirectory}/tokyo-mobile.png`,
+                fullPage: false,
+              });
+            });
+          });
+          SPEC
+
+      - name: Capture desktop and mobile QA screenshots
+        env:
+          QA_SCREENSHOT_DIR: /tmp/timezone-greeting-qa
+        run: |
+          mkdir -p "$QA_SCREENSHOT_DIR"
+          npx playwright test tests/timezone-greeting-qa.tmp.spec.ts --reporter=line
+          rm tests/timezone-greeting-qa.tmp.spec.ts
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: timezone-greeting-qa-v3
+          path: /tmp/timezone-greeting-qa
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Commit the verified fix
+        run: |
+          rm -f tests/timezone-greeting-qa.tmp.spec.ts
+          rm scripts/timezone-greeting.patch
+          rm .github/workflows/apply-timezone-greeting-fix-v3.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix returning homepage timezone greeting"
+          git push origin HEAD:${{ github.head_ref }}
