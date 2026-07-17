@@ -16,7 +16,9 @@
   <script>
     (async function loadMoralTrade() {
       try {
-        const firstVisit = new URLSearchParams(window.location.search).get("first_visit") === "1";
+        const firstVisit =
+          window.location.pathname === "/walkthrough" &&
+          new URLSearchParams(window.location.search).get("first_visit") === "1";
         const response = await fetch("/moral-trade-interactive-walkthroughs.html", {
           cache: "no-store",
           credentials: "same-origin"
