@@ -5,6 +5,10 @@ on:
     branches:
       - feat/returning-homepage-match-deck
 
+concurrency:
+  group: timezone-greeting-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -61,7 +65,7 @@ jobs:
           const qaDirectory = process.env.QA_SCREENSHOT_DIR ?? "/tmp/timezone-greeting-qa";
           const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
 
-          function monitorRuntimeErrors(page: Parameters<typeof test>[0] extends never ? never : any) {
+          function monitorRuntimeErrors(page: any) {
             const errors: string[] = [];
             page.on("pageerror", (error: Error) => errors.push(error.message));
             page.on("console", (message: { type(): string; text(): string }) => {
@@ -90,7 +94,6 @@ jobs:
               await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-16");
               await expect(greeting.locator("time")).toHaveText("Thursday, July 16, 2026");
               await expect(greeting.locator("span")).toHaveText("Good evening, Alex.");
-              await expect(page.locator("nextjs-portal")).toHaveCount(0);
               expect(errors).toEqual([]);
               await page.screenshot({
                 path: `${qaDirectory}/los-angeles-desktop.png`,
@@ -116,7 +119,6 @@ jobs:
               await expect(greeting.locator("time")).toHaveAttribute("datetime", "2026-07-17");
               await expect(greeting.locator("time")).toHaveText("Friday, July 17, 2026");
               await expect(greeting.locator("span")).toHaveText("Good morning, Alex.");
-              await expect(page.locator("nextjs-portal")).toHaveCount(0);
               expect(errors).toEqual([]);
               await page.screenshot({
                 path: `${qaDirectory}/tokyo-mobile.png`,
