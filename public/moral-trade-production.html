@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Moral Trade — discover reciprocal commitments and shared gains through an interactive walkthrough.">
+  <title>Moral Trade</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #11120f; color: #f2eee6; font-family: system-ui, sans-serif; }
+    main { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    p { max-width: 40rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main><p id="loading">Loading Moral Trade…</p></main>
+  <script>
+    (async function loadMoralTrade() {
+      try {
+        const response = await fetch("/moral-trade-interactive-walkthroughs.html", {
+          cache: "no-store",
+          credentials: "same-origin"
+        });
+        if (!response.ok) throw new Error(`Walkthrough source returned ${response.status}`);
+
+        let html = await response.text();
+        const oldConcept = '{ id: "two-moves", short: "Third option", title: "The Third Option", caption: "A cinematic two-person exchange" },';
+        const newConcept = '{ id: "two-moves", short: "Third option", title: "Welcome to Moral Trade", caption: "A cinematic two-person exchange" },';
+        if (!html.includes(oldConcept)) throw new Error("Walkthrough concept marker was not found");
+
+        html = html.replace(oldConcept, newConcept);
+        html = html.replace(
+          "</head>",
+          '<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"></head>'
+        );
+        html = html.replace(
+          "</body>",
+          '<script src="/walkthrough-profile-enhancement.js"><\/script></body>'
+        );
+
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (error) {
+        const loading = document.getElementById("loading");
+        if (loading) loading.textContent = "Unable to load Moral Trade. Please refresh.";
+        console.error(error);
+      }
+    })();
+  </script>
+  <noscript><main><p>JavaScript is required to use Moral Trade.</p></main></noscript>
+</body>
+</html>
