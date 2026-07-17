@@ -13,6 +13,56 @@ interface HomePageProps {
   isAuthenticated: boolean;
 }
 
+type ProcessIconName = "baseline" | "offer" | "approval" | "receipt";
+
+function ProcessIcon({ name }: { name: ProcessIconName }) {
+  if (name === "baseline") {
+    return (
+      <svg viewBox="0 0 72 72" focusable="false">
+        <circle cx="14" cy="36" r="3.5" />
+        <path d="M18 36h11" />
+        <path d="M29 36 47 20h11" />
+        <path d="M29 36 47 52h11" />
+        <path d="m54 16 4 4-4 4" />
+        <path d="m54 48 4 4-4 4" />
+      </svg>
+    );
+  }
+
+  if (name === "offer") {
+    return (
+      <svg viewBox="0 0 72 72" focusable="false">
+        <rect x="13" y="15" width="46" height="42" rx="3" />
+        <path d="M22 28h28" />
+        <path d="M22 37h20" />
+        <path d="M22 46h12" />
+        <path d="M48 43h6v8" />
+      </svg>
+    );
+  }
+
+  if (name === "approval") {
+    return (
+      <svg viewBox="0 0 72 72" focusable="false">
+        <circle cx="27" cy="36" r="17" />
+        <circle cx="45" cy="36" r="17" />
+        <path d="m19 36 5 5 9-11" />
+        <path d="m39 36 5 5 9-11" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 72 72" focusable="false">
+      <path d="M21 10h25l8 8v44H21z" />
+      <path d="M46 10v9h8" />
+      <path d="M29 29h17" />
+      <path d="M29 38h17" />
+      <path d="m29 50 4 4 9-10" />
+    </svg>
+  );
+}
+
 const productModes = [
   {
     index: "01",
@@ -96,23 +146,27 @@ const actionRoutes = [
 const processSteps = [
   {
     number: "01",
-    title: "Name the no-deal default.",
-    description: "Record what each side would otherwise do before a proposal creates new leverage.",
+    title: "No deal",
+    description: "What happens otherwise",
+    icon: "baseline",
   },
   {
     number: "02",
-    title: "Set bounded terms.",
-    description: "State the exact action, maximum exposure, deadline, evidence, settlement, and exit rule.",
+    title: "Clear offer",
+    description: "Action · cap · deadline",
+    icon: "offer",
   },
   {
     number: "03",
-    title: "Match only on mutual gain.",
-    description: "Each side judges the proposal by their own priorities.",
+    title: "Both say yes",
+    description: "Each prefers the deal",
+    icon: "approval",
   },
   {
     number: "04",
-    title: "Authorize, evidence, resolve.",
-    description: "Move through explicit states and produce a Deal Receipt rather than a vague success claim.",
+    title: "Deal receipt",
+    description: "Evidence · settlement",
+    icon: "receipt",
   },
 ] as const;
 
@@ -251,22 +305,28 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         </section>
 
         <section className="mt-product-section" aria-labelledby="process-heading">
-          <div className="mt-product-section-head">
+          <div className="mt-product-section-head mt-process-intro">
             <div>
               <p className="mt-product-kicker">How it works</p>
-              <h2 id="process-heading">Agree on the deal, not the values.</h2>
+              <h2 id="process-heading">Trade actions. Keep your values.</h2>
             </div>
-            <p>
-              The interface uses plain actions first. Mechanism detail, evidence scope, and limits
-              remain available before authorization and settlement.
-            </p>
+            <p>Compare one clear offer with what each side would do anyway.</p>
+            <Link className="mt-process-cta" href={createHref}>
+              Start a trade
+              <span aria-hidden="true">↗</span>
+            </Link>
           </div>
-          <ol className="mt-how-grid">
+          <ol className="mt-how-grid" aria-label="Moral Trade in four steps">
             {processSteps.map((step) => (
               <li className="mt-how-step" key={step.number}>
-                <span>{step.number}</span>
-                <h3>{step.title}</h3>
-                <p>{step.description}</p>
+                <span className="mt-process-step-number">{step.number}</span>
+                <div className="mt-process-icon" aria-hidden="true">
+                  <ProcessIcon name={step.icon} />
+                </div>
+                <div className="mt-process-step-copy">
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                </div>
               </li>
             ))}
           </ol>

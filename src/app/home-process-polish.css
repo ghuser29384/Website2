@@ -1,8 +1,8 @@
-/* Homepage process section — compact, deliberate, and legible. */
+/* Homepage process section — an icon-led four-step flow. */
 .marketplace-product-shell .mt-product-section:has(#process-heading) {
   display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(480px, 1.18fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(340px, 0.82fr) minmax(0, 1.18fr);
+  min-height: 34rem;
   gap: 0;
   overflow: hidden;
   padding: 0;
@@ -13,14 +13,13 @@
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-section-head {
-  grid-column: 1;
-  grid-row: 1;
   display: grid;
   grid-template-columns: 1fr;
-  align-content: center;
+  grid-template-rows: auto 1fr auto;
+  align-content: stretch;
   gap: 0;
   min-width: 0;
-  padding: clamp(2.75rem, 5vw, 5.25rem);
+  padding: clamp(2.5rem, 4vw, 4rem);
   background: var(--ink);
   color: #ffffff;
 }
@@ -40,30 +39,66 @@
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-section-head h2 {
-  max-width: 10ch;
+  max-width: 10.5ch;
   margin-top: 1.35rem;
   color: #ffffff;
-  font-size: clamp(3.2rem, 5.3vw, 5.75rem);
-  line-height: 0.91;
+  font-size: clamp(3.15rem, 5vw, 5.25rem);
+  line-height: 0.93;
   text-wrap: balance;
 }
 
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-product-section-head > p {
-  max-width: 36ch;
-  margin-top: 2rem;
+  max-width: 31ch;
+  align-self: center;
+  margin: 2rem 0;
   color: rgba(255, 255, 255, 0.7);
   font-size: 1rem;
-  line-height: 1.62;
+  line-height: 1.55;
   text-wrap: pretty;
 }
 
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-cta {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  align-self: end;
+  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  padding-top: 1.15rem;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-cta span {
+  font-size: 1.15rem;
+  transition: transform 150ms ease;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-cta:hover span {
+  transform: translate(0.2rem, -0.2rem);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-cta:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 0.35rem;
+}
+
 .marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-grid {
-  grid-column: 2;
-  grid-row: 1 / 3;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   border: 0;
@@ -75,176 +110,169 @@
 .marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step {
   position: relative;
   display: grid;
-  grid-template-columns: 3.2rem minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: 1.4rem;
-  row-gap: 0.38rem;
-  min-height: 9.8rem;
-  align-content: center;
-  padding: 1.55rem clamp(1.5rem, 3vw, 2.5rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: center;
+  justify-items: center;
+  gap: 1.35rem;
+  padding: 2rem clamp(1rem, 1.8vw, 1.65rem);
   border: 0;
-  border-bottom: 1px solid var(--ink);
+  border-left: 1px solid var(--line-strong);
   background: var(--surface);
+  text-align: center;
 }
 
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
-  .mt-how-step:nth-child(even) {
-  background: rgba(243, 245, 240, 0.68);
+  .mt-how-step:first-child {
+  border-left: 0;
 }
 
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-how-step:last-child {
-  border-bottom: 0;
   background: var(--accent-soft);
-}
-
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  .mt-how-step > span {
-  position: relative;
-  z-index: 1;
-  grid-column: 1;
-  grid-row: 1 / 3;
-  display: grid;
-  width: 2.7rem;
-  height: 2.7rem;
-  place-items: center;
-  align-self: center;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--accent-deep);
-  font-size: 0.64rem;
-  letter-spacing: 0.06em;
-}
-
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  .mt-how-step:last-child > span {
-  border-color: var(--ink);
-  background: var(--signal);
-  color: var(--signal-ink);
 }
 
 .marketplace-product-shell
   .mt-product-section:has(#process-heading)
   .mt-how-step:not(:last-child)::after {
   position: absolute;
-  bottom: -1px;
-  left: calc(clamp(1.5rem, 3vw, 2.5rem) + 1.35rem);
-  width: 1px;
-  height: calc(50% - 1.35rem);
-  background: var(--line-strong);
-  content: "";
+  top: 50%;
+  right: -0.72rem;
+  z-index: 3;
+  display: grid;
+  width: 1.4rem;
+  height: 1.4rem;
+  place-items: center;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  content: "→";
+  font-size: 0.78rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-step-number {
+  display: block;
+  width: auto;
+  height: auto;
+  justify-self: start;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child
+  .mt-process-step-number {
+  border: 0;
+  background: transparent;
+  color: var(--signal-ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-icon {
+  display: grid;
+  width: clamp(4.6rem, 6vw, 5.75rem);
+  aspect-ratio: 1;
+  place-items: center;
+  align-self: center;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-how-step:last-child
+  .mt-process-icon {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-icon svg {
+  width: 68%;
+  height: 68%;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.marketplace-product-shell
+  .mt-product-section:has(#process-heading)
+  .mt-process-step-copy {
+  display: grid;
+  gap: 0.45rem;
+  align-self: end;
+  justify-items: center;
 }
 
 .marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step h3 {
-  grid-column: 2;
-  grid-row: 1;
   margin: 0;
-  font-size: clamp(1.65rem, 2.15vw, 2.15rem);
+  font-size: clamp(1.4rem, 1.7vw, 1.85rem);
   letter-spacing: -0.035em;
   line-height: 1;
   text-wrap: balance;
 }
 
 .marketplace-product-shell .mt-product-section:has(#process-heading) .mt-how-step p {
-  grid-column: 2;
-  grid-row: 2;
-  max-width: 54ch;
+  max-width: 18ch;
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.9rem;
-  line-height: 1.55;
-  text-wrap: pretty;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  text-wrap: balance;
 }
 
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  > .button {
-  grid-column: 1;
-  grid-row: 2;
-  display: flex;
-  width: 100%;
-  min-height: 5.6rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 0;
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 0;
-  padding: 1.3rem clamp(2.75rem, 5vw, 5.25rem);
-  background: var(--ink);
-  color: #ffffff;
-  font-size: 0.9rem;
-  text-align: left;
-  transform: none;
-}
-
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  > .button::after {
-  width: 0.65rem;
-  height: 0.65rem;
-  flex: 0 0 auto;
-  border-top: 2px solid currentColor;
-  border-right: 2px solid currentColor;
-  content: "";
-  transform: rotate(45deg);
-}
-
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  > .button:hover {
-  background: var(--accent-deep);
-  color: #ffffff;
-  transform: none;
-}
-
-.marketplace-product-shell
-  .mt-product-section:has(#process-heading)
-  > .button:focus-visible {
-  position: relative;
-  z-index: 2;
-  outline: 3px solid var(--signal);
-  outline-offset: -3px;
-}
-
-@media (max-width: 1080px) {
+@media (max-width: 1120px) {
   .marketplace-product-shell .mt-product-section:has(#process-heading) {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    min-height: 0;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-product-section-head {
-    grid-column: 1;
-    grid-row: 1;
     min-height: 28rem;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
-    .mt-how-grid {
-    grid-column: 1;
-    grid-row: 2;
-    border-top: 1px solid var(--ink);
-    border-left: 0;
+    .mt-product-section-head h2 {
+    max-width: 10ch;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
-    > .button {
-    grid-column: 1;
-    grid-row: 3;
+    .mt-how-grid {
+    min-height: 24rem;
+    border-top: 1px solid var(--ink);
+    border-left: 0;
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-product-section-head {
@@ -255,39 +283,73 @@
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-product-section-head h2 {
-    max-width: 11ch;
-    font-size: clamp(2.9rem, 14vw, 4.25rem);
+    max-width: 9ch;
+    font-size: clamp(2.8rem, 13.5vw, 4.1rem);
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-product-section-head > p {
-    margin-top: 1.5rem;
+    margin: 1.5rem 0;
     font-size: 0.9rem;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
-    .mt-how-step {
-    grid-template-columns: 2.75rem minmax(0, 1fr);
-    column-gap: 1rem;
-    min-height: auto;
-    padding: 1.35rem 1.25rem;
+    .mt-how-grid {
+    grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
-    .mt-how-step > span {
-    width: 2.35rem;
-    height: 2.35rem;
-    font-size: 0.58rem;
+    .mt-how-step {
+    grid-template-columns: 2.4rem 4rem minmax(0, 1fr);
+    grid-template-rows: 1fr;
+    gap: 0.85rem;
+    min-height: 7rem;
+    padding: 1.15rem 1.2rem;
+    border-left: 0;
+    border-bottom: 1px solid var(--line-strong);
+    text-align: left;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-how-step:last-child {
+    border-bottom: 0;
   }
 
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-how-step:not(:last-child)::after {
-    left: calc(1.25rem + 1.175rem);
-    height: calc(50% - 1.175rem);
+    top: auto;
+    right: calc(50% - 0.7rem);
+    bottom: -0.7rem;
+    content: "↓";
+    transform: none;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-process-step-number {
+    grid-column: 1;
+    justify-self: center;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-process-icon {
+    grid-column: 2;
+    width: 3.65rem;
+  }
+
+  .marketplace-product-shell
+    .mt-product-section:has(#process-heading)
+    .mt-process-step-copy {
+    grid-column: 3;
+    align-self: center;
+    justify-items: start;
   }
 
   .marketplace-product-shell
@@ -299,22 +361,16 @@
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
     .mt-how-step p {
-    font-size: 0.82rem;
-  }
-
-  .marketplace-product-shell
-    .mt-product-section:has(#process-heading)
-    > .button {
-    min-height: 4.9rem;
-    padding: 1.2rem 1.4rem;
-    font-size: 0.82rem;
+    max-width: none;
+    font-size: 0.75rem;
+    text-wrap: pretty;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .marketplace-product-shell
     .mt-product-section:has(#process-heading)
-    > .button {
+    .mt-process-cta span {
     transition: none;
   }
 }
