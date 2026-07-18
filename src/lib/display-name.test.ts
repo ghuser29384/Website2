@@ -9,7 +9,7 @@ test("display name parts use the first name and outer initials", () => {
     initials: "AJ",
   });
 
-  assert.deepEqual(getDisplayNameParts("Alex James Johnson"), {
+  assert.deepEqual(getDisplayNameParts("Alex Morgan Johnson"), {
     firstName: "Alex",
     initials: "AJ",
   });
