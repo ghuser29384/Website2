@@ -16,8 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out latest source
+      - name: Check out latest main source
         uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Upload latest source
         uses: actions/upload-artifact@v4
         with:
