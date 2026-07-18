@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm test && npm run lint && npm run build",
+  "buildCommand": "node --test --import tsx src/lib/trade-reminders.test.ts src/lib/trade-reminder-worker.test.ts src/lib/trade-reminder-email-safety.test.ts && npm run lint && npm run build",
   "crons": [
     {
       "path": "/api/jobs/saved-searches",
