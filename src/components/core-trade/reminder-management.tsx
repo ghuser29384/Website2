@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   rotateReminderCalendarFeedAction,
@@ -30,6 +30,8 @@ interface ReminderManagementProps {
   initialMilestones: ReminderMilestone[];
   initialCalendarFeed: ReminderCalendarFeed | null;
   initialView?: ReminderView;
+  initialNow: string;
+  siteUrl: string;
 }
 
 const VIEWS: Array<{
@@ -213,7 +215,10 @@ export function ReminderManagement({
   initialMilestones,
   initialCalendarFeed,
   initialView = "schedule",
+  initialNow,
+  siteUrl,
 }: ReminderManagementProps) {
+  const stableNow = Number.isNaN(Date.parse(initialNow)) ? 0 : Date.parse(initialNow);
   const [view, setView] = useState<ReminderView>(initialView);
   const [preferences, setPreferences] = useState(initialPreferences);
   const [rules, setRules] = useState(initialRules.map(withComputedTime));
@@ -225,14 +230,6 @@ export function ReminderManagement({
   const [customLabel, setCustomLabel] = useState("");
   const [customDueAt, setCustomDueAt] = useState("");
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (hasSavedPreferences || initialPreferences.timezone !== "UTC") return;
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (timezone && timezone !== "UTC") {
-      setPreferences((current) => ({ ...current, timezone }));
-    }
-  }, [hasSavedPreferences, initialPreferences.timezone]);
 
   const allMilestones = useMemo(() => {
     const byKey = new Map(milestones.map((milestone) => [milestone.key, milestone]));
@@ -260,10 +257,13 @@ export function ReminderManagement({
     [rules],
   );
 
-  const nextRule = useMemo(() => {
-    const now = Date.now();
-    return activeRules.find((rule) => Date.parse(rule.remindAt) >= now) ?? activeRules[0] ?? null;
-  }, [activeRules]);
+  const nextRule = useMemo(
+    () =>
+      activeRules.find((rule) => Date.parse(rule.remindAt) >= stableNow) ??
+      activeRules[0] ??
+      null,
+    [activeRules, stableNow],
+  );
 
   const selectedRule =
     activeRules.find((rule) => rule.id === selectedRuleId) ?? activeRules[0] ?? null;
@@ -320,13 +320,13 @@ export function ReminderManagement({
     showStatus("Reminder added. Save changes to activate it.");
   };
 
-  const changeMilestoneDueAt = (milestoneKey: string, inputValue: string) => {
+  const changeCustomMilestoneDueAt = (milestoneKey: string, inputValue: string) => {
     const dueAt = localInputToIso(inputValue);
     if (!dueAt) return;
+    const milestone = allMilestones.find((item) => item.key === milestoneKey);
+    if (!milestone || milestone.source !== "custom") return;
     setMilestones((current) =>
-      current.map((milestone) =>
-        milestone.key === milestoneKey ? { ...milestone, dueAt } : milestone,
-      ),
+      current.map((item) => (item.key === milestoneKey ? { ...item, dueAt } : item)),
     );
     setRules((current) =>
       current.map((rule) =>
@@ -429,11 +429,13 @@ export function ReminderManagement({
     });
   };
 
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const feedUrl =
-    calendarFeed?.feedToken && origin
-      ? `${origin}/api/calendar/reminders/${calendarFeed.feedToken}.ics`
-      : "";
+  const normalizedSiteUrl = siteUrl.endsWith("/") ? siteUrl : `${siteUrl}/`;
+  const feedUrl = calendarFeed?.feedToken
+    ? new URL(
+        `api/calendar/reminders/${encodeURIComponent(calendarFeed.feedToken)}.ics`,
+        normalizedSiteUrl,
+      ).toString()
+    : "";
   const webcalUrl = feedUrl ? feedUrl.replace(/^https?:/, "webcal:") : "";
 
   const copyFeedUrl = async () => {
@@ -445,6 +447,16 @@ export function ReminderManagement({
       showStatus("Could not copy automatically. Select and copy the URL below.", "error");
     }
   };
+
+  const calendarAnchor =
+    activeRules.find((rule) => Date.parse(rule.remindAt) >= stableNow)?.remindAt ?? initialNow;
+  const calendarStart = new Date(calendarAnchor);
+  calendarStart.setHours(0, 0, 0, 0);
+  const calendarDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
 
   return (
     <div className={styles.workspace}>
@@ -501,825 +513,721 @@ export function ReminderManagement({
       ) : null}
 
       {view === "schedule" ? (
-        <ScheduleLayer
-          activeRules={activeRules}
-          addCustomMilestone={addCustomMilestone}
-          addRule={addRule}
-          changeMilestoneDueAt={changeMilestoneDueAt}
-          changeOffset={changeOffset}
-          customDueAt={customDueAt}
-          customLabel={customLabel}
-          isPending={isPending}
-          milestones={allMilestones}
-          nextRule={nextRule}
-          preferences={preferences}
-          removeRule={removeRule}
-          rules={rules}
-          save={save}
-          setCustomDueAt={setCustomDueAt}
-          setCustomLabel={setCustomLabel}
-          updatePreference={updatePreference}
-          updateRule={updateRule}
-        />
+        <section aria-labelledby="schedule-layer-heading" className={styles.layerSurface}>
+          <div className={styles.layerHeading}>
+            <div>
+              <p className={styles.kicker}>01 · Scoped schedule</p>
+              <h2 id="schedule-layer-heading">Set the exact reminder plan.</h2>
+              <p>Agreement dates stay canonical; the reminder time and channels are personal.</p>
+            </div>
+            <dl className={styles.metrics}>
+              <div>
+                <dt>Milestones</dt>
+                <dd>{allMilestones.length}</dd>
+              </div>
+              <div>
+                <dt>Active rules</dt>
+                <dd>{activeRules.length}</dd>
+              </div>
+              <div>
+                <dt>Next</dt>
+                <dd>{nextRule ? formatDate(nextRule.remindAt, preferences.timezone) : "None"}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className={styles.scheduleGrid}>
+            <div className={styles.milestoneStack}>
+              {allMilestones.length ? (
+                allMilestones.map((milestone) => {
+                  const milestoneRules = rules
+                    .filter((rule) => rule.milestoneKey === milestone.key)
+                    .sort((left, right) => left.offsetMinutes - right.offsetMinutes);
+                  return (
+                    <article className={styles.milestoneCard} key={milestone.key}>
+                      <div className={styles.milestoneHeader}>
+                        <div>
+                          <span className={styles.sourceLabel}>
+                            {milestone.source === "agreement"
+                              ? "Deal Receipt milestone"
+                              : "Personal checkpoint"}
+                          </span>
+                          <h3>{milestone.label}</h3>
+                        </div>
+                        {milestone.source === "agreement" ? (
+                          <div className={styles.dueField}>
+                            <span>Deal Receipt due time</span>
+                            <strong>{formatDate(milestone.dueAt, preferences.timezone)}</strong>
+                          </div>
+                        ) : (
+                          <label className={styles.dueField}>
+                            <span>Personal due time</span>
+                            <input
+                              onChange={(event) =>
+                                changeCustomMilestoneDueAt(
+                                  milestone.key,
+                                  event.currentTarget.value,
+                                )
+                              }
+                              type="datetime-local"
+                              value={toLocalInputValue(milestone.dueAt)}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      <div className={styles.reminderRows}>
+                        {milestoneRules.length ? (
+                          milestoneRules.map((rule) => (
+                            <div className={styles.reminderRow} key={rule.id}>
+                              <label className={styles.offsetField}>
+                                <span>When</span>
+                                <select
+                                  onChange={(event) =>
+                                    changeOffset(rule, Number(event.currentTarget.value))
+                                  }
+                                  value={rule.offsetMinutes}
+                                >
+                                  {OFFSET_OPTIONS.map((option) => (
+                                    <option key={option.minutes} value={option.minutes}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                  {!OFFSET_OPTIONS.some(
+                                    (option) => option.minutes === rule.offsetMinutes,
+                                  ) ? (
+                                    <option value={rule.offsetMinutes}>
+                                      {offsetLabel(rule.offsetMinutes)}
+                                    </option>
+                                  ) : null}
+                                </select>
+                                <small>
+                                  {formatDate(reminderTime(rule), preferences.timezone)}
+                                </small>
+                              </label>
+
+                              <div aria-label="Delivery channels" className={styles.channelControls}>
+                                <label>
+                                  <input
+                                    checked={rule.inAppEnabled}
+                                    onChange={(event) =>
+                                      updateRule(rule.id, {
+                                        inAppEnabled: event.currentTarget.checked,
+                                      })
+                                    }
+                                    type="checkbox"
+                                  />
+                                  In-app
+                                </label>
+                                <label>
+                                  <input
+                                    checked={rule.emailEnabled}
+                                    onChange={(event) =>
+                                      updateRule(rule.id, {
+                                        emailEnabled: event.currentTarget.checked,
+                                      })
+                                    }
+                                    type="checkbox"
+                                  />
+                                  Email
+                                </label>
+                                <label>
+                                  <input
+                                    checked={rule.calendarEnabled}
+                                    onChange={(event) =>
+                                      updateRule(rule.id, {
+                                        calendarEnabled: event.currentTarget.checked,
+                                      })
+                                    }
+                                    type="checkbox"
+                                  />
+                                  Calendar
+                                </label>
+                              </div>
+
+                              <label className={styles.switchLabel}>
+                                <input
+                                  checked={rule.enabled}
+                                  onChange={(event) =>
+                                    updateRule(rule.id, { enabled: event.currentTarget.checked })
+                                  }
+                                  type="checkbox"
+                                />
+                                <span aria-hidden="true" className={styles.switchTrack} />
+                                <span className={styles.srOnly}>Enable reminder</span>
+                              </label>
+
+                              <button
+                                aria-label={`Remove ${offsetLabel(rule.offsetMinutes)} reminder`}
+                                className={styles.iconButton}
+                                onClick={() => removeRule(rule.id)}
+                                type="button"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className={styles.emptyInline}>
+                            <strong>No reminders for this milestone.</strong>
+                            <span>
+                              The commitment date remains visible but no notification will be sent.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        className={styles.inlineAction}
+                        onClick={() => addRule(milestone)}
+                        type="button"
+                      >
+                        + Add reminder
+                      </button>
+                    </article>
+                  );
+                })
+              ) : (
+                <div className={styles.emptyState}>
+                  <strong>No dated milestones are recorded.</strong>
+                  <p>
+                    Add an evidence due date through an agreement amendment, or create a personal
+                    checkpoint below. Personal checkpoints do not modify the Deal Receipt.
+                  </p>
+                </div>
+              )}
+
+              <article className={styles.customCheckpoint}>
+                <div>
+                  <span className={styles.sourceLabel}>Personal checkpoint</span>
+                  <h3>Add a date that is not part of the agreement.</h3>
+                </div>
+                <label>
+                  <span>Label</span>
+                  <input
+                    maxLength={180}
+                    onChange={(event) => setCustomLabel(event.currentTarget.value)}
+                    placeholder="Prepare evidence package"
+                    value={customLabel}
+                  />
+                </label>
+                <label>
+                  <span>Due time</span>
+                  <input
+                    onChange={(event) => setCustomDueAt(event.currentTarget.value)}
+                    type="datetime-local"
+                    value={customDueAt}
+                  />
+                </label>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={addCustomMilestone}
+                  type="button"
+                >
+                  Add checkpoint
+                </button>
+              </article>
+            </div>
+
+            <aside className={styles.settingsPanel}>
+              <div className={styles.panelHeading}>
+                <div>
+                  <span className={styles.sourceLabel}>Delivery settings</span>
+                  <h3>Personal defaults</h3>
+                </div>
+                <label className={styles.switchLabel}>
+                  <input
+                    checked={!preferences.paused}
+                    onChange={(event) =>
+                      updatePreference("paused", !event.currentTarget.checked)
+                    }
+                    type="checkbox"
+                  />
+                  <span aria-hidden="true" className={styles.switchTrack} />
+                  <span>{preferences.paused ? "Paused" : "Active"}</span>
+                </label>
+              </div>
+
+              <div className={styles.settingRow}>
+                <span>
+                  <strong>In-app</strong>
+                  <small>Delivered to Moral Trade notifications.</small>
+                </span>
+                <label className={styles.switchLabel}>
+                  <input
+                    checked={preferences.inAppEnabled}
+                    onChange={(event) =>
+                      updatePreference("inAppEnabled", event.currentTarget.checked)
+                    }
+                    type="checkbox"
+                  />
+                  <span aria-hidden="true" className={styles.switchTrack} />
+                  <span className={styles.srOnly}>Enable in-app delivery</span>
+                </label>
+              </div>
+
+              <div className={styles.settingRow}>
+                <span>
+                  <strong>Email</strong>
+                  <small>Queued without private terms or evidence.</small>
+                </span>
+                <label className={styles.switchLabel}>
+                  <input
+                    checked={preferences.emailEnabled}
+                    onChange={(event) =>
+                      updatePreference("emailEnabled", event.currentTarget.checked)
+                    }
+                    type="checkbox"
+                  />
+                  <span aria-hidden="true" className={styles.switchTrack} />
+                  <span className={styles.srOnly}>Enable email delivery</span>
+                </label>
+              </div>
+
+              <div className={styles.settingBlock}>
+                <label className={styles.checkboxLine}>
+                  <input
+                    checked={preferences.quietHoursEnabled}
+                    onChange={(event) =>
+                      updatePreference("quietHoursEnabled", event.currentTarget.checked)
+                    }
+                    type="checkbox"
+                  />
+                  Respect quiet hours
+                </label>
+                <div className={styles.timeGrid}>
+                  <label>
+                    <span>From</span>
+                    <input
+                      disabled={!preferences.quietHoursEnabled}
+                      onChange={(event) =>
+                        updatePreference("quietHoursStart", event.currentTarget.value)
+                      }
+                      type="time"
+                      value={preferences.quietHoursStart}
+                    />
+                  </label>
+                  <label>
+                    <span>Until</span>
+                    <input
+                      disabled={!preferences.quietHoursEnabled}
+                      onChange={(event) =>
+                        updatePreference("quietHoursEnd", event.currentTarget.value)
+                      }
+                      type="time"
+                      value={preferences.quietHoursEnd}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <label className={styles.settingBlock}>
+                <span>Timezone</span>
+                <input
+                  list="reminder-timezones"
+                  onChange={(event) => updatePreference("timezone", event.currentTarget.value)}
+                  value={preferences.timezone}
+                />
+                <datalist id="reminder-timezones">
+                  {TIMEZONE_OPTIONS.map((timezone) => (
+                    <option key={timezone} value={timezone} />
+                  ))}
+                </datalist>
+                <small>Use an IANA name, such as Europe/London.</small>
+              </label>
+
+              <button
+                className={styles.primaryButton}
+                disabled={isPending}
+                onClick={save}
+                type="button"
+              >
+                {isPending ? "Saving…" : "Save reminder plan"}
+              </button>
+            </aside>
+          </div>
+        </section>
       ) : null}
 
       {view === "timeline" ? (
-        <TimelineLayer
-          agreementId={agreementId}
-          activeRules={activeRules}
-          preferences={preferences}
-        />
+        <section aria-labelledby="timeline-layer-heading" className={styles.layerSurface}>
+          <div className={styles.layerHeading}>
+            <div>
+              <p className={styles.kicker}>02 · Deadline timeline</p>
+              <h2 id="timeline-layer-heading">Audit what will happen next.</h2>
+              <p>Every row is calculated from the saved milestone time plus its offset.</p>
+            </div>
+            <span className={styles.countBadge}>{activeRules.length} active</span>
+          </div>
+
+          <div className={styles.timelineGrid}>
+            <div className={styles.timeline}>
+              {activeRules.length ? (
+                activeRules.map((rule) => {
+                  const channels = channelLabels(rule, preferences);
+                  const past = Date.parse(rule.remindAt) < stableNow;
+                  return (
+                    <article className={styles.timelineItem} key={rule.id}>
+                      <time>
+                        {formatDate(rule.remindAt, preferences.timezone, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </time>
+                      <div className={past ? styles.timelineDotPast : styles.timelineDot} />
+                      <div className={styles.timelineCard}>
+                        <div>
+                          <span className={styles.sourceLabel}>
+                            {offsetLabel(rule.offsetMinutes)}
+                          </span>
+                          <h3>{rule.milestoneLabel}</h3>
+                        </div>
+                        <p>Milestone due {formatDate(rule.dueAt, preferences.timezone)}.</p>
+                        <div className={styles.tagRow}>
+                          {channels.length ? (
+                            channels.map((channel) => <span key={channel}>{channel}</span>)
+                          ) : (
+                            <span>No active delivery channel</span>
+                          )}
+                          {past ? <span>Elapsed</span> : null}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <div className={styles.emptyState}>
+                  <strong>No active reminder occurrences.</strong>
+                  <p>Return to Schedule or Rules to add one.</p>
+                </div>
+              )}
+            </div>
+
+            <aside className={styles.previewPanel}>
+              <span className={styles.sourceLabel}>Next notification</span>
+              {nextRule ? (
+                <>
+                  <h3>{formatDate(nextRule.remindAt, preferences.timezone)}</h3>
+                  <div className={styles.notificationPreview}>
+                    <span className={styles.previewDot} />
+                    <div>
+                      <strong>{nextRule.milestoneLabel}</strong>
+                      <p>
+                        {offsetLabel(nextRule.offsetMinutes)}. Open the private commitment to review
+                        the Deal Receipt and evidence rule.
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    className={styles.secondaryButton}
+                    href={`/trade-agreements/${agreementId}`}
+                  >
+                    Open commitment
+                  </Link>
+                </>
+              ) : (
+                <p>No future occurrence is currently active.</p>
+              )}
+              <p className={styles.privacyNote}>
+                Email copy excludes participant names, private terms, payment information, and
+                evidence.
+              </p>
+            </aside>
+          </div>
+        </section>
       ) : null}
 
       {view === "rules" ? (
-        <RulesLayer
-          milestones={allMilestones}
-          preferences={preferences}
-          rules={rules}
-          setView={setView}
-          toggleMatrixRule={toggleMatrixRule}
-        />
+        <section aria-labelledby="rules-layer-heading" className={styles.layerSurface}>
+          <div className={styles.layerHeading}>
+            <div>
+              <p className={styles.kicker}>03 · Rule matrix</p>
+              <h2 id="rules-layer-heading">Apply a consistent assurance pattern.</h2>
+              <p>Checked cells create one rule. Unchecked cells remove it from your personal plan.</p>
+            </div>
+            <button
+              className={styles.secondaryButton}
+              onClick={() => setView("schedule")}
+              type="button"
+            >
+              Edit custom offsets
+            </button>
+          </div>
+
+          <div className={styles.matrixWrap}>
+            <table className={styles.ruleMatrix}>
+              <thead>
+                <tr>
+                  <th scope="col">Milestone</th>
+                  {OFFSET_OPTIONS.map((option) => (
+                    <th key={option.minutes} scope="col">
+                      {option.label}
+                    </th>
+                  ))}
+                  <th scope="col">Other</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allMilestones.map((milestone) => {
+                  const milestoneRules = rules.filter(
+                    (rule) => rule.milestoneKey === milestone.key,
+                  );
+                  const otherCount = milestoneRules.filter(
+                    (rule) =>
+                      !OFFSET_OPTIONS.some(
+                        (option) => option.minutes === rule.offsetMinutes,
+                      ),
+                  ).length;
+                  return (
+                    <tr key={milestone.key}>
+                      <th scope="row">
+                        <strong>{milestone.label}</strong>
+                        <small>{formatDate(milestone.dueAt, preferences.timezone)}</small>
+                      </th>
+                      {OFFSET_OPTIONS.map((option) => {
+                        const rule = milestoneRules.find(
+                          (candidate) => candidate.offsetMinutes === option.minutes,
+                        );
+                        return (
+                          <td key={option.minutes}>
+                            <button
+                              aria-label={`${rule ? "Remove" : "Add"} ${option.label} reminder for ${milestone.label}`}
+                              aria-pressed={Boolean(rule)}
+                              className={rule ? styles.matrixCellActive : styles.matrixCell}
+                              onClick={() => toggleMatrixRule(milestone, option.minutes)}
+                              type="button"
+                            >
+                              {rule ? "✓" : "+"}
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td>{otherCount || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {!allMilestones.length ? (
+            <div className={styles.emptyState}>
+              <strong>No milestones are available for bulk rules.</strong>
+              <p>Add a personal checkpoint in Schedule first.</p>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {view === "calendar" ? (
-        <CalendarLayer
-          activeRules={activeRules}
-          calendarFeed={calendarFeed}
-          copyFeedUrl={copyFeedUrl}
-          feedUrl={feedUrl}
-          isPending={isPending}
-          preferences={preferences}
-          rotateCalendarFeed={rotateCalendarFeed}
-          selectedRule={selectedRule}
-          setCalendarFeedEnabled={setCalendarFeedEnabled}
-          setSelectedRuleId={setSelectedRuleId}
-          webcalUrl={webcalUrl}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-interface ScheduleLayerProps {
-  activeRules: ReminderRule[];
-  addCustomMilestone: () => void;
-  addRule: (milestone: ReminderMilestone, offset?: number) => void;
-  changeMilestoneDueAt: (milestoneKey: string, value: string) => void;
-  changeOffset: (rule: ReminderRule, offset: number) => void;
-  customDueAt: string;
-  customLabel: string;
-  isPending: boolean;
-  milestones: ReminderMilestone[];
-  nextRule: ReminderRule | null;
-  preferences: ReminderPreferences;
-  removeRule: (id: string) => void;
-  rules: ReminderRule[];
-  save: () => void;
-  setCustomDueAt: (value: string) => void;
-  setCustomLabel: (value: string) => void;
-  updatePreference: <Key extends keyof ReminderPreferences>(
-    key: Key,
-    value: ReminderPreferences[Key],
-  ) => void;
-  updateRule: (id: string, patch: Partial<ReminderRule>) => void;
-}
-
-function ScheduleLayer({
-  activeRules,
-  addCustomMilestone,
-  addRule,
-  changeMilestoneDueAt,
-  changeOffset,
-  customDueAt,
-  customLabel,
-  isPending,
-  milestones,
-  nextRule,
-  preferences,
-  removeRule,
-  rules,
-  save,
-  setCustomDueAt,
-  setCustomLabel,
-  updatePreference,
-  updateRule,
-}: ScheduleLayerProps) {
-  return (
-    <section aria-labelledby="schedule-layer-heading" className={styles.layerSurface}>
-      <div className={styles.layerHeading}>
-        <div>
-          <p className={styles.kicker}>01 · Scoped schedule</p>
-          <h2 id="schedule-layer-heading">Set the exact reminder plan.</h2>
-          <p>Agreement dates stay canonical; the reminder time and channels are personal.</p>
-        </div>
-        <dl className={styles.metrics}>
-          <div>
-            <dt>Milestones</dt>
-            <dd>{milestones.length}</dd>
-          </div>
-          <div>
-            <dt>Active rules</dt>
-            <dd>{activeRules.length}</dd>
-          </div>
-          <div>
-            <dt>Next</dt>
-            <dd>{nextRule ? formatDate(nextRule.remindAt, preferences.timezone) : "None"}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className={styles.scheduleGrid}>
-        <div className={styles.milestoneStack}>
-          {milestones.length ? (
-            milestones.map((milestone) => {
-              const milestoneRules = rules
-                .filter((rule) => rule.milestoneKey === milestone.key)
-                .sort((left, right) => left.offsetMinutes - right.offsetMinutes);
-              return (
-                <article className={styles.milestoneCard} key={milestone.key}>
-                  <div className={styles.milestoneHeader}>
-                    <div>
-                      <span className={styles.sourceLabel}>
-                        {milestone.source === "agreement" ? "Deal Receipt milestone" : "Personal checkpoint"}
-                      </span>
-                      <h3>{milestone.label}</h3>
-                    </div>
-                    <label className={styles.dueField}>
-                      <span>Personal due time</span>
-                      <input
-                        onChange={(event) =>
-                          changeMilestoneDueAt(milestone.key, event.currentTarget.value)
-                        }
-                        type="datetime-local"
-                        value={toLocalInputValue(milestone.dueAt)}
-                      />
-                    </label>
-                  </div>
-
-                  <div className={styles.reminderRows}>
-                    {milestoneRules.length ? (
-                      milestoneRules.map((rule) => (
-                        <div className={styles.reminderRow} key={rule.id}>
-                          <label className={styles.offsetField}>
-                            <span>When</span>
-                            <select
-                              onChange={(event) => changeOffset(rule, Number(event.currentTarget.value))}
-                              value={rule.offsetMinutes}
-                            >
-                              {OFFSET_OPTIONS.map((option) => (
-                                <option key={option.minutes} value={option.minutes}>
-                                  {option.label}
-                                </option>
-                              ))}
-                              {!OFFSET_OPTIONS.some(
-                                (option) => option.minutes === rule.offsetMinutes,
-                              ) ? (
-                                <option value={rule.offsetMinutes}>{offsetLabel(rule.offsetMinutes)}</option>
-                              ) : null}
-                            </select>
-                            <small>{formatDate(reminderTime(rule), preferences.timezone)}</small>
-                          </label>
-
-                          <div aria-label="Delivery channels" className={styles.channelControls}>
-                            <label>
-                              <input
-                                checked={rule.inAppEnabled}
-                                onChange={(event) =>
-                                  updateRule(rule.id, { inAppEnabled: event.currentTarget.checked })
-                                }
-                                type="checkbox"
-                              />
-                              In-app
-                            </label>
-                            <label>
-                              <input
-                                checked={rule.emailEnabled}
-                                onChange={(event) =>
-                                  updateRule(rule.id, { emailEnabled: event.currentTarget.checked })
-                                }
-                                type="checkbox"
-                              />
-                              Email
-                            </label>
-                            <label>
-                              <input
-                                checked={rule.calendarEnabled}
-                                onChange={(event) =>
-                                  updateRule(rule.id, { calendarEnabled: event.currentTarget.checked })
-                                }
-                                type="checkbox"
-                              />
-                              Calendar
-                            </label>
-                          </div>
-
-                          <label className={styles.switchLabel}>
-                            <input
-                              checked={rule.enabled}
-                              onChange={(event) =>
-                                updateRule(rule.id, { enabled: event.currentTarget.checked })
-                              }
-                              type="checkbox"
-                            />
-                            <span aria-hidden="true" className={styles.switchTrack} />
-                            <span className={styles.srOnly}>Enable reminder</span>
-                          </label>
-
-                          <button
-                            aria-label={`Remove ${offsetLabel(rule.offsetMinutes)} reminder`}
-                            className={styles.iconButton}
-                            onClick={() => removeRule(rule.id)}
-                            type="button"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className={styles.emptyInline}>
-                        <strong>No reminders for this milestone.</strong>
-                        <span>The commitment date remains visible but no notification will be sent.</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    className={styles.inlineAction}
-                    onClick={() => addRule(milestone)}
-                    type="button"
-                  >
-                    + Add reminder
-                  </button>
-                </article>
-              );
-            })
-          ) : (
-            <div className={styles.emptyState}>
-              <strong>No dated milestones are recorded.</strong>
+        <section aria-labelledby="calendar-layer-heading" className={styles.layerSurface}>
+          <div className={styles.layerHeading}>
+            <div>
+              <p className={styles.kicker}>04 · Calendar + drawer</p>
+              <h2 id="calendar-layer-heading">See the week, then subscribe once.</h2>
               <p>
-                Add an evidence due date through an agreement amendment, or create a personal
-                checkpoint below. Personal checkpoints do not modify the Deal Receipt.
+                The private feed is read-only. Moral Trade never receives or reads events from your
+                calendar account.
               </p>
             </div>
-          )}
-
-          <article className={styles.customCheckpoint}>
-            <div>
-              <span className={styles.sourceLabel}>Personal checkpoint</span>
-              <h3>Add a date that is not part of the agreement.</h3>
-            </div>
-            <label>
-              <span>Label</span>
-              <input
-                maxLength={180}
-                onChange={(event) => setCustomLabel(event.currentTarget.value)}
-                placeholder="Prepare evidence package"
-                value={customLabel}
-              />
-            </label>
-            <label>
-              <span>Due time</span>
-              <input
-                onChange={(event) => setCustomDueAt(event.currentTarget.value)}
-                type="datetime-local"
-                value={customDueAt}
-              />
-            </label>
-            <button className={styles.secondaryButton} onClick={addCustomMilestone} type="button">
-              Add checkpoint
-            </button>
-          </article>
-        </div>
-
-        <aside className={styles.settingsPanel}>
-          <div className={styles.panelHeading}>
-            <div>
-              <span className={styles.sourceLabel}>Delivery settings</span>
-              <h3>Personal defaults</h3>
-            </div>
-            <label className={styles.switchLabel}>
-              <input
-                checked={!preferences.paused}
-                onChange={(event) => updatePreference("paused", !event.currentTarget.checked)}
-                type="checkbox"
-              />
-              <span aria-hidden="true" className={styles.switchTrack} />
-              <span>{preferences.paused ? "Paused" : "Active"}</span>
-            </label>
+            <span className={styles.countBadge}>{activeRules.length} calendar-ready</span>
           </div>
 
-          <div className={styles.settingRow}>
-            <span>
-              <strong>In-app</strong>
-              <small>Delivered to Moral Trade notifications.</small>
-            </span>
-            <label className={styles.switchLabel}>
-              <input
-                checked={preferences.inAppEnabled}
-                onChange={(event) => updatePreference("inAppEnabled", event.currentTarget.checked)}
-                type="checkbox"
-              />
-              <span aria-hidden="true" className={styles.switchTrack} />
-              <span className={styles.srOnly}>Enable in-app delivery</span>
-            </label>
-          </div>
-
-          <div className={styles.settingRow}>
-            <span>
-              <strong>Email</strong>
-              <small>Queued without private terms or evidence.</small>
-            </span>
-            <label className={styles.switchLabel}>
-              <input
-                checked={preferences.emailEnabled}
-                onChange={(event) => updatePreference("emailEnabled", event.currentTarget.checked)}
-                type="checkbox"
-              />
-              <span aria-hidden="true" className={styles.switchTrack} />
-              <span className={styles.srOnly}>Enable email delivery</span>
-            </label>
-          </div>
-
-          <div className={styles.settingBlock}>
-            <label className={styles.checkboxLine}>
-              <input
-                checked={preferences.quietHoursEnabled}
-                onChange={(event) =>
-                  updatePreference("quietHoursEnabled", event.currentTarget.checked)
-                }
-                type="checkbox"
-              />
-              Respect quiet hours
-            </label>
-            <div className={styles.timeGrid}>
-              <label>
-                <span>From</span>
-                <input
-                  disabled={!preferences.quietHoursEnabled}
-                  onChange={(event) =>
-                    updatePreference("quietHoursStart", event.currentTarget.value)
-                  }
-                  type="time"
-                  value={preferences.quietHoursStart}
-                />
-              </label>
-              <label>
-                <span>Until</span>
-                <input
-                  disabled={!preferences.quietHoursEnabled}
-                  onChange={(event) =>
-                    updatePreference("quietHoursEnd", event.currentTarget.value)
-                  }
-                  type="time"
-                  value={preferences.quietHoursEnd}
-                />
-              </label>
-            </div>
-          </div>
-
-          <label className={styles.settingBlock}>
-            <span>Timezone</span>
-            <input
-              list="reminder-timezones"
-              onChange={(event) => updatePreference("timezone", event.currentTarget.value)}
-              value={preferences.timezone}
-            />
-            <datalist id="reminder-timezones">
-              {TIMEZONE_OPTIONS.map((timezone) => (
-                <option key={timezone} value={timezone} />
-              ))}
-            </datalist>
-            <small>Use an IANA name, such as Europe/London.</small>
-          </label>
-
-          <button className={styles.primaryButton} disabled={isPending} onClick={save} type="button">
-            {isPending ? "Saving…" : "Save reminder plan"}
-          </button>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function TimelineLayer({
-  agreementId,
-  activeRules,
-  preferences,
-}: {
-  agreementId: string;
-  activeRules: ReminderRule[];
-  preferences: ReminderPreferences;
-}) {
-  const now = Date.now();
-  const next = activeRules.find((rule) => Date.parse(rule.remindAt) >= now) ?? null;
-
-  return (
-    <section aria-labelledby="timeline-layer-heading" className={styles.layerSurface}>
-      <div className={styles.layerHeading}>
-        <div>
-          <p className={styles.kicker}>02 · Deadline timeline</p>
-          <h2 id="timeline-layer-heading">Audit what will happen next.</h2>
-          <p>Every row is calculated from the saved milestone time plus its offset.</p>
-        </div>
-        <span className={styles.countBadge}>{activeRules.length} active</span>
-      </div>
-
-      <div className={styles.timelineGrid}>
-        <div className={styles.timeline}>
-          {activeRules.length ? (
-            activeRules.map((rule) => {
-              const channels = channelLabels(rule, preferences);
-              const past = Date.parse(rule.remindAt) < now;
-              return (
-                <article className={styles.timelineItem} key={rule.id}>
-                  <time>
-                    {formatDate(rule.remindAt, preferences.timezone, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </time>
-                  <div className={past ? styles.timelineDotPast : styles.timelineDot} />
-                  <div className={styles.timelineCard}>
+          <div className={styles.calendarShell}>
+            <div className={styles.weekGrid}>
+              {calendarDays.map((day) => {
+                const key = dateKey(day.toISOString(), preferences.timezone);
+                const dayRules = activeRules.filter(
+                  (rule) => dateKey(rule.remindAt, preferences.timezone) === key,
+                );
+                return (
+                  <section className={styles.dayColumn} key={key}>
+                    <header>
+                      <span>
+                        {new Intl.DateTimeFormat("en", {
+                          weekday: "short",
+                          timeZone: preferences.timezone,
+                        }).format(day)}
+                      </span>
+                      <strong>
+                        {new Intl.DateTimeFormat("en", {
+                          day: "numeric",
+                          month: "short",
+                          timeZone: preferences.timezone,
+                        }).format(day)}
+                      </strong>
+                    </header>
                     <div>
-                      <span className={styles.sourceLabel}>{offsetLabel(rule.offsetMinutes)}</span>
-                      <h3>{rule.milestoneLabel}</h3>
-                    </div>
-                    <p>Milestone due {formatDate(rule.dueAt, preferences.timezone)}.</p>
-                    <div className={styles.tagRow}>
-                      {channels.length ? (
-                        channels.map((channel) => <span key={channel}>{channel}</span>)
-                      ) : (
-                        <span>No active delivery channel</span>
-                      )}
-                      {past ? <span>Elapsed</span> : null}
-                    </div>
-                  </div>
-                </article>
-              );
-            })
-          ) : (
-            <div className={styles.emptyState}>
-              <strong>No active reminder occurrences.</strong>
-              <p>Return to Schedule or Rules to add one.</p>
-            </div>
-          )}
-        </div>
-
-        <aside className={styles.previewPanel}>
-          <span className={styles.sourceLabel}>Next notification</span>
-          {next ? (
-            <>
-              <h3>{formatDate(next.remindAt, preferences.timezone)}</h3>
-              <div className={styles.notificationPreview}>
-                <span className={styles.previewDot} />
-                <div>
-                  <strong>{next.milestoneLabel}</strong>
-                  <p>
-                    {offsetLabel(next.offsetMinutes)}. Open the private commitment to review the
-                    Deal Receipt and evidence rule.
-                  </p>
-                </div>
-              </div>
-              <Link className={styles.secondaryButton} href={`/trade-agreements/${agreementId}`}>
-                Open commitment
-              </Link>
-            </>
-          ) : (
-            <p>No future occurrence is currently active.</p>
-          )}
-          <p className={styles.privacyNote}>
-            Email copy excludes participant names, private terms, payment information, and evidence.
-          </p>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function RulesLayer({
-  milestones,
-  preferences,
-  rules,
-  setView,
-  toggleMatrixRule,
-}: {
-  milestones: ReminderMilestone[];
-  preferences: ReminderPreferences;
-  rules: ReminderRule[];
-  setView: (view: ReminderView) => void;
-  toggleMatrixRule: (milestone: ReminderMilestone, offsetMinutes: number) => void;
-}) {
-  return (
-    <section aria-labelledby="rules-layer-heading" className={styles.layerSurface}>
-      <div className={styles.layerHeading}>
-        <div>
-          <p className={styles.kicker}>03 · Rule matrix</p>
-          <h2 id="rules-layer-heading">Apply a consistent assurance pattern.</h2>
-          <p>Checked cells create one rule. Unchecked cells remove it from your personal plan.</p>
-        </div>
-        <button className={styles.secondaryButton} onClick={() => setView("schedule")} type="button">
-          Edit custom offsets
-        </button>
-      </div>
-
-      <div className={styles.matrixWrap}>
-        <table className={styles.ruleMatrix}>
-          <thead>
-            <tr>
-              <th scope="col">Milestone</th>
-              {OFFSET_OPTIONS.map((option) => (
-                <th key={option.minutes} scope="col">
-                  {option.label}
-                </th>
-              ))}
-              <th scope="col">Other</th>
-            </tr>
-          </thead>
-          <tbody>
-            {milestones.map((milestone) => {
-              const milestoneRules = rules.filter(
-                (rule) => rule.milestoneKey === milestone.key,
-              );
-              const otherCount = milestoneRules.filter(
-                (rule) =>
-                  !OFFSET_OPTIONS.some((option) => option.minutes === rule.offsetMinutes),
-              ).length;
-              return (
-                <tr key={milestone.key}>
-                  <th scope="row">
-                    <strong>{milestone.label}</strong>
-                    <small>{formatDate(milestone.dueAt, preferences.timezone)}</small>
-                  </th>
-                  {OFFSET_OPTIONS.map((option) => {
-                    const rule = milestoneRules.find(
-                      (candidate) => candidate.offsetMinutes === option.minutes,
-                    );
-                    return (
-                      <td key={option.minutes}>
+                      {dayRules.map((rule) => (
                         <button
-                          aria-label={`${rule ? "Remove" : "Add"} ${option.label} reminder for ${milestone.label}`}
-                          aria-pressed={Boolean(rule)}
-                          className={rule ? styles.matrixCellActive : styles.matrixCell}
-                          onClick={() => toggleMatrixRule(milestone, option.minutes)}
+                          className={
+                            selectedRule?.id === rule.id ? styles.eventSelected : styles.event
+                          }
+                          key={rule.id}
+                          onClick={() => setSelectedRuleId(rule.id)}
                           type="button"
                         >
-                          {rule ? "✓" : "+"}
+                          <time>
+                            {new Intl.DateTimeFormat("en", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                              timeZone: preferences.timezone,
+                            }).format(Date.parse(rule.remindAt))}
+                          </time>
+                          <span>{rule.milestoneLabel}</span>
                         </button>
-                      </td>
-                    );
-                  })}
-                  <td>{otherCount || "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
 
-      {!milestones.length ? (
-        <div className={styles.emptyState}>
-          <strong>No milestones are available for bulk rules.</strong>
-          <p>Add a personal checkpoint in Schedule first.</p>
-        </div>
-      ) : null}
-    </section>
-  );
-}
+            <aside className={styles.calendarDrawer}>
+              <span className={styles.sourceLabel}>Selected occurrence</span>
+              {selectedRule ? (
+                <>
+                  <h3>{selectedRule.milestoneLabel}</h3>
+                  <p>{offsetLabel(selectedRule.offsetMinutes)}</p>
+                  <dl>
+                    <div>
+                      <dt>Reminder</dt>
+                      <dd>{formatDate(selectedRule.remindAt, preferences.timezone)}</dd>
+                    </div>
+                    <div>
+                      <dt>Milestone</dt>
+                      <dd>{formatDate(selectedRule.dueAt, preferences.timezone)}</dd>
+                    </div>
+                    <div>
+                      <dt>Channels</dt>
+                      <dd>{channelLabels(selectedRule, preferences).join(", ") || "None"}</dd>
+                    </div>
+                  </dl>
+                </>
+              ) : (
+                <p>Select a calendar occurrence to inspect it.</p>
+              )}
+            </aside>
+          </div>
 
-function CalendarLayer({
-  activeRules,
-  calendarFeed,
-  copyFeedUrl,
-  feedUrl,
-  isPending,
-  preferences,
-  rotateCalendarFeed,
-  selectedRule,
-  setCalendarFeedEnabled,
-  setSelectedRuleId,
-  webcalUrl,
-}: {
-  activeRules: ReminderRule[];
-  calendarFeed: ReminderCalendarFeed | null;
-  copyFeedUrl: () => void;
-  feedUrl: string;
-  isPending: boolean;
-  preferences: ReminderPreferences;
-  rotateCalendarFeed: () => void;
-  selectedRule: ReminderRule | null;
-  setCalendarFeedEnabled: (enabled: boolean, includeTitle?: boolean) => void;
-  setSelectedRuleId: (id: string) => void;
-  webcalUrl: string;
-}) {
-  const anchor = activeRules.find((rule) => Date.parse(rule.remindAt) >= Date.now())?.remindAt;
-  const start = new Date(anchor ?? Date.now());
-  start.setHours(0, 0, 0, 0);
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return date;
-  });
+          <div className={styles.integrationPanel}>
+            <div className={styles.integrationIntro}>
+              <span className={styles.sourceLabel}>External calendar integration</span>
+              <h3>One private URL for Apple, Google, and Microsoft.</h3>
+              <p>
+                Subscribe rather than import. Future saved changes update in the calendar provider
+                without granting Moral Trade access to the rest of your calendar.
+              </p>
+            </div>
 
-  return (
-    <section aria-labelledby="calendar-layer-heading" className={styles.layerSurface}>
-      <div className={styles.layerHeading}>
-        <div>
-          <p className={styles.kicker}>04 · Calendar + drawer</p>
-          <h2 id="calendar-layer-heading">See the week, then subscribe once.</h2>
-          <p>
-            The private feed is read-only. Moral Trade never receives or reads events from your
-            calendar account.
-          </p>
-        </div>
-        <span className={styles.countBadge}>{activeRules.length} calendar-ready</span>
-      </div>
+            {calendarFeed?.enabled && feedUrl ? (
+              <div className={styles.integrationControls}>
+                <div className={styles.providerGrid}>
+                  <a className={styles.providerButton} href={webcalUrl}>
+                    <CalendarMark provider="apple" />
+                    <span>
+                      <strong>Apple Calendar</strong>
+                      <small>Subscribe directly</small>
+                    </span>
+                    <ArrowIcon />
+                  </a>
+                  <a
+                    className={styles.providerButton}
+                    href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <CalendarMark provider="google" />
+                    <span>
+                      <strong>Google Calendar</strong>
+                      <small>Open “From URL,” then paste</small>
+                    </span>
+                    <ArrowIcon />
+                  </a>
+                  <a
+                    className={styles.providerButton}
+                    href="https://outlook.live.com/calendar/0/addcalendar"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <CalendarMark provider="microsoft" />
+                    <span>
+                      <strong>Microsoft Outlook</strong>
+                      <small>Open “Subscribe from web”</small>
+                    </span>
+                    <ArrowIcon />
+                  </a>
+                </div>
 
-      <div className={styles.calendarShell}>
-        <div className={styles.weekGrid}>
-          {days.map((day) => {
-            const key = dateKey(day.toISOString(), preferences.timezone);
-            const dayRules = activeRules.filter(
-              (rule) => dateKey(rule.remindAt, preferences.timezone) === key,
-            );
-            return (
-              <section className={styles.dayColumn} key={key}>
-                <header>
-                  <span>
-                    {new Intl.DateTimeFormat("en", {
-                      weekday: "short",
-                      timeZone: preferences.timezone,
-                    }).format(day)}
-                  </span>
-                  <strong>
-                    {new Intl.DateTimeFormat("en", {
-                      day: "numeric",
-                      month: "short",
-                      timeZone: preferences.timezone,
-                    }).format(day)}
-                  </strong>
-                </header>
-                <div>
-                  {dayRules.map((rule) => (
-                    <button
-                      className={selectedRule?.id === rule.id ? styles.eventSelected : styles.event}
-                      key={rule.id}
-                      onClick={() => setSelectedRuleId(rule.id)}
-                      type="button"
-                    >
-                      <time>
-                        {new Intl.DateTimeFormat("en", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          timeZone: preferences.timezone,
-                        }).format(Date.parse(rule.remindAt))}
-                      </time>
-                      <span>{rule.milestoneLabel}</span>
+                <label className={styles.privateUrlField}>
+                  <span>Private subscription URL</span>
+                  <div>
+                    <input readOnly value={feedUrl} />
+                    <button onClick={copyFeedUrl} type="button">
+                      Copy
                     </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                  </div>
+                </label>
 
-        <aside className={styles.calendarDrawer}>
-          <span className={styles.sourceLabel}>Selected occurrence</span>
-          {selectedRule ? (
-            <>
-              <h3>{selectedRule.milestoneLabel}</h3>
-              <p>{offsetLabel(selectedRule.offsetMinutes)}</p>
-              <dl>
-                <div>
-                  <dt>Reminder</dt>
-                  <dd>{formatDate(selectedRule.remindAt, preferences.timezone)}</dd>
-                </div>
-                <div>
-                  <dt>Milestone</dt>
-                  <dd>{formatDate(selectedRule.dueAt, preferences.timezone)}</dd>
-                </div>
-                <div>
-                  <dt>Channels</dt>
-                  <dd>{channelLabels(selectedRule, preferences).join(", ") || "None"}</dd>
-                </div>
-              </dl>
-            </>
-          ) : (
-            <p>Select a calendar occurrence to inspect it.</p>
-          )}
-        </aside>
-      </div>
+                <label className={styles.checkboxLine}>
+                  <input
+                    checked={calendarFeed.includeCommitmentTitle}
+                    disabled={isPending}
+                    onChange={(event) =>
+                      setCalendarFeedEnabled(true, event.currentTarget.checked)
+                    }
+                    type="checkbox"
+                  />
+                  Include commitment titles in calendar event names
+                </label>
 
-      <div className={styles.integrationPanel}>
-        <div className={styles.integrationIntro}>
-          <span className={styles.sourceLabel}>External calendar integration</span>
-          <h3>One private URL for Apple, Google, and Microsoft.</h3>
-          <p>
-            Subscribe rather than import. Future saved changes update in the calendar provider
-            without granting Moral Trade access to the rest of your calendar.
-          </p>
-        </div>
-
-        {calendarFeed?.enabled && feedUrl ? (
-          <div className={styles.integrationControls}>
-            <div className={styles.providerGrid}>
-              <a className={styles.providerButton} href={webcalUrl}>
-                <CalendarMark provider="apple" />
-                <span>
-                  <strong>Apple Calendar</strong>
-                  <small>Subscribe directly</small>
-                </span>
-                <ArrowIcon />
-              </a>
-              <a
-                className={styles.providerButton}
-                href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl"
-                rel="noreferrer"
-                target="_blank"
-              >
-                <CalendarMark provider="google" />
-                <span>
-                  <strong>Google Calendar</strong>
-                  <small>Open “From URL,” then paste</small>
-                </span>
-                <ArrowIcon />
-              </a>
-              <a
-                className={styles.providerButton}
-                href="https://outlook.live.com/calendar/0/addcalendar"
-                rel="noreferrer"
-                target="_blank"
-              >
-                <CalendarMark provider="microsoft" />
-                <span>
-                  <strong>Microsoft Outlook</strong>
-                  <small>Open “Subscribe from web”</small>
-                </span>
-                <ArrowIcon />
-              </a>
-            </div>
-
-            <label className={styles.privateUrlField}>
-              <span>Private subscription URL</span>
-              <div>
-                <input readOnly value={feedUrl} />
-                <button onClick={copyFeedUrl} type="button">
-                  Copy
-                </button>
+                <div className={styles.integrationActions}>
+                  <button
+                    className={styles.secondaryButton}
+                    disabled={isPending}
+                    onClick={rotateCalendarFeed}
+                    type="button"
+                  >
+                    Rotate private URL
+                  </button>
+                  <button
+                    className={styles.dangerButton}
+                    disabled={isPending}
+                    onClick={() => setCalendarFeedEnabled(false)}
+                    type="button"
+                  >
+                    Disable subscription
+                  </button>
+                </div>
+                <p className={styles.privacyNote}>
+                  Treat this URL like a password. Rotating it immediately stops the old feed from
+                  receiving updates.
+                </p>
               </div>
-            </label>
-
-            <label className={styles.checkboxLine}>
-              <input
-                checked={calendarFeed.includeCommitmentTitle}
-                disabled={isPending}
-                onChange={(event) =>
-                  setCalendarFeedEnabled(true, event.currentTarget.checked)
-                }
-                type="checkbox"
-              />
-              Include commitment titles in calendar event names
-            </label>
-
-            <div className={styles.integrationActions}>
-              <button
-                className={styles.secondaryButton}
-                disabled={isPending}
-                onClick={rotateCalendarFeed}
-                type="button"
-              >
-                Rotate private URL
-              </button>
-              <button
-                className={styles.dangerButton}
-                disabled={isPending}
-                onClick={() => setCalendarFeedEnabled(false)}
-                type="button"
-              >
-                Disable subscription
-              </button>
-            </div>
-            <p className={styles.privacyNote}>
-              Treat this URL like a password. Rotating it immediately stops the old feed from
-              receiving updates.
-            </p>
+            ) : (
+              <div className={styles.integrationEnable}>
+                <p>
+                  Calendar access is off. Enabling it creates a revocable, read-only subscription URL
+                  containing only reminder labels, times, and links back to Moral Trade.
+                </p>
+                <button
+                  className={styles.primaryButton}
+                  disabled={isPending}
+                  onClick={() => setCalendarFeedEnabled(true)}
+                  type="button"
+                >
+                  {isPending ? "Enabling…" : "Enable calendar subscription"}
+                </button>
+                {!hasSavedPreferences ? (
+                  <p className={styles.privacyNote}>
+                    Save the reminder plan before enabling the subscription.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
-        ) : (
-          <div className={styles.integrationEnable}>
-            <p>
-              Calendar access is off. Enabling it creates a revocable, read-only subscription URL
-              containing only reminder labels, times, and links back to Moral Trade.
-            </p>
-            <button
-              className={styles.primaryButton}
-              disabled={isPending}
-              onClick={() => setCalendarFeedEnabled(true)}
-              type="button"
-            >
-              {isPending ? "Enabling…" : "Enable calendar subscription"}
-            </button>
-          </div>
-        )}
-      </div>
-    </section>
+        </section>
+      ) : null}
+    </div>
   );
 }
