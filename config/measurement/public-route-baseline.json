@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-public-route-baseline-v0.3-2026-07",
-  "purpose": "Executable public-route performance and resilience baseline for the action router, provider-hosted payment handoff, live marketplace, creation, offset, pool, safety, and status pages visitors use before relying on Moral Trade.",
+  "version": "moral-trade-public-route-baseline-v0.4-2026-07",
+  "purpose": "Executable public-route performance and resilience baseline for the action router, provider-hosted payment handoff, live marketplace, public evidence, creation, offset, pool, safety, and status pages visitors use before relying on Moral Trade.",
   "command": "MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes",
   "baseUrlEnv": "MORALTRADE_BASE_URL",
   "outputPathEnv": "MORALTRADE_BASELINE_OUTPUT",
@@ -24,6 +24,8 @@
     { "path": "/start", "family": "action_router", "stage": "activation" },
     { "path": "/donate", "family": "provider_payment", "stage": "payment" },
     { "path": "/offers?view=live", "family": "marketplace", "stage": "discovery" },
+    { "path": "/evidence", "family": "public_evidence", "stage": "trust" },
+    { "path": "/evidence/example", "family": "public_evidence_workbench", "stage": "trust" },
     { "path": "/create", "family": "creation", "stage": "activation" },
     { "path": "/offsets", "family": "donation_offsets", "stage": "coordination" },
     { "path": "/pools", "family": "conditional_pools", "stage": "coordination" },

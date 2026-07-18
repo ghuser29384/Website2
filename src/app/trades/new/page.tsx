@@ -17,7 +17,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "Create a trade",
   description:
-    "Save one bounded Moral Trade draft, submit it once, and track its review and publication state.",
+    "Save one bounded Moral Trade draft, submit it once, and track its review, evidence, and publication state.",
   robots: { index: false, follow: false },
 };
 
@@ -34,8 +34,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const formMessage = getFormMessage(resolvedSearchParams);
   const existingOffers = viewer ? await listCoreOffersForOwner(viewer.authUser.id) : [];
   const submissionKey = randomUUID();
-  const example = valueOf(resolvedSearchParams.example);
-  const useVictoriaExample = example === "seed-victoria";
+  const useVictoriaExample = valueOf(resolvedSearchParams.example) === "seed-victoria";
 
   return (
     <div className="page-shell marketplace-app-shell">
@@ -65,9 +64,9 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
             <p className="eyebrow">Create one bounded proposal</p>
             <h1 id="new-trade-heading">Draft, review, publish, then invite.</h1>
             <p>
-              This is the operational non-financial path. A saved draft is private, submission is
-              idempotent, publication is a distinct review state, and no agreement becomes active
-              without both parties confirming the same version.
+              Saved drafts and participant messages remain private. Once a trade is active,
+              its evidence record is public by default so other participants can inspect what
+              was submitted, how it was reviewed, and when each milestone occurred.
             </p>
           </div>
 
@@ -75,8 +74,8 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
             <article className="panel data-card data-card-wide">
               <h2>Create an account before saving a private draft.</h2>
               <p className="route-text">
-                Registration ties the draft, invitation, messages, confirmations, and evidence to a
-                participant-controlled record.
+                Registration ties the draft, invitation, messages, confirmations, and evidence
+                to a participant-controlled record.
               </p>
               <div className="form-actions">
                 <Link className="button button-primary" href="/signup?returnTo=/trades/new">
@@ -229,13 +228,22 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
                   </label>
 
                   <label className="field">
-                    <span>Privacy scope</span>
+                    <span>Evidence visibility and privacy scope</span>
                     <textarea
-                      defaultValue="Participants and operator only. Public pages show the proposal terms but not private messages or evidence."
+                      defaultValue="Evidence and completed trade records are public by default. Before submitting proof, remove exact addresses, account numbers, private contact details, and unrelated personal information. A narrowly tailored safety exception may withhold specific proof when publication would create a concrete risk."
                       name="privacy_scope"
                       required
-                      rows={3}
+                      rows={4}
                     />
+                  </label>
+
+                  <label className="radio-row">
+                    <input name="public_evidence_certification" required type="checkbox" />
+                    <span>
+                      I understand that evidence records are public by default. I will submit
+                      a public-safe copy and remove sensitive identifiers before relying on it
+                      as proof.
+                    </span>
                   </label>
 
                   <label className="field">
@@ -250,8 +258,8 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
                   <label className="radio-row">
                     <input name="voluntary_certification" type="checkbox" />
                     <span>
-                      This proposal is voluntary. It does not threaten harm, retaliation, or a worse
-                      baseline if the other person declines.
+                      This proposal is voluntary. It does not threaten harm, retaliation, or a
+                      worse baseline if the other person declines.
                     </span>
                   </label>
 
@@ -273,8 +281,9 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
                     </PendingSubmitButton>
                   </div>
                   <p className="panel-note">
-                    The submission key is unique to this form. Repeated clicks return the existing
-                    draft instead of creating duplicate offers.
+                    Public visibility is separate from review status. A public item remains
+                    labelled submitted, accepted, or challenged; visibility is not presented
+                    as independent verification.
                   </p>
                 </form>
               </article>
@@ -286,9 +295,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
                   <div className="mini-list">
                     {existingOffers.slice(0, 8).map((offer) => (
                       <div className="panel subtle-panel" key={offer.id}>
-                        <strong>
-                          {offer.offered_cause} ↔ {offer.requested_cause}
-                        </strong>
+                        <strong>{offer.offered_cause} ↔ {offer.requested_cause}</strong>
                         <p className="route-text">
                           {offer.workflow_status.replaceAll("_", " ")} · version {offer.terms_version}
                         </p>
@@ -303,10 +310,11 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
                 )}
 
                 <div className="status-banner">
-                  <strong>State model</strong>
+                  <strong>Publication model</strong>
                   <p>
-                    Draft → pending review → published. An operator can request changes or reject
-                    with a specific reason. You can revise, resubmit, pause, close, or delete.
+                    Drafts and messages stay private. Agreement evidence is public by default;
+                    source files remain private until a public-safe copy is ready. A documented
+                    safety exception can withhold specific proof.
                   </p>
                 </div>
               </aside>
