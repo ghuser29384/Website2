@@ -1664,7 +1664,10 @@ export async function reviewTradeEvidenceAction(formData: FormData) {
   const agreementId = read(formData, "agreement_id");
   const evidenceId = read(formData, "evidence_id");
   const decision = read(formData, "decision");
-  const returnTo = `/trade-agreements/${agreementId}`;
+  const returnTo = safeInternalPath(
+    read(formData, "return_to"),
+    `/trade-agreements/${agreementId}`,
+  );
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
 
@@ -1685,6 +1688,10 @@ export async function reviewTradeEvidenceAction(formData: FormData) {
     if (!agreement || !evidence) throw new Error("Evidence item is unavailable.");
     if (String(evidence.submitted_by) === viewer.authUser.id) {
       throw new Error("The submitter cannot review their own evidence.");
+    }
+    const reviewWindowEndsAt = Date.parse(String(evidence.challenge_window_ends_at ?? ""));
+    if (Number.isFinite(reviewWindowEndsAt) && reviewWindowEndsAt <= Date.now()) {
+      throw new Error("The participant review window for this evidence item has closed.");
     }
 
     if (decision === "accept") {
@@ -1708,12 +1715,20 @@ export async function reviewTradeEvidenceAction(formData: FormData) {
     if (decision === "challenge") {
       const reason = read(formData, "challenge_reason");
       if (!reason) throw new Error("State the factual or scope issue being challenged.");
+      const categoryLabels: Record<string, string> = {
+        duplicate_proof: "Duplicate or reused proof",
+        factual_mismatch: "Factual mismatch",
+        outside_scope: "Outside the agreed scope",
+        privacy_or_coercion: "Privacy or coercion concern",
+      };
+      const category = categoryLabels[read(formData, "challenge_category")];
+      const recordedReason = category ? `${category}: ${reason}` : reason;
       await Promise.all([
         supabase
           .from("trade_evidence_items")
           .update({
             status: "challenged",
-            challenge_reason: reason.slice(0, MAX_MESSAGE_LENGTH),
+            challenge_reason: recordedReason.slice(0, MAX_MESSAGE_LENGTH),
             reviewed_at: new Date().toISOString(),
           })
           .eq("id", evidenceId),
