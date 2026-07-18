@@ -61,7 +61,20 @@ export function proxy(request: NextRequest) {
     return shouldRecordVisit ? markWalkthroughSeen(response, request) : response;
   }
 
-  if (request.nextUrl.pathname !== "/offers" || request.nextUrl.searchParams.has("view")) {
+  if (pathname !== "/offers") {
+    return NextResponse.next();
+  }
+
+  if (request.nextUrl.searchParams.size === 0) {
+    const discoverUrl = request.nextUrl.clone();
+    discoverUrl.pathname = "/discover";
+    discoverUrl.searchParams.set("domain", "offers");
+    discoverUrl.searchParams.set("view", "list");
+
+    return NextResponse.redirect(discoverUrl);
+  }
+
+  if (request.nextUrl.searchParams.has("view")) {
     return NextResponse.next();
   }
 

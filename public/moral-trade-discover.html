@@ -1,1 +1,57 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#050505"><meta name="description" content="Explore Moral Trade offers, threshold pools, and trusted counterparties through transparent, inspectable discovery views."><link rel="canonical" href="https://moraltrade.org/discover"><title>Moral Trade — Discover</title><style>html,body{margin:0;min-height:100%;background:#f7f5ef;color:#0b0b0a;font-family:system-ui,sans-serif}main{min-height:100vh;display:grid;place-items:center;padding:24px}p{max-width:42rem;line-height:1.5}</style></head><body><main><p id="loading">Loading Discover…</p></main><script>(async()=>{try{const paths=["/discover/payload/0.txt","/discover/payload/1.txt","/discover/payload/2.txt","/discover/payload/3.txt","/discover/payload/4.txt","/discover/payload/5.txt","/discover/payload/6.txt"];const parts=await Promise.all(paths.map(async path=>{const response=await fetch(path,{cache:"force-cache"});if(!response.ok)throw new Error(`Discover payload ${path} returned ${response.status}`);return response.text()}));const bytes=Uint8Array.from(atob(parts.join("")),c=>c.charCodeAt(0));const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));const html=await new Response(stream).text();document.open();document.write(html);document.close()}catch(error){const el=document.getElementById("loading");if(el)el.textContent="Unable to load Discover. Please refresh.";console.error(error)}})();</script><noscript><main><p>JavaScript is required to use Discover.</p></main></noscript></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#050505">
+  <meta name="description" content="Explore Moral Trade offers, threshold pools, and trusted counterparties through transparent, inspectable discovery views.">
+  <link rel="canonical" href="https://moraltrade.org/discover">
+  <title>Moral Trade — Discover</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#f7f5ef;color:#0b0b0a;font-family:system-ui,sans-serif}
+    main{min-height:100vh;display:grid;place-items:center;padding:24px}
+    p{max-width:42rem;line-height:1.5}
+  </style>
+</head>
+<body>
+  <main><p id="loading">Loading Discover…</p></main>
+  <script>
+    (async () => {
+      try {
+        const paths = [
+          "/discover/payload/0.txt",
+          "/discover/payload/1.txt",
+          "/discover/payload/2.txt",
+          "/discover/payload/3.txt",
+          "/discover/payload/4.txt",
+          "/discover/payload/5.txt",
+          "/discover/payload/6.txt",
+        ];
+        const parts = await Promise.all(
+          paths.map(async (path) => {
+            const response = await fetch(path, { cache: "force-cache" });
+            if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
+            return response.text();
+          }),
+        );
+        const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        const source = await new Response(stream).text();
+        const productNavigationScript = '<script src="/moral-trade-discover-navigation.js"><\\/script>';
+        const enhancedSource = source.includes("</body>")
+          ? source.replace("</body>", `${productNavigationScript}</body>`)
+          : `${source}${productNavigationScript}`;
+
+        document.open();
+        document.write(enhancedSource);
+        document.close();
+      } catch (error) {
+        const loading = document.getElementById("loading");
+        if (loading) loading.textContent = "Unable to load Discover. Please refresh.";
+        console.error(error);
+      }
+    })();
+  </script>
+  <noscript><main><p>JavaScript is required to use Discover.</p></main></noscript>
+</body>
+</html>

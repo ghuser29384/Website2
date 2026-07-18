@@ -72,9 +72,30 @@ test("bots and prefetches receive the live homepage without consuming the walkth
   }
 });
 
-test("the offers directory still defaults to its live view", () => {
+test("the legacy queryless offers entry opens Discover", () => {
   const response = proxy(makeRequest("/offers"));
 
   assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "https://moraltrade.org/offers?view=live");
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/discover?domain=offers&view=list",
+  );
+});
+
+test("query-driven offer searches continue to default to the live list", () => {
+  const response = proxy(makeRequest("/offers?search=Climate"));
+
+  assert.equal(response.status, 307);
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/offers?search=Climate&view=live",
+  );
+});
+
+test("explicit offer views pass through without redirecting", () => {
+  const response = proxy(makeRequest("/offers?view=templates"));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("location"), null);
 });
