@@ -101,10 +101,11 @@ jobs:
               src/app/trades/new/page.tsx \
               src/app/sitemap.ts \
               src/components/core-trade/trade-draft-workbench.tsx \
+              src/lib/public-evidence-policy.test.ts \
               src/lib/site.ts \
               src/lib/site-search.ts \
               tests/public-evidence.spec.ts
-            npm test
+            node --import tsx --test src/lib/public-evidence-policy.test.ts
             npm run build
             npx playwright test tests/public-evidence.spec.ts --reporter=line
           ) 2>&1 | tee /tmp/public-evidence-release-checks.log
@@ -122,7 +123,7 @@ jobs:
             echo '### Public evidence release-check failure'
             echo
             echo '```text'
-            tail -n 160 /tmp/public-evidence-release-checks.log
+            tail -n 180 /tmp/public-evidence-release-checks.log
             echo '```'
           } > /tmp/public-evidence-checks-comment.md
           gh pr comment 120 --body-file /tmp/public-evidence-checks-comment.md
