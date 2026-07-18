@@ -23,7 +23,7 @@ export function getDisplayNameParts(
   const initialParts =
     nameParts.length === 1 ? nameParts : [nameParts[0], nameParts[nameParts.length - 1]];
   const initials = initialParts
-    .map((part) => getFirstCharacter(part).toLocaleUpperCase())
+    .map((part) => getFirstCharacter(part).toUpperCase())
     .join("")
     .slice(0, 2);
 
