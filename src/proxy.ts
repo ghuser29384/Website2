@@ -42,6 +42,14 @@ export function proxy(request: NextRequest) {
     isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
 
   if (pathname === "/") {
+    if (shouldRecordVisit) {
+      const walkthroughUrl = request.nextUrl.clone();
+      walkthroughUrl.pathname = "/walkthrough";
+      walkthroughUrl.searchParams.set("first_visit", "1");
+
+      return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
+    }
+
     const liveUrl = request.nextUrl.clone();
     liveUrl.pathname = "/moral-trade-live.html";
 
