@@ -21,7 +21,7 @@
 
   function openDiscover(event) {
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     window.location.assign("/discover");
   }
 
