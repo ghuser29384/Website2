@@ -1,0 +1,36 @@
+name: Unpack live source for inspection
+
+on:
+  push:
+    branches:
+      - agent/inspect-live-source-20260718
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Unpack retained live source
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const zlib = require('node:zlib');
+          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+          const encoded = names.map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8')).join('');
+          fs.mkdirSync('tmp', { recursive: true });
+          fs.writeFileSync('tmp/live-source.html', zlib.gunzipSync(Buffer.from(encoded, 'base64')));
+          NODE
+      - name: Commit inspection artifact
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tmp/live-source.html
+          git commit -m "Unpack live source for inspection"
+          git push
