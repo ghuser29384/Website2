@@ -74,7 +74,10 @@ test("every Plan Resources setting changes the generated route model", () => {
     "~30 minutes available",
     "Maximum verification",
   ]);
-  assert.match(model.cards[1].title, /independently reviewed biosecurity evidence review/);
+  assert.match(
+    model.cards[1].title,
+    /an independently reviewed biosecurity evidence review/,
+  );
   assert.match(model.cards[1].meta, /\$30 · 15–20 min/);
   assert.match(model.itinerary[2].title, /biosecurity counterparty/);
 });

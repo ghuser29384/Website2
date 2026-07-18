@@ -103,18 +103,21 @@
     standard: {
       label: "Standard ◇",
       shortLabel: "Standard",
+      article: "a",
       adjective: "screened",
       help: "Balanced evidence checks",
     },
     high: {
       label: "High ◈",
       shortLabel: "High",
+      article: "a",
       adjective: "verified",
       help: "Prioritize rigor",
     },
     maximum: {
       label: "Maximum ◆",
       shortLabel: "Maximum",
+      article: "an",
       adjective: "independently reviewed",
       help: "Independent review required",
     },
@@ -187,7 +190,7 @@
     const directAmount = Math.min(40, plan.budget);
     const poolAmount = Math.min(15, plan.budget);
     const directTitle = directAmount
-      ? `Fund a ${verification.adjective} ${goal.review}`
+      ? `Fund ${verification.article} ${verification.adjective} ${goal.review}`
       : `Compare ${goal.compare}`;
     const directMeta = directAmount
       ? `$${directAmount} · ${time.routeTime}`
