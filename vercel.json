@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/jobs/email",
-      "schedule": "0 10 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/jobs/trade-reminders",
