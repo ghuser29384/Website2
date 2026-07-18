@@ -2,7 +2,7 @@ import { getSiteUrl } from "@/lib/supabase/config";
 import { createServiceClient } from "@/lib/supabase/server";
 import { formatReminderDate, offsetLabel } from "@/lib/trade-reminders";
 
-type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
+type SupabaseServiceAny = {
   from: (table: string) => any;
 };
 
@@ -112,7 +112,7 @@ export async function processTradeReminders(
 ): Promise<ReminderWorkerResult> {
   const now = options.now ?? new Date();
   const dryRun = Boolean(options.dryRun);
-  const supabase = createServiceClient() as SupabaseServiceAny;
+  const supabase = createServiceClient() as unknown as SupabaseServiceAny;
   const warnings: string[] = [];
   const result: ReminderWorkerResult = {
     scannedConfiguredRules: 0,
@@ -252,18 +252,21 @@ export async function processTradeReminders(
       const recipientEmail = configuredEmailByUser.get(userId)?.trim() ?? "";
       if (recipientEmail) {
         const absoluteUrl = new URL(href, getSiteUrl()).toString();
-        const queued = await supabase.from("email_outbox").upsert(
-          {
-            profile_id: userId,
-            recipient_email: recipientEmail,
-            subject: `Moral Trade: ${copy.title}`.slice(0, 160),
-            body: `A private Moral Trade reminder is ready. Sign in at ${absoluteUrl}. This email does not include participant names, private terms, payment information, or evidence.`,
-            status: "queued",
-            provider: "configured_trade_reminder",
-            dedupe_key: `${dedupeBase}:email`,
-          },
-          { onConflict: "dedupe_key", ignoreDuplicates: true },
-        ).select("id");
+        const queued = await supabase
+          .from("email_outbox")
+          .upsert(
+            {
+              profile_id: userId,
+              recipient_email: recipientEmail,
+              subject: `Moral Trade: ${copy.title}`.slice(0, 160),
+              body: `A private Moral Trade reminder is ready. Sign in at ${absoluteUrl}. This email does not include participant names, private terms, payment information, or evidence.`,
+              status: "queued",
+              provider: "configured_trade_reminder",
+              dedupe_key: `${dedupeBase}:email`,
+            },
+            { onConflict: "dedupe_key", ignoreDuplicates: true },
+          )
+          .select("id");
         if (queued.error) {
           deliveryFailed = true;
           warnings.push(`Email reminder ${String(rule.id)} failed: ${queued.error.message}`);
@@ -374,6 +377,10 @@ export async function processTradeReminders(
     }
   }
 
-  if (dryRun) warnings.push("Dry run: no notifications, emails, lifecycle updates, or delivery markers were written.");
+  if (dryRun) {
+    warnings.push(
+      "Dry run: no notifications, emails, lifecycle updates, or delivery markers were written.",
+    );
+  }
   return result;
 }
