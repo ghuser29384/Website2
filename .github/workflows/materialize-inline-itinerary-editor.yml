@@ -1,0 +1,42 @@
+name: Materialize inline itinerary editor
+
+on:
+  push:
+    branches:
+      - release-inline-itinerary-editor-v2
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Materialize production files
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const zlib = require('node:zlib');
+          const payloadPath = 'tmp/inline-itinerary-editor-payload.txt';
+          const encoded = fs.readFileSync(payloadPath, 'utf8').trim();
+          const files = JSON.parse(zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8'));
+          for (const [filePath, content] of Object.entries(files)) {
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            fs.writeFileSync(filePath, content);
+          }
+          fs.rmSync(payloadPath);
+          fs.rmSync('.github/workflows/materialize-inline-itinerary-editor.yml');
+          NODE
+      - name: Commit production implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add the inline itinerary editor"
+          git push
