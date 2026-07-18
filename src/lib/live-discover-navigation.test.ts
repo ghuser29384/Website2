@@ -24,12 +24,28 @@ test("the live navigation bridge exposes the canonical Discover route", () => {
   assert.match(bridge, /control\.textContent = "Discover"/);
 });
 
-test("the Discover loader reconnects its product navigation", () => {
+test("the Discover loader reconnects product navigation and value-field hover details", () => {
   const loader = readPublicFile("moral-trade-discover.html");
-  const bridge = readPublicFile("moral-trade-discover-navigation.js");
+  const navigationBridge = readPublicFile("moral-trade-discover-navigation.js");
 
   assert.match(loader, /moral-trade-discover-navigation\.js/);
-  assert.match(bridge, /\["now", "\/"\]/);
-  assert.match(bridge, /\["offer", "\/trades\/new"\]/);
-  assert.match(bridge, /\["activity", "\/commitments"\]/);
+  assert.match(loader, /moral-trade-discover-value-hover\.js/);
+  assert.match(loader, /<\/scr' \+ 'ipt>/);
+  assert.doesNotMatch(loader, /moral-trade-discover-navigation\.js"><\\\\\/script>/);
+  assert.doesNotMatch(loader, /moral-trade-discover-value-hover\.js"><\\\\\/script>/);
+  assert.match(navigationBridge, /\["now", "\/"\]/);
+  assert.match(navigationBridge, /\["offer", "\/trades\/new"\]/);
+  assert.match(navigationBridge, /\["activity", "\/commitments"\]/);
+});
+
+test("value-field copy appears only after a half-second mouse hover", () => {
+  const hoverBridge = readPublicFile("moral-trade-discover-value-hover.js");
+
+  assert.match(hoverBridge, /const HOVER_DELAY_MS = 500/);
+  assert.match(hoverBridge, /document\.addEventListener\("pointerover"/);
+  assert.match(hoverBridge, /document\.addEventListener\("pointerout"/);
+  assert.match(hoverBridge, /point\.matches\(":hover"\)/);
+  assert.match(hoverBridge, /\.value-point \.point-title/);
+  assert.match(hoverBridge, /\.value-point \.point-meta/);
+  assert.match(hoverBridge, /tooltip\.setAttribute\("role", "tooltip"\)/);
 });
