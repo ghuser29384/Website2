@@ -1,0 +1,82 @@
+name: PR finalize public evidence v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/public-evidence-desk-v2
+          fetch-depth: 0
+
+      - name: Reconcile current main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+
+      - name: Execute finalizer payload
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/finalize-public-evidence-v2.yml').read_text().splitlines()
+          start = source.index("          python - <<'PY'") + 1
+          end = source.index("          PY", start)
+          payload = []
+          for line in source[start:end]:
+              if not line.startswith('          '):
+                  raise RuntimeError(f'Unexpected finalizer indentation: {line!r}')
+              payload.append(line[10:])
+          Path('/tmp/finalize-public-evidence.py').write_text('\n'.join(payload) + '\n')
+          PY
+          python /tmp/finalize-public-evidence.py
+
+      - name: Remove temporary materialization workflows
+        shell: bash
+        run: |
+          rm -f .github/workflows/materialize-public-evidence-v2.yml
+          rm -f .github/workflows/finalize-public-evidence-v2.yml
+          rm -f .github/workflows/pr-finalize-public-evidence-v2.yml
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Evidence interaction tests
+        run: npx playwright test tests/public-evidence.spec.ts --reporter=line
+
+      - name: Commit integrated implementation
+        shell: bash
+        run: |
+          git add -A
+          git commit -m "Integrate public-safe evidence into the current trade flow"
+          git push origin HEAD:feature/public-evidence-desk-v2
