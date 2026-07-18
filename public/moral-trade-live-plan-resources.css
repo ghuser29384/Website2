@@ -1,0 +1,77 @@
+.plan-control .mt-plan-select {
+  appearance: auto;
+  color: #111;
+  cursor: pointer;
+  display: block;
+  font: 400 18px/1.25 var(--serif);
+  min-height: 44px;
+  width: 100%;
+}
+
+.plan-control .mt-plan-budget {
+  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 2px;
+}
+
+.mt-plan-budget-prefix,
+.mt-plan-budget input,
+.mt-plan-budget-edit {
+  font: 400 18px/1.25 var(--serif);
+}
+
+.mt-plan-budget input {
+  appearance: textfield;
+  background: transparent;
+  border: 0;
+  color: #111;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.mt-plan-budget input::-webkit-inner-spin-button,
+.mt-plan-budget input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.mt-plan-budget-edit {
+  color: var(--muted);
+}
+
+.plan-control .mt-plan-select:focus-visible,
+.plan-control .mt-plan-budget:focus-within {
+  outline: 3px solid rgba(20, 75, 255, 0.22);
+  outline-offset: 2px;
+}
+
+.mt-plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 12px;
+}
+
+.mt-plan-summary span {
+  background: #f1eee6;
+  border: 1px solid var(--line);
+  color: #333;
+  font: 9px/1.2 var(--mono);
+  padding: 5px 7px;
+}
+
+.mt-plan-step-label {
+  display: block;
+}
+
+@media (max-width: 760px) {
+  .plan-control .mt-plan-select,
+  .mt-plan-budget-prefix,
+  .mt-plan-budget input,
+  .mt-plan-budget-edit {
+    font-size: 22px;
+  }
+}
