@@ -24,9 +24,7 @@ create table if not exists public.agreement_reminder_rules (
   milestone_label text not null,
   due_at timestamp with time zone not null,
   offset_minutes integer not null default 0,
-  remind_at timestamp with time zone generated always as (
-    due_at + (offset_minutes * interval '1 minute')
-  ) stored,
+  remind_at timestamp with time zone not null,
   enabled boolean not null default true,
   in_app_enabled boolean not null default true,
   email_enabled boolean not null default false,
@@ -56,6 +54,24 @@ create table if not exists public.reminder_calendar_feeds (
   updated_at timestamp with time zone not null default now(),
   constraint reminder_calendar_feeds_token_unique unique (feed_token)
 );
+
+create or replace function public.set_agreement_reminder_occurrence()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  new.remind_at := new.due_at + (new.offset_minutes * interval '1 minute');
+  return new;
+end;
+$$;
+
+drop trigger if exists set_agreement_reminder_occurrence on public.agreement_reminder_rules;
+create trigger set_agreement_reminder_occurrence
+before insert or update of due_at, offset_minutes
+on public.agreement_reminder_rules
+for each row
+execute function public.set_agreement_reminder_occurrence();
 
 create index if not exists agreement_reminder_preferences_user_idx
   on public.agreement_reminder_preferences (user_id, agreement_id);
