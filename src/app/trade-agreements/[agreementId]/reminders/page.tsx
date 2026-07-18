@@ -7,6 +7,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { requireViewer } from "@/lib/app-data";
 import { getCoreAgreementForUser } from "@/lib/core-trade";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { getSiteUrl } from "@/lib/supabase/config";
 import {
   deriveAgreementReminderMilestones,
   loadTradeReminderConfiguration,
@@ -74,9 +75,11 @@ export default async function ReminderPage({ params, searchParams }: ReminderPag
           hasSavedPreferences={configuration.hasSavedPreferences}
           initialCalendarFeed={configuration.calendarFeed}
           initialMilestones={milestones}
+          initialNow={new Date().toISOString()}
           initialPreferences={configuration.preferences}
           initialRules={rules}
           initialView={initialView}
+          siteUrl={getSiteUrl()}
         />
       </main>
 
