@@ -38,10 +38,13 @@
         }
 
         const source = new TextDecoder().decode(raw);
-        const discoverNavigationScript = '<script src="/moral-trade-live-navigation.js"><\\/script>';
+        const enhancementScripts = [
+          '<script src="/moral-trade-live-navigation.js"><\/script>',
+          '<script src="/moral-trade-live-local-time.js"><\/script>',
+        ].join('');
         const enhancedSource = source.includes('</body>')
-          ? source.replace('</body>', `${discoverNavigationScript}</body>`)
-          : `${source}${discoverNavigationScript}`;
+          ? source.replace('</body>', `${enhancementScripts}</body>`)
+          : `${source}${enhancementScripts}`;
 
         document.open();
         document.write(enhancedSource);
