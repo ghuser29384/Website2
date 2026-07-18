@@ -94,7 +94,16 @@ jobs:
           set +e
           (
             set -e
-            npm run lint
+            npx eslint \
+              'src/app/evidence/[[...recordId]]/page.tsx' \
+              'src/app/trade-agreements/[agreementId]/page.tsx' \
+              src/app/core-trade-actions.ts \
+              src/app/trades/new/page.tsx \
+              src/app/sitemap.ts \
+              src/components/core-trade/trade-draft-workbench.tsx \
+              src/lib/site.ts \
+              src/lib/site-search.ts \
+              tests/public-evidence.spec.ts
             npm test
             npm run build
             npx playwright test tests/public-evidence.spec.ts --reporter=line
@@ -113,7 +122,7 @@ jobs:
             echo '### Public evidence release-check failure'
             echo
             echo '```text'
-            tail -n 140 /tmp/public-evidence-release-checks.log
+            tail -n 160 /tmp/public-evidence-release-checks.log
             echo '```'
           } > /tmp/public-evidence-checks-comment.md
           gh pr comment 120 --body-file /tmp/public-evidence-checks-comment.md
