@@ -1,9 +1,13 @@
 name: Verify public evidence production
 
 on:
-  push:
+  pull_request:
     branches:
-      - verify/public-evidence-production-20260718
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
     paths:
       - .github/workflows/verify-public-evidence-production.yml
 
