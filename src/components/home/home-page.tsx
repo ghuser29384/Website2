@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
+import { getDisplayNameParts } from "@/lib/display-name";
 
 import { LocalDateGreeting } from "./local-date-greeting";
 import styles from "./returning-home.module.css";
@@ -75,7 +76,12 @@ const matchReasons = [
   },
 ] as const;
 
-export function HomePage() {
+interface HomePageProps {
+  displayName: string | null;
+}
+
+export function HomePage({ displayName }: HomePageProps) {
+  const { firstName, initials } = getDisplayNameParts(displayName);
   const [trips, setTrips] = useState(8);
   const [amount, setAmount] = useState(20);
   const [saved, setSaved] = useState(false);
@@ -118,7 +124,9 @@ export function HomePage() {
             onClick={() => setAccountOpen((open) => !open)}
             type="button"
           >
-            <span>AJ</span>
+            <span aria-hidden="true" data-testid="account-avatar">
+              {initials ?? <UserCircle size={24} weight="thin" />}
+            </span>
             <CaretDown aria-hidden="true" size={17} weight="regular" />
           </button>
           {accountOpen ? (
@@ -142,7 +150,7 @@ export function HomePage() {
           <div>
             <p>Your best match right now, based on your commitments and priorities.</p>
           </div>
-          <LocalDateGreeting name="Alex" />
+          <LocalDateGreeting name={firstName} />
         </section>
 
         <section className={styles.tradePair} aria-label="Recommended moral trade">
