@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/jobs/trade-reminders",
-      "schedule": "0 11 * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/jobs/background-networking",
