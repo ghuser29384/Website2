@@ -30,6 +30,8 @@ test("the live shell bootstraps authenticated account data before rendering", ()
 });
 
 test("the live account endpoint reads real profile and agreement state", () => {
+  assert.match(route, /hasSupabaseEnv\(\)/);
+  assert.match(route, /hasSupabaseAuthCookie\(cookieStore\)/);
   assert.match(route, /getViewer\(\)/);
   assert.match(route, /from\("agreements"\)/);
   assert.match(route, /eq\("status", "completed"\)/);

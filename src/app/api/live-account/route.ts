@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
 import { getDisplayNameParts } from "@/lib/display-name";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,12 @@ function privateJson(body: unknown) {
       Vary: "Cookie",
     },
   });
+}
+
+function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+  return cookieStore
+    .getAll()
+    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
 }
 
 function paymentAccountLabel(account: PaymentAccount | null) {
@@ -93,6 +101,11 @@ function privacyLabel(settings: WishProfileSettings | null) {
 }
 
 export async function GET() {
+  const cookieStore = await cookies();
+  if (!hasSupabaseEnv() || !hasSupabaseAuthCookie(cookieStore)) {
+    return privateJson({ authenticated: false });
+  }
+
   const viewer = await getViewer();
 
   if (!viewer) {
