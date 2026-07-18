@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import styles from "./returning-home.module.css";
 
 interface LocalDateGreetingProps {
-  name: string;
+  name?: string | null;
 }
 
 interface LocalGreeting {
@@ -82,9 +82,7 @@ export function LocalDateGreeting({ name }: LocalDateGreetingProps) {
       {localGreeting ? (
         <>
           <time dateTime={localGreeting.dateTime}>{localGreeting.dateLabel}</time>
-          <span>
-            {localGreeting.timeOfDay}, {name}.
-          </span>
+          <span>{`${localGreeting.timeOfDay}${name ? `, ${name}` : ""}.`}</span>
         </>
       ) : (
         <>
