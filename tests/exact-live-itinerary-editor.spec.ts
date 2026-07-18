@@ -1,3 +1,4 @@
+// Production regression coverage for the approved inline itinerary editor.
 import { expect, test, type Page } from "@playwright/test";
 
 const storageKey = "mt_live_itinerary_v1";
