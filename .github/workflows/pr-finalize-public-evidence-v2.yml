@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: write
-  actions: read
+  pull-requests: write
 
 jobs:
   finalize:
@@ -37,7 +37,9 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          python - <<'PY'
+          set +e
+          (
+            python - <<'PY'
           from pathlib import Path
 
           source = Path('.github/workflows/finalize-public-evidence-v2.yml').read_text().splitlines()
@@ -50,32 +52,27 @@ jobs:
               payload.append(line[10:])
           Path('/tmp/finalize-public-evidence.py').write_text('\n'.join(payload) + '\n')
           PY
-          set +e
-          python /tmp/finalize-public-evidence.py 2>&1 | tee /tmp/finalize-public-evidence.log
+            python /tmp/finalize-public-evidence.py
+          ) 2>&1 | tee /tmp/finalize-public-evidence.log
           status=${PIPESTATUS[0]}
           set -e
           exit "$status"
 
-      - name: Upload finalizer diagnostics
+      - name: Post finalizer diagnostics
         if: steps.finalizer.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-evidence-finalizer-diagnostics
-          path: /tmp/finalize-public-evidence.log
-          if-no-files-found: error
-
-      - name: Stop after finalizer failure
-        if: steps.finalizer.outcome == 'failure'
-        run: exit 1
-
-      - name: Remove temporary materialization workflows
-        if: steps.finalizer.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          rm -f .github/workflows/materialize-public-evidence-v2.yml
-          rm -f .github/workflows/finalize-public-evidence-v2.yml
-          rm -f .github/workflows/pr-finalize-public-evidence-v2.yml
-          rm -f .github/finalize-public-evidence-error.txt
+          {
+            echo '### Public evidence finalizer failure'
+            echo
+            echo '```text'
+            tail -n 80 /tmp/finalize-public-evidence.log
+            echo '```'
+          } > /tmp/public-evidence-finalizer-comment.md
+          gh pr comment 120 --body-file /tmp/public-evidence-finalizer-comment.md
+          exit 1
 
       - name: Install dependencies
         if: steps.finalizer.outcome == 'success'
@@ -105,6 +102,6 @@ jobs:
         if: steps.finalizer.outcome == 'success'
         shell: bash
         run: |
-          git add -A
+          git add src config tests supabase
           git commit -m "Integrate public-safe evidence into the current trade flow"
           git push origin HEAD:feature/public-evidence-desk-v2
