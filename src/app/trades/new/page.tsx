@@ -46,6 +46,18 @@ const VICTORIA_EXAMPLE: Partial<TradeDraftValues> = {
     "Either participant may end future obligations by notifying the other; completed periods remain recorded.",
 };
 
+const WORKBENCH_GRID = `
+  #main-content > form {
+    grid-template-rows: 76px auto minmax(0, 1fr) 96px;
+  }
+
+  @media (max-width: 840px) {
+    #main-content > form {
+      grid-template-rows: 68px auto auto 88px;
+    }
+  }
+`;
+
 export default async function NewTradePage({ searchParams }: NewTradePageProps) {
   const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
 
@@ -56,11 +68,14 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const example = valueOf(resolvedSearchParams.example);
 
   return (
-    <TradeDraftWorkbench
-      formMessage={getFormMessage(resolvedSearchParams)}
-      initialValues={example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined}
-      saveAction={saveCoreOfferAction}
-      submissionKey={randomUUID()}
-    />
+    <>
+      <style>{WORKBENCH_GRID}</style>
+      <TradeDraftWorkbench
+        formMessage={getFormMessage(resolvedSearchParams)}
+        initialValues={example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined}
+        saveAction={saveCoreOfferAction}
+        submissionKey={randomUUID()}
+      />
+    </>
   );
 }
