@@ -14,6 +14,12 @@ test("the exact live loader injects the Discover navigation bridge", () => {
 
   assert.match(loader, /moral-trade-live-navigation\.js/);
   assert.match(loader, /source\.replace\('<\/body>'/);
+  assert.ok(
+    loader.includes(
+      `'<script src="/moral-trade-live-navigation.js"></scr' + 'ipt>'`,
+    ),
+  );
+  assert.doesNotMatch(loader, /moral-trade-live-navigation\.js"><\\\\\/script>/);
 });
 
 test("the live navigation bridge exposes the canonical Discover route", () => {
@@ -29,6 +35,12 @@ test("the Discover loader reconnects its product navigation", () => {
   const bridge = readPublicFile("moral-trade-discover-navigation.js");
 
   assert.match(loader, /moral-trade-discover-navigation\.js/);
+  assert.ok(
+    loader.includes(
+      `'<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>'`,
+    ),
+  );
+  assert.doesNotMatch(loader, /moral-trade-discover-navigation\.js"><\\\\\/script>/);
   assert.match(bridge, /\["now", "\/"\]/);
   assert.match(bridge, /\["offer", "\/trades\/new"\]/);
   assert.match(bridge, /\["activity", "\/commitments"\]/);
