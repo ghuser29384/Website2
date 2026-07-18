@@ -1,0 +1,385 @@
+name: Harden public evidence rollout
+
+on:
+  push:
+    branches:
+      - feature/public-evidence-desk
+    paths:
+      - .github/workflows/harden-public-evidence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/public-evidence-desk
+          fetch-depth: 0
+
+      - name: Apply public-evidence safety and integration updates
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def load(path: str) -> list[str]:
+              return Path(path).read_text().splitlines()
+
+          def save(path: str, lines: list[str]) -> None:
+              Path(path).write_text("\n".join(lines) + "\n")
+
+          def find_sequence(lines: list[str], sequence: list[str], start: int = 0) -> int:
+              matches = [
+                  index
+                  for index in range(start, len(lines) - len(sequence) + 1)
+                  if lines[index : index + len(sequence)] == sequence
+              ]
+              if len(matches) != 1:
+                  raise RuntimeError(f"Expected one sequence match, found {len(matches)}: {sequence!r}")
+              return matches[0]
+
+          def find_line(lines: list[str], exact: str, start: int = 0) -> int:
+              matches = [index for index in range(start, len(lines)) if lines[index] == exact]
+              if len(matches) != 1:
+                  raise RuntimeError(f"Expected one line match, found {len(matches)}: {exact!r}")
+              return matches[0]
+
+          actions_path = "src/app/core-trade-actions.ts"
+          lines = load(actions_path)
+
+          sequence = [
+              '    if (intent === "submit" && !readCheckbox(formData, "voluntary_certification")) {',
+              '      throw new Error("Confirm that the proposal is voluntary and contains no threat or retaliation.");',
+              '    }',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index + len(sequence) : index + len(sequence)] = [
+              '    if (intent === "submit" && !readCheckbox(formData, "public_evidence_certification")) {',
+              '      throw new Error(',
+              '        "Confirm that agreement evidence will be public by default and that only public-safe copies will be submitted.",',
+              '      );',
+              '    }',
+          ]
+
+          index = find_line(lines, '    const fileEntry = formData.get("evidence_file");')
+          lines[index + 1 : index + 1] = [
+              '    const publicSafeCopy = readCheckbox(formData, "public_safe_copy");',
+              '    if (!publicSafeCopy) {',
+              '      throw new Error(',
+              '        "Confirm that this evidence and its source are public-safe before submission.",',
+              '      );',
+              '    }',
+          ]
+          index = find_line(lines, '    let evidenceType = "";')
+          lines[index + 1 : index + 1] = [
+              '    let publicOriginalFilename = "";',
+              '    let publicMimeType = "";',
+              '    const publicRedactionNote =',
+              '      "The submitting participant certified this source as public-safe. This certification is not independent verification.";',
+          ]
+
+          sequence = [
+              '      const safeName = fileEntry.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "evidence";',
+              '      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${safeName}`;',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index : index + len(sequence)] = [
+              '      const extension = fileEntry.name.match(/\\.[a-zA-Z0-9]{1,10}$/)?.[0].toLowerCase() ?? "";',
+              '      publicOriginalFilename = `public-evidence${extension}`;',
+              '      publicMimeType = fileEntry.type;',
+              '      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${publicOriginalFilename}`;',
+          ]
+
+          index = find_line(lines, '      evidenceType = "link";')
+          lines[index + 1 : index + 1] = [
+              '      publicOriginalFilename = "external-evidence-link";',
+              '      publicMimeType = "text/html";',
+          ]
+          index = find_line(lines, '      evidenceType = "attestation";')
+          lines[index + 1 : index + 1] = [
+              '      publicOriginalFilename = "participant-attestation.txt";',
+              '      publicMimeType = "text/plain";',
+          ]
+
+          insert_index = find_line(lines, '        status: "submitted",') + 1
+          lines[insert_index:insert_index] = [
+              '        public_visibility: "public",',
+              '        redaction_status: "not_required",',
+              '        public_storage_path: storagePath,',
+              '        public_original_filename: publicOriginalFilename,',
+              '        public_mime_type: publicMimeType,',
+              '        public_redaction_note: publicRedactionNote,',
+          ]
+
+          index = find_line(
+              lines,
+              '          .update({ status: "completed", lifecycle_status: "completed", completed_at: now, updated_at: now })',
+          )
+          lines[index : index + 1] = [
+              '          .update({',
+              '            status: "completed",',
+              '            lifecycle_status: "completed",',
+              '            completed_at: now,',
+              '            updated_at: now,',
+              '            public_evidence_updated_at: now,',
+              '          })',
+          ]
+          save(actions_path, lines)
+
+          agreement_path = "src/app/trade-agreements/[agreementId]/page.tsx"
+          lines = load(agreement_path)
+          sequence = [
+              '            <h2 id="evidence-heading">Submit one proof, then let the other participant review it.</h2>',
+              '            <p>',
+              '              A private file, external link, or participant attestation may be used. The submitter',
+              '              cannot review their own evidence. A challenge moves the agreement into disputed state.',
+              '            </p>',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index : index + len(sequence)] = [
+              '            <h2 id="evidence-heading">Submit public-safe proof, then let the other participant review it.</h2>',
+              '            <p>',
+              '              Evidence records and their sources are public by default. Remove exact addresses,',
+              '              account numbers, private contact details, and unrelated personal information before',
+              '              submission. The submitter cannot review their own evidence, and a challenge moves the',
+              '              agreement into disputed state.',
+              '            </p>',
+          ]
+          header_close = find_sequence(
+              lines,
+              [
+                  '              agreement into disputed state.',
+                  '            </p>',
+                  '          </div>',
+              ],
+          )
+          insert_index = header_close + 3
+          lines[insert_index:insert_index] = [
+              '',
+              '          {detail.evidence.length ? (',
+              '            <p>',
+              '              <Link className="inline-link" href={`/evidence/${agreementId}`}>',
+              '                Open the public evidence desk and proof timeline',
+              '              </Link>',
+              '            </p>',
+              '          ) : null}',
+          ]
+          index = find_line(lines, '                <span>Evidence file (PDF, image, or text; 10 MB maximum)</span>')
+          lines[index] = '                <span>Public-safe evidence file (PDF, image, or text; 10 MB maximum)</span>'
+          index = find_line(lines, '              <p className="panel-note">Provide one of the three evidence forms above.</p>')
+          lines[index : index + 1] = [
+              '              <label className="radio-row">',
+              '                <input name="public_safe_copy" required type="checkbox" />',
+              '                <span>',
+              '                  I understand this evidence item and its source will be publicly inspectable. I have',
+              '                  removed sensitive identifiers and unrelated personal information.',
+              '                </span>',
+              '              </label>',
+              '              <p className="panel-note">',
+              '                Provide one evidence form above. Public visibility is separate from submitted,',
+              '                accepted, or challenged review status.',
+              '              </p>',
+          ]
+          sequence = [
+              '                      <span className="source-pill">',
+              '                        Challenge until {formatDate(item.challenge_window_ends_at)}',
+              '                      </span>',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index + len(sequence) : index + len(sequence)] = [
+              '                      <span className="source-pill">',
+              '                        Visibility: {String(item.public_visibility ?? "public").replaceAll("_", " ")}',
+              '                      </span>',
+              '                      <span className="source-pill">',
+              '                        Redaction: {String(item.redaction_status ?? "pending_review").replaceAll("_", " ")}',
+              '                      </span>',
+          ]
+          index = find_line(lines, '                        Open private uploaded evidence')
+          lines[index] = '                        Open uploaded evidence'
+          save(agreement_path, lines)
+
+          evidence_path = "src/app/evidence/[[...recordId]]/page.tsx"
+          lines = load(evidence_path)
+          index = find_line(lines, '  const path = clean(row.storage_path);')
+          lines[index] = '  const path = clean(row.public_storage_path);'
+          index = find_line(lines, "  const timeline=desk.querySelector('[data-pe-timeline]');")
+          lines.insert(index + 1, "  const timelineToggle=desk.querySelector('[data-pe-timeline-toggle]');")
+          index = find_line(lines, '  function select(id){')
+          lines[index:index] = [
+              '  function setTimeline(open){',
+              "    timeline?.classList.toggle('open',open);",
+              "    timelineToggle?.setAttribute('aria-expanded',open?'true':'false');",
+              '  }',
+          ]
+          replacements = {
+              "    const linked=event.target.closest('[data-pe-open-evidence]');if(linked){select(linked.getAttribute('data-pe-open-evidence'));timeline?.classList.remove('open');return;}":
+                  "    const linked=event.target.closest('[data-pe-open-evidence]');if(linked){select(linked.getAttribute('data-pe-open-evidence'));setTimeline(false);return;}",
+              "    if(event.target.closest('[data-pe-timeline-toggle]')){timeline?.classList.toggle('open');return;}":
+                  "    if(event.target.closest('[data-pe-timeline-toggle]')){setTimeline(!timeline?.classList.contains('open'));return;}",
+              "    if(event.target.closest('[data-pe-timeline-close]')){timeline?.classList.remove('open');return;}":
+                  "    if(event.target.closest('[data-pe-timeline-close]')){setTimeline(false);return;}",
+              "    if(event.target.closest('[data-pe-share]')){try{await navigator.clipboard.writeText(location.href);event.target.closest('button').lastChild.textContent=' Copied';setTimeout(()=>location.reload(),1100)}catch(_){}}":
+                  "    if(event.target.closest('[data-pe-share]')){try{await navigator.clipboard.writeText(location.href);const button=event.target.closest('button');const label=button?.lastChild;const prior=label?.textContent||' Share';if(label)label.textContent=' Copied';setTimeout(()=>{if(label)label.textContent=prior},1100)}catch(_){}}",
+              "  document.addEventListener('keydown',(event)=>{if(event.key==='Escape')timeline?.classList.remove('open');});":
+                  "  document.addEventListener('keydown',(event)=>{if(event.key==='Escape')setTimeline(false);});",
+          }
+          for old, new in replacements.items():
+              index = find_line(lines, old)
+              lines[index] = new
+          save(evidence_path, lines)
+
+          migration_path = "supabase/migrations/20260718130000_public_trade_evidence.sql"
+          lines = load(migration_path)
+          index = find_line(lines, "  add column if not exists public_url text not null default '',")
+          lines.insert(index + 1, "  add column if not exists public_storage_path text not null default '',")
+
+          start = find_line(lines, "    new.public_visibility := 'withheld_safety';")
+          end = find_line(lines, '    new.public_published_at := null;', start)
+          lines[start : end + 1] = [
+              "    new.public_visibility := 'withheld_safety';",
+              "    new.redaction_status := 'withheld';",
+              "    new.public_title := 'Evidence withheld for safety';",
+              "    new.public_summary := 'Specific proof is withheld under a documented safety exception.';",
+              "    new.public_url := '';",
+              "    new.public_storage_path := '';",
+              "    new.public_original_filename := '';",
+              "    new.public_mime_type := '';",
+              "    new.public_redaction_note := 'Specific proof withheld under a documented safety exception.';",
+              '    new.public_published_at := null;',
+          ]
+
+          file_branch = find_line(lines, "  if new.evidence_type = 'file' then")
+          pending_url = find_line(lines, "      new.public_url := '';", file_branch)
+          lines.insert(pending_url + 1, "      new.public_storage_path := '';")
+          link_branch = find_line(lines, "  elsif new.evidence_type = 'link' then")
+          link_status = find_line(lines, "    new.redaction_status := 'not_required';", link_branch)
+          lines.insert(link_status + 1, "    new.public_storage_path := '';")
+          else_branch = find_line(lines, '  else', link_status)
+          attestation_status = find_line(lines, "    new.redaction_status := 'not_required';", else_branch)
+          lines.insert(attestation_status + 1, "    new.public_storage_path := '';")
+
+          function_start = find_line(lines, 'create or replace function public.touch_public_evidence_record()')
+          function_end = find_line(lines, '$$;', function_start)
+          lines[function_start : function_end + 1] = [
+              'create or replace function public.touch_public_evidence_record()',
+              'returns trigger',
+              'language plpgsql',
+              'security definer',
+              'set search_path = public',
+              'as $$',
+              'declare',
+              '  target_agreement_id uuid;',
+              'begin',
+              "  if tg_op = 'DELETE' then",
+              '    target_agreement_id := old.agreement_id;',
+              '  else',
+              '    target_agreement_id := new.agreement_id;',
+              '  end if;',
+              '',
+              '  update public.agreements',
+              '  set public_evidence_updated_at = now()',
+              '  where id = target_agreement_id;',
+              '',
+              "  if tg_op = 'DELETE' then",
+              '    return old;',
+              '  end if;',
+              '  return new;',
+              'end;',
+              '$$;',
+          ]
+
+          index = find_line(lines, '  public_title = case')
+          lines.insert(index + 1, "    when not coalesce(a.public_evidence_enabled, true) then 'Evidence withheld for safety'")
+          index = find_line(lines, '  public_summary = case')
+          lines.insert(index + 1, "    when not coalesce(a.public_evidence_enabled, true) then 'Specific proof is withheld under a documented safety exception.'")
+          public_url_start = find_line(lines, '  public_url = case')
+          public_url_end = find_line(lines, '  end,', public_url_start)
+          lines.insert(public_url_end + 1, "  public_storage_path = '',")
+          filename_case = find_line(lines, '  public_original_filename = case')
+          lines.insert(filename_case + 1, "    when not coalesce(a.public_evidence_enabled, true) then ''")
+
+          visibility_comment = find_sequence(
+              lines,
+              [
+                  'comment on column public.trade_evidence_items.public_visibility is',
+                  "  'Public by default. withheld_safety is reserved for a documented safety exception.';",
+              ],
+          )
+          lines[visibility_comment + 2 : visibility_comment + 2] = [
+              'comment on column public.trade_evidence_items.public_storage_path is',
+              "  'Storage path for the certified or redacted public-safe copy. Never populate this with an unreviewed private source.';",
+          ]
+          save(migration_path, lines)
+
+          sitemap_path = "src/app/sitemap.ts"
+          lines = load(sitemap_path)
+          sequence = [
+              '    {',
+              '      url: getAbsoluteUrl("/create"),',
+              '      lastModified: now,',
+              '      changeFrequency: "weekly",',
+              '      priority: 0.96,',
+              '    },',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index:index] = [
+              '    {',
+              '      url: getAbsoluteUrl("/evidence"),',
+              '      lastModified: now,',
+              '      changeFrequency: "daily",',
+              '      priority: 0.9,',
+              '    },',
+          ]
+          save(sitemap_path, lines)
+
+          search_path = "src/lib/site-search.ts"
+          lines = load(search_path)
+          sequence = [
+              '  {',
+              '    href: "/create",',
+              '    label: "Create",',
+          ]
+          index = find_sequence(lines, sequence)
+          lines[index:index] = [
+              '  {',
+              '    href: "/evidence",',
+              '    label: "Public evidence",',
+              '    summary:',
+              '      "Inspect public-by-default evidence, review states, redactions, and the proof timeline behind trade records.",',
+              '    kind: "trade",',
+              '    keywords: [',
+              '      "evidence",',
+              '      "proof",',
+              '      "public",',
+              '      "timeline",',
+              '      "submitted",',
+              '      "accepted",',
+              '      "challenged",',
+              '      "redaction",',
+              '      "receipt",',
+              '    ],',
+              '  },',
+          ]
+          save(search_path, lines)
+          PY
+
+      - name: Commit hardened implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/app/core-trade-actions.ts \
+            'src/app/trade-agreements/[agreementId]/page.tsx' \
+            'src/app/evidence/[[...recordId]]/page.tsx' \
+            src/app/sitemap.ts \
+            src/lib/site-search.ts \
+            supabase/migrations/20260718130000_public_trade_evidence.sql
+          git rm -- .github/workflows/harden-public-evidence.yml
+          git commit -m "Harden public evidence submission and redaction gates"
+          git push origin HEAD:feature/public-evidence-desk
