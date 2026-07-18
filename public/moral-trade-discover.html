@@ -38,8 +38,9 @@
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();
         const enhancementScripts = [
-          '<script src="/moral-trade-discover-navigation.js"><\/script>',
-          '<script src="/moral-trade-brand.js"><\/script>',
+          '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
+          '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
+          '<script src="/moral-trade-brand.js"></scr' + 'ipt>',
         ].join("");
         const enhancedSource = source.includes("</body>")
           ? source.replace("</body>", `${enhancementScripts}</body>`)
