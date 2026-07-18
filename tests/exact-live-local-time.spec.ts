@@ -2,6 +2,29 @@ import { expect, test, type Page } from "@playwright/test";
 
 const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
 
+async function installAccountFixture(page: Page) {
+  await page.route("**/api/live-account", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated: true,
+        account: {
+          displayName: "Riley Morgan",
+          firstName: "Riley",
+          initials: "RM",
+          memberSince: "2026-01-01T00:00:00.000Z",
+          completedCommitments: 0,
+          paymentAccount: { configured: false, label: "Not configured" },
+          notifications: { enabled: null, label: "Not configured" },
+          publicTrustProfile: { enabled: null, label: "Not configured" },
+          defaultPrivacy: "Not configured",
+          standardTerms: { href: "/terms", label: "Current site terms" },
+        },
+      }),
+    }),
+  );
+}
+
 async function expectLocalHeader(
   page: Page,
   expected: { dateTime: string; dateLabel: string; greeting: string },
@@ -36,12 +59,13 @@ test.describe("exact live interface local time", () => {
 
     test("uses the visitor's previous local day across Now, Trade, and Activity", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
+      await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
 
       await expectHeaderAcrossPrimaryPages(page, {
         dateTime: "2026-07-16",
         dateLabel: "Thursday, July 16, 2026",
-        greeting: "Good evening, Alex.",
+        greeting: "Good evening, Riley.",
       });
     });
   });
@@ -51,12 +75,13 @@ test.describe("exact live interface local time", () => {
 
     test("uses the visitor's next local day across Now, Trade, and Activity", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
+      await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
 
       await expectHeaderAcrossPrimaryPages(page, {
         dateTime: "2026-07-17",
         dateLabel: "Friday, July 17, 2026",
-        greeting: "Good morning, Alex.",
+        greeting: "Good morning, Riley.",
       });
     });
   });
@@ -66,11 +91,12 @@ test.describe("exact live interface local time", () => {
 
     test("refreshes after the local date and greeting period change", async ({ page }) => {
       await page.clock.setFixedTime(new Date("2026-07-16T17:59:00.000Z"));
+      await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
       await expectLocalHeader(page, {
         dateTime: "2026-07-16",
         dateLabel: "Thursday, July 16, 2026",
-        greeting: "Good afternoon, Alex.",
+        greeting: "Good afternoon, Riley.",
       });
 
       await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
@@ -78,7 +104,7 @@ test.describe("exact live interface local time", () => {
       await expectLocalHeader(page, {
         dateTime: "2026-07-17",
         dateLabel: "Friday, July 17, 2026",
-        greeting: "Good morning, Alex.",
+        greeting: "Good morning, Riley.",
       });
     });
   });
