@@ -47,6 +47,9 @@ jobs:
           end = source.index("          PY", start)
           payload = []
           for line in source[start:end]:
+              if line == "":
+                  payload.append("")
+                  continue
               if not line.startswith('          '):
                   raise RuntimeError(f'Unexpected finalizer indentation: {line!r}')
               payload.append(line[10:])
