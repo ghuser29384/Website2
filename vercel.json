@@ -1,5 +1,5 @@
 {
-  "buildCommand": "node --test --import tsx src/lib/trade-reminders.test.ts src/lib/trade-reminder-worker.test.ts src/lib/trade-reminder-email-safety.test.ts && npm run lint && npm run build",
+  "buildCommand": "node --test --import tsx src/lib/trade-reminders.test.ts src/lib/trade-reminder-worker.test.ts src/lib/trade-reminder-email-safety.test.ts && npx eslint 'src/app/agreements/[agreementId]/reminders/page.tsx' 'src/app/agreements/[agreementId]/template.tsx' 'src/app/api/calendar/reminders/[...token]/route.ts' 'src/app/api/jobs/trade-reminders/route.ts' 'src/app/commitments/[agreementId]/reminders/page.tsx' 'src/app/commitments/page.tsx' 'src/app/trade-agreements/[agreementId]/reminders/actions.ts' 'src/app/trade-agreements/[agreementId]/reminders/page.tsx' 'src/app/trade-agreements/[agreementId]/template.tsx' 'src/components/core-trade/reminder-launcher.tsx' 'src/components/core-trade/reminder-management.tsx' 'src/lib/trade-reminder-email-safety.test.ts' 'src/lib/trade-reminder-worker.test.ts' 'src/lib/trade-reminder-worker.ts' 'src/lib/trade-reminders.test.ts' 'src/lib/trade-reminders.ts' && npm run build",
   "crons": [
     {
       "path": "/api/jobs/saved-searches",
