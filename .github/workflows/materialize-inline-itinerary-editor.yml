@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - release-inline-itinerary-editor-v2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -31,6 +36,7 @@ jobs:
             fs.writeFileSync(filePath, content);
           }
           fs.rmSync(payloadPath);
+          fs.rmSync('tmp/materialize-trigger.txt', { force: true });
           fs.rmSync('.github/workflows/materialize-inline-itinerary-editor.yml');
           NODE
       - name: Commit production implementation
@@ -39,4 +45,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Add the inline itinerary editor"
-          git push
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
