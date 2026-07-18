@@ -36,7 +36,8 @@ test.describe("Returning-user homepage", () => {
       "aria-current",
       "page",
     );
-    await expect(page.getByRole("button", { name: "Open account menu" })).toContainText("AJ");
+    const accountMenu = page.getByRole("button", { name: "Open account menu" });
+    await expect(accountMenu.getByTestId("account-avatar").locator("svg")).toBeVisible();
 
     await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
     await expect(
@@ -50,9 +51,7 @@ test.describe("Returning-user homepage", () => {
     await expect(localGreeting.locator('time[datetime="2026-07-16"]')).toHaveText(
       "Thursday, July 16, 2026",
     );
-    await expect(
-      localGreeting.getByText("Good afternoon, Alex.", { exact: true }),
-    ).toBeVisible();
+    await expect(localGreeting.getByText("Good afternoon.", { exact: true })).toBeVisible();
 
     const recommendation = page.getByRole("region", { name: "Recommended moral trade" });
     const tradeCards = recommendation.locator("article");
