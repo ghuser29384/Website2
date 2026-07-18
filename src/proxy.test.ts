@@ -18,28 +18,21 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("a first human homepage visit redirects once to the walkthrough", () => {
-  const response = proxy(makeRequest("/?utm_source=invite"));
-
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite&first_visit=1",
-  );
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
-  assert.equal(response.headers.get("cache-control"), "private, no-store");
-});
-
-test("a returning visitor receives the normal application homepage", () => {
-  const response = proxy(
+test("homepage requests are rewritten to the live application", () => {
+  const firstVisitResponse = proxy(makeRequest("/?utm_source=invite"));
+  const returningResponse = proxy(
     makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("x-middleware-next"), "1");
-  assert.equal(response.headers.get("x-middleware-rewrite"), null);
-  assert.equal(response.headers.get("location"), null);
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
+  for (const response of [firstVisitResponse, returningResponse]) {
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.headers.get("x-middleware-rewrite"),
+      "https://moraltrade.org/moral-trade-live.html?utm_source=invite",
+    );
+    assert.equal(response.headers.get("location"), null);
+    assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
+  }
 });
 
 test("opening the walkthrough directly records the visit without redirecting", () => {
@@ -51,7 +44,7 @@ test("opening the walkthrough directly records the visit without redirecting", (
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("bots and prefetches receive the homepage without consuming the walkthrough", () => {
+test("bots and prefetches receive the live homepage without setting the walkthrough cookie", () => {
   const botResponse = proxy(
     makeRequest("/", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
   );
@@ -61,16 +54,39 @@ test("bots and prefetches receive the homepage without consuming the walkthrough
 
   for (const response of [botResponse, prefetchResponse]) {
     assert.equal(response.status, 200);
-    assert.equal(response.headers.get("x-middleware-next"), "1");
-    assert.equal(response.headers.get("x-middleware-rewrite"), null);
+    assert.equal(
+      response.headers.get("x-middleware-rewrite"),
+      "https://moraltrade.org/moral-trade-live.html",
+    );
     assert.equal(response.headers.get("location"), null);
     assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
   }
 });
 
-test("the offers directory still defaults to its live view", () => {
+test("the legacy queryless offers entry opens Discover", () => {
   const response = proxy(makeRequest("/offers"));
 
   assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "https://moraltrade.org/offers?view=live");
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/discover?domain=offers&view=list",
+  );
+});
+
+test("query-driven offer searches continue to default to the live list", () => {
+  const response = proxy(makeRequest("/offers?search=Climate"));
+
+  assert.equal(response.status, 307);
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/offers?search=Climate&view=live",
+  );
+});
+
+test("explicit offer views pass through without redirecting", () => {
+  const response = proxy(makeRequest("/offers?view=templates"));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("location"), null);
 });
