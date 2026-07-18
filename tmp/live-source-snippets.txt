@@ -1,0 +1,360 @@
+
+===== /Your itinerary/i at line 228 =====
+200: function story(ey,title,copy,rows,cta,action){
+201:  return `<article class="story"><div class="eyebrow blue">${ey}</div><h3>${title}</h3><p>${copy}</p><div class="term-table">${rows.map(r=>`<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div><button class="btn small ${ey.startsWith('Lead')?'primary':''}" style="margin-top:14px" data-action="${action}">${cta} →</button></article>`;
+202: }
+203: function sideCard(title,items,foot='',kind=''){
+204:  return `<section class="panel side-card" ${kind?'style="border-color:#ec9c69"':''}><h4>${title}</h4>${items.map(i=>`<div class="side-row"><i class="dot ${kind==='warn'?'warn':'info'}"></i><div>${i}</div></div>`).join('')}${foot}</section>`;
+205: }
+206: function nowPlan(){
+207:  return `<div class="plan-grid">
+208:  <aside class="panel plan-control">
+209:   ${field('Change goal','Reduce factory-farming harm 🎯')}${field('Horizon','This month ▾','by Jul 31, 2026')}${field('Budget','$80.00 ✎','of $120 available',67)}${field('Time available','~2 hours ▾','This month')}${field('Verification level','High ◈','Prioritize rigor')}
+210:   <button class="btn" style="width:100%;margin-top:12px">↻ Reset</button>
+211:  </aside>
+212:  <main>
+213:   <section class="panel route"><div class="between"><div><div class="eyebrow blue">Choose the outcome. See every route.</div><h2>Reduce factory-farming harm this month.</h2></div>${tag('Goal active','ok')}</div>
+214:    ${lane('blue-l','→','Direct trade','Fund proven high-integrity interventions directly.',[['Fund a verified research review','$20 · 30–60m'],['Fund transport improvement','$25 · 30–45m'],['Support policy implementation','$25 · 45–60m']])}
+215:    ${lane('green-l','▣','Conditional threshold pool','Pool funds that unlock when conditions are met.',[['Join cage-free transition pool','$15 · 2m'],['Threshold unlocks (75%)','Depends'],['Funds disbursed to grantee','Within 48h']])}
+216:    ${lane('orange-l','⇄','Donation redirect','Redirect ineffective donations to high-impact options.',[['Redirect $20 of political donations','$20 · 5m',1],['Route to verified research review','$20 · 30–60m'],['Research review completed','Within 14d']])}
+217:    ${lane('purple-l','○','Personal action','Change your behavior to reduce demand.',[['Commit to 30-day diet shift','$0 · 5m'],['Track & reflect weekly','$0 · 15m/wk'],['Reassess & extend impact','Ongoing']])}
+218:    ${lane('gray-l','◎','Coalition','Coordinate with others to amplify change.',[['Invite one counterparty','$0 · 5m'],['Align on shared action','15–30m'],['Coordinate execution','Ongoing']])}
+219:    <div class="eyebrow blue">Recommended mixed route</div><div class="metric-grid" style="grid-template-columns:repeat(3,1fr);margin-top:7px">
+220:     <div><b class="serif" style="font-size:18px">1 · Redirect $20</b><br><small class="muted">5 min · due Jul 20</small></div>
+221:     <div><b class="serif" style="font-size:18px">2 · Fund a verified review</b><br><small class="muted">$20 · 30–60 min</small></div>
+222:     <div><b class="serif" style="font-size:18px">3 · Invite one counterparty</b><br><small class="muted">$0 · 5 min</small></div>
+223:    </div>
+224:    <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="start-route">Start this route</button><button class="btn">Compare routes</button><button class="btn" data-action="save">Save goal</button><button class="btn">Custom route</button></div>
+225:   </section>
+226:  </main>
+227:  <aside class="stack">
+228:   <section class="panel itinerary"><div class="between"><div class="eyebrow">Your itinerary</div><button class="btn ghost small">Edit</button></div>
+229:    ${it(1,'Redirect $20 of political donations','$20 · Jul 20')}${it(2,'Fund a verified research review','$20 · Jul 31')}${it(3,'Invite one counterparty','$0 · Jul 31')}
+230:   </section>
+231:   <section class="panel pad"><div class="eyebrow">Current progress</div>${checkline('Goal created · Jul 16')}${checkline('Budget set · $80 / $120')}${checkline('Route planned · 3 of 3')}${checkline('Started · 0 of 3',false)}${progress(0)}</section>
+232:   <section class="panel pad" style="border-color:#e88061"><div class="eyebrow orange">Blocked dependency</div><h3 class="serif" style="font-weight:400">Political donation redirect</h3><p style="font-size:11px">Confirm redirect of $20 from an ineffective donation.</p><button class="btn ghost small orange" data-action="start-route">Go to redirect →</button></section>
+233:  </aside></div>${allocationPlanner()}`;
+234: }
+235: function field(label,value,help='',pct=null){return `<div class="field"><label>${label}</label><div class="value">${value}</div>${pct!==null?progress(pct):''}${help?`<small class="muted">${help}</small>`:''}</div>`}
+236: function lane(cls,ico,title,desc,steps){return `<div class="lane ${cls}"><div class="lane-label"><i class="circleicon">${ico}</i><div><b>${title}</b><small>${desc}</small></div></div><div class="lane-track">${steps.map(s=>`<div class="step ${s[2]?'active':''}">${s[0]}<em>${s[1]}</em></div>`).join('')}</div></div>`}
+237: function it(nm,title,meta){return `<div class="it-item"><i class="n">${nm}</i><div><b>${title}</b><br><small class="muted">${meta}</small></div></div>`}
+238: function checkline(t,done=true){return `<div class="side-row"><i class="dot ${done?'good':''}"></i><div>${t}</div></div>`}
+239: function allocationPlanner(){
+240:  const rows=[['bio','Verified biosecurity salary-gap pool','$10,000','Jul 31','78%'],['wild','Wild-animal-suffering research threshold','$25,000','Aug 15','66%'],['civic','Civic-infrastructure trade','$15,000','Aug 31','80%'],['factory','Factory-farming redirect','$12,000','Aug 20','71%']];
+241:  return `<section class="panel alloc"><div class="resourcebar">
+242:   <div><div class="eyebrow">Available money</div><strong>$250</strong><span class="dragchip" draggable="true" data-resource="m">Drag $10</span></div>
+243:   <div><div class="eyebrow">Time</div><strong>6 h</strong><span class="dragchip" draggable="true" data-resource="h">Drag 1 h</span></div>
+244:   <div><div class="eyebrow">Transit</div><strong>12 trips</strong><span class="dragchip" draggable="true" data-resource="t">Drag 1 trip</span></div>
+245:   <div><div class="eyebrow">Unscheduled</div><strong class="blue">$65</strong><span class="mono blue">2 h · 4 trips</span></div>
+246:   <div><div class="eyebrow">Recurring rules</div><small>Keep $25 unscheduled.<br>Keep at least 1h flexible.</small><br><button class="btn ghost small" data-now="rules">Edit</button></div>
+247:  </div><div class="tablewrap"><table class="table"><thead><tr><th>Opportunity</th><th>What happens</th><th>Threshold</th><th>Deadline</th><th>Reserved</th><th>Conditional</th><th>Charged</th><th>Refundable</th><th>Status</th></tr></thead><tbody>
+248:  ${rows.map(r=>{let a=state.alloc[r[0]];return `<tr><td><div class="opptitle">${r[1]}</div>${tag(r[0]==='bio'||r[0]==='wild'?'Pool':'Trade')}</td><td style="font-size:11px">${r[0]==='bio'?'Fill verified salary gaps in biosecurity roles.':r[0]==='wild'?'Fund research meeting a shared bar.':r[0]==='civic'?'Build an open-data pipeline for city analytics.':'Redirect advocacy spend from harmful campaigns.'}</td><td><b>${r[2]}</b></td><td><b>${r[3]}</b><br><small>11:59 PM</small></td><td><div class="drop" data-row="${r[0]}">$${Math.max(10,a.m-40)}</div><div class="drop" data-row="${r[0]}">${Math.max(0,a.h-1)} h</div></td><td><div class="drop" data-row="${r[0]}">$${a.m}</div><div class="drop" data-row="${r[0]}">${a.h}h · ${a.t} trips</div></td><td><div class="drop solid">$${Math.max(20,a.m-10)}</div><div class="drop solid">${Math.max(1,a.t-1)} trips</div></td><td><div class="drop refund">$${Math.max(5,a.m-60)}</div><div class="drop refund">—</div></td><td>${status('On track')}<br><small>${r[4]} to activate</small></td></tr>`}).join('')}
+249:  </tbody></table></div><div class="between pad"><div class="h" style="gap:28px"><div><b class="big blue">$185</b><br><small>charged</small></div><div><b class="big blue">4 h</b><br><small>committed</small></div><div><b class="big blue">8</b><br><small>trips replaced</small></div></div><div style="min-width:245px"><div class="eyebrow orange">Safe cap monthly</div><div class="between"><span>Money</span><b>$200 / $250</b></div>${progress(80,'orangebar')}<button class="btn primary" style="width:100%;margin-top:8px" data-action="confirm">Confirm allocations</button></div></div></section>`;
+250: }
+251: function nowRules(){
+252:  const rows=[
+253:   ['1','When a verified AI-safety pool is updated','pool.category == "AI safety" && pool.verified && gap_pct <= 2','Reserve funds and ask me before pledging.','Up to $25','Verified pool page + funding snapshot.','passing'],
+254:   ['2','When a trusted counterparty submits an offer','counterparty.trusted && offer.topic == "Factory-farming research"','Notify me of the offer.','—','Offer summary + counterparty attestation.','passing'],
+255:   ['3','Monthly after rewards are calculated','rewards.unused_amount > 0 && approval.required','Redirect up to $10 to my standing donation pool.','Up to $10','Rewards statement + pool allocation record.','blocked']
+256:  ];
+257:  return `<div class="rules-layout"><main>
+258:  <div class="metric-grid rule-summary"><div><div class="eyebrow">Test mode</div><div class="h" style="margin-top:8px"><span class="switch ${state.test?'on':''}" data-action="toggle-test"></span><b>${state.test?'ON':'OFF'}</b></div><small>Rules evaluate; nothing executes.</small></div><div><div class="eyebrow">Upcoming matches</div><div class="big">3–5</div><small>Next 30 days</small></div><div><div class="eyebrow">Monthly risk cap</div><div class="big">$200 / $200</div>${progress(100)}</div><div><div class="eyebrow">System status</div><div style="margin-top:10px">${status('All systems operational')}</div><small>Last evaluated 2 min ago</small></div></div>
+259:  <div class="rule-flow" style="background:#eeebe2"><div>#</div><div class="eyebrow">Trigger</div><div class="eyebrow">Condition</div><div class="eyebrow">Action</div><div class="eyebrow">Cap</div><div class="eyebrow">Proof</div></div>
+260:  ${rows.map(r=>`<div class="rule-flow"><div class="rule-num">${r[0]}</div><div><div class="box-title">${r[1]}</div></div><div><div class="code">${r[2]}</div><div style="margin-top:8px">${status(r[6],r[6]==='blocked'?'warn':'good')}</div></div><div><div class="box-title">${r[3]}</div><div class="mono blue" style="font-size:9px;margin-top:8px">${r[6]==='blocked'?'PENDING APPROVAL':'NOTIFY + RESERVE'}</div></div><div><div class="box-title" style="text-align:center">${r[4]}</div></div><div style="font-size:10px">${r[5]}<br><button class="btn ghost small blue">View proof →</button></div></div>`).join('')}
+261:  <div class="panel pad" style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:14px"><div><div class="eyebrow">Risk & control</div><p style="font-size:11px;line-height:1.65">You set the rules.<br>We evaluate conditions.<br>We act only after approval.<br>Every action is auditable.</p></div><div><div class="eyebrow">Execution mode</div>${tag(state.test?'Test mode on':'Live','info')}<p style="font-size:10px">Notifications and approvals still run.</p></div><div><div class="eyebrow">Notifications</div><p style="font-size:11px">Email · approvals<br>In-app · all<br>Digest · daily</p></div><div><div class="eyebrow">Key</div><p style="font-size:11px"><span class="blue">━━</span> Live path<br><span class="green">━━</span> Passing<br><span class="orange">━━</span> Blocked</p></div></div>
+262:  </main><aside class="stack">
+263:   <section class="panel pad"><div class="between"><div class="eyebrow">Approval queue (1)</div><a class="blue">View all</a></div><h3 class="serif" style="font-weight:400">Pending pledge</h3><p style="font-size:11px"><b>AI Safety Fund</b><br>Verified AI-safety pool</p><div class="big" style="text-align:right">$20</div><p class="muted" style="font-size:10px">Rule #1 · Pool is 1.6% below threshold.</p><div class="h"><button class="btn primary small" data-action="approve">Approve $20</button><button class="btn small" data-action="decline">Decline</button></div></section>
+264:   <section class="panel pad"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+265:   <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+266:  </aside></div>`;
+267: }
+268: 
+269: /* Trade */
+
+===== /function\s+nowPage/i at line 160 =====
+132:   ['I offer','I will give <span class="token" contenteditable="true">$80.00</span> to <span class="token" contenteditable="true">AI-safety research</span>.'],
+133:   ['Only if they','Only if they <span class="token" contenteditable="true">replace 12 car trips</span> or <span class="token" contenteditable="true">deliver a factory-farming evidence review</span>.'],
+134:   ['Activation condition','Both sides lock in by <span class="token" contenteditable="true">July 23, 2026</span>.'],
+135:   ['Proof','Proof via <span class="token" contenteditable="true">receipts</span> or <span class="token" contenteditable="true">independent reviewer</span>.'],
+136:   ['If it fails','If proof is not provided, <span class="token fail" contenteditable="true">no funds are released</span>.']
+137:  ]
+138: };
+139: const O={
+140:  civic:{kind:'Trade opportunity',title:'Replace 8 car trips ↔ Mina funds $20 of civic infrastructure',cause:'Civic infrastructure',mechanism:'Direct reciprocity',amount:'$20',effort:'~40 minutes',trust:'High',a:'6–12 trips',b:'$16–$25',deadline:'Jul 31, 2026',proof:'Miles logged via connected app; receipts and project reports',status:'Verified',counterparty:'Mina Park'},
+141:  bio:{kind:'Near-threshold pool',title:'Close a verified biosecurity salary gap',cause:'Biosecurity',mechanism:'Threshold pool',amount:'$45 pledge',effort:'One-time',trust:'High',a:'$10–$100',b:'$4,800 remaining',deadline:'Jul 20, 2026',proof:'Employer letter and salary-gap audit',status:'Near activation',counterparty:'Praesidium Biosecurity'},
+142:  factory:{kind:'Mutual redirect',title:'Redirect factory-farming donation spend',cause:'Animal welfare',mechanism:'Donation redirect',amount:'$20 / month',effort:'5 minutes',trust:'Medium',a:'$10–$100',b:'Matched 1:1',deadline:'Jul 25, 2026',proof:'Donation receipts',status:'On track',counterparty:'Taylor Reed'},
+143:  wild:{kind:'Threshold pool',title:'Fund wild-animal-suffering research threshold',cause:'Wild animal suffering',mechanism:'Conditional pledge',amount:'$35',effort:'No time',trust:'High',a:'$10–$250',b:'21 contributors',deadline:'Jul 30, 2026',proof:'Verified grant report',status:'On track',counterparty:'Wild Animal Initiative'},
+144:  docs:{kind:'Reciprocal trade',title:'Open-civic-infrastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+145: };
+146: const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+147: const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+148: const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+149: const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+150: const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+151: const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+152: const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+153: 
+154: function render(){
+155:  if(!['now','trade','activity'].includes(state.page))state.page='now';
+156:  $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+157:  $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+158:  bindDnD();
+159: }
+160: function nowPage(){
+161:  return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+162:  ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+163:  ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+164: }
+165: function nowFocus(){
+166:  return `<div class="focus-layout"><main>
+167:  <section class="panel black urgent">
+168:   <div><div class="eyebrow orange">Due today</div><h2>Counteroffer from Mina.</h2><p class="muted">Mina responded to your transit trade. Due by 6:00 PM today.</p></div>
+169:   <div class="terms"><div><span class="eyebrow">Your offer</span><strong>8 transit trips</strong></div><div><span class="eyebrow">Mina’s counter</span><strong>6 transit trips + $20</strong></div></div>
+170:   <div class="stack"><button class="btn primary" data-action="dealroom">Review terms →</button><button class="btn ghost">View conversation →</button></div>
+171:  </section>
+172:  <section class="panel attention" style="background:linear-gradient(90deg,rgba(184,217,44,.12),rgba(251,250,246,.9))">
+173:   <div class="iconbox limebg">↗</div><div class="lead"><div class="eyebrow lime">Threshold opportunity</div><h3>Your $10 could activate $9,990.</h3></div>
+174:   <div><div class="between"><b class="serif" style="font-size:22px">$${state.threshold.toLocaleString()} of $9,990</b><b class="blue">${(state.threshold/9990*100).toFixed(1)}%</b></div>${progress(state.threshold/9990*100)}<small class="muted">Only charged if the match activates.</small></div>
+175:   <button class="btn" data-action="add-pledge">Add $10 →</button>
+176:  </section>
+177:  <section class="panel attention">
+178:   <div class="iconbox orangebg">✓</div><div class="lead"><div class="eyebrow orange">Requires your action</div><h3>${state.verified?'Transit commitment verified.':'Verify your completed transit commitment.'}</h3></div>
+179:   <div><b>You marked ${state.verified?'8':'4'} of 8 trips complete.</b><p class="muted" style="font-size:11px">Verification unlocks your counterparty’s funds.</p></div>
+180:   <button class="btn" data-action="verify">${state.verified?'Verified':'Verify trips →'}</button>
+181:  </section>
+182:  <section class="panel brief">
+183:   ${story('Lead story · Counteroffer','Support AI-safety research under $100.','Mina is a verified researcher. She countered your offer with updated terms and a four-week deliverable.',
+184:    [['Work','Frontier bio-risk evaluations'],['Deliverable','Red-team evals + publish results'],['Your funding','$95, one-time'],['Proof','Public harness + review']],'Review counteroffer','dealroom')}
+185:   ${story('Near-threshold pool','Close the gap. Choose the more impactful biosecurity job.','Verified salary gap to reach the role. Funds return automatically if the employment condition is not met.',
+186:    [['Gap','$580'],['Remaining','$45'],['Contributors','7'],['Start','Aug 17, 2026']],'Pledge $45','select-bio')}
+187:   ${story('Completed trade','You funded open-source eval tooling. Impact delivered.','The researcher delivered as promised. Proof and downstream use were verified.',
+188:    [['Trade','#7842'],['Funding','$75'],['Completed','Jul 12, 2026'],['Impact','Tooling used in 3 projects']],'Repeat pattern','repeat')}
+189:  </section>
+190:  <div class="metric-grid stats"><div><strong>$45</strong><small>reserved across 3 commitments</small></div><div><strong>$0</strong><small>charged today</small></div><div><strong>3</strong><small>active commitments</small></div><div><strong>4</strong><small>new saved-field opportunities</small></div></div>
+191:  </main><aside class="stack">
+192:  ${sideCard('Today’s changes',[
+193:   'Near-threshold salary-gap pools · 12 new','AI-safety research under $100 · 5 new','Civic infrastructure helpers · 3 new'
+194:  ],'<button class="btn ghost small" data-action="command">Review saved changes →</button>')}
+195:  <section class="panel side-card"><h4>Today’s activity</h4><div class="between"><div><div class="big">$45</div><small class="muted">Reserved</small></div><div><div class="big">$0</div><small class="muted">Charged</small></div></div></section>
+196:  ${sideCard('Pending action',['1 counteroffer awaiting review from Mina R. on “Support AI safety evals for frontier bio risks.”'],'<button class="btn ghost small" data-action="dealroom">Review →</button>','warn')}
+197:  ${sideCard('Next 7 days',['Fri 17 · Salary-gap campaign closes','Sun 19 · Follow-up with Mina','Mon 20 · Verification partner deadline'],'<button class="btn ghost small" data-action="calendar">Open calendar →</button>')}
+198:  </aside></div>`;
+199: }
+200: function story(ey,title,copy,rows,cta,action){
+201:  return `<article class="story"><div class="eyebrow blue">${ey}</div><h3>${title}</h3><p>${copy}</p><div class="term-table">${rows.map(r=>`<div><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div><button class="btn small ${ey.startsWith('Lead')?'primary':''}" style="margin-top:14px" data-action="${action}">${cta} →</button></article>`;
+
+===== /const\s+state\s*=/i at line 126 =====
+98:  .plan-grid,.rules-layout,.discover-grid,.compose-grid,.exchange-grid,.deal-layout,.port-grid,.outcomes-grid,.calendar-grid{grid-template-columns:1fr}.plan-control,.itinerary,.ingredients{position:static}.lane{grid-template-columns:1fr}.resourcebar{grid-template-columns:1fr 1fr}.rule-summary{grid-template-columns:1fr 1fr}.rule-flow{grid-template-columns:32px 1fr}.rule-flow>div{border-right:0}.filters{border-right:0;border-bottom:1px solid var(--line)}
+99:  .resultbody{height:auto;min-height:560px}.market-row{grid-template-columns:1fr}.market-row>div{border-right:0}.compose-grid>.stack{display:block}.ingredients{display:flex;overflow:auto;gap:6px}.ingredient{min-width:115px}.sentence{font-size:22px}.clause{grid-template-columns:38px 1fr}.clause-tool{display:none}
+100:  .exchange-grid{display:block}.match-hero{grid-template-columns:1fr}.offer-body{grid-template-columns:1fr}.why{grid-template-columns:1fr 1fr}.rooms{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--line)}.room{min-width:170px}.dealbottom{grid-template-columns:1fr}
+101:  .port-summary{grid-template-columns:1fr 1fr}.allocrow{grid-template-columns:56px 1.3fr .8fr .8fr}.allocrow>div:nth-child(5),.allocrow>div:nth-child(6){display:none}
+102:  .ledger-summary{grid-template-columns:1fr 1fr}.outcome{grid-template-columns:1fr}.outmeta{border-right:0;border-bottom:1px solid var(--line)}.outdetail{grid-template-columns:1fr 1fr}.commandrow{grid-template-columns:1fr}
+103: }
+104: 
+105: </style>
+106: </head>
+107: <body>
+108: <header class="topbar">
+109:   <a class="brand" href="#now"><span class="mark"><i></i></span><span>Moral Trade</span></a>
+110:   <nav>
+111:     <button data-page="now">Now</button>
+112:     <button data-page="trade">Trade</button>
+113:     <button data-page="activity">Commitments</button>
+114:   </nav>
+115:   <div class="top-actions">
+116:     <button class="text-btn" data-action="command">⌕ Command</button>
+117:     <button class="avatar" data-action="profile">AJ</button>
+118:   </div>
+119: </header>
+120: <main id="app"></main>
+121: <div id="toast" class="toast"></div>
+122: <div id="overlay" class="overlay"><aside id="drawer" class="drawer"></aside></div>
+123: <script>
+124: 
+125: const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+126: const state={
+127:  page:(location.hash||'#now').slice(1), now:'focus', discover:'list', trade:'build', build:'clauses',
+128:  activity:'portfolio', selected:'civic', pledge:10, threshold:8640, test:true, locked:false, verified:false,
+129:  zoom:1, calendar:'week',
+130:  alloc:{bio:{m:70,h:2,t:3},wild:{m:80,h:2,t:4},civic:{m:50,h:1,t:2},factory:{m:30,h:0,t:1}},
+131:  clauses:[
+132:   ['I offer','I will give <span class="token" contenteditable="true">$80.00</span> to <span class="token" contenteditable="true">AI-safety research</span>.'],
+133:   ['Only if they','Only if they <span class="token" contenteditable="true">replace 12 car trips</span> or <span class="token" contenteditable="true">deliver a factory-farming evidence review</span>.'],
+134:   ['Activation condition','Both sides lock in by <span class="token" contenteditable="true">July 23, 2026</span>.'],
+135:   ['Proof','Proof via <span class="token" contenteditable="true">receipts</span> or <span class="token" contenteditable="true">independent reviewer</span>.'],
+136:   ['If it fails','If proof is not provided, <span class="token fail" contenteditable="true">no funds are released</span>.']
+137:  ]
+138: };
+139: const O={
+140:  civic:{kind:'Trade opportunity',title:'Replace 8 car trips ↔ Mina funds $20 of civic infrastructure',cause:'Civic infrastructure',mechanism:'Direct reciprocity',amount:'$20',effort:'~40 minutes',trust:'High',a:'6–12 trips',b:'$16–$25',deadline:'Jul 31, 2026',proof:'Miles logged via connected app; receipts and project reports',status:'Verified',counterparty:'Mina Park'},
+141:  bio:{kind:'Near-threshold pool',title:'Close a verified biosecurity salary gap',cause:'Biosecurity',mechanism:'Threshold pool',amount:'$45 pledge',effort:'One-time',trust:'High',a:'$10–$100',b:'$4,800 remaining',deadline:'Jul 20, 2026',proof:'Employer letter and salary-gap audit',status:'Near activation',counterparty:'Praesidium Biosecurity'},
+142:  factory:{kind:'Mutual redirect',title:'Redirect factory-farming donation spend',cause:'Animal welfare',mechanism:'Donation redirect',amount:'$20 / month',effort:'5 minutes',trust:'Medium',a:'$10–$100',b:'Matched 1:1',deadline:'Jul 25, 2026',proof:'Donation receipts',status:'On track',counterparty:'Taylor Reed'},
+143:  wild:{kind:'Threshold pool',title:'Fund wild-animal-suffering research threshold',cause:'Wild animal suffering',mechanism:'Conditional pledge',amount:'$35',effort:'No time',trust:'High',a:'$10–$250',b:'21 contributors',deadline:'Jul 30, 2026',proof:'Verified grant report',status:'On track',counterparty:'Wild Animal Initiative'},
+144:  docs:{kind:'Reciprocal trade',title:'Open-civic-infrastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+145: };
+146: const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+147: const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+148: const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+149: const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+150: const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+151: const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+152: const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+153: 
+154: function render(){
+155:  if(!['now','trade','activity'].includes(state.page))state.page='now';
+156:  $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+157:  $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+158:  bindDnD();
+159: }
+160: function nowPage(){
+161:  return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+162:  ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+163:  ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+164: }
+165: function nowFocus(){
+166:  return `<div class="focus-layout"><main>
+167:  <section class="panel black urgent">
+
+===== /data-page=["']now/i at line 111 =====
+83: .switch{display:inline-block;width:40px;height:21px;border-radius:20px;background:#999;position:relative}.switch:after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:3px;left:3px}.switch.on{background:var(--blue)}.switch.on:after{left:22px}
+84: 
+85: @media(max-width:1180px){
+86:  .topbar{grid-template-columns:210px 1fr 185px}.page{padding:22px}
+87:  .focus-layout,.outcomes-grid{grid-template-columns:1fr}.focus-layout>.stack{display:grid;grid-template-columns:repeat(3,1fr)}
+88:  .discover-grid{grid-template-columns:185px minmax(0,1fr)}.inspector{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}
+89:  .compose-grid{grid-template-columns:120px minmax(0,1fr)}.compose-grid>.stack{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr)}
+90:  .dealgrid{grid-template-columns:1fr}.live-head{margin:0 auto}.port-grid{grid-template-columns:1fr}.feed{border-left:0;padding-left:0}
+91:  .calendar-grid{grid-template-columns:160px minmax(0,1fr)}.calendar-grid>.stack{grid-column:1/-1}
+92: }
+93: @media(max-width:820px){
+94:  :root{--head:58px}.topbar{grid-template-columns:1fr auto;padding:0 14px}.topbar nav{position:fixed;bottom:0;left:0;right:0;height:58px;background:#050505;z-index:50;justify-content:space-around}.topbar nav button{font-size:11px;padding:8px}.text-btn{display:none}
+95:  .page{padding:16px 13px 74px}.head{display:block}.date{text-align:left;margin-top:12px}h1{font-size:39px}
+96:  .urgent,.attention{grid-template-columns:1fr}.urgent .terms{border-left:0;border-top:1px solid #333;padding:14px 0 0}.attention .lead{border-right:0}.brief{grid-template-columns:1fr}.story{border-right:0;border-bottom:1px solid var(--line)}
+97:  .focus-layout>.stack{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}
+98:  .plan-grid,.rules-layout,.discover-grid,.compose-grid,.exchange-grid,.deal-layout,.port-grid,.outcomes-grid,.calendar-grid{grid-template-columns:1fr}.plan-control,.itinerary,.ingredients{position:static}.lane{grid-template-columns:1fr}.resourcebar{grid-template-columns:1fr 1fr}.rule-summary{grid-template-columns:1fr 1fr}.rule-flow{grid-template-columns:32px 1fr}.rule-flow>div{border-right:0}.filters{border-right:0;border-bottom:1px solid var(--line)}
+99:  .resultbody{height:auto;min-height:560px}.market-row{grid-template-columns:1fr}.market-row>div{border-right:0}.compose-grid>.stack{display:block}.ingredients{display:flex;overflow:auto;gap:6px}.ingredient{min-width:115px}.sentence{font-size:22px}.clause{grid-template-columns:38px 1fr}.clause-tool{display:none}
+100:  .exchange-grid{display:block}.match-hero{grid-template-columns:1fr}.offer-body{grid-template-columns:1fr}.why{grid-template-columns:1fr 1fr}.rooms{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--line)}.room{min-width:170px}.dealbottom{grid-template-columns:1fr}
+101:  .port-summary{grid-template-columns:1fr 1fr}.allocrow{grid-template-columns:56px 1.3fr .8fr .8fr}.allocrow>div:nth-child(5),.allocrow>div:nth-child(6){display:none}
+102:  .ledger-summary{grid-template-columns:1fr 1fr}.outcome{grid-template-columns:1fr}.outmeta{border-right:0;border-bottom:1px solid var(--line)}.outdetail{grid-template-columns:1fr 1fr}.commandrow{grid-template-columns:1fr}
+103: }
+104: 
+105: </style>
+106: </head>
+107: <body>
+108: <header class="topbar">
+109:   <a class="brand" href="#now"><span class="mark"><i></i></span><span>Moral Trade</span></a>
+110:   <nav>
+111:     <button data-page="now">Now</button>
+112:     <button data-page="trade">Trade</button>
+113:     <button data-page="activity">Commitments</button>
+114:   </nav>
+115:   <div class="top-actions">
+116:     <button class="text-btn" data-action="command">⌕ Command</button>
+117:     <button class="avatar" data-action="profile">AJ</button>
+118:   </div>
+119: </header>
+120: <main id="app"></main>
+121: <div id="toast" class="toast"></div>
+122: <div id="overlay" class="overlay"><aside id="drawer" class="drawer"></aside></div>
+123: <script>
+124: 
+125: const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+126: const state={
+127:  page:(location.hash||'#now').slice(1), now:'focus', discover:'list', trade:'build', build:'clauses',
+128:  activity:'portfolio', selected:'civic', pledge:10, threshold:8640, test:true, locked:false, verified:false,
+129:  zoom:1, calendar:'week',
+130:  alloc:{bio:{m:70,h:2,t:3},wild:{m:80,h:2,t:4},civic:{m:50,h:1,t:2},factory:{m:30,h:0,t:1}},
+131:  clauses:[
+132:   ['I offer','I will give <span class="token" contenteditable="true">$80.00</span> to <span class="token" contenteditable="true">AI-safety research</span>.'],
+133:   ['Only if they','Only if they <span class="token" contenteditable="true">replace 12 car trips</span> or <span class="token" contenteditable="true">deliver a factory-farming evidence review</span>.'],
+134:   ['Activation condition','Both sides lock in by <span class="token" contenteditable="true">July 23, 2026</span>.'],
+135:   ['Proof','Proof via <span class="token" contenteditable="true">receipts</span> or <span class="token" contenteditable="true">independent reviewer</span>.'],
+136:   ['If it fails','If proof is not provided, <span class="token fail" contenteditable="true">no funds are released</span>.']
+137:  ]
+138: };
+139: const O={
+140:  civic:{kind:'Trade opportunity',title:'Replace 8 car trips ↔ Mina funds $20 of civic infrastructure',cause:'Civic infrastructure',mechanism:'Direct reciprocity',amount:'$20',effort:'~40 minutes',trust:'High',a:'6–12 trips',b:'$16–$25',deadline:'Jul 31, 2026',proof:'Miles logged via connected app; receipts and project reports',status:'Verified',counterparty:'Mina Park'},
+141:  bio:{kind:'Near-threshold pool',title:'Close a verified biosecurity salary gap',cause:'Biosecurity',mechanism:'Threshold pool',amount:'$45 pledge',effort:'One-time',trust:'High',a:'$10–$100',b:'$4,800 remaining',deadline:'Jul 20, 2026',proof:'Employer letter and salary-gap audit',status:'Near activation',counterparty:'Praesidium Biosecurity'},
+142:  factory:{kind:'Mutual redirect',title:'Redirect factory-farming donation spend',cause:'Animal welfare',mechanism:'Donation redirect',amount:'$20 / month',effort:'5 minutes',trust:'Medium',a:'$10–$100',b:'Matched 1:1',deadline:'Jul 25, 2026',proof:'Donation receipts',status:'On track',counterparty:'Taylor Reed'},
+143:  wild:{kind:'Threshold pool',title:'Fund wild-animal-suffering research threshold',cause:'Wild animal suffering',mechanism:'Conditional pledge',amount:'$35',effort:'No time',trust:'High',a:'$10–$250',b:'21 contributors',deadline:'Jul 30, 2026',proof:'Verified grant report',status:'On track',counterparty:'Wild Animal Initiative'},
+144:  docs:{kind:'Reciprocal trade',title:'Open-civic-infrastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+145: };
+146: const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+147: const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+148: const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+149: const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+150: const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+151: const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+152: const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+
+===== /function\s+render\s*\(/i at line 154 =====
+126: const state={
+127:  page:(location.hash||'#now').slice(1), now:'focus', discover:'list', trade:'build', build:'clauses',
+128:  activity:'portfolio', selected:'civic', pledge:10, threshold:8640, test:true, locked:false, verified:false,
+129:  zoom:1, calendar:'week',
+130:  alloc:{bio:{m:70,h:2,t:3},wild:{m:80,h:2,t:4},civic:{m:50,h:1,t:2},factory:{m:30,h:0,t:1}},
+131:  clauses:[
+132:   ['I offer','I will give <span class="token" contenteditable="true">$80.00</span> to <span class="token" contenteditable="true">AI-safety research</span>.'],
+133:   ['Only if they','Only if they <span class="token" contenteditable="true">replace 12 car trips</span> or <span class="token" contenteditable="true">deliver a factory-farming evidence review</span>.'],
+134:   ['Activation condition','Both sides lock in by <span class="token" contenteditable="true">July 23, 2026</span>.'],
+135:   ['Proof','Proof via <span class="token" contenteditable="true">receipts</span> or <span class="token" contenteditable="true">independent reviewer</span>.'],
+136:   ['If it fails','If proof is not provided, <span class="token fail" contenteditable="true">no funds are released</span>.']
+137:  ]
+138: };
+139: const O={
+140:  civic:{kind:'Trade opportunity',title:'Replace 8 car trips ↔ Mina funds $20 of civic infrastructure',cause:'Civic infrastructure',mechanism:'Direct reciprocity',amount:'$20',effort:'~40 minutes',trust:'High',a:'6–12 trips',b:'$16–$25',deadline:'Jul 31, 2026',proof:'Miles logged via connected app; receipts and project reports',status:'Verified',counterparty:'Mina Park'},
+141:  bio:{kind:'Near-threshold pool',title:'Close a verified biosecurity salary gap',cause:'Biosecurity',mechanism:'Threshold pool',amount:'$45 pledge',effort:'One-time',trust:'High',a:'$10–$100',b:'$4,800 remaining',deadline:'Jul 20, 2026',proof:'Employer letter and salary-gap audit',status:'Near activation',counterparty:'Praesidium Biosecurity'},
+142:  factory:{kind:'Mutual redirect',title:'Redirect factory-farming donation spend',cause:'Animal welfare',mechanism:'Donation redirect',amount:'$20 / month',effort:'5 minutes',trust:'Medium',a:'$10–$100',b:'Matched 1:1',deadline:'Jul 25, 2026',proof:'Donation receipts',status:'On track',counterparty:'Taylor Reed'},
+143:  wild:{kind:'Threshold pool',title:'Fund wild-animal-suffering research threshold',cause:'Wild animal suffering',mechanism:'Conditional pledge',amount:'$35',effort:'No time',trust:'High',a:'$10–$250',b:'21 contributors',deadline:'Jul 30, 2026',proof:'Verified grant report',status:'On track',counterparty:'Wild Animal Initiative'},
+144:  docs:{kind:'Reciprocal trade',title:'Open-civic-infrastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+145: };
+146: const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+147: const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+148: const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+149: const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+150: const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+151: const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+152: const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+153: 
+154: function render(){
+155:  if(!['now','trade','activity'].includes(state.page))state.page='now';
+156:  $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+157:  $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+158:  bindDnD();
+159: }
+160: function nowPage(){
+161:  return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+162:  ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+163:  ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+164: }
+165: function nowFocus(){
+166:  return `<div class="focus-layout"><main>
+167:  <section class="panel black urgent">
+168:   <div><div class="eyebrow orange">Due today</div><h2>Counteroffer from Mina.</h2><p class="muted">Mina responded to your transit trade. Due by 6:00 PM today.</p></div>
+169:   <div class="terms"><div><span class="eyebrow">Your offer</span><strong>8 transit trips</strong></div><div><span class="eyebrow">Mina’s counter</span><strong>6 transit trips + $20</strong></div></div>
+170:   <div class="stack"><button class="btn primary" data-action="dealroom">Review terms →</button><button class="btn ghost">View conversation →</button></div>
+171:  </section>
+172:  <section class="panel attention" style="background:linear-gradient(90deg,rgba(184,217,44,.12),rgba(251,250,246,.9))">
+173:   <div class="iconbox limebg">↗</div><div class="lead"><div class="eyebrow lime">Threshold opportunity</div><h3>Your $10 could activate $9,990.</h3></div>
+174:   <div><div class="between"><b class="serif" style="font-size:22px">$${state.threshold.toLocaleString()} of $9,990</b><b class="blue">${(state.threshold/9990*100).toFixed(1)}%</b></div>${progress(state.threshold/9990*100)}<small class="muted">Only charged if the match activates.</small></div>
+175:   <button class="btn" data-action="add-pledge">Add $10 →</button>
+176:  </section>
+177:  <section class="panel attention">
+178:   <div class="iconbox orangebg">✓</div><div class="lead"><div class="eyebrow orange">Requires your action</div><h3>${state.verified?'Transit commitment verified.':'Verify your completed transit commitment.'}</h3></div>
+179:   <div><b>You marked ${state.verified?'8':'4'} of 8 trips complete.</b><p class="muted" style="font-size:11px">Verification unlocks your counterparty’s funds.</p></div>
+180:   <button class="btn" data-action="verify">${state.verified?'Verified':'Verify trips →'}</button>
+181:  </section>
+182:  <section class="panel brief">
+183:   ${story('Lead story · Counteroffer','Support AI-safety research under $100.','Mina is a verified researcher. She countered your offer with updated terms and a four-week deliverable.',
+184:    [['Work','Frontier bio-risk evaluations'],['Deliverable','Red-team evals + publish results'],['Your funding','$95, one-time'],['Proof','Public harness + review']],'Review counteroffer','dealroom')}
+185:   ${story('Near-threshold pool','Close the gap. Choose the more impactful biosecurity job.','Verified salary gap to reach the role. Funds return automatically if the employment condition is not met.',
+186:    [['Gap','$580'],['Remaining','$45'],['Contributors','7'],['Start','Aug 17, 2026']],'Pledge $45','select-bio')}
+187:   ${story('Completed trade','You funded open-source eval tooling. Impact delivered.','The researcher delivered as promised. Proof and downstream use were verified.',
+188:    [['Trade','#7842'],['Funding','$75'],['Completed','Jul 12, 2026'],['Impact','Tooling used in 3 projects']],'Repeat pattern','repeat')}
+189:  </section>
+190:  <div class="metric-grid stats"><div><strong>$45</strong><small>reserved across 3 commitments</small></div><div><strong>$0</strong><small>charged today</small></div><div><strong>3</strong><small>active commitments</small></div><div><strong>4</strong><small>new saved-field opportunities</small></div></div>
+191:  </main><aside class="stack">
+192:  ${sideCard('Today’s changes',[
+193:   'Near-threshold salary-gap pools · 12 new','AI-safety research under $100 · 5 new','Civic infrastructure helpers · 3 new'
+194:  ],'<button class="btn ghost small" data-action="command">Review saved changes →</button>')}
+195:  <section class="panel side-card"><h4>Today’s activity</h4><div class="between"><div><div class="big">$45</div><small class="muted">Reserved</small></div><div><div class="big">$0</div><small class="muted">Charged</small></div></div></section>
