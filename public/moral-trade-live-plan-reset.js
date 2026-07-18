@@ -120,6 +120,21 @@
     },
   });
 
+  const MONTH_NAMES = Object.freeze([
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ]);
+
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
   const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -156,11 +171,8 @@
   }
 
   function formatDate(date, includeYear = true) {
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      ...(includeYear ? { year: "numeric" } : {}),
-    });
+    const monthAndDay = `${MONTH_NAMES[date.getMonth()]} ${date.getDate()}`;
+    return includeYear ? `${monthAndDay}, ${date.getFullYear()}` : monthAndDay;
   }
 
   function buildRouteModel(value, nowValue) {
