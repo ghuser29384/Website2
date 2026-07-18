@@ -16,10 +16,20 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   assert.match(loader, /source\.replace\('<\/body>'/);
 });
 
-test("the navigation bridge exposes the canonical Discover route", () => {
+test("the live navigation bridge exposes the canonical Discover route", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
   assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /control\.textContent = "Discover"/);
+});
+
+test("the Discover loader reconnects its product navigation", () => {
+  const loader = readPublicFile("moral-trade-discover.html");
+  const bridge = readPublicFile("moral-trade-discover-navigation.js");
+
+  assert.match(loader, /moral-trade-discover-navigation\.js/);
+  assert.match(bridge, /\["now", "\/"\]/);
+  assert.match(bridge, /\["offer", "\/trades\/new"\]/);
+  assert.match(bridge, /\["activity", "\/commitments"\]/);
 });
