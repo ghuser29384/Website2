@@ -328,11 +328,17 @@ export default async function TradeAgreementPage({
           </div>
 
           {detail.evidence.length ? (
-            <p>
-              <Link className="inline-link" href={`/evidence/${agreementId}`}>
-                Open the public evidence desk and proof timeline
+            <div className="panel">
+              <p className="detail-kicker">Evidence Stage</p>
+              <h3>Review {detail.evidence.length} submitted artifact{detail.evidence.length === 1 ? "" : "s"} together</h3>
+              <p className="route-text">
+                Inspect the public-safe source copies, review state, privacy notes, and proof timeline
+                in the immersive evidence viewer.
+              </p>
+              <Link className="button button-primary" href={`/evidence/${agreementId}`}>
+                Review evidence
               </Link>
-            </p>
+            </div>
           ) : null}
 
           {canSubmitEvidence ? (
