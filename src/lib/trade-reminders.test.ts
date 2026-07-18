@@ -86,12 +86,13 @@ test("builds a read-only calendar event without private agreement terms", () => 
       },
     ],
   });
+  const unfoldedCalendar = calendar.replaceAll("\r\n ", "");
 
   assert.match(calendar, /BEGIN:VCALENDAR\r\n/);
-  assert.match(calendar, /SUMMARY:Moral Trade: Verification\\, review\\; due/);
-  assert.match(calendar, /DTSTART:20260720T205900Z/);
+  assert.match(unfoldedCalendar, /SUMMARY:Moral Trade: Verification\\, review\\; due/);
+  assert.match(unfoldedCalendar, /DTSTART:20260720T205900Z/);
   assert.match(
-    calendar,
+    unfoldedCalendar,
     /trade-agreements\/11111111-1111-4111-8111-111111111111\/reminders/,
   );
   assert.doesNotMatch(calendar, /counterparty|payment information|evidence content/i);
