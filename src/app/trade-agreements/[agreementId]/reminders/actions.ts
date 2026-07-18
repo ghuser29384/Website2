@@ -6,11 +6,12 @@ import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/lib/app-data";
 import { getCoreAgreementForUser } from "@/lib/core-trade";
 import { createServiceClient } from "@/lib/supabase/server";
-import type {
-  ReminderCalendarFeed,
-  ReminderPreferences,
-  SaveReminderConfigurationInput,
-  SaveReminderRuleInput,
+import {
+  deriveAgreementReminderMilestones,
+  type ReminderCalendarFeed,
+  type ReminderPreferences,
+  type SaveReminderConfigurationInput,
+  type SaveReminderRuleInput,
 } from "@/lib/trade-reminders";
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
@@ -92,20 +93,45 @@ export async function saveReminderConfigurationAction(
   );
 
   try {
-    await requireReminderAgreement(input.agreementId, viewer.authUser.id);
+    const detail = await requireReminderAgreement(input.agreementId, viewer.authUser.id);
     validatePreferences(input.preferences);
     if (input.rules.length > 100) {
       throw new Error("A commitment can have at most 100 personal reminder rules.");
     }
 
+    const canonicalMilestones = new Map(
+      deriveAgreementReminderMilestones(detail).map((milestone) => [milestone.key, milestone]),
+    );
     const uniqueRules = new Set<string>();
-    input.rules.forEach((rule, index) => {
+    const normalizedRules = input.rules.map((rule, index) => {
       validateRule(rule, index);
       const uniqueKey = `${rule.milestoneKey}:${rule.offsetMinutes}`;
       if (uniqueRules.has(uniqueKey)) {
         throw new Error(`Only one reminder may use ${rule.milestoneLabel} at that offset.`);
       }
       uniqueRules.add(uniqueKey);
+
+      if (rule.source === "custom") {
+        return {
+          ...rule,
+          milestoneLabel: rule.milestoneLabel.trim(),
+          dueAt: new Date(rule.dueAt).toISOString(),
+        };
+      }
+
+      const canonicalMilestone = canonicalMilestones.get(rule.milestoneKey);
+      if (!canonicalMilestone) {
+        throw new Error(
+          `${rule.milestoneLabel} is no longer an active agreement milestone. Reload the page before saving.`,
+        );
+      }
+
+      return {
+        ...rule,
+        source: "agreement" as const,
+        milestoneLabel: canonicalMilestone.label,
+        dueAt: canonicalMilestone.dueAt,
+      };
     });
 
     const supabase = createServiceClient() as SupabaseServiceAny;
@@ -113,11 +139,11 @@ export async function saveReminderConfigurationAction(
       p_agreement_id: input.agreementId,
       p_user_id: viewer.authUser.id,
       p_preferences: input.preferences,
-      p_rules: input.rules.map((rule) => ({
+      p_rules: normalizedRules.map((rule) => ({
         source: rule.source,
         milestone_key: rule.milestoneKey,
-        milestone_label: rule.milestoneLabel.trim(),
-        due_at: new Date(rule.dueAt).toISOString(),
+        milestone_label: rule.milestoneLabel,
+        due_at: rule.dueAt,
         offset_minutes: rule.offsetMinutes,
         enabled: rule.enabled,
         in_app_enabled: rule.inAppEnabled,
@@ -167,6 +193,23 @@ export async function setReminderCalendarFeedAction(input: {
       throw new Error(`Could not load calendar integration: ${existing.error.message}`);
     }
 
+    if (input.enabled && !existing.data) {
+      const savedPlan = await supabase
+        .from("agreement_reminder_preferences")
+        .select("id")
+        .eq("agreement_id", input.agreementId)
+        .eq("user_id", viewer.authUser.id)
+        .maybeSingle();
+      if (savedPlan.error) {
+        throw new Error(`Could not verify the reminder plan: ${savedPlan.error.message}`);
+      }
+      if (!savedPlan.data) {
+        throw new Error(
+          "Save this commitment's reminder plan before enabling its calendar subscription.",
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     const write = existing.data
       ? await supabase
@@ -190,7 +233,9 @@ export async function setReminderCalendarFeedAction(input: {
           .single();
 
     if (write.error || !write.data) {
-      throw new Error(`Could not update calendar integration: ${write.error?.message ?? "No row returned."}`);
+      throw new Error(
+        `Could not update calendar integration: ${write.error?.message ?? "No row returned."}`,
+      );
     }
 
     revalidateReminderRoutes(input.agreementId);
@@ -240,7 +285,9 @@ export async function rotateReminderCalendarFeedAction(input: {
       .single();
 
     if (write.error || !write.data) {
-      throw new Error(`Could not rotate calendar URL: ${write.error?.message ?? "No row returned."}`);
+      throw new Error(
+        `Could not rotate calendar URL: ${write.error?.message ?? "No row returned."}`,
+      );
     }
 
     revalidateReminderRoutes(input.agreementId);
