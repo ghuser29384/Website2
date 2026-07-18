@@ -37,10 +37,13 @@
         const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();
-        const productNavigationScript = '<script src="/moral-trade-discover-navigation.js"><\\/script>';
+        const enhancementScripts = [
+          '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
+          '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
+        ].join("");
         const enhancedSource = source.includes("</body>")
-          ? source.replace("</body>", `${productNavigationScript}</body>`)
-          : `${source}${productNavigationScript}`;
+          ? source.replace("</body>", `${enhancementScripts}</body>`)
+          : `${source}${enhancementScripts}`;
 
         document.open();
         document.write(enhancedSource);
