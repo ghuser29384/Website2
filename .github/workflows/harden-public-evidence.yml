@@ -48,6 +48,12 @@ jobs:
                   raise RuntimeError(f"Expected one line match, found {len(matches)}: {exact!r}")
               return matches[0]
 
+          def find_next(lines: list[str], exact: str, start: int = 0) -> int:
+              for index in range(start, len(lines)):
+                  if lines[index] == exact:
+                      return index
+              raise RuntimeError(f"Line not found after {start}: {exact!r}")
+
           actions_path = "src/app/core-trade-actions.ts"
           lines = load(actions_path)
 
@@ -253,17 +259,17 @@ jobs:
           ]
 
           file_branch = find_line(lines, "  if new.evidence_type = 'file' then")
-          pending_url = find_line(lines, "      new.public_url := '';", file_branch)
+          pending_url = find_next(lines, "      new.public_url := '';", file_branch)
           lines.insert(pending_url + 1, "      new.public_storage_path := '';")
           link_branch = find_line(lines, "  elsif new.evidence_type = 'link' then")
-          link_status = find_line(lines, "    new.redaction_status := 'not_required';", link_branch)
+          link_status = find_next(lines, "    new.redaction_status := 'not_required';", link_branch)
           lines.insert(link_status + 1, "    new.public_storage_path := '';")
-          else_branch = find_line(lines, '  else', link_status)
-          attestation_status = find_line(lines, "    new.redaction_status := 'not_required';", else_branch)
+          else_branch = find_next(lines, '  else', link_status)
+          attestation_status = find_next(lines, "    new.redaction_status := 'not_required';", else_branch)
           lines.insert(attestation_status + 1, "    new.public_storage_path := '';")
 
           function_start = find_line(lines, 'create or replace function public.touch_public_evidence_record()')
-          function_end = find_line(lines, '$$;', function_start)
+          function_end = find_next(lines, '$$;', function_start)
           lines[function_start : function_end + 1] = [
               'create or replace function public.touch_public_evidence_record()',
               'returns trigger',
@@ -297,7 +303,7 @@ jobs:
           index = find_line(lines, '  public_summary = case')
           lines.insert(index + 1, "    when not coalesce(a.public_evidence_enabled, true) then 'Specific proof is withheld under a documented safety exception.'")
           public_url_start = find_line(lines, '  public_url = case')
-          public_url_end = find_line(lines, '  end,', public_url_start)
+          public_url_end = find_next(lines, '  end,', public_url_start)
           lines.insert(public_url_end + 1, "  public_storage_path = '',")
           filename_case = find_line(lines, '  public_original_filename = case')
           lines.insert(filename_case + 1, "    when not coalesce(a.public_evidence_enabled, true) then ''")
