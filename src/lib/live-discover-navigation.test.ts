@@ -13,15 +13,19 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   const loader = readPublicFile("moral-trade-live.html");
 
   assert.match(loader, /moral-trade-live-navigation\.js/);
-  assert.match(loader, /source\.replace\('<\/body>'/);
+  assert.match(loader, /accountAwareSource\.replace\('<\/body>'/);
 });
 
-test("the live navigation bridge exposes the canonical Discover route", () => {
+test("the live navigation bridge exposes Discover and Trade controls without duplicates", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
   assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /control\.textContent = "Discover"/);
+  assert.match(bridge, /window\.location\.assign\("\/trade-controls"\)/);
+  assert.match(bridge, /data-mt-controls-link/);
+  assert.match(bridge, /control\.textContent = "Controls"/);
+  assert.match(bridge, /normalizeLabel\(control\) === "controls"/);
 });
 
 test("the Discover loader reconnects product navigation and value-field hover details", () => {
