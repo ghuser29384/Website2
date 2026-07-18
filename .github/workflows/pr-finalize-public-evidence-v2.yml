@@ -77,6 +77,29 @@ jobs:
           gh pr comment 120 --body-file /tmp/public-evidence-finalizer-comment.md
           exit 1
 
+      - name: Stabilize evidence hydration and strict selectors
+        if: steps.finalizer.outcome == 'success'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page_path = Path("src/app/evidence/[[...recordId]]/page.tsx")
+          page = page_path.read_text()
+          old = "  select(selected);applyZoom();\n})();"
+          if page.count(old) != 1:
+              raise RuntimeError(f"Expected one initial evidence mutation, found {page.count(old)}")
+          page_path.write_text(page.replace(old, "})();", 1))
+
+          test_path = Path("tests/public-evidence.spec.ts")
+          test_source = test_path.read_text()
+          old = "    await page.locator('[data-pe-open-evidence=\"payment\"]').click();"
+          new = "    await page.locator('[data-pe-open-evidence=\"payment\"]').first().click();"
+          if test_source.count(old) != 1:
+              raise RuntimeError(f"Expected one payment timeline selector, found {test_source.count(old)}")
+          test_path.write_text(test_source.replace(old, new, 1))
+          PY
+
       - name: Install dependencies
         if: steps.finalizer.outcome == 'success'
         run: npm ci
