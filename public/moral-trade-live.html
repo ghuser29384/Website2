@@ -17,14 +17,23 @@
     (async () => {
       try {
         const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
-        const chunks = await Promise.all(
-          names.map((name) =>
-            fetch(`/mt-live-0d0e0f03-${name}.txt`).then((response) => {
-              if (!response.ok) throw new Error(`chunk ${name}`);
-              return response.text();
-            }),
+        const accountPromise = fetch('/api/live-account', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then((response) => (response.ok ? response.json() : { authenticated: false }))
+          .catch(() => ({ authenticated: false }));
+        const [chunks, liveAccount] = await Promise.all([
+          Promise.all(
+            names.map((name) =>
+              fetch(`/mt-live-0d0e0f03-${name}.txt`).then((response) => {
+                if (!response.ok) throw new Error(`chunk ${name}`);
+                return response.text();
+              }),
+            ),
           ),
-        );
+          accountPromise,
+        ]);
         const compressed = Uint8Array.from(atob(chunks.join('')), (character) => character.charCodeAt(0));
         const raw = await new Response(
           new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')),
@@ -38,9 +47,23 @@
         }
 
         const source = new TextDecoder().decode(raw);
+        const accountJson = JSON.stringify(liveAccount)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
         const enhancementStyles = [
           '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
         ].join('');
+        const accountScripts = [
+          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
+          '<script src="/moral-trade-live-account.js"><\/script>',
+        ].join('');
+        const headEnhancements = `${enhancementStyles}${accountScripts}`;
+        const accountAwareSource = source.includes('</head>')
+          ? source.replace('</head>', `${headEnhancements}</head>`)
+          : `${headEnhancements}${source}`;
         const enhancementScripts = [
           '<script src="/moral-trade-live-navigation.js"><\/script>',
           '<script src="/moral-trade-live-local-time.js"><\/script>',
@@ -49,12 +72,9 @@
           '<script src="/moral-trade-brand.js"><\/script>',
           '<script src="/moral-trade-live-verification.js"><\/script>',
         ].join('');
-        const sourceWithStyles = source.includes('</head>')
-          ? source.replace('</head>', `${enhancementStyles}</head>`)
-          : `${enhancementStyles}${source}`;
-        const enhancedSource = sourceWithStyles.includes('</body>')
-          ? sourceWithStyles.replace('</body>', `${enhancementScripts}</body>`)
-          : `${sourceWithStyles}${enhancementScripts}`;
+        const enhancedSource = accountAwareSource.includes('</body>')
+          ? accountAwareSource.replace('</body>', `${enhancementScripts}</body>`)
+          : `${accountAwareSource}${enhancementScripts}`;
 
         document.open();
         document.write(enhancedSource);
