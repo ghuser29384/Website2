@@ -85,24 +85,42 @@ jobs:
         if: steps.finalizer.outcome == 'success'
         run: npx playwright install --with-deps chromium
 
-      - name: Lint
+      - name: Run release checks
+        id: checks
         if: steps.finalizer.outcome == 'success'
-        run: npm run lint
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          (
+            set -e
+            npm run lint
+            npm test
+            npm run build
+            npx playwright test tests/public-evidence.spec.ts --reporter=line
+          ) 2>&1 | tee /tmp/public-evidence-release-checks.log
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
 
-      - name: Unit tests
-        if: steps.finalizer.outcome == 'success'
-        run: npm test
-
-      - name: Production build
-        if: steps.finalizer.outcome == 'success'
-        run: npm run build
-
-      - name: Evidence interaction tests
-        if: steps.finalizer.outcome == 'success'
-        run: npx playwright test tests/public-evidence.spec.ts --reporter=line
+      - name: Post release-check diagnostics
+        if: steps.finalizer.outcome == 'success' && steps.checks.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo '### Public evidence release-check failure'
+            echo
+            echo '```text'
+            tail -n 140 /tmp/public-evidence-release-checks.log
+            echo '```'
+          } > /tmp/public-evidence-checks-comment.md
+          gh pr comment 120 --body-file /tmp/public-evidence-checks-comment.md
+          exit 1
 
       - name: Commit integrated implementation
-        if: steps.finalizer.outcome == 'success'
+        if: steps.finalizer.outcome == 'success' && steps.checks.outcome == 'success'
         shell: bash
         run: |
           git add src config tests supabase
