@@ -14,6 +14,11 @@ const MAX_MESSAGE_LENGTH = 4_000;
 const MAX_TERM_LENGTH = 5_000;
 const EVIDENCE_BUCKET = "trade-evidence";
 
+function revalidatePublicEvidence(agreementId: string) {
+  revalidatePath("/evidence");
+  revalidatePath(`/evidence/${agreementId}`);
+}
+
 function read(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -340,6 +345,11 @@ export async function saveCoreOfferAction(formData: FormData) {
     const terms = readTerms(formData);
     if (intent === "submit" && !readCheckbox(formData, "voluntary_certification")) {
       throw new Error("Confirm that the proposal is voluntary and contains no threat or retaliation.");
+    }
+    if (intent === "submit" && !readCheckbox(formData, "public_evidence_certification")) {
+      throw new Error(
+        "Confirm that agreement evidence will be public by default and that only public-safe copies will be submitted.",
+      );
     }
 
     const fingerprint = buildFingerprint([
@@ -1541,8 +1551,17 @@ export async function submitTradeEvidenceAction(formData: FormData) {
     const evidenceUrl = read(formData, "evidence_url");
     const attestation = read(formData, "attestation").slice(0, MAX_TERM_LENGTH);
     const fileEntry = formData.get("evidence_file");
+    if (!readCheckbox(formData, "public_safe_copy")) {
+      throw new Error(
+        "Confirm that this evidence item and its source are public-safe before submission.",
+      );
+    }
     let storagePath = "";
     let evidenceType = "";
+    let publicOriginalFilename = "";
+    let publicMimeType = "";
+    const publicRedactionNote =
+      "The submitting participant certified this source as public-safe. This certification is not independent verification.";
 
     if (fileEntry instanceof File && fileEntry.size > 0) {
       if (fileEntry.size > 10 * 1024 * 1024) throw new Error("Evidence files must be 10 MB or smaller.");
@@ -1554,8 +1573,10 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         "text/plain",
       ]);
       if (!allowedTypes.has(fileEntry.type)) throw new Error("Unsupported evidence file type.");
-      const safeName = fileEntry.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "evidence";
-      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${safeName}`;
+      const extension = fileEntry.name.match(/\.[a-zA-Z0-9]{1,10}$/)?.[0].toLowerCase() ?? "";
+      publicOriginalFilename = `public-evidence${extension}`;
+      publicMimeType = fileEntry.type;
+      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${publicOriginalFilename}`;
       const upload = await supabase.storage.from(EVIDENCE_BUCKET).upload(storagePath, fileEntry, {
         contentType: fileEntry.type,
         upsert: false,
@@ -1570,8 +1591,12 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         throw new Error("Evidence link must be a valid http or https URL.");
       }
       evidenceType = "link";
+      publicOriginalFilename = "external-evidence-link";
+      publicMimeType = "text/html";
     } else if (attestation) {
       evidenceType = "attestation";
+      publicOriginalFilename = "participant-attestation.txt";
+      publicMimeType = "text/plain";
     } else {
       throw new Error("Upload a file, provide an evidence link, or write an attestation.");
     }
@@ -1586,6 +1611,13 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         evidence_url: evidenceUrl,
         attestation,
         status: "submitted",
+        public_visibility: "public",
+        redaction_status: "not_required",
+        public_url: evidenceType === "link" ? evidenceUrl : "",
+        public_storage_path: evidenceType === "file" ? storagePath : "",
+        public_original_filename: publicOriginalFilename,
+        public_mime_type: publicMimeType,
+        public_redaction_note: publicRedactionNote,
       })
       .select("id")
       .single();
@@ -1593,7 +1625,11 @@ export async function submitTradeEvidenceAction(formData: FormData) {
 
     await supabase
       .from("agreements")
-      .update({ lifecycle_status: "evidence_due", updated_at: new Date().toISOString() })
+      .update({
+        lifecycle_status: "evidence_due",
+        updated_at: new Date().toISOString(),
+        public_evidence_updated_at: new Date().toISOString(),
+      })
       .eq("id", agreementId)
       .neq("lifecycle_status", "disputed");
     const counterpartId =
@@ -1617,6 +1653,7 @@ export async function submitTradeEvidenceAction(formData: FormData) {
       }),
     ]);
     revalidatePath(returnTo);
+    revalidatePublicEvidence(agreementId);
     redirectWithMessage(returnTo, "message", "Evidence submitted. A seven-day challenge window is open.");
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Evidence submission failed.");
@@ -1664,6 +1701,7 @@ export async function reviewTradeEvidenceAction(formData: FormData) {
         dedupeKey: `evidence_accepted:${evidenceId}`,
       });
       revalidatePath(returnTo);
+      revalidatePublicEvidence(agreementId);
       redirectWithMessage(returnTo, "message", "Evidence accepted.");
     }
 
@@ -1693,6 +1731,7 @@ export async function reviewTradeEvidenceAction(formData: FormData) {
         }),
       ]);
       revalidatePath(returnTo);
+      revalidatePublicEvidence(agreementId);
       redirectWithMessage(returnTo, "message", "Evidence challenged and agreement marked disputed.");
     }
 
@@ -1746,7 +1785,13 @@ export async function confirmTradeCompletionAction(formData: FormData) {
       await Promise.all([
         supabase
           .from("agreements")
-          .update({ status: "completed", lifecycle_status: "completed", completed_at: now, updated_at: now })
+          .update({
+            status: "completed",
+            lifecycle_status: "completed",
+            completed_at: now,
+            updated_at: now,
+            public_evidence_updated_at: now,
+          })
           .eq("id", agreementId),
         recordCoreEvent({
           profileId: String(agreement.proposer_id),
@@ -1778,6 +1823,7 @@ export async function confirmTradeCompletionAction(formData: FormData) {
         }),
       ]);
       revalidatePath(returnTo);
+      revalidatePublicEvidence(agreementId);
       redirectWithMessage(returnTo, "message", "Both parties confirmed completion. Final Deal Receipt generated.");
     }
 
@@ -1790,6 +1836,7 @@ export async function confirmTradeCompletionAction(formData: FormData) {
       dedupeKey: `completion_confirmation:${agreementId}:${counterpartId}`,
     });
     revalidatePath(returnTo);
+    revalidatePublicEvidence(agreementId);
     redirectWithMessage(returnTo, "message", "Your completion confirmation was recorded.");
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Completion confirmation failed.");

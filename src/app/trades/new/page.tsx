@@ -41,7 +41,7 @@ const VICTORIA_EXAMPLE: Partial<TradeDraftValues> = {
     "Donation receipt for the giving commitment and participant attestation for the diet commitment.",
   maximumBurden: "The stated 1% donation and the stated 12-month dietary commitment only.",
   privacyScope:
-    "Participants and operator only. Public pages show proposal terms but not private messages or evidence.",
+    "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
   exitConditions:
     "Either participant may end future obligations by notifying the other; completed periods remain recorded.",
 };

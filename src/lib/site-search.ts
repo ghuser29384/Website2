@@ -17,6 +17,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["explore", "offers", "trade", "marketplace", "listing", "registry", "proposal", "swap", "offset", "pool"],
   },
   {
+    href: "/evidence",
+    label: "Public evidence",
+    summary: "Inspect public-by-default trade evidence, review states, redactions, and the layered proof timeline.",
+    kind: "learn",
+    keywords: ["evidence", "proof", "public", "redaction", "timeline", "verification", "receipt", "completion"],
+  },
+  {
     href: "/create",
     label: "Create",
     summary: "Choose Trade, Offset, Pool, or the later Back lane, then make the no-deal default explicit before drafting terms.",

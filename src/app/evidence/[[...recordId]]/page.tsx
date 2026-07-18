@@ -112,7 +112,6 @@ const SCRIPT = String.raw`
     if(event.target.closest('[data-pe-share]')){try{await navigator.clipboard.writeText(location.href);const button=event.target.closest('button');const label=button?.lastChild;const prior=label?.textContent||' Share';if(label)label.textContent=' Copied';setTimeout(()=>{if(label)label.textContent=prior},1100)}catch(_){}}
   });
   document.addEventListener('keydown',(event)=>{if(event.key==='Escape')setTimeline(false);});
-  select(selected);applyZoom();
 })();
 `;
 

@@ -23,6 +23,7 @@ export interface TradeDraftValues {
   privacyScope: string;
   exitConditions: string;
   notes: string;
+  publicEvidenceCertification: boolean;
   voluntaryCertification: boolean;
 }
 
@@ -44,9 +45,10 @@ const DEFAULT_VALUES: TradeDraftValues = {
   evidenceDueDate: "",
   evidenceRule: "",
   maximumBurden: "",
-  privacyScope: "Participants and operator only. Public pages exclude private messages and evidence.",
+  privacyScope: "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
   exitConditions: "",
   notes: "",
+  publicEvidenceCertification: false,
   voluntaryCertification: false,
 };
 
@@ -152,6 +154,9 @@ export function TradeDraftWorkbench({
         <input name="notes" type="hidden" value={values.notes} />
         {values.voluntaryCertification ? (
           <input name="voluntary_certification" type="hidden" value="on" />
+        ) : null}
+        {values.publicEvidenceCertification ? (
+          <input name="public_evidence_certification" type="hidden" value="on" />
         ) : null}
 
         <header className={styles.top}>
@@ -355,7 +360,7 @@ export function TradeDraftWorkbench({
                 <>
                   <div className={styles.prompt}>
                     <h1>How is completion proved?</h1>
-                    <p>Name the evidence that counts and who may see it.</p>
+                    <p>Define the proof that counts. Evidence records and certified public-safe source copies are public by default; private messages remain private.</p>
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
@@ -370,7 +375,7 @@ export function TradeDraftWorkbench({
                       />
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Privacy scope</span>
+                      <span className={styles.fieldLabel}>Public evidence and safety scope</span>
                       <textarea
                         className={styles.textarea}
                         maxLength={5000}
@@ -378,6 +383,9 @@ export function TradeDraftWorkbench({
                         value={values.privacyScope}
                       />
                     </label>
+                    <span className={styles.helper}>
+                      Remove exact addresses, account numbers, private contact details, and unrelated personal information before evidence submission. A narrow, documented safety exception may withhold specific proof.
+                    </span>
                   </div>
                 </>
               ) : null}
@@ -433,6 +441,10 @@ export function TradeDraftWorkbench({
                       <dt>Evidence</dt>
                       <dd>{concise(values.evidenceRule, "Not stated")}</dd>
                     </div>
+                    <div className={styles.receiptRow}>
+                      <dt>Evidence visibility</dt>
+                      <dd>{concise(values.privacyScope, "Public by default")}</dd>
+                    </div>
                   </dl>
 
                   <label className={styles.certification}>
@@ -447,10 +459,26 @@ export function TradeDraftWorkbench({
                     </span>
                   </label>
 
+                  <label className={styles.certification}>
+                    <input
+                      className={styles.checkbox}
+                      checked={values.publicEvidenceCertification}
+                      onChange={(event) => update("publicEvidenceCertification", event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span>
+                      I understand that evidence submitted under an active agreement is public by default. I will submit only public-safe copies with sensitive identifiers and unrelated personal information removed.
+                    </span>
+                  </label>
+
                   <div className={styles.safetyList}>
                     <div className={styles.safetyItem}>
                       <strong>No payment or custody</strong>
                       <span>This route records non-financial commitments. Moral Trade does not hold or release funds here.</span>
+                    </div>
+                    <div className={styles.safetyItem}>
+                      <strong>Public-safe evidence</strong>
+                      <span>Evidence is public by default; only necessary, redacted, or certified public-safe copies should be submitted.</span>
                     </div>
                     <div className={styles.safetyItem}>
                       <strong>Separate confirmation</strong>
@@ -480,7 +508,7 @@ export function TradeDraftWorkbench({
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="evidence" />
-              Evidence and privacy specified
+              Public-safe evidence specified
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="lock" />
@@ -511,7 +539,7 @@ export function TradeDraftWorkbench({
           ) : (
             <>
               <span className={styles.footerNote}>
-                Save privately, or certify voluntariness and submit once for operator review.
+                Save privately, or certify voluntariness and public-safe evidence before submitting once for operator review.
               </span>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonDark}`}
@@ -524,7 +552,11 @@ export function TradeDraftWorkbench({
               </PendingSubmitButton>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonPrimary}`}
-                disabled={!finalTermsComplete || !values.voluntaryCertification}
+                disabled={
+                  !finalTermsComplete ||
+                  !values.voluntaryCertification ||
+                  !values.publicEvidenceCertification
+                }
                 name="intent"
                 pendingLabel="Submitting for review..."
                 value="submit"

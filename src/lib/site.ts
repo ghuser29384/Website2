@@ -4,6 +4,7 @@ export function getPrimaryNavLinks(_isAuthenticated = false) {
     { href: "/trades/new", label: "Create" },
     { href: "/messages", label: "Messages" },
     { href: "/commitments", label: "Commitments" },
+    { href: "/evidence", label: "Evidence" },
     { href: "/safety", label: "Safety" },
   ];
 }
@@ -37,6 +38,7 @@ export const FOOTER_LINK_GROUPS = [
     title: "Safety & transparency",
     links: [
       { href: "/credibility", label: "Contextual credibility" },
+      { href: "/evidence", label: "Public evidence" },
       { href: "/status", label: "Service status" },
       { href: "/safety", label: "Safety and anti-threat rules" },
       { href: "/transparency", label: "Transparency" },
