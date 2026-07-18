@@ -35,7 +35,6 @@
         gap: 0.48em !important;
         color: var(--mt-brand-foreground, #171815) !important;
         font-family: Arial, Helvetica, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        font-size: inherit !important;
         font-style: normal !important;
         font-weight: 400 !important;
         letter-spacing: -0.035em !important;
