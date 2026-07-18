@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Verify a Moral Trade commitment against connected evidence, reconcile exceptions, and apply a locked settlement gate.">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Complete verification — Moral Trade</title>
+  <style>
+    html,body{margin:0;background:#f5f2e9;color:#111;font-family:system-ui,sans-serif}
+    main{min-height:100vh;display:grid;place-items:center;padding:24px}
+    p{max-width:42rem;line-height:1.5}
+  </style>
+</head>
+<body>
+  <main><p id="loading">Loading verification record…</p></main>
+  <script>
+    (async () => {
+      try {
+        const names = ['a', 'b', 'c', 'd', 'e'];
+        const chunks = await Promise.all(names.map((name) =>
+          fetch(`/mt-verify-f01a8b07-${name}.txt`).then((response) => {
+            if (!response.ok) throw new Error(`verification chunk ${name}`);
+            return response.text();
+          }),
+        ));
+        const compressed = Uint8Array.from(atob(chunks.join('')), (character) => character.charCodeAt(0));
+        const raw = await new Response(
+          new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')),
+        ).arrayBuffer();
+        const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', raw))]
+          .map((value) => value.toString(16).padStart(2, '0'))
+          .join('');
+        if (digest !== 'f01a8b072be93e5b9899f52c7a09b3049566bfadd63dc9000ecd4e8894fa0465') throw new Error('verification integrity');
+
+        document.open();
+        document.write(new TextDecoder().decode(raw));
+        document.close();
+      } catch (error) {
+        document.getElementById('loading').textContent = 'Unable to load the verification workflow. Please refresh.';
+        console.error(error);
+      }
+    })();
+  </script>
+  <noscript><main><p>JavaScript is required to complete verification.</p></main></noscript>
+</body>
+</html>
