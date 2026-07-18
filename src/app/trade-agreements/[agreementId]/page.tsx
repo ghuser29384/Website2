@@ -12,13 +12,12 @@ import {
   reviewTradeEvidenceAction,
   submitTradeEvidenceAction,
 } from "@/app/core-trade-actions";
+import { TradeAgreementStage } from "@/components/core-trade/trade-agreement-stage";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteTopbar } from "@/components/layout/site-topbar";
 import { requireViewer } from "@/lib/app-data";
 import { getCoreAgreementForUser } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
-import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -98,246 +97,180 @@ export default async function TradeAgreementPage({
     acceptedEvidenceCount > 0 &&
     !viewerCompleted;
 
-  return (
-    <div className="page-shell marketplace-app-shell">
-      <header className="v72-route-header">
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(true)}
-          {...getTopbarActions(true)}
-          showSearch={false}
-          showLogout
-        />
-      </header>
-
-      <main id="main-content" tabIndex={-1}>
-        {formMessage ? (
-          <div
-            className={`status-banner ${
-              formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
-            }`}
-          >
-            {formMessage.text}
-          </div>
-        ) : null}
-
-        <section className="section section-white" aria-labelledby="agreement-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Bilateral agreement record</p>
-            <h1 id="agreement-heading">
-              {offer
-                ? `${offer.offered_cause} ↔ ${offer.requested_cause}`
-                : "Private Moral Trade agreement"}
-            </h1>
-            <p>
-              With {counterpart?.display_name ?? "counterparty"}. The current version is immutable.
-              It becomes active only after both participants separately confirm the exact same terms.
-            </p>
-          </div>
-
-          <div className="data-grid">
-            <article className="panel data-card">
-              <p className="detail-kicker">Lifecycle state</p>
-              <h2>{lifecycleStatus.replaceAll("_", " ")}</h2>
-              <dl className="detail-grid">
-                <div>
-                  <dt>Activated</dt>
-                  <dd>{formatDate(agreement.activated_at)}</dd>
-                </div>
-                <div>
-                  <dt>Evidence due</dt>
-                  <dd>{formatDate(agreement.evidence_due_at)}</dd>
-                </div>
-                <div>
-                  <dt>Completed</dt>
-                  <dd>{formatDate(agreement.completed_at)}</dd>
-                </div>
-                <div>
-                  <dt>Updated</dt>
-                  <dd>{formatDate(agreement.updated_at)}</dd>
-                </div>
-              </dl>
-              <div className="form-actions">
-                {detail.threadId ? (
-                  <Link className="button button-secondary button-mini" href={`/messages/${detail.threadId}`}>
-                    Open private thread
-                  </Link>
-                ) : null}
-                {offer ? (
-                  <Link className="button button-secondary button-mini" href={`/offers/${offer.id}`}>
-                    View source offer
-                  </Link>
-                ) : null}
-              </div>
-            </article>
-
-            <article className="panel data-card">
-              <p className="detail-kicker">Current confirmation</p>
-              <h2>Version {version?.version ?? "unavailable"}</h2>
-              <div className="mini-list">
-                <span className="source-pill">
-                  {proposer?.display_name ?? "Proposer"}: {proposerConfirmed ? "confirmed" : "waiting"}
-                </span>
-                <span className="source-pill">
-                  {responder?.display_name ?? "Responder"}: {responderConfirmed ? "confirmed" : "waiting"}
-                </span>
-              </div>
-              {canConfirm ? (
-                <form action={confirmAgreementVersionAction} className="stack-form">
-                  <input name="agreement_id" type="hidden" value={agreementId} />
-                  <label className="radio-row">
-                    <input name="terms_reviewed" required type="checkbox" />
-                    <span>
-                      I reviewed this exact frozen version, including the no-deal baseline, maximum
-                      burden, evidence rule, privacy scope, and exit conditions.
-                    </span>
-                  </label>
-                  <PendingSubmitButton pendingLabel="Recording confirmation...">
-                    Confirm version {version?.version}
-                  </PendingSubmitButton>
-                </form>
-              ) : viewerConfirmed && lifecycleStatus === "proposed" ? (
-                <p className="panel-note">Your confirmation is recorded. Waiting for the other participant.</p>
-              ) : null}
-
-              {lifecycleStatus === "proposed" ? (
-                <form action={declineProposedAgreementAction}>
-                  <input name="agreement_id" type="hidden" value={agreementId} />
-                  <PendingSubmitButton
-                    className="button button-secondary button-mini"
-                    pendingLabel="Declining..."
-                  >
-                    Decline before activation
-                  </PendingSubmitButton>
-                </form>
-              ) : null}
-            </article>
-          </div>
-
-          {version ? (
-            <article className="panel data-card data-card-wide">
-              <p className="detail-kicker">Frozen Deal Receipt</p>
-              <h2>Version {version.version}</h2>
-              <dl className="detail-grid">
-                <div>
-                  <dt>Without this deal</dt>
-                  <dd>{version.no_trade_baseline}</dd>
-                </div>
-                <div>
-                  <dt>Offer-maker commits</dt>
-                  <dd>{version.proposed_action}</dd>
-                </div>
-                <div>
-                  <dt>Counterparty commits</dt>
-                  <dd>{version.requested_action}</dd>
-                </div>
-                <div>
-                  <dt>Duration</dt>
-                  <dd>{version.duration}</dd>
-                </div>
-                <div>
-                  <dt>Start date</dt>
-                  <dd>{formatDate(version.start_date)}</dd>
-                </div>
-                <div>
-                  <dt>Maximum burden</dt>
-                  <dd>{version.maximum_burden}</dd>
-                </div>
-                <div>
-                  <dt>Evidence rule</dt>
-                  <dd>{version.evidence_rule}</dd>
-                </div>
-                <div>
-                  <dt>Evidence due</dt>
-                  <dd>{formatDate(version.evidence_due_date)}</dd>
-                </div>
-                <div>
-                  <dt>Privacy scope</dt>
-                  <dd>{version.privacy_scope}</dd>
-                </div>
-                <div>
-                  <dt>Exit conditions</dt>
-                  <dd>{version.exit_conditions}</dd>
-                </div>
-              </dl>
-              <p className="panel-note">
-                Terms hash: {String(version.terms_hash).slice(0, 16)}… · proposed by{" "}
-                {participantLabel(
-                  String(version.proposed_by),
-                  viewer.authUser.id,
-                  proposer,
-                  responder,
-                )}
-                . Any amendment creates a new version and clears prior confirmations.
-              </p>
-            </article>
-          ) : (
+  if (!version) {
+    return (
+      <div className="page-shell marketplace-app-shell">
+        <main id="main-content" tabIndex={-1}>
+          <section className="section section-white">
             <div className="status-banner status-banner-error">
               <strong>Agreement version unavailable</strong>
               <p>No participant should rely on this record until a frozen term version exists.</p>
             </div>
-          )}
-        </section>
+            {detail.threadId ? (
+              <Link className="button button-secondary" href={`/messages/${detail.threadId}`}>
+                Open private thread
+              </Link>
+            ) : null}
+          </section>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
-        {canAmend ? (
-          <section className="section section-subtle" aria-labelledby="amendment-heading">
-            <div className="section-head section-head-compact">
-              <p className="eyebrow">Amendment</p>
-              <h2 id="amendment-heading">Propose a new version, never edit the confirmed record.</h2>
-              <p>
-                A material change returns the agreement to proposed state. Both participants must
-                confirm the new immutable version independently.
-              </p>
-            </div>
+  const proposerLabel = participantLabel(
+    String(agreement.proposer_id),
+    viewer.authUser.id,
+    proposer,
+    responder,
+  );
+  const responderLabel = participantLabel(
+    String(agreement.responder_id),
+    viewer.authUser.id,
+    proposer,
+    responder,
+  );
 
+  return (
+    <div className="marketplace-app-shell">
+      <div id="main-content" tabIndex={-1}>
+        <TradeAgreementStage
+          acceptedEvidenceCount={acceptedEvidenceCount}
+          activatedAt={agreement.activated_at ? String(agreement.activated_at) : null}
+          agreementId={agreementId}
+          canConfirm={canConfirm}
+          completedAt={agreement.completed_at ? String(agreement.completed_at) : null}
+          completionConfirmationCount={detail.completionConfirmations.length}
+          confirmAction={confirmAgreementVersionAction}
+          confirmationCount={detail.confirmations.length}
+          counterpartLabel={counterpart?.display_name ?? "the other participant"}
+          declineAction={declineProposedAgreementAction}
+          evidenceCount={detail.evidence.length}
+          evidenceDueAt={agreement.evidence_due_at ? String(agreement.evidence_due_at) : null}
+          exitReason={agreement.exit_reason ? String(agreement.exit_reason) : null}
+          formMessage={formMessage}
+          lifecycleStatus={lifecycleStatus}
+          offerHref={offer ? `/offers/${offer.id}` : null}
+          proposer={{
+            action: String(version.proposed_action),
+            cause: offer?.offered_cause ?? "Offer-maker priority",
+            confirmed: proposerConfirmed,
+            label: proposerLabel,
+          }}
+          responder={{
+            action: String(version.requested_action),
+            cause: offer?.requested_cause ?? "Counterparty priority",
+            confirmed: responderConfirmed,
+            label: responderLabel,
+          }}
+          threadHref={detail.threadId ? `/messages/${detail.threadId}` : null}
+          version={{
+            evidenceDueDate: formatDate(version.evidence_due_date),
+            evidenceRule: String(version.evidence_rule),
+            exitConditions: String(version.exit_conditions),
+            maximumBurden: String(version.maximum_burden),
+            noTradeBaseline: String(version.no_trade_baseline),
+            privacyScope: String(version.privacy_scope),
+            version: Number(version.version),
+          }}
+          viewerConfirmed={viewerConfirmed}
+        />
+
+        <section className="section section-white" id="terms" aria-labelledby="terms-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Frozen Deal Receipt</p>
+            <h2 id="terms-heading">Version {version.version} is the only version anyone may confirm.</h2>
+            <p>
+              Material changes create a new immutable version and clear prior confirmations. No payment,
+              custody, or blanket verification claim is created by this record.
+            </p>
+          </div>
+
+          <article className="panel data-card data-card-wide">
+            <dl className="detail-grid">
+              <div>
+                <dt>Without this deal</dt>
+                <dd>{version.no_trade_baseline}</dd>
+              </div>
+              <div>
+                <dt>Offer-maker commits</dt>
+                <dd>{version.proposed_action}</dd>
+              </div>
+              <div>
+                <dt>Counterparty commits</dt>
+                <dd>{version.requested_action}</dd>
+              </div>
+              <div>
+                <dt>Duration</dt>
+                <dd>{version.duration}</dd>
+              </div>
+              <div>
+                <dt>Start date</dt>
+                <dd>{formatDate(version.start_date)}</dd>
+              </div>
+              <div>
+                <dt>Maximum burden</dt>
+                <dd>{version.maximum_burden}</dd>
+              </div>
+              <div>
+                <dt>Evidence rule</dt>
+                <dd>{version.evidence_rule}</dd>
+              </div>
+              <div>
+                <dt>Evidence due</dt>
+                <dd>{formatDate(version.evidence_due_date)}</dd>
+              </div>
+              <div>
+                <dt>Privacy scope</dt>
+                <dd>{version.privacy_scope}</dd>
+              </div>
+              <div>
+                <dt>Exit conditions</dt>
+                <dd>{version.exit_conditions}</dd>
+              </div>
+            </dl>
+            <p className="panel-note">
+              Terms hash: {String(version.terms_hash).slice(0, 16)}… · proposed by{" "}
+              {participantLabel(
+                String(version.proposed_by),
+                viewer.authUser.id,
+                proposer,
+                responder,
+              )}
+              .
+            </p>
+          </article>
+
+          {canAmend ? (
             <details className="panel subtle-panel">
-              <summary className="panel-summary">Draft amendment from the current version</summary>
+              <summary className="panel-summary">Propose a new version</summary>
               <form action={proposeAgreementAmendmentAction} className="stack-form">
                 <input name="agreement_id" type="hidden" value={agreementId} />
                 <label className="field">
                   <span>Offer-maker action</span>
-                  <textarea
-                    defaultValue={String(version?.proposed_action ?? "")}
-                    name="proposed_action"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.proposed_action)} name="proposed_action" required rows={3} />
                 </label>
                 <label className="field">
                   <span>Counterparty action</span>
-                  <textarea
-                    defaultValue={String(version?.requested_action ?? "")}
-                    name="requested_action"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.requested_action)} name="requested_action" required rows={3} />
                 </label>
                 <label className="field">
                   <span>No-trade baseline</span>
-                  <textarea
-                    defaultValue={String(version?.no_trade_baseline ?? "")}
-                    name="no_trade_baseline"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.no_trade_baseline)} name="no_trade_baseline" required rows={3} />
                 </label>
                 <div className="field-grid">
                   <label className="field">
                     <span>Duration</span>
-                    <input defaultValue={String(version?.duration ?? "")} name="duration" required />
+                    <input defaultValue={String(version.duration)} name="duration" required />
                   </label>
                   <label className="field">
                     <span>Start date</span>
-                    <input
-                      defaultValue={version?.start_date ? String(version.start_date) : ""}
-                      name="start_date"
-                      type="date"
-                    />
+                    <input defaultValue={version.start_date ? String(version.start_date) : ""} name="start_date" type="date" />
                   </label>
                   <label className="field">
                     <span>Evidence due date</span>
                     <input
-                      defaultValue={version?.evidence_due_date ? String(version.evidence_due_date) : ""}
+                      defaultValue={version.evidence_due_date ? String(version.evidence_due_date) : ""}
                       name="evidence_due_date"
                       type="date"
                     />
@@ -345,67 +278,47 @@ export default async function TradeAgreementPage({
                 </div>
                 <label className="field">
                   <span>Evidence rule</span>
-                  <textarea
-                    defaultValue={String(version?.evidence_rule ?? "")}
-                    name="evidence_rule"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.evidence_rule)} name="evidence_rule" required rows={3} />
                 </label>
                 <label className="field">
                   <span>Maximum burden</span>
-                  <textarea
-                    defaultValue={String(version?.maximum_burden ?? "")}
-                    name="maximum_burden"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.maximum_burden)} name="maximum_burden" required rows={3} />
                 </label>
                 <label className="field">
                   <span>Privacy scope</span>
-                  <textarea
-                    defaultValue={String(version?.privacy_scope ?? "")}
-                    name="privacy_scope"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.privacy_scope)} name="privacy_scope" required rows={3} />
                 </label>
                 <label className="field">
                   <span>Exit conditions</span>
-                  <textarea
-                    defaultValue={String(version?.exit_conditions ?? "")}
-                    name="exit_conditions"
-                    required
-                    rows={3}
-                  />
+                  <textarea defaultValue={String(version.exit_conditions)} name="exit_conditions" required rows={3} />
                 </label>
                 <PendingSubmitButton pendingLabel="Creating new version...">
                   Propose amendment
                 </PendingSubmitButton>
               </form>
             </details>
+          ) : null}
 
-            {detail.versions.length > 1 ? (
-              <div className="data-grid">
-                {detail.versions.map((historicalVersion) => (
-                  <article className="panel data-card" key={historicalVersion.id}>
-                    <p className="detail-kicker">Version history</p>
-                    <h3>Version {historicalVersion.version}</h3>
-                    <p className="route-text">
-                      {historicalVersion.proposed_action} ↔ {historicalVersion.requested_action}
-                    </p>
-                    <span className="source-pill">{formatDate(historicalVersion.created_at)}</span>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        ) : null}
+          {detail.versions.length > 1 ? (
+            <div className="data-grid">
+              {detail.versions.map((historicalVersion) => (
+                <article className="panel data-card" key={historicalVersion.id}>
+                  <p className="detail-kicker">Version history</p>
+                  <h3>Version {historicalVersion.version}</h3>
+                  <p className="route-text">
+                    {historicalVersion.proposed_action} ↔ {historicalVersion.requested_action}
+                  </p>
+                  <span className="source-pill">{formatDate(historicalVersion.created_at)}</span>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
 
-        <section className="section section-white" aria-labelledby="evidence-heading">
+        <section className="section section-subtle" id="evidence" aria-labelledby="evidence-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Evidence</p>
-            <h2 id="evidence-heading">Submit one proof, then let the other participant review it.</h2>
+            <h2 id="evidence-heading">Submit proof, then let the other participant review it.</h2>
             <p>
               A private file, external link, or participant attestation may be used. The submitter
               cannot review their own evidence. A challenge moves the agreement into disputed state.
@@ -537,7 +450,7 @@ export default async function TradeAgreementPage({
           </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="completion-heading">
+        <section className="section section-white" id="completion" aria-labelledby="completion-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Completion</p>
             <h2 id="completion-heading">Both parties close the loop.</h2>
@@ -571,7 +484,7 @@ export default async function TradeAgreementPage({
               ) : null}
             </article>
 
-            {lifecycleStatus === "completed" && version ? (
+            {lifecycleStatus === "completed" ? (
               <article className="panel data-card">
                 <p className="detail-kicker">Final Deal Receipt</p>
                 <h3>Completed by both parties</h3>
@@ -596,7 +509,7 @@ export default async function TradeAgreementPage({
         </section>
 
         {!FINAL_STATES.has(lifecycleStatus) ? (
-          <section className="section section-white" aria-labelledby="exit-heading">
+          <section className="section section-subtle" id="exit" aria-labelledby="exit-heading">
             <div className="section-head section-head-compact">
               <p className="eyebrow">Exit and cancellation</p>
               <h2 id="exit-heading">End future obligations under visible rules.</h2>
@@ -679,7 +592,7 @@ export default async function TradeAgreementPage({
                   <input name="agreement_id" type="hidden" value={agreementId} />
                   <input name="request_type" type="hidden" value="unilateral_exit" />
                   <h3>Use unilateral exit rule</h3>
-                  <p className="route-text">{String(version?.exit_conditions ?? "No exit rule recorded.")}</p>
+                  <p className="route-text">{String(version.exit_conditions)}</p>
                   <label className="field">
                     <span>Reason and rule relied on</span>
                     <textarea name="reason" required rows={3} />
@@ -697,14 +610,14 @@ export default async function TradeAgreementPage({
         ) : null}
 
         {lifecycleStatus === "cancelled" ? (
-          <section className="section section-subtle">
+          <section className="section section-white">
             <div className="status-banner">
               <strong>Agreement cancelled</strong>
               <p>{agreement.exit_reason || "Future obligations ended. Completed periods remain recorded."}</p>
             </div>
           </section>
         ) : null}
-      </main>
+      </div>
 
       <SiteFooter />
     </div>
