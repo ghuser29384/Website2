@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   finalize:
@@ -55,15 +56,17 @@ jobs:
           set -e
           exit "$status"
 
-      - name: Persist finalizer diagnostics
+      - name: Upload finalizer diagnostics
         if: steps.finalizer.outcome == 'failure'
-        shell: bash
-        run: |
-          cp /tmp/finalize-public-evidence.log .github/finalize-public-evidence-error.txt
-          git add .github/finalize-public-evidence-error.txt
-          git commit -m "Record public evidence finalizer error"
-          git push origin HEAD:feature/public-evidence-desk-v2
-          exit 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-evidence-finalizer-diagnostics
+          path: /tmp/finalize-public-evidence.log
+          if-no-files-found: error
+
+      - name: Stop after finalizer failure
+        if: steps.finalizer.outcome == 'failure'
+        run: exit 1
 
       - name: Remove temporary materialization workflows
         if: steps.finalizer.outcome == 'success'
