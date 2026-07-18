@@ -16,6 +16,7 @@
     "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "auth:configure-oauth": "node scripts/configure-supabase-oauth.mjs",
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
+    "verify:reminders": "node scripts/verify-reminder-management.mjs",
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test"
   },
