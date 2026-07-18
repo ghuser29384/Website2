@@ -1,9 +1,6 @@
 name: Materialize inline itinerary editor
 
 on:
-  push:
-    branches:
-      - release-inline-itinerary-editor-v2
   pull_request:
     branches:
       - main
@@ -18,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.head_ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -28,17 +25,24 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const zlib = require('node:zlib');
-          const payloadPath = 'tmp/inline-itinerary-editor-payload.txt';
+          const crypto = require('node:crypto');
+          const parts = Array.from({ length: 8 }, (_, index) =>
+            `tmp/inline-itinerary-editor-payload-${String(index).padStart(2, '0')}.txt`,
+          );
           try {
-            const encoded = fs.readFileSync(payloadPath, 'utf8').trim();
-            const compressed = Buffer.from(encoded, 'base64');
-            const decoded = zlib.gunzipSync(compressed).toString('utf8');
-            const files = JSON.parse(decoded);
+            const encoded = parts.map((file) => fs.readFileSync(file, 'utf8')).join('').trim();
+            const decoded = zlib.gunzipSync(Buffer.from(encoded, 'base64'));
+            const digest = crypto.createHash('sha256').update(decoded).digest('hex');
+            if (digest !== 'c5c6017b4c63d39ae3e6715f562bfad272531e8e7e8ede71466cfba821eebe94') {
+              throw new Error(`payload integrity mismatch: ${digest}`);
+            }
+            const files = JSON.parse(decoded.toString('utf8'));
             for (const [filePath, content] of Object.entries(files)) {
               fs.mkdirSync(path.dirname(filePath), { recursive: true });
               fs.writeFileSync(filePath, content);
             }
-            fs.rmSync(payloadPath);
+            fs.rmSync('tmp/inline-itinerary-editor-payload.txt', { force: true });
+            for (const file of parts) fs.rmSync(file, { force: true });
             fs.rmSync('tmp/materialize-trigger.txt', { force: true });
             fs.rmSync('tmp/materialize-error.txt', { force: true });
             fs.rmSync('.github/workflows/materialize-inline-itinerary-editor.yml');
@@ -57,4 +61,4 @@ jobs:
           else
             git commit -m "Add the inline itinerary editor"
           fi
-          git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          git push origin HEAD:${{ github.head_ref }}
