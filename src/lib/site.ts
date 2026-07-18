@@ -41,6 +41,7 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/evidence", label: "Public evidence" },
       { href: "/status", label: "Service status" },
       { href: "/safety", label: "Safety and anti-threat rules" },
+      { href: "/trade-controls", label: "Trade controls" },
       { href: "/transparency", label: "Transparency" },
     ],
   },

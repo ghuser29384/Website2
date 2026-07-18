@@ -58,3 +58,34 @@ A separate crop was not needed after the full-resolution comparison: the header,
 No P3 design changes are recommended because the request requires the supplied design without reinterpretation.
 
 final result: passed
+
+---
+
+# Design QA — Trade controls workspace
+
+## Design system alignment
+
+- Source visual truth: the approved Moral Trade returning-user interface and interactive walkthrough language already implemented in this repository.
+- The new workspace reuses the product's existing Source Serif, Metropolis, and mono typography, warm paper background, ink panels, cobalt action color, fine borders, brand step mark, and Phosphor icon set.
+- No new image style, palette, radius system, shadow treatment, or navigation language was introduced.
+
+## Interaction coverage
+
+- All ten controls have a distinct interactive state model, a reset path, explicit fail-closed copy, and a reviewed handoff into an existing live workflow.
+- Keyboard and assistive-technology surfaces use native buttons, links, checkboxes, ranges, selects, text areas, and labels.
+- Desktop, tablet, and mobile layouts are covered by the responsive stylesheet and focused browser regression specification.
+- The workspace never represents a preview as a durable payment, commitment, verification, settlement, or authority change.
+
+## Verification evidence
+
+- Focused route, navigation, and search contract suite: 11 passing tests.
+- Focused ESLint and JavaScript syntax checks: passed.
+- Production Next.js compilation produced the /trade-controls route.
+- Final deployed-route and live-navigation checks are recorded in the release verification.
+
+## Findings
+
+- No P0, P1, or P2 design or interaction issue remains in the implemented workspace.
+- The ten-control sidebar, mobile selector, feature headers, interactive work surfaces, protocol badges, and live-workflow actions preserve the approved marketplace presentation.
+
+final result: passed
