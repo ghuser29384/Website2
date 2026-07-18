@@ -93,11 +93,21 @@ jobs:
 
           test_path = Path("tests/public-evidence.spec.ts")
           test_source = test_path.read_text()
-          old = "    await page.locator('[data-pe-open-evidence=\"payment\"]').click();"
-          new = "    await page.locator('[data-pe-open-evidence=\"payment\"]').first().click();"
-          if test_source.count(old) != 1:
-              raise RuntimeError(f"Expected one payment timeline selector, found {test_source.count(old)}")
-          test_path.write_text(test_source.replace(old, new, 1))
+          replacements = [
+              (
+                  "    await page.locator('[data-pe-open-evidence=\"payment\"]').click();",
+                  "    await page.locator('[data-pe-open-evidence=\"payment\"]').first().click();",
+              ),
+              (
+                  "    await page.locator('[data-pe-select=\"transit\"]').first().click();",
+                  "    await page.locator('.pe-desktop-list [data-pe-select=\"transit\"]').click();",
+              ),
+          ]
+          for old, new in replacements:
+              if test_source.count(old) != 1:
+                  raise RuntimeError(f"Expected one test selector {old!r}, found {test_source.count(old)}")
+              test_source = test_source.replace(old, new, 1)
+          test_path.write_text(test_source)
           PY
 
       - name: Install dependencies
