@@ -32,6 +32,8 @@ jobs:
           git merge --no-edit origin/main
 
       - name: Execute finalizer payload
+        id: finalizer
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
@@ -47,34 +49,57 @@ jobs:
               payload.append(line[10:])
           Path('/tmp/finalize-public-evidence.py').write_text('\n'.join(payload) + '\n')
           PY
-          python /tmp/finalize-public-evidence.py
+          set +e
+          python /tmp/finalize-public-evidence.py 2>&1 | tee /tmp/finalize-public-evidence.log
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Persist finalizer diagnostics
+        if: steps.finalizer.outcome == 'failure'
+        shell: bash
+        run: |
+          cp /tmp/finalize-public-evidence.log .github/finalize-public-evidence-error.txt
+          git add .github/finalize-public-evidence-error.txt
+          git commit -m "Record public evidence finalizer error"
+          git push origin HEAD:feature/public-evidence-desk-v2
+          exit 1
 
       - name: Remove temporary materialization workflows
+        if: steps.finalizer.outcome == 'success'
         shell: bash
         run: |
           rm -f .github/workflows/materialize-public-evidence-v2.yml
           rm -f .github/workflows/finalize-public-evidence-v2.yml
           rm -f .github/workflows/pr-finalize-public-evidence-v2.yml
+          rm -f .github/finalize-public-evidence-error.txt
 
       - name: Install dependencies
+        if: steps.finalizer.outcome == 'success'
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: steps.finalizer.outcome == 'success'
         run: npx playwright install --with-deps chromium
 
       - name: Lint
+        if: steps.finalizer.outcome == 'success'
         run: npm run lint
 
       - name: Unit tests
+        if: steps.finalizer.outcome == 'success'
         run: npm test
 
       - name: Production build
+        if: steps.finalizer.outcome == 'success'
         run: npm run build
 
       - name: Evidence interaction tests
+        if: steps.finalizer.outcome == 'success'
         run: npx playwright test tests/public-evidence.spec.ts --reporter=line
 
       - name: Commit integrated implementation
+        if: steps.finalizer.outcome == 'success'
         shell: bash
         run: |
           git add -A
