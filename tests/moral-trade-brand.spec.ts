@@ -43,7 +43,7 @@ test.describe("canonical Moral Trade brand", () => {
         <a class="brand" href="/"><span aria-hidden="true">old mark</span><span>Moral Trade</span></a>
       </header>
     `);
-    await page.addScriptTag({ url: "/moral-trade-brand.js" });
+    await page.addScriptTag({ url: "http://127.0.0.1:3210/moral-trade-brand.js" });
 
     const brands = page.locator('[data-mt-brand-canonical="true"]');
     await expect(brands).toHaveCount(2);
