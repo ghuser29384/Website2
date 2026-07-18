@@ -17,6 +17,7 @@ alter table public.trade_evidence_items
   add column if not exists public_title text not null default '',
   add column if not exists public_summary text not null default '',
   add column if not exists public_url text not null default '',
+  add column if not exists public_storage_path text not null default '',
   add column if not exists public_visibility text not null default 'public',
   add column if not exists redaction_status text not null default 'pending_review',
   add column if not exists public_redaction_note text not null default '',
@@ -98,14 +99,13 @@ begin
   if not evidence_is_public then
     new.public_visibility := 'withheld_safety';
     new.redaction_status := 'withheld';
+    new.public_title := 'Evidence withheld for safety';
+    new.public_summary := 'Specific proof is withheld under a documented safety exception.';
     new.public_url := '';
-    new.public_redaction_note := coalesce(
-      nullif(btrim(new.public_redaction_note), ''),
-      case
-        when btrim(exception_reason) <> '' then 'Specific proof withheld under a documented safety exception.'
-        else 'Specific proof withheld under a safety exception.'
-      end
-    );
+    new.public_storage_path := '';
+    new.public_original_filename := '';
+    new.public_mime_type := '';
+    new.public_redaction_note := 'Specific proof withheld under a documented safety exception.';
     new.public_published_at := null;
     return new;
   end if;
@@ -122,6 +122,7 @@ begin
     if new.redaction_status not in ('redacted', 'not_required') then
       new.redaction_status := 'pending_review';
       new.public_url := '';
+      new.public_storage_path := '';
     end if;
     new.public_redaction_note := coalesce(
       nullif(btrim(new.public_redaction_note), ''),
@@ -129,6 +130,7 @@ begin
     );
   elsif new.evidence_type = 'link' then
     new.redaction_status := 'not_required';
+    new.public_storage_path := '';
     new.public_url := coalesce(nullif(btrim(new.public_url), ''), new.evidence_url, '');
     new.public_redaction_note := coalesce(
       nullif(btrim(new.public_redaction_note), ''),
@@ -136,6 +138,7 @@ begin
     );
   else
     new.redaction_status := 'not_required';
+    new.public_storage_path := '';
     new.public_url := '';
     new.public_redaction_note := coalesce(
       nullif(btrim(new.public_redaction_note), ''),
@@ -162,11 +165,20 @@ as $$
 declare
   target_agreement_id uuid;
 begin
-  target_agreement_id := coalesce(new.agreement_id, old.agreement_id);
+  if tg_op = 'DELETE' then
+    target_agreement_id := old.agreement_id;
+  else
+    target_agreement_id := new.agreement_id;
+  end if;
+
   update public.agreements
   set public_evidence_updated_at = now()
   where id = target_agreement_id;
-  return coalesce(new, old);
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $$;
 
@@ -190,12 +202,14 @@ set
     else 'not_required'
   end,
   public_title = case
+    when not coalesce(a.public_evidence_enabled, true) then 'Evidence withheld for safety'
     when btrim(e.public_title) <> '' then e.public_title
     when e.evidence_type = 'attestation' then 'Participant attestation'
     when e.evidence_type = 'link' then 'External evidence link'
     else 'Submitted evidence file'
   end,
   public_summary = case
+    when not coalesce(a.public_evidence_enabled, true) then 'Specific proof is withheld under a documented safety exception.'
     when btrim(e.public_summary) <> '' then e.public_summary
     when btrim(e.attestation) <> '' then e.attestation
     else 'Evidence submitted under the parties'' frozen agreement. The public record preserves its review and redaction state.'
@@ -205,7 +219,9 @@ set
     when e.evidence_type = 'link' then e.evidence_url
     else ''
   end,
+  public_storage_path = '',
   public_original_filename = case
+    when not coalesce(a.public_evidence_enabled, true) then ''
     when btrim(e.public_original_filename) <> '' then e.public_original_filename
     else regexp_replace(coalesce(e.storage_path, ''), '^.*/', '')
   end,
@@ -225,6 +241,8 @@ where a.id = e.agreement_id;
 
 comment on column public.trade_evidence_items.public_visibility is
   'Public by default. withheld_safety is reserved for a documented safety exception.';
+comment on column public.trade_evidence_items.public_storage_path is
+  'Storage path for the certified or redacted public-safe copy. Never populate this with an unreviewed private source.';
 comment on column public.trade_evidence_items.redaction_status is
   'Controls whether a stored source can be opened publicly. Public metadata remains visible while a file is pending review.';
 comment on table public.trade_evidence_items is

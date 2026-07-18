@@ -341,6 +341,11 @@ export async function saveCoreOfferAction(formData: FormData) {
     if (intent === "submit" && !readCheckbox(formData, "voluntary_certification")) {
       throw new Error("Confirm that the proposal is voluntary and contains no threat or retaliation.");
     }
+    if (intent === "submit" && !readCheckbox(formData, "public_evidence_certification")) {
+      throw new Error(
+        "Confirm that agreement evidence will be public by default and that only public-safe copies will be submitted.",
+      );
+    }
 
     const fingerprint = buildFingerprint([
       offeredCause,
@@ -1541,8 +1546,18 @@ export async function submitTradeEvidenceAction(formData: FormData) {
     const evidenceUrl = read(formData, "evidence_url");
     const attestation = read(formData, "attestation").slice(0, MAX_TERM_LENGTH);
     const fileEntry = formData.get("evidence_file");
+    const publicSafeCopy = readCheckbox(formData, "public_safe_copy");
+    if (!publicSafeCopy) {
+      throw new Error(
+        "Confirm that this evidence and its source are public-safe before submission.",
+      );
+    }
     let storagePath = "";
     let evidenceType = "";
+    let publicOriginalFilename = "";
+    let publicMimeType = "";
+    const publicRedactionNote =
+      "The submitting participant certified this source as public-safe. This certification is not independent verification.";
 
     if (fileEntry instanceof File && fileEntry.size > 0) {
       if (fileEntry.size > 10 * 1024 * 1024) throw new Error("Evidence files must be 10 MB or smaller.");
@@ -1554,8 +1569,10 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         "text/plain",
       ]);
       if (!allowedTypes.has(fileEntry.type)) throw new Error("Unsupported evidence file type.");
-      const safeName = fileEntry.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "evidence";
-      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${safeName}`;
+      const extension = fileEntry.name.match(/\.[a-zA-Z0-9]{1,10}$/)?.[0].toLowerCase() ?? "";
+      publicOriginalFilename = `public-evidence${extension}`;
+      publicMimeType = fileEntry.type;
+      storagePath = `${agreementId}/${viewer.authUser.id}/${randomUUID()}-${publicOriginalFilename}`;
       const upload = await supabase.storage.from(EVIDENCE_BUCKET).upload(storagePath, fileEntry, {
         contentType: fileEntry.type,
         upsert: false,
@@ -1570,8 +1587,12 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         throw new Error("Evidence link must be a valid http or https URL.");
       }
       evidenceType = "link";
+      publicOriginalFilename = "external-evidence-link";
+      publicMimeType = "text/html";
     } else if (attestation) {
       evidenceType = "attestation";
+      publicOriginalFilename = "participant-attestation.txt";
+      publicMimeType = "text/plain";
     } else {
       throw new Error("Upload a file, provide an evidence link, or write an attestation.");
     }
@@ -1586,6 +1607,12 @@ export async function submitTradeEvidenceAction(formData: FormData) {
         evidence_url: evidenceUrl,
         attestation,
         status: "submitted",
+        public_visibility: "public",
+        redaction_status: "not_required",
+        public_storage_path: storagePath,
+        public_original_filename: publicOriginalFilename,
+        public_mime_type: publicMimeType,
+        public_redaction_note: publicRedactionNote,
       })
       .select("id")
       .single();
@@ -1746,7 +1773,13 @@ export async function confirmTradeCompletionAction(formData: FormData) {
       await Promise.all([
         supabase
           .from("agreements")
-          .update({ status: "completed", lifecycle_status: "completed", completed_at: now, updated_at: now })
+          .update({
+            status: "completed",
+            lifecycle_status: "completed",
+            completed_at: now,
+            updated_at: now,
+            public_evidence_updated_at: now,
+          })
           .eq("id", agreementId),
         recordCoreEvent({
           profileId: String(agreement.proposer_id),

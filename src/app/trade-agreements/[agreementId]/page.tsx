@@ -405,18 +405,28 @@ export default async function TradeAgreementPage({
         <section className="section section-white" aria-labelledby="evidence-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Evidence</p>
-            <h2 id="evidence-heading">Submit one proof, then let the other participant review it.</h2>
+            <h2 id="evidence-heading">Submit public-safe proof, then let the other participant review it.</h2>
             <p>
-              A private file, external link, or participant attestation may be used. The submitter
-              cannot review their own evidence. A challenge moves the agreement into disputed state.
+              Evidence records and their sources are public by default. Remove exact addresses,
+              account numbers, private contact details, and unrelated personal information before
+              submission. The submitter cannot review their own evidence, and a challenge moves the
+              agreement into disputed state.
             </p>
           </div>
+
+          {detail.evidence.length ? (
+            <p>
+              <Link className="inline-link" href={`/evidence/${agreementId}`}>
+                Open the public evidence desk and proof timeline
+              </Link>
+            </p>
+          ) : null}
 
           {canSubmitEvidence ? (
             <form action={submitTradeEvidenceAction} className="panel stack-form" encType="multipart/form-data">
               <input name="agreement_id" type="hidden" value={agreementId} />
               <label className="field">
-                <span>Evidence file (PDF, image, or text; 10 MB maximum)</span>
+                <span>Public-safe evidence file (PDF, image, or text; 10 MB maximum)</span>
                 <input
                   accept="application/pdf,image/png,image/jpeg,image/webp,text/plain"
                   name="evidence_file"
@@ -435,7 +445,17 @@ export default async function TradeAgreementPage({
                   rows={4}
                 />
               </label>
-              <p className="panel-note">Provide one of the three evidence forms above.</p>
+              <label className="radio-row">
+                <input name="public_safe_copy" required type="checkbox" />
+                <span>
+                  I understand this evidence item and its source will be publicly inspectable. I have
+                  removed sensitive identifiers and unrelated personal information.
+                </span>
+              </label>
+              <p className="panel-note">
+                Provide one evidence form above. Public visibility is separate from submitted,
+                accepted, or challenged review status.
+              </p>
               <PendingSubmitButton pendingLabel="Uploading evidence...">
                 Submit evidence
               </PendingSubmitButton>
@@ -469,11 +489,17 @@ export default async function TradeAgreementPage({
                       <span className="source-pill">
                         Challenge until {formatDate(item.challenge_window_ends_at)}
                       </span>
+                      <span className="source-pill">
+                        Visibility: {String(item.public_visibility ?? "public").replaceAll("_", " ")}
+                      </span>
+                      <span className="source-pill">
+                        Redaction: {String(item.redaction_status ?? "pending_review").replaceAll("_", " ")}
+                      </span>
                     </div>
                     {item.attestation ? <p className="route-text">{item.attestation}</p> : null}
                     {item.signedUrl ? (
                       <a className="inline-link" href={item.signedUrl}>
-                        Open private uploaded evidence
+                        Open uploaded evidence
                       </a>
                     ) : null}
                     {item.evidence_url ? (

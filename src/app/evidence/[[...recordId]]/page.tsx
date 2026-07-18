@@ -83,12 +83,17 @@ const SCRIPT = String.raw`
   const docs=[...desk.querySelectorAll('[data-pe-document]')];
   const inspectors=[...desk.querySelectorAll('[data-pe-inspector]')];
   const timeline=desk.querySelector('[data-pe-timeline]');
+  const timelineToggle=desk.querySelector('[data-pe-timeline-toggle]');
   const zoomLabel=desk.querySelector('[data-pe-zoom-label]');
   let selected=buttons[0]?.getAttribute('data-pe-select')||'';
   let zoom=1;
   function applyZoom(){
     docs.forEach((doc)=>{const inner=doc.querySelector('[data-pe-zoom-target]');if(inner)inner.style.transform='scale('+zoom+')';});
     if(zoomLabel)zoomLabel.textContent=Math.round(zoom*100)+'%';
+  }
+  function setTimeline(open){
+    timeline?.classList.toggle('open',open);
+    timelineToggle?.setAttribute('aria-expanded',open?'true':'false');
   }
   function select(id){
     selected=id;
@@ -99,14 +104,14 @@ const SCRIPT = String.raw`
   }
   desk.addEventListener('click',async(event)=>{
     const selectButton=event.target.closest('[data-pe-select]');if(selectButton){select(selectButton.getAttribute('data-pe-select'));return;}
-    const linked=event.target.closest('[data-pe-open-evidence]');if(linked){select(linked.getAttribute('data-pe-open-evidence'));timeline?.classList.remove('open');return;}
-    if(event.target.closest('[data-pe-timeline-toggle]')){timeline?.classList.toggle('open');return;}
-    if(event.target.closest('[data-pe-timeline-close]')){timeline?.classList.remove('open');return;}
+    const linked=event.target.closest('[data-pe-open-evidence]');if(linked){select(linked.getAttribute('data-pe-open-evidence'));setTimeline(false);return;}
+    if(event.target.closest('[data-pe-timeline-toggle]')){setTimeline(!timeline?.classList.contains('open'));return;}
+    if(event.target.closest('[data-pe-timeline-close]')){setTimeline(false);return;}
     if(event.target.closest('[data-pe-zoom-in]')){zoom=Math.min(1.3,Math.round((zoom+.1)*10)/10);applyZoom();return;}
     if(event.target.closest('[data-pe-zoom-out]')){zoom=Math.max(.8,Math.round((zoom-.1)*10)/10);applyZoom();return;}
-    if(event.target.closest('[data-pe-share]')){try{await navigator.clipboard.writeText(location.href);event.target.closest('button').lastChild.textContent=' Copied';setTimeout(()=>location.reload(),1100)}catch(_){}}
+    if(event.target.closest('[data-pe-share]')){try{await navigator.clipboard.writeText(location.href);const button=event.target.closest('button');const label=button?.lastChild;const prior=label?.textContent||' Share';if(label)label.textContent=' Copied';setTimeout(()=>{if(label)label.textContent=prior},1100)}catch(_){}}
   });
-  document.addEventListener('keydown',(event)=>{if(event.key==='Escape')timeline?.classList.remove('open');});
+  document.addEventListener('keydown',(event)=>{if(event.key==='Escape')setTimeline(false);});
   select(selected);applyZoom();
 })();
 `;
@@ -191,7 +196,7 @@ async function signedPublicUrl(supabase: any, row: Record<string, any>) {
   if (!["redacted", "not_required"].includes(redaction(row.redaction_status))) return null;
   const direct = clean(row.public_url);
   if (direct) return direct;
-  const path = clean(row.storage_path);
+  const path = clean(row.public_storage_path);
   if (!path) return null;
   const { data, error } = await supabase.storage.from("trade-evidence").createSignedUrl(path, 1800);
   return error ? null : data?.signedUrl ?? null;
