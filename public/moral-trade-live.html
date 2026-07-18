@@ -38,7 +38,8 @@
         }
 
         const source = new TextDecoder().decode(raw);
-        const discoverNavigationScript = '<script src="/moral-trade-live-navigation.js"><\\/script>';
+        const discoverNavigationScript =
+          '<script src="/moral-trade-live-navigation.js"></scr' + 'ipt>';
         const enhancedSource = source.includes('</body>')
           ? source.replace('</body>', `${discoverNavigationScript}</body>`)
           : `${source}${discoverNavigationScript}`;
