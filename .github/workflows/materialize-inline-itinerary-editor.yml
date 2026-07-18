@@ -29,20 +29,32 @@ jobs:
           const path = require('node:path');
           const zlib = require('node:zlib');
           const payloadPath = 'tmp/inline-itinerary-editor-payload.txt';
-          const encoded = fs.readFileSync(payloadPath, 'utf8').trim();
-          const files = JSON.parse(zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8'));
-          for (const [filePath, content] of Object.entries(files)) {
-            fs.mkdirSync(path.dirname(filePath), { recursive: true });
-            fs.writeFileSync(filePath, content);
+          try {
+            const encoded = fs.readFileSync(payloadPath, 'utf8').trim();
+            const compressed = Buffer.from(encoded, 'base64');
+            const decoded = zlib.gunzipSync(compressed).toString('utf8');
+            const files = JSON.parse(decoded);
+            for (const [filePath, content] of Object.entries(files)) {
+              fs.mkdirSync(path.dirname(filePath), { recursive: true });
+              fs.writeFileSync(filePath, content);
+            }
+            fs.rmSync(payloadPath);
+            fs.rmSync('tmp/materialize-trigger.txt', { force: true });
+            fs.rmSync('tmp/materialize-error.txt', { force: true });
+            fs.rmSync('.github/workflows/materialize-inline-itinerary-editor.yml');
+          } catch (error) {
+            fs.writeFileSync('tmp/materialize-error.txt', `${error.stack || error}\n`);
           }
-          fs.rmSync(payloadPath);
-          fs.rmSync('tmp/materialize-trigger.txt', { force: true });
-          fs.rmSync('.github/workflows/materialize-inline-itinerary-editor.yml');
           NODE
-      - name: Commit production implementation
+      - name: Commit production implementation or diagnostic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Add the inline itinerary editor"
+          if git diff --cached --quiet; then exit 0; fi
+          if test -f tmp/materialize-error.txt; then
+            git commit -m "Record itinerary materialization diagnostic"
+          else
+            git commit -m "Add the inline itinerary editor"
+          fi
           git push origin HEAD:${{ github.head_ref || github.ref_name }}
