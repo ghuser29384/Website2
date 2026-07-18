@@ -25,7 +25,13 @@
     window.location.assign("/discover");
   }
 
-  function prepareControl(control) {
+  function openControls(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    window.location.assign("/trade-controls");
+  }
+
+  function prepareDiscoverControl(control) {
     control.setAttribute("data-mt-discover-link", "true");
     control.removeAttribute("aria-current");
     control.removeAttribute("data-page");
@@ -42,13 +48,30 @@
     control.addEventListener("click", openDiscover, true);
   }
 
+  function prepareControlsControl(control) {
+    control.setAttribute("data-mt-controls-link", "true");
+    control.removeAttribute("aria-current");
+    control.removeAttribute("data-page");
+    control.removeAttribute("data-action");
+    control.removeAttribute("data-view");
+    control.classList.remove("active");
+
+    if (control instanceof HTMLAnchorElement) {
+      control.href = "/trade-controls";
+    } else if (control instanceof HTMLButtonElement) {
+      control.type = "button";
+    }
+
+    control.addEventListener("click", openControls, true);
+  }
+
   function createDiscoverControl(nav, template) {
     const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
     const control = document.createElement(tagName);
     control.className = template.className;
     control.textContent = "Discover";
     control.setAttribute("aria-label", "Open Discover");
-    prepareControl(control);
+    prepareDiscoverControl(control);
 
     const nowControl = Array.from(nav.querySelectorAll("a, button")).find(
       (candidate) => normalizeLabel(candidate) === "now",
@@ -61,6 +84,25 @@
     } else {
       nav.insertBefore(control, nav.firstChild);
     }
+
+    return control;
+  }
+
+  function createControlsControl(nav, template, discoverControl) {
+    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
+    const control = document.createElement(tagName);
+    control.className = template.className;
+    control.textContent = "Controls";
+    control.setAttribute("aria-label", "Open Trade controls");
+    prepareControlsControl(control);
+
+    if (discoverControl?.nextSibling) {
+      nav.insertBefore(control, discoverControl.nextSibling);
+    } else if (discoverControl) {
+      nav.appendChild(control);
+    } else {
+      nav.appendChild(control);
+    }
   }
 
   function patchNavigation() {
@@ -69,20 +111,34 @@
 
     for (const nav of navs) {
       const controls = [...nav.querySelectorAll("a, button")];
-      const discoverControl = controls.find((control) => normalizeLabel(control) === "discover");
+      let discoverControl = controls.find((control) => normalizeLabel(control) === "discover");
 
       if (discoverControl) {
         if (!discoverControl.hasAttribute("data-mt-discover-link")) {
-          prepareControl(discoverControl);
+          prepareDiscoverControl(discoverControl);
         }
-        patched = true;
-        continue;
+      } else {
+        const template = controls.find((control) => normalizeLabel(control) === "now") || controls[0];
+        if (!template) continue;
+
+        discoverControl = createDiscoverControl(nav, template);
       }
 
-      const template = controls.find((control) => normalizeLabel(control) === "now") || controls[0];
-      if (!template) continue;
+      const updatedControls = [...nav.querySelectorAll("a, button")];
+      const controlsControl = updatedControls.find(
+        (control) => normalizeLabel(control) === "controls",
+      );
 
-      createDiscoverControl(nav, template);
+      if (controlsControl) {
+        if (!controlsControl.hasAttribute("data-mt-controls-link")) {
+          prepareControlsControl(controlsControl);
+        }
+      } else {
+        const template =
+          updatedControls.find((control) => normalizeLabel(control) === "now") || updatedControls[0];
+        if (template) createControlsControl(nav, template, discoverControl);
+      }
+
       patched = true;
     }
 
