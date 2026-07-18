@@ -23,7 +23,7 @@ test.describe("Returning homepage in America/Los_Angeles", () => {
     await expectLocalGreeting(page, {
       dateTime: "2026-07-16",
       dateLabel: "Thursday, July 16, 2026",
-      greeting: "Good evening, Alex.",
+      greeting: "Good evening.",
     });
   });
 });
@@ -38,7 +38,7 @@ test.describe("Returning homepage in Asia/Tokyo", () => {
     await expectLocalGreeting(page, {
       dateTime: "2026-07-17",
       dateLabel: "Friday, July 17, 2026",
-      greeting: "Good morning, Alex.",
+      greeting: "Good morning.",
     });
   });
 });
@@ -53,7 +53,7 @@ test.describe("Returning homepage local-time refresh", () => {
     await expectLocalGreeting(page, {
       dateTime: "2026-07-16",
       dateLabel: "Thursday, July 16, 2026",
-      greeting: "Good afternoon, Alex.",
+      greeting: "Good afternoon.",
     });
 
     await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
@@ -62,7 +62,7 @@ test.describe("Returning homepage local-time refresh", () => {
     await expectLocalGreeting(page, {
       dateTime: "2026-07-17",
       dateLabel: "Friday, July 17, 2026",
-      greeting: "Good morning, Alex.",
+      greeting: "Good morning.",
     });
   });
 });
