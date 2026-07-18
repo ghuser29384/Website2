@@ -1,0 +1,1262 @@
+.workspace {
+  width: min(1240px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 44px 0 88px;
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.workspaceHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: end;
+  padding: 34px;
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(rgba(23, 24, 21, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 24, 21, 0.035) 1px, transparent 1px),
+    var(--surface);
+  background-size: 28px 28px;
+}
+
+.workspaceHeader h1,
+.layerHeading h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.workspaceHeader h1 {
+  max-width: 14ch;
+  font-size: clamp(46px, 7vw, 82px);
+  line-height: 0.94;
+}
+
+.workspaceHeader p:not(.kicker),
+.layerHeading p,
+.integrationIntro p {
+  max-width: 70ch;
+  margin: 14px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.kicker,
+.sourceLabel {
+  margin: 0 0 10px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.headerActions,
+.integrationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.inlineAction,
+.iconButton,
+.providerButton,
+.layerButton,
+.layerActive,
+.matrixCell,
+.matrixCellActive,
+.event,
+.eventSelected {
+  font: inherit;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 15px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.primaryButton {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--accent-deep);
+  background: var(--accent-deep);
+}
+
+.secondaryButton {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.dangerButton {
+  border-color: var(--danger-ink);
+  background: transparent;
+  color: var(--danger-ink);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.layerNav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.layerButton,
+.layerActive {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 86px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.layerButton:last-child,
+.layerActive:last-child {
+  border-right: 0;
+}
+
+.layerButton:hover {
+  background: var(--surface-muted);
+}
+
+.layerActive {
+  background: var(--accent);
+  color: #fff;
+}
+
+.layerNumber {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: -0.08em;
+}
+
+.layerButton strong,
+.layerActive strong {
+  display: block;
+  font-size: 13px;
+}
+
+.layerButton small,
+.layerActive small {
+  display: block;
+  margin-top: 4px;
+  color: inherit;
+  font-size: 10px;
+  line-height: 1.35;
+  opacity: 0.72;
+}
+
+.sequenceNote,
+.statusSuccess,
+.statusError {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.sequenceNote {
+  color: var(--ink-soft);
+}
+
+.sequenceNote strong {
+  color: var(--ink);
+}
+
+.statusSuccess {
+  border-color: #9aaf9d;
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+
+.statusError {
+  border-color: #c49388;
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+.layerSurface {
+  margin-top: 18px;
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(rgba(23, 24, 21, 0.027) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 24, 21, 0.027) 1px, transparent 1px),
+    var(--bg);
+  background-size: 28px 28px;
+}
+
+.layerHeading {
+  display: flex;
+  gap: 24px;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.layerHeading h2 {
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 0.98;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(100px, 1fr));
+  min-width: min(100%, 430px);
+  margin: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.metrics > div {
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.metrics > div:last-child {
+  border-right: 0;
+}
+
+.metrics dt {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metrics dd {
+  overflow: hidden;
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.countBadge {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scheduleGrid,
+.timelineGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.milestoneStack {
+  display: grid;
+  gap: 12px;
+}
+
+.milestoneCard,
+.customCheckpoint,
+.settingsPanel,
+.previewPanel,
+.timelineCard,
+.integrationPanel,
+.calendarShell,
+.emptyState {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.milestoneCard {
+  border-left: 4px solid var(--accent);
+}
+
+.milestoneHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 280px);
+  gap: 18px;
+  align-items: center;
+  padding: 17px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.milestoneHeader h3,
+.customCheckpoint h3,
+.settingsPanel h3,
+.previewPanel h3,
+.timelineCard h3,
+.calendarDrawer h3,
+.integrationPanel h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.dueField,
+.offsetField,
+.customCheckpoint label,
+.settingBlock,
+.privateUrlField {
+  display: grid;
+  gap: 6px;
+}
+
+.dueField > span,
+.offsetField > span,
+.customCheckpoint label > span,
+.settingBlock > span,
+.privateUrlField > span,
+.timeGrid label > span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dueField input,
+.offsetField select,
+.customCheckpoint input,
+.settingBlock input,
+.timeGrid input,
+.privateUrlField input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: #fff;
+  color: var(--ink);
+  font: 12px var(--font-body);
+}
+
+.offsetField small,
+.settingBlock small {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.reminderRows {
+  padding: 0 18px;
+}
+
+.reminderRow {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(230px, auto) auto auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 74px;
+  border-bottom: 1px solid var(--line);
+}
+
+.reminderRow:last-child {
+  border-bottom: 0;
+}
+
+.channelControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.channelControls label {
+  position: relative;
+  cursor: pointer;
+}
+
+.channelControls input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.channelControls label {
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.channelControls label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.switchLabel {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.switchLabel input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.switchTrack {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  transition: 140ms ease;
+}
+
+.switchTrack::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(23, 24, 21, 0.18);
+  content: "";
+  transition: 140ms ease;
+}
+
+.switchLabel input:checked + .switchTrack {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switchLabel input:checked + .switchTrack::after {
+  transform: translateX(16px);
+}
+
+.switchLabel input:focus-visible + .switchTrack {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.iconButton {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.iconButton:hover {
+  border-color: var(--danger-ink);
+  color: var(--danger-ink);
+}
+
+.inlineAction {
+  margin: 0 18px 16px;
+  padding: 7px 0;
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.emptyInline {
+  display: grid;
+  gap: 4px;
+  padding: 18px 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.emptyInline strong {
+  color: var(--ink);
+}
+
+.customCheckpoint {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.2fr) minmax(160px, 1fr) minmax(180px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  padding: 17px 18px;
+}
+
+.settingsPanel,
+.previewPanel {
+  position: sticky;
+  top: 18px;
+}
+
+.panelHeading {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settingRow {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settingRow strong,
+.settingRow small {
+  display: block;
+}
+
+.settingRow strong {
+  font-size: 12px;
+}
+
+.settingRow small {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.settingBlock {
+  padding: 15px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settingsPanel > .primaryButton {
+  width: calc(100% - 34px);
+  margin: 17px;
+}
+
+.checkboxLine {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.checkboxLine input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.timeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.timeGrid label {
+  display: grid;
+  gap: 6px;
+}
+
+.timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding-left: 148px;
+}
+
+.timeline::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 122px;
+  width: 1px;
+  background: var(--line-strong);
+  content: "";
+}
+
+.timelineItem {
+  position: relative;
+}
+
+.timelineItem > time {
+  position: absolute;
+  top: 12px;
+  right: calc(100% + 46px);
+  width: 110px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.timelineDot,
+.timelineDotPast {
+  position: absolute;
+  top: 16px;
+  left: -32px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.timelineDotPast {
+  background: var(--line-strong);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.timelineCard {
+  padding: 16px;
+}
+
+.timelineCard p {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.tagRow span {
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.previewPanel {
+  padding: 18px;
+}
+
+.previewPanel > h3 {
+  margin-top: 4px;
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.notificationPreview {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 12px;
+  margin: 17px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.notificationPreview p {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.previewDot {
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.privacyNote {
+  margin: 14px 0 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.matrixWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.ruleMatrix {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+}
+
+.ruleMatrix th,
+.ruleMatrix td {
+  padding: 11px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.ruleMatrix tr:last-child th,
+.ruleMatrix tr:last-child td {
+  border-bottom: 0;
+}
+
+.ruleMatrix th:last-child,
+.ruleMatrix td:last-child {
+  border-right: 0;
+}
+
+.ruleMatrix thead th {
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ruleMatrix thead th:first-child,
+.ruleMatrix tbody th {
+  text-align: left;
+}
+
+.ruleMatrix tbody th {
+  min-width: 230px;
+  font-size: 12px;
+}
+
+.ruleMatrix tbody th strong,
+.ruleMatrix tbody th small {
+  display: block;
+}
+
+.ruleMatrix tbody th small {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.matrixCell,
+.matrixCellActive {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.matrixCell:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.matrixCellActive {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.calendarShell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  overflow: hidden;
+}
+
+.weekGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(125px, 1fr));
+  overflow-x: auto;
+}
+
+.dayColumn {
+  min-height: 390px;
+  border-right: 1px solid var(--line);
+}
+
+.dayColumn:last-child {
+  border-right: 0;
+}
+
+.dayColumn > header {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.dayColumn > header span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dayColumn > header strong {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.dayColumn > div {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+}
+
+.event,
+.eventSelected {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventSelected {
+  background: var(--accent);
+  color: #fff;
+}
+
+.event time {
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.eventSelected time {
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.event span,
+.eventSelected span {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.calendarDrawer {
+  padding: 17px;
+  border-left: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.calendarDrawer > p {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.calendarDrawer dl {
+  display: grid;
+  gap: 0;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.calendarDrawer dl > div {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.calendarDrawer dt {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.calendarDrawer dd {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.integrationPanel {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 1.7fr);
+  gap: 22px;
+  margin-top: 16px;
+  padding: 22px;
+}
+
+.integrationIntro h3 {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+
+.integrationControls,
+.integrationEnable {
+  display: grid;
+  gap: 14px;
+}
+
+.integrationEnable {
+  align-content: center;
+  justify-items: start;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.integrationEnable p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.providerButton {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  gap: 10px;
+  align-items: center;
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.providerButton:hover {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+
+.providerButton > svg:first-child {
+  width: 25px;
+  height: 25px;
+}
+
+.providerButton > svg:last-child {
+  width: 18px;
+  height: 18px;
+}
+
+.providerButton strong,
+.providerButton small {
+  display: block;
+}
+
+.providerButton strong {
+  font-size: 11px;
+}
+
+.providerButton small {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.privateUrlField > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.privateUrlField input {
+  min-width: 0;
+  border-right: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.privateUrlField button {
+  min-width: 66px;
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.emptyState {
+  padding: 24px;
+}
+
+.emptyState strong {
+  font-size: 14px;
+}
+
+.emptyState p {
+  max-width: 65ch;
+  margin: 7px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 1040px) {
+  .workspaceHeader,
+  .layerHeading {
+    align-items: start;
+  }
+
+  .scheduleGrid,
+  .timelineGrid,
+  .calendarShell,
+  .integrationPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsPanel,
+  .previewPanel {
+    position: static;
+  }
+
+  .calendarDrawer {
+    border-top: 1px solid var(--line-strong);
+    border-left: 0;
+  }
+
+  .customCheckpoint {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .customCheckpoint > div {
+    grid-column: 1 / -1;
+  }
+
+  .providerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  .workspace {
+    width: min(100% - 20px, 1240px);
+    padding-top: 18px;
+  }
+
+  .workspaceHeader {
+    grid-template-columns: 1fr;
+    padding: 24px 18px;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .headerActions > * {
+    flex: 1;
+  }
+
+  .layerNav {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .layerButton,
+  .layerActive {
+    min-height: 72px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .layerButton:nth-child(2),
+  .layerActive:nth-child(2) {
+    border-right: 0;
+  }
+
+  .layerButton:nth-child(3),
+  .layerActive:nth-child(3),
+  .layerButton:nth-child(4),
+  .layerActive:nth-child(4) {
+    border-bottom: 0;
+  }
+
+  .layerSurface {
+    padding: 20px 12px;
+  }
+
+  .layerHeading {
+    display: grid;
+  }
+
+  .metrics {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .milestoneHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .reminderRow {
+    grid-template-columns: 1fr auto auto;
+    padding: 14px 0;
+  }
+
+  .offsetField,
+  .channelControls {
+    grid-column: 1 / -1;
+  }
+
+  .customCheckpoint {
+    grid-template-columns: 1fr;
+  }
+
+  .customCheckpoint > div {
+    grid-column: auto;
+  }
+
+  .timeline {
+    padding-left: 34px;
+  }
+
+  .timeline::before {
+    left: 9px;
+  }
+
+  .timelineItem > time {
+    position: static;
+    width: auto;
+    margin-bottom: 6px;
+    text-align: left;
+  }
+
+  .timelineDot,
+  .timelineDotPast {
+    left: -31px;
+  }
+}
+
+@media (max-width: 520px) {
+  .layerNav {
+    grid-template-columns: 1fr;
+  }
+
+  .layerButton,
+  .layerActive {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .layerButton:nth-child(3),
+  .layerActive:nth-child(3) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .layerButton:nth-child(4),
+  .layerActive:nth-child(4) {
+    border-bottom: 0;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metrics > div:last-child {
+    border-bottom: 0;
+  }
+
+  .reminderRow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .channelControls {
+    grid-column: 1 / -1;
+  }
+
+  .timeGrid {
+    grid-template-columns: 1fr;
+  }
+}
