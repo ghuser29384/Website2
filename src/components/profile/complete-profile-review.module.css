@@ -280,6 +280,8 @@
 
 .mosaicStage {
   min-width: 0;
+  display: block;
+  gap: 0;
   padding: 30px 42px;
   background: var(--paper);
 }

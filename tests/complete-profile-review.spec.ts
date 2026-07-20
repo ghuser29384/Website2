@@ -17,6 +17,19 @@ test("100-Spark Mosaic ranks priorities and preserves the account completion flo
     "AI safety",
   );
 
+  const mosaicBox = await page
+    .getByLabel("80 of 100 attention points assigned")
+    .boundingBox();
+  const rankingBox = await page
+    .getByRole("complementary", { name: "Your ranking" })
+    .boundingBox();
+  expect(mosaicBox).not.toBeNull();
+  expect(rankingBox).not.toBeNull();
+  expect(mosaicBox!.x + mosaicBox!.width).toBeLessThanOrEqual(rankingBox!.x);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => window.innerWidth),
+  );
+
   await page.getByRole("button", { name: "Assign one spark to Global poverty" }).click();
   await expect(page.getByText("85/100", { exact: false })).toBeVisible();
   await expect(page.getByText("3 sparks left to place", { exact: true })).toBeVisible();
