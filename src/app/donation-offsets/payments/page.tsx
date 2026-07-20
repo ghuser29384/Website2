@@ -3,9 +3,25 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import {
+  DonationRedirectImpactFlow,
+  type DonationRedirectImpactPreview,
+  type DonationRedirectPartyPlan,
+  type DonationRedirectSettlementStatus,
+  type DonationRedirectStage,
+} from "@/components/donation-offsets/donation-redirect-impact-flow";
 import { Breadcrumbs, PageHero, SectionHeader } from "@/components/ui/page-primitives";
+import {
+  publishDonationRedirectReceiptAction,
+  unpublishDonationRedirectReceiptAction,
+  updateDonationRedirectPlanAction,
+} from "@/app/donation-offsets/payments/actions";
 import { isAdminEmail } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
+import {
+  calculateDonationOffsetImpactSnapshot,
+  type DonationOffsetImpactSnapshot,
+} from "@/lib/donation-offset-impact";
 import {
   CONDITIONAL_PAYMENT_TERMS_VERSION,
 } from "@/lib/payments/conditional-mandates";
@@ -22,6 +38,8 @@ export const metadata: Metadata = {
     follow: false,
   },
 };
+
+const WORKSPACE_PATH = "/donation-offsets/payments";
 
 interface PaymentWorkspacePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -59,6 +77,80 @@ function paymentPostureMessage(mode: string) {
   return "Stripe payments are disabled on the production site until a verified live account, live keys, signed webhook, recipient destination, and settlement gates are ready.";
 }
 
+function selectedStage(value: string): DonationRedirectStage | null {
+  return value === "choose" || value === "review" || value === "complete" ? value : null;
+}
+
+function formatImpactCount(value: number) {
+  if (Math.abs(value) >= 100) return value.toFixed(0);
+  if (Math.abs(value) >= 10) return value.toFixed(1);
+  if (Math.abs(value) >= 1) return value.toFixed(2);
+  return value.toFixed(3);
+}
+
+function impactPreview(snapshot: DonationOffsetImpactSnapshot): DonationRedirectImpactPreview {
+  if (snapshot.status === "unavailable") {
+    return {
+      status: "unavailable",
+      unavailableReason: snapshot.message,
+      primaryOutput: null,
+      effectiveLifeYears: null,
+      caveat: "No reviewed effective-life-year estimate available; this is not zero impact.",
+    };
+  }
+
+  const count = snapshot.programOutput.expectedCount;
+  const unitLabel =
+    Math.abs(count - 1) < Number.EPSILON
+      ? snapshot.programOutput.unitLabelSingular
+      : snapshot.programOutput.unitLabelPlural;
+  return {
+    status: "modeled",
+    primaryOutput: `${formatImpactCount(count)} ${unitLabel}`,
+    effectiveLifeYears: snapshot.effectiveLifeYears.estimate,
+    comparableMetric: {
+      aggregationKey: snapshot.aggregationCompatibility.compatibilityKey,
+      unit: "effective life-years saved",
+      value: snapshot.effectiveLifeYears.estimate,
+    },
+    methodology: `${formatMoney(snapshot.amountCents)} divided by the versioned program-output and modeled cost-per-death-averted inputs`,
+    modelVersion: snapshot.model.modelVersion,
+    sourceLabel: snapshot.model.sourceLabel,
+    sourceUrl: "https://www.givewell.org/impact-estimates",
+    caveat: snapshot.effectiveLifeYears.scenarioLabel,
+  };
+}
+
+function settlementStatus(status: string | null | undefined): DonationRedirectSettlementStatus {
+  if (status === "transferred") return "transferred";
+  if (status === "refunded" || status === "refunding") return "refunded";
+  if (status === "cancelled") return "cancelled";
+  if (status === "disputed") return "disputed";
+  if (status === "charging" || status === "charged" || status === "transferring") {
+    return "settling";
+  }
+  if (status === "ready") return "authorized";
+  if (status === "pending_authorizations" || status === "requires_action") {
+    return "authorization_pending";
+  }
+  return "not_started";
+}
+
+function mandateMatchesCurrentPlans(
+  mandate: Record<string, any> | undefined,
+  ownerPlan: Record<string, any> | undefined,
+  counterpartyPlan: Record<string, any> | undefined,
+) {
+  if (!mandate || !ownerPlan || !counterpartyPlan) return false;
+  const snapshot = mandate.condition_snapshot as Record<string, any> | null;
+  return (
+    snapshot?.schemaVersion === "donation-offset-payment-condition-v2" &&
+    Number(snapshot.redirects?.owner?.planVersion) === Number(ownerPlan.plan_version) &&
+    Number(snapshot.redirects?.counterparty?.planVersion) ===
+      Number(counterpartyPlan.plan_version)
+  );
+}
+
 function latestByRole(rows: Array<Record<string, any>>) {
   const result = new Map<string, Record<string, any>>();
   for (const row of [...rows].sort((left, right) =>
@@ -80,6 +172,8 @@ export default async function PaymentWorkspacePage({
   const errorMessage = queryValue(parameters.error);
   const statusMessage = queryValue(parameters.status);
   const settlementMessage = queryValue(parameters.message);
+  const requestedMatchId = queryValue(parameters.match);
+  const requestedStage = selectedStage(queryValue(parameters.stage));
   const readiness = await getConditionalPaymentReadiness();
   const supabase = createServiceClient() as any;
   const profileId = viewer.authUser.id;
@@ -88,16 +182,21 @@ export default async function PaymentWorkspacePage({
     .from("donation_offset_matches")
     .select("*")
     .or(`owner_profile_id.eq.${profileId},counterparty_profile_id.eq.${profileId}`)
+    .in("status", ["matched", "completed"])
     .order("created_at", { ascending: false });
 
   const matchRows = (matches ?? []) as Array<Record<string, any>>;
   const matchIds = matchRows.map((match) => String(match.id));
   const offerIds = [...new Set(matchRows.map((match) => String(match.offer_id)))];
 
-  const [offersResult, offsetsResult, mandatesResult, batchesResult] = await Promise.all([
-    offerIds.length
-      ? supabase.from("offers").select("*").in("id", offerIds)
-      : Promise.resolve({ data: [], error: null }),
+  const [
+    offsetsResult,
+    mandatesResult,
+    batchesResult,
+    redirectPlansResult,
+    charitiesResult,
+    destinationsResult,
+  ] = await Promise.all([
     offerIds.length
       ? supabase.from("donation_offset_offers").select("*").in("offer_id", offerIds)
       : Promise.resolve({ data: [], error: null }),
@@ -118,35 +217,60 @@ export default async function PaymentWorkspacePage({
           .eq("purpose", "donation_offset")
           .eq("subject_type", "donation_offset_match")
           .in("subject_id", matchIds)
-          .eq("livemode", readiness.livemode)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
+    matchIds.length
+      ? supabase
+          .from("donation_offset_redirect_plans")
+          .select("*")
+          .in("match_id", matchIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("registered_charities")
+      .select("*")
+      .eq("is_active", true)
+      .eq("selectable", true)
+      .eq("is_political_campaign", false)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("conditional_payment_destinations")
+      .select("*")
+      .eq("livemode", readiness.livemode)
+      .eq("status", "active"),
   ]);
 
   const offsetRows = (offsetsResult.data ?? []) as Array<Record<string, any>>;
-  const charityIds = [...new Set(offsetRows.map((offset) => String(offset.compromise_charity_id)))];
-  const { data: charities, error: charitiesError } = charityIds.length
-    ? await supabase.from("registered_charities").select("*").in("id", charityIds)
-    : { data: [], error: null };
+  const charities = (charitiesResult.data ?? []) as Array<Record<string, any>>;
 
   const pageErrors = [
     matchesError,
-    offersResult.error,
     offsetsResult.error,
     mandatesResult.error,
     batchesResult.error,
-    charitiesError,
+    redirectPlansResult.error,
+    charitiesResult.error,
+    destinationsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
     .filter(Boolean);
 
-  const offersById = new Map(
-    ((offersResult.data ?? []) as Array<Record<string, any>>).map((row) => [String(row.id), row]),
-  );
   const offsetsByOfferId = new Map(offsetRows.map((row) => [String(row.offer_id), row]));
   const charitiesById = new Map(
-    ((charities ?? []) as Array<Record<string, any>>).map((row) => [String(row.id), row]),
+    charities.map((row) => [String(row.id), row]),
+  );
+  const redirectPlansByMatch = new Map<string, Map<string, Record<string, any>>>();
+  for (const plan of (redirectPlansResult.data ?? []) as Array<Record<string, any>>) {
+    const matchId = String(plan.match_id);
+    const byRole = redirectPlansByMatch.get(matchId) ?? new Map();
+    byRole.set(String(plan.participant_role), plan);
+    redirectPlansByMatch.set(matchId, byRole);
+  }
+  const paymentDestinationByCharityId = new Map(
+    ((destinationsResult.data ?? []) as Array<Record<string, any>>).map((row) => [
+      String(row.registered_charity_id),
+      row,
+    ]),
   );
   const mandatesByMatch = new Map<string, Array<Record<string, any>>>();
   for (const mandate of (mandatesResult.data ?? []) as Array<Record<string, any>>) {
@@ -270,110 +394,232 @@ export default async function PaymentWorkspacePage({
           </SectionHeader>
 
           {matchRows.length ? (
-            <div className="data-grid">
+            <div className="form-stack">
               {matchRows.map((match) => {
                 const matchId = String(match.id);
-                const offer = offersById.get(String(match.offer_id));
                 const offset = offsetsByOfferId.get(String(match.offer_id));
-                const charity = offset
-                  ? charitiesById.get(String(offset.compromise_charity_id))
-                  : null;
-                const role =
+                const viewerRole =
                   match.owner_profile_id === profileId ? "owner" : "counterparty";
-                const yourAmountCents = Number(
-                  role === "owner"
-                    ? match.matched_baseline_cents
-                    : match.matched_counterparty_cents,
+                const plansByRole = redirectPlansByMatch.get(matchId);
+                const ownerPlanRow = plansByRole?.get("owner");
+                const counterpartyPlanRow = plansByRole?.get("counterparty");
+                const batch = batchesByMatch.get(matchId);
+                const frozenSnapshot = batch?.condition_snapshot as Record<string, any> | null;
+                const useFrozenRedirects =
+                  frozenSnapshot?.schemaVersion === "donation-offset-payment-condition-v2" &&
+                  ["transferred", "refunded", "disputed"].includes(String(batch?.status));
+                const frozenOwner = useFrozenRedirects ? frozenSnapshot?.redirects?.owner : null;
+                const frozenCounterparty = useFrozenRedirects
+                  ? frozenSnapshot?.redirects?.counterparty
+                  : null;
+
+                function makePartyPlan(
+                  partyRole: "owner" | "counterparty",
+                  planRow: Record<string, any> | undefined,
+                  frozenRedirect: Record<string, any> | null,
+                ): DonationRedirectPartyPlan {
+                  const amountCents = Number(
+                    partyRole === "owner"
+                      ? match.matched_baseline_cents
+                      : match.matched_counterparty_cents,
+                  );
+                  const profile = String(
+                    partyRole === "owner"
+                      ? match.owner_profile_id
+                      : match.counterparty_profile_id,
+                  );
+                  const charityId = String(
+                    frozenRedirect?.charityId ?? planRow?.registered_charity_id ?? "",
+                  );
+                  const charity = charitiesById.get(charityId);
+                  const impactSnapshot = frozenRedirect?.impact
+                    ? (frozenRedirect.impact as DonationOffsetImpactSnapshot)
+                    : calculateDonationOffsetImpactSnapshot({
+                        partyId: profile,
+                        partyRole,
+                        destinationId: charityId,
+                        amountCents,
+                      });
+                  return {
+                    amountCents,
+                    causeArea: String(frozenRedirect?.causeArea ?? charity?.cause_area ?? ""),
+                    destinationId: charityId || null,
+                    destinationName: String(
+                      frozenRedirect?.charityName ?? charity?.name ?? "",
+                    ),
+                    impact: impactPreview(impactSnapshot),
+                    planVersion: Number(frozenRedirect?.planVersion ?? planRow?.plan_version ?? 0),
+                    updatedAtIso: planRow?.updated_at ? String(planRow.updated_at) : null,
+                  };
+                }
+
+                const ownerPlan = makePartyPlan("owner", ownerPlanRow, frozenOwner);
+                const counterpartyPlan = makePartyPlan(
+                  "counterparty",
+                  counterpartyPlanRow,
+                  frozenCounterparty,
                 );
-                const roleMandates = latestByRole(mandatesByMatch.get(matchId) ?? []);
-                const ownMandate = roleMandates.get(role);
+                const viewerPlan = viewerRole === "owner" ? ownerPlan : counterpartyPlan;
+                const matchPlan = viewerRole === "owner" ? counterpartyPlan : ownerPlan;
+                const currentMandateRows = (mandatesByMatch.get(matchId) ?? []).filter((mandate) =>
+                  mandateMatchesCurrentPlans(mandate, ownerPlanRow, counterpartyPlanRow),
+                );
+                const roleMandates = latestByRole(currentMandateRows);
                 const ownerMandate = roleMandates.get("owner");
                 const counterpartyMandate = roleMandates.get("counterparty");
-                const batch = batchesByMatch.get(matchId);
-                const authorizationCanBeReplaced =
-                  !ownMandate ||
-                  ["setup_pending", "failed", "requires_action", "cancelled"].includes(
-                    String(ownMandate.status),
-                  );
-                const authorizationReady = ownMandate?.status === "ready";
+                const ownMandateForViewer = roleMandates.get(viewerRole);
+                const authorizationReady = ownMandateForViewer?.status === "ready";
                 const canCancel =
-                  ownMandate &&
+                  ownMandateForViewer &&
                   ["setup_pending", "ready", "failed", "requires_action"].includes(
-                    String(ownMandate.status),
+                    String(ownMandateForViewer.status),
                   );
                 const bothReady =
                   ["ready", "charge_pending", "charged"].includes(String(ownerMandate?.status)) &&
                   ["ready", "charge_pending", "charged"].includes(
                     String(counterpartyMandate?.status),
                   );
+                const ownerPaymentDestination = ownerPlan.destinationId
+                  ? paymentDestinationByCharityId.get(ownerPlan.destinationId)
+                  : null;
+                const counterpartyPaymentDestination = counterpartyPlan.destinationId
+                  ? paymentDestinationByCharityId.get(counterpartyPlan.destinationId)
+                  : null;
+                const destinationsCanSettle = Boolean(
+                  ownerPaymentDestination && counterpartyPaymentDestination,
+                );
+                const authorizationDisabledReason = !ownerPlan.destinationId || !matchPlan.destinationId
+                  ? "Both participants must choose a destination before payment authorization."
+                  : !destinationsCanSettle
+                    ? "One or both selected organizations do not yet have an approved payment destination. You can save and compare the plan, but automated settlement remains gated."
+                    : !readiness.canCreateMandates
+                      ? readiness.blockers.join(" ") || paymentPostureMessage(readiness.mode)
+                      : null;
+                const authorizationState = authorizationReady
+                  ? "ready" as const
+                  : ownMandateForViewer?.status === "setup_pending"
+                    ? "pending" as const
+                    : authorizationDisabledReason
+                      ? "unavailable" as const
+                      : "required" as const;
+                const isTransferred = String(batch?.status) === "transferred";
+                const requestedStageForMatch =
+                  requestedMatchId === matchId ? requestedStage : null;
+                const currentStage: DonationRedirectStage =
+                  isTransferred && batch?.livemode
+                    ? "complete"
+                    : requestedStageForMatch
+                      ? requestedStageForMatch
+                      : isTransferred
+                        ? "complete"
+                        : "choose";
+                const stageHref = (stage: DonationRedirectStage) =>
+                  `${WORKSPACE_PATH}?match=${encodeURIComponent(matchId)}&stage=${stage}`;
+                const receiptToken = batch?.public_receipt_token
+                  ? String(batch.public_receipt_token)
+                  : null;
+                const publicReceiptUrl =
+                  batch?.public_receipt_enabled && receiptToken
+                    ? `https://www.moraltrade.org/redirects/${receiptToken}`
+                    : null;
+                const availableDestinations = charities.map((charity) => ({
+                  causeArea: String(charity.cause_area),
+                  id: String(charity.id),
+                  impact: impactPreview(
+                    calculateDonationOffsetImpactSnapshot({
+                      partyId: profileId,
+                      partyRole: viewerRole,
+                      destinationId: String(charity.id),
+                      amountCents: viewerPlan.amountCents,
+                    }),
+                  ),
+                  name: String(charity.name),
+                }));
 
                 return (
-                  <article className="panel data-card data-card-wide" key={matchId}>
-                    <p className="detail-kicker">
-                      {role === "owner" ? "Offer owner" : "Counterparty"} · match {matchId.slice(0, 8)}
-                    </p>
-                    <h3>{charity?.name ?? "Compromise destination unavailable"}</h3>
-                    <p>
-                      Your maximum conditional charge: {formatMoney(yourAmountCents)}. Combined
-                      destination amount: {formatMoney(Number(match.compromise_total_cents))}.
-                    </p>
-                    <p>
-                      Baseline: {offset?.baseline_opposed_cause ?? "Unavailable"}. Counterparty
-                      baseline: {offset?.requested_opposed_cause ?? "Unavailable"}.
-                    </p>
-                    <p>
-                      Owner mandate: {statusLabel(ownerMandate?.status)} · Counterparty mandate:{" "}
-                      {statusLabel(counterpartyMandate?.status)} · Settlement:{" "}
-                      {statusLabel(batch?.status)}.
-                    </p>
-                    {ownMandate?.condition_hash ? (
-                      <p className="route-text">
-                        Frozen condition: {String(ownMandate.condition_hash).slice(0, 16)}… · Terms:{" "}
-                        {ownMandate.consent_terms_version}
-                      </p>
-                    ) : null}
-                    {ownMandate?.failure_message ? (
+                  <article className="form-stack" key={matchId}>
+                    <DonationRedirectImpactFlow
+                      availableDestinations={availableDestinations}
+                      baselineCaveat="Other shared effects, unequal influence per dollar, and effects outside the named contested margin are not modeled."
+                      baselineOutcomeLabel="the contested margin"
+                      counterpartyOriginalBaselineLabel={
+                        offset?.requested_opposed_cause ?? "the other opposed destination"
+                      }
+                      counterpartyPlan={counterpartyPlan}
+                      currentStage={currentStage}
+                      matchId={matchId}
+                      ownerOriginalBaselineLabel={
+                        offset?.baseline_opposed_cause ?? "one opposed destination"
+                      }
+                      ownerPlan={ownerPlan}
+                      paymentAuthorization={{
+                        actionUrl: "/api/payments/conditional/mandates/donation-offset",
+                        consentLabel: `I authorize Moral Trade to save this payment method and later charge exactly ${formatMoney(viewerPlan.amountCents)} only for this frozen two-destination condition. I understand the two charges and transfers are compensated with reversals or refunds if paired settlement fails, and I can revoke before capture.`,
+                        disabledReason: authorizationDisabledReason,
+                        hiddenFields: {
+                          match_id: matchId,
+                          terms_version: CONDITIONAL_PAYMENT_TERMS_VERSION,
+                        },
+                        state: authorizationState,
+                        statusLabel: authorizationReady
+                          ? "Your payment authorization is ready"
+                          : statusLabel(ownMandateForViewer?.status),
+                        submitLabel: ownMandateForViewer
+                          ? "Replace payment authorization"
+                          : "Authorize payment method",
+                        termsVersion: CONDITIONAL_PAYMENT_TERMS_VERSION,
+                      }}
+                      publishReceiptAction={publishDonationRedirectReceiptAction}
+                      receiptId={receiptToken ? receiptToken.slice(0, 8).toUpperCase() : null}
+                      receiptPublication={{
+                        batchId: batch?.id ? String(batch.id) : null,
+                        disabledReason:
+                          isTransferred && batch?.livemode
+                            ? null
+                            : "A shareable link requires a verified live transfer.",
+                        state:
+                          isTransferred && batch?.livemode
+                            ? batch.public_receipt_enabled
+                              ? "public"
+                              : "private"
+                            : "unavailable",
+                        statusLabel: batch?.public_receipt_enabled
+                          ? "Politics hidden · public link active"
+                          : "Private by default · original political destinations stay hidden",
+                      }}
+                      settlement={{
+                        completedAtIso: batch?.completed_at ? String(batch.completed_at) : null,
+                        isLive: batch ? Boolean(batch.livemode) : readiness.mode !== "test",
+                        publicReceiptUrl,
+                        receiptImageFileName: receiptToken
+                          ? `moral-trade-donation-redirect-${receiptToken.slice(0, 8)}.png`
+                          : null,
+                        status: settlementStatus(batch?.status),
+                        statusLabel: statusLabel(batch?.status),
+                      }}
+                      stageUrls={{
+                        choose: stageHref("choose"),
+                        review: stageHref("review"),
+                        complete: isTransferred ? stageHref("complete") : null,
+                      }}
+                      unpublishReceiptAction={unpublishDonationRedirectReceiptAction}
+                      updatePlanAction={updateDonationRedirectPlanAction}
+                      viewerRole={viewerRole}
+                    />
+
+                    {ownMandateForViewer?.failure_message ? (
                       <div className="status-banner status-banner-error">
-                        {ownMandate.failure_message}
+                        {ownMandateForViewer.failure_message}
                       </div>
                     ) : null}
-
-                    {readiness.canCreateMandates && (authorizationCanBeReplaced || !authorizationReady) ? (
-                      <form
-                        action="/api/payments/conditional/mandates/donation-offset"
-                        className="form-stack"
-                        method="post"
-                      >
-                        <input name="match_id" type="hidden" value={matchId} />
-                        <input
-                          name="terms_version"
-                          type="hidden"
-                          value={CONDITIONAL_PAYMENT_TERMS_VERSION}
-                        />
-                        <label className="checkbox-field">
-                          <input name="consent" required type="checkbox" />
-                          <span>
-                            I authorize Moral Trade to save this payment method and later charge
-                            exactly {formatMoney(yourAmountCents)} off-session only for the frozen
-                            condition shown here. I understand the first side may be charged before
-                            the second and will be refunded if paired settlement or destination
-                            transfer fails. I can revoke this mandate before capture.
-                          </span>
-                        </label>
-                        <div className="form-actions">
-                          <button className="button button-primary" type="submit">
-                            {ownMandate ? "Replace payment authorization" : "Authorize payment method"}
-                          </button>
-                        </div>
-                      </form>
-                    ) : authorizationReady ? (
-                      <div className="status-banner">Your payment authorization is ready.</div>
-                    ) : null}
-
                     <div className="form-actions">
                       {canCancel ? (
                         <form action="/api/payments/conditional/mandates/cancel" method="post">
-                          <input name="mandate_id" type="hidden" value={String(ownMandate.id)} />
+                          <input
+                            name="mandate_id"
+                            type="hidden"
+                            value={String(ownMandateForViewer.id)}
+                          />
                           <button className="button button-secondary button-mini" type="submit">
                             Revoke before capture
                           </button>
