@@ -10882,7 +10882,7 @@ export async function acceptInterestAction(formData: FormData) {
       compromise_total_cents: convertUsdToCents(preview.compromiseTotalUsd),
       unmatched_baseline_cents: convertUsdToCents(preview.unmatchedBaselineUsd),
       unmatched_counterparty_cents: convertUsdToCents(preview.unmatchedCounterpartyUsd),
-      status: "completed",
+      status: "matched",
       owner_evidence_url: offsetDetails.evidence_url,
       compromise_evidence_url: offsetDetails.evidence_url,
     };
@@ -11167,7 +11167,7 @@ export async function acceptGuestInterestAction(formData: FormData) {
       compromise_total_cents: convertUsdToCents(preview.compromiseTotalUsd),
       unmatched_baseline_cents: convertUsdToCents(preview.unmatchedBaselineUsd),
       unmatched_counterparty_cents: convertUsdToCents(preview.unmatchedCounterpartyUsd),
-      status: "completed",
+      status: "matched",
       owner_evidence_url: offsetDetails.evidence_url,
       compromise_evidence_url: offsetDetails.evidence_url,
     };
