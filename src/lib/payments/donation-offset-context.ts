@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { calculateDonationOffsetImpactSnapshot } from "@/lib/donation-offset-impact";
 import {
   donationOffsetSnapshotIsInternallyConsistent,
   getConditionalPaymentsEnvironment,
@@ -13,6 +14,18 @@ export interface DonationOffsetPaymentContext {
   offset: Record<string, any>;
   charity: Record<string, any>;
   destination: Record<string, any>;
+  charities: {
+    owner: Record<string, any>;
+    counterparty: Record<string, any>;
+  };
+  destinations: {
+    owner: Record<string, any>;
+    counterparty: Record<string, any>;
+  };
+  redirectPlans: {
+    owner: Record<string, any>;
+    counterparty: Record<string, any>;
+  };
   snapshot: DonationOffsetConditionSnapshot;
   conditionHash: string;
 }
@@ -93,43 +106,6 @@ export async function loadDonationOffsetPaymentContext(
     throw new Error("The match is not attached to a donation-offset offer.");
   }
 
-  const { data: charity, error: charityError } = await supabase
-    .from("registered_charities")
-    .select("*")
-    .eq("id", offset.compromise_charity_id)
-    .maybeSingle();
-  const { data: destination, error: destinationError } = await supabase
-    .from("conditional_payment_destinations")
-    .select("*")
-    .eq("registered_charity_id", offset.compromise_charity_id)
-    .eq("livemode", environment.livemode)
-    .eq("status", "active")
-    .maybeSingle();
-
-  if (charityError || destinationError) {
-    throw new Error(
-      `Unable to verify the settlement destination: ${
-        charityError?.message ?? destinationError?.message ?? "unknown error"
-      }`,
-    );
-  }
-  if (!charity || !charity.is_active || !charity.selectable || charity.is_political_campaign) {
-    throw new Error("The compromise destination is not eligible for automated settlement.");
-  }
-  if (!destination) {
-    throw new Error(
-      environment.livemode
-        ? "The compromise charity does not have an approved live payment destination."
-        : "The compromise charity does not have an active Stripe test destination.",
-    );
-  }
-  if (Boolean(destination.livemode) !== environment.livemode) {
-    throw new Error("The payment destination environment does not match the Stripe key environment.");
-  }
-  if (environment.livemode && destination.test_only) {
-    throw new Error("A test-only payment destination cannot receive live settlement.");
-  }
-
   const ownerProfileId = requireText(match.owner_profile_id, "Owner profile");
   const counterpartyProfileId = requireText(match.counterparty_profile_id, "Counterparty profile");
   if (ownerProfileId === counterpartyProfileId) {
@@ -137,6 +113,104 @@ export async function loadDonationOffsetPaymentContext(
   }
   if (offer.owner_id !== ownerProfileId) {
     throw new Error("The match owner does not match the offer owner.");
+  }
+
+  const { data: redirectPlanRows, error: redirectPlansError } = await supabase
+    .from("donation_offset_redirect_plans")
+    .select("*")
+    .eq("match_id", normalizedMatchId);
+  if (redirectPlansError) {
+    throw new Error(`Unable to read the participant redirect plans: ${redirectPlansError.message}`);
+  }
+  const redirectPlansByRole = new Map(
+    ((redirectPlanRows ?? []) as Array<Record<string, any>>).map((plan) => [
+      String(plan.participant_role),
+      plan,
+    ]),
+  );
+  const ownerPlan = redirectPlansByRole.get("owner");
+  const counterpartyPlan = redirectPlansByRole.get("counterparty");
+  if (!ownerPlan || !counterpartyPlan) {
+    throw new Error("Both participants must choose a redirect destination before authorization.");
+  }
+  if (
+    String(ownerPlan.participant_profile_id) !== ownerProfileId ||
+    String(counterpartyPlan.participant_profile_id) !== counterpartyProfileId
+  ) {
+    throw new Error("A participant redirect plan belongs to the wrong matched profile.");
+  }
+
+  const charityIds = [
+    String(ownerPlan.registered_charity_id),
+    String(counterpartyPlan.registered_charity_id),
+  ];
+  const [{ data: charityRows, error: charitiesError }, { data: destinationRows, error: destinationsError }] =
+    await Promise.all([
+      supabase.from("registered_charities").select("*").in("id", charityIds),
+      supabase
+        .from("conditional_payment_destinations")
+        .select("*")
+        .in("registered_charity_id", charityIds)
+        .eq("livemode", environment.livemode)
+        .eq("status", "active"),
+    ]);
+  if (charitiesError || destinationsError) {
+    throw new Error(
+      `Unable to verify the participant destinations: ${
+        charitiesError?.message ?? destinationsError?.message ?? "unknown error"
+      }`,
+    );
+  }
+  const charitiesById = new Map(
+    ((charityRows ?? []) as Array<Record<string, any>>).map((charityRow) => [
+      String(charityRow.id),
+      charityRow,
+    ]),
+  );
+  const destinationsByCharityId = new Map(
+    ((destinationRows ?? []) as Array<Record<string, any>>).map((destinationRow) => [
+      String(destinationRow.registered_charity_id),
+      destinationRow,
+    ]),
+  );
+  const ownerCharity = charitiesById.get(charityIds[0]);
+  const counterpartyCharity = charitiesById.get(charityIds[1]);
+  const ownerDestination = destinationsByCharityId.get(charityIds[0]);
+  const counterpartyDestination = destinationsByCharityId.get(charityIds[1]);
+
+  for (const [role, charityRow, destinationRow] of [
+    ["owner", ownerCharity, ownerDestination],
+    ["counterparty", counterpartyCharity, counterpartyDestination],
+  ] as const) {
+    if (
+      !charityRow ||
+      !charityRow.is_active ||
+      !charityRow.selectable ||
+      charityRow.is_political_campaign
+    ) {
+      throw new Error(`The ${role} redirect is not eligible for automated settlement.`);
+    }
+    if (!destinationRow) {
+      throw new Error(
+        environment.livemode
+          ? `${charityRow.name} does not yet have an approved live payment destination.`
+          : `${charityRow.name} does not yet have an active Stripe test destination.`,
+      );
+    }
+    if (Boolean(destinationRow.livemode) !== environment.livemode) {
+      throw new Error("A payment destination does not match the Stripe key environment.");
+    }
+    if (environment.livemode && destinationRow.test_only) {
+      throw new Error("A test-only payment destination cannot receive live settlement.");
+    }
+  }
+  if (
+    !ownerCharity ||
+    !counterpartyCharity ||
+    !ownerDestination ||
+    !counterpartyDestination
+  ) {
+    throw new Error("Both participant destinations must be approved before authorization.");
   }
   if (offset.moderation_status !== "clear") {
     throw new Error("The donation offset must be review-cleared before payment authorization.");
@@ -167,8 +241,21 @@ export async function loadDonationOffsetPaymentContext(
     throw new Error("The compromise total does not equal the two participant charges.");
   }
 
+  const ownerImpact = calculateDonationOffsetImpactSnapshot({
+    partyId: ownerProfileId,
+    partyRole: "owner",
+    destinationId: String(ownerCharity.id),
+    amountCents: matchedBaselineCents,
+  });
+  const counterpartyImpact = calculateDonationOffsetImpactSnapshot({
+    partyId: counterpartyProfileId,
+    partyRole: "counterparty",
+    destinationId: String(counterpartyCharity.id),
+    amountCents: matchedCounterpartyCents,
+  });
+
   const snapshot: DonationOffsetConditionSnapshot = {
-    schemaVersion: "donation-offset-payment-condition-v1",
+    schemaVersion: "donation-offset-payment-condition-v2",
     matchId: String(match.id),
     offerId: String(match.offer_id),
     ownerProfileId,
@@ -182,15 +269,18 @@ export async function loadDonationOffsetPaymentContext(
       "Unmatched counterparty amount",
     ),
     currency: "usd",
-    compromiseCharityId: requireText(charity.id, "Compromise charity ID"),
-    compromiseCharityName: requireText(charity.name, "Compromise charity name"),
-    destinationId: requireText(destination.id, "Settlement destination ID"),
-    destinationDisplayName: requireText(destination.display_name, "Settlement destination name"),
-    destinationConnectedAccountId: requireText(
-      destination.stripe_connected_account_id,
-      "Stripe connected account",
+    compromiseCharityId: requireText(ownerCharity.id, "Owner redirect charity ID"),
+    compromiseCharityName: requireText(ownerCharity.name, "Owner redirect charity name"),
+    destinationId: requireText(ownerDestination.id, "Owner settlement destination ID"),
+    destinationDisplayName: requireText(
+      ownerDestination.display_name,
+      "Owner settlement destination name",
     ),
-    destinationLivemode: Boolean(destination.livemode),
+    destinationConnectedAccountId: requireText(
+      ownerDestination.stripe_connected_account_id,
+      "Owner Stripe connected account",
+    ),
+    destinationLivemode: Boolean(ownerDestination.livemode),
     baselineAmountCents: requireInteger(offset.baseline_amount_cents, "Baseline amount"),
     requestedMatchingAmountCents: requireInteger(
       offset.requested_matching_amount_cents,
@@ -215,6 +305,54 @@ export async function loadDonationOffsetPaymentContext(
       : null,
     matchStatus: requireText(match.status, "Match status"),
     offerStatus: requireText(offer.status, "Offer status"),
+    redirects: {
+      owner: {
+        participantRole: "owner",
+        profileId: ownerProfileId,
+        amountCents: matchedBaselineCents,
+        charityId: requireText(ownerCharity.id, "Owner redirect charity ID"),
+        charityName: requireText(ownerCharity.name, "Owner redirect charity name"),
+        causeArea: requireText(ownerCharity.cause_area, "Owner redirect cause area"),
+        planVersion: requireInteger(ownerPlan.plan_version, "Owner redirect plan version"),
+        destinationId: requireText(ownerDestination.id, "Owner settlement destination ID"),
+        destinationDisplayName: requireText(
+          ownerDestination.display_name,
+          "Owner settlement destination name",
+        ),
+        destinationConnectedAccountId: requireText(
+          ownerDestination.stripe_connected_account_id,
+          "Owner Stripe connected account",
+        ),
+        destinationLivemode: Boolean(ownerDestination.livemode),
+        impact: ownerImpact as unknown as Record<string, unknown>,
+      },
+      counterparty: {
+        participantRole: "counterparty",
+        profileId: counterpartyProfileId,
+        amountCents: matchedCounterpartyCents,
+        charityId: requireText(counterpartyCharity.id, "Counterparty redirect charity ID"),
+        charityName: requireText(counterpartyCharity.name, "Counterparty redirect charity name"),
+        causeArea: requireText(counterpartyCharity.cause_area, "Counterparty redirect cause area"),
+        planVersion: requireInteger(
+          counterpartyPlan.plan_version,
+          "Counterparty redirect plan version",
+        ),
+        destinationId: requireText(
+          counterpartyDestination.id,
+          "Counterparty settlement destination ID",
+        ),
+        destinationDisplayName: requireText(
+          counterpartyDestination.display_name,
+          "Counterparty settlement destination name",
+        ),
+        destinationConnectedAccountId: requireText(
+          counterpartyDestination.stripe_connected_account_id,
+          "Counterparty Stripe connected account",
+        ),
+        destinationLivemode: Boolean(counterpartyDestination.livemode),
+        impact: counterpartyImpact as unknown as Record<string, unknown>,
+      },
+    },
   };
 
   if (!donationOffsetSnapshotIsInternallyConsistent(snapshot)) {
@@ -225,8 +363,20 @@ export async function loadDonationOffsetPaymentContext(
     match,
     offer,
     offset,
-    charity,
-    destination,
+    charity: ownerCharity,
+    destination: ownerDestination,
+    charities: {
+      owner: ownerCharity,
+      counterparty: counterpartyCharity,
+    },
+    destinations: {
+      owner: ownerDestination,
+      counterparty: counterpartyDestination,
+    },
+    redirectPlans: {
+      owner: ownerPlan,
+      counterparty: counterpartyPlan,
+    },
     snapshot,
     conditionHash: hashConditionSnapshot(snapshot),
   };

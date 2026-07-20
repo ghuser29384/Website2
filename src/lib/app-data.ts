@@ -21,7 +21,7 @@ import {
 } from "@/lib/background-opportunity-briefs";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
@@ -1170,19 +1170,30 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
     };
   }
 
-  const supabase = await createClient();
+  // This function returns a narrow aggregate only. Service access prevents
+  // participant-scoped RLS from silently turning real transferred totals into
+  // zero while no private match, identity, or receipt fields leave the server.
+  const supabase = createServiceClient() as any;
   const [
     { data: matches, error: matchesError },
     { data: offsetOffers, error: offsetOffersError },
     { data: pools, error: poolsError },
     { data: charities, error: charitiesError },
     { data: offers, error: offersError },
+    { data: transferredBatches, error: transferredBatchesError },
   ] = await Promise.all([
     supabase.from("donation_offset_matches").select("*"),
     supabase.from("donation_offset_offers").select("*"),
     supabase.from("donation_offset_pools").select("*"),
     supabase.from("registered_charities").select("*"),
     supabase.from("offers").select("*").eq("mode", "offset"),
+    supabase
+      .from("conditional_settlement_batches")
+      .select("subject_id, total_amount_cents, condition_snapshot, completed_at")
+      .eq("purpose", "donation_offset")
+      .eq("subject_type", "donation_offset_match")
+      .eq("status", "transferred")
+      .eq("livemode", true),
   ]);
 
   if (matchesError) {
@@ -1200,6 +1211,9 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
   if (offersError) {
     throw new Error(offersError.message);
   }
+  if (transferredBatchesError) {
+    throw new Error(transferredBatchesError.message);
+  }
 
   const matchRows = (matches ?? []) as DonationOffsetMatchRow[];
   const offsetRows = (offsetOffers ?? []) as DonationOffsetOfferRow[];
@@ -1207,6 +1221,14 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
   const offerRows = (offers ?? []) as OfferRow[];
   const charityMap = new Map(charityRows.map((row) => [row.id, row] as const));
   const offsetMap = new Map(offsetRows.map((row) => [row.offer_id, row] as const));
+  const transferredBatchByMatch = new Map<string, Record<string, any>>();
+  for (const batch of (transferredBatches ?? []) as Array<Record<string, any>>) {
+    const matchId = String(batch.subject_id);
+    const current = transferredBatchByMatch.get(matchId);
+    if (!current || String(batch.completed_at) > String(current.completed_at)) {
+      transferredBatchByMatch.set(matchId, batch);
+    }
+  }
   const poolMap = buildDonationOffsetPoolMap({
     pools: (pools ?? []) as DonationOffsetPoolRow[],
     poolOffers: offsetRows.filter((row) => row.participation_mode === "pool"),
@@ -1224,7 +1246,8 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
   let moralPublicGoodsMatchCount = 0;
 
   for (const match of matchRows) {
-    if (match.status !== "completed") {
+    const transferredBatch = transferredBatchByMatch.get(match.id);
+    if (!transferredBatch) {
       continue;
     }
 
@@ -1233,25 +1256,52 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
       continue;
     }
 
-    const redirected = match.compromise_total_cents;
+    const redirected = Number(transferredBatch.total_amount_cents);
+    const snapshot = transferredBatch.condition_snapshot as Record<string, any> | null;
+    const redirects = snapshot?.schemaVersion === "donation-offset-payment-condition-v2"
+      ? [snapshot.redirects?.owner, snapshot.redirects?.counterparty].filter(Boolean)
+      : null;
     const charity = charityMap.get(offset.compromise_charity_id) ?? null;
 
     totalRedirectedCents += redirected;
     completedMatchCount += 1;
 
-    if (charity?.is_moral_public_good) {
-      moralPublicGoodsRedirectedCents += redirected;
+    const moralPublicGoodsForMatch = redirects
+      ? redirects.reduce((total: number, participantRedirect: Record<string, any>) => {
+          const redirectCharity = charityMap.get(String(participantRedirect.charityId));
+          return redirectCharity?.is_moral_public_good
+            ? total + Number(participantRedirect.amountCents ?? 0)
+            : total;
+        }, 0)
+      : charity?.is_moral_public_good
+        ? redirected
+        : 0;
+    if (moralPublicGoodsForMatch > 0) {
+      moralPublicGoodsRedirectedCents += moralPublicGoodsForMatch;
       moralPublicGoodsMatchCount += 1;
     }
 
-    if (charity) {
-      const current = destinationTotals.get(charity.id) ?? {
+    const destinationParts = redirects
+      ? redirects.map((participantRedirect: Record<string, any>) => ({
+          charityId: String(participantRedirect.charityId),
+          amountCents: Number(participantRedirect.amountCents ?? 0),
+        }))
+      : charity
+        ? [{ charityId: charity.id, amountCents: redirected }]
+        : [];
+    const countedDestinations = new Set<string>();
+    for (const part of destinationParts) {
+      if (!charityMap.has(part.charityId) || part.amountCents <= 0) continue;
+      const current = destinationTotals.get(part.charityId) ?? {
         totalRedirectedCents: 0,
         matchCount: 0,
       };
-      current.totalRedirectedCents += redirected;
-      current.matchCount += 1;
-      destinationTotals.set(charity.id, current);
+      current.totalRedirectedCents += part.amountCents;
+      if (!countedDestinations.has(part.charityId)) {
+        current.matchCount += 1;
+        countedDestinations.add(part.charityId);
+      }
+      destinationTotals.set(part.charityId, current);
     }
   }
 

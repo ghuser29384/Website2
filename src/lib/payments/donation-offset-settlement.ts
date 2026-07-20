@@ -75,7 +75,8 @@ async function getOrCreateSettlementBatch(input: {
   matchId: string;
   conditionHash: string;
   conditionSnapshot: Record<string, unknown>;
-  destinationId: string;
+  ownerDestinationId: string;
+  counterpartyDestinationId: string;
   livemode: boolean;
   totalAmountCents: number;
 }) {
@@ -90,7 +91,11 @@ async function getOrCreateSettlementBatch(input: {
         subject_id: input.matchId,
         condition_hash: input.conditionHash,
         condition_snapshot: input.conditionSnapshot,
-        destination_id: input.destinationId,
+        // Keep destination_id populated for the historical ledger contract while
+        // v2 routes each participant charge through its role-specific destination.
+        destination_id: input.ownerDestinationId,
+        owner_destination_id: input.ownerDestinationId,
+        counterparty_destination_id: input.counterpartyDestinationId,
         livemode: input.livemode,
         currency: "usd",
         total_amount_cents: input.totalAmountCents,
@@ -125,7 +130,9 @@ async function getOrCreateSettlementBatch(input: {
   }
 
   if (
-    String(batch.destination_id) !== input.destinationId ||
+    String(batch.destination_id) !== input.ownerDestinationId ||
+    String(batch.owner_destination_id) !== input.ownerDestinationId ||
+    String(batch.counterparty_destination_id) !== input.counterpartyDestinationId ||
     Number(batch.total_amount_cents) !== input.totalAmountCents ||
     String(batch.transfer_group) !== transferGroup
   ) {
@@ -940,6 +947,9 @@ function settlementFailureStatus(charge: ChargeResult) {
 }
 
 async function findTerminalSettlementBatch(matchId: string, livemode: boolean) {
+  const terminalStatuses = livemode
+    ? ["transferred", "refunding", "disputed"]
+    : ["refunding", "disputed"];
   const { data, error } = await getDb()
     .from("conditional_settlement_batches")
     .select("id, status, created_at")
@@ -947,7 +957,9 @@ async function findTerminalSettlementBatch(matchId: string, livemode: boolean) {
     .eq("subject_type", "donation_offset_match")
     .eq("subject_id", matchId)
     .eq("livemode", livemode)
-    .in("status", ["transferred", "refunding", "disputed", "cancelled"])
+    // A cancelled batch is scoped to one obsolete condition hash. It must not
+    // block a fresh, participant-consented redirect plan for the same match.
+    .in("status", terminalStatuses)
     .order("created_at", { ascending: false })
     .limit(20);
 
@@ -996,7 +1008,8 @@ export async function attemptDonationOffsetSettlement(
     matchId: context.snapshot.matchId,
     conditionHash: context.conditionHash,
     conditionSnapshot: context.snapshot as unknown as Record<string, unknown>,
-    destinationId: context.snapshot.destinationId,
+    ownerDestinationId: context.snapshot.redirects!.owner.destinationId,
+    counterpartyDestinationId: context.snapshot.redirects!.counterparty.destinationId,
     livemode: environment.livemode,
     totalAmountCents: context.snapshot.compromiseTotalCents,
   });
@@ -1202,10 +1215,14 @@ export async function attemptDonationOffsetSettlement(
     const completedTransfers: Record<string, any>[] = [];
     try {
       for (const charge of charges) {
+        const participantRole = String(charge.mandate.participant_role);
+        if (participantRole !== "owner" && participantRole !== "counterparty") {
+          throw new Error("A captured charge has an invalid donation-offset participant role.");
+        }
         const transfer = await transferCharge({
           batch,
           charge,
-          destination: context.destination,
+          destination: context.destinations[participantRole],
         });
         completedTransfers.push(transfer);
       }
@@ -1220,22 +1237,24 @@ export async function attemptDonationOffsetSettlement(
       };
     }
 
-    const { data: finalized, error: completeError } = await getDb().rpc(
-    "finalize_donation_offset_settlement",
-    {
-      p_batch_id: batch.id,
-      p_processing_token: processingToken,
-      p_match_id: context.snapshot.matchId,
-      p_offer_id: context.snapshot.offerId,
-    },
-  );
-  if (completeError || !finalized) {
-    throw new Error(
-      `Funds transferred but the settlement ledger could not be finalized atomically: ${
-        completeError?.message ?? "the settlement claim no longer matched"
-      }`,
-    );
-  }
+    const { data: finalized, error: completeError } = environment.livemode
+      ? await getDb().rpc("finalize_donation_offset_settlement", {
+          p_batch_id: batch.id,
+          p_processing_token: processingToken,
+          p_match_id: context.snapshot.matchId,
+          p_offer_id: context.snapshot.offerId,
+        })
+      : await getDb().rpc("finalize_test_donation_offset_settlement", {
+          p_batch_id: batch.id,
+          p_processing_token: processingToken,
+        });
+    if (completeError || !finalized) {
+      throw new Error(
+        `Funds transferred but the settlement ledger could not be finalized atomically: ${
+          completeError?.message ?? "the settlement claim no longer matched"
+        }`,
+      );
+    }
 
     await recordAudit({
       eventType: "donation_offset_settled",
@@ -1244,8 +1263,8 @@ export async function attemptDonationOffsetSettlement(
       details: {
         matchId: context.snapshot.matchId,
         conditionHash: context.conditionHash,
-        destinationId: context.snapshot.destinationId,
-        destinationConnectedAccountId: context.snapshot.destinationConnectedAccountId,
+        ownerDestinationId: context.snapshot.redirects!.owner.destinationId,
+        counterpartyDestinationId: context.snapshot.redirects!.counterparty.destinationId,
         totalAmountCents: context.snapshot.compromiseTotalCents,
         paymentIntentIds: charges.map((charge) => charge.paymentIntentId),
         transferIds: completedTransfers.map((transfer) => transfer.stripe_transfer_id),
@@ -1258,8 +1277,8 @@ export async function attemptDonationOffsetSettlement(
       matchId,
       batchId: String(batch.id),
       message: environment.livemode
-        ? "Both charges succeeded and were transferred to the approved compromise destination."
-        : "TEST MODE: both test charges succeeded and were transferred to the mapped test account.",
+        ? "Both charges succeeded and each was transferred to its participant-selected destination."
+        : "TEST MODE: both test charges reached the mapped test accounts; the real match remains uncompleted.",
     };
   } catch (error) {
     if (charges.some((charge) => charge.captured)) {

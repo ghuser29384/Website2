@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { calculateDonationOffsetImpactSnapshot } from "@/lib/donation-offset-impact";
 import {
   canonicalJson,
   donationOffsetSnapshotIsInternallyConsistent,
@@ -109,6 +110,74 @@ test("donation-offset snapshots reject self-trades and inconsistent totals", () 
   );
   assert.equal(
     donationOffsetSnapshotIsInternallyConsistent(makeSnapshot({ offerStatus: "paused" })),
+    false,
+  );
+});
+
+test("v2 snapshots bind both redirect plans and frozen impacts to the correct participant", () => {
+  const base = makeSnapshot({
+    schemaVersion: "donation-offset-payment-condition-v2",
+    compromiseCharityId: "against-malaria-foundation",
+    compromiseCharityName: "Against Malaria Foundation",
+  });
+  const ownerImpact = calculateDonationOffsetImpactSnapshot({
+    amountCents: base.matchedBaselineCents,
+    destinationId: "against-malaria-foundation",
+    partyId: base.ownerProfileId,
+    partyRole: "owner",
+  });
+  const counterpartyImpact = calculateDonationOffsetImpactSnapshot({
+    amountCents: base.matchedCounterpartyCents,
+    destinationId: "helen-keller-intl-vitamin-a",
+    partyId: base.counterpartyProfileId,
+    partyRole: "counterparty",
+  });
+  const snapshot: DonationOffsetConditionSnapshot = {
+    ...base,
+    redirects: {
+      owner: {
+        amountCents: base.matchedBaselineCents,
+        causeArea: "Global health",
+        charityId: "against-malaria-foundation",
+        charityName: "Against Malaria Foundation",
+        destinationConnectedAccountId: base.destinationConnectedAccountId,
+        destinationDisplayName: base.destinationDisplayName,
+        destinationId: base.destinationId,
+        destinationLivemode: base.destinationLivemode,
+        impact: ownerImpact as unknown as Record<string, unknown>,
+        participantRole: "owner",
+        planVersion: 2,
+        profileId: base.ownerProfileId,
+      },
+      counterparty: {
+        amountCents: base.matchedCounterpartyCents,
+        causeArea: "Global health",
+        charityId: "helen-keller-intl-vitamin-a",
+        charityName: "Helen Keller Intl — Vitamin A Supplementation",
+        destinationConnectedAccountId: "acct_counterparty",
+        destinationDisplayName: "Helen Keller Intl",
+        destinationId: "20000000-0000-4000-8000-000000000005",
+        destinationLivemode: base.destinationLivemode,
+        impact: counterpartyImpact as unknown as Record<string, unknown>,
+        participantRole: "counterparty",
+        planVersion: 3,
+        profileId: base.counterpartyProfileId,
+      },
+    },
+  };
+
+  assert.equal(donationOffsetSnapshotIsInternallyConsistent(snapshot), true);
+  assert.equal(
+    donationOffsetSnapshotIsInternallyConsistent({
+      ...snapshot,
+      redirects: {
+        ...snapshot.redirects!,
+        counterparty: {
+          ...snapshot.redirects!.counterparty,
+          profileId: snapshot.ownerProfileId,
+        },
+      },
+    }),
     false,
   );
 });
