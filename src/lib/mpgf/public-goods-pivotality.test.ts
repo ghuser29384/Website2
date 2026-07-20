@@ -144,16 +144,23 @@ test("MPGF pivotality calculator requires an allowed educational surface", () =>
   assert.ok(missingSurface.blockers.includes("pivotality_calculator_surface_invalid"));
 });
 
-test("MPGF pivotality calculator is exposed only as an advanced educational surface", () => {
+test("MPGF keeps the public assurance receipt educational and the advanced API isolated", () => {
   const hubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
+  const receipt = readFileSync(
+    "src/components/mpgf/mpgf-assurance-funding-receipt.tsx",
+    "utf8",
+  );
+  const receiptModel = readFileSync("src/lib/mpgf/assurance-funding-receipt.ts", "utf8");
   const route = readFileSync("src/app/api/mpgf/pivotality-calculator/route.ts", "utf8");
 
-  assert.match(hubPage, /Advanced: Pivotality Calculator/);
-  assert.match(hubPage, /action="\/api\/mpgf\/pivotality-calculator"/);
-  assert.match(hubPage, /name="calculatorSurface"/);
-  assert.match(hubPage, /Calculate from subjective inputs/);
-  assert.match(hubPage, /up to unless the maximum liability is\s+fully backed/);
-  assert.match(hubPage, /MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE/);
+  assert.match(hubPage, /id="assurance-funding"/);
+  assert.match(hubPage, /MpgfAssuranceFundingReceipt/);
+  assert.match(receipt, /Your estimated chance this pledge would be decisive/);
+  assert.match(receipt, /Funding estimate, not an impact guarantee/);
+  assert.match(receipt, /ASSURANCE_FUNDING_RECEIPT_BOUNDARY/);
+  assert.match(receiptModel, /does not use live round progress/);
+  assert.match(receiptModel, /create or change a pledge/);
+  assert.equal(hubPage.includes('action="/api/mpgf/pivotality-calculator"'), false);
   assert.match(MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE, /does not use live sealed-round data/);
   assert.ok(MPGF_PUBLIC_GOODS_PIVOTALITY_ALLOWED_INPUT_KEYS.includes("signerOnlyRewardValue"));
   assert.ok(

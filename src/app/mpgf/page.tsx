@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { MpgfAssuranceFundingReceipt } from "@/components/mpgf/mpgf-assurance-funding-receipt";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
@@ -134,6 +135,7 @@ export default async function MpgfPage() {
     >
       <nav className="hub-tabs" aria-label="Public Goods Fund sections">
         <a href="#how-it-works">How it works</a>
+        <a href="#assurance-funding">Assurance funding estimate</a>
         <a href="#routes">Service routes</a>
         <a href="#boundaries">Operating boundaries</a>
         <Link href={roundHref}>Current round</Link>
@@ -163,7 +165,24 @@ export default async function MpgfPage() {
         </div>
       </section>
 
-      <section className="section section-subtle" id="routes" aria-labelledby="mpgf-routes-heading">
+      <section
+        className="section section-subtle"
+        id="assurance-funding"
+        aria-labelledby="assurance-funding-heading"
+      >
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Assurance funding</p>
+          <h2 id="assurance-funding-heading">Estimate the funding beyond your own pledge.</h2>
+          <p>
+            Enter a possible pledge and your own estimate of the chance it would be decisive. The
+            receipt shows the expected funding from everyone else per proposed pledge dollar in a
+            simplified exact-fill scenario.
+          </p>
+        </div>
+        <MpgfAssuranceFundingReceipt />
+      </section>
+
+      <section className="section section-white" id="routes" aria-labelledby="mpgf-routes-heading">
         <div className="section-head section-head-compact">
           <p className="eyebrow">Service routes</p>
           <h2 id="mpgf-routes-heading">Choose the task you need to complete.</h2>

@@ -1,0 +1,200 @@
+.calculator {
+  display: grid;
+  gap: 1.1rem;
+  padding: clamp(1.15rem, 2.8vw, 1.75rem);
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.controls,
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  align-content: start;
+  gap: 0.45rem;
+  margin: 0;
+  color: var(--ink);
+}
+
+.field > span:first-child {
+  font-weight: 700;
+}
+
+.field small {
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.inputShell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 3.25rem;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.inputShell > span {
+  padding: 0 0.85rem;
+}
+
+.inputShell input {
+  min-width: 0;
+  height: 100%;
+  padding: 0.82rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.inputShell input:focus-visible {
+  outline: 0;
+}
+
+.inputShell:focus-within {
+  border-color: var(--mpgf-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mpgf-accent) 18%, transparent);
+}
+
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 0.85rem;
+  align-items: center;
+}
+
+.context p,
+.metric p,
+.conclusion p,
+.boundary {
+  margin: 0;
+}
+
+.context p {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: 999px;
+  background: var(--mpgf-accent-soft);
+  color: var(--mpgf-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.result {
+  display: grid;
+  gap: 1rem;
+}
+
+.metric {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  min-height: 12rem;
+  padding: clamp(1rem, 2.4vw, 1.4rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.metricPrimary {
+  border-color: color-mix(in srgb, var(--mpgf-accent) 42%, var(--line));
+  background: linear-gradient(180deg, #ffffff 0%, #f2f8f6 100%);
+}
+
+.metricLabel {
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+
+.metricValue {
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mpgf-accent-strong);
+  font-family: var(--font-heading);
+  font-size: clamp(2.35rem, 6vw, 4rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  text-align: left;
+}
+
+.metric p:last-child {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.conclusion,
+.boundary {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--mpgf-line);
+}
+
+.conclusion {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.conclusion strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.conclusion p,
+.boundary {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--danger-ink) 30%, var(--line));
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+}
+
+@media (max-width: 680px) {
+  .controls,
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metric {
+    min-height: 0;
+  }
+
+  .badge {
+    white-space: normal;
+  }
+}

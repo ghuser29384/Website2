@@ -317,6 +317,26 @@ for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology
   });
 }
 
+test("/mpgf assurance funding receipt recalculates expected other funding", async ({ page }) => {
+  await page.goto("/mpgf#assurance-funding", { waitUntil: "networkidle" });
+
+  const pledge = page.getByLabel("Your possible net pledge");
+  const probability = page.getByLabel("Your estimated chance this pledge would be decisive (%)");
+
+  await expect(page.getByText("Expected other funding per $1 pledged")).toBeVisible();
+  await expect(page.getByText("$1.80", { exact: true })).toBeVisible();
+  await expect(page.getByText("$180 expected from other valid pledges.")).toBeVisible();
+
+  await pledge.fill("250");
+  await probability.fill("40");
+
+  await expect(page.getByText("$1.20", { exact: true })).toBeVisible();
+  await expect(page.getByText("$300 expected from other valid pledges.")).toBeVisible();
+  await expect(
+    page.getByText("You supplied the decisive-chance estimate", { exact: false }),
+  ).toBeVisible();
+});
+
 test("/offers keeps offer and cause-area cards before the footer", async ({ page }) => {
   await page.goto("/offers", { waitUntil: "domcontentloaded" });
 
