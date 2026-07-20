@@ -16,6 +16,18 @@
   <script>
     (async () => {
       try {
+        const stripLegacyNowFocus = (source) => {
+          const startMarker = 'function nowFocus(){';
+          const endMarker = '\nfunction story(';
+          const start = source.indexOf(startMarker);
+          const end = source.indexOf(endMarker, start);
+          if (start < 0 || end < 0) throw new Error('live Now source markers');
+
+          const loadingState = `function nowFocus(){
+ return '<div class="focus-layout" data-mt-live-now="profile-driven" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live proposals that match your priorities.</h2><p class="muted">No generic or demo suggestions are shown.</p></div></section></main></div>';
+}`;
+          return `${source.slice(0, start)}${loadingState}${source.slice(end)}`;
+        };
         const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
         const accountPromise = fetch('/api/live-account', {
           credentials: 'same-origin',
@@ -23,7 +35,17 @@
         })
           .then((response) => (response.ok ? response.json() : { authenticated: false }))
           .catch(() => ({ authenticated: false }));
-        const [chunks, liveAccount] = await Promise.all([
+        const liveNowPromise = fetch('/api/live-now', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then((response) =>
+            response.ok
+              ? response.json()
+              : { authenticated: false, recommendations: [], status: 'unavailable' },
+          )
+          .catch(() => ({ authenticated: false, recommendations: [], status: 'unavailable' }));
+        const [chunks, liveAccount, liveNow] = await Promise.all([
           Promise.all(
             names.map((name) =>
               fetch(`/mt-live-0d0e0f03-${name}.txt`).then((response) => {
@@ -33,6 +55,7 @@
             ),
           ),
           accountPromise,
+          liveNowPromise,
         ]);
         const compressed = Uint8Array.from(atob(chunks.join('')), (character) => character.charCodeAt(0));
         const raw = await new Response(
@@ -46,8 +69,14 @@
           throw new Error('integrity');
         }
 
-        const source = new TextDecoder().decode(raw);
+        const source = stripLegacyNowFocus(new TextDecoder().decode(raw));
         const accountJson = JSON.stringify(liveAccount)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
+        const liveNowJson = JSON.stringify(liveNow)
           .replace(/</g, '\\u003c')
           .replace(/>/g, '\\u003e')
           .replace(/&/g, '\\u0026')
@@ -59,6 +88,7 @@
         ].join('');
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
+          `<script>window.__MT_LIVE_NOW_BOOTSTRAP__=${liveNowJson};<\/script>`,
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join('');
         const headEnhancements = `${enhancementStyles}${accountScripts}`;
@@ -72,6 +102,7 @@
           '<script src="/moral-trade-live-itinerary-editor.js"><\/script>',
           '<script src="/moral-trade-brand.js"><\/script>',
           '<script src="/moral-trade-live-verification.js"><\/script>',
+          '<script src="/moral-trade-live-now.js"><\/script>',
         ].join('');
         const enhancedSource = accountAwareSource.includes('</body>')
           ? accountAwareSource.replace('</body>', `${enhancementScripts}</body>`)
