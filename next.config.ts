@@ -38,7 +38,10 @@ const nextConfig: NextConfig = {
     ...vercelLowMemoryBuildConfig,
     parallelServerBuildTraces: false,
     parallelServerCompiles: false,
-    webpackBuildWorker: true,
+    // On Vercel the coordinator and webpack worker each receive a large heap.
+    // Keeping compilation in the constrained coordinator avoids their combined
+    // RSS crossing the 8 GB preview-builder limit on this route-heavy app.
+    webpackBuildWorker: process.env.VERCEL !== "1",
     webpackMemoryOptimizations: true,
   },
   outputFileTracingIncludes: {
