@@ -9,6 +9,14 @@ import {
   getCompleteProfilePrivacyStage,
   normalizeCompleteProfileSubmission,
 } from "@/lib/complete-profile";
+import {
+  buildInitialProfilePriorityAllocation,
+  serializeProfilePriorityAllocation,
+} from "@/lib/profile-priorities";
+
+const priorityAllocation = serializeProfilePriorityAllocation(
+  buildInitialProfilePriorityAllocation(),
+);
 
 test("normalizes a review and refine submission", () => {
   const result = normalizeCompleteProfileSubmission({
@@ -22,6 +30,7 @@ test("normalizes a review and refine submission", () => {
     offerType: "Money",
     causeArea: "Cause prioritization",
     matchGet: "Research review",
+    priorityAllocation,
   });
 
   assert.ok(result);
@@ -58,6 +67,7 @@ test("builds bounded matching summaries without claiming a commitment", () => {
     offerType: "Time",
     causeArea: "Animal welfare",
     matchGet: "Independent review",
+    priorityAllocation,
   });
 
   assert.ok(result);
@@ -65,4 +75,18 @@ test("builds bounded matching summaries without claiming a commitment", () => {
   assert.match(buildCompleteProfileConstraintText(result), /\$50/);
   assert.match(buildCompleteProfilePublicPreview(result), /Animal welfare/);
   assert.doesNotMatch(buildCompleteProfilePublicPreview(result), /commitment created/i);
+});
+
+test("rejects a submission with a forged or over-budget priority allocation", () => {
+  const result = normalizeCompleteProfileSubmission({
+    displayName: "Mina Park",
+    role: "Researcher",
+    offerType: "Time",
+    causeArea: "Animal welfare",
+    priorityAllocation: JSON.stringify([
+      { id: "ai-safety", sparks: 21 },
+    ]),
+  });
+
+  assert.equal(result, null);
 });

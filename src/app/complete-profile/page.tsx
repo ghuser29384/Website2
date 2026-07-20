@@ -2,12 +2,9 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteTopbar } from "@/components/layout/site-topbar";
 import { CompleteProfileReview } from "@/components/profile/complete-profile-review";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
   getWalkthroughProfileDraft,
@@ -20,7 +17,7 @@ import styles from "./page.module.css";
 export const metadata: Metadata = {
   title: "Complete your profile",
   description:
-    "Review the private starter profile created from the Moral Trade walkthrough before saving it to your account.",
+    "Rank your priorities with a private, coarse 100-spark mosaic before saving your Moral Trade profile.",
   robots: {
     index: false,
     follow: false,
@@ -73,27 +70,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
 
   return (
     <div className={styles.pageShell}>
-      <header className={styles.routeHeader}>
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(Boolean(viewer))}
-          {...getTopbarActions(Boolean(viewer))}
-          showLogout={Boolean(viewer)}
-          showSearch={false}
-        />
-        <div className={styles.workflowBar}>
-          <div className={styles.workflowPath}>
-            <span>Walkthrough</span>
-            <span aria-hidden="true">/</span>
-            <strong>Complete profile</strong>
-          </div>
-          <div className={styles.workflowStatus}>
-            <i aria-hidden="true" />
-            Private draft
-          </div>
-        </div>
-      </header>
-
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
@@ -122,8 +98,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
           signupHref={signupHref}
         />
       </main>
-
-      <SiteFooter />
     </div>
   );
 }

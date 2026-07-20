@@ -15,6 +15,11 @@ import {
 import { ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
 import { prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
 import { getSafeInternalPath } from "@/lib/paths";
+import {
+  buildPersistedProfilePriorities,
+  getRankedProfileCauseAreas,
+  getRankedProfilePriorityLabels,
+} from "@/lib/profile-priorities";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
@@ -71,15 +76,24 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     offerType: walkthroughDraft.offerType,
     causeArea: walkthroughDraft.causeArea,
     matchGet: walkthroughDraft.matchGet,
+    priorityAllocation: read(formData, "priority_allocation"),
   });
 
   if (!submission) {
     redirectWithMessage(
       returnTo,
       "error",
-      "Add a display name and role, then review the participation limits before saving.",
+      "Review your priorities, add a display name and role, then check the participation limits before saving.",
     );
   }
+
+  const persistedPriorities = buildPersistedProfilePriorities(
+    submission.priorityAllocation,
+  );
+  const rankedCauseAreas = getRankedProfileCauseAreas(submission.priorityAllocation);
+  const savedCauseAreas = rankedCauseAreas.includes(walkthroughDraft.causeArea)
+    ? rankedCauseAreas
+    : [...rankedCauseAreas, walkthroughDraft.causeArea];
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
@@ -121,12 +135,13 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     .from("cohort_onboarding_profiles")
     .upsert(
       {
-        cause_areas: [walkthroughDraft.causeArea],
+        cause_areas: savedCauseAreas,
         completed_at: new Date().toISOString(),
         first_action: walkthroughDraft.firstAction,
         invite_target: walkthroughDraft.matchName,
         participant_kind: walkthroughDraft.participantKind,
         primary_goal: walkthroughDraft.primaryGoal,
+        priority_allocations: persistedPriorities,
         profile_id: viewer.authUser.id,
         referral_source: "Moral Trade walkthrough",
         status: "completed",
@@ -153,7 +168,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
       profile_id: viewer.authUser.id,
       participant_kind: walkthroughDraft.participantKind,
       collective_name: "",
-      causes: [walkthroughDraft.causeArea],
+      causes: savedCauseAreas,
       location_city: null,
       location_region: null,
       capabilities: encryptedPreferences.plaintextFields.capabilities,
@@ -185,6 +200,20 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   if (wishProfileError) {
     console.error("Failed to save complete profile matching preferences", wishProfileError);
     redirectWithMessage(returnTo, "error", "Your private matching preferences could not be saved.");
+  }
+
+  const { error: synthesisError } = await (supabase as any)
+    .from("profile_syntheses")
+    .upsert(
+      {
+        profile_id: viewer.authUser.id,
+        cause_priorities: getRankedProfilePriorityLabels(submission.priorityAllocation),
+      },
+      { onConflict: "profile_id" },
+    );
+
+  if (synthesisError) {
+    console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);
   }
 
   const cookieStore = await cookies();
