@@ -1,8 +1,10 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { TradeFlowIcon, type TradeFlowIconName } from "@/components/core-trade/trade-flow-icons";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getTradeFlowStage } from "@/lib/trade-flow-stage";
 
 import styles from "./trade-agreement-stage.module.css";
@@ -22,6 +24,14 @@ interface AgreementVersionSummary {
   noTradeBaseline: string;
   privacyScope: string;
   version: number;
+}
+
+interface LiveCopy {
+  detailHeading: string;
+  detailRows: Array<[string, ReactNode]>;
+  intro: string;
+  kicker: string;
+  title: string;
 }
 
 interface TradeAgreementStageProps {
@@ -75,8 +85,7 @@ function initialFor(label: string) {
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback={value} />;
 }
 
 function nodeDetail(
@@ -107,7 +116,7 @@ function nodeDetail(
   return `${props.completionConfirmationCount} / 2 confirmed`;
 }
 
-function liveCopy(props: TradeAgreementStageProps) {
+function liveCopy(props: TradeAgreementStageProps): LiveCopy {
   if (props.lifecycleStatus === "completed") {
     return {
       detailHeading: "Trade completed by both parties.",

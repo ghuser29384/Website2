@@ -17,6 +17,7 @@ import { CommentThread } from "@/components/community/comment-thread";
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
   CommitmentSheet,
   CommitmentTermsPanel,
@@ -96,8 +97,7 @@ function formatDate(value: string | null) {
     return "Not set";
   }
 
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+  return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
 function formatBondState(value: string) {
@@ -621,7 +621,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 {offsetEvidenceState.challengeWindowEndsAt ? (
                   <p className="route-text">
                     Challenge window ends{" "}
-                    {new Date(offsetEvidenceState.challengeWindowEndsAt).toLocaleDateString()}.
+                    <LocalDateTime
+                      value={offsetEvidenceState.challengeWindowEndsAt}
+                      fallback="Date unavailable"
+                      dateOnly
+                    />.
                   </p>
                 ) : null}
                 <p className="route-text">
@@ -800,10 +804,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                           <p>
                             Assurance target $
                             {(offer.donationOffset.pool.assurance_minimum_cents / 100).toFixed(2)} by{" "}
-                            {new Date(
-                              offer.donationOffset.pool.assurance_deadline_at,
-                            ).toLocaleDateString()}
-                            .
+                            <LocalDateTime
+                              value={offer.donationOffset.pool.assurance_deadline_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />.
                           </p>
                         ) : null}
                       </>
@@ -831,16 +836,21 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         {offer.donationOffset.offer_expires_at ? (
                           <p>
                             Offer expires{" "}
-                            {new Date(offer.donationOffset.offer_expires_at).toLocaleDateString()}.
+                            <LocalDateTime
+                              value={offer.donationOffset.offer_expires_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />.
                           </p>
                         ) : null}
                         {offer.donationOffset.baseline_bond_evidence_due_at ? (
                           <p>
                             Evidence due{" "}
-                            {new Date(
-                              offer.donationOffset.baseline_bond_evidence_due_at,
-                            ).toLocaleDateString()}
-                            .
+                            <LocalDateTime
+                              value={offer.donationOffset.baseline_bond_evidence_due_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />.
                           </p>
                         ) : null}
                         <p>{offer.donationOffset.baseline_bond_evidence_standard}</p>
@@ -1384,7 +1394,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         <span className="source-pill">Account linked</span>
                       ) : null}
                       <span className="source-pill">
-                        {new Date(interest.created_at).toLocaleDateString()}
+                        <LocalDateTime value={interest.created_at} fallback="Date unavailable" dateOnly />
                       </span>
                     </div>
                     {interest.performanceBond ? (

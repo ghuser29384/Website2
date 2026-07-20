@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import type { CredibilitySummary } from "@/lib/credibility";
 
 function percentage(value: number | null) {
@@ -10,8 +11,7 @@ function formatDate(value: string | null) {
   if (!value) {
     return "No verified event yet";
   }
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleDateString() : "Date unavailable";
+  return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
 function levelTone(level: CredibilitySummary["level"]) {

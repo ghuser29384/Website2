@@ -8,6 +8,7 @@ import {
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -38,8 +39,7 @@ type ReviewQueueOffer = {
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback={value} />;
 }
 
 export default async function TradeReviewPage({ searchParams }: TradeReviewPageProps) {

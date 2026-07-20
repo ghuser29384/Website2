@@ -13,6 +13,7 @@ import {
 } from "@/components/evidence/evidence-stage";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -70,15 +71,21 @@ function groupFor(title: string, evidenceType: string) {
 
 function formatDate(value: string | null, includeTime = false) {
   if (!value) return "Not recorded";
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) return value;
-  return new Intl.DateTimeFormat("en", {
-    day: "numeric",
-    hour: includeTime ? "numeric" : undefined,
-    minute: includeTime ? "2-digit" : undefined,
-    month: "short",
-    year: "numeric",
-  }).format(new Date(timestamp));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback={value}
+      dateOnly={!includeTime}
+      locale="en"
+      options={{
+        day: "numeric",
+        hour: includeTime ? "numeric" : undefined,
+        minute: includeTime ? "2-digit" : undefined,
+        month: "short",
+        year: "numeric",
+      }}
+    />
+  );
 }
 
 function buildTimeline(record: Omit<EvidenceRecord, "timeline">, confirmations: Array<Record<string, unknown>>) {

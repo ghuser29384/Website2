@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { addOfferCommentAction, voteCommentAction } from "@/app/actions";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { formatPublicProfileLocation, type OfferCommentNode } from "@/lib/app-data";
 
 interface CommentThreadProps {
@@ -33,7 +34,7 @@ function CommentNode({ comment, offerId, returnTo, viewerId }: CommentNodeProps)
           </p>
           <p className="comment-meta">
             {authorLocation || "Public comment"}{" "}
-            | {new Date(comment.created_at).toLocaleString()}
+            | <LocalDateTime value={comment.created_at} fallback="Date unavailable" />
           </p>
         </div>
         <div className="comment-score">

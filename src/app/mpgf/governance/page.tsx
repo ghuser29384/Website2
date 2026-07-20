@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
@@ -31,11 +32,15 @@ function statusLabel(value: string) {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "short", year: "numeric" }}
+    />
+  );
 }
 
 export default async function MpgfGovernancePage() {

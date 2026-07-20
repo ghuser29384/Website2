@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getFormMessage } from "@/lib/form-state";
 import { stableWitnessHash } from "@/lib/moral-trade/guest-witness-testimony";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -34,8 +35,7 @@ type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "display
 
 function formatDateTime(value: string | null) {
   if (!value) return "Not set";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback="Date unavailable" />;
 }
 
 async function loadInvite(token: string) {

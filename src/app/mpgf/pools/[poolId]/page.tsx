@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import {
   demoAlternatives,
@@ -161,11 +162,13 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 <div>
                   <dt>Deadline</dt>
                   <dd>
-                    {new Date(campaign.deadlineAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    <LocalDateTime
+                      value={campaign.deadlineAt}
+                      fallback="Date unavailable"
+                      dateOnly
+                      locale="en-US"
+                      options={{ day: "numeric", month: "short", year: "numeric" }}
+                    />
                   </dd>
                 </div>
                 <div>
@@ -231,10 +234,13 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                   <dt>Challenge window</dt>
                   <dd>
                     {proofSummary.challengeWindowEndsAt
-                      ? new Date(proofSummary.challengeWindowEndsAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })
+                      ? <LocalDateTime
+                          value={proofSummary.challengeWindowEndsAt}
+                          fallback="Date unavailable"
+                          dateOnly
+                          locale="en-US"
+                          options={{ day: "numeric", month: "short" }}
+                        />
                       : "Not opened"}
                   </dd>
                 </div>
@@ -270,10 +276,13 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                   <dt>Latest verified at</dt>
                   <dd>
                     {proofSummary.latestVerifiedAt
-                      ? new Date(proofSummary.latestVerifiedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })
+                      ? <LocalDateTime
+                          value={proofSummary.latestVerifiedAt}
+                          fallback="Date unavailable"
+                          dateOnly
+                          locale="en-US"
+                          options={{ day: "numeric", month: "short" }}
+                        />
                       : "Not verified"}
                   </dd>
                 </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { markTradeNotificationReadAction } from "@/app/core-trade-actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
   MarketplaceBottomNav,
   MarketplaceRouteShell,
@@ -25,8 +26,7 @@ export const metadata: Metadata = {
 };
 
 function formatDate(value: string) {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback={value} />;
 }
 
 export default async function MessagesPage() {

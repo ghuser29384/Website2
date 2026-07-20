@@ -4,6 +4,7 @@ import Link from "next/link";
 import { toggleCartAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
   MarketplaceBottomNav,
   MarketplaceRouteShell,
@@ -81,7 +82,9 @@ export default async function SavedOffersPage({ searchParams }: SavedOffersPageP
 
                     <div className="offer-footer">
                       <div className="tag-row">
-                        <span>Added {new Date(item.addedAt).toLocaleDateString()}</span>
+                        <span>
+                          Added <LocalDateTime value={item.addedAt} fallback="Date unavailable" dateOnly />
+                        </span>
                         <span>{item.offer.verification}</span>
                         <span>{item.offer.duration}</span>
                         {item.offer.mode === "payment" ? (

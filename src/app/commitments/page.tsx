@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
   CommitmentStatusBadge,
   MarketplaceBottomNav,
@@ -27,8 +28,7 @@ export const metadata: Metadata = {
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+  return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
 function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsForUser>>[number]) {
@@ -43,11 +43,15 @@ function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsF
       ? `${latestPayment.status.replaceAll("_", " ")} (${latestPayment.authorization_status.replaceAll("_", " ")})`
       : "No payment record",
     counterparty: agreement.counterparty?.resolvedName ?? "Counterparty private",
-    evidenceState: latestEvidence
-      ? `${latestEvidence.status.replaceAll("_", " ")} submitted ${formatDate(latestEvidence.created_at)}`
-      : evidenceDueBond
-        ? `Evidence due ${formatDate(evidenceDueBond.evidence_due_at)}`
-        : "No evidence item yet",
+    evidenceState: latestEvidence ? (
+      <>
+        {latestEvidence.status.replaceAll("_", " ")} submitted {formatDate(latestEvidence.created_at)}
+      </>
+    ) : evidenceDueBond ? (
+      <>Evidence due {formatDate(evidenceDueBond.evidence_due_at)}</>
+    ) : (
+      "No evidence item yet"
+    ),
     href: `/agreements/${agreement.id}`,
     reviewState: latestReview ? latestReview.status.replaceAll("_", " ") : "No review case",
     status,

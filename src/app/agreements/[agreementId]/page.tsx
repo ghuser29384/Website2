@@ -18,6 +18,7 @@ import {
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getAgreementForUser, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
@@ -95,8 +96,7 @@ function formatAgreementDate(value: string | null) {
     return "Not set";
   }
 
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+  return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
 function formatPerformanceBondDestination(bond: PerformanceBondRow) {
@@ -234,7 +234,10 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                 <span className="flow-number">01</span>
                 <div>
                   <strong>{formatState(agreement.completion_state)}</strong>
-                  <p>Status last updated {new Date(agreement.updated_at).toLocaleDateString()}.</p>
+                  <p>
+                    Status last updated{" "}
+                    <LocalDateTime value={agreement.updated_at} fallback="Date unavailable" dateOnly />.
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
@@ -542,12 +545,20 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                           </div>
                         ) : null}
                         <p className="panel-note">
-                          Submitted {new Date(latestEvidence.submitted_at).toLocaleString()}.
-                          {bond.challenge_window_ends_at
-                            ? ` Challenge window ends ${new Date(
-                                bond.challenge_window_ends_at,
-                              ).toLocaleString()}.`
-                            : ""}
+                          Submitted{" "}
+                          <LocalDateTime
+                            value={latestEvidence.submitted_at}
+                            fallback="Date unavailable"
+                          />.
+                          {bond.challenge_window_ends_at ? (
+                            <>
+                              {" "}Challenge window ends{" "}
+                              <LocalDateTime
+                                value={bond.challenge_window_ends_at}
+                                fallback="Date unavailable"
+                              />.
+                            </>
+                          ) : null}
                         </p>
                       </div>
                     ) : null}
@@ -632,7 +643,9 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                                 {formatState(event.from_status)} to {formatState(event.to_status)}
                               </strong>
                               <span>{event.reason}</span>
-                              <span>{new Date(event.created_at).toLocaleString()}</span>
+                              <span>
+                                <LocalDateTime value={event.created_at} fallback="Date unavailable" />
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -774,7 +787,12 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                     <span className="source-pill">{formatSla(reviewCase.sla_due_at)}</span>
                     {reviewCase.challenge_window_ends_at ? (
                       <span className="source-pill">
-                        Challenge until {new Date(reviewCase.challenge_window_ends_at).toLocaleDateString()}
+                        Challenge until{" "}
+                        <LocalDateTime
+                          value={reviewCase.challenge_window_ends_at}
+                          fallback="Date unavailable"
+                          dateOnly
+                        />
                       </span>
                     ) : null}
                   </div>
@@ -944,7 +962,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                     </span>
                     {payment.paid_at ? (
                       <span className="source-pill">
-                        Paid {new Date(payment.paid_at).toLocaleDateString()}
+                        Paid <LocalDateTime value={payment.paid_at} fallback="Date unavailable" dateOnly />
                       </span>
                     ) : null}
                   </div>
@@ -989,7 +1007,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                       {formatCadence(schedule.cadence_interval_value, schedule.cadence_interval_unit)}
                     </span>
                     <span className="source-pill">
-                      Next due {new Date(schedule.next_due_at).toLocaleDateString()}
+                      Next due{" "}
+                      <LocalDateTime value={schedule.next_due_at} fallback="Date unavailable" dateOnly />
                     </span>
                   </div>
                 </article>
@@ -1090,7 +1109,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                   <h3>{event.summary}</h3>
                   <p className="route-text">{event.details || "No additional detail."}</p>
                   <span className="source-pill">
-                    {new Date(event.created_at).toLocaleString()}
+                    <LocalDateTime value={event.created_at} fallback="Date unavailable" />
                   </span>
                 </article>
               ))
