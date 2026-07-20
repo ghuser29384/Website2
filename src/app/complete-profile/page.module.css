@@ -1,83 +1,25 @@
 .pageShell {
   min-height: 100vh;
-  background:
-    linear-gradient(rgba(13, 13, 12, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(13, 13, 12, 0.025) 1px, transparent 1px),
-    #f7f5ef;
-  background-size: 16px 16px;
-}
-
-.routeHeader {
-  position: sticky;
-  top: 0;
-  z-index: 60;
-}
-
-.workflowBar {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 0 28px;
-  border-bottom: 1px solid #c9c5ba;
-  background: rgba(247, 245, 239, 0.97);
-  backdrop-filter: blur(12px);
-  color: #6e6c66;
-  font: 10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-}
-
-.workflowPath {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.workflowPath strong {
-  color: #0b0b0a;
-  font-weight: 600;
-}
-
-.workflowStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.workflowStatus i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #2f8847;
+  background: #f7f3eb;
 }
 
 .statusBanner {
-  max-width: 1444px;
-  margin: 18px auto -12px;
+  width: min(620px, calc(100% - 24px));
+  position: fixed;
+  z-index: 260;
+  top: 12px;
+  left: 50%;
   padding: 12px 15px;
-  border: 1px solid #a4c9ae;
+  transform: translateX(-50%);
+  border: 1px solid #8bb898;
   background: #f2f8f3;
+  box-shadow: 6px 6px 0 rgba(7, 7, 7, 0.16);
   color: #216a36;
-  font: 11px / 1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font: 10px / 1.45 var(--font-mono, "IBM Plex Mono", monospace);
 }
 
 .statusError {
   border-color: #d88f7f;
   background: #fff2ef;
   color: #8d2f22;
-}
-
-@media (max-width: 720px) {
-  .workflowBar {
-    padding: 0 14px;
-  }
-
-  .workflowPath span:first-child,
-  .workflowPath span:nth-child(2) {
-    display: none;
-  }
-
-  .statusBanner {
-    margin: 12px 10px -8px;
-  }
 }

@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import { useFormStatus } from "react-dom";
 
 import { completeWalkthroughProfileAction } from "@/app/complete-profile/actions";
@@ -13,11 +18,26 @@ import {
   type CompleteProfileMaxCommitment,
   type CompleteProfileMonthlyTime,
 } from "@/lib/complete-profile";
+import {
+  buildInitialProfilePriorityAllocation,
+  COMPLETE_PROFILE_SPARK_COUNT,
+  COMPLETE_PROFILE_SPARK_VALUE,
+  getAssignedProfilePrioritySparks,
+  getProfilePriority,
+  normalizeProfilePriorityAllocation,
+  PROFILE_PRIORITY_OPTIONS,
+  rankProfilePriorities,
+  serializeProfilePriorityAllocation,
+  type ProfilePriorityAllocation,
+  type ProfilePriorityId,
+} from "@/lib/profile-priorities";
 import type { WalkthroughProfileDraft } from "@/lib/walkthrough-profile";
 
 import styles from "./complete-profile-review.module.css";
 
 const REFINEMENT_STORAGE_KEY = "mt_complete_profile_refinement";
+const priorityOrder = PROFILE_PRIORITY_OPTIONS.map((priority) => priority.id);
+const INITIAL_ALLOCATION = buildInitialProfilePriorityAllocation();
 
 interface ReviewState {
   displayName: string;
@@ -40,28 +60,94 @@ interface CompleteProfileReviewProps {
   signupHref: string;
 }
 
-function Icon({ name }: { name: "arrow" | "check" | "lock" }) {
+type IconName =
+  | "arrow"
+  | "check"
+  | "close"
+  | "info"
+  | "lock"
+  | "minus"
+  | "plus"
+  | "reset"
+  | "sparkles";
+
+function Icon({ name, className = "" }: { name: IconName; className?: string }) {
+  if (name === "sparkles") {
+    return (
+      <svg aria-hidden="true" className={className} viewBox="0 0 24 24">
+        <path d="m12 3-1.8 4.9a2.2 2.2 0 0 1-1.3 1.3L4 11l4.9 1.8a2.2 2.2 0 0 1 1.3 1.3L12 19l1.8-4.9a2.2 2.2 0 0 1 1.3-1.3L20 11l-4.9-1.8a2.2 2.2 0 0 1-1.3-1.3L12 3Z" />
+        <path d="m5 3 .4 1.1a1 1 0 0 0 .5.5L7 5l-1.1.4a1 1 0 0 0-.5.5L5 7l-.4-1.1a1 1 0 0 0-.5-.5L3 5l1.1-.4a1 1 0 0 0 .5-.5L5 3Zm14 14 .4 1.1a1 1 0 0 0 .5.5l1.1.4-1.1.4a1 1 0 0 0-.5.5L19 21l-.4-1.1a1 1 0 0 0-.5-.5L17 19l1.1-.4a1 1 0 0 0 .5-.5L19 17Z" />
+      </svg>
+    );
+  }
+
   if (name === "arrow") {
     return (
-      <svg aria-hidden="true" className={styles.icon} viewBox="0 0 20 20">
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
         <path d="M3 10h13M11.5 5.5 16 10l-4.5 4.5" />
+      </svg>
+    );
+  }
+
+  if (name === "plus" || name === "minus") {
+    return (
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
+        <path d="M4 10h12" />
+        {name === "plus" ? <path d="M10 4v12" /> : null}
+      </svg>
+    );
+  }
+
+  if (name === "reset") {
+    return (
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
+        <path d="M4.5 6.5V2.8M4.5 2.8h3.8M4.6 3.2a7 7 0 1 1-1.2 8.1" />
+      </svg>
+    );
+  }
+
+  if (name === "info") {
+    return (
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="7" />
+        <path d="M10 9v4M10 6.3v.2" />
+      </svg>
+    );
+  }
+
+  if (name === "lock") {
+    return (
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
+        <rect height="9" rx="1" width="12" x="4" y="8" />
+        <path d="M7 8V5.5a3 3 0 0 1 6 0V8" />
       </svg>
     );
   }
 
   if (name === "check") {
     return (
-      <svg aria-hidden="true" className={styles.icon} viewBox="0 0 20 20">
+      <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
         <path d="m4 10.5 3.5 3.5L16 5.5" />
       </svg>
     );
   }
 
   return (
-    <svg aria-hidden="true" className={styles.icon} viewBox="0 0 20 20">
-      <rect height="9" rx="1" width="12" x="4" y="8" />
-      <path d="M7 8V5.5a3 3 0 0 1 6 0V8" />
+    <svg aria-hidden="true" className={className} viewBox="0 0 20 20">
+      <path d="m4.5 4.5 11 11M15.5 4.5l-11 11" />
     </svg>
+  );
+}
+
+function MoralMark() {
+  return (
+    <span aria-hidden="true" className={styles.moralMark}>
+      <i />
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
   );
 }
 
@@ -69,7 +155,7 @@ function SubmitButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   const { pending } = useFormStatus();
 
   return (
-    <button className={styles.primaryButton} disabled={pending} type="submit">
+    <button className={styles.drawerSubmit} disabled={pending} type="submit">
       <span>
         {pending
           ? "Saving profile…"
@@ -77,19 +163,9 @@ function SubmitButton({ isAuthenticated }: { isAuthenticated: boolean }) {
             ? "Save profile & explore"
             : "Create account & continue"}
       </span>
-      <Icon name="arrow" />
+      <Icon className={styles.icon} name="arrow" />
     </button>
   );
-}
-
-function getInitials(displayName: string) {
-  const parts = displayName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  return parts.length ? parts.map((part) => part[0]?.toUpperCase()).join("") : "YOU";
 }
 
 function getDefaultBio(draft: WalkthroughProfileDraft) {
@@ -105,6 +181,9 @@ export function CompleteProfileReview({
   returnTo,
   signupHref,
 }: CompleteProfileReviewProps) {
+  const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(INITIAL_ALLOCATION);
+  const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [restored, setRestored] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
   const [profile, setProfile] = useState<ReviewState>({
@@ -121,10 +200,20 @@ export function CompleteProfileReview({
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(REFINEMENT_STORAGE_KEY);
-      const stored = raw ? (JSON.parse(raw) as Partial<ReviewState> & { context?: string }) : null;
+      const stored = raw
+        ? (JSON.parse(raw) as Partial<ReviewState> & {
+            context?: string;
+            priorityAllocation?: unknown;
+          })
+        : null;
       const context = `${draft.causeArea}|${draft.offerType}|${draft.matchName}`;
 
       if (stored?.context === context) {
+        const restoredAllocation = normalizeProfilePriorityAllocation(
+          stored.priorityAllocation,
+        );
+        if (restoredAllocation) setAllocation(restoredAllocation);
+
         setProfile((current) => ({
           ...current,
           ...stored,
@@ -166,24 +255,66 @@ export function CompleteProfileReview({
         JSON.stringify({
           ...profile,
           context: `${draft.causeArea}|${draft.offerType}|${draft.matchName}`,
-          version: 1,
+          priorityAllocation: JSON.parse(serializeProfilePriorityAllocation(allocation)),
+          version: 2,
         }),
       );
     } catch (error) {
       console.warn("Moral Trade could not save the profile refinement draft.", error);
     }
-  }, [draft.causeArea, draft.matchName, draft.offerType, profile, restored]);
+  }, [allocation, draft.causeArea, draft.matchName, draft.offerType, profile, restored]);
 
-  const initials = useMemo(() => getInitials(profile.displayName), [profile.displayName]);
-  const causeShort = draft.causeArea
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
+  useEffect(() => {
+    if (!detailsOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDetailsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [detailsOpen]);
+
+  const assigned = getAssignedProfilePrioritySparks(allocation);
+  const unassigned = COMPLETE_PROFILE_SPARK_COUNT - assigned;
+  const ranking = rankProfilePriorities(allocation, priorityOrder);
+  const leadingPriorityIds = ranking.slice(0, 8);
+  const allocationRowIds =
+    focusedPriorityId && !leadingPriorityIds.includes(focusedPriorityId)
+      ? [...leadingPriorityIds.slice(0, 7), focusedPriorityId]
+      : leadingPriorityIds;
+  const sparks = ranking.flatMap((id) =>
+    Array.from({ length: allocation[id] }, () => id),
+  );
 
   function updateProfile<Key extends keyof ReviewState>(key: Key, value: ReviewState[Key]) {
     setProfile((current) => ({ ...current, [key]: value }));
+  }
+
+  function adjust(id: ProfilePriorityId, delta: -1 | 1) {
+    setAllocation((current) => {
+      if (delta === -1 && current[id] === 0) return current;
+      const total = getAssignedProfilePrioritySparks(current);
+
+      if (delta === 1 && total >= COMPLETE_PROFILE_SPARK_COUNT) {
+        const donor = [...priorityOrder]
+          .reverse()
+          .find((candidate) => candidate !== id && current[candidate] > 0);
+        if (!donor) return current;
+        return {
+          ...current,
+          [donor]: current[donor] - 1,
+          [id]: current[id] + 1,
+        };
+      }
+
+      return { ...current, [id]: current[id] + delta };
+    });
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -192,6 +323,14 @@ export function CompleteProfileReview({
     if (!profile.displayName.trim() || !profile.role.trim() || !profile.email.trim()) {
       event.preventDefault();
       setValidationMessage("Add a display name, role, and email before continuing.");
+      setDetailsOpen(true);
+      return;
+    }
+
+    if (!normalizeProfilePriorityAllocation(serializeProfilePriorityAllocation(allocation))) {
+      event.preventDefault();
+      setValidationMessage("Your priority allocation could not be verified. Reset it and try again.");
+      setDetailsOpen(true);
       return;
     }
 
@@ -202,43 +341,7 @@ export function CompleteProfileReview({
   }
 
   return (
-    <section className={styles.surface} aria-labelledby="complete-profile-heading">
-      <div className={styles.stageHeading}>
-        <div>
-          <h1 id="complete-profile-heading">Turn your walkthrough into a profile.</h1>
-        </div>
-        <div className={styles.headingCopy}>
-          <p>
-            Review what Moral Trade carried over, fill the few missing details, and see the exact
-            profile another member would receive.
-          </p>
-          <div className={styles.privateNote}>
-            <Icon name="lock" />
-            Nothing is public until you review and save.
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.importStrip} aria-label="Imported walkthrough choices">
-        <div className={styles.importCell}>
-          <span>Priority carried over</span>
-          <strong>{draft.causeArea}</strong>
-          <small>{draft.originalCause}</small>
-        </div>
-        <div className={styles.importCell}>
-          <span>Offer type carried over</span>
-          <strong>{draft.offerType}</strong>
-          <small>No offer or obligation has been created.</small>
-        </div>
-        <div className={styles.importCell}>
-          <span>Illustrative match</span>
-          <strong>{draft.matchName} match</strong>
-          <small>
-            {draft.matchGive || "Your contribution"} ↔ {draft.matchGet || "Their contribution"}
-          </small>
-        </div>
-      </div>
-
+    <section aria-labelledby="complete-profile-heading" className={styles.profilePage}>
       <form action={completeWalkthroughProfileAction} onSubmit={handleSubmit}>
         <input name="return_to" type="hidden" value={returnTo} />
         <input
@@ -257,226 +360,453 @@ export function CompleteProfileReview({
         <input name="first_action" type="hidden" value={draft.firstAction} />
         <input name="contact_rule" type="hidden" value={profile.contactRule} />
         <input name="private_profile" type="hidden" value={String(profile.privateProfile)} />
+        <input
+          name="priority_allocation"
+          type="hidden"
+          value={serializeProfilePriorityAllocation(allocation)}
+        />
 
-        <div className={styles.reviewLayout}>
-          <div className={styles.formPanel}>
-            <section className={styles.formSection}>
-              <header className={styles.sectionHeader}>
-                <div>
-                  <h2>Your identity</h2>
-                  <p>The name and role shown when someone evaluates an introduction or proposal.</p>
-                </div>
-                <span className={styles.requiredTag}>Required</span>
-              </header>
-              <div className={styles.fieldRow}>
-                <label className={styles.field}>
-                  <span>Display name</span>
-                  <input
-                    autoComplete="name"
-                    name="display_name"
-                    required
-                    value={profile.displayName}
-                    onChange={(event) => updateProfile("displayName", event.target.value)}
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span>Role or short descriptor</span>
-                  <input
-                    name="role"
-                    placeholder="e.g. Policy researcher"
-                    required
-                    value={profile.role}
-                    onChange={(event) => updateProfile("role", event.target.value)}
-                  />
-                </label>
-              </div>
-              <label className={`${styles.field} ${styles.spacedField}`}>
-                <span>Email</span>
-                <input
-                  autoComplete="email"
-                  name="email"
-                  readOnly={isAuthenticated}
-                  required
-                  type="email"
-                  value={profile.email}
-                  onChange={(event) => updateProfile("email", event.target.value)}
-                />
-                <small>
-                  Used for sign-in and private notifications. It is never shown on your public
-                  profile.
-                </small>
-              </label>
-            </section>
-
-            <section className={styles.formSection}>
-              <header className={styles.sectionHeader}>
-                <div>
-                  <h2>How you can participate</h2>
-                  <p>
-                    Set realistic boundaries so recommendations do not assume more time or money
-                    than you can offer.
-                  </p>
-                </div>
-                <span className={styles.safeTag}>
-                  <Icon name="check" /> No commitment created
-                </span>
-              </header>
-              <div className={styles.fieldRow}>
-                <label className={styles.field}>
-                  <span>Maximum one-time commitment</span>
-                  <select
-                    name="max_commitment"
-                    value={profile.maxCommitment}
-                    onChange={(event) =>
-                      updateProfile(
-                        "maxCommitment",
-                        Number(event.target.value) as CompleteProfileMaxCommitment,
-                      )
-                    }
-                  >
-                    {COMPLETE_PROFILE_MAX_COMMITMENTS.map((amount) => (
-                      <option key={amount} value={amount}>
-                        Up to ${amount}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.field}>
-                  <span>Time available each month</span>
-                  <select
-                    name="monthly_time"
-                    value={profile.monthlyTime}
-                    onChange={(event) =>
-                      updateProfile("monthlyTime", event.target.value as CompleteProfileMonthlyTime)
-                    }
-                  >
-                    {COMPLETE_PROFILE_MONTHLY_TIMES.map((time) => (
-                      <option key={time} value={time}>
-                        {time === "8+ hours" ? time : `About ${time}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className={`${styles.field} ${styles.spacedField}`}>
-                <span>How may people approach you?</span>
-                <div className={styles.choiceRow} role="group" aria-label="Contact boundary">
-                  {COMPLETE_PROFILE_CONTACT_RULES.map((rule) => (
-                    <button
-                      aria-pressed={profile.contactRule === rule}
-                      className={styles.choice}
-                      key={rule}
-                      type="button"
-                      onClick={() => updateProfile("contactRule", rule)}
-                    >
-                      {rule}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className={styles.formSection}>
-              <header className={styles.sectionHeader}>
-                <div>
-                  <h2>One useful sentence</h2>
-                  <p>Tell potential counterparties what makes an opportunity worth your attention.</p>
-                </div>
-                <span className={styles.optionalTag}>Optional</span>
-              </header>
-              <label className={styles.field}>
-                <span>Profile introduction</span>
-                <textarea
-                  maxLength={500}
-                  name="bio"
-                  value={profile.bio}
-                  onChange={(event) => updateProfile("bio", event.target.value)}
-                />
-                <small>Keep this concrete. You can change it later.</small>
-              </label>
-            </section>
-
-            <section className={styles.formSection}>
-              <header className={styles.sectionHeader}>
-                <div>
-                  <h2>Visibility</h2>
-                  <p>You control when this draft becomes discoverable.</p>
-                </div>
-              </header>
-              <div className={styles.toggleLine}>
-                <div>
-                  <strong>Keep this profile private after account creation</strong>
-                  <small>You can browse and refine recommendations before publishing.</small>
-                </div>
-                <button
-                  aria-label="Keep profile private after account creation"
-                  aria-pressed={profile.privateProfile}
-                  className={styles.switch}
-                  type="button"
-                  onClick={() => updateProfile("privateProfile", !profile.privateProfile)}
-                />
-              </div>
-            </section>
+        <header className={styles.profileHeader}>
+          <Link aria-label="Moral Trade home" className={styles.brandLockup} href="/">
+            <MoralMark />
+            <span>Moral Trade</span>
+          </Link>
+          <div
+            aria-label="Walkthrough progress: final step"
+            className={styles.walkthroughProgress}
+          >
+            <span>1&nbsp; Welcome</span>
+            <i />
+            <span>2&nbsp; Explore</span>
+            <i />
+            <span>3&nbsp; Priorities</span>
+            <i />
+            <strong>
+              <b>4</b> Complete
+            </strong>
           </div>
+          <button
+            className={styles.primaryAction}
+            onClick={() => setDetailsOpen(true)}
+            type="button"
+          >
+            Save profile
+            <Icon className={styles.icon} name="arrow" />
+          </button>
+        </header>
 
-          <aside className={styles.previewRail} aria-label="Live profile preview">
-            <article className={styles.profilePreview}>
-              <div className={styles.previewTop}>
-                <div className={styles.avatarOrb}>{initials}</div>
-                <div className={styles.causeRing}>{causeShort || "MT"}</div>
-                <h2>{profile.displayName || "Your name"}</h2>
-                <p>{profile.role || "Role or short descriptor"}</p>
+        <div className={styles.mosaicLayout}>
+          <aside className={styles.introPanel}>
+            <p className={styles.sectionLabel}>Complete your profile</p>
+            <h1 id="complete-profile-heading">Spend 100 sparks of attention.</h1>
+            <p className={styles.introDescription}>
+              Each block is a rough five-point share of your personal attention. Grow the
+              priorities that feel central.
+            </p>
+            <div className={styles.honestyNote}>
+              <Icon className={styles.icon} name="info" />
+              <p>
+                These are coarse personal emphasis shares—not cost-effectiveness, moral value, or
+                predicted impact.
+              </p>
+            </div>
+            <div className={styles.instructionBlock}>
+              <h2>Twenty deliberate blocks</h2>
+              <p>
+                <Icon className={styles.icon} name="plus" />
+                <span>Add one five-point spark.</span>
+              </p>
+              <p>
+                <Icon className={styles.icon} name="minus" />
+                <span>Return a spark to the unassigned tray.</span>
+              </p>
+            </div>
+            <button
+              className={styles.textAction}
+              onClick={() => {
+                setAllocation(INITIAL_ALLOCATION);
+                setFocusedPriorityId(null);
+              }}
+              type="button"
+            >
+              <Icon className={styles.icon} name="reset" />
+              Reset this design
+            </button>
+          </aside>
+
+          <main className={styles.mosaicStage}>
+            <div className={styles.mosaicHeadline}>
+              <div>
+                <span>Personal emphasis</span>
+                <strong aria-live="polite">
+                  {assigned * COMPLETE_PROFILE_SPARK_VALUE}
+                  <small>/100</small>
+                </strong>
               </div>
-              <div className={styles.previewBody}>
-                <div className={styles.previewBlock}>
-                  <span>About</span>
-                  <strong>{profile.bio || "Add one useful sentence about the opportunities you value."}</strong>
-                </div>
-                <div className={styles.previewBlock}>
-                  <span>Can offer</span>
-                  <div className={styles.previewTags}>
-                    <b>{draft.offerType}</b>
-                    <b>{profile.monthlyTime}/month</b>
-                    <b>≤ ${profile.maxCommitment}</b>
+              <p>
+                {unassigned
+                  ? `${unassigned} sparks left to place`
+                  : "All sparks placed — adjust freely"}
+              </p>
+            </div>
+
+            <div
+              aria-label={`${assigned * COMPLETE_PROFILE_SPARK_VALUE} of 100 attention points assigned`}
+              className={styles.sparkMosaic}
+              role="img"
+            >
+              {Array.from({ length: COMPLETE_PROFILE_SPARK_COUNT }).map((_, index) => {
+                const id = sparks[index];
+                const priority = id ? getProfilePriority(id) : null;
+                return (
+                  <span
+                    aria-label={priority?.name ?? "Unassigned spark"}
+                    className={priority ? styles.assignedSpark : styles.emptySpark}
+                    key={index}
+                    style={
+                      priority
+                        ? ({ "--priority-color": priority.color } as CSSProperties)
+                        : undefined
+                    }
+                    title={priority?.name ?? "Unassigned spark"}
+                  >
+                    <Icon className={styles.sparkIcon} name="sparkles" />
+                  </span>
+                );
+              })}
+            </div>
+
+            <div className={styles.allocationList}>
+              {allocationRowIds.map((id) => {
+                const priority = getProfilePriority(id);
+                return (
+                  <div className={styles.allocationRow} key={id}>
+                    <i style={{ background: priority.color }} />
+                    <span>{priority.shortName}</span>
+                    <div className={styles.allocationBar}>
+                      <b
+                        style={{
+                          background: priority.color,
+                          width: `${Math.min(allocation[id] * 20, 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>{allocation[id] * COMPLETE_PROFILE_SPARK_VALUE}</strong>
+                    <button
+                      aria-label={`Decrease ${priority.name}`}
+                      disabled={!allocation[id]}
+                      onClick={() => adjust(id, -1)}
+                      type="button"
+                    >
+                      <Icon className={styles.rowIcon} name="minus" />
+                    </button>
+                    <button
+                      aria-label={`Increase ${priority.name}`}
+                      onClick={() => adjust(id, 1)}
+                      type="button"
+                    >
+                      <Icon className={styles.rowIcon} name="plus" />
+                    </button>
                   </div>
-                </div>
-                <div className={styles.previewBlock}>
-                  <span>Looking for</span>
-                  <strong>{draft.matchGet || `Opportunities in ${draft.causeArea}`}</strong>
-                </div>
-                <div className={styles.previewBlock}>
-                  <span>Contact</span>
-                  <strong>{profile.contactRule}</strong>
-                </div>
-              </div>
-            </article>
-            <div className={styles.previewStatus}>
-              <span className={profile.privateProfile ? styles.privateDot : styles.publicDot} />
-              {profile.privateProfile ? "Private after save" : "Discoverable after save"}
+                );
+              })}
+            </div>
+          </main>
+
+          <aside aria-label="Your ranking" className={styles.rankingRail}>
+            <div className={styles.railHeading}>
+              <h2>Your ranking</h2>
+              <p>Ordered by your rough attention share.</p>
+            </div>
+            <ol className={styles.rankingList}>
+              {ranking.map((id, index) => {
+                const priority = getProfilePriority(id);
+                const topRank = index < 5;
+                return (
+                  <li className={topRank ? styles.topRank : ""} key={id}>
+                    <span
+                      className={styles.rankNumber}
+                      style={{ color: topRank ? priority.color : undefined }}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className={styles.rankLabel}>{priority.shortName}</span>
+                    {allocation[id] && allocationRowIds.includes(id) ? (
+                      <span className={styles.rankTrailing}>
+                        {allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks
+                      </span>
+                    ) : allocation[id] ? (
+                      <button
+                        aria-label={`Edit ${priority.name}`}
+                        className={styles.rankAllocate}
+                        onClick={() => setFocusedPriorityId(id)}
+                        title={`Show controls for ${priority.name}`}
+                        type="button"
+                      >
+                        {allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks
+                      </button>
+                    ) : (
+                      <button
+                        aria-label={`Assign one spark to ${priority.name}`}
+                        className={styles.rankAllocate}
+                        onClick={() => {
+                          setFocusedPriorityId(id);
+                          adjust(id, 1);
+                        }}
+                        title={`Assign one spark to ${priority.name}`}
+                        type="button"
+                      >
+                        Unassigned
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+            <div className={styles.railFooter}>
+              <p>
+                Ties are shown together. Five-point blocks deliberately avoid false precision.
+              </p>
             </div>
           </aside>
         </div>
 
-        {validationMessage ? (
-          <div aria-live="assertive" className={styles.validationMessage} role="alert">
-            {validationMessage}
+        {detailsOpen ? (
+          <div
+            aria-label="Close profile details"
+            className={styles.detailsBackdrop}
+            onMouseDown={(event) => {
+              if (event.currentTarget === event.target) setDetailsOpen(false);
+            }}
+            role="presentation"
+          >
+            <section
+              aria-labelledby="profile-details-heading"
+              aria-modal="true"
+              className={styles.detailsSheet}
+              role="dialog"
+            >
+              <header className={styles.detailsHeader}>
+                <div>
+                  <span>Complete your profile</span>
+                  <h2 id="profile-details-heading">Finish the practical details.</h2>
+                  <p>
+                    Your mosaic stays private by default. These boundaries help Moral Trade avoid
+                    assuming more time, money, or contact than you intend.
+                  </p>
+                </div>
+                <button
+                  aria-label="Close profile details"
+                  autoFocus
+                  className={styles.closeButton}
+                  onClick={() => setDetailsOpen(false)}
+                  type="button"
+                >
+                  <Icon className={styles.icon} name="close" />
+                </button>
+              </header>
+
+              <div className={styles.contextStrip}>
+                <div>
+                  <span>Walkthrough priority</span>
+                  <strong>{draft.originalCause}</strong>
+                  <small>{draft.causeArea}</small>
+                </div>
+                <div>
+                  <span>Personal emphasis</span>
+                  <strong>{assigned * COMPLETE_PROFILE_SPARK_VALUE}/100</strong>
+                  <small>{unassigned} unassigned blocks remain</small>
+                </div>
+                <div>
+                  <span>Offer boundary</span>
+                  <strong>{draft.offerType}</strong>
+                  <small>No offer or obligation has been created.</small>
+                </div>
+              </div>
+
+              <div className={styles.detailsBody}>
+                <section className={styles.formSection}>
+                  <div className={styles.formSectionHeading}>
+                    <div>
+                      <span>01</span>
+                      <h3>Your identity</h3>
+                    </div>
+                    <small>Required</small>
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.field}>
+                      <span>Display name</span>
+                      <input
+                        autoComplete="name"
+                        name="display_name"
+                        required
+                        value={profile.displayName}
+                        onChange={(event) => updateProfile("displayName", event.target.value)}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span>Role or short descriptor</span>
+                      <input
+                        name="role"
+                        placeholder="e.g. Policy researcher"
+                        required
+                        value={profile.role}
+                        onChange={(event) => updateProfile("role", event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label className={`${styles.field} ${styles.spacedField}`}>
+                    <span>Email</span>
+                    <input
+                      autoComplete="email"
+                      name="email"
+                      readOnly={isAuthenticated}
+                      required
+                      type="email"
+                      value={profile.email}
+                      onChange={(event) => updateProfile("email", event.target.value)}
+                    />
+                    <small>Used for sign-in and private notifications. Never shown publicly.</small>
+                  </label>
+                </section>
+
+                <section className={styles.formSection}>
+                  <div className={styles.formSectionHeading}>
+                    <div>
+                      <span>02</span>
+                      <h3>Participation limits</h3>
+                    </div>
+                    <small className={styles.safeLabel}>
+                      <Icon className={styles.miniIcon} name="check" /> No commitment created
+                    </small>
+                  </div>
+                  <div className={styles.fieldRow}>
+                    <label className={styles.field}>
+                      <span>Maximum one-time commitment</span>
+                      <select
+                        name="max_commitment"
+                        value={profile.maxCommitment}
+                        onChange={(event) =>
+                          updateProfile(
+                            "maxCommitment",
+                            Number(event.target.value) as CompleteProfileMaxCommitment,
+                          )
+                        }
+                      >
+                        {COMPLETE_PROFILE_MAX_COMMITMENTS.map((amount) => (
+                          <option key={amount} value={amount}>
+                            Up to ${amount}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={styles.field}>
+                      <span>Time available each month</span>
+                      <select
+                        name="monthly_time"
+                        value={profile.monthlyTime}
+                        onChange={(event) =>
+                          updateProfile(
+                            "monthlyTime",
+                            event.target.value as CompleteProfileMonthlyTime,
+                          )
+                        }
+                      >
+                        {COMPLETE_PROFILE_MONTHLY_TIMES.map((time) => (
+                          <option key={time} value={time}>
+                            {time === "8+ hours" ? time : `About ${time}`}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className={`${styles.field} ${styles.spacedField}`}>
+                    <span>How may people approach you?</span>
+                    <div className={styles.choiceRow} role="group" aria-label="Contact boundary">
+                      {COMPLETE_PROFILE_CONTACT_RULES.map((rule) => (
+                        <button
+                          aria-pressed={profile.contactRule === rule}
+                          className={styles.choice}
+                          key={rule}
+                          onClick={() => updateProfile("contactRule", rule)}
+                          type="button"
+                        >
+                          {rule}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className={styles.formSection}>
+                  <div className={styles.formSectionHeading}>
+                    <div>
+                      <span>03</span>
+                      <h3>One useful sentence</h3>
+                    </div>
+                    <small>Optional</small>
+                  </div>
+                  <label className={styles.field}>
+                    <span>Profile introduction</span>
+                    <textarea
+                      maxLength={500}
+                      name="bio"
+                      value={profile.bio}
+                      onChange={(event) => updateProfile("bio", event.target.value)}
+                    />
+                    <small>Keep this concrete. You can change it later.</small>
+                  </label>
+                </section>
+
+                <section className={styles.formSection}>
+                  <div className={styles.formSectionHeading}>
+                    <div>
+                      <span>04</span>
+                      <h3>Visibility</h3>
+                    </div>
+                    <small>
+                      <Icon className={styles.miniIcon} name="lock" /> Owner controlled
+                    </small>
+                  </div>
+                  <div className={styles.toggleLine}>
+                    <div>
+                      <strong>Keep this profile private after account creation</strong>
+                      <small>You can browse and refine recommendations before publishing.</small>
+                    </div>
+                    <button
+                      aria-label="Keep profile private after account creation"
+                      aria-pressed={profile.privateProfile}
+                      className={styles.switch}
+                      onClick={() => updateProfile("privateProfile", !profile.privateProfile)}
+                      type="button"
+                    />
+                  </div>
+                </section>
+              </div>
+
+              {validationMessage ? (
+                <div aria-live="assertive" className={styles.validationMessage} role="alert">
+                  {validationMessage}
+                </div>
+              ) : null}
+
+              <footer className={styles.detailsFooter}>
+                <div>
+                  <p>
+                    Saving creates a starter profile. It does not publish an offer, contact
+                    another member, reserve money, or create a commitment.
+                  </p>
+                  {!isAuthenticated ? (
+                    <p>
+                      Already have an account? <Link href={loginHref}>Sign in</Link>.
+                    </p>
+                  ) : null}
+                </div>
+                <SubmitButton isAuthenticated={isAuthenticated} />
+              </footer>
+            </section>
           </div>
         ) : null}
-
-        <div className={styles.saveBar}>
-          <div>
-            <p>
-              This creates a starter profile and account record. It does not publish an offer,
-              contact another member, reserve money, or create a commitment.
-            </p>
-            {!isAuthenticated ? (
-              <p className={styles.signInPrompt}>
-                Already have an account? <Link href={loginHref}>Sign in</Link>.
-              </p>
-            ) : null}
-          </div>
-          <SubmitButton isAuthenticated={isAuthenticated} />
-        </div>
       </form>
     </section>
   );

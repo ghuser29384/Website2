@@ -1,4 +1,8 @@
 import type { WalkthroughOfferType } from "@/lib/walkthrough-profile";
+import {
+  normalizeProfilePriorityAllocation,
+  type ProfilePriorityAllocation,
+} from "@/lib/profile-priorities";
 
 export const COMPLETE_PROFILE_MAX_COMMITMENTS = [25, 50, 100, 250, 500] as const;
 export const COMPLETE_PROFILE_MONTHLY_TIMES = [
@@ -29,6 +33,7 @@ export interface CompleteProfileSubmission {
   offerType: WalkthroughOfferType;
   causeArea: string;
   matchGet: string;
+  priorityAllocation: ProfilePriorityAllocation;
 }
 
 const offerTypeSet = new Set<WalkthroughOfferType>(["Money", "Time", "A pledge"]);
@@ -54,6 +59,7 @@ export function normalizeCompleteProfileSubmission(input: {
   offerType?: unknown;
   causeArea?: unknown;
   matchGet?: unknown;
+  priorityAllocation?: unknown;
 }): CompleteProfileSubmission | null {
   const displayName = clean(input.displayName, 80);
   const role = clean(input.role, 100);
@@ -63,12 +69,14 @@ export function normalizeCompleteProfileSubmission(input: {
   const contactRule = clean(input.contactRule, 40);
   const offerType = clean(input.offerType, 40);
   const causeArea = clean(input.causeArea, 80);
+  const priorityAllocation = normalizeProfilePriorityAllocation(input.priorityAllocation);
 
   if (
     displayName.length < 2 ||
     role.length < 2 ||
     !offerTypeSet.has(offerType as WalkthroughOfferType) ||
-    !causeArea
+    !causeArea ||
+    !priorityAllocation
   ) {
     return null;
   }
@@ -94,6 +102,7 @@ export function normalizeCompleteProfileSubmission(input: {
     offerType: offerType as WalkthroughOfferType,
     causeArea,
     matchGet: clean(input.matchGet, 180),
+    priorityAllocation,
   };
 }
 
