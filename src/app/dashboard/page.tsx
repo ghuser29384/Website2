@@ -56,11 +56,8 @@ import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portabil
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { MarketplaceBottomNav } from "@/components/marketplace/marketplace-components";
-import {
-  buildMatchInboxBadges,
-  buildMatchExplanation,
-  formatGrantExpiry,
-} from "@/lib/background-explanations";
+import { LocalDateTime } from "@/components/ui/local-date-time";
+import { buildMatchInboxBadges, buildMatchExplanation } from "@/lib/background-explanations";
 import {
   BACKGROUND_DISCLOSURE_FIELDS,
   formatDisclosureFieldLabel,
@@ -151,8 +148,7 @@ function formatDashboardDate(value: string | null | undefined) {
     return "Not set";
   }
 
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+  return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
 function formatConciergeSla(value: string | null) {
@@ -176,12 +172,7 @@ function formatDashboardDateTime(value: string | null | undefined) {
     return "Not run yet";
   }
 
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) {
-    return "Date unavailable";
-  }
-
-  return new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback="Date unavailable" />;
 }
 
 function readCandidateBudgetValue({
@@ -690,7 +681,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </span>
                 </div>
                 <p className="route-text">
-                  Published for {new Date(priorityFundSummary.currentCycle.cycle_month).toLocaleDateString()}.
+                  Published for{" "}
+                  <LocalDateTime
+                    value={priorityFundSummary.currentCycle.cycle_month}
+                    fallback="Date unavailable"
+                    dateOnly
+                  />.
                   {priorityFundSummary.viewerSnapshot
                     ? ` Your current share this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
                     : " You do not have a current member snapshot yet."}
@@ -818,7 +814,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     : "Private only"}
                 </span>
                 <span className="source-pill">
-                  Updated {new Date(dashboardData.wishProfile.updated_at).toLocaleDateString()}
+                  Updated{" "}
+                  <LocalDateTime
+                    value={dashboardData.wishProfile.updated_at}
+                    fallback="Date unavailable"
+                    dateOnly
+                  />
                 </span>
               </div>
               <dl className="values-summary">
@@ -1374,7 +1375,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.profileDataRightRequests.slice(0, 4).map((request) => (
                     <li key={request.id}>
                       {request.request_type} ({request.scope}) · {request.status} · due{" "}
-                      {new Date(request.due_at).toLocaleDateString()}
+                      <LocalDateTime value={request.due_at} fallback="Date unavailable" dateOnly />
                     </li>
                   ))}
                 </ul>
@@ -1413,7 +1414,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </span>
                   <span>
                     Audience: profile matching only until a grant is approved ·{" "}
-                    {formatGrantExpiry(connection.retention_expires_at)}
+                    {connection.retention_expires_at ? (
+                      <>
+                        expires{" "}
+                        <LocalDateTime
+                          value={connection.retention_expires_at}
+                          fallback="Date unavailable"
+                          dateOnly
+                        />
+                      </>
+                    ) : (
+                      "until revoked"
+                    )}
                   </span>
                   <span>
                     Last used: {formatDashboardDateTime(connection.last_imported_at ?? connection.updated_at)}
@@ -1440,7 +1452,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </span>
                   <span>
                     Fields: {formatDisclosureFieldLabel(grant.field_key)} ·{" "}
-                    {formatGrantExpiry(grant.expires_at)}
+                    {grant.expires_at ? (
+                      <>
+                        expires{" "}
+                        <LocalDateTime value={grant.expires_at} fallback="Date unavailable" dateOnly />
+                      </>
+                    ) : (
+                      "until revoked"
+                    )}
                   </span>
                   <span>
                     Audience: {grant.counterparty_id ? `Counterparty ${grant.counterparty_id}` : "No counterparty bound"}
@@ -2249,9 +2268,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                                   .map(formatBackgroundSourcePermissionFieldLabel)
                                   .join(", ")
                               : "not set"}
-                            {connection.retention_expires_at
-                              ? `; expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
-                              : "; no expiry recorded"}
+                            {connection.retention_expires_at ? (
+                              <>
+                                ; expires{" "}
+                                <LocalDateTime
+                                  value={connection.retention_expires_at}
+                                  fallback="Date unavailable"
+                                  dateOnly
+                                />
+                              </>
+                            ) : (
+                              "; no expiry recorded"
+                            )}
                             {connection.ai_shadow_mode_allowed ? "; AI shadow mode allowed" : ""}
                           </p>
                           <p>
@@ -2308,10 +2336,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         .slice(0, 8)
                         .map((connection) => (
                           <option key={`summary-connection-${connection.id}`} value={connection.id}>
-                            {connection.label} · {connection.access_status} · expires{" "}
-                            {connection.retention_expires_at
-                              ? new Date(connection.retention_expires_at).toLocaleDateString()
-                              : "not set"}
+                            {connection.label} · {connection.access_status}
                           </option>
                         ))}
                     </select>
@@ -2373,7 +2398,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               .map(formatBackgroundSourcePermissionFieldLabel)
                               .join(", ")
                           : "not set"}
-                        ; expires {new Date(summary.retention_expires_at).toLocaleDateString()}
+                        ; expires{" "}
+                        <LocalDateTime
+                          value={summary.retention_expires_at}
+                          fallback="Date unavailable"
+                          dateOnly
+                        />
                       </p>
                       <p>
                         <strong>Exposure preview:</strong> the reviewed summary may affect broad
@@ -2404,7 +2434,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span>
                         Audience: {receipt.audience_stage}; expires{" "}
                         {receipt.expires_at
-                          ? new Date(receipt.expires_at).toLocaleDateString()
+                          ? <LocalDateTime
+                              value={receipt.expires_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />
                           : "not set"}
                       </span>
                     </div>
@@ -2761,7 +2795,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.privacyGrants.slice(0, 5).map((grant) => (
                     <li key={grant.id}>
                       {formatDisclosureFieldLabel(grant.field_key)}: {grant.access_level} at{" "}
-                      {grant.audience_stage} ({grant.status}, {formatGrantExpiry(grant.expires_at)})
+                      {grant.audience_stage} ({grant.status},{" "}
+                      {grant.expires_at ? (
+                        <>
+                          expires{" "}
+                          <LocalDateTime value={grant.expires_at} fallback="Date unavailable" dateOnly />
+                        </>
+                      ) : (
+                        "until revoked"
+                      )}
+                      )
                     </li>
                   ))}
                 </ul>
@@ -3383,7 +3426,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <p>
                           <strong>Retention:</strong>{" "}
                           {sourceCanInfluence ? "may influence deterministic synthesis" : "expired or inactive; influence disabled"}{" "}
-                          until {new Date(source.retention_expires_at).toLocaleDateString()}.
+                          until{" "}
+                          <LocalDateTime
+                            value={source.retention_expires_at}
+                            fallback="Date unavailable"
+                            dateOnly
+                          />.
                         </p>
                       </li>
                     );
@@ -3437,9 +3485,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.savedSearches.slice(0, 4).map((search) => (
                     <li key={search.id}>
                       {search.label} ({search.cadence}, threshold {search.min_score}+)
-                      {search.last_scanned_at
-                        ? `; last scanned ${new Date(search.last_scanned_at).toLocaleDateString()}`
-                        : ""}
+                      {search.last_scanned_at ? (
+                        <>
+                          ; last scanned{" "}
+                          <LocalDateTime
+                            value={search.last_scanned_at}
+                            fallback="Date unavailable"
+                            dateOnly
+                          />
+                        </>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -3837,7 +3892,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="route-text">{notification.body}</p>
                   <div className="tag-row">
                     <span className="source-pill">
-                      {new Date(notification.created_at).toLocaleDateString()}
+                      <LocalDateTime
+                        value={notification.created_at}
+                        fallback="Date unavailable"
+                        dateOnly
+                      />
                     </span>
                     <span className={notification.read_at ? "source-pill" : "badge"}>
                       {notification.read_at ? "Read" : "Unread"}
@@ -3972,7 +4031,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span className="source-pill">Account linked</span>
                     ) : null}
                     <span className="source-pill">
-                      Submitted {new Date(interest.created_at).toLocaleDateString()}
+                      Submitted{" "}
+                      <LocalDateTime value={interest.created_at} fallback="Date unavailable" dateOnly />
                     </span>
                   </div>
                   <div className="offer-footer">
@@ -4043,7 +4103,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </div>
                   <div className="offer-footer">
                     <div className="tag-row">
-                      <span>{new Date(interest.created_at).toLocaleDateString()}</span>
+                      <span>
+                        <LocalDateTime value={interest.created_at} fallback="Date unavailable" dateOnly />
+                      </span>
                     </div>
                     <div className="offer-actions">
                       {interest.offer ? (
@@ -4144,11 +4206,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             </span>
                             <span>
                               Evidence due {formatDashboardDate(bond.evidence_due_at)}
-                              {bond.challenge_window_ends_at
-                                ? ` | challenge window ends ${formatDashboardDate(
-                                    bond.challenge_window_ends_at,
-                                  )}`
-                                : ""}
+                              {bond.challenge_window_ends_at ? (
+                                <>
+                                  {" | "}challenge window ends{" "}
+                                  {formatDashboardDate(bond.challenge_window_ends_at)}
+                                </>
+                              ) : null}
                             </span>
                             {bond.funding_status === "payment_pending" ? (
                               <span>
@@ -4222,7 +4285,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             <strong>{formatPaymentAmount(schedule.amount_cents, schedule.currency)}</strong>
                             <span>
                               reminder {formatCadence(schedule.cadence_interval_value, schedule.cadence_interval_unit)} | next due{" "}
-                              {new Date(schedule.next_due_at).toLocaleDateString()}
+                              <LocalDateTime
+                                value={schedule.next_due_at}
+                                fallback="Date unavailable"
+                                dateOnly
+                              />
                             </span>
                           </div>
                         ))}
@@ -4279,7 +4346,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             <strong>{event.summary}</strong>
                             <span>
                               {event.event_type.replaceAll("_", " ")} |{" "}
-                              {new Date(event.created_at).toLocaleDateString()}
+                              <LocalDateTime value={event.created_at} fallback="Date unavailable" dateOnly />
                             </span>
                           </div>
                         ))}
@@ -4350,7 +4417,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         {item.offer.ownerProfile?.resolvedName ?? item.offer.owner_alias}
                       </span>
                       <span className="impact-pill">
-                        Added {new Date(item.addedAt).toLocaleDateString()}
+                        Added <LocalDateTime value={item.addedAt} fallback="Date unavailable" dateOnly />
                       </span>
                     </div>
                     <div className="offer-footer">

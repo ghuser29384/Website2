@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { SectionHeader } from "@/components/ui/page-primitives";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -29,8 +30,7 @@ function firstString(value: string | string[] | undefined) {
 }
 
 function formatDateTime(value: string) {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? "Time supplied in invite" : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback="Time supplied in invite" />;
 }
 
 function hiddenInviteFields(input: {

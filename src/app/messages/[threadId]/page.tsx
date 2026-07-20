@@ -13,6 +13,7 @@ import {
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
 import { getThreadForUser } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
@@ -32,8 +33,7 @@ interface ThreadPageProps {
 }
 
 function formatDate(value: string) {
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback={value} />;
 }
 
 function changed(left: string | null | undefined, right: string | null | undefined) {

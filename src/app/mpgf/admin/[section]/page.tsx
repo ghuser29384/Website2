@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -544,16 +545,26 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                             {item.appealStatus.replaceAll("_", " ")}.
                           </p>
                           <p>
-                            Opened {new Date(item.openedAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                            {item.challengeWindowEndsAt
-                              ? `; challenge window ends ${new Date(item.challengeWindowEndsAt).toLocaleDateString(
-                                  "en-US",
-                                  { month: "short", day: "numeric" },
-                                )}`
-                              : ""}
+                            Opened{" "}
+                            <LocalDateTime
+                              value={item.openedAt}
+                              fallback="Date unavailable"
+                              dateOnly
+                              locale="en-US"
+                              options={{ day: "numeric", month: "short" }}
+                            />
+                            {item.challengeWindowEndsAt ? (
+                              <>
+                                ; challenge window ends{" "}
+                                <LocalDateTime
+                                  value={item.challengeWindowEndsAt}
+                                  fallback="Date unavailable"
+                                  dateOnly
+                                  locale="en-US"
+                                  options={{ day: "numeric", month: "short" }}
+                                />
+                              </>
+                            ) : null}
                           </p>
                         </div>
                         <span className="mpgf-gate-status mpgf-gate-status-pending_review">dispute</span>

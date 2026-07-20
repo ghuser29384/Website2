@@ -15,6 +15,7 @@
 </head>
 <body>
   <main><p id="loading">Loading Discover…</p></main>
+  <script src="/moral-trade-discover-local-time.js"></script>
   <script>
     (async () => {
       try {
@@ -37,14 +38,22 @@
         const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();
+        const localTimeRuntime = window.MoralTradeDiscoverLocalTime;
+        if (!localTimeRuntime) throw new Error("Discover local-time runtime did not load");
+        const localizedSource = localTimeRuntime.transformSource(source);
+        const localTimeScript = '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>';
+        if (!localizedSource.includes("</head>")) {
+          throw new Error("Discover payload is missing its closing head tag");
+        }
+        const replacementSource = localizedSource.replace("</head>", `${localTimeScript}</head>`);
         const enhancementScripts = [
           '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
           '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
           '<script src="/moral-trade-brand.js"></scr' + 'ipt>',
         ].join("");
-        const enhancedSource = source.includes("</body>")
-          ? source.replace("</body>", `${enhancementScripts}</body>`)
-          : `${source}${enhancementScripts}`;
+        const enhancedSource = replacementSource.includes("</body>")
+          ? replacementSource.replace("</body>", `${enhancementScripts}</body>`)
+          : `${replacementSource}${enhancementScripts}`;
 
         document.open();
         document.write(enhancedSource);

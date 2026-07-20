@@ -6,6 +6,7 @@ import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-s
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { EVERY_ORG_CURATED_TARGETS } from "@/lib/every-org";
 import { getFormMessage } from "@/lib/form-state";
@@ -46,12 +47,15 @@ function formatDateOnly(value: string | null | undefined) {
     return "Not set";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(value));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "long", year: "numeric" }}
+    />
+  );
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -59,15 +63,21 @@ function formatDateTime(value: string | null | undefined) {
     return "Not set";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  }).format(new Date(value));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      locale="en-US"
+      options={{
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        month: "short",
+        timeZoneName: "short",
+        year: "numeric",
+      }}
+    />
+  );
 }
 
 function readParam(value: string | string[] | undefined) {

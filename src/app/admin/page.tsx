@@ -16,6 +16,7 @@ import {
 import { updateProfileDataRightRequestAction } from "@/app/background-networking/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { formatBaselineBondAmount, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
 import {
   buildAgreementReviewerConsolePreview,
@@ -928,7 +929,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       <h3>{request.scope.replaceAll("_", " ")}</h3>
                       <p className="route-text">
                         Profile {request.profile_id} · due{" "}
-                        {new Date(request.due_at).toLocaleDateString()}
+                        <LocalDateTime value={request.due_at} fallback="Date unavailable" dateOnly />
                       </p>
                       {request.request_details ? (
                         <p className="route-text">{request.request_details}</p>
@@ -1258,8 +1259,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         {invite ? (
                           <p className="route-text">
                             Invite status {invite.invite_status.replaceAll("_", " ")}; action
-                            window {new Date(invite.action_window_start_at).toLocaleDateString()} to{" "}
-                            {new Date(invite.action_window_end_at).toLocaleDateString()}.
+                            window{" "}
+                            <LocalDateTime
+                              value={invite.action_window_start_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />{" "}
+                            to{" "}
+                            <LocalDateTime
+                              value={invite.action_window_end_at}
+                              fallback="Date unavailable"
+                              dateOnly
+                            />.
                           </p>
                         ) : null}
                         <div className="field-grid">
@@ -1449,7 +1460,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               <p className="route-text">
                                 Evidence due{" "}
                                 {bond.evidence_due_at
-                                  ? new Date(bond.evidence_due_at).toLocaleDateString()
+                                  ? <LocalDateTime
+                                      value={bond.evidence_due_at}
+                                      fallback="Date unavailable"
+                                      dateOnly
+                                    />
                                   : "not set"}
                                 ; challenge window {bond.challenge_window_days} days.
                               </p>
@@ -1559,7 +1574,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                       {formatAdminState(event.to_status)}
                                     </strong>
                                     <span>{event.reason}</span>
-                                    <span>{new Date(event.created_at).toLocaleString()}</span>
+                                    <span>
+                                      <LocalDateTime value={event.created_at} fallback="Date unavailable" />
+                                    </span>
                                   </div>
                                 ))}
                               </div>
@@ -1717,7 +1734,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             <div className="mini-list-item" key={event.id}>
                               <strong>{event.event_type.replaceAll("_", " ")}</strong>
                               <span>{event.summary}</span>
-                              <span>{new Date(event.created_at).toLocaleString()}</span>
+                              <span>
+                                <LocalDateTime value={event.created_at} fallback="Date unavailable" />
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -2131,11 +2150,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <p className="route-text">
                           Offer expiry:{" "}
                           {review.offset.offer_expires_at
-                            ? new Date(review.offset.offer_expires_at).toLocaleString()
+                            ? <LocalDateTime
+                                value={review.offset.offer_expires_at}
+                                fallback="Date unavailable"
+                              />
                             : "Not recorded"}
                           {" | "}evidence due:{" "}
                           {review.offset.baseline_bond_evidence_due_at
-                            ? new Date(review.offset.baseline_bond_evidence_due_at).toLocaleString()
+                            ? <LocalDateTime
+                                value={review.offset.baseline_bond_evidence_due_at}
+                                fallback="Date unavailable"
+                              />
                             : "Not recorded"}
                         </p>
                         <p className="route-text">
@@ -2156,7 +2181,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <p className="route-text">
                             Appeal window:{" "}
                             {appealWindowOpen ? "open until " : "closed at "}
-                            {new Date(appealWindowEndsAt).toLocaleString()}
+                            <LocalDateTime value={appealWindowEndsAt} fallback="Date unavailable" />
                           </p>
                         ) : null}
                         {review.offset.baseline_bond_review_notes ? (

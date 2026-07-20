@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { MetricCard } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import { loadLiveGroupBuyingSnapshot } from "@/lib/moral-trade/group-buying-live";
@@ -65,12 +66,15 @@ function formatDate(value: string | null) {
     return "No public deadline";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-    year: "numeric",
-  }).format(new Date(value));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "short", year: "numeric" }}
+    />
+  );
 }
 
 function readinessLabel(status: "ready" | "pending" | "blocked" | "unavailable") {

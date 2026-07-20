@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import { getPrivateProposalIntakeFields } from "@/lib/moral-trade/group-buying";
@@ -59,12 +60,15 @@ function formatDate(value: string | null) {
     return "No public deadline";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-    year: "numeric",
-  }).format(new Date(value));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "short", year: "numeric" }}
+    />
+  );
 }
 
 function formatTimestamp(value: string | null) {
@@ -72,15 +76,21 @@ function formatTimestamp(value: string | null) {
     return "None";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-    timeZoneName: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      locale="en-US"
+      options={{
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        month: "short",
+        timeZoneName: "short",
+        year: "numeric",
+      }}
+    />
+  );
 }
 
 function readinessLabel(status: "ready" | "pending" | "blocked" | "unavailable") {

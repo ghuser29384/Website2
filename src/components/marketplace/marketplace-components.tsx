@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties, FormHTMLAttributes, ReactNode } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { IconMark, type IconName } from "@/components/ui/page-primitives";
 import {
   buildCompatibleAdditions,
@@ -1735,7 +1736,13 @@ export function PledgeFundingPanel({ round }: { round: PledgeFundingRound }) {
         </div>
         <div>
           <dt>Deadline</dt>
-          <dd>{round.deadlineAt ? new Date(round.deadlineAt).toLocaleDateString() : "Not connected"}</dd>
+          <dd>
+            {round.deadlineAt ? (
+              <LocalDateTime value={round.deadlineAt} fallback="Date unavailable" dateOnly />
+            ) : (
+              "Not connected"
+            )}
+          </dd>
         </div>
         <div>
           <dt>Refund / release</dt>

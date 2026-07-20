@@ -15,6 +15,7 @@ import {
 import { TradeAgreementStage } from "@/components/core-trade/trade-agreement-stage";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
 import { getCoreAgreementForUser } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
@@ -37,8 +38,7 @@ const ACTIVE_STATES = new Set(["active", "evidence_due", "disputed"]);
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
+  return <LocalDateTime value={value} fallback={value} />;
 }
 
 function participantLabel(
@@ -165,7 +165,7 @@ export default async function TradeAgreementPage({
           }}
           threadHref={detail.threadId ? `/messages/${detail.threadId}` : null}
           version={{
-            evidenceDueDate: formatDate(version.evidence_due_date),
+            evidenceDueDate: String(version.evidence_due_date),
             evidenceRule: String(version.evidence_rule),
             exitConditions: String(version.exit_conditions),
             maximumBurden: String(version.maximum_burden),

@@ -9,6 +9,7 @@ import {
 import { MpgfContributionModal } from "@/components/mpgf/mpgf-contribution-modal";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-panel";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
@@ -46,11 +47,15 @@ interface MpgfRoundPageProps {
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "short", year: "numeric" }}
+    />
+  );
 }
 
 function formatCountdown(seconds: number) {

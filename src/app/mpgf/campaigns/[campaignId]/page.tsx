@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import {
@@ -28,11 +29,15 @@ function formatDate(value: string | null | undefined) {
     return "Not open";
   }
 
-  return new Date(value).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return (
+    <LocalDateTime
+      value={value}
+      fallback="Date unavailable"
+      dateOnly
+      locale="en-US"
+      options={{ day: "numeric", month: "short", year: "numeric" }}
+    />
+  );
 }
 
 function formatPublicUsd(value: number | null | undefined) {
