@@ -16,7 +16,9 @@ export interface ConditionalPaymentsEnvironment {
 }
 
 export interface DonationOffsetConditionSnapshot {
-  schemaVersion: "donation-offset-payment-condition-v1";
+  schemaVersion:
+    | "donation-offset-payment-condition-v1"
+    | "donation-offset-payment-condition-v2";
   matchId: string;
   offerId: string;
   ownerProfileId: string;
@@ -49,6 +51,25 @@ export interface DonationOffsetConditionSnapshot {
   assuranceDeadlineAt: string | null;
   matchStatus: string;
   offerStatus: string;
+  redirects?: {
+    owner: DonationOffsetParticipantRedirectSnapshot;
+    counterparty: DonationOffsetParticipantRedirectSnapshot;
+  };
+}
+
+export interface DonationOffsetParticipantRedirectSnapshot {
+  participantRole: Extract<ConditionalPaymentParticipantRole, "owner" | "counterparty">;
+  profileId: string;
+  amountCents: number;
+  charityId: string;
+  charityName: string;
+  causeArea: string;
+  planVersion: number;
+  destinationId: string;
+  destinationDisplayName: string;
+  destinationConnectedAccountId: string;
+  destinationLivemode: boolean;
+  impact: Record<string, unknown>;
 }
 
 function normalizeForCanonicalJson(value: unknown): unknown {
@@ -195,8 +216,7 @@ export function participantAmountForDonationOffset(
 export function donationOffsetSnapshotIsInternallyConsistent(
   snapshot: DonationOffsetConditionSnapshot,
 ) {
-  return (
-    snapshot.schemaVersion === "donation-offset-payment-condition-v1" &&
+  const commonIsConsistent =
     snapshot.ownerProfileId !== snapshot.counterpartyProfileId &&
     Number.isInteger(snapshot.matchedBaselineCents) &&
     Number.isInteger(snapshot.matchedCounterpartyCents) &&
@@ -207,8 +227,63 @@ export function donationOffsetSnapshotIsInternallyConsistent(
     snapshot.destinationConnectedAccountId.startsWith("acct_") &&
     snapshot.moderationStatus === "clear" &&
     snapshot.matchStatus === "matched" &&
-    (snapshot.offerStatus === "open" || snapshot.offerStatus === "matched")
+    (snapshot.offerStatus === "open" || snapshot.offerStatus === "matched");
+
+  if (!commonIsConsistent) return false;
+  if (snapshot.schemaVersion === "donation-offset-payment-condition-v1") {
+    return snapshot.destinationConnectedAccountId.startsWith("acct_");
+  }
+  if (snapshot.schemaVersion !== "donation-offset-payment-condition-v2") return false;
+
+  const redirects = snapshot.redirects;
+  if (!redirects) return false;
+  const ownerIsConsistent =
+    redirects.owner.participantRole === "owner" &&
+    redirects.owner.profileId === snapshot.ownerProfileId &&
+    redirects.owner.amountCents === snapshot.matchedBaselineCents;
+  const counterpartyIsConsistent =
+    redirects.counterparty.participantRole === "counterparty" &&
+    redirects.counterparty.profileId === snapshot.counterpartyProfileId &&
+    redirects.counterparty.amountCents === snapshot.matchedCounterpartyCents;
+  const redirectIsConsistent = (redirect: DonationOffsetParticipantRedirectSnapshot) => {
+    const impact = redirect.impact as Record<string, any>;
+    const attribution = impact?.attribution as Record<string, any> | undefined;
+    return (
+      Boolean(redirect.charityId && redirect.charityName && redirect.causeArea) &&
+      Number.isInteger(redirect.planVersion) &&
+      redirect.planVersion > 0 &&
+      Boolean(redirect.destinationId && redirect.destinationDisplayName) &&
+      redirect.destinationConnectedAccountId.startsWith("acct_") &&
+      redirect.destinationLivemode === snapshot.destinationLivemode &&
+      impact?.schemaVersion === "donation-offset-impact-snapshot-v1" &&
+      (impact.status === "available" || impact.status === "unavailable") &&
+      impact.destinationId === redirect.charityId &&
+      impact.amountCents === redirect.amountCents &&
+      attribution?.partyId === redirect.profileId &&
+      attribution?.partyRole === redirect.participantRole
+    );
+  };
+
+  return (
+    ownerIsConsistent &&
+    counterpartyIsConsistent &&
+    redirectIsConsistent(redirects.owner) &&
+    redirectIsConsistent(redirects.counterparty) &&
+    snapshot.compromiseCharityId === redirects.owner.charityId &&
+    snapshot.destinationId === redirects.owner.destinationId &&
+    snapshot.destinationConnectedAccountId ===
+      redirects.owner.destinationConnectedAccountId
   );
+}
+
+export function participantRedirectForDonationOffset(
+  snapshot: DonationOffsetConditionSnapshot,
+  role: Extract<ConditionalPaymentParticipantRole, "owner" | "counterparty">,
+) {
+  if (snapshot.schemaVersion !== "donation-offset-payment-condition-v2" || !snapshot.redirects) {
+    return null;
+  }
+  return snapshot.redirects[role];
 }
 
 export function isFinalSettlementStatus(status: string) {
