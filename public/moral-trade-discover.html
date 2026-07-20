@@ -28,24 +28,44 @@
           "/discover/payload/5.txt",
           "/discover/payload/6.txt",
         ];
-        const parts = await Promise.all(
-          paths.map(async (path) => {
-            const response = await fetch(path, { cache: "force-cache" });
-            if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
-            return response.text();
-          }),
-        );
+        const accountPromise = fetch("/api/live-account", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        })
+          .then((response) => (response.ok ? response.json() : { authenticated: false }))
+          .catch(() => ({ authenticated: false }));
+        const [parts, liveAccount] = await Promise.all([
+          Promise.all(
+            paths.map(async (path) => {
+              const response = await fetch(path, { cache: "force-cache" });
+              if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
+              return response.text();
+            }),
+          ),
+          accountPromise,
+        ]);
         const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();
         const localTimeRuntime = window.MoralTradeDiscoverLocalTime;
         if (!localTimeRuntime) throw new Error("Discover local-time runtime did not load");
         const localizedSource = localTimeRuntime.transformSource(source);
-        const localTimeScript = '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>';
+        const accountJson = JSON.stringify(liveAccount)
+          .replace(/</g, "\\u003c")
+          .replace(/>/g, "\\u003e")
+          .replace(/&/g, "\\u0026")
+          .replace(/\u2028/g, "\\u2028")
+          .replace(/\u2029/g, "\\u2029");
+        const headScripts = [
+          '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>',
+          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};</scr` + 'ipt>',
+          '<script src="/moral-trade-account-identity.js"></scr' + 'ipt>',
+          '<script src="/moral-trade-live-account.js"></scr' + 'ipt>',
+        ].join("");
         if (!localizedSource.includes("</head>")) {
           throw new Error("Discover payload is missing its closing head tag");
         }
-        const replacementSource = localizedSource.replace("</head>", `${localTimeScript}</head>`);
+        const replacementSource = localizedSource.replace("</head>", `${headScripts}</head>`);
         const enhancementScripts = [
           '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
           '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
