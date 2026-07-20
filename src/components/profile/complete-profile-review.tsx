@@ -182,6 +182,7 @@ export function CompleteProfileReview({
   signupHref,
 }: CompleteProfileReviewProps) {
   const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(INITIAL_ALLOCATION);
+  const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [restored, setRestored] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
@@ -282,6 +283,11 @@ export function CompleteProfileReview({
   const assigned = getAssignedProfilePrioritySparks(allocation);
   const unassigned = COMPLETE_PROFILE_SPARK_COUNT - assigned;
   const ranking = rankProfilePriorities(allocation, priorityOrder);
+  const leadingPriorityIds = ranking.slice(0, 8);
+  const allocationRowIds =
+    focusedPriorityId && !leadingPriorityIds.includes(focusedPriorityId)
+      ? [...leadingPriorityIds.slice(0, 7), focusedPriorityId]
+      : leadingPriorityIds;
   const sparks = ranking.flatMap((id) =>
     Array.from({ length: allocation[id] }, () => id),
   );
@@ -417,7 +423,10 @@ export function CompleteProfileReview({
             </div>
             <button
               className={styles.textAction}
-              onClick={() => setAllocation(INITIAL_ALLOCATION)}
+              onClick={() => {
+                setAllocation(INITIAL_ALLOCATION);
+                setFocusedPriorityId(null);
+              }}
               type="button"
             >
               <Icon className={styles.icon} name="reset" />
@@ -468,7 +477,7 @@ export function CompleteProfileReview({
             </div>
 
             <div className={styles.allocationList}>
-              {ranking.slice(0, 8).map((id) => {
+              {allocationRowIds.map((id) => {
                 const priority = getProfilePriority(id);
                 return (
                   <div className={styles.allocationRow} key={id}>
@@ -522,15 +531,28 @@ export function CompleteProfileReview({
                       {index + 1}
                     </span>
                     <span className={styles.rankLabel}>{priority.shortName}</span>
-                    {allocation[id] ? (
+                    {allocation[id] && allocationRowIds.includes(id) ? (
                       <span className={styles.rankTrailing}>
                         {allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks
                       </span>
+                    ) : allocation[id] ? (
+                      <button
+                        aria-label={`Edit ${priority.name}`}
+                        className={styles.rankAllocate}
+                        onClick={() => setFocusedPriorityId(id)}
+                        title={`Show controls for ${priority.name}`}
+                        type="button"
+                      >
+                        {allocation[id] * COMPLETE_PROFILE_SPARK_VALUE} sparks
+                      </button>
                     ) : (
                       <button
                         aria-label={`Assign one spark to ${priority.name}`}
                         className={styles.rankAllocate}
-                        onClick={() => adjust(id, 1)}
+                        onClick={() => {
+                          setFocusedPriorityId(id);
+                          adjust(id, 1);
+                        }}
                         title={`Assign one spark to ${priority.name}`}
                         type="button"
                       >

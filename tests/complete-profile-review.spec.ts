@@ -33,6 +33,7 @@ test("100-Spark Mosaic ranks priorities and preserves the account completion flo
   await page.getByRole("button", { name: "Assign one spark to Global poverty" }).click();
   await expect(page.getByText("85/100", { exact: false })).toBeVisible();
   await expect(page.getByText("3 sparks left to place", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Decrease Global poverty" })).toBeVisible();
 
   await page.getByRole("button", { name: "Save profile" }).click();
   const details = page.getByRole("dialog", { name: "Finish the practical details." });
@@ -56,6 +57,7 @@ test("all twelve priorities remain reachable on a narrow screen", async ({ page 
   await expect(page.getByLabel("80 of 100 attention points assigned")).toBeVisible();
   await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
   await expect(page.getByRole("button", { name: "Assign one spark to Space governance" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Decrease Space governance" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Your ranking" })).toContainText(
     "5 sparks",
   );
