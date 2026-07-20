@@ -450,7 +450,7 @@ create table if not exists public.donation_offset_matches (
   compromise_total_cents integer not null check (compromise_total_cents >= 0),
   unmatched_baseline_cents integer not null default 0 check (unmatched_baseline_cents >= 0),
   unmatched_counterparty_cents integer not null default 0 check (unmatched_counterparty_cents >= 0),
-  status text not null default 'completed' check (status in ('matched', 'completed', 'cancelled')),
+  status text not null default 'matched' check (status in ('matched', 'completed', 'cancelled')),
   owner_evidence_url text not null default '',
   counterparty_evidence_url text not null default '',
   compromise_evidence_url text not null default '',
