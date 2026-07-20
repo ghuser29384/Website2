@@ -575,6 +575,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      donation_offset_redirect_plans: {
+        Row: {
+          match_id: string;
+          participant_role: "owner" | "counterparty";
+          participant_profile_id: string;
+          registered_charity_id: string;
+          plan_version: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          match_id: string;
+          participant_role: "owner" | "counterparty";
+          participant_profile_id: string;
+          registered_charity_id: string;
+          plan_version?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          match_id?: string;
+          participant_role?: "owner" | "counterparty";
+          participant_profile_id?: string;
+          registered_charity_id?: string;
+          plan_version?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       agreements: {
         Row: {
           id: string;
