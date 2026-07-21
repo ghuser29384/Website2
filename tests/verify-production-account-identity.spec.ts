@@ -72,6 +72,16 @@ for (const route of productionRoutes) {
       bridgeError = error instanceof Error ? error.message : String(error);
     }
 
+    const avatars = page.locator('[data-mt-account-avatar="true"]');
+    let avatarReady = false;
+    let avatarWaitError: string | null = null;
+    try {
+      await expect.poll(() => avatars.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+      avatarReady = true;
+    } catch (error) {
+      avatarWaitError = error instanceof Error ? error.message : String(error);
+    }
+
     await page.waitForTimeout(250);
     const pathname = new URL(page.url()).pathname;
     const title = await page.title();
@@ -79,7 +89,6 @@ for (const route of productionRoutes) {
     const overlayCount = await page
       .locator("nextjs-portal,[data-nextjs-dialog-overlay],#webpack-dev-server-client-overlay")
       .count();
-    const avatars = page.locator('[data-mt-account-avatar="true"]');
     const avatarCount = await avatars.count();
     const avatarTexts: string[] = [];
     const avatarLabels: Array<string | null> = [];
@@ -126,6 +135,8 @@ for (const route of productionRoutes) {
       navigationError,
       bridgeLoaded,
       bridgeError,
+      avatarReady,
+      avatarWaitError,
       pathname,
       title,
       bodyHasText: bodyText.length > 0,
@@ -150,6 +161,7 @@ for (const route of productionRoutes) {
 
     expect(responseOk, navigationError ?? "Production route did not return an OK response").toBe(true);
     expect(bridgeLoaded, bridgeError ?? "Account identity bridge did not load").toBe(true);
+    expect(avatarReady, avatarWaitError ?? "Account avatar did not render").toBe(true);
     expect(pathname).toBe(route.path);
     expect(title).toMatch(/Moral Trade/u);
     expect(bodyText.length).toBeGreaterThan(0);
