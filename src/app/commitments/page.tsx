@@ -31,12 +31,15 @@ function formatDate(value: string | null | undefined) {
   return <LocalDateTime value={value} fallback="Date unavailable" dateOnly />;
 }
 
-function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsForUser>>[number]) {
+function summarizeAgreement(
+  agreement: Awaited<ReturnType<typeof listAgreementsForUser>>[number],
+) {
   const status = mapAgreementToCommitmentStatus(agreement);
   const latestPayment = agreement.payments[0] ?? null;
   const latestEvidence = agreement.evidenceItems[0] ?? null;
   const latestReview = agreement.reviewCases[0] ?? null;
-  const evidenceDueBond = agreement.performanceBonds.find((bond) => bond.status === "evidence_due") ?? null;
+  const evidenceDueBond =
+    agreement.performanceBonds.find((bond) => bond.status === "evidence_due") ?? null;
 
   return {
     chargeState: latestPayment
@@ -53,6 +56,7 @@ function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsF
       "No evidence item yet"
     ),
     href: `/agreements/${agreement.id}`,
+    remindersHref: `/agreements/${agreement.id}/reminders`,
     reviewState: latestReview ? latestReview.status.replaceAll("_", " ") : "No review case",
     status,
     statusLabel: getCommitmentStatusLabel(status),
@@ -82,7 +86,10 @@ export default async function CommitmentsPage() {
 
       <main id="main-content" tabIndex={-1}>
         <MarketplaceRouteShell active="track">
-          <section className="v72-private-surface commitments-center mt-v75-route-card" aria-labelledby="commitments-heading">
+          <section
+            aria-labelledby="commitments-heading"
+            className="v72-private-surface commitments-center mt-v75-route-card"
+          >
             <div className="v72-owner-strip">
               <h1 id="commitments-heading">Track</h1>
               <p>Track — commitments, drafts, and issues.</p>
@@ -93,46 +100,55 @@ export default async function CommitmentsPage() {
                 <div className="commitment-list">
                   {summaries.map(({ agreement, summary }) => (
                     <article className="commitment-row panel" key={agreement.id}>
-                    <div className="commitment-row-main">
-                      <CommitmentStatusBadge status={summary.status} />
-                      <div>
-                        <h3>
-                          {agreement.offer
-                            ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
-                            : "Agreement without public offer"}
-                        </h3>
-                        <p>
-                          {agreement.offer
-                            ? formatMode(agreement.offer.mode)
-                            : agreement.source.replaceAll("_", " ")}
-                          {" · "}
-                          {summary.counterparty}
-                        </p>
+                      <div className="commitment-row-main">
+                        <CommitmentStatusBadge status={summary.status} />
+                        <div>
+                          <h3>
+                            {agreement.offer
+                              ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
+                              : "Agreement without public offer"}
+                          </h3>
+                          <p>
+                            {agreement.offer
+                              ? formatMode(agreement.offer.mode)
+                              : agreement.source.replaceAll("_", " ")}
+                            {" · "}
+                            {summary.counterparty}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <dl className="deal-economics-grid">
-                      <div>
-                        <dt>Exposure</dt>
-                        <dd>{summary.chargeState}</dd>
+                      <dl className="deal-economics-grid">
+                        <div>
+                          <dt>Exposure</dt>
+                          <dd>{summary.chargeState}</dd>
+                        </div>
+                        <div>
+                          <dt>Latest step</dt>
+                          <dd>{summary.evidenceState}</dd>
+                        </div>
+                        <div>
+                          <dt>Review</dt>
+                          <dd>{summary.reviewState}</dd>
+                        </div>
+                        <div>
+                          <dt>Created</dt>
+                          <dd>{formatDate(agreement.created_at)}</dd>
+                        </div>
+                      </dl>
+                      <div className="offer-actions">
+                        <Link
+                          className="button button-secondary button-mini"
+                          href={summary.href}
+                        >
+                          View commitment
+                        </Link>
+                        <Link
+                          className="button button-primary button-mini"
+                          href={summary.remindersHref}
+                        >
+                          Manage reminders
+                        </Link>
                       </div>
-                      <div>
-                        <dt>Latest step</dt>
-                        <dd>{summary.evidenceState}</dd>
-                      </div>
-                      <div>
-                        <dt>Review</dt>
-                        <dd>{summary.reviewState}</dd>
-                      </div>
-                      <div>
-                        <dt>Created</dt>
-                        <dd>{formatDate(agreement.created_at)}</dd>
-                      </div>
-                    </dl>
-                    <div className="offer-actions">
-                      <Link className="button button-secondary button-mini" href={summary.href}>
-                        View commitment
-                      </Link>
-                    </div>
                     </article>
                   ))}
                 </div>
@@ -145,7 +161,10 @@ export default async function CommitmentsPage() {
                         ? "Saved offers, examples, searches, and marketplace previews are not commitments. Pledge-funding contribution rows are not connected yet. Agreements will appear here only after the existing acceptance flow creates one."
                         : "Commitments are private. This preview shell does not create demo agreements, fake evidence rows, or pledge-funding contribution state."}
                     </p>
-                    <Link className="button button-primary" href={viewer ? "/offers" : "/login?returnTo=/commitments"}>
+                    <Link
+                      className="button button-primary"
+                      href={viewer ? "/offers" : "/login?returnTo=/commitments"}
+                    >
                       {viewer ? "Browse marketplace" : "Sign in to continue"}
                     </Link>
                   </div>
