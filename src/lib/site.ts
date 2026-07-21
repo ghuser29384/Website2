@@ -1,5 +1,6 @@
 export function getPrimaryNavLinks(_isAuthenticated = false) {
   return [
+    { href: "/feed", label: "Feed" },
     { href: "/discover", label: "Discover" },
     { href: "/trades/new", label: "Create" },
     { href: "/messages", label: "Messages" },
@@ -28,6 +29,7 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Marketplace",
     links: [
+      { href: "/feed", label: "Personalized feed" },
       { href: "/discover", label: "Discover opportunities" },
       { href: "/trades/new", label: "Create a trade" },
       { href: "/messages", label: "Private messages" },

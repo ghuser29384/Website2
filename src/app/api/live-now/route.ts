@@ -25,6 +25,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const OFFER_BATCH_SIZE = 1_000;
+const OWNED_OPPORTUNITY_LIMIT = 6;
 const OFFER_SELECT =
   "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,no_trade_baseline,created_at,updated_at";
 const INTERACTION_LIMIT = 500;
@@ -89,6 +90,28 @@ interface OfferInventoryRow {
   no_trade_baseline: string;
   created_at: string;
   updated_at: string;
+}
+
+function buildOwnedOpportunity(offer: OfferInventoryRow) {
+  const opportunityType: RecommendationOpportunityType =
+    offer.mode === "offset" ? "donation_redirect" : "offer";
+
+  return {
+    id: offer.id,
+    opportunityType,
+    href: `/trades/${encodeURIComponent(offer.id)}/manage`,
+    ctaLabel: "Manage & invite",
+    sourceLabel: opportunityType === "donation_redirect" ? "Your donation redirect" : "Your live offer",
+    ownerAlias: text(offer.owner_alias, 100) || "You",
+    offeredCause: text(offer.offered_cause, 120),
+    requestedCause: text(offer.requested_cause, 120),
+    offerAction: text(offer.offer_action, 420),
+    requestAction: text(offer.request_action, 420),
+    verification: text(offer.verification, 320),
+    duration: text(offer.duration, 160),
+    summary: text(offer.no_trade_baseline, 320),
+    updatedAt: offer.updated_at,
+  };
 }
 
 function privateJson(body: unknown) {
@@ -230,6 +253,8 @@ function emptyPayload(
     },
     recentChanges: [],
     recommendations: [],
+    ownedOpportunities: [],
+    ownedOpportunityCount: 0,
     status,
   };
 }
@@ -256,6 +281,7 @@ export async function GET() {
     routeProfileResult,
     preferenceResult,
     interactionsResult,
+    ownedOffersResult,
   ] = await Promise.all([
     supabase
       .from("wish_profiles")
@@ -297,14 +323,30 @@ export async function GET() {
       .eq("profile_id", userId)
       .order("occurred_at", { ascending: false })
       .limit(INTERACTION_LIMIT),
+    typedSupabase
+      .from("offers")
+      .select(OFFER_SELECT)
+      .eq("status", "open")
+      .eq("owner_id", userId)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true })
+      .limit(OWNED_OPPORTUNITY_LIMIT),
   ]);
+
+  const ownedOpportunities = ownedOffersResult.error
+    ? []
+    : ((ownedOffersResult.data ?? []) as OfferInventoryRow[]).map(buildOwnedOpportunity);
 
   if (wishProfileResult.error) {
     console.error("[live-now] Failed to load profile priorities", {
       message: wishProfileResult.error.message,
       userId,
     });
-    return privateJson(emptyPayload("unavailable", true));
+    return privateJson({
+      ...emptyPayload("unavailable", true),
+      ownedOpportunities,
+      ownedOpportunityCount: ownedOpportunities.length,
+    });
   }
 
   for (const [label, result] of [
@@ -314,6 +356,7 @@ export async function GET() {
     ["route recommendation profile", routeProfileResult],
     ["recommendation preferences", preferenceResult],
     ["recommendation interactions", interactionsResult],
+    ["owned live listings", ownedOffersResult],
   ] as const) {
     if (result.error) {
       console.error(`[live-now] Failed to load ${label}`, {
@@ -380,6 +423,8 @@ export async function GET() {
         browsingSignalCount: 0,
         actionFeedbackCount: 0,
       },
+      ownedOpportunities,
+      ownedOpportunityCount: ownedOpportunities.length,
     });
   }
 
@@ -431,7 +476,11 @@ export async function GET() {
         message: offersResult.error.message,
         userId,
       });
-      return privateJson(emptyPayload("unavailable", true));
+      return privateJson({
+        ...emptyPayload("unavailable", true),
+        ownedOpportunities,
+        ownedOpportunityCount: ownedOpportunities.length,
+      });
     }
 
     const batch = (offersResult.data ?? []) as OfferInventoryRow[];
@@ -535,6 +584,8 @@ export async function GET() {
     },
     recentChanges: buildLiveNowRecentChanges(ranked),
     recommendations,
+    ownedOpportunities,
+    ownedOpportunityCount: ownedOpportunities.length,
     status: recommendations.length ? "ready" : "no_matches",
   });
 }

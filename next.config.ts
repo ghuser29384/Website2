@@ -48,9 +48,23 @@ const nextConfig: NextConfig = {
     "/mpgf": mpgfRuntimeArtifacts,
     "/mpgf/**/*": mpgfRuntimeArtifacts,
   },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "moraltrade.org" }],
+        destination: "https://www.moraltrade.org/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return {
       beforeFiles: [
+        {
+          source: "/feed",
+          destination: "/moral-trade-live.html",
+        },
         {
           source: "/walkthrough",
           destination: "/moral-trade-production.html",

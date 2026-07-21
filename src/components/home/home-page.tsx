@@ -105,6 +105,7 @@ export function HomePage({ displayName }: HomePageProps) {
         </Link>
 
         <nav aria-label="Primary" className={styles.primaryNav}>
+          <Link href="/feed">Feed</Link>
           <Link aria-current="page" className={styles.activeNav} href="/">
             Now
           </Link>

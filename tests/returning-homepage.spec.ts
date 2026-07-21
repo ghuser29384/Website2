@@ -26,12 +26,17 @@ test.describe("Returning-user homepage", () => {
 
     const primary = page.getByRole("navigation", { name: "Primary" });
     await expect(primary.getByRole("link")).toHaveText([
+      "Feed",
       "Now",
       "Discover",
       "Offer",
       "Activity",
       "Account",
     ]);
+    await expect(primary.getByRole("link", { name: "Feed" })).toHaveAttribute(
+      "href",
+      "/feed",
+    );
     await expect(primary.getByRole("link", { name: "Now" })).toHaveAttribute(
       "aria-current",
       "page",

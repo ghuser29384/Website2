@@ -41,7 +41,10 @@ test("the live-now endpoint combines explicit priorities, browsing, actions, and
   assert.match(route, /buildLearnedActionPreferences/);
   assert.match(route, /buildBrowsingCauseWeights/);
   assert.match(route, /eq\("status", "open"\)/);
+  assert.match(route, /eq\("owner_id", userId\)/);
   assert.match(route, /neq\("owner_id", userId\)/);
+  assert.match(route, /ownedOpportunities/);
+  assert.match(route, /Manage & invite/);
   assert.match(route, /\.range\(offset, offset \+ OFFER_BATCH_SIZE - 1\)/);
   assert.doesNotMatch(route, /\.limit\(240\)/);
   assert.match(route, /rankLiveNowOffers/);
@@ -80,6 +83,7 @@ test("fallback states explicitly refuse generic or fabricated suggestions", () =
   ]) {
     assert.match(bridge, new RegExp(phrase));
   }
+  assert.match(bridge, /\/login\?returnTo=%2Ffeed/);
 
   for (const hardCodedSuggestion of [
     "Counteroffer from Mina",
@@ -176,6 +180,25 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
             actionFitLabel: "Possible fit",
           },
         ],
+        ownedOpportunities: [
+          {
+            id: "owned-offer",
+            opportunityType: "offer",
+            href: "/trades/owned-offer/manage",
+            ctaLabel: "Manage & invite",
+            sourceLabel: "Your live offer",
+            ownerAlias: "Ellen",
+            offeredCause: "Cause prioritization",
+            requestedCause: "Research feedback",
+            offerAction: "Share a reviewed brief",
+            requestAction: "Provide bounded feedback",
+            verification: "Public link",
+            duration: "Within 30 days",
+            summary: "Safe owner summary",
+            updatedAt: "2026-07-20T11:00:00.000Z",
+          },
+        ],
+        ownedOpportunityCount: 1,
         status: "ready",
       },
       dispatchEvent() {},
@@ -192,6 +215,9 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
   assert.match(context.rendered, /For you/);
   assert.match(context.rendered, /Animal welfare &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(context.rendered, /Why this is in your feed/);
+  assert.match(context.rendered, /Your live routes/);
+  assert.match(context.rendered, /Shown here as your own listing, not as a match/);
+  assert.match(context.rendered, /Manage &amp; invite/);
   assert.doesNotMatch(context.rendered, /legacy feed|Counteroffer from Mina/);
   assert.doesNotMatch(context.rendered, /<script>alert\(1\)<\/script>/);
 });
@@ -199,10 +225,12 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
 test("the social feed has vertical card, feedback, privacy, and mobile rules", () => {
   assert.match(feedStyles, /\.mt-social-feed/);
   assert.match(feedStyles, /\.mt-feed-card/);
+  assert.match(feedStyles, /\.mt-owned-feed/);
   assert.match(feedStyles, /\.mt-feed-feedback/);
   assert.match(feedStyles, /@media \(max-width: 620px\)/);
   assert.match(bridge, /Easy for me/);
   assert.match(bridge, /Hard for me/);
   assert.match(bridge, /Less like this/);
+  assert.match(bridge, /Your live routes/);
   assert.match(bridge, /does not retain raw browsing URLs or page content/);
 });
