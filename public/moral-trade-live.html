@@ -24,7 +24,7 @@
           if (start < 0 || end < 0) throw new Error('live Now source markers');
 
           const loadingState = `function nowFocus(){
- return '<div class="focus-layout" data-mt-live-now="profile-driven" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live proposals that match your priorities.</h2><p class="muted">No generic or demo suggestions are shown.</p></div></section></main></div>';
+ return '<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live moral opportunities that match your priorities and action preferences.</h2><p class="muted">No generic or demo suggestions are shown.</p></div></section></main></div>';
 }`;
           return `${source.slice(0, start)}${loadingState}${source.slice(end)}`;
         };
@@ -85,6 +85,7 @@
         const enhancementStyles = [
           '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
           '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
+          '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
         ].join('');
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
