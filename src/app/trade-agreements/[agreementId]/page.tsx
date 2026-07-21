@@ -327,19 +327,22 @@ export default async function TradeAgreementPage({
             </p>
           </div>
 
-          {detail.evidence.length ? (
-            <div className="panel">
-              <p className="detail-kicker">Evidence Stage</p>
-              <h3>Review {detail.evidence.length} submitted artifact{detail.evidence.length === 1 ? "" : "s"} together</h3>
-              <p className="route-text">
-                Inspect the public-safe source copies, review state, privacy notes, and proof timeline
-                in the immersive evidence viewer.
-              </p>
-              <Link className="button button-primary" href={`/evidence/${agreementId}`}>
-                Review evidence
-              </Link>
-            </div>
-          ) : null}
+          <div className="panel">
+            <p className="detail-kicker">Evidence viewer</p>
+            <h3>
+              {detail.evidence.length
+                ? `Review ${detail.evidence.length} submitted artifact${detail.evidence.length === 1 ? "" : "s"} together`
+                : "Your evidence page is ready before the first submission"}
+            </h3>
+            <p className="route-text">
+              {detail.evidence.length
+                ? "Inspect public-safe source copies, exact terms, participant review state, privacy notes, and the full verification history in one place."
+                : "Open the awaiting-evidence state now to inspect the frozen terms, evidence rule, privacy scope, and trade history."}
+            </p>
+            <Link className="button button-primary" href={`/evidence/${agreementId}`}>
+              {detail.evidence.length ? "Review evidence" : "Open evidence page"}
+            </Link>
+          </div>
 
           {canSubmitEvidence ? (
             <form action={submitTradeEvidenceAction} className="panel stack-form" encType="multipart/form-data">

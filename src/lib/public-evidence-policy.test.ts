@@ -28,7 +28,7 @@ test("evidence submission requires a certified public-safe copy", () => {
   assert.match(action, /public_redaction_note:/);
   assert.match(agreement, /name="public_safe_copy" required/);
   assert.match(agreement, /Review evidence/);
-  assert.match(agreement, /immersive evidence viewer/);
+  assert.match(agreement, /evidence (?:viewer|dossier)/i);
   assert.match(agreement, /Visibility:/);
   assert.match(agreement, /Redaction:/);
 });
@@ -43,18 +43,37 @@ test("the schema is public by default and keeps explicit safety and redaction st
   assert.match(migration, /touch_public_evidence_record_trigger/);
 });
 
-test("the Evidence Desk contains the Proof Timeline as an interactive layer", () => {
+test("the evidence dossier exposes section tabs, artifact controls, and privacy details", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
   const stage = source("src/components/evidence/evidence-stage.tsx");
   const evidenceSurface = `${page}\n${stage}`;
 
-  assert.match(evidenceSurface, /data-pe-desk/);
-  assert.match(evidenceSurface, /data-pe-timeline-toggle/);
-  assert.match(evidenceSurface, /data-pe-timeline/);
-  assert.match(evidenceSurface, /data-pe-open-evidence/);
-  assert.match(evidenceSurface, /data-pe-select/);
-  assert.match(evidenceSurface, /setTimelineOpen\(false\)/);
+  assert.match(evidenceSurface, /data-stage-evidence-viewer/);
+  assert.match(evidenceSurface, /role="tablist"/);
+  assert.match(evidenceSurface, /role="tab"/);
+  assert.match(evidenceSurface, /\{ id: "evidence", label: "Evidence" \}/);
+  assert.match(evidenceSurface, /\{ id: "terms", label: "Trade terms" \}/);
+  assert.match(evidenceSurface, /\{ id: "verification", label: "Verification" \}/);
+  assert.match(evidenceSurface, /data-stage-artifact/);
+  assert.match(evidenceSurface, /aria-pressed=/);
+  assert.match(evidenceSurface, /Privacy details/);
   assert.match(evidenceSurface, /Illustrative record — the people, evidence, and review state below are examples/);
+});
+
+test("public agreements remain in the directory before their first evidence submission", () => {
+  const page = source("src/app/evidence/[[...recordId]]/page.tsx");
+  const hydrateStart = page.indexOf("async function hydrate");
+  const hydrateEnd = page.indexOf("async function listRecords", hydrateStart);
+  const hydrate = page.slice(hydrateStart, hydrateEnd);
+
+  assert.ok(hydrateStart >= 0 && hydrateEnd > hydrateStart, "could not locate the evidence hydrator");
+  assert.match(hydrate, /const rawEvidence = byAgreement\.get\(id\) \?\? \[\]/);
+  assert.doesNotMatch(
+    hydrate,
+    /if\s*\(\s*!rawEvidence\.length\s*\)\s*(?:\{\s*)?continue/,
+    "public agreements must not be skipped solely because they have no evidence items yet",
+  );
+  assert.match(hydrate, /records\.push/);
 });
 
 test("participant evidence decisions stay scoped, confirmed, and inside the review window", () => {
@@ -66,6 +85,5 @@ test("participant evidence decisions stay scoped, confirmed, and inside the revi
   assert.match(stage, /acceptDialogRef\.current\?\.showModal\(\)/);
   assert.match(stage, /Accepting records your participant review/);
   assert.match(stage, /name="return_to"/);
-  assert.match(stage, /styles\.verdictSubmitted/);
-  assert.match(stage, /This screen records review decisions; it does not itself hold or release funds/);
+  assert.match(stage, /this screen does not itself move money/i);
 });
