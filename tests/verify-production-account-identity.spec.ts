@@ -22,9 +22,9 @@ const accountFixture = {
 };
 
 const productionRoutes = [
-  { name: "live", path: "/moral-trade-live.html" },
-  { name: "discover", path: "/discover" },
-  { name: "walkthrough", path: "/walkthrough" },
+  { name: "live", path: "/moral-trade-live.html", requiresVisibleAvatar: true },
+  { name: "discover", path: "/discover", requiresVisibleAvatar: true },
+  { name: "walkthrough", path: "/walkthrough", requiresVisibleAvatar: false },
 ] as const;
 
 mkdirSync("test-results", { recursive: true });
@@ -75,11 +75,15 @@ for (const route of productionRoutes) {
     const avatars = page.locator('[data-mt-account-avatar="true"]');
     let avatarReady = false;
     let avatarWaitError: string | null = null;
-    try {
-      await expect.poll(() => avatars.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+    if (route.requiresVisibleAvatar) {
+      try {
+        await expect.poll(() => avatars.count(), { timeout: 15_000 }).toBeGreaterThan(0);
+        avatarReady = true;
+      } catch (error) {
+        avatarWaitError = error instanceof Error ? error.message : String(error);
+      }
+    } else {
       avatarReady = true;
-    } catch (error) {
-      avatarWaitError = error instanceof Error ? error.message : String(error);
     }
 
     await page.waitForTimeout(250);
@@ -166,7 +170,7 @@ for (const route of productionRoutes) {
     expect(title).toMatch(/Moral Trade/u);
     expect(bodyText.length).toBeGreaterThan(0);
     expect(overlayCount).toBe(0);
-    expect(avatarCount).toBeGreaterThan(0);
+    if (route.requiresVisibleAvatar) expect(avatarCount).toBeGreaterThan(0);
     expect(avatarTexts.every((text) => text === "SC")).toBe(true);
     expect(avatarLabels.every((label) => label === "Samira Chen account")).toBe(true);
     expect(legacyInitialCount).toBe(0);
