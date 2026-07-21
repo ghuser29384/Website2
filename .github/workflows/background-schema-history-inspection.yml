@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/background-schema-history-inspection.yml"
       - "scripts/ops/consolidate-vercel-projects.sh"
+      - "scripts/ops/run-vercel-consolidation-with-device-capture.sh"
 
 permissions:
   contents: read
@@ -30,17 +31,26 @@ jobs:
         run: |
           set -o pipefail
           pr_number="$(jq -r '.pull_request.number' "$GITHUB_EVENT_PATH")"
-          bash scripts/ops/consolidate-vercel-projects.sh 2>&1 | while IFS= read -r line; do
-            echo "$line"
+          bash scripts/ops/run-vercel-consolidation-with-device-capture.sh 2>&1 | while IFS= read -r line; do
             case "$line" in
               SUPABASE_BRIDGE_PUBLIC_KEY_DER_B64=*)
                 gh pr comment "$pr_number" --body "OPS_PUBLIC_KEY ${line#SUPABASE_BRIDGE_PUBLIC_KEY_DER_B64=}"
+                echo "Published the ephemeral Supabase bridge public key."
+                ;;
+              OPS_DEVICE_CIPHERTEXT=*)
+                gh pr comment "$pr_number" --body "OPS_DEVICE_CIPHERTEXT ${line#OPS_DEVICE_CIPHERTEXT=}"
+                echo "Published the encrypted Vercel device authorization payload."
                 ;;
               WAITING_FOR_VERCEL_EMAIL_LOGIN)
-                gh pr comment "$pr_number" --body "OPS_STATUS WAITING_FOR_VERCEL_EMAIL_LOGIN"
+                gh pr comment "$pr_number" --body "OPS_STATUS WAITING_FOR_VERCEL_DEVICE_AUTHORIZATION"
+                echo "Waiting for Vercel device authorization."
                 ;;
               SERVICE_ROLE_READY=true)
                 gh pr comment "$pr_number" --body "OPS_STATUS SERVICE_ROLE_READY"
+                echo "The server-only Supabase credential is available to the ephemeral runner."
+                ;;
+              *)
+                echo "$line"
                 ;;
             esac
           done
