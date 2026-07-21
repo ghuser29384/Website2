@@ -5,15 +5,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
-  buildCompleteProfileCapabilityText,
-  buildCompleteProfileConstraintText,
   buildCompleteProfilePublicPreview,
   getCompleteProfileOfferOpenness,
   getCompleteProfilePrivacyStage,
   normalizeCompleteProfileSubmission,
 } from "@/lib/complete-profile";
+import { prepareCompleteProfilePrivatePreferences } from "@/lib/complete-profile-private-preferences";
 import { ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
-import { prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   buildPersistedProfilePriorities,
@@ -100,22 +98,24 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   const supabase = await createClient();
   await ensureAccountRowsForUser(viewer.authUser, supabase);
 
-  let encryptedPreferences: ReturnType<typeof prepareRecordSensitiveTextFields>;
+  let privatePreferences: ReturnType<typeof prepareCompleteProfilePrivatePreferences>;
   try {
-    encryptedPreferences = prepareRecordSensitiveTextFields({
-      brokerage_preference: submission.contactRule,
-      capabilities: buildCompleteProfileCapabilityText(submission),
-      constraints: buildCompleteProfileConstraintText(submission),
-      uncertainty_notes: "",
-      verification_preferences:
-        "Review identity and evidence requirements before contact details are shared.",
-    });
+    privatePreferences = prepareCompleteProfilePrivatePreferences(submission);
   } catch (error) {
     console.error("Failed to encrypt complete-profile preferences", error);
     redirectWithMessage(
       returnTo,
       "error",
-      "Private matching preferences cannot be saved right now. Try again or contact support.",
+      "Secure private matching storage failed. Try again or contact support.",
+    );
+  }
+
+  const privateMatchingAvailable = privatePreferences.available;
+  const encryptedPreferences = privatePreferences.prepared;
+
+  if (!privateMatchingAvailable) {
+    console.warn(
+      "Complete Profile private-field encryption is unavailable; saving non-sensitive profile data with private matching paused.",
     );
   }
 
@@ -164,44 +164,75 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     submission.contactRule,
   );
   const publicPreview = buildCompleteProfilePublicPreview(submission);
+  const wishProfileBasePayload = {
+    profile_id: viewer.authUser.id,
+    participant_kind: walkthroughDraft.participantKind,
+    collective_name: "",
+    causes: savedCauseAreas,
+    location_city: null,
+    location_region: null,
+    openness_to_payment: openToPayment,
+    openness_to_pledges: openToPledges,
+    background_search_enabled: privateMatchingAvailable,
+    manual_source_review_enabled: privateMatchingAvailable,
+    notification_email_enabled: privateMatchingAvailable,
+    notification_dashboard_enabled: privateMatchingAvailable,
+    privacy_stage: privacyStage,
+    match_frequency: "manual",
+    is_discoverable: !submission.privateProfile,
+    share_public_preview: !submission.privateProfile,
+    share_location: false,
+    public_preview: submission.privateProfile ? "" : publicPreview,
+    safety_status: "clear",
+    safety_notes: "",
+  };
 
-  const { error: wishProfileError } = await (supabase as any).from("wish_profiles").upsert(
-    {
-      profile_id: viewer.authUser.id,
-      participant_kind: walkthroughDraft.participantKind,
-      collective_name: "",
-      causes: savedCauseAreas,
-      location_city: null,
-      location_region: null,
-      capabilities: encryptedPreferences.plaintextFields.capabilities,
-      constraints: encryptedPreferences.plaintextFields.constraints,
-      verification_preferences:
-        encryptedPreferences.plaintextFields.verification_preferences,
-      uncertainty_notes: encryptedPreferences.plaintextFields.uncertainty_notes,
-      openness_to_payment: openToPayment,
-      openness_to_pledges: openToPledges,
-      background_search_enabled: true,
-      manual_source_review_enabled: true,
-      notification_email_enabled: true,
-      notification_dashboard_enabled: true,
-      privacy_stage: privacyStage,
-      brokerage_preference: encryptedPreferences.plaintextFields.brokerage_preference,
-      match_frequency: "manual",
-      is_discoverable: !submission.privateProfile,
-      share_public_preview: !submission.privateProfile,
-      share_location: false,
-      public_preview: submission.privateProfile ? "" : publicPreview,
-      safety_status: "clear",
-      safety_notes: "",
-      sensitive_ciphertexts: encryptedPreferences.ciphertexts,
-      sensitive_encryption_version: encryptedPreferences.version,
-    },
-    { onConflict: "profile_id" },
-  );
+  let wishProfileError: unknown = null;
+
+  if (privateMatchingAvailable) {
+    const { error } = await (supabase as any).from("wish_profiles").upsert(
+      {
+        ...wishProfileBasePayload,
+        capabilities: encryptedPreferences.plaintextFields.capabilities,
+        constraints: encryptedPreferences.plaintextFields.constraints,
+        verification_preferences:
+          encryptedPreferences.plaintextFields.verification_preferences,
+        uncertainty_notes: encryptedPreferences.plaintextFields.uncertainty_notes,
+        brokerage_preference: encryptedPreferences.plaintextFields.brokerage_preference,
+        sensitive_ciphertexts: encryptedPreferences.ciphertexts,
+        sensitive_encryption_version: encryptedPreferences.version,
+      },
+      { onConflict: "profile_id" },
+    );
+    wishProfileError = error;
+  } else {
+    const { data: existingWishProfile, error: updateError } = await (supabase as any)
+      .from("wish_profiles")
+      .update(wishProfileBasePayload)
+      .eq("profile_id", viewer.authUser.id)
+      .select("profile_id")
+      .maybeSingle();
+
+    if (updateError) {
+      wishProfileError = updateError;
+    } else if (!existingWishProfile) {
+      const { error: insertError } = await (supabase as any).from("wish_profiles").insert({
+        ...wishProfileBasePayload,
+        capabilities: "",
+        constraints: "",
+        verification_preferences: "",
+        uncertainty_notes: "",
+        brokerage_preference: "",
+        sensitive_ciphertexts: {},
+        sensitive_encryption_version: "",
+      });
+      wishProfileError = insertError;
+    }
+  }
 
   if (wishProfileError) {
     console.error("Failed to save complete profile matching preferences", wishProfileError);
-    redirectWithMessage(returnTo, "error", "Your private matching preferences could not be saved.");
+    redirectWithMessage(returnTo, "error", "Your profile preferences could not be saved.");
   }
 
   const { error: synthesisError } = await (supabase as any)
@@ -227,11 +258,13 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   revalidatePath("/people");
   revalidatePath(`/people/${viewer.authUser.id}`);
 
-  redirectWithMessage(
-    successTo,
-    "message",
-    submission.privateProfile
+  const successMessage = privateMatchingAvailable
+    ? submission.privateProfile
       ? "Private profile saved. Explore matches when you are ready."
-      : "Profile saved and made discoverable.",
-  );
+      : "Profile saved and made discoverable."
+    : submission.privateProfile
+      ? "Private profile saved. Private matching is paused until secure storage is restored."
+      : "Profile saved and made discoverable. Private matching is paused until secure storage is restored.";
+
+  redirectWithMessage(successTo, "message", successMessage);
 }
