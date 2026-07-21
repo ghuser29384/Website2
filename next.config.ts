@@ -34,6 +34,7 @@ const vercelLowMemoryBuildConfig =
     : {};
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["terminal.local"],
   experimental: {
     ...vercelLowMemoryBuildConfig,
     parallelServerBuildTraces: false,

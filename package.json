@@ -7,7 +7,7 @@
   },
   "scripts": {
     "predev": "node scripts/ensure-next-swc.mjs",
-    "dev": "next dev --webpack",
+    "dev": "bash scripts/dev.sh",
     "prebuild": "node scripts/ensure-next-swc.mjs",
     "build": "next build --webpack",
     "prestart": "node scripts/ensure-next-swc.mjs",

@@ -439,7 +439,7 @@ function LiveDealMap(props: TradeAgreementStageProps) {
             </div>
           </div>
           <div className={styles.detailActions}>
-            <Link className={`${styles.actionButton} ${styles.actionDark}`} href="#evidence">
+            <Link className={`${styles.actionButton} ${styles.actionDark}`} href={`/evidence/${props.agreementId}`}>
               Open evidence
               <TradeFlowIcon name="arrow" />
             </Link>

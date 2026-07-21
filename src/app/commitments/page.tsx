@@ -132,6 +132,9 @@ export default async function CommitmentsPage() {
                       <Link className="button button-secondary button-mini" href={summary.href}>
                         View commitment
                       </Link>
+                      <Link className="button button-secondary button-mini" href={`/evidence/${agreement.id}`}>
+                        View evidence
+                      </Link>
                     </div>
                     </article>
                   ))}

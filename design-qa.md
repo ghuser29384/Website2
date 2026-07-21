@@ -1,56 +1,58 @@
 **Comparison Target**
 
-- Source visual truth: `/workspace/scratch/0bf6f64a0da1/generated_images/exec-4373dd80-63fb-4c3e-828b-3182ca500008.png`, reinforced by Design 01 in `/workspace/scratch/0bf6f64a0da1/upload/Pasted text(18).txt`.
-- Rendered implementation: `/evidence/example` from the optimized local production build.
-- Browser-rendered implementation screenshot: `/home/oai/share/evidence-stage-design-qa-20260718.jpg` (captured and inspected in the cloud browser; shared-file synchronization did not produce a main-container copy).
-- Viewport: 1363 × 936 CSS pixels at device scale 1; evidence stage measured 1348 × 864 with no horizontal overflow.
-- State: illustrative record, before-meal photo selected, timeline closed, public visitor.
+- Source visual truth: `/workspace/scratch/0bf6f64a0da1/upload/e80c76eb341876f659f8b36475bfaccf.png`
+- Browser-rendered implementation: `/workspace/scratch/evidence-viewer-desktop-final-20260721.jpg`
+- Route: `/evidence/example`
+- Browser viewport: `1363 × 936` CSS pixels at DPR 1
+- Compared state: Evidence tab, first receipt selected, 100% zoom, privacy dialog closed
+- Normalization: both 1,290 × 852 dossier interiors were cropped at native scale before comparison.
+- Full-view comparison: `/tmp/moraltrade-design-comparison.jpg`
+- Focused right-pane comparison: `/tmp/moraltrade-right-pane-comparison.jpg`
 
 **Findings**
 
-- No actionable P0, P1, or P2 mismatch remains.
-- The implementation preserves Design 01’s dominant dark evidence stage, narrow artifact filmstrip, large media-first canvas, right-hand interpretation panel, lime status accents, privacy overlay, media controls, and three-part decision bar.
-- Fonts and typography: the production heading serif and compact sans-serif UI preserve the source hierarchy and optical contrast. Labels, evidence metadata, and limitations remain readable at the captured viewport.
-- Spacing and layout rhythm: the three-column proportions, dense artifact rail, large central crop, review-section dividers, and bottom action rhythm closely follow the source. The production site header above the stage is an intentional integration difference from the standalone concept.
-- Colors and tokens: near-black surfaces, warm white type, muted gray metadata, lime focus/status color, amber limitations, and muted coral challenge semantics match the source’s token hierarchy.
-- Image quality and assets: the supplied 1536 × 1024 meal assets render sharply and use the intended crop. Phosphor icons replace prototype glyphs consistently; no placeholder or CSS-drawn imagery remains.
-- Copy and content: the production version intentionally changes the source’s unverified “meets standard” and “release $10” language. Submitted evidence uses a neutral clock, acceptance is explicitly participant review rather than independent verification, and the screen states that it does not itself hold or release funds.
+- No actionable P0, P1, or P2 visual differences remain.
+- The implementation preserves the source's 1,290 × 852 sheet, 35/65 split, inset frame, warm paper palette, serif/sans/monospace hierarchy, nearly square controls, evidence toolbar, centered artifact, filmstrip, submitter/file metadata, verification rail, and bottom actions.
+- Dynamic demo content produces different line wrapping than the transit example, as expected. The layout remains stable and scrollable rather than truncating the real agreement.
+- The “Illustrative” badge is an intentional truthfulness addition for the non-live example. It does not displace the source hierarchy.
 
-**Full-view Comparison Evidence**
+**Required Fidelity Surfaces**
 
-- The source and implementation were inspected at the same default before-meal artifact state. Major-region proportions and above-the-fold hierarchy are materially aligned.
-- The production capture adds global navigation and uses a truthful submitted/example state; these are intentional product constraints, not design drift.
-
-**Focused Region Comparison Evidence**
-
-- A separate crop was not needed because the 1363 × 936 capture keeps the filmstrip, full media canvas, privacy control, right review panel, and bottom media controls legible together.
-- Privacy details, receipt switching, proof timeline, Escape-to-close, and focus restoration were checked interactively in the rendered browser.
-- Browser console review found no application-origin errors; the only logged errors came from the cloud-browser extension.
+- Fonts and typography: passed. Existing site heading/body/mono tokens reproduce the reference's editorial, interface, and audit-label hierarchy. Real names and obligations wrap without clipping.
+- Spacing and layout rhythm: passed. Sheet/frame dimensions, divider position, tabs, 64px artifact toolbar, dominant evidence canvas, filmstrip/metadata split, and action row align with the normalized reference.
+- Colors and visual tokens: passed. Warm whites, neutral matte, charcoal ink, fine gray dividers, restrained green state accents, amber example label, and red challenge states are semantically mapped.
+- Image quality and asset fidelity: passed. The evidence photos are real raster assets at 1536 × 1024 and render sharply with contained crops. Phosphor icons provide a consistent thin-stroke family. The receipt remains selectable text rather than a fake screenshot.
+- Copy and content: passed. Copy is trade-specific and truthfully distinguishes submission, counterparty acceptance, challenge, privacy redaction, and independent verification.
+- Accessibility and interaction: passed for the target desktop route. Tabs use tab semantics, the evidence canvas supports arrow-key selection, artifacts expose pressed/current state, native dialogs are labelled, focus styles remain visible, and controls use practical targets.
 
 **Comparison History**
 
-- Earlier P1: submitted evidence used the source’s lime check and could imply acceptance. Fixed with neutral submitted, lime accepted, and coral challenged states; post-fix browser capture shows the submitted clock state.
-- Earlier P1: acceptance mutated immediately. Fixed with an explicit confirmation dialog and limitation copy before the server action.
-- Earlier P2: “How this was checked” overstated unreviewed evidence. Fixed with state-aware “Evidence details” / “Review record” language and conditional coverage copy.
-- Earlier P2: actions redirected reviewers out of the evidence stage. Fixed with a validated `return_to` path and stage-local hidden return target.
-- Earlier P2: timeline lacked dialog semantics, Escape support, and focus restoration. Fixed and verified interactively in the post-fix browser render.
-- Earlier P2: the mobile route inherited a directory top padding. Fixed with a record-specific zero-padding override. A 390 × 844 Playwright test is present; the local runner could not execute it because its browser binary is absent from this environment.
+- Iteration 1 findings: the first implementation review found hidden required-vs-optional mapping, overly broad green/check semantics, a brittle mobile zoom offset, incomplete routed-page modal semantics, small metadata text, an example notice overlapping the toolbar, and participant-only records that could 404.
+- Iteration 1 fixes: artifact group and limits were exposed; submitted/accepted/challenged tones were separated; mobile zoom became a normal toolbar row; the routed screen became a labelled section; dialog labels and metadata sizing were corrected; the example state became an inline badge; participant-only records now authorize participants and render a restricted dossier.
+- Iteration 2 findings: the first browser render showed the receipt shrink-wrapped too narrowly and privacy details could remain below a retained metadata scroll position.
+- Iteration 2 fixes: the zoom target now fills the canvas, matching the reference's artifact width; vertical canvas padding was removed; privacy moved above detailed mapping; and metadata scroll resets on artifact change.
+- Post-fix evidence: the full-view and focused right-pane comparison images above show the corrected sheet, canvas, filmstrip, metadata, and action geometry with no remaining P0/P1/P2 mismatch.
 
-**Open Questions**
+**Primary Interactions Tested**
 
-- None blocking release. The source’s “release $10” state is deliberately not reproduced because the live product does not claim evidence-viewer custody or settlement.
+- Selected receipt and photo artifacts; `aria-pressed` and the evidence-preview label updated.
+- Switched Evidence, Trade terms, and Verification tabs; selected semantics and panel content updated.
+- Opened and closed Privacy details; redaction state, hidden fields, viewer scope, and privacy rule were present.
+- Zoomed to 125% and reset to 100%.
+- Used ArrowRight and ArrowLeft on the focused evidence canvas to change artifacts.
+- Browser console checked: no viewer runtime error. The only local messages were the cloud-browser extension's metadata warning and the expected missing local Supabase-auth environment message; neither originates in this component or appears in the configured production environment.
 
 **Implementation Checklist**
 
-- [x] Preserve Design 01’s media-first composition.
-- [x] Keep submitted, accepted, and challenged states visually distinct.
-- [x] Confirm consequential participant actions before mutation.
-- [x] Make privacy scope and evidentiary limits explicit.
-- [x] Verify artifact switching, privacy dialog, proof timeline, keyboard dismissal, focus return, console, build, lint, and policy tests.
+- [x] Match the desktop dossier composition and visual tokens.
+- [x] Preserve real evidence, terms, verification, privacy, and review interactions.
+- [x] Cover awaiting-evidence and participant-only agreement states.
+- [x] Validate source contracts, lint, and browser interactions.
+- [x] Recompare the corrected browser render against the source at native dossier scale.
 
 **Follow-up Polish**
 
-- P3: a future iteration could offer a dedicated authenticated, in-context question composer instead of linking to the existing private thread.
+- P3: the Next.js development issue badge touches the bottom-left of the local capture. It is development-only and is absent from production.
 
 final result: passed
 

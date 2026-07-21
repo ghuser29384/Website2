@@ -7,50 +7,57 @@ test.describe("public evidence desk", () => {
   test("serves the public directory and the clearly labeled example", async ({ page }) => {
     await page.goto(route("/evidence"));
     await expect(page.getByRole("heading", { name: "Inspect the proof behind every trade." })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Open the Design 01 evidence stage/i })).toBeVisible();
+    await expect(page.locator('a[href="/evidence/example"]')).toBeVisible();
     await expect(page.getByText("Interface example · not a live trade")).toBeVisible();
   });
 
-  test("switches artifacts, explains privacy, and jumps from the proof timeline", async ({ page }) => {
+  test("switches dossier tabs and artifacts, then explains the public-safe copy", async ({ page }) => {
     await page.goto(route("/evidence/example"));
-    await expect(page.locator("[data-pe-desk]")).toBeVisible();
+    const dossier = page.locator("[data-stage-evidence-viewer]");
+    await expect(dossier).toBeVisible();
 
-    const receiptArtifact = page.locator('[data-stage-artifact="receipt"]');
+    const evidenceTab = dossier.getByRole("tab", { exact: true, name: "Evidence" });
+    const termsTab = dossier.getByRole("tab", { exact: true, name: "Trade terms" });
+    const verificationTab = dossier.getByRole("tab", { exact: true, name: "Verification" });
+
+    await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
+    await termsTab.click();
+    await expect(termsTab).toHaveAttribute("aria-selected", "true");
+    await expect(dossier.getByRole("tabpanel").getByText(/before-meal photo and itemized receipt/i)).toBeVisible();
+
+    await verificationTab.click();
+    await expect(verificationTab).toHaveAttribute("aria-selected", "true");
+    await expect(dossier.getByRole("tabpanel").getByText("Trade record created")).toBeVisible();
+
+    await evidenceTab.click();
+    await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
+
+    const receiptArtifact = dossier.locator('[data-stage-artifact="receipt"]');
     await receiptArtifact.click();
     await expect(receiptArtifact).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("heading", { name: "THE GREEN TABLE" })).toBeVisible();
+    await expect(dossier.getByRole("heading", { name: "THE GREEN TABLE" })).toBeVisible();
 
-    await page.getByRole("button", { name: /Privacy-redacted/i }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByText("Order and payment identifiers are masked")).toBeVisible();
-    await page.getByRole("button", { name: "Done" }).click();
-
-    const timelineToggle = page.locator("[data-stage-timeline-toggle]");
-    await timelineToggle.click();
-    await expect(timelineToggle).toHaveAttribute("aria-expanded", "true");
-    const timeline = page.locator("[data-stage-timeline]");
-    await expect(timeline).toBeVisible();
-
-    const afterEvent = timeline.locator("article").filter({ hasText: "After-meal photo submitted" });
-    await afterEvent.getByRole("button", { name: /Inspect linked evidence/i }).click();
-    await expect(page.locator('[data-stage-artifact="after"]')).toHaveAttribute("aria-pressed", "true");
-    await expect(timeline).toBeHidden();
+    await dossier.getByRole("button", { exact: true, name: "Privacy details" }).click();
+    const privacyDialog = page.locator("dialog").filter({ hasText: "Public-copy privacy" });
+    await expect(privacyDialog).toBeVisible();
+    await expect(privacyDialog.getByText("Order and payment identifiers are masked in the shared copy.")).toBeVisible();
+    await privacyDialog.getByRole("button", { name: "Done" }).click();
   });
 
-  test("keeps the immersive review usable on mobile without horizontal overflow", async ({ page }) => {
+  test("keeps the dossier tabs and artifacts usable on mobile without horizontal overflow", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(route("/evidence/example"));
 
-    const afterArtifact = page.locator('[data-stage-artifact="after"]');
+    const dossier = page.locator("[data-stage-evidence-viewer]");
+    const afterArtifact = dossier.locator('[data-stage-artifact="after"]');
     await afterArtifact.click();
     await expect(afterArtifact).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("heading", { name: /Submitted under the agreed evidence rule/i })).toBeVisible();
 
-    const timelineToggle = page.locator("[data-stage-timeline-toggle]");
-    await timelineToggle.click();
-    await expect(page.locator("[data-stage-timeline]")).toBeVisible();
-    await page.getByRole("button", { name: "Close timeline" }).click();
-    await expect(timelineToggle).toHaveAttribute("aria-expanded", "false");
+    const termsTab = dossier.getByRole("tab", { exact: true, name: "Trade terms" });
+    await termsTab.click();
+    await expect(termsTab).toHaveAttribute("aria-selected", "true");
+    await dossier.getByRole("tab", { exact: true, name: "Evidence" }).click();
+    await expect(dossier.getByRole("button", { exact: true, name: "Privacy details" })).toBeVisible();
 
     const dimensions = await page.evaluate(() => ({
       innerWidth: window.innerWidth,
