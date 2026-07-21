@@ -224,6 +224,7 @@ import {
 } from "@/lib/stripe";
 import { evidenceLocatorsConflict } from "@/lib/validation";
 import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
+import { getReviewedMarketplaceSeedTemplate } from "@/lib/marketplace-seed-templates";
 import {
   buildMoralTradeOfferCreateProvenanceConflictSelectors,
   buildMoralTradeOfferCreateProvenanceAgentRow,
@@ -3479,28 +3480,39 @@ export async function signOutAction() {
 }
 
 export async function createOfferAction(formData: FormData) {
+  const requestedTemplate = getReviewedMarketplaceSeedTemplate(
+    readOptional(formData, "template_id"),
+  );
+  const offsetTemplateId =
+    requestedTemplate?.format === "donation_offset" ? requestedTemplate.id : "";
+  const baseOffsetReturnPath = `/offers/new?mode=offset${
+    offsetTemplateId
+      ? `&entry=draft&template=${encodeURIComponent(offsetTemplateId)}`
+      : ""
+  }`;
+
   if (!hasSupabaseEnv()) {
-    redirectWithMessage("/offers/new", "error", "Supabase is not configured yet.");
+    redirectWithMessage(baseOffsetReturnPath, "error", "Supabase is not configured yet.");
   }
 
-  const viewer = await requireViewer("/offers/new");
+  const viewer = await requireViewer(baseOffsetReturnPath);
   const supabase = await createClient();
 
   enforceActionRateLimit({
     key: `offer-create:${viewer.authUser.id}`,
     limit: 8,
     message: "You are creating offers too quickly. Wait a bit before publishing another one.",
-    returnTo: "/offers/new",
+    returnTo: baseOffsetReturnPath,
     windowMs: 60 * 60 * 1000,
   });
 
   const mode = readRequired(formData, "mode");
   const normalizedMode = normalizeOfferMode(mode);
-  if (normalizedMode === "payment") {
+  if (String(normalizedMode) !== "offset") {
     redirectWithMessage(
-      "/offers/new?mode=payment",
+      baseOffsetReturnPath,
       "error",
-      "General paid action offers are deferred from the public offer wizard while review, identity, dispute, and compliance workflows mature.",
+      "This template route only accepts donation-offset trades. Use the private trade builder for pledge or action templates.",
     );
   }
 
@@ -3963,9 +3975,9 @@ export async function createOfferAction(formData: FormData) {
       : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
-      ? `/offers/new?mode=offset${
-          participationMode === "pool" ? "&offset_participation_mode=pool" : ""
-        }${poolId ? `&offset_pool_id=${encodeURIComponent(poolId)}` : ""}${
+      ? `${baseOffsetReturnPath}&offset_participation_mode=${participationMode}${
+          poolId ? `&offset_pool_id=${encodeURIComponent(poolId)}` : ""
+        }${
           poolSide ? `&offset_pool_side=${poolSide}` : ""
         }`
       : normalizedMode === "pledge"
@@ -4403,6 +4415,7 @@ export async function createOfferAction(formData: FormData) {
   let poolRecord:
     | Database["public"]["Tables"]["donation_offset_pools"]["Row"]
     | null = null;
+  let createdPoolId: string | null = null;
 
   if (normalizedMode === "offset" && donationOffsetFields?.participationMode === "pool") {
     if (donationOffsetFields.poolId) {
@@ -4491,6 +4504,7 @@ export async function createOfferAction(formData: FormData) {
       }
 
       poolRecord = createdPool;
+      createdPoolId = createdPool.id;
     }
   }
 
@@ -4594,6 +4608,29 @@ export async function createOfferAction(formData: FormData) {
         offerId: data.id,
         ownerId: viewer.authUser.id,
       });
+      const cleanupResults = await Promise.all([
+        supabase
+          .from("offers")
+          .delete()
+          .eq("id", data.id)
+          .eq("owner_id", viewer.authUser.id)
+          .eq("status", "paused"),
+        createdPoolId
+          ? supabase
+              .from("donation_offset_pools")
+              .delete()
+              .eq("id", createdPoolId)
+              .eq("created_by", viewer.authUser.id)
+          : Promise.resolve({ error: null }),
+      ]);
+      const cleanupError = cleanupResults.find((result) => result.error)?.error;
+      if (cleanupError) {
+        logSupabaseActionError(
+          "Failed to clean up incomplete donation offset creation",
+          cleanupError,
+          { offerId: data.id, ownerId: viewer.authUser.id },
+        );
+      }
       redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
     }
 

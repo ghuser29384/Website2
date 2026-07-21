@@ -171,15 +171,17 @@ test("moraltrade82 offers route source keeps ranking internals out of default br
   assert.equal(marketplaceBoundary.includes("external CRECM module"), false);
 });
 
-test("the legacy creation route preserves pledge and offset mechanism boundaries", () => {
+test("the creation route sends each template to its real mechanism", () => {
   const newOfferPage = readFileSync("src/app/offers/new/page.tsx", "utf8");
 
   assert.match(newOfferPage, /getReviewedMarketplaceSeedTemplate/);
-  assert.match(newOfferPage, /template\?\.format === "pledge_swap"/);
+  assert.match(newOfferPage, /requestedTemplate\?\.format === "pledge_swap"/);
   assert.match(newOfferPage, /\/trades\/new\?template=/);
-  assert.match(newOfferPage, /template\?\.format === "donation_offset" \|\| mode === "offset"/);
-  assert.match(newOfferPage, /\/donation-offsets\$\{query\}/);
-  assert.match(newOfferPage, /target = "\/pools"/);
+  assert.match(newOfferPage, /requestedTemplate\?\.format === "donation_offset"/);
+  assert.match(newOfferPage, /Boolean\(requestedOffsetTemplate\) \|\| mode === "offset"/);
+  assert.match(newOfferPage, /<OfferCreateForm/);
+  assert.match(newOfferPage, /initialMode="offset"/);
+  assert.match(newOfferPage, /\/mpgf\/pools\/new\?template=threshold-coalition/);
   assert.equal(newOfferPage.includes("mode: \"pledge\""), false);
 });
 
@@ -191,9 +193,9 @@ test("moraltrade82 typology examples do not become draft-prefill defaults", () =
   );
 
   assert.equal(newOfferPage.includes("const MORAL_TRADE_TYPE_TEMPLATES"), false);
-  assert.match(newOfferPage, /getReviewedMarketplaceSeedTemplate\(templateId\)/);
-  assert.match(newOfferPage, /template\?\.format === "pledge_swap"/);
-  assert.match(newOfferPage, /template\?\.format === "donation_offset"/);
+  assert.match(newOfferPage, /getReviewedMarketplaceSeedTemplate\(requestedTemplateId\)/);
+  assert.match(newOfferPage, /requestedTemplate\?\.format === "pledge_swap"/);
+  assert.match(newOfferPage, /requestedTemplate\?\.format === "donation_offset"/);
   assert.equal(newOfferPage.includes('title: "Lottery-mediated trade"'), false);
   assert.equal(newOfferPage.includes('title: "Side-payment trade"'), false);
   assert.equal(newOfferPage.includes('duration: "30 days"'), false);
@@ -236,7 +238,11 @@ test("moraltrade82 donation-offsets page uses plain questions and a concrete pre
   assert.match(seedTemplatesSource, /what would make this unsafe or invalid/);
   assert.match(donationOffsetsPage, /Without the trade, A would give \$50 to Cause X/);
   assert.match(donationOffsetsPage, /both redirect \$50 to GiveWell Top Charities Fund/);
-  assert.match(donationOffsetsPage, /Compare template anatomy/);
+  assert.match(donationOffsetsPage, /Start an offset draft/);
+  assert.match(
+    donationOffsetsPage,
+    /\/offers\/new\?entry=draft&template=pure-opposed-cause&mode=offset/,
+  );
   assert.equal(donationOffsetsPage.includes("What would each side donate without this trade?"), false);
   assert.equal(donationOffsetsPage.includes("Baseline intention"), false);
   assert.equal(donationOffsetsPage.includes("Match ratio"), false);

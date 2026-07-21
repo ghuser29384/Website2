@@ -41,12 +41,12 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
     return {
       title: "Trade templates",
       description:
-        "Browse source-backed Moral Trade structures, inspect every required term, or use a three-question guide before starting an editable draft.",
+        "Choose a Moral Trade template and open its real editable draft in one click, or use a three-question guide to find the right starting point.",
       alternates: { canonical: "/offers?view=templates" },
       openGraph: {
         title: "Trade templates | Moral Trade",
         description:
-          "Choose an exchange shape, inspect its baseline, activation, evidence, burden, fallback, and exit terms, then continue through the correct draft route.",
+          "Open a prefilled pledge, donation-offset, skill, favor, or threshold-pool draft and edit every term before saving.",
         url: getAbsoluteUrl("/offers?view=templates"),
         type: "website",
       },

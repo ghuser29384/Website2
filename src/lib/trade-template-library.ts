@@ -1,7 +1,11 @@
 import { getReviewedMarketplaceSeedTemplate } from "@/lib/marketplace-seed-templates";
 
-export type TradeTemplateFilter = "all" | "money" | "actions" | "groups" | "custom";
-export type TradeTemplateHandoff = "trade_draft" | "offset_route" | "pool_route" | "custom_draft";
+export type TradeTemplateFilter = "all" | "money" | "actions" | "groups";
+export type TradeTemplateHandoff = "trade_draft" | "offset_route" | "pool_route";
+export type TradeTemplateGuideQuestionKey = "moves" | "coordination" | "trust";
+export type TradeTemplateGuideAnswers = Partial<
+  Record<TradeTemplateGuideQuestionKey, string>
+>;
 
 export interface TradeTemplateSignal {
   label: string;
@@ -87,12 +91,12 @@ export const TRADE_TEMPLATE_LIBRARY = [
   {
     id: "pledge-swap",
     symbol: "↔",
-    name: "Pledge swap",
-    family: "Reciprocal commitments",
-    summary: "Trade one bounded behavior or allocation for another.",
+    name: "One-meal pledge swap",
+    family: "Reciprocal pledge",
+    summary: "Trade one bounded food-abstention pledge for a concrete reciprocal action.",
     exchangeType: "ACTION × ACTION",
     filters: ["actions"],
-    statusLabel: "Admin-reviewed seed available",
+    statusLabel: "Reviewed starter",
     sourceBasis: "Moral barter",
     youOffer: "One short, concrete commitment that advances their priority",
     theyOffer: "One bounded reciprocal action that advances your priority",
@@ -127,19 +131,19 @@ export const TRADE_TEMPLATE_LIBRARY = [
     handoff: {
       kind: "trade_draft",
       href: "/trades/new?template=reciprocal-mixed",
-      label: "Use reviewed starter",
-      note: "Opens the real private card-stack editor with an editable reviewed micro-pledge example.",
+      label: "Use template →",
+      note: "Opens the private card-stack editor with editable one-meal pledge terms.",
     },
   },
   {
     id: "donation-redirect",
     symbol: "$",
-    name: "Donation cancellation + redirect",
+    name: "Direct donation offset",
     family: "Opposition cancellation",
     summary: "Neutralize matched opposed spending, then redirect the matched amounts.",
     exchangeType: "MONEY × MONEY",
     filters: ["money"],
-    statusLabel: "Admin-reviewed offset seed",
+    statusLabel: "Reviewed starter",
     sourceBasis: "Opposition cancellation + settlement",
     youOffer: "Redirect a matched amount you credibly planned to give to one side",
     theyOffer: "Redirect a matched amount they credibly planned to give to the opposed side",
@@ -188,9 +192,9 @@ export const TRADE_TEMPLATE_LIBRARY = [
     },
     handoff: {
       kind: "offset_route",
-      href: "/donation-offsets",
-      label: "Review offset mechanism",
-      note: "Opens the specialist offset mechanism and its review gates. No one-click offset draft is currently available.",
+      href: "/offers/new?entry=draft&template=pure-opposed-cause&mode=offset",
+      label: "Use template →",
+      note: "Opens the donation-offset editor with editable reviewed defaults.",
     },
   },
   {
@@ -201,7 +205,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
     summary: "Give bounded expertise; receive a concrete action or service.",
     exchangeType: "SKILL × ACTION",
     filters: ["actions"],
-    statusLabel: "Structure starter · review required",
+    statusLabel: "Editable starter",
     sourceBasis: "Work/time as a trade leg",
     youOffer: "A scoped review, analysis, introduction, or other defined contribution",
     theyOffer: "A concrete action, service, or allocation with a clear endpoint",
@@ -244,10 +248,10 @@ export const TRADE_TEMPLATE_LIBRARY = [
       trust: ["evidence", "verifier"],
     },
     handoff: {
-      kind: "custom_draft",
-      href: "/trades/new?structure=skill-exchange",
-      label: "Start a custom draft",
-      note: "Opens a blank private trade draft; this structure has no approved one-click prefill yet.",
+      kind: "trade_draft",
+      href: "/trades/new?template=skill-exchange",
+      label: "Use template →",
+      note: "Opens the private card-stack editor with an editable skill-exchange scaffold.",
     },
   },
   {
@@ -258,7 +262,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
     summary: "Activate a shared project only when its published threshold is met.",
     exchangeType: "GROUP × THRESHOLD",
     filters: ["money", "groups"],
-    statusLabel: "Pool route · terms set per pool",
+    statusLabel: "Editable starter",
     sourceBasis: "Assurance contract",
     youOffer: "A capped conditional contribution",
     theyOffer: "Enough compatible contributions to reach the activation condition",
@@ -312,9 +316,9 @@ export const TRADE_TEMPLATE_LIBRARY = [
     },
     handoff: {
       kind: "pool_route",
-      href: "/create?mode=pool",
-      label: "Open pool route",
-      note: "Opens the conditional-pool route without pretending a generic template is a live pool.",
+      href: "/mpgf/pools/new?template=threshold-coalition",
+      label: "Use template →",
+      note: "Opens the candidate-pool editor with editable threshold terms.",
     },
   },
   {
@@ -325,7 +329,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
     summary: "Make one clear favor reviewable with proof proportional to its stakes.",
     exchangeType: "TIME × PROOF",
     filters: ["actions"],
-    statusLabel: "Structure starter · review required",
+    statusLabel: "Editable starter",
     sourceBasis: "Mixed or pure moral trade",
     youOffer: "A bounded favor, action, or allocation",
     theyOffer: "A concrete reciprocal or sponsored moral action",
@@ -368,80 +372,74 @@ export const TRADE_TEMPLATE_LIBRARY = [
       trust: ["evidence", "verifier"],
     },
     handoff: {
-      kind: "custom_draft",
-      href: "/trades/new?structure=evidence-backed-favor",
-      label: "Start a custom draft",
-      note: "Opens a blank private trade draft; the anatomy remains a checklist, not an approved instance.",
-    },
-  },
-  {
-    id: "blank",
-    symbol: "+",
-    name: "Build from blank",
-    family: "Custom structure",
-    summary: "Choose only the clauses your exchange actually needs.",
-    exchangeType: "CUSTOM STRUCTURE",
-    filters: ["custom"],
-    statusLabel: "Custom draft · operator review",
-    sourceBasis: "Compositional trade dimensions",
-    youOffer: "A bounded leg you define",
-    theyOffer: "A reciprocal, sponsored, collective, or shared-outcome leg",
-    baseline: "The real no-trade default remains mandatory even in a custom structure",
-    activation: "You define an immediate, paired-match, threshold, recurring, or other reviewed trigger",
-    evidence: "You select a proportionate proof ladder and privacy scope",
-    duration: "Explicitly bounded by quantity, time, rounds, or a one-off decision",
-    exitRule: "State what can end, what remains recorded, and what becomes unresolved",
-    unmatchedRule: "Required whenever money, matching, residual claims, or threshold overage exists",
-    caveat:
-      "Custom does not bypass baseline integrity, voluntariness, affected-party review, authority, evidence, privacy, legal review, or separate authorization before reliance.",
-    clauses: [
-      "No-trade baseline",
-      "Each exchange leg",
-      "Activation condition",
-      "Maximum burden",
-      "Evidence and privacy",
-      "Exit, fallback, or residual rule",
-      "Affected-party and authority review",
-    ],
-    signals: [
-      {
-        label: "Setup effort",
-        level: 4,
-        value: "Custom",
-        note: "The user owns every structural choice and its completeness.",
-      },
-      {
-        label: "Evidence burden",
-        level: 3,
-        value: "Variable",
-        note: "Evidence should scale with consequence and privacy cost.",
-      },
-      {
-        label: "Coordination",
-        level: 3,
-        value: "Variable",
-        note: "Topology may be bilateral, matched, collective, or another reviewed structure.",
-      },
-      {
-        label: "Review need",
-        level: 4,
-        value: "Full",
-        note: "No approved starter narrows the review surface.",
-      },
-    ],
-    guide: {
-      moves: ["unsure"],
-      coordination: ["custom", "team"],
-      trust: ["honor", "evidence", "verifier", "conditional"],
-    },
-    handoff: {
-      kind: "custom_draft",
-      href: "/trades/new",
-      label: "Start from blank",
-      note: "Opens the real private card-stack editor with no canned terms.",
+      kind: "trade_draft",
+      href: "/trades/new?template=evidence-backed-favor",
+      label: "Use template →",
+      note: "Opens the private card-stack editor with an editable favor-and-evidence scaffold.",
     },
   },
 ] as const satisfies readonly TradeTemplateLibraryEntry[];
+
+const STRUCTURAL_TRADE_TEMPLATE_INITIAL_VALUES: Readonly<
+  Record<string, TradeTemplateInitialValues>
+> = {
+  "skill-exchange": {
+    offeredCause: "[Replace: priority advanced by your contribution]",
+    requestedCause: "[Replace: priority advanced by the counterparty]",
+    proposedAction:
+      "Provide [Replace: a defined review, deliverable, introduction, or up to X hours of work] by [Replace: date].",
+    requestedAction:
+      "Complete [Replace: a concrete reciprocal action or service] by [Replace: date].",
+    noTradeBaseline:
+      "[Replace: what each side would do without the exchange and whether either contribution was already planned.]",
+    duration: "One deliverable or a fixed number of hours",
+    evidenceRule:
+      "Use a deliverable link, shared acceptance checklist, or proportionate attestation; keep confidential material private.",
+    exitConditions:
+      "Either side may withdraw before terms are locked. Record accepted partial work, and end unstarted future work under the agreed cancellation rule.",
+    notes:
+      "Define scope, deadline, maximum time, ownership, confidentiality, authority, and the acceptance standard before submitting for review.",
+  },
+  "evidence-backed-favor": {
+    offeredCause: "[Replace: priority advanced by your favor]",
+    requestedCause: "[Replace: priority advanced by the reciprocal action]",
+    proposedAction:
+      "Complete [Replace: one bounded favor or action] by [Replace: date], with a maximum burden of [Replace: limit].",
+    requestedAction:
+      "Complete [Replace: one concrete reciprocal or sponsored moral action] by [Replace: date].",
+    noTradeBaseline:
+      "[Replace: whether either action was already planned and what each side would otherwise do.]",
+    duration: "One favor or a short fixed sequence",
+    evidenceRule:
+      "Use the least intrusive sufficient proof: a timestamped artifact, bounded attestation, or independent check.",
+    exitConditions:
+      "Either side may withdraw before terms are locked. Missing or disputed proof remains unresolved rather than completed.",
+    notes:
+      "Confirm voluntariness, authority, affected-party safety, privacy, maximum burden, and the exact claim the evidence can support.",
+  },
+};
+
+export function findTradeTemplateGuideResult(answers: TradeTemplateGuideAnswers) {
+  const completed = Object.entries(answers).filter(([, value]) => Boolean(value));
+  const requestedMove = answers.moves;
+  const compatibleTemplates =
+    requestedMove && requestedMove !== "unsure"
+      ? TRADE_TEMPLATE_LIBRARY.filter((template) =>
+          (template.guide.moves as readonly string[]).includes(requestedMove),
+        )
+      : TRADE_TEMPLATE_LIBRARY;
+  const ranked = compatibleTemplates
+    .map((template, index) => {
+      const score = completed.reduce((total, [key, value]) => {
+        const guideValues = template.guide[key as TradeTemplateGuideQuestionKey] as readonly string[];
+        return total + (guideValues.includes(value) ? 3 : 0);
+      }, 0);
+      return { template, score, index };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+
+  return ranked[0]?.template ?? TRADE_TEMPLATE_LIBRARY[0];
+}
 
 export function getTradeTemplateLibraryEntry(templateId: string | undefined) {
   if (!templateId) return null;
@@ -452,7 +450,9 @@ export function getPledgeTemplateInitialValues(
   templateId: string | undefined,
 ): TradeTemplateInitialValues | null {
   const template = getReviewedMarketplaceSeedTemplate(templateId);
-  if (!template || template.format !== "pledge_swap") return null;
+  if (!template || template.format !== "pledge_swap") {
+    return templateId ? STRUCTURAL_TRADE_TEMPLATE_INITIAL_VALUES[templateId] ?? null : null;
+  }
 
   return {
     offeredCause: template.prefill.offeredCause,
@@ -465,4 +465,15 @@ export function getPledgeTemplateInitialValues(
     exitConditions: template.prefill.exitCondition,
     notes: template.prefill.notes,
   };
+}
+
+export function getTradeDraftTemplateLabel(templateId: string | undefined) {
+  if (!templateId) return null;
+
+  const reviewedTemplate = getReviewedMarketplaceSeedTemplate(templateId);
+  if (reviewedTemplate?.format === "pledge_swap") {
+    return reviewedTemplate.prefill.title;
+  }
+
+  return getTradeTemplateLibraryEntry(templateId)?.name ?? null;
 }

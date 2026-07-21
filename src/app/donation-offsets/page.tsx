@@ -158,8 +158,11 @@ export default async function DonationOffsetsPage() {
           description="When two donors would otherwise fund opposing efforts, they can redirect matched funds to a mutually acceptable destination."
           actions={
             <>
-              <Link className="button button-primary" href="/offers?view=templates">
-                Compare template anatomy
+              <Link
+                className="button button-primary"
+                href="/offers/new?entry=draft&template=pure-opposed-cause&mode=offset"
+              >
+                Start an offset draft
               </Link>
               <Link className="button button-secondary" href="/offers?mode=offset">
                 View offset examples

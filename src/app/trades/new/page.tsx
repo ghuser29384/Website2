@@ -9,7 +9,10 @@ import {
 } from "@/components/core-trade/trade-draft-workbench";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { getPledgeTemplateInitialValues } from "@/lib/trade-template-library";
+import {
+  getPledgeTemplateInitialValues,
+  getTradeDraftTemplateLabel,
+} from "@/lib/trade-template-library";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -74,6 +77,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
 
   const example = valueOf(resolvedSearchParams.example);
   const templateValues = getPledgeTemplateInitialValues(templateId);
+  const templateLabel = templateValues ? getTradeDraftTemplateLabel(templateId) : null;
 
   return (
     <>
@@ -83,7 +87,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
         initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
         saveAction={saveCoreOfferAction}
         submissionKey={randomUUID()}
-        templateLabel={templateValues ? "Reviewed pledge-swap starter" : null}
+        templateLabel={templateLabel}
       />
     </>
   );

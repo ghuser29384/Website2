@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  findTradeTemplateGuideResult,
   getPledgeTemplateInitialValues,
+  getTradeDraftTemplateLabel,
   getTradeTemplateLibraryEntry,
   TRADE_TEMPLATE_LIBRARY,
 } from "./trade-template-library";
 
-test("the template library exposes six compositional shapes without pretending they are live offers", () => {
+test("the template library exposes direct-use templates without pretending they are live offers", () => {
   assert.deepEqual(
     TRADE_TEMPLATE_LIBRARY.map((template) => template.id),
     [
@@ -16,7 +18,6 @@ test("the template library exposes six compositional shapes without pretending t
       "skill-exchange",
       "threshold-coalition",
       "evidence-backed-favor",
-      "blank",
     ],
   );
 
@@ -29,24 +30,28 @@ test("the template library exposes six compositional shapes without pretending t
   }
 });
 
-test("template handoffs keep pledge drafts, donation offsets, and pools in distinct routes", () => {
+test("template handoffs open the correct real composer without an anatomy interstitial", () => {
   assert.deepEqual(getTradeTemplateLibraryEntry("pledge-swap")?.handoff, {
     kind: "trade_draft",
     href: "/trades/new?template=reciprocal-mixed",
-    label: "Use reviewed starter",
-    note: "Opens the real private card-stack editor with an editable reviewed micro-pledge example.",
+    label: "Use template →",
+    note: "Opens the private card-stack editor with editable one-meal pledge terms.",
   });
   assert.equal(
     getTradeTemplateLibraryEntry("donation-redirect")?.handoff.href,
-    "/donation-offsets",
-  );
-  assert.match(
-    getTradeTemplateLibraryEntry("donation-redirect")?.handoff.note ?? "",
-    /no one-click offset draft/i,
+    "/offers/new?entry=draft&template=pure-opposed-cause&mode=offset",
   );
   assert.equal(
     getTradeTemplateLibraryEntry("threshold-coalition")?.handoff.href,
-    "/create?mode=pool",
+    "/mpgf/pools/new?template=threshold-coalition",
+  );
+  assert.equal(
+    getTradeTemplateLibraryEntry("skill-exchange")?.handoff.href,
+    "/trades/new?template=skill-exchange",
+  );
+  assert.equal(
+    getTradeTemplateLibraryEntry("evidence-backed-favor")?.handoff.href,
+    "/trades/new?template=evidence-backed-favor",
   );
   assert.equal(getTradeTemplateLibraryEntry("missing"), null);
 });
@@ -65,7 +70,51 @@ test("only approved pledge seeds prefill the pledge-only card-stack editor", () 
   assert.equal(getPledgeTemplateInitialValues("missing"), null);
 });
 
-test("the donation redirect anatomy distinguishes cancellation, destinations, and residual funds", () => {
+test("skill and favor templates prefill their actual private trade scaffold", () => {
+  const skill = getPledgeTemplateInitialValues("skill-exchange");
+  const favor = getPledgeTemplateInitialValues("evidence-backed-favor");
+
+  assert.ok(skill);
+  assert.match(skill.proposedAction, /defined review|deliverable/i);
+  assert.match(skill.proposedAction, /\[Replace:/);
+  assert.match(skill.evidenceRule, /acceptance checklist/i);
+  assert.equal(getTradeDraftTemplateLabel("skill-exchange"), "Skill exchange");
+
+  assert.ok(favor);
+  assert.match(favor.proposedAction, /bounded favor/i);
+  assert.match(favor.noTradeBaseline, /\[Replace:/);
+  assert.match(favor.exitConditions, /unresolved/i);
+  assert.equal(getTradeDraftTemplateLabel("evidence-backed-favor"), "Evidence-backed favor");
+});
+
+test("guided matching never contradicts the kind of thing the user wants to move", () => {
+  assert.equal(
+    findTradeTemplateGuideResult({
+      moves: "money",
+      coordination: "two_sides",
+      trust: "honor",
+    }).id,
+    "donation-redirect",
+  );
+  assert.equal(
+    findTradeTemplateGuideResult({
+      moves: "project",
+      coordination: "two_sides",
+      trust: "evidence",
+    }).id,
+    "threshold-coalition",
+  );
+  assert.equal(
+    findTradeTemplateGuideResult({
+      moves: "skill",
+      coordination: "group",
+      trust: "conditional",
+    }).id,
+    "skill-exchange",
+  );
+});
+
+test("the donation redirect contract distinguishes cancellation, destinations, and residual funds", () => {
   const redirect = getTradeTemplateLibraryEntry("donation-redirect");
 
   assert.ok(redirect);

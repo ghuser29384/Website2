@@ -148,6 +148,7 @@ interface DonationOffsetPoolOption {
 }
 
 interface OfferCreateFormProps {
+  directTemplateEntry?: boolean;
   formMessage:
     | {
         text: string;
@@ -161,6 +162,7 @@ interface OfferCreateFormProps {
   initialOffsetPoolId?: string;
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
   initialTemplate?: OfferTemplate | null;
+  templateId?: string;
   paymentBondsEnabled: boolean;
   pledgePerformanceBondsEnabled: boolean;
   liveBondPaymentsEnabled: boolean;
@@ -966,11 +968,12 @@ function buildEvidenceProvenancePreflight(
 }
 
 export function OfferCreateForm({
+  directTemplateEntry = false,
   formMessage,
   supabaseReady,
   availablePools,
   initialMode = "pledge",
-  initialOffsetParticipationMode = defaultOffsetFields.participationMode,
+  initialOffsetParticipationMode,
   initialOffsetPoolId = "",
   initialOffsetPoolSide = "",
   initialTemplate = null,
@@ -980,6 +983,7 @@ export function OfferCreateForm({
   performanceBondMinCents,
   performanceBondMaxCents,
   provenanceValidationRules,
+  templateId = "",
 }: OfferCreateFormProps) {
   const resolvedInitialMode = initialTemplate?.mode ?? initialMode;
   const initialReviewPeriod =
@@ -1132,7 +1136,9 @@ export function OfferCreateForm({
     initialTemplate?.offset?.unmatchedSurplusRule ?? defaultOffsetFields.unmatchedSurplusRule,
   );
   const [participationMode, setParticipationMode] = useState(
-    initialTemplate?.offset?.participationMode ?? initialOffsetParticipationMode,
+    initialOffsetParticipationMode ??
+      initialTemplate?.offset?.participationMode ??
+      defaultOffsetFields.participationMode,
   );
   const [poolId, setPoolId] = useState(initialOffsetPoolId);
   const [poolName, setPoolName] = useState("");
@@ -2721,11 +2727,12 @@ export function OfferCreateForm({
   return (
     <article className="panel auth-card">
       <div className="section-head auth-head">
-        <p className="eyebrow">Offer details</p>
-        <h2>Create offer</h2>
+        <p className="eyebrow">{directTemplateEntry ? "Template ready" : "Offer details"}</p>
+        <h2>{directTemplateEntry ? "Edit this trade" : "Create offer"}</h2>
         <p>
-          State the two sides, the expected gain, and the verification terms in one
-          public record.
+          {directTemplateEntry
+            ? "The template is already applied. Replace its facts with your terms, then save the trade for review."
+            : "State the two sides, the expected gain, and the verification terms in one public record."}
         </p>
       </div>
 
@@ -2794,6 +2801,8 @@ export function OfferCreateForm({
         </div>
       ) : null}
 
+      {!directTemplateEntry ? (
+        <>
       <section className="offer-wizard-panel" aria-labelledby="offer-wizard-heading">
         <div className="offer-wizard-summary">
           <div>
@@ -3185,6 +3194,8 @@ export function OfferCreateForm({
           ) : null}
         </div>
       </section>
+        </>
+      ) : null}
 
       <form
         action={createOfferAction}
@@ -3195,6 +3206,10 @@ export function OfferCreateForm({
           }
         }}
       >
+        <input name="template_id" type="hidden" value={templateId} />
+        {directTemplateEntry ? (
+          <input name="mode" type="hidden" value={mode} />
+        ) : (
         <label className="field" id="offer-route">
           <span>Exchange mode</span>
           <select
@@ -3216,6 +3231,7 @@ export function OfferCreateForm({
             </small>
           ) : null}
         </label>
+        )}
 
         <div className="panel subtle-panel">
           <p className="eyebrow">Validator checklist</p>
@@ -6757,7 +6773,11 @@ export function OfferCreateForm({
 
         <div className="form-actions">
           <button className="button button-primary" disabled={!canPublishOffer} type="submit">
-            {isPayment ? "Paid offers are deferred" : "Publish offer"}
+            {isPayment
+              ? "Paid offers are deferred"
+              : directTemplateEntry
+                ? "Save trade for review"
+                : "Publish offer"}
           </button>
           <Link className="button button-secondary" href="/offers">
             Back to offers

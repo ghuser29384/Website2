@@ -26,7 +26,7 @@
     scope.querySelectorAll("button, a").forEach((control) => {
       if (!isTemplatesControl(control)) return;
       control.setAttribute("aria-label", "Open trade template library");
-      control.setAttribute("title", "Browse trade structures and inspect their required terms");
+      control.setAttribute("title", "Choose a template and open a prefilled editable draft");
       control.setAttribute("data-mt-template-library", "true");
     });
   }

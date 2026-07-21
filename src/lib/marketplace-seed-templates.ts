@@ -133,13 +133,13 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     reviewStatus: "admin_reviewed",
     reviewStatusLabel: "Admin-reviewed seed template",
     reviewSummary:
-      "Approved only as a preview template for genuine baseline opposed donations, receipts, and manual review.",
+      "Approved only as a draft template for genuine baseline opposed donations, receipts, and manual review.",
     environment: "seed_template",
     environmentLabel: "Seed template, not live liquidity",
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/donation-offsets?template=pure-opposed-cause",
+    templateHref: "/offers/new?entry=draft&template=pure-opposed-cause&mode=offset",
     publicSummary:
       "Redirect two opposed baseline donations into one reviewed compromise destination.",
     prefill: {
@@ -195,7 +195,7 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/donation-offsets?template=market-mediated",
+    templateHref: "/offers/new?entry=draft&template=market-mediated&mode=offset",
     publicSummary:
       "Pool opposed donation commitments at a published ratio with an assurance threshold.",
     prefill: {

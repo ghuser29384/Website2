@@ -80,6 +80,10 @@ function normalized(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function hasUnresolvedTemplatePrompt(value: string) {
+  return value.includes("[Replace:");
+}
+
 function buildFingerprint(values: string[]) {
   return createHash("sha256").update(values.map(normalized).join("\u241f")).digest("hex");
 }
@@ -140,6 +144,13 @@ function readTerms(formData: FormData): CoreTerms {
   const missing = required.filter(([, value]) => !value).map(([label]) => label);
   if (missing.length) {
     throw new Error(`Complete these fields: ${missing.join(", ")}.`);
+  }
+
+  const unresolved = required
+    .filter(([, value]) => hasUnresolvedTemplatePrompt(value))
+    .map(([label]) => label);
+  if (unresolved.length) {
+    throw new Error(`Replace the template prompts in these fields: ${unresolved.join(", ")}.`);
   }
 
   for (const [label, value] of required) {
@@ -338,6 +349,12 @@ export async function saveCoreOfferAction(formData: FormData) {
   try {
     if (!offeredCause || !requestedCause) {
       throw new Error("Name both the priority you are offering and the priority you are requesting.");
+    }
+    if (
+      hasUnresolvedTemplatePrompt(offeredCause) ||
+      hasUnresolvedTemplatePrompt(requestedCause)
+    ) {
+      throw new Error("Replace both template priority prompts with terms that are true for this trade.");
     }
     if (offeredCause.length > 180 || requestedCause.length > 180) {
       throw new Error("Priority labels must be 180 characters or fewer.");

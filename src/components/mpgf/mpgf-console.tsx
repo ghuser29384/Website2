@@ -51,10 +51,12 @@ import type {
 type MpgfConsoleTab = "contribute" | "pools" | "ballot" | "summary";
 
 interface MpgfConsoleProps {
+  initialPoolProposalDeadline?: string;
   initialTab?: MpgfConsoleTab;
   participantState?: MpgfParticipantState;
   manualEvidenceReadiness?: MpgfManualEvidenceReadiness;
   realMoneyReadiness?: MpgfRealMoneyReadiness;
+  poolTemplateApplied?: boolean;
   viewerPresent?: boolean;
 }
 
@@ -116,9 +118,11 @@ function donateHrefFromPayload(payload: unknown) {
 }
 
 export function MpgfConsole({
+  initialPoolProposalDeadline = "",
   initialTab = "contribute",
   manualEvidenceReadiness,
   participantState,
+  poolTemplateApplied = false,
   realMoneyReadiness,
   viewerPresent = false,
 }: MpgfConsoleProps) {
@@ -175,7 +179,9 @@ export function MpgfConsole({
   const [savedCommitmentMessage, setSavedCommitmentMessage] = useState(
     "Production participation is pledge-only and uses external handoff. Moral Trade does not store a payment method.",
   );
-  const [proposalTitle, setProposalTitle] = useState("Community public-goods evaluation reserve");
+  const [proposalTitle, setProposalTitle] = useState(
+    poolTemplateApplied ? "New conditional public-good pool" : "Community public-goods evaluation reserve",
+  );
   const [proposalSummary, setProposalSummary] = useState("");
   const [proposalCauseArea, setProposalCauseArea] = useState("");
   const [proposalProblem, setProposalProblem] = useState(
@@ -202,7 +208,7 @@ export function MpgfConsole({
   const [proposalDestinationRef, setProposalDestinationRef] = useState("");
   const [proposalThresholdAmount, setProposalThresholdAmount] = useState(10_000);
   const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(25);
-  const [proposalDeadlineAt, setProposalDeadlineAt] = useState("2026-06-30");
+  const [proposalDeadlineAt, setProposalDeadlineAt] = useState(initialPoolProposalDeadline);
   const [proposalVerificationMethod, setProposalVerificationMethod] = useState("");
   const [proposalBaselineRule, setProposalBaselineRule] = useState("");
   const [proposalExitRule, setProposalExitRule] = useState("");
@@ -212,7 +218,9 @@ export function MpgfConsole({
   const [proposalPayoutMethod, setProposalPayoutMethod] =
     useState<MpgfPublicGoodsCaptureMode>("external_handoff");
   const [proposalConfirmation, setProposalConfirmation] = useState(
-    "Complete the pool reasoning fields before saving or submitting. This route performs no live authorization, payout, or real-money accounting.",
+    poolTemplateApplied
+      ? "Threshold coalition template applied. Replace the project, baseline, threshold, cap, deadline, failure rule, recipient, and evidence terms before saving."
+      : "Complete the pool reasoning fields before saving or submitting. This route performs no live authorization, payout, or real-money accounting.",
   );
   const [weights, setWeights] = useState<Record<string, number>>(() =>
     Object.fromEntries(demoAlternatives.map((alternative) => [alternative.id, alternative.demoPriorityBps])),
@@ -735,13 +743,12 @@ export function MpgfConsole({
 
   return (
     <section className="mpgf-console" aria-label="Moral Public Goods Fund direct-working console">
-      <div className="mpgf-console-toolbar" role="tablist" aria-label="MPGF workflow">
+      <div className="mpgf-console-toolbar" aria-label="MPGF workflow">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            aria-selected={activeTab === tab.id}
+            aria-pressed={activeTab === tab.id}
             className="mpgf-tab"
-            role="tab"
             type="button"
             onClick={() => setActiveTab(tab.id)}
           >
@@ -1289,6 +1296,12 @@ export function MpgfConsole({
           <section className="mpgf-panel">
             <p className="eyebrow">Pool reasoning</p>
             <h2>Draft a candidate pool reasoning</h2>
+            {poolTemplateApplied ? (
+              <p className="status-banner status-banner-success" role="status">
+                Template applied. Every term remains editable; opening this form creates no pledge,
+                authorization, allocation, or payout.
+              </p>
+            ) : null}
             <div className="mpgf-form-grid">
               <label>
                 Proposal title

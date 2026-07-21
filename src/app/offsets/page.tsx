@@ -107,8 +107,11 @@ export default async function OffsetsPage() {
               amount into a named destination both prefer to the original pair of donations.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href="/donation-offsets">
-                Review offset safeguards
+              <Link
+                className="button button-primary"
+                href="/offers/new?entry=draft&template=pure-opposed-cause&mode=offset"
+              >
+                Start an offset draft
               </Link>
               <Link className="button button-secondary" href="/offers?view=examples&search=offset">
                 Inspect examples
