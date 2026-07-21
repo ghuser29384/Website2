@@ -1,0 +1,74 @@
+name: Background schema history inspection
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/background-schema-history-inspection.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Locate the intended background schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p background-schema-history
+
+          git log --all -S'background_intro_packets' --format='%H %s' \
+            > background-schema-history/commits-containing-introduction.txt
+
+          introducing_commit="$(git log --all -S'background_intro_packets' --format='%H' --reverse | head -n 1)"
+          if [[ -z "$introducing_commit" ]]; then
+            echo "No introducing commit found" >&2
+            exit 1
+          fi
+
+          printf '%s\n' "$introducing_commit" \
+            > background-schema-history/introducing-commit-sha.txt
+          git show --stat --oneline "$introducing_commit" \
+            > background-schema-history/introducing-commit-stat.txt
+          git diff-tree --no-commit-id --name-only -r "$introducing_commit" \
+            > background-schema-history/introducing-commit-files.txt
+          git show --format=fuller --no-ext-diff "$introducing_commit" -- '*.sql' \
+            > background-schema-history/introducing-sql.diff || true
+
+          while read -r commit _; do
+            [[ -n "$commit" ]] || continue
+            {
+              echo "===== $commit ====="
+              git diff-tree --no-commit-id --name-only -r "$commit"
+              git show --format= --no-ext-diff "$commit" -- '*.sql' || true
+            } >> background-schema-history/all-relevant-commit-sql.txt
+          done < background-schema-history/commits-containing-introduction.txt
+
+          git grep -n -F 'background_intro_packets' HEAD -- '*.sql' 'supabase/**' \
+            > background-schema-history/current-sql-matches.txt || true
+          git grep -n -F 'background_intro_packets' HEAD -- ':!src/lib/supabase/database.types.ts' \
+            > background-schema-history/current-nontype-matches.txt || true
+
+          if [[ -f supabase/schema.sql ]]; then
+            cp supabase/schema.sql background-schema-history/current-schema.sql
+          fi
+
+          echo "Introducing commit: $introducing_commit"
+          cat background-schema-history/introducing-commit-files.txt
+
+      - name: Upload inspection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: background-schema-history
+          path: background-schema-history
+          if-no-files-found: error
+          retention-days: 3
