@@ -125,6 +125,42 @@ test.describe("profile-driven live Now suggestions", () => {
     await expect(page.getByText("Your $10 could activate $9,990.", { exact: true })).toHaveCount(0);
   });
 
+  test("routes incomplete profiles to the direct priority editor", async ({ page }) => {
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          generatedAt: "2026-07-21T14:00:00.000Z",
+          matchingOfferCount: 0,
+          profile: {
+            causes: [],
+            openToPayment: null,
+            openToPledges: null,
+            signalSources: [],
+          },
+          recentChanges: [],
+          recommendations: [],
+          status: "profile_incomplete",
+        }),
+      }),
+    );
+    await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+
+    const personalized = page.locator('[data-mt-live-now="profile-driven"]');
+    const completeProfile = personalized.getByRole("link", { name: "Complete profile →" });
+    await expect(personalized).toHaveAttribute("data-mt-live-now-state", "profile_incomplete");
+    await expect(completeProfile).toHaveAttribute(
+      "href",
+      "/profile/priorities?returnTo=%2Fmoral-trade-live.html%23now",
+    );
+    await expect(completeProfile).not.toHaveAttribute("href", /dashboard/);
+    await expect(personalized.getByRole("link", { name: "Review profile →" })).toHaveAttribute(
+      "href",
+      "/profile/priorities?returnTo=%2Fmoral-trade-live.html%23now",
+    );
+  });
+
   test("keeps the mobile fallback within the viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.route("**/api/live-now", (route) =>

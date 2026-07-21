@@ -7,6 +7,8 @@ import { gunzipSync } from "node:zlib";
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
 const bridge = readFileSync("public/moral-trade-live-now.js", "utf8");
 const route = readFileSync("src/app/api/live-now/route.ts", "utf8");
+const priorityPage = readFileSync("src/app/profile/priorities/page.tsx", "utf8");
+const priorityAction = readFileSync("src/app/profile/priorities/actions.ts", "utf8");
 
 test("the live shell fetches private profile recommendations before rendering", () => {
   assert.match(loader, /fetch\('\/api\/live-now'/);
@@ -31,6 +33,30 @@ test("the live-now endpoint uses authenticated profile causes and live offers", 
   assert.match(route, /rankLiveNowOffers/);
   assert.match(route, /Cache-Control.*private, no-store/s);
   assert.match(route, /Vary: "Cookie"/);
+});
+
+test("the incomplete-profile CTA opens direct priority setup instead of the dashboard", () => {
+  const incompleteStart = bridge.indexOf('if (model.status === "profile_incomplete")');
+  const noMatchesStart = bridge.indexOf('if (model.status === "no_matches")');
+  const incompleteBlock = bridge.slice(incompleteStart, noMatchesStart);
+
+  assert.ok(incompleteStart >= 0 && noMatchesStart > incompleteStart);
+  assert.match(
+    bridge,
+    /\/profile\/priorities\?returnTo=%2Fmoral-trade-live\.html%23now/,
+  );
+  assert.match(incompleteBlock, /primaryHref: profilePriorityHref/);
+  assert.doesNotMatch(incompleteBlock, /dashboard#wish-profile/);
+  assert.match(priorityPage, /Choose what should shape Now\./);
+  assert.match(priorityPage, /saveProfilePrioritySearchAction/);
+});
+
+test("priority setup saves a manual active cause search and returns to Now", () => {
+  assert.match(priorityAction, /from\("saved_searches"\)/);
+  assert.match(priorityAction, /cadence: "manual"/);
+  assert.match(priorityAction, /status: "active"/);
+  assert.match(priorityAction, /\/moral-trade-live\.html#now/);
+  assert.match(priorityAction, /Choose at least one cause area\./);
 });
 
 test("fallback states explicitly refuse generic or fabricated suggestions", () => {
