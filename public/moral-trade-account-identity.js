@@ -41,15 +41,18 @@
   }
 
   function isCompactIdentity(element) {
-    return /^(?:[\p{L}\p{N}]{1,3}|•)$/u.test(compactText(element));
+    return /^(?:\p{L}{1,3}|•)$/u.test(compactText(element));
   }
 
   function resolveAvatarTarget(candidate) {
     const descendants = Array.from(candidate.querySelectorAll("span,strong,div"))
       .filter((element) => isCompactIdentity(element))
       .sort((left, right) => left.childElementCount - right.childElementCount);
+    const legacyTarget = descendants.find(
+      (element) => compactText(element) === LEGACY_INITIALS,
+    );
 
-    return descendants[0] || (isCompactIdentity(candidate) ? candidate : null);
+    return legacyTarget || descendants[0] || (isCompactIdentity(candidate) ? candidate : null);
   }
 
   function findAvatarCandidates() {
@@ -62,8 +65,6 @@
       'a[class*="avatar" i]',
       '[class*="account" i] [class*="avatar" i]',
       '[class*="profile" i] [class*="avatar" i]',
-      'button[class*="profile" i]',
-      'a[class*="profile" i]',
       'button[aria-label*="account" i]',
       'a[aria-label*="account" i]',
       'button[aria-label*="profile" i]',
