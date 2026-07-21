@@ -29,7 +29,7 @@ jobs:
           git log --all -S'background_intro_packets' --format='%H %s' \
             > background-schema-history/commits-containing-introduction.txt
 
-          introducing_commit="$(git log --all -S'background_intro_packets' --format='%H' --reverse | head -n 1)"
+          introducing_commit="$(git log --all -S'background_intro_packets' --format='%H' --reverse --max-count=1)"
           if [[ -z "$introducing_commit" ]]; then
             echo "No introducing commit found" >&2
             exit 1
