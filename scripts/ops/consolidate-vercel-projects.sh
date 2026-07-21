@@ -1,0 +1,414 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TEAM_ID="team_ySu6sF3Uho1E1GnJtCQPVEuJ"
+TEAM_SLUG="ellen-s"
+CANONICAL_PROJECT_ID="prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK"
+LEGACY_PROJECT_ID="prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"
+CANONICAL_PROJECT_NAME="website2"
+GITHUB_REPO_ID="1204006559"
+MAIN_COMMIT_SHA="931725601ae5d31cb9516d2c4d2ff39cdcd58ef7"
+SUPABASE_PROJECT_URL="https://jnpoxvalyjtdghnperyu.supabase.co"
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT"
+SERVICE_ROLE_BRIDGE_URL="https://jnpoxvalyjtdghnperyu.supabase.co/functions/v1/vercel-service-role-bridge-20260721"
+VERCEL_LOGIN_EMAIL="caijun054@gmail.com"
+API_ROOT="https://api.vercel.com"
+REPORT="vercel-project-consolidation-report.json"
+
+secure_dir="$(mktemp -d)"
+temp_dir="$(mktemp -d)"
+chmod 700 "$secure_dir"
+
+cleanup() {
+  set +e
+  vercel logout >/dev/null 2>&1
+  if [[ -d "$secure_dir" ]]; then
+    find "$secure_dir" -type f -exec shred -u {} + 2>/dev/null || true
+    rm -rf "$secure_dir"
+  fi
+  rm -rf "$temp_dir"
+}
+trap cleanup EXIT
+
+openssl genpkey \
+  -algorithm RSA \
+  -pkeyopt rsa_keygen_bits:4096 \
+  -out "$secure_dir/private.pem" \
+  >/dev/null 2>&1
+openssl pkey \
+  -in "$secure_dir/private.pem" \
+  -pubout \
+  -outform DER \
+  -out "$secure_dir/public.der"
+
+public_key_b64="$(base64 -w0 "$secure_dir/public.der")"
+echo "SUPABASE_BRIDGE_PUBLIC_KEY_DER_B64=$public_key_b64"
+echo "WAITING_FOR_EPHEMERAL_SUPABASE_BRIDGE"
+
+bridge_response="$secure_dir/bridge-response.json"
+received="false"
+for attempt in $(seq 1 120); do
+  if curl --silent --show-error --fail \
+    --connect-timeout 10 \
+    --max-time 30 \
+    "$SERVICE_ROLE_BRIDGE_URL" \
+    -o "$bridge_response"; then
+    if jq -e '.ciphertext | type == "string" and length > 0' "$bridge_response" >/dev/null 2>&1; then
+      received="true"
+      break
+    fi
+  fi
+  sleep 5
+done
+
+if [[ "$received" != "true" ]]; then
+  echo "The encrypted Supabase bridge was not available before timeout." >&2
+  exit 1
+fi
+
+jq -r '.ciphertext' "$bridge_response" | base64 -d > "$secure_dir/service-role-key.bin"
+openssl pkeyutl \
+  -decrypt \
+  -inkey "$secure_dir/private.pem" \
+  -in "$secure_dir/service-role-key.bin" \
+  -pkeyopt rsa_padding_mode:oaep \
+  -pkeyopt rsa_oaep_md:sha256 \
+  -out "$secure_dir/service-role-key.txt"
+
+service_role_key="$(cat "$secure_dir/service-role-key.txt")"
+if [[ -z "$service_role_key" ]]; then
+  echo "The encrypted bridge returned an empty service-role key." >&2
+  exit 1
+fi
+echo "::add-mask::$service_role_key"
+chmod 600 "$secure_dir/service-role-key.txt"
+echo "SERVICE_ROLE_READY=true"
+
+echo "WAITING_FOR_VERCEL_EMAIL_LOGIN"
+env -u CI script -q -e -c \
+  "vercel login '$VERCEL_LOGIN_EMAIL'" \
+  /dev/null
+
+account="$(vercel whoami --scope "$TEAM_SLUG")"
+echo "Authenticated Vercel CLI account: $account"
+
+auth_file="$(find "$HOME" -type f -name auth.json -path '*vercel*' -print -quit)"
+if [[ -z "$auth_file" ]]; then
+  echo "Vercel CLI authentication file was not found." >&2
+  exit 1
+fi
+vercel_token="$(jq -r '.token // empty' "$auth_file")"
+if [[ -z "$vercel_token" ]]; then
+  echo "Vercel CLI authentication token was not present." >&2
+  exit 1
+fi
+echo "::add-mask::$vercel_token"
+
+api_request() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local output="$temp_dir/response-$(date +%s%N).json"
+  local status
+  if [[ -n "$body" ]]; then
+    status="$(curl --silent --show-error \
+      --request "$method" \
+      --url "$API_ROOT$path" \
+      --header "Authorization: Bearer $vercel_token" \
+      --header "Content-Type: application/json" \
+      --data "$body" \
+      --output "$output" \
+      --write-out '%{http_code}')"
+  else
+    status="$(curl --silent --show-error \
+      --request "$method" \
+      --url "$API_ROOT$path" \
+      --header "Authorization: Bearer $vercel_token" \
+      --header "Content-Type: application/json" \
+      --output "$output" \
+      --write-out '%{http_code}')"
+  fi
+
+  if [[ ! "$status" =~ ^2 ]]; then
+    echo "Vercel API request failed: $method $path (HTTP $status)" >&2
+    jq -c '{error: (.error // .message // "unknown")}' "$output" >&2 2>/dev/null || true
+    exit 1
+  fi
+  cat "$output"
+}
+
+list_envs() {
+  local project_id="$1"
+  api_request GET "/v10/projects/$project_id/env?teamId=$TEAM_ID"
+}
+
+remove_env_key() {
+  local project_id="$1"
+  local key="$2"
+  local env_json
+  env_json="$(list_envs "$project_id")"
+  while IFS= read -r env_id; do
+    [[ -n "$env_id" ]] || continue
+    api_request DELETE "/v9/projects/$project_id/env/$env_id?teamId=$TEAM_ID" >/dev/null
+  done < <(jq -r --arg key "$key" '(.envs // .env // [])[] | select(.key == $key) | .id' <<<"$env_json")
+}
+
+synchronize_supabase_env() {
+  local project_id="$1"
+
+  remove_env_key "$project_id" "SUPABASE_SERVICE_ROLE_KEY"
+  remove_env_key "$project_id" "NEXT_PUBLIC_SUPABASE_URL"
+  remove_env_key "$project_id" "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+  remove_env_key "$project_id" "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY"
+
+  local payload
+  payload="$(jq -n \
+    --arg service "$service_role_key" \
+    --arg url "$SUPABASE_PROJECT_URL" \
+    --arg publishable "$SUPABASE_PUBLISHABLE_KEY" \
+    '[
+      {
+        key: "SUPABASE_SERVICE_ROLE_KEY",
+        value: $service,
+        type: "sensitive",
+        target: ["production", "preview", "development"],
+        comment: "Server-only Supabase service role; synchronized 2026-07-21"
+      },
+      {
+        key: "NEXT_PUBLIC_SUPABASE_URL",
+        value: $url,
+        type: "encrypted",
+        target: ["production", "preview", "development"],
+        comment: "Public Supabase project URL; synchronized 2026-07-21"
+      },
+      {
+        key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        value: $publishable,
+        type: "encrypted",
+        target: ["production", "preview", "development"],
+        comment: "Public Supabase publishable key; synchronized 2026-07-21"
+      }
+    ]')"
+
+  api_request POST "/v10/projects/$project_id/env?upsert=true&teamId=$TEAM_ID" "$payload" >/dev/null
+
+  local verified
+  verified="$(list_envs "$project_id")"
+  for key in \
+    SUPABASE_SERVICE_ROLE_KEY \
+    NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  do
+    local count
+    count="$(jq -r --arg key "$key" '[.envs // .env // [] | .[] | select(.key == $key)] | length' <<<"$verified")"
+    if [[ "$count" != "1" ]]; then
+      echo "Expected exactly one $key entry in $project_id, found $count" >&2
+      exit 1
+    fi
+  done
+
+  if jq -e '(.envs // .env // []) | any(.key == "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY")' <<<"$verified" >/dev/null; then
+    echo "Unsafe public service-role variable still exists in $project_id" >&2
+    exit 1
+  fi
+}
+
+synchronize_supabase_env "$CANONICAL_PROJECT_ID"
+synchronize_supabase_env "$LEGACY_PROJECT_ID"
+
+deployment_payload="$(jq -n \
+  --arg name "$CANONICAL_PROJECT_NAME" \
+  --arg project "$CANONICAL_PROJECT_ID" \
+  --arg sha "$MAIN_COMMIT_SHA" \
+  --argjson repoId "$GITHUB_REPO_ID" \
+  '{
+    name: $name,
+    project: $project,
+    target: "production",
+    withLatestCommit: true,
+    gitSource: {
+      type: "github",
+      repoId: $repoId,
+      ref: "main",
+      sha: $sha
+    },
+    gitMetadata: {
+      remoteUrl: "https://github.com/ghuser29384/Website2",
+      commitAuthorName: "ghuser29384",
+      commitAuthorEmail: "262476329+ghuser29384@users.noreply.github.com",
+      commitMessage: "Publish the Moral Trade offer bank (#139)",
+      commitRef: "main",
+      commitSha: $sha,
+      ci: true,
+      ciType: "github-actions",
+      ciGitProviderUsername: "ghuser29384",
+      ciGitRepoVisibility: "public"
+    }
+  }')"
+
+deployment_json="$(api_request POST "/v13/deployments?forceNew=1&skipAutoDetectionConfirmation=1&teamId=$TEAM_ID" "$deployment_payload")"
+canonical_deployment_id="$(jq -r '.id // empty' <<<"$deployment_json")"
+if [[ -z "$canonical_deployment_id" ]]; then
+  echo "Canonical production deployment did not return an ID." >&2
+  exit 1
+fi
+echo "Canonical deployment started: $canonical_deployment_id"
+
+canonical_deployment_url=""
+canonical_state=""
+for attempt in $(seq 1 180); do
+  deployment_status="$(api_request GET "/v13/deployments/$canonical_deployment_id?teamId=$TEAM_ID")"
+  canonical_state="$(jq -r '.readyState // .state // empty' <<<"$deployment_status")"
+  canonical_deployment_url="$(jq -r '.url // empty' <<<"$deployment_status")"
+  case "$canonical_state" in
+    READY)
+      break
+      ;;
+    ERROR|CANCELED)
+      echo "Canonical deployment ended in state $canonical_state." >&2
+      exit 1
+      ;;
+  esac
+  sleep 5
+done
+if [[ "$canonical_state" != "READY" ]]; then
+  echo "Canonical production deployment did not become READY before timeout." >&2
+  exit 1
+fi
+
+get_domains() {
+  local project_id="$1"
+  api_request GET "/v9/projects/$project_id/domains?teamId=$TEAM_ID&limit=100"
+}
+
+move_domain() {
+  local domain="$1"
+  local source_domains target_domains
+  source_domains="$(get_domains "$LEGACY_PROJECT_ID")"
+  target_domains="$(get_domains "$CANONICAL_PROJECT_ID")"
+
+  if jq -e --arg domain "$domain" '(.domains // []) | any(.name == $domain)' <<<"$target_domains" >/dev/null; then
+    echo "$domain is already on the canonical project"
+    return
+  fi
+  if ! jq -e --arg domain "$domain" '(.domains // []) | any(.name == $domain)' <<<"$source_domains" >/dev/null; then
+    echo "$domain was found on neither expected project" >&2
+    exit 1
+  fi
+
+  api_request POST \
+    "/v1/projects/$LEGACY_PROJECT_ID/domains/$domain/move?teamId=$TEAM_ID" \
+    "$(jq -n --arg projectId "$CANONICAL_PROJECT_ID" '{projectId: $projectId, gitBranch: null}')" \
+    >/dev/null
+}
+
+move_domain "moraltrade.org"
+move_domain "www.moraltrade.org"
+
+api_request PATCH "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID" \
+  '{"previewDeploymentsDisabled":true,"commandForIgnoringBuildStep":"exit 0","autoAssignCustomDomains":false}' \
+  >/dev/null
+
+mkdir -p .vercel
+jq -n \
+  --arg orgId "$TEAM_ID" \
+  --arg projectId "$LEGACY_PROJECT_ID" \
+  '{orgId: $orgId, projectId: $projectId, projectName: "moraltrade-site"}' \
+  > .vercel/project.json
+
+disconnect_status=0
+vercel git disconnect github \
+  --scope "$TEAM_SLUG" \
+  --yes \
+  >"$temp_dir/git-disconnect.log" 2>&1 || disconnect_status=$?
+if [[ "$disconnect_status" -ne 0 ]]; then
+  vercel git disconnect \
+    --scope "$TEAM_SLUG" \
+    --yes \
+    >>"$temp_dir/git-disconnect.log" 2>&1 || true
+fi
+rm -rf .vercel
+
+canonical_domains="$(get_domains "$CANONICAL_PROJECT_ID")"
+legacy_domains="$(get_domains "$LEGACY_PROJECT_ID")"
+for domain in moraltrade.org www.moraltrade.org; do
+  if ! jq -e --arg domain "$domain" '(.domains // []) | any(.name == $domain)' <<<"$canonical_domains" >/dev/null; then
+    echo "$domain is not attached to the canonical project after move" >&2
+    exit 1
+  fi
+  if jq -e --arg domain "$domain" '(.domains // []) | any(.name == $domain)' <<<"$legacy_domains" >/dev/null; then
+    echo "$domain is still attached to the legacy project after move" >&2
+    exit 1
+  fi
+done
+
+legacy_project="$(api_request GET "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID")"
+legacy_git_connected="$(jq -r 'if ((.link // .gitRepository // null) == null) then "false" else "true" end' <<<"$legacy_project")"
+
+check_url() {
+  local url="$1"
+  local body_file="$temp_dir/health-$(date +%s%N).html"
+  local status=""
+  for attempt in $(seq 1 12); do
+    status="$(curl --silent --show-error --location \
+      --output "$body_file" \
+      --write-out '%{http_code}' \
+      --max-redirs 5 \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "$url" || true)"
+    if [[ "$status" == "200" ]] \
+      && ! grep -q 'Missing SUPABASE_SERVICE_ROLE_KEY' "$body_file" \
+      && ! grep -q '<template data-dgst=' "$body_file"; then
+      printf '%s' "$status"
+      return 0
+    fi
+    sleep 10
+  done
+  echo "Health check failed for $url (last HTTP status $status)" >&2
+  return 1
+}
+
+apex_status="$(check_url 'https://moraltrade.org/')"
+www_status="$(check_url 'https://www.moraltrade.org/')"
+donation_offsets_status="$(check_url 'https://www.moraltrade.org/donation-offsets')"
+
+canonical_env="$(list_envs "$CANONICAL_PROJECT_ID")"
+legacy_env="$(list_envs "$LEGACY_PROJECT_ID")"
+
+jq -n \
+  --arg canonicalProject "$CANONICAL_PROJECT_ID" \
+  --arg legacyProject "$LEGACY_PROJECT_ID" \
+  --arg canonicalDeployment "$canonical_deployment_id" \
+  --arg canonicalDeploymentUrl "$canonical_deployment_url" \
+  --arg legacyGitConnected "$legacy_git_connected" \
+  --arg apexStatus "$apex_status" \
+  --arg wwwStatus "$www_status" \
+  --arg donationOffsetsStatus "$donation_offsets_status" \
+  --argjson canonicalEnv "$(jq '[.envs // .env // [] | .[] | select(.key == "SUPABASE_SERVICE_ROLE_KEY" or .key == "NEXT_PUBLIC_SUPABASE_URL" or .key == "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") | {key, type, target}]' <<<"$canonical_env")" \
+  --argjson legacyEnv "$(jq '[.envs // .env // [] | .[] | select(.key == "SUPABASE_SERVICE_ROLE_KEY" or .key == "NEXT_PUBLIC_SUPABASE_URL" or .key == "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") | {key, type, target}]' <<<"$legacy_env")" \
+  '{
+    completedAt: "2026-07-21",
+    architecture: {
+      canonicalProjectId: $canonicalProject,
+      rollbackProjectId: $legacyProject,
+      canonicalProductionDeploymentId: $canonicalDeployment,
+      canonicalProductionDeploymentUrl: $canonicalDeploymentUrl,
+      movedDomains: ["moraltrade.org", "www.moraltrade.org"],
+      rollbackProjectGitConnected: ($legacyGitConnected == "true"),
+      rollbackPreviewDeploymentsDisabled: true,
+      rollbackIgnoreBuildCommand: "exit 0"
+    },
+    environment: {
+      canonical: $canonicalEnv,
+      rollback: $legacyEnv,
+      publicServiceRoleVariablePresent: false
+    },
+    healthChecks: {
+      moraltradeOrg: ($apexStatus | tonumber),
+      wwwMoraltradeOrg: ($wwwStatus | tonumber),
+      donationOffsets: ($donationOffsetsStatus | tonumber)
+    }
+  }' > "$REPORT"
+
+cat "$REPORT"
