@@ -12,6 +12,7 @@ on:
       - "src/lib/live-now-recommendations*"
       - "src/lib/recommendation-learning*"
       - "src/live-now-data.test.ts"
+      - "src/live-now-priority-route.test.ts"
       - "tests/exact-live-now-recommendations.spec.ts"
       - ".github/workflows/home-process-visual-qa.yml"
   push:
@@ -51,6 +52,7 @@ jobs:
             src/lib/recommendation-learning.test.ts \
             src/lib/recommendation-learning.ts \
             src/live-now-data.test.ts \
+            src/live-now-priority-route.test.ts \
             tests/exact-live-now-recommendations.spec.ts
 
       - name: Run adaptive feed unit tests
@@ -58,7 +60,8 @@ jobs:
           node --import tsx --test \
             src/lib/live-now-recommendations.test.ts \
             src/lib/recommendation-learning.test.ts \
-            src/live-now-data.test.ts
+            src/live-now-data.test.ts \
+            src/live-now-priority-route.test.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
