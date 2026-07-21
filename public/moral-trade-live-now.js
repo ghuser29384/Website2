@@ -11,6 +11,8 @@
     "signed_out",
     "unavailable",
   ]);
+  const profilePriorityHref =
+    "/profile/priorities?returnTo=%2Fmoral-trade-live.html%23now";
   const bootstrap =
     window.__MT_LIVE_NOW_BOOTSTRAP__ &&
     typeof window.__MT_LIVE_NOW_BOOTSTRAP__ === "object"
@@ -212,7 +214,7 @@
         title: "Add your priorities to personalize Now.",
         copy: "Suggestions begin only after you choose at least one cause area or save a cause search.",
         facts: ["Signed in", "No cause priorities saved"],
-        primaryHref: "/dashboard#wish-profile",
+        primaryHref: profilePriorityHref,
         primaryLabel: "Complete profile →",
         secondaryHref: "/offers?view=live",
         secondaryLabel: "Browse without personalization →",
@@ -280,7 +282,7 @@
         <div class="iconbox bluebg">◎</div>
         <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your profile is the filter.</h3></div>
         <div><b>Cause overlap selects candidates.</b><p class="muted" style="font-size:11px">Recency and complete terms break ties; they never replace a profile match.</p></div>
-        <a class="btn" href="/dashboard#wish-profile">Review profile →</a>
+        <a class="btn" href="${escapeHtml(profilePriorityHref)}">Review profile →</a>
       </section>
     </main><aside class="stack">
       ${sidePanel("Profile basis", model.profile.causes, "")}
