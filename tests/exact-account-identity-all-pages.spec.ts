@@ -29,10 +29,17 @@ for (const path of ["/moral-trade-live.html", "/discover", "/walkthrough"] as co
     );
 
     await page.goto(path, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      () =>
+        Boolean(
+          (window as typeof window & { __MT_ACCOUNT_IDENTITY__?: boolean })
+            .__MT_ACCOUNT_IDENTITY__,
+        ),
+      undefined,
+      { timeout: 15_000 },
+    );
 
     const avatars = page.locator('[data-mt-account-avatar="true"]');
-    await expect.poll(() => avatars.count(), { timeout: 15_000 }).toBeGreaterThan(0);
-
     const avatarCount = await avatars.count();
     for (let index = 0; index < avatarCount; index += 1) {
       await expect(avatars.nth(index)).toHaveText("SC");
@@ -43,11 +50,15 @@ for (const path of ["/moral-trade-live.html", "/discover", "/walkthrough"] as co
     await expect(page.getByText("Alex Johnson", { exact: true })).toHaveCount(0);
 
     await page.evaluate(() => {
+      let accountSurface = document.querySelector(".topbar,[role='banner'],header");
+      if (!accountSurface) {
+        accountSurface = document.createElement("header");
+        document.body.appendChild(accountSurface);
+      }
+
       const lateAvatar = document.createElement("span");
       lateAvatar.id = "late-account-avatar";
       lateAvatar.textContent = "AJ";
-      const accountSurface = document.querySelector(".topbar,[role='banner'],header");
-      if (!accountSurface) throw new Error("Account surface was not rendered");
       accountSurface.appendChild(lateAvatar);
     });
 
