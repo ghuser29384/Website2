@@ -158,7 +158,7 @@
       <div class="mt-cr-reservoir-copy">
         <span class="eyebrow">${label}</span>
         <div class="mt-cr-range-head"><label for="mt-cr-limit-${key}">Available</label><output>${displayedLimit}</output></div>
-        <input id="mt-cr-limit-${key}" data-mt-cr-input="limit" data-resource="${key}" type="range" min="${key === "money" ? 0 : 1}" max="${maximum}" step="${step}" value="${limit}">
+        <input id="mt-cr-limit-${key}" data-mt-cr-input="limit" data-resource="${key}" type="range" min="${key === "money" ? 0 : key === "minutes" ? 5 : 1}" max="${maximum}" step="${step}" value="${limit}">
         <p>${key === "money" ? "Only marginal money counts; conditional pledges count at maximum exposure." : key === "minutes" ? "Only additional active time counts; waiting time is excluded." : "Only additional commitments created by this route count."}</p>
       </div>
     </div>`;

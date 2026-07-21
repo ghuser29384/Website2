@@ -35,6 +35,7 @@ test.describe("Exact live Custom Route workbench", () => {
   });
 
   test("keeps top-ups, fees, setup time, and actions inside added resources", async ({ page }) => {
+    await expect(page.locator('[data-mt-cr-meter="minutes"] input')).toHaveValue("120");
     await page.locator('[data-mt-cr-action="declaration"][data-status="all"]').click();
 
     const topUp = page.getByLabel("Additional donation top-up");
