@@ -58,6 +58,8 @@ test("the evidence dossier exposes section tabs, artifact controls, and privacy 
   assert.match(evidenceSurface, /aria-pressed=/);
   assert.match(evidenceSurface, /Privacy details/);
   assert.match(evidenceSurface, /Illustrative record — the people, evidence, and review state below are examples/);
+  assert.match(stage, /LocalDateTime/);
+  assert.doesNotMatch(stage, /new Intl\.DateTimeFormat/);
 });
 
 test("public agreements remain in the directory before their first evidence submission", () => {

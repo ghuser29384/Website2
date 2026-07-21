@@ -25,6 +25,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reviewTradeEvidenceAction } from "@/app/core-trade-actions";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
+import {
+  formatLocalDateTimeValue,
+  LocalDateTime,
+} from "@/components/ui/local-date-time";
 
 import styles from "./evidence-stage.module.css";
 
@@ -105,18 +109,41 @@ const TABS: Array<{ id: EvidenceTab; label: string }> = [
   { id: "verification", label: "Verification" },
 ];
 
-function formatDate(value: string | null, includeTime = true) {
-  if (!value) return "Not recorded";
-  const timestamp = Date.parse(value);
-  if (Number.isNaN(timestamp)) return value;
-  return new Intl.DateTimeFormat("en", {
+function evidenceDateOptions(includeTime: boolean): Intl.DateTimeFormatOptions {
+  return {
     day: "numeric",
     hour: includeTime ? "numeric" : undefined,
     minute: includeTime ? "2-digit" : undefined,
     month: "short",
     timeZoneName: includeTime ? "short" : undefined,
     year: "numeric",
-  }).format(new Date(timestamp));
+  };
+}
+
+function EvidenceDate({
+  value,
+  includeTime = true,
+}: {
+  value: string | null;
+  includeTime?: boolean;
+}) {
+  const options = evidenceDateOptions(includeTime);
+  const fallback = formatLocalDateTimeValue(value, {
+    dateOnly: !includeTime,
+    locale: "en",
+    options,
+    timeZone: "UTC",
+  })?.label ?? value ?? "Not recorded";
+
+  return (
+    <LocalDateTime
+      value={value}
+      fallback={fallback}
+      dateOnly={!includeTime}
+      locale="en"
+      options={options}
+    />
+  );
 }
 
 function lifecycleCopy(record: EvidenceStageRecord) {
@@ -126,7 +153,7 @@ function lifecycleCopy(record: EvidenceStageRecord) {
     return "Awaiting evidence";
   }
   if (record.evidence.some((item) => item.state === "challenged")) return "Evidence disputed";
-  if (record.completedAt) return `Completed ${formatDate(record.completedAt, false)}`;
+  if (record.completedAt) return <>Completed <EvidenceDate value={record.completedAt} includeTime={false} /></>;
   if (record.evidence.every((item) => item.state === "accepted")) return "All submitted evidence accepted";
   if (record.evidence.some((item) => item.state === "accepted")) return "Partially reviewed";
   return normalized === "evidence due" ? "Evidence submitted" : normalized;
@@ -337,7 +364,7 @@ function Timeline({
           <span className={styles.timelineMarker}><Check aria-hidden="true" size={12} weight="bold" /></span>
           <div className={styles.timelineCopy}>
             <strong>{event.title}</strong>
-            <time dateTime={event.at}>{formatDate(event.at)}</time>
+            <EvidenceDate value={event.at} />
             <p>{event.description}</p>
             {event.evidenceId && onSelectEvidence ? (
               <button
@@ -628,7 +655,7 @@ export function EvidenceStage({
                     >
                       <span className={styles.thumbnail}><ArtifactThumbnail item={item} /></span>
                       <strong>{item.title}</strong>
-                      <small>{item.group} · {formatDate(item.submittedAt, false)}</small>
+                      <small>{item.group} · <EvidenceDate value={item.submittedAt} includeTime={false} /></small>
                       <i>{String(index + 1).padStart(2, "0")}</i>
                     </button>
                   ))}
@@ -640,7 +667,7 @@ export function EvidenceStage({
                       <h2>Submitted by</h2>
                       <div className={styles.submitter}>
                         <span>{selected.submittedBy.slice(0, 2).toUpperCase()}</span>
-                        <p><strong>{selected.submittedBy}</strong><small>{formatDate(selected.submittedAt)}</small></p>
+                        <p><strong>{selected.submittedBy}</strong><small><EvidenceDate value={selected.submittedAt} /></small></p>
                       </div>
                       <h2>File details</h2>
                       <p className={`${styles.artifactStatus} ${styles[`artifactStatus${selected.state[0].toUpperCase()}${selected.state.slice(1)}`]}`}>
