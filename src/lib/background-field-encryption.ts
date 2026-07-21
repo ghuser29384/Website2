@@ -17,6 +17,10 @@ const LEGACY_KEY_ENV_NAMES = [
   "BACKGROUND_FIELD_ENCRYPTION_KEY",
   "MORAL_TRADE_FIELD_ENCRYPTION_KEY",
 ];
+const SUPABASE_SERVICE_ROLE_ENV_NAME = "SUPABASE_SERVICE_ROLE_KEY";
+const SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID = "supabase-service-role-v1";
+const SUPABASE_SERVICE_ROLE_FALLBACK_DOMAIN =
+  "moral-trade:background-field-encryption:supabase-service-role:v1";
 
 export type SensitiveTextFieldMap = Record<string, string>;
 
@@ -129,6 +133,20 @@ function deriveBackgroundFieldEncryptionKey(rawKey: string) {
   return createHash("sha256").update(rawKey, "utf8").digest();
 }
 
+function deriveSupabaseServiceRoleFallbackKey() {
+  const rawKey = process.env[SUPABASE_SERVICE_ROLE_ENV_NAME]?.trim();
+
+  if (!rawKey) {
+    return null;
+  }
+
+  return createHash("sha256")
+    .update(SUPABASE_SERVICE_ROLE_FALLBACK_DOMAIN, "utf8")
+    .update("\0", "utf8")
+    .update(rawKey, "utf8")
+    .digest();
+}
+
 function parseJsonKeyring(rawValue: string) {
   try {
     const parsed = JSON.parse(rawValue) as unknown;
@@ -183,6 +201,7 @@ function loadBackgroundFieldEncryptionKeyring() {
   const keys = new Map<string, Buffer>();
   const keyringValue = process.env[KEYRING_ENV_NAME]?.trim();
   const configuredActiveKeyId = normalizeKeyId(process.env[ACTIVE_KEY_ID_ENV_NAME] ?? "");
+  const serviceRoleFallbackKey = deriveSupabaseServiceRoleFallbackKey();
 
   if (keyringValue) {
     const parsedKeyring = parseJsonKeyring(keyringValue);
@@ -197,13 +216,19 @@ function loadBackgroundFieldEncryptionKeyring() {
       }
     }
 
+    const explicitKeyIds = Array.from(keys.keys());
+    if (serviceRoleFallbackKey && !keys.has(SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID)) {
+      keys.set(SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID, serviceRoleFallbackKey);
+    }
+
     const parsedActiveKeyId = normalizeKeyId(parsedKeyring?.activeKeyId ?? "");
     const activeKeyId =
       configuredActiveKeyId && keys.has(configuredActiveKeyId)
         ? configuredActiveKeyId
         : parsedActiveKeyId && keys.has(parsedActiveKeyId)
           ? parsedActiveKeyId
-          : keys.keys().next().value ?? null;
+          : explicitKeyIds[0] ??
+            (serviceRoleFallbackKey ? SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID : null);
 
     return { activeKeyId, keys };
   }
@@ -214,9 +239,16 @@ function loadBackgroundFieldEncryptionKeyring() {
   if (fallbackKey) {
     keys.set(DEFAULT_KEY_ID, fallbackKey);
   }
+  if (serviceRoleFallbackKey && !keys.has(SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID)) {
+    keys.set(SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID, serviceRoleFallbackKey);
+  }
 
   return {
-    activeKeyId: fallbackKey ? DEFAULT_KEY_ID : null,
+    activeKeyId: fallbackKey
+      ? DEFAULT_KEY_ID
+      : serviceRoleFallbackKey
+        ? SUPABASE_SERVICE_ROLE_FALLBACK_KEY_ID
+        : null,
     keys,
   };
 }
@@ -282,7 +314,7 @@ export function encryptBackgroundSensitiveText(value: string, fieldKey: string) 
 
   if (!key) {
     throw new Error(
-      "BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY is required before saving private background-networking text.",
+      "BACKGROUND_FIELD_ENCRYPTION_KEYS, BACKGROUND_FIELD_ENCRYPTION_KEY, or SUPABASE_SERVICE_ROLE_KEY is required before saving private background-networking text.",
     );
   }
 
