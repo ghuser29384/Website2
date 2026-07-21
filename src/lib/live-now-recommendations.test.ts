@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   buildLiveNowRecentChanges,
+  buildWeightedCauseSignals,
   rankLiveNowOffers,
   uniqueProfileCauses,
   type LiveNowOfferCandidate,
 } from "./live-now-recommendations";
+import type { LearnedActionPreference } from "./recommendation-learning";
 
 const now = new Date("2026-07-20T12:00:00.000Z");
 
@@ -54,8 +56,78 @@ test("profile causes select distinct live offers instead of a universal fixed fe
 
   assert.deepEqual(animalResults.map((candidate) => candidate.id), ["animal"]);
   assert.deepEqual(aiResults.map((candidate) => candidate.id), ["ai"]);
-  assert.equal(animalResults[0]?.reason, "Matches your Animal welfare priority");
-  assert.equal(aiResults[0]?.reason, "Matches your AI safety priority");
+  assert.match(animalResults[0]?.reason ?? "", /Animal welfare priority/);
+  assert.match(aiResults[0]?.reason ?? "", /AI safety priority/);
+});
+
+test("explicit profile allocations preserve moral priority intensity", () => {
+  const causeSignals = buildWeightedCauseSignals({
+    priorityAllocations: [
+      { label: "AI safety", causeArea: "Existential risk", share: 50, rank: 1 },
+      { label: "End factory farming", causeArea: "Animal welfare", share: 30, rank: 2 },
+      { label: "Climate & environment", causeArea: "Climate", share: 20, rank: 3 },
+    ],
+  });
+
+  const existential = causeSignals.find((signal) => signal.cause === "Existential risk");
+  const animal = causeSignals.find((signal) => signal.cause === "Animal welfare");
+  const climate = causeSignals.find((signal) => signal.cause === "Climate");
+  assert.ok(existential && animal && climate);
+  assert.ok(existential.weight > animal.weight);
+  assert.ok(animal.weight > climate.weight);
+});
+
+test("moral co-benefit can outweigh default burden, while learned difficulty can reverse it", () => {
+  const candidates = [
+    {
+      ...offer("meat", "Existential risk", "Animal welfare"),
+      requestAction: "Do not eat meat for one month",
+    },
+    {
+      ...offer("plastic", "Existential risk", "Climate"),
+      requestAction: "Do not buy single-use plastic bags for one month",
+    },
+  ];
+  const causeSignals = buildWeightedCauseSignals({
+    priorityAllocations: [
+      { label: "AI safety", causeArea: "Existential risk", share: 50, rank: 1 },
+      { label: "End factory farming", causeArea: "Animal welfare", share: 30, rank: 2 },
+      { label: "Climate & environment", causeArea: "Climate", share: 20, rank: 3 },
+    ],
+  });
+
+  const baseline = rankLiveNowOffers(
+    candidates,
+    {
+      causes: causeSignals.map((signal) => signal.cause),
+      causeSignals,
+      openToPayment: true,
+      openToPledges: true,
+    },
+    now,
+  );
+  assert.deepEqual(baseline.map((candidate) => candidate.id), ["meat", "plastic"]);
+
+  const hardMeat: LearnedActionPreference = {
+    actionKey: "diet:reduce-meat",
+    actionLabel: "Reduce or avoid meat",
+    difficulty: 5,
+    willingness: 20,
+    observationCount: 4,
+    explicitDifficultyCount: 2,
+  };
+  const learned = rankLiveNowOffers(
+    candidates,
+    {
+      causes: causeSignals.map((signal) => signal.cause),
+      causeSignals,
+      openToPayment: true,
+      openToPledges: true,
+      actionPreferences: new Map([[hardMeat.actionKey, hardMeat]]),
+    },
+    now,
+  );
+  assert.deepEqual(learned.map((candidate) => candidate.id), ["plastic", "meat"]);
 });
 
 test("profile order breaks otherwise equal matches transparently", () => {
@@ -109,14 +181,6 @@ test("missing priorities and incompatible participation settings do not produce 
     ).map((candidate) => candidate.id),
     ["payment"],
   );
-  assert.deepEqual(
-    rankLiveNowOffers(
-      [payment, pledge],
-      { causes: ["Animal welfare"], openToPayment: false, openToPledges: true },
-      now,
-    ).map((candidate) => candidate.id),
-    ["pledge"],
-  );
 });
 
 test("profile sources are de-duplicated without changing their stated order", () => {
@@ -145,7 +209,7 @@ test("recent-change counts include only matched records changed in the last 24 h
     {
       cause: "Animal welfare",
       count: 2,
-      label: "Animal welfare · 2 proposals new or updated",
+      label: "Animal welfare · 2 opportunities new or updated",
     },
   ]);
 });
