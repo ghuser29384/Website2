@@ -4,6 +4,7 @@ import {
   type ProfilePriorityAllocation,
 } from "@/lib/profile-priorities";
 
+export const COMPLETE_PROFILE_AFFILIATION_MAX_LENGTH = 160;
 export const COMPLETE_PROFILE_MAX_COMMITMENTS = [25, 50, 100, 250, 500] as const;
 export const COMPLETE_PROFILE_MONTHLY_TIMES = [
   "1 hour",
@@ -25,6 +26,7 @@ export type CompleteProfileContactRule = (typeof COMPLETE_PROFILE_CONTACT_RULES)
 export interface CompleteProfileSubmission {
   displayName: string;
   role: string;
+  affiliation: string;
   bio: string;
   maxCommitment: CompleteProfileMaxCommitment;
   monthlyTime: CompleteProfileMonthlyTime;
@@ -51,6 +53,7 @@ function clean(value: unknown, maxLength: number) {
 export function normalizeCompleteProfileSubmission(input: {
   displayName?: unknown;
   role?: unknown;
+  affiliation?: unknown;
   bio?: unknown;
   maxCommitment?: unknown;
   monthlyTime?: unknown;
@@ -63,6 +66,7 @@ export function normalizeCompleteProfileSubmission(input: {
 }): CompleteProfileSubmission | null {
   const displayName = clean(input.displayName, 80);
   const role = clean(input.role, 100);
+  const affiliation = clean(input.affiliation, COMPLETE_PROFILE_AFFILIATION_MAX_LENGTH);
   const bio = clean(input.bio, 500);
   const maxCommitmentNumber = Number(input.maxCommitment);
   const monthlyTime = clean(input.monthlyTime, 40);
@@ -84,6 +88,7 @@ export function normalizeCompleteProfileSubmission(input: {
   return {
     displayName,
     role,
+    affiliation,
     bio,
     maxCommitment: (maxCommitmentSet.has(maxCommitmentNumber)
       ? maxCommitmentNumber
@@ -122,8 +127,12 @@ export function getCompleteProfileOfferOpenness(offerType: WalkthroughOfferType)
   };
 }
 
+function buildRoleAndAffiliation(input: CompleteProfileSubmission) {
+  return input.affiliation ? `${input.role} at ${input.affiliation}` : input.role;
+}
+
 export function buildCompleteProfileCapabilityText(input: CompleteProfileSubmission) {
-  return `${input.role}. Can contribute ${input.offerType.toLowerCase()} with about ${input.monthlyTime} available each month.`;
+  return `${buildRoleAndAffiliation(input)}. Can contribute ${input.offerType.toLowerCase()} with about ${input.monthlyTime} available each month.`;
 }
 
 export function buildCompleteProfileConstraintText(input: CompleteProfileSubmission) {
@@ -132,7 +141,7 @@ export function buildCompleteProfileConstraintText(input: CompleteProfileSubmiss
 
 export function buildCompleteProfilePublicPreview(input: CompleteProfileSubmission) {
   const introduction = input.bio ? ` ${input.bio}` : "";
-  return `${input.displayName} — ${input.role}. Prioritizes ${input.causeArea}.${introduction}`.slice(
+  return `${input.displayName} — ${buildRoleAndAffiliation(input)}. Prioritizes ${input.causeArea}.${introduction}`.slice(
     0,
     420,
   );
