@@ -441,12 +441,12 @@
     }
   });
 
-  function handleResourceInput(event, commitNumericFields) {
+  function handleResourceInput(event, phase) {
     const input = event.target.closest("[data-mt-cr-input]");
     if (!input) return;
     const kind = input.dataset.mtCrInput;
     const isImmediate = kind === "limit" || kind === "effect";
-    if (commitNumericFields === isImmediate) return;
+    if (phase === "focusout" && isImmediate) return;
     const value = Number(input.value);
     const snapshot = accountingApi.getSnapshot();
     const period = snapshot.activePeriod;
@@ -463,11 +463,12 @@
       if (input.checked) ui.confirmedEffects.add(input.dataset.effectId);
       else ui.confirmedEffects.delete(input.dataset.effectId);
     }
+    if (phase === "input" && !isImmediate) return;
     render();
   }
 
-  document.addEventListener("input", (event) => handleResourceInput(event, false));
-  document.addEventListener("change", (event) => handleResourceInput(event, true));
+  document.addEventListener("input", (event) => handleResourceInput(event, "input"));
+  document.addEventListener("focusout", (event) => handleResourceInput(event, "focusout"));
 
   if (state.now === "plan") render();
 })();
