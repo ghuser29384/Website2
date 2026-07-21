@@ -131,8 +131,7 @@ async function listLiveOffers({
   let query = supabase
     .from("offers")
     .select("*", { count: "exact" })
-    .eq("status", "open")
-    .eq("workflow_status", "published");
+    .eq("status", "open");
 
   if (mode !== "all") {
     query = query.eq("mode", mode);
