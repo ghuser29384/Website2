@@ -13,7 +13,7 @@ type Plan = {
 
 type PlanApi = {
   availableBudget: number;
-  buildRouteModel: (plan: Plan, now?: string) => {
+  buildRouteModel: (plan: Plan, now?: string, routeResources?: unknown) => {
     budgetHelp: string;
     cards: Array<{ meta: string; title: string }>;
     horizonHelp: string;
@@ -27,11 +27,23 @@ type PlanApi = {
 };
 
 function loadPlanApi() {
+  const resourceSource = readFileSync("public/moral-trade-live-route-resources.js", "utf8");
   const source = readFileSync("public/moral-trade-live-plan-reset.js", "utf8");
-  const window: { __MT_PLAN_RESOURCES_API__?: PlanApi } = {};
-  vm.runInNewContext(source, { window });
+  const window: {
+    __MT_PLAN_RESOURCES_API__?: PlanApi;
+    __MT_ROUTE_RESOURCES_API__?: {
+      defaultState: (now?: string) => Record<string, unknown>;
+    };
+  } = {};
+  const context = { window };
+  vm.runInNewContext(resourceSource, context);
+  vm.runInNewContext(source, context);
   assert.ok(window.__MT_PLAN_RESOURCES_API__);
-  return window.__MT_PLAN_RESOURCES_API__;
+  assert.ok(window.__MT_ROUTE_RESOURCES_API__);
+  return {
+    plan: window.__MT_PLAN_RESOURCES_API__,
+    resources: window.__MT_ROUTE_RESOURCES_API__,
+  };
 }
 
 test("the live shell loads the complete Plan Resources enhancement", () => {
@@ -41,21 +53,21 @@ test("the live shell loads the complete Plan Resources enhancement", () => {
 });
 
 test("Plan Resources defaults produce an actionable, budget-honest route", () => {
-  const api = loadPlanApi();
+  const { plan: api } = loadPlanApi();
   const model = api.buildRouteModel(api.defaultPlan(), "2026-07-18T12:00:00");
 
   assert.equal(api.availableBudget, 120);
   assert.equal(model.title, "Reduce factory-farming harm this month.");
   assert.equal(model.horizonHelp, "by Jul 31, 2026");
-  assert.match(model.budgetHelp, /planned-donation redirects excluded/);
+  assert.match(model.budgetHelp, /counts until same-period baseline confirmation/);
   assert.equal(model.summary[0], "$80 action budget");
-  assert.match(model.cards[0].meta, /Outside action budget/);
+  assert.match(model.cards[0].meta, /\$20 counted until baseline confirmed/);
   assert.match(model.cards[1].title, /verified animal-welfare evidence review/);
-  assert.match(model.itinerary[0].meta, /Outside action budget/);
+  assert.match(model.itinerary[0].meta, /counted until baseline confirmed/);
 });
 
 test("every Plan Resources setting changes the generated route model", () => {
-  const api = loadPlanApi();
+  const { plan: api } = loadPlanApi();
   const model = api.buildRouteModel(
     {
       goal: "bio",
@@ -83,7 +95,7 @@ test("every Plan Resources setting changes the generated route model", () => {
 });
 
 test("invalid or excessive Plan Resources values normalize safely", () => {
-  const api = loadPlanApi();
+  const { plan: api } = loadPlanApi();
   const normalized = JSON.parse(JSON.stringify(api.normalizePlan({
     goal: "unknown",
     horizon: "forever",
@@ -98,4 +110,22 @@ test("invalid or excessive Plan Resources values normalize safely", () => {
     time: "2h",
     verification: "high",
   });
+});
+
+test("a confirmed monthly baseline updates the shared Plan Resources route card", () => {
+  const { plan, resources } = loadPlanApi();
+  const resourceState = resources.defaultState("2026-07-18T12:00:00");
+  const monthly = resourceState.periods as Record<string, {
+    declaration: { status: string; amount: number };
+  }>;
+  monthly.month.declaration = { status: "all", amount: 20 };
+  const model = plan.buildRouteModel(
+    plan.defaultPlan(),
+    "2026-07-18T12:00:00",
+    resourceState,
+  );
+
+  assert.match(model.budgetHelp, /confirmed same-period donation principal excluded/);
+  assert.match(model.cards[0].meta, /\$20 redirected · \$0 added money/);
+  assert.match(model.itinerary[0].meta, /\$20 redirected · \$0 added money/);
 });

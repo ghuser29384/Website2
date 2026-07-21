@@ -178,12 +178,42 @@
     return includeYear ? `${monthAndDay}, ${date.getFullYear()}` : monthAndDay;
   }
 
-  function buildRouteModel(value, nowValue) {
+  function fallbackRedirectAccounting() {
+    return {
+      confirmed: false,
+      addedMoney: 20,
+      moneyLabel: "$20 redirected · $20 counted until baseline confirmed",
+      unmatchedLabel: "$20 awaiting baseline confirmation",
+    };
+  }
+
+  function resolveRedirectAccounting(plan, resourceState) {
+    const routeApi = window.__MT_ROUTE_RESOURCES_API__;
+    if (!routeApi || !resourceState || !resourceState.periods) {
+      return fallbackRedirectAccounting();
+    }
+
+    const declarationPeriod = plan.horizon === "week"
+      ? "week"
+      : plan.horizon === "month"
+        ? "month"
+        : null;
+    if (!declarationPeriod) return fallbackRedirectAccounting();
+
+    return routeApi.buildRedirectAccounting(
+      resourceState.periods[declarationPeriod],
+      declarationPeriod,
+      routeApi.redirectPrincipal,
+    );
+  }
+
+  function buildRouteModel(value, nowValue, resourceState) {
     const plan = normalizePlan(value);
     const goal = GOALS[plan.goal];
     const horizon = HORIZONS[plan.horizon];
     const time = TIMES[plan.time];
     const verification = VERIFICATIONS[plan.verification];
+    const redirect = resolveRedirectAccounting(plan, resourceState);
     const dueDate = horizonEnd(plan.horizon, nowValue);
     const due = formatDate(dueDate);
     const dueShort = formatDate(dueDate, false);
@@ -201,7 +231,9 @@
       goal,
       title: `${goal.heading} ${horizon.phrase}.`,
       horizonHelp: `by ${due}`,
-      budgetHelp: `of $${AVAILABLE_BUDGET} available · planned-donation redirects excluded`,
+      budgetHelp: redirect.confirmed
+        ? `of $${AVAILABLE_BUDGET} available · confirmed same-period donation principal excluded`
+        : `of $${AVAILABLE_BUDGET} available · redirect principal counts until same-period baseline confirmation`,
       timeHelp: horizon.label,
       verificationHelp: verification.help,
       summary: [
@@ -212,13 +244,13 @@
       cards: [
         {
           title: `1 · ${goal.redirect}`,
-          meta: `Outside action budget · due ${dueShort}`,
+          meta: `${redirect.moneyLabel} · 5 min setup · due ${dueShort}`,
         },
         { title: `2 · ${directTitle}`, meta: directMeta },
         { title: `3 · ${goal.invite}`, meta: `$0 · 5 min` },
       ],
       itinerary: [
-        { title: goal.redirect, meta: `Outside action budget · ${dueShort}` },
+        { title: goal.redirect, meta: `${redirect.moneyLabel} · ${dueShort}` },
         {
           title: directTitle,
           meta: `${directAmount ? `$${directAmount}` : "$0 reserved"} · ${dueShort}`,
@@ -237,8 +269,8 @@
           [goal.outcome, "After activation"],
         ],
         [
-          [goal.redirect, "Outside action budget · 5 min"],
-          [goal.redirectTarget, "No action-budget use"],
+          [goal.redirect, `${redirect.moneyLabel} · 5 min setup`],
+          [goal.redirectTarget, redirect.confirmed ? "Confirmed baseline flow stays separate" : "Confirm the same-period baseline first"],
           ["Publish the recipient record", "Receipt required"],
         ],
         [
@@ -416,7 +448,12 @@
     patchPlanResources();
 
     if (!announce || typeof toast !== "function") return;
-    const model = buildRouteModel(state.planResources);
+    const routeApi = window.__MT_ROUTE_RESOURCES_API__;
+    const model = buildRouteModel(
+      state.planResources,
+      undefined,
+      routeApi ? routeApi.getSnapshot() : undefined,
+    );
     const messages = {
       goal: `Plan goal changed to ${model.goal.heading}.`,
       horizon: `Plan horizon changed to ${HORIZONS[model.plan.horizon].label}.`,
@@ -538,6 +575,14 @@
     laneSelectors.forEach((selector, index) => {
       syncLane(route.querySelector(`.lane${selector}`), model.lanes[index]);
     });
+
+    const customRouteButton = Array.from(route.querySelectorAll("button")).find(
+      (button) => normalizeText(button) === "custom route",
+    );
+    if (customRouteButton) {
+      customRouteButton.type = "button";
+      setAttribute(customRouteButton, "data-mt-cr-action", "open");
+    }
   }
 
   function syncItinerary(model) {
@@ -613,7 +658,12 @@
     const panel = document.querySelector(".plan-control");
     if (!panel) return false;
 
-    const model = buildRouteModel(state.planResources);
+    const routeApi = window.__MT_ROUTE_RESOURCES_API__;
+    const model = buildRouteModel(
+      state.planResources,
+      undefined,
+      routeApi ? routeApi.getSnapshot() : undefined,
+    );
     syncControlValues(panel, model);
     syncPlanSurface(model);
     installReset(panel);
@@ -627,4 +677,9 @@
     childList: true,
     subtree: true,
   });
+
+  const routeApi = window.__MT_ROUTE_RESOURCES_API__;
+  if (routeApi && typeof routeApi.subscribe === "function") {
+    routeApi.subscribe(() => patchPlanResources());
+  }
 })();
