@@ -76,6 +76,9 @@ jobs:
           if [[ -f supabase/schema.sql ]]; then
             cp supabase/schema.sql background-schema-history/current-schema.sql
           fi
+          if [[ -d supabase/migrations ]]; then
+            cp -R supabase/migrations background-schema-history/current-migrations
+          fi
 
           echo "Inspection complete"
           cat background-schema-history/sql-files-containing-background-intro-packets.txt || true
