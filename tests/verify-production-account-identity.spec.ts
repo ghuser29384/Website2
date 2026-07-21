@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 import { expect, test } from "@playwright/test";
 
@@ -46,57 +46,123 @@ for (const route of productionRoutes) {
       }),
     );
 
-    const response = await page.goto(route.path, { waitUntil: "domcontentloaded" });
-    expect(response?.ok()).toBe(true);
-
-    await page.waitForFunction(
-      () =>
-        Boolean(
-          (window as typeof window & { __MT_ACCOUNT_IDENTITY__?: boolean })
-            .__MT_ACCOUNT_IDENTITY__,
-        ),
-      undefined,
-      { timeout: 15_000 },
-    );
-
-    expect(new URL(page.url()).pathname).toBe(route.path);
-    await expect(page).toHaveTitle(/Moral Trade/u);
-    await expect(page.locator("body")).toContainText(/\S/u);
-    await expect(
-      page.locator("nextjs-portal,[data-nextjs-dialog-overlay],#webpack-dev-server-client-overlay"),
-    ).toHaveCount(0);
-
-    const avatars = page.locator('[data-mt-account-avatar="true"]');
-    await expect.poll(() => avatars.count()).toBeGreaterThan(0);
-    const avatarCount = await avatars.count();
-    for (let index = 0; index < avatarCount; index += 1) {
-      await expect(avatars.nth(index)).toHaveText("SC");
-      await expect(avatars.nth(index)).toHaveAttribute("aria-label", "Samira Chen account");
+    let responseOk = false;
+    let navigationError: string | null = null;
+    try {
+      const response = await page.goto(route.path, { waitUntil: "domcontentloaded" });
+      responseOk = response?.ok() === true;
+    } catch (error) {
+      navigationError = error instanceof Error ? error.message : String(error);
     }
 
-    await expect(page.getByText("AJ", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Alex Johnson", { exact: true })).toHaveCount(0);
+    let bridgeLoaded = false;
+    let bridgeError: string | null = null;
+    try {
+      await page.waitForFunction(
+        () =>
+          Boolean(
+            (window as typeof window & { __MT_ACCOUNT_IDENTITY__?: boolean })
+              .__MT_ACCOUNT_IDENTITY__,
+          ),
+        undefined,
+        { timeout: 15_000 },
+      );
+      bridgeLoaded = true;
+    } catch (error) {
+      bridgeError = error instanceof Error ? error.message : String(error);
+    }
 
-    await page.screenshot({
-      path: `test-results/production-${route.name}-account.png`,
-      fullPage: false,
-    });
+    await page.waitForTimeout(250);
+    const pathname = new URL(page.url()).pathname;
+    const title = await page.title();
+    const bodyText = (await page.locator("body").innerText()).trim();
+    const overlayCount = await page
+      .locator("nextjs-portal,[data-nextjs-dialog-overlay],#webpack-dev-server-client-overlay")
+      .count();
+    const avatars = page.locator('[data-mt-account-avatar="true"]');
+    const avatarCount = await avatars.count();
+    const avatarTexts: string[] = [];
+    const avatarLabels: Array<string | null> = [];
+    for (let index = 0; index < avatarCount; index += 1) {
+      avatarTexts.push((await avatars.nth(index).innerText()).trim());
+      avatarLabels.push(await avatars.nth(index).getAttribute("aria-label"));
+    }
+    const legacyInitialCount = await page.getByText("AJ", { exact: true }).count();
+    const legacyNameCount = await page.getByText("Alex Johnson", { exact: true }).count();
 
-    await page.evaluate(() => {
-      const accountSurface = document.querySelector(".topbar,[role='banner'],header");
-      if (!accountSurface) throw new Error("Production account surface was not rendered");
+    let screenshotError: string | null = null;
+    try {
+      await page.screenshot({
+        path: `test-results/production-${route.name}-account.png`,
+        fullPage: false,
+      });
+    } catch (error) {
+      screenshotError = error instanceof Error ? error.message : String(error);
+    }
 
-      const lateAvatar = document.createElement("span");
-      lateAvatar.id = "late-account-avatar";
-      lateAvatar.textContent = "AJ";
-      accountSurface.appendChild(lateAvatar);
-    });
-    await expect(page.locator("#late-account-avatar")).toHaveText("SC");
-    await expect(page.locator("#late-account-avatar")).toHaveAttribute(
-      "aria-label",
-      "Samira Chen account",
+    let lateAvatarText: string | null = null;
+    let lateAvatarLabel: string | null = null;
+    let lateAvatarError: string | null = null;
+    try {
+      await page.evaluate(() => {
+        const accountSurface = document.querySelector(".topbar,[role='banner'],header");
+        if (!accountSurface) throw new Error("Production account surface was not rendered");
+
+        const lateAvatar = document.createElement("span");
+        lateAvatar.id = "late-account-avatar";
+        lateAvatar.textContent = "AJ";
+        accountSurface.appendChild(lateAvatar);
+      });
+      await expect(page.locator("#late-account-avatar")).toHaveText("SC");
+      lateAvatarText = (await page.locator("#late-account-avatar").innerText()).trim();
+      lateAvatarLabel = await page.locator("#late-account-avatar").getAttribute("aria-label");
+    } catch (error) {
+      lateAvatarError = error instanceof Error ? error.message : String(error);
+    }
+
+    const diagnostics = {
+      route,
+      responseOk,
+      navigationError,
+      bridgeLoaded,
+      bridgeError,
+      pathname,
+      title,
+      bodyHasText: bodyText.length > 0,
+      overlayCount,
+      avatarCount,
+      avatarTexts,
+      avatarLabels,
+      legacyInitialCount,
+      legacyNameCount,
+      lateAvatarText,
+      lateAvatarLabel,
+      lateAvatarError,
+      screenshotError,
+      pageErrors,
+      consoleErrors,
+    };
+    writeFileSync(
+      `test-results/production-${route.name}-diagnostics.json`,
+      `${JSON.stringify(diagnostics, null, 2)}\n`,
+      "utf8",
     );
 
+    expect(responseOk, navigationError ?? "Production route did not return an OK response").toBe(true);
+    expect(bridgeLoaded, bridgeError ?? "Account identity bridge did not load").toBe(true);
+    expect(pathname).toBe(route.path);
+    expect(title).toMatch(/Moral Trade/u);
+    expect(bodyText.length).toBeGreaterThan(0);
+    expect(overlayCount).toBe(0);
+    expect(avatarCount).toBeGreaterThan(0);
+    expect(avatarTexts.every((text) => text === "SC")).toBe(true);
+    expect(avatarLabels.every((label) => label === "Samira Chen account")).toBe(true);
+    expect(legacyInitialCount).toBe(0);
+    expect(legacyNameCount).toBe(0);
+    expect(lateAvatarText).toBe("SC");
+    expect(lateAvatarLabel).toBe("Samira Chen account");
+    expect(lateAvatarError).toBeNull();
+    expect(screenshotError).toBeNull();
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
   });
