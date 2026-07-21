@@ -126,6 +126,35 @@
     };
   }
 
+  function normalizeOwnedOpportunity(value) {
+    if (!value || typeof value !== "object") return null;
+
+    const id = string(value.id, 160);
+    const offeredCause = string(value.offeredCause, 120);
+    const requestedCause = string(value.requestedCause, 120);
+    if (!id || !offeredCause || !requestedCause) return null;
+    const opportunityType = allowedOpportunityTypes.has(value.opportunityType)
+      ? value.opportunityType
+      : "offer";
+
+    return {
+      id,
+      opportunityType,
+      href: safePath(value.href, "/trades/" + encodeURIComponent(id) + "/manage"),
+      ctaLabel: string(value.ctaLabel, 80) || "Manage & invite",
+      sourceLabel: string(value.sourceLabel, 80) || "Your live offer",
+      ownerAlias: string(value.ownerAlias, 100) || "You",
+      offeredCause,
+      requestedCause,
+      offerAction: string(value.offerAction, 420),
+      requestAction: string(value.requestAction, 420),
+      verification: string(value.verification, 320),
+      duration: string(value.duration, 160),
+      summary: string(value.summary, 320),
+      updatedAt: string(value.updatedAt, 40),
+    };
+  }
+
   function normalizeChange(value) {
     if (!value || typeof value !== "object") return null;
     const cause = string(value.cause, 120);
@@ -185,6 +214,16 @@
       .map(normalizeRecommendation)
       .filter(Boolean)
       .slice(0, 12),
+    ownedOpportunities: (Array.isArray(bootstrap.ownedOpportunities)
+      ? bootstrap.ownedOpportunities
+      : [])
+      .map(normalizeOwnedOpportunity)
+      .filter(Boolean)
+      .slice(0, 6),
+    ownedOpportunityCount: Math.max(
+      0,
+      Math.floor(Number(bootstrap.ownedOpportunityCount) || 0),
+    ),
     status: allowedStates.has(bootstrap.status) ? bootstrap.status : "unavailable",
   };
 
@@ -309,6 +348,68 @@
     </article>`;
   }
 
+  function ownedOpportunityCard(opportunity) {
+    const summary =
+      opportunity.summary ||
+      opportunity.offerAction ||
+      'Your live route involving ' +
+        opportunity.offeredCause +
+        ' and ' +
+        opportunity.requestedCause +
+        '.';
+    const duration = opportunity.duration
+      ? '<span>' + escapeHtml(opportunity.duration) + '</span>'
+      : '';
+    const verification = opportunity.verification
+      ? '<span>Evidence: ' + escapeHtml(opportunity.verification) + '</span>'
+      : '';
+
+    return [
+      '<article class="story mt-owned-card" data-owned-opportunity-id="',
+      escapeHtml(opportunity.id),
+      '"><div class="mt-feed-card-main"><div class="mt-feed-card-head">',
+      '<div class="mt-feed-avatar mt-owned-avatar" aria-hidden="true">YOU</div>',
+      '<div class="mt-feed-owner"><strong>Your listing</strong><span>',
+      escapeHtml(opportunity.sourceLabel),
+      '</span></div><div class="mt-feed-rank-reason">Live · ready to share</div></div><h3>',
+      escapeHtml(opportunity.offeredCause),
+      ' ↔ ',
+      escapeHtml(opportunity.requestedCause),
+      '</h3><p class="mt-feed-summary">',
+      escapeHtml(summary),
+      '</p><div class="mt-feed-exchange"><div class="mt-feed-exchange-block"><span>You offer</span><b>',
+      escapeHtml(opportunity.offerAction || opportunity.offeredCause),
+      '</b></div><div class="mt-feed-exchange-arrow" aria-hidden="true">↔</div>',
+      '<div class="mt-feed-exchange-block"><span>You seek</span><b>',
+      escapeHtml(opportunity.requestAction || opportunity.requestedCause),
+      '</b></div></div><div class="mt-feed-meta">',
+      '<span>Shown here as your own listing, not as a match</span>',
+      duration,
+      verification,
+      '</div></div><div class="mt-feed-actions mt-owned-actions"><a class="btn primary" href="',
+      escapeHtml(opportunity.href),
+      '">',
+      escapeHtml(opportunity.ctaLabel),
+      ' →</a><a class="mt-feed-feedback" href="/offers/',
+      escapeHtml(encodeURIComponent(opportunity.id)),
+      '">View public listing</a></div></article>',
+    ].join('');
+  }
+
+  function renderOwnedOpportunities() {
+    if (!model.ownedOpportunities.length) return '';
+
+    return [
+      '<section class="mt-owned-feed" aria-label="Your live listings">',
+      '<div class="mt-owned-feed-heading"><div><div class="eyebrow blue">Your live routes</div>',
+      '<h3>Bring counterparties into offers you already published.</h3></div>',
+      '<a class="btn ghost small" href="/dashboard#my-trades">View all your listings →</a></div>',
+      '<div class="mt-owned-feed-cards">',
+      model.ownedOpportunities.map(ownedOpportunityCard).join(''),
+      '</div></section>',
+    ].join('');
+  }
+
   function sidePanel(title, items, footer) {
     const rows = items.length
       ? items
@@ -356,12 +457,16 @@
 
     if (model.status === "no_matches") {
       const causeSummary = model.profile.causes.slice(0, 3).join(", ");
+      const ownListingsCopy = model.ownedOpportunities.length
+        ? " Your own live routes remain available below for sharing and invitations."
+        : "";
       return {
         eyebrow: "Profile checked against live inventory",
         title: "No open opportunity currently matches your profile.",
         copy: causeSummary
-          ? `We checked proposals and donation redirects against ${causeSummary}. No filler suggestions were added.`
-          : "No filler suggestions were added.",
+          ? `We checked other participants' proposals and donation redirects against ${causeSummary}. No filler suggestions were added.` +
+            ownListingsCopy
+          : "No filler suggestions were added." + ownListingsCopy,
         facts: [
           `${model.profile.causes.length} profile ${
             model.profile.causes.length === 1 ? "priority" : "priorities"
@@ -414,6 +519,7 @@
           content.secondaryHref,
         )}">${escapeHtml(content.secondaryLabel)}</a></div>
       </section>
+      ${renderOwnedOpportunities()}
       <section class="panel attention">
         <div class="iconbox bluebg">◎</div>
         <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities select the benefit. Your action model estimates the burden.</h3></div>
@@ -493,6 +599,7 @@
         <div class="mt-feed-priority-row" aria-label="Priority signals used">${weightedPriorityChips()}</div>
       </section>
       <section class="mt-social-feed" aria-label="Personalized moral opportunities">${cards}</section>
+      ${renderOwnedOpportunities()}
     </main><aside class="stack">
       ${sidePanel(
         "Moral priorities used",

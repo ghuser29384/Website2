@@ -10,6 +10,13 @@ export interface SiteSearchItem {
 
 export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
+    href: "/feed",
+    label: "Personalized opportunity feed",
+    summary: "See live moral-trade opportunities ranked by your priorities, action preferences, and explicit feedback.",
+    kind: "trade",
+    keywords: ["feed", "for you", "home", "personalized", "recommendations", "priorities", "actions", "opportunities"],
+  },
+  {
     href: "/offers",
     label: "Explore the marketplace",
     summary: "Browse live participant proposals, worked examples, reviewed templates, and conditional pools without mixing their states.",

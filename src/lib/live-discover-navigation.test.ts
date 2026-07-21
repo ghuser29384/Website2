@@ -16,9 +16,12 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   assert.match(loader, /accountAwareSource\.replace\('<\/body>'/);
 });
 
-test("the live navigation bridge exposes Discover and Trade controls without duplicates", () => {
+test("the live navigation bridge names the home stream Feed and exposes Discover and Trade controls", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
+  assert.match(bridge, /control\.textContent = "Feed"/);
+  assert.match(bridge, /data-mt-feed-link/);
+  assert.match(bridge, /Open personalized feed/);
   assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /control\.textContent = "Discover"/);

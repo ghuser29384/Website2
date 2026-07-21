@@ -19,6 +19,23 @@
       .toLowerCase();
   }
 
+  function findFeedControl(nav) {
+    return Array.from(nav.querySelectorAll("a, button")).find((candidate) => {
+      const label = normalizeLabel(candidate);
+      return label === "now" || label === "feed";
+    });
+  }
+
+  function prepareFeedControl(control) {
+    control.textContent = "Feed";
+    control.setAttribute("aria-label", "Open personalized feed");
+    control.setAttribute("data-mt-feed-link", "true");
+
+    if (control instanceof HTMLAnchorElement) {
+      control.href = "/feed";
+    }
+  }
+
   function openDiscover(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -73,13 +90,11 @@
     control.setAttribute("aria-label", "Open Discover");
     prepareDiscoverControl(control);
 
-    const nowControl = Array.from(nav.querySelectorAll("a, button")).find(
-      (candidate) => normalizeLabel(candidate) === "now",
-    );
+    const feedControl = findFeedControl(nav);
 
-    if (nowControl?.nextSibling) {
-      nav.insertBefore(control, nowControl.nextSibling);
-    } else if (nowControl) {
+    if (feedControl?.nextSibling) {
+      nav.insertBefore(control, feedControl.nextSibling);
+    } else if (feedControl) {
       nav.appendChild(control);
     } else {
       nav.insertBefore(control, nav.firstChild);
@@ -110,6 +125,11 @@
     let patched = false;
 
     for (const nav of navs) {
+      const existingFeedControl = findFeedControl(nav);
+      if (existingFeedControl && !existingFeedControl.hasAttribute("data-mt-feed-link")) {
+        prepareFeedControl(existingFeedControl);
+      }
+
       const controls = [...nav.querySelectorAll("a, button")];
       let discoverControl = controls.find((control) => normalizeLabel(control) === "discover");
 
@@ -118,7 +138,7 @@
           prepareDiscoverControl(discoverControl);
         }
       } else {
-        const template = controls.find((control) => normalizeLabel(control) === "now") || controls[0];
+        const template = findFeedControl(nav) || controls[0];
         if (!template) continue;
 
         discoverControl = createDiscoverControl(nav, template);
@@ -135,7 +155,7 @@
         }
       } else {
         const template =
-          updatedControls.find((control) => normalizeLabel(control) === "now") || updatedControls[0];
+          findFeedControl(nav) || updatedControls[0];
         if (template) createControlsControl(nav, template, discoverControl);
       }
 

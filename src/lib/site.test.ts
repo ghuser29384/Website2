@@ -4,9 +4,14 @@ import test from "node:test";
 import { FOOTER_LINK_GROUPS, getPrimaryNavLinks } from "@/lib/site";
 import { SITE_SEARCH_ITEMS } from "@/lib/site-search";
 
-test("exposes Discover as the primary marketplace navigation entry", () => {
+test("exposes Feed and Discover as the first marketplace navigation entries", () => {
   const primaryLinks = getPrimaryNavLinks(false);
-  const [discoverLink] = primaryLinks;
+  const [feedLink, discoverLink] = primaryLinks;
+
+  assert.deepEqual(feedLink, {
+    href: "/feed",
+    label: "Feed",
+  });
 
   assert.deepEqual(discoverLink, {
     href: "/discover",
@@ -15,10 +20,15 @@ test("exposes Discover as the primary marketplace navigation entry", () => {
   assert.ok(primaryLinks.some((link) => link.href === "/evidence" && link.label === "Evidence"));
 });
 
-test("links to Discover from the marketplace footer group", () => {
+test("links to Feed and Discover from the marketplace footer group", () => {
   const marketplaceGroup = FOOTER_LINK_GROUPS.find((group) => group.title === "Marketplace");
 
   assert.ok(marketplaceGroup);
+  assert.ok(
+    marketplaceGroup.links.some(
+      (link) => link.href === "/feed" && link.label === "Personalized feed",
+    ),
+  );
   assert.ok(
     marketplaceGroup.links.some(
       (link) => link.href === "/discover" && link.label === "Discover opportunities",

@@ -96,7 +96,8 @@
   margin-top: 14px;
 }
 
-.mt-feed-card {
+.mt-feed-card,
+.mt-owned-card {
   overflow: hidden;
   position: relative;
   background: var(--mt-feed-paper);
@@ -164,7 +165,8 @@
   text-align: right;
 }
 
-.mt-feed-card h3 {
+.mt-feed-card h3,
+.mt-owned-card h3 {
   margin: 18px 0 8px;
   max-width: 760px;
   font-size: clamp(20px, 2.7vw, 30px);
@@ -328,6 +330,55 @@
   line-height: 1.45;
 }
 
+.mt-owned-feed {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid var(--mt-feed-border);
+  background: rgba(22, 72, 255, 0.045);
+}
+
+.mt-owned-feed-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mt-owned-feed-heading h3 {
+  margin: 3px 0 0;
+  font-size: clamp(19px, 2.2vw, 27px);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.mt-owned-feed-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.mt-owned-card {
+  overflow: hidden;
+  position: relative;
+  background: var(--mt-feed-paper);
+  border: 1px solid var(--mt-feed-border);
+  box-shadow: 0 8px 28px rgba(17, 17, 17, 0.04);
+  padding: 0 !important;
+}
+
+.mt-owned-avatar {
+  border-radius: 3px;
+  background: var(--mt-feed-blue);
+  font-size: 9px;
+}
+
+.mt-owned-actions a.mt-feed-feedback {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 @media (max-width: 920px) {
   [data-mt-live-now="adaptive"].focus-layout {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -384,6 +435,15 @@
   .mt-feed-actions .btn {
     flex-basis: 100%;
     text-align: center;
+  }
+
+  .mt-owned-feed {
+    padding: 14px;
+  }
+
+  .mt-owned-feed-heading {
+    display: grid;
+    align-items: start;
   }
 
   .mt-feed-feedback[data-action="hide"] {

@@ -228,4 +228,75 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     );
     expect(overflow).toBeLessThanOrEqual(1);
   });
+
+  test("exposes a real Feed route and keeps owned listings useful without calling them matches", async ({
+    page,
+  }) => {
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          generatedAt: "2026-07-21T16:00:00.000Z",
+          matchingOpportunityCount: 0,
+          profile: {
+            causes: ["Cause prioritization"],
+            weightedCauses: [
+              {
+                cause: "Cause prioritization",
+                weight: 98,
+                source: "explicit_priority",
+                rank: 1,
+              },
+            ],
+            openToPayment: true,
+            openToPledges: true,
+            signalSources: ["Weighted profile priorities"],
+            learningEnabled: true,
+          },
+          recentChanges: [],
+          recommendations: [],
+          ownedOpportunityCount: 1,
+          ownedOpportunities: [
+            {
+              id: "owned-offer",
+              opportunityType: "offer",
+              href: "/trades/owned-offer/manage",
+              ctaLabel: "Manage & invite",
+              sourceLabel: "Your live offer",
+              ownerAlias: "Ellen",
+              offeredCause: "Cause prioritization",
+              requestedCause: "Research feedback",
+              offerAction: "Share a reviewed prioritization brief",
+              requestAction: "Provide bounded research feedback",
+              verification: "Public link and counterparty confirmation",
+              duration: "Complete within 30 days",
+              summary: "Without an agreement, neither action is assumed to occur.",
+              updatedAt: "2026-07-21T15:00:00.000Z",
+            },
+          ],
+          status: "no_matches",
+        }),
+      }),
+    );
+
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(/\/feed$/);
+    await expect(page.getByRole("button", { name: "Open personalized feed" })).toHaveText(
+      "Feed",
+    );
+    const feed = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(feed).toHaveAttribute("data-mt-live-now-state", "no_matches");
+    await expect(feed.getByRole("region", { name: "Your live listings" })).toContainText(
+      "Cause prioritization ↔ Research feedback",
+    );
+    await expect(feed.getByRole("link", { name: "Manage & invite →" })).toHaveAttribute(
+      "href",
+      "/trades/owned-offer/manage",
+    );
+    await expect(feed.getByText("Shown here as your own listing, not as a match")).toBeVisible();
+    await expect(feed.getByRole("button", { name: "Easy for me" })).toHaveCount(0);
+    await expect(feed.getByRole("button", { name: "Hard for me" })).toHaveCount(0);
+  });
 });
