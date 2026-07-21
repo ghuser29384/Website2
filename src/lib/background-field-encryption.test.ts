@@ -22,6 +22,7 @@ const FIELD_ENCRYPTION_ENV_NAMES = [
   "BACKGROUND_FIELD_ENCRYPTION_KEYS",
   "BACKGROUND_FIELD_ENCRYPTION_LEGACY_KEY",
   "MORAL_TRADE_FIELD_ENCRYPTION_KEY",
+  "SUPABASE_SERVICE_ROLE_KEY",
 ] as const;
 
 function withFieldEncryptionEnv(
@@ -88,17 +89,17 @@ test("background field encryption round-trips without storing plaintext", () => 
       BACKGROUND_FIELD_ENCRYPTION_KEY: "test-only-background-field-encryption-key",
     },
     () => {
-    const ciphertext = encryptBackgroundSensitiveText(
-      "Find an animal welfare counterparty",
-      "exact_wish",
-    );
+      const ciphertext = encryptBackgroundSensitiveText(
+        "Find an animal welfare counterparty",
+        "exact_wish",
+      );
 
-    assert.ok(ciphertext.startsWith("bgenc:v2:default:"));
-    assert.equal(ciphertext.includes("animal welfare"), false);
-    assert.equal(
-      decryptBackgroundSensitiveText(ciphertext, "exact_wish"),
-      "Find an animal welfare counterparty",
-    );
+      assert.ok(ciphertext.startsWith("bgenc:v2:default:"));
+      assert.equal(ciphertext.includes("animal welfare"), false);
+      assert.equal(
+        decryptBackgroundSensitiveText(ciphertext, "exact_wish"),
+        "Find an animal welfare counterparty",
+      );
     },
   );
 });
@@ -109,26 +110,29 @@ test("sensitive record preparation stores placeholders and decryptable ciphertex
       BACKGROUND_FIELD_ENCRYPTION_KEY: "test-only-background-field-encryption-key",
     },
     () => {
-    const prepared = prepareRecordSensitiveTextFields({
-      capabilities: "I can fund a pilot",
-      constraints: "No public contact before consent",
-    });
+      const prepared = prepareRecordSensitiveTextFields({
+        capabilities: "I can fund a pilot",
+        constraints: "No public contact before consent",
+      });
 
-    assert.equal(prepared.version, BACKGROUND_FIELD_ENCRYPTION_VERSION);
-    assert.equal(prepared.plaintextFields.capabilities, BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER);
-    assert.equal(prepared.ciphertexts.capabilities.includes("fund a pilot"), false);
+      assert.equal(prepared.version, BACKGROUND_FIELD_ENCRYPTION_VERSION);
+      assert.equal(
+        prepared.plaintextFields.capabilities,
+        BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER,
+      );
+      assert.equal(prepared.ciphertexts.capabilities.includes("fund a pilot"), false);
 
-    const row = overlayBackgroundRecordSensitiveText(
-      {
-        capabilities: BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER,
-        constraints: BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER,
-        sensitive_ciphertexts: prepared.ciphertexts,
-      },
-      ["capabilities", "constraints"],
-    );
+      const row = overlayBackgroundRecordSensitiveText(
+        {
+          capabilities: BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER,
+          constraints: BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER,
+          sensitive_ciphertexts: prepared.ciphertexts,
+        },
+        ["capabilities", "constraints"],
+      );
 
-    assert.equal(row.capabilities, "I can fund a pilot");
-    assert.equal(row.constraints, "No public contact before consent");
+      assert.equal(row.capabilities, "I can fund a pilot");
+      assert.equal(row.constraints, "No public contact before consent");
     },
   );
 });
@@ -139,29 +143,91 @@ test("wish entry body encryption uses a private placeholder", () => {
       BACKGROUND_FIELD_ENCRYPTION_KEY: "test-only-background-field-encryption-key",
     },
     () => {
-    const prepared = prepareEncryptedWishEntryBody("Exact ask for a private intro");
+      const prepared = prepareEncryptedWishEntryBody("Exact ask for a private intro");
 
-    assert.equal(prepared.body, BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER);
-    assert.equal(prepared.body_encryption_version, BACKGROUND_FIELD_ENCRYPTION_VERSION);
-    assert.equal(prepared.body_ciphertext.includes("private intro"), false);
+      assert.equal(prepared.body, BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER);
+      assert.equal(prepared.body_encryption_version, BACKGROUND_FIELD_ENCRYPTION_VERSION);
+      assert.equal(prepared.body_ciphertext.includes("private intro"), false);
 
-    const row = overlayEncryptedWishEntryBody({
-      body: prepared.body,
-      body_ciphertext: prepared.body_ciphertext,
-    });
+      const row = overlayEncryptedWishEntryBody({
+        body: prepared.body,
+        body_ciphertext: prepared.body_ciphertext,
+      });
 
-    assert.equal(row.body, "Exact ask for a private intro");
+      assert.equal(row.body, "Exact ask for a private intro");
     },
   );
 });
 
-test("saving non-empty private text fails closed when no field key is configured", () => {
+test("saving non-empty private text fails closed when no server key is configured", () => {
   withFieldEncryptionEnv({}, () => {
     assert.throws(
       () => prepareRecordSensitiveTextFields({ constraints: "Needs private review" }),
-      /BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY/,
+      /BACKGROUND_FIELD_ENCRYPTION_KEYS.*SUPABASE_SERVICE_ROLE_KEY/,
     );
   });
+});
+
+test("background field encryption derives a stable server-only fallback from Supabase", () => {
+  withFieldEncryptionEnv(
+    {
+      SUPABASE_SERVICE_ROLE_KEY: "test-only-supabase-service-role-key",
+    },
+    () => {
+      const status = getBackgroundFieldEncryptionKeyStatus();
+      const ciphertext = encryptBackgroundSensitiveText(
+        "Complete Profile private matching preferences",
+        "wish_profiles.constraints",
+      );
+
+      assert.equal(status.activeKeyId, "supabase-service-role-v1");
+      assert.deepEqual(status.configuredKeyIds, ["supabase-service-role-v1"]);
+      assert.ok(ciphertext.startsWith("bgenc:v2:supabase-service-role-v1:"));
+      assert.equal(ciphertext.includes("private matching preferences"), false);
+      assert.equal(
+        decryptBackgroundSensitiveText(ciphertext, "wish_profiles.constraints"),
+        "Complete Profile private matching preferences",
+      );
+    },
+  );
+});
+
+test("a dedicated field key takes precedence without losing fallback decrypt support", () => {
+  let fallbackCiphertext = "";
+
+  withFieldEncryptionEnv(
+    {
+      SUPABASE_SERVICE_ROLE_KEY: "test-only-supabase-service-role-key",
+    },
+    () => {
+      fallbackCiphertext = encryptBackgroundSensitiveText(
+        "Saved during the production fallback",
+        "wish_profiles.constraints",
+      );
+    },
+  );
+
+  withFieldEncryptionEnv(
+    {
+      BACKGROUND_FIELD_ENCRYPTION_KEY: "test-only-dedicated-field-key",
+      SUPABASE_SERVICE_ROLE_KEY: "test-only-supabase-service-role-key",
+    },
+    () => {
+      const status = getBackgroundFieldEncryptionKeyStatus();
+      const dedicatedCiphertext = encryptBackgroundSensitiveText(
+        "Saved after dedicated key configuration",
+        "wish_profiles.constraints",
+      );
+
+      assert.equal(status.activeKeyId, "default");
+      assert.deepEqual(status.configuredKeyIds, ["default", "supabase-service-role-v1"]);
+      assert.ok(dedicatedCiphertext.startsWith("bgenc:v2:default:"));
+      assert.equal(
+        decryptBackgroundSensitiveText(fallbackCiphertext, "wish_profiles.constraints"),
+        "Saved during the production fallback",
+      );
+    },
+  );
 });
 
 test("background field encryption uses a versioned active key id for rotation", () => {
