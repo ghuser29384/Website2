@@ -60,7 +60,7 @@ export default async function ProfilePrioritiesPage({
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase
+    (supabase as any)
       .from("cohort_onboarding_profiles")
       .select("cause_areas")
       .eq("profile_id", viewer.authUser.id)
