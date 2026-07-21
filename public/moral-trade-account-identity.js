@@ -8,7 +8,6 @@
   const ROOT_SELECTOR = '.topbar,[role="banner"],header';
   const LEGACY_INITIALS = "AJ";
   const LEGACY_DISPLAY_NAME = "Alex Johnson";
-  const LEGACY_FIRST_NAME = "Alex";
   const hasBootstrap = Object.prototype.hasOwnProperty.call(
     window,
     "__MT_LIVE_ACCOUNT_BOOTSTRAP__",
