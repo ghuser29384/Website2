@@ -9,6 +9,7 @@ import {
 } from "@/components/core-trade/trade-draft-workbench";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { getPledgeTemplateInitialValues } from "@/lib/trade-template-library";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -60,21 +61,29 @@ const WORKBENCH_GRID = `
 
 export default async function NewTradePage({ searchParams }: NewTradePageProps) {
   const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
+  const templateId = valueOf(resolvedSearchParams.template);
+  const structure = valueOf(resolvedSearchParams.structure);
+  const returnParams = new URLSearchParams();
+  if (templateId) returnParams.set("template", templateId);
+  if (structure) returnParams.set("structure", structure);
+  const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
 
   if (!viewer) {
-    return <TradeDraftSignInGate />;
+    return <TradeDraftSignInGate returnTo={returnTo} />;
   }
 
   const example = valueOf(resolvedSearchParams.example);
+  const templateValues = getPledgeTemplateInitialValues(templateId);
 
   return (
     <>
       <style>{WORKBENCH_GRID}</style>
       <TradeDraftWorkbench
         formMessage={getFormMessage(resolvedSearchParams)}
-        initialValues={example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined}
+        initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
         saveAction={saveCoreOfferAction}
         submissionKey={randomUUID()}
+        templateLabel={templateValues ? "Reviewed pledge-swap starter" : null}
       />
     </>
   );

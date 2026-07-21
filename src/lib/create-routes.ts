@@ -72,10 +72,10 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     title: "Trade",
   },
   {
-    authRequired: true,
+    authRequired: false,
     bestFor: "Two real donation plans pointing in opposite directions.",
     boundary: "Invented, inflated, or pressured donation plans.",
-    cta: "Draft an offset",
+    cta: "Review offset safeguards",
     fallback: {
       label: "Verification fails",
       value: "Plans stay",
@@ -84,8 +84,8 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
     index: "02",
     key: "offset",
     later: false,
-    nextNote: "Add both plans and one shared cause.",
-    nextTitle: "Open the draft.",
+    nextNote: "Inspect the baseline, recipient, settlement, and legal review gates.",
+    nextTitle: "Review the mechanism.",
     proposition: "Two opposed gifts move to one shared cause.",
     receipt: {
       baseline: "Each participant's pre-existing intended donation and destination.",
@@ -102,7 +102,7 @@ export const CREATE_ROUTE_DEFINITIONS: readonly CreateRouteDefinition[] = [
       value: "Gifts redirect",
     },
     summary: "Two gifts. One shared cause.",
-    target: "/offers/new?entry=draft&mode=offset",
+    target: "/donation-offsets",
     title: "Offset",
   },
   {

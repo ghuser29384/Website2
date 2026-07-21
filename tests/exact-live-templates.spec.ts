@@ -1,0 +1,76 @@
+import { expect, test } from "@playwright/test";
+
+test.describe("live Trade template system", () => {
+  test("opens from the previously inert control and exposes browse plus anatomy", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".compose-grid")).toBeVisible();
+
+    await page.getByRole("button", { name: "Open trade template library" }).click();
+    await expect(page).toHaveURL(/\/offers\?view=templates$/);
+    await expect(page.getByRole("heading", { name: "Start from a clear shape." })).toBeVisible();
+    await expect(page.locator(".mt-template-card")).toHaveCount(6);
+
+    await page.getByRole("button", { name: "Money", exact: true }).click();
+    await expect(page.locator(".mt-template-card")).toHaveCount(2);
+    await page.getByPlaceholder("Search by outcome, action, or mechanism…").fill("donation");
+    await expect(page.locator(".mt-template-card")).toHaveCount(1);
+
+    await page.getByRole("button", { name: "Inspect Donation cancellation + redirect" }).click();
+    await expect(page.getByRole("heading", { name: "Understand before you insert." })).toBeVisible();
+    await expect(page.getByText("No-trade baseline", { exact: true })).toBeVisible();
+    await expect(page.getByText("Residual or overage rule", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review offset mechanism" }).first()).toHaveAttribute(
+      "href",
+      "/donation-offsets",
+    );
+    await expect(page.getByText("Not outcome data", { exact: false })).toBeVisible();
+  });
+
+  test("completes all three guided questions and hands pledge templates to the safe editor", async ({ page }) => {
+    await page.goto("/offers?view=templates");
+    await page.getByRole("button", { name: "Help me choose" }).click();
+
+    await expect(page.getByText("Question 1 of 3", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /An action/ })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.getByText("Question 2 of 3", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Two sides/ }).click();
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.getByText("Question 3 of 3", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Direct evidence/ }).click();
+    await expect(page.getByText("3 of 3", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pledge swap" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Inspect match" }).click();
+    await expect(page.getByText("Admin-reviewed seed available", { exact: true })).toBeVisible();
+    const handoff = page.getByRole("link", { name: "Use reviewed starter" }).first();
+    await expect(handoff).toHaveAttribute("href", "/trades/new?template=reciprocal-mixed");
+    await handoff.click();
+
+    await expect(page).toHaveURL(/\/trades\/new\?template=reciprocal-mixed$/);
+    await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create account" })).toHaveAttribute(
+      "href",
+      "/signup?returnTo=%2Ftrades%2Fnew%3Ftemplate%3Dreciprocal-mixed",
+    );
+  });
+
+  test("keeps the library and guide usable without horizontal overflow on mobile", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/offers?view=templates");
+    await expect(page.getByRole("heading", { name: "Start from a clear shape." })).toBeVisible();
+
+    const libraryOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(libraryOverflow).toBeLessThanOrEqual(1);
+
+    await page.getByRole("button", { name: "Help me choose" }).click();
+    await expect(page.getByText("Question 1 of 3", { exact: true })).toBeVisible();
+    const guideOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(guideOverflow).toBeLessThanOrEqual(1);
+  });
+});

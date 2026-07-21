@@ -141,10 +141,6 @@ export default async function DonationOffsetsPage() {
   const participantConfirmationPreview = buildDemoDonationOffsetParticipantConfirmationPreview();
   const safetyAuthenticityPreview = buildDemoDonationOffsetSafetyAuthenticityPreview();
   const authorityFairnessPreview = buildDemoDonationOffsetAuthorityFairnessPreview();
-  const createOffsetHref = viewer
-    ? "/offers/new?mode=offset"
-    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
-
   return (
     <div className="page-shell">
       <header className="hero">
@@ -162,8 +158,8 @@ export default async function DonationOffsetsPage() {
           description="When two donors would otherwise fund opposing efforts, they can redirect matched funds to a mutually acceptable destination."
           actions={
             <>
-              <Link className="button button-primary" href={createOffsetHref}>
-                Draft an offset
+              <Link className="button button-primary" href="/offers?view=templates">
+                Compare template anatomy
               </Link>
               <Link className="button button-secondary" href="/offers?mode=offset">
                 View offset examples

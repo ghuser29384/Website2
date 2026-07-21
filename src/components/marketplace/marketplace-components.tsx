@@ -2289,7 +2289,7 @@ export function MarketplaceHome({
   const nonExamples = surface.deals.filter((deal) => deal.sourceLabel !== "Worked example");
   const visibleDeals = zeroLive ? [...examples, ...nonExamples] : surface.deals;
   const railLinks = [
-    { href: "/offers?tab=templates", label: "Reviewed templates" },
+    { href: "/offers?view=templates", label: "Reviewed templates" },
     { href: "/offers?tab=worked_examples", label: "Worked examples" },
     { href: "/mpgf", label: "Public goods" },
   ];
@@ -2329,7 +2329,7 @@ export function MarketplaceHome({
   const tabLinks = [
     ["For you", buildMarketplaceHref({ query: surface.query })],
     ["Offers", "/offers?tab=live"],
-    ["Templates", "/offers?tab=templates"],
+    ["Templates", "/offers?view=templates"],
     ["Public goods", "/mpgf"],
     ["Swaps", buildMarketplaceHref({ category: "cross_view_swaps", query: surface.query })],
     ["Offsets", buildMarketplaceHref({ category: "offset_trades", query: surface.query })],
@@ -2481,7 +2481,7 @@ export function MarketplaceHome({
       <nav className="v72-marketplace-tabs" aria-label="Marketplace tabs">
         {(zeroLive
           ? [
-              ["Templates", "/offers?tab=templates"],
+              ["Templates", "/offers?view=templates"],
               ["Examples", "/offers?tab=worked_examples"],
               ["Public goods", "/mpgf"],
               ["Guides", "/worked-examples"],
@@ -2489,7 +2489,7 @@ export function MarketplaceHome({
           : [
               ["Live", "/offers?tab=live"],
               ["Preview", "/offers"],
-              ["Templates", "/offers?tab=templates"],
+              ["Templates", "/offers?view=templates"],
               ["Examples", "/offers?tab=worked_examples"],
               ["Guides", "/worked-examples"],
             ]

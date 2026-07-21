@@ -52,7 +52,7 @@ test("authenticated users continue directly to every selected route", () => {
   );
   assert.equal(
     buildCreateTargetHref("offset", true),
-    "/offers/new?entry=draft&mode=offset",
+    "/donation-offsets",
   );
   assert.equal(buildCreateTargetHref("pool", true), "/pools");
   assert.equal(buildCreateTargetHref("back", true), "/create?mode=back");
@@ -65,7 +65,7 @@ test("signed-out users are gated only for routes that create a private draft", (
   );
   assert.equal(
     buildCreateTargetHref("offset", false),
-    "/signup?returnTo=%2Foffers%2Fnew%3Fentry%3Ddraft%26mode%3Doffset",
+    "/donation-offsets",
   );
   assert.equal(buildCreateTargetHref("pool", false), "/pools");
   assert.equal(buildCreateTargetHref("back", false), "/create?mode=back");

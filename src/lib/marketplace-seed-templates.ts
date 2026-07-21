@@ -139,7 +139,7 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/offers/new?template=pure-opposed-cause",
+    templateHref: "/donation-offsets?template=pure-opposed-cause",
     publicSummary:
       "Redirect two opposed baseline donations into one reviewed compromise destination.",
     prefill: {
@@ -195,7 +195,7 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/offers/new?template=market-mediated",
+    templateHref: "/donation-offsets?template=market-mediated",
     publicSummary:
       "Pool opposed donation commitments at a published ratio with an assurance threshold.",
     prefill: {
@@ -251,7 +251,7 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/offers/new?template=reciprocal-mixed",
+    templateHref: "/trades/new?template=reciprocal-mixed",
     publicSummary:
       "Trade one short food-abstention micro-pledge for a bounded counterparty action with matched evidence duties.",
     microPledgeDefaults: FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS,
@@ -296,7 +296,7 @@ export const REVIEWED_MARKETPLACE_SEED_TEMPLATES = [
     liveMetricEligible: false,
     promotionBehavior: "reviewed_template_only",
     promotionControlLabel: "Promote only after reviewed live-template approval",
-    templateHref: "/offers/new?template=bargained-coordination",
+    templateHref: "/trades/new?template=bargained-coordination",
     publicSummary:
       "Use a few-day micro-pledge sequence when a one-shot pledge would not clear.",
     microPledgeDefaults: FOOD_ABSTENTION_MICRO_PLEDGE_DEFAULTS,

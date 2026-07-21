@@ -4,6 +4,7 @@ import Link from "next/link";
 import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { TradeTemplateLibrary } from "@/components/trade-templates/trade-template-library";
 import { getViewer, OFFERS_PAGE_SIZE } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
@@ -13,7 +14,7 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata: Metadata = {
+const LIVE_METADATA: Metadata = {
   title: "Explore live proposals",
   description:
     "Explore live Moral Trade proposals with explicit baselines, terms, evidence, payment boundaries, and current review states.",
@@ -29,6 +30,30 @@ export const metadata: Metadata = {
 
 interface OffersPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ searchParams }: OffersPageProps): Promise<Metadata> {
+  const resolvedSearchParams = await searchParams;
+  const view = readParam(resolvedSearchParams, "view");
+  const legacyTab = readParam(resolvedSearchParams, "tab");
+
+  if (view === "templates" || legacyTab === "templates") {
+    return {
+      title: "Trade templates",
+      description:
+        "Browse source-backed Moral Trade structures, inspect every required term, or use a three-question guide before starting an editable draft.",
+      alternates: { canonical: "/offers?view=templates" },
+      openGraph: {
+        title: "Trade templates | Moral Trade",
+        description:
+          "Choose an exchange shape, inspect its baseline, activation, evidence, burden, fallback, and exit terms, then continue through the correct draft route.",
+        url: getAbsoluteUrl("/offers?view=templates"),
+        type: "website",
+      },
+    };
+  }
+
+  return LIVE_METADATA;
 }
 
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
@@ -239,6 +264,13 @@ function LiveProposalCard({ offer }: { offer: OfferRow }) {
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
+  const view = readParam(resolvedSearchParams, "view");
+  const legacyTab = readParam(resolvedSearchParams, "tab");
+
+  if (view === "templates" || legacyTab === "templates") {
+    return <TradeTemplateLibrary />;
+  }
+
   const page = parsePage(resolvedSearchParams.page);
   const search = normalizeSearch(readParam(resolvedSearchParams, "search"));
   const mode = parseMode(readParam(resolvedSearchParams, "mode"));
