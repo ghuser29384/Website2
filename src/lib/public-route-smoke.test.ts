@@ -462,6 +462,7 @@ test("returning home page exposes the screenshot navigation contract", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
 
   assert.match(homeSource, /aria-label="Primary"/);
+  assert.match(homeSource, /href="\/feed">Feed/);
   assert.match(homeSource, />\s*Now\s*</);
   assert.match(homeSource, /href="\/offers">Discover/);
   assert.match(homeSource, /href="\/create">Offer/);

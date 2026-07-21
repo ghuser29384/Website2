@@ -181,14 +181,19 @@ test.describe("adaptive moral-opportunity Now feed", () => {
         }),
       }),
     );
-    await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
 
     const personalized = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(page).toHaveURL(/\/feed$/);
     await expect(personalized).toHaveAttribute("data-mt-live-now-state", "signed_out");
     await expect(personalized).toContainText(
       "Sign in to see a feed based on your moral priorities.",
     );
     await expect(personalized).toContainText("No recommendations shown");
+    await expect(personalized.getByRole("link", { name: "Sign in →" })).toHaveAttribute(
+      "href",
+      "/login?returnTo=%2Ffeed",
+    );
     await expect(page.getByText("Counteroffer from Mina.", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Your $10 could activate $9,990.", { exact: true })).toHaveCount(0);
   });

@@ -434,7 +434,10 @@
         title: "Sign in to see a feed based on your moral priorities.",
         copy: "This page does not guess your priorities or substitute demo recommendations.",
         facts: ["No profile loaded", "No recommendations shown"],
-        primaryHref: "/login?returnTo=%2F",
+        primaryHref:
+          window.location.pathname === "/feed"
+            ? "/login?returnTo=%2Ffeed"
+            : "/login?returnTo=%2F",
         primaryLabel: "Sign in →",
         secondaryHref: "/offers?view=live",
         secondaryLabel: "Browse all live proposals →",

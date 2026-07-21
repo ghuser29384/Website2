@@ -83,6 +83,7 @@ test("fallback states explicitly refuse generic or fabricated suggestions", () =
   ]) {
     assert.match(bridge, new RegExp(phrase));
   }
+  assert.match(bridge, /\/login\?returnTo=%2Ffeed/);
 
   for (const hardCodedSuggestion of [
     "Counteroffer from Mina",
