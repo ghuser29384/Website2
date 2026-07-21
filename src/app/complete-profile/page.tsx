@@ -63,6 +63,9 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   const supabaseReady = hasSupabaseEnv();
   const viewer =
     supabaseReady && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
+  const initialAffiliation = (
+    viewer?.profile as unknown as { affiliation?: string | null } | undefined
+  )?.affiliation ?? "";
   const returnTo = buildCompleteProfilePath(walkthroughDraft);
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
@@ -91,6 +94,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
         <CompleteProfileReview
           accountEmail={viewer?.profile.email ?? ""}
           draft={walkthroughDraft}
+          initialAffiliation={initialAffiliation}
           initialDisplayName={viewer?.displayName ?? ""}
           isAuthenticated={Boolean(viewer)}
           loginHref={loginHref}

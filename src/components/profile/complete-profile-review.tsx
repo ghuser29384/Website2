@@ -11,6 +11,7 @@ import { useFormStatus } from "react-dom";
 
 import { completeWalkthroughProfileAction } from "@/app/complete-profile/actions";
 import {
+  COMPLETE_PROFILE_AFFILIATION_MAX_LENGTH,
   COMPLETE_PROFILE_CONTACT_RULES,
   COMPLETE_PROFILE_MAX_COMMITMENTS,
   COMPLETE_PROFILE_MONTHLY_TIMES,
@@ -42,6 +43,7 @@ const INITIAL_ALLOCATION = buildInitialProfilePriorityAllocation();
 interface ReviewState {
   displayName: string;
   role: string;
+  affiliation: string;
   email: string;
   bio: string;
   maxCommitment: CompleteProfileMaxCommitment;
@@ -53,6 +55,7 @@ interface ReviewState {
 interface CompleteProfileReviewProps {
   accountEmail: string;
   draft: WalkthroughProfileDraft;
+  initialAffiliation: string;
   initialDisplayName: string;
   isAuthenticated: boolean;
   loginHref: string;
@@ -175,6 +178,7 @@ function getDefaultBio(draft: WalkthroughProfileDraft) {
 export function CompleteProfileReview({
   accountEmail,
   draft,
+  initialAffiliation,
   initialDisplayName,
   isAuthenticated,
   loginHref,
@@ -189,6 +193,7 @@ export function CompleteProfileReview({
   const [profile, setProfile] = useState<ReviewState>({
     displayName: initialDisplayName,
     role: "",
+    affiliation: initialAffiliation,
     email: accountEmail,
     bio: getDefaultBio(draft),
     maxCommitment: 100,
@@ -256,7 +261,7 @@ export function CompleteProfileReview({
           ...profile,
           context: `${draft.causeArea}|${draft.offerType}|${draft.matchName}`,
           priorityAllocation: JSON.parse(serializeProfilePriorityAllocation(allocation)),
-          version: 2,
+          version: 3,
         }),
       );
     } catch (error) {
@@ -655,6 +660,18 @@ export function CompleteProfileReview({
                       />
                     </label>
                   </div>
+                  <label className={`${styles.field} ${styles.spacedField}`}>
+                    <span>Company, organization, or university (optional)</span>
+                    <input
+                      autoComplete="organization"
+                      maxLength={COMPLETE_PROFILE_AFFILIATION_MAX_LENGTH}
+                      name="affiliation"
+                      placeholder="e.g. Future Institute or University of Oxford"
+                      value={profile.affiliation}
+                      onChange={(event) => updateProfile("affiliation", event.target.value)}
+                    />
+                    <small>Shown with your role when your profile is public.</small>
+                  </label>
                   <label className={`${styles.field} ${styles.spacedField}`}>
                     <span>Email</span>
                     <input

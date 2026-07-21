@@ -42,6 +42,9 @@ test("100-Spark Mosaic ranks priorities and preserves the account completion flo
 
   await page.getByLabel("Display name").fill("Alex Morgan");
   await page.getByLabel("Role or short descriptor").fill("Policy researcher");
+  await page
+    .getByLabel("Company, organization, or university (optional)")
+    .fill("Future Institute");
   await page.getByLabel("Email").fill("alex@example.org");
   await page.getByRole("button", { name: "Verified members" }).click();
 

@@ -22,6 +22,7 @@ test("normalizes a review and refine submission", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "  Alex   Morgan ",
     role: "Policy researcher",
+    affiliation: "  Future   Institute ",
     bio: "Interested in bounded, verifiable exchanges.",
     maxCommitment: "100",
     monthlyTime: "4 hours",
@@ -35,6 +36,7 @@ test("normalizes a review and refine submission", () => {
 
   assert.ok(result);
   assert.equal(result.displayName, "Alex Morgan");
+  assert.equal(result.affiliation, "Future Institute");
   assert.equal(result.maxCommitment, 100);
   assert.equal(result.monthlyTime, "4 hours");
   assert.equal(result.contactRule, "Verified members");
@@ -59,6 +61,7 @@ test("builds bounded matching summaries without claiming a commitment", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "Mina Park",
     role: "Researcher",
+    affiliation: "University of Oxford",
     bio: "Open to introductions with clear evidence requirements.",
     maxCommitment: 50,
     monthlyTime: "2 hours",
@@ -71,8 +74,10 @@ test("builds bounded matching summaries without claiming a commitment", () => {
   });
 
   assert.ok(result);
+  assert.match(buildCompleteProfileCapabilityText(result), /University of Oxford/);
   assert.match(buildCompleteProfileCapabilityText(result), /2 hours/);
   assert.match(buildCompleteProfileConstraintText(result), /\$50/);
+  assert.match(buildCompleteProfilePublicPreview(result), /University of Oxford/);
   assert.match(buildCompleteProfilePublicPreview(result), /Animal welfare/);
   assert.doesNotMatch(buildCompleteProfilePublicPreview(result), /commitment created/i);
 });
