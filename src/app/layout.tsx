@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { FunnelTracker } from "@/components/analytics/funnel-tracker";
+import { RecommendationLearningTracker } from "@/components/recommendations/recommendation-learning-tracker";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
@@ -124,6 +125,7 @@ export default function RootLayout({
         </a>
         <Suspense fallback={null}>
           <FunnelTracker />
+          <RecommendationLearningTracker />
         </Suspense>
         {children}
       </body>
