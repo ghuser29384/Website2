@@ -26,7 +26,10 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
     return "worked_example_opened";
   }
   if (target.dataset.intakeRoute) return "marketplace_intake_triage_routed";
-  if (href.includes("/offers/new") && href.includes("template=")) {
+  if (
+    href.includes("template=") &&
+    (href.includes("/offers/new") || href.includes("/trades/new") || href.includes("/create"))
+  ) {
     return "marketplace_seed_template_selected";
   }
   if (href.includes("/offers/new") && href.includes("example=")) return "clone_example_action";
@@ -206,7 +209,10 @@ export function FunnelTracker() {
       });
     }
 
-    if (pathname === "/offers/new" && searchParams.get("template")) {
+    if (
+      (pathname === "/offers/new" || pathname === "/trades/new" || pathname === "/create") &&
+      searchParams.get("template")
+    ) {
       postFunnelEvent(
         "marketplace_create_from_template_started",
         getTemplateMetadata(window.location.href),

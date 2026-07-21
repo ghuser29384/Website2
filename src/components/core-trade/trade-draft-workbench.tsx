@@ -32,6 +32,7 @@ interface TradeDraftWorkbenchProps {
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
   submissionKey: string;
+  templateLabel?: string | null;
 }
 
 const DEFAULT_VALUES: TradeDraftValues = {
@@ -98,6 +99,7 @@ export function TradeDraftWorkbench({
   initialValues,
   saveAction,
   submissionKey,
+  templateLabel,
 }: TradeDraftWorkbenchProps) {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -186,6 +188,10 @@ export function TradeDraftWorkbench({
               role="status"
             >
               {formMessage.text}
+            </div>
+          ) : templateLabel ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              {templateLabel} loaded as an editable starting point. Review every field before saving or submitting.
             </div>
           ) : null}
         </div>
@@ -572,7 +578,9 @@ export function TradeDraftWorkbench({
   );
 }
 
-export function TradeDraftSignInGate() {
+export function TradeDraftSignInGate({ returnTo = "/trades/new" }: { returnTo?: string }) {
+  const encodedReturnTo = encodeURIComponent(returnTo);
+
   return (
     <main className={`${styles.page} ${styles.gate}`} id="main-content" tabIndex={-1}>
       <header className={styles.gateHeader}>
@@ -591,10 +599,10 @@ export function TradeDraftSignInGate() {
             The card stack saves real proposal terms to your account. Nothing is public or binding until review, invitation, and separate bilateral confirmation.
           </p>
           <div className={styles.gateActions}>
-            <Link className={`${styles.button} ${styles.buttonPrimary}`} href="/signup?returnTo=/trades/new">
+            <Link className={`${styles.button} ${styles.buttonPrimary}`} href={`/signup?returnTo=${encodedReturnTo}`}>
               Create account
             </Link>
-            <Link className={`${styles.button} ${styles.buttonDark}`} href="/login?returnTo=/trades/new">
+            <Link className={`${styles.button} ${styles.buttonDark}`} href={`/login?returnTo=${encodedReturnTo}`}>
               Sign in
             </Link>
           </div>

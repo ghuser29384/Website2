@@ -21,8 +21,20 @@ test("reviewed marketplace seed templates provide the required bootstrap mix", (
         template.reviewStatus === "admin_reviewed" &&
         template.environment === "seed_template" &&
         template.liveMetricEligible === false &&
-        template.promotionBehavior === "reviewed_template_only" &&
-        template.templateHref === `/offers/new?template=${template.id}`,
+        template.promotionBehavior === "reviewed_template_only",
+    ),
+  );
+  assert.ok(
+    REVIEWED_MARKETPLACE_SEED_TEMPLATES.filter(
+      (template) => template.format === "pledge_swap",
+    ).every((template) => template.templateHref === `/trades/new?template=${template.id}`),
+  );
+  assert.ok(
+    REVIEWED_MARKETPLACE_SEED_TEMPLATES.filter(
+      (template) => template.format === "donation_offset",
+    ).every(
+      (template) =>
+        template.templateHref === `/donation-offsets?template=${template.id}`,
     ),
   );
 });

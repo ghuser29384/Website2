@@ -78,6 +78,14 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (request.nextUrl.searchParams.get("tab") === "templates") {
+    const templatesUrl = request.nextUrl.clone();
+    templatesUrl.searchParams.delete("tab");
+    templatesUrl.searchParams.set("view", "templates");
+
+    return NextResponse.redirect(templatesUrl);
+  }
+
   const liveDirectoryUrl = request.nextUrl.clone();
   liveDirectoryUrl.searchParams.set("view", "live");
 

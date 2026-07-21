@@ -79,10 +79,6 @@ export default async function OffsetsPage() {
   const viewer = await getViewer();
   const overview = hasSupabaseEnv() ? await getDonationOffsetOverview() : null;
   const isAuthenticated = Boolean(viewer);
-  const createTarget = "/offers/new?entry=draft&mode=offset";
-  const createHref = isAuthenticated
-    ? createTarget
-    : `/signup?returnTo=${encodeURIComponent(createTarget)}`;
 
   return (
     <div className="page-shell marketplace-product-shell">
@@ -111,7 +107,9 @@ export default async function OffsetsPage() {
               amount into a named destination both prefer to the original pair of donations.
             </p>
             <div className="mt-product-actions">
-              <Link className="button button-primary" href={createHref}>Draft an offset</Link>
+              <Link className="button button-primary" href="/donation-offsets">
+                Review offset safeguards
+              </Link>
               <Link className="button button-secondary" href="/offers?view=examples&search=offset">
                 Inspect examples
               </Link>

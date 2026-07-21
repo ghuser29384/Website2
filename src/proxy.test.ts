@@ -99,3 +99,13 @@ test("explicit offer views pass through without redirecting", () => {
   assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("location"), null);
 });
+
+test("legacy template tabs canonicalize to the real template library", () => {
+  const response = proxy(makeRequest("/offers?tab=templates&utm_source=legacy"));
+
+  assert.equal(response.status, 307);
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/offers?utm_source=legacy&view=templates",
+  );
+});
