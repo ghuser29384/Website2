@@ -4,15 +4,21 @@ on:
   pull_request:
     paths:
       - ".github/workflows/private-field-encryption-checks.yml"
+      - "src/app/complete-profile/actions.ts"
       - "src/lib/background-field-encryption.ts"
       - "src/lib/background-field-encryption.test.ts"
+      - "src/lib/complete-profile-private-preferences.ts"
+      - "src/lib/complete-profile-private-preferences.test.ts"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/private-field-encryption-checks.yml"
+      - "src/app/complete-profile/actions.ts"
       - "src/lib/background-field-encryption.ts"
       - "src/lib/background-field-encryption.test.ts"
+      - "src/lib/complete-profile-private-preferences.ts"
+      - "src/lib/complete-profile-private-preferences.test.ts"
 
 permissions:
   contents: read
@@ -35,7 +41,16 @@ jobs:
         run: npm ci
 
       - name: Run private-field encryption tests
-        run: node --import tsx --test src/lib/background-field-encryption.test.ts
+        run: >-
+          node --import tsx --test
+          src/lib/background-field-encryption.test.ts
+          src/lib/complete-profile-private-preferences.test.ts
 
       - name: Lint private-field encryption files
-        run: npx eslint src/lib/background-field-encryption.ts src/lib/background-field-encryption.test.ts
+        run: >-
+          npx eslint
+          src/app/complete-profile/actions.ts
+          src/lib/background-field-encryption.ts
+          src/lib/background-field-encryption.test.ts
+          src/lib/complete-profile-private-preferences.ts
+          src/lib/complete-profile-private-preferences.test.ts
