@@ -14,40 +14,131 @@ permissions:
 jobs:
   consolidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
       TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       TEAM_SLUG: ellen-s
       CANONICAL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
       LEGACY_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CANONICAL_PROJECT_NAME: website2
+      LEGACY_PROJECT_NAME: moraltrade-site
+      GITHUB_REPO_ID: "1204006559"
+      MAIN_COMMIT_SHA: 931725601ae5d31cb9516d2c4d2ff39cdcd58ef7
+      SUPABASE_PROJECT_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+      SERVICE_ROLE_BRIDGE_URL: https://jnpoxvalyjtdghnperyu.supabase.co/functions/v1/vercel-service-role-bridge-20260721
+      VERCEL_LOGIN_EMAIL: caijun054@gmail.com
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Synchronize Supabase environment and consolidate domains
+      - name: Install Vercel CLI
+        shell: bash
+        run: npm install --global vercel@56.4.0
+
+      - name: Retrieve the service-role key through an ephemeral encrypted bridge
+        id: service_role
+        shell: bash
+        run: |
+          set -euo pipefail
+          secure_dir="$(mktemp -d)"
+          echo "secure_dir=$secure_dir" >> "$GITHUB_OUTPUT"
+          chmod 700 "$secure_dir"
+
+          openssl genpkey \
+            -algorithm RSA \
+            -pkeyopt rsa_keygen_bits:4096 \
+            -out "$secure_dir/private.pem" \
+            >/dev/null 2>&1
+          openssl pkey \
+            -in "$secure_dir/private.pem" \
+            -pubout \
+            -outform DER \
+            -out "$secure_dir/public.der"
+
+          public_key_b64="$(base64 -w0 "$secure_dir/public.der")"
+          echo "SUPABASE_BRIDGE_PUBLIC_KEY_DER_B64=$public_key_b64"
+          echo "WAITING_FOR_EPHEMERAL_SUPABASE_BRIDGE"
+
+          bridge_response="$secure_dir/bridge-response.json"
+          received="false"
+          for attempt in $(seq 1 120); do
+            if curl --silent --show-error --fail \
+              --connect-timeout 10 \
+              --max-time 30 \
+              "$SERVICE_ROLE_BRIDGE_URL" \
+              -o "$bridge_response"; then
+              if jq -e '.ciphertext | type == "string" and length > 0' "$bridge_response" >/dev/null 2>&1; then
+                received="true"
+                break
+              fi
+            fi
+            sleep 5
+          done
+
+          if [[ "$received" != "true" ]]; then
+            echo "The encrypted Supabase bridge was not available before timeout." >&2
+            exit 1
+          fi
+
+          jq -r '.ciphertext' "$bridge_response" | base64 -d > "$secure_dir/service-role-key.bin"
+          openssl pkeyutl \
+            -decrypt \
+            -inkey "$secure_dir/private.pem" \
+            -in "$secure_dir/service-role-key.bin" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -out "$secure_dir/service-role-key.txt"
+
+          service_role_key="$(cat "$secure_dir/service-role-key.txt")"
+          if [[ -z "$service_role_key" ]]; then
+            echo "The encrypted bridge returned an empty service-role key." >&2
+            exit 1
+          fi
+          echo "::add-mask::$service_role_key"
+          chmod 600 "$secure_dir/service-role-key.txt"
+          echo "SERVICE_ROLE_READY=true"
+
+      - name: Authenticate the ephemeral runner to Vercel
+        id: vercel_login
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "WAITING_FOR_VERCEL_EMAIL_LOGIN"
+          env -u CI script -q -e -c \
+            "vercel login '$VERCEL_LOGIN_EMAIL'" \
+            /dev/null
+
+          account="$(vercel whoami --scope "$TEAM_SLUG")"
+          echo "Authenticated Vercel CLI account: $account"
+
+          auth_file="$(find "$HOME" -type f -name auth.json -path '*vercel*' -print -quit)"
+          if [[ -z "$auth_file" ]]; then
+            echo "Vercel CLI authentication file was not found." >&2
+            exit 1
+          fi
+          vercel_token="$(jq -r '.token // empty' "$auth_file")"
+          if [[ -z "$vercel_token" ]]; then
+            echo "Vercel CLI authentication token was not present." >&2
+            exit 1
+          fi
+          echo "::add-mask::$vercel_token"
+          token_file="${{ steps.service_role.outputs.secure_dir }}/vercel-token.txt"
+          printf '%s' "$vercel_token" > "$token_file"
+          chmod 600 "$token_file"
+          echo "token_file=$token_file" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize environment, redeploy canonical production, and consolidate domains
+        id: consolidate
         shell: bash
         run: |
           set -euo pipefail
 
-          for required in \
-            VERCEL_TOKEN \
-            SUPABASE_SERVICE_ROLE_KEY \
-            NEXT_PUBLIC_SUPABASE_URL \
-            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-          do
-            if [[ -z "${!required:-}" ]]; then
-              echo "Required repository secret is missing: $required" >&2
-              exit 1
-            fi
-          done
-
-          echo "::add-mask::$SUPABASE_SERVICE_ROLE_KEY"
-          echo "::add-mask::$NEXT_PUBLIC_SUPABASE_URL"
-          echo "::add-mask::$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          secure_dir="${{ steps.service_role.outputs.secure_dir }}"
+          service_role_key="$(cat "$secure_dir/service-role-key.txt")"
+          vercel_token="$(cat "${{ steps.vercel_login.outputs.token_file }}")"
+          echo "::add-mask::$service_role_key"
+          echo "::add-mask::$vercel_token"
 
           API_ROOT="https://api.vercel.com"
           REPORT="vercel-project-consolidation-report.json"
@@ -64,7 +155,7 @@ jobs:
               status="$(curl --silent --show-error \
                 --request "$method" \
                 --url "$API_ROOT$path" \
-                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                --header "Authorization: Bearer $vercel_token" \
                 --header "Content-Type: application/json" \
                 --data "$body" \
                 --output "$output" \
@@ -73,7 +164,7 @@ jobs:
               status="$(curl --silent --show-error \
                 --request "$method" \
                 --url "$API_ROOT$path" \
-                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                --header "Authorization: Bearer $vercel_token" \
                 --header "Content-Type: application/json" \
                 --output "$output" \
                 --write-out '%{http_code}')"
@@ -106,8 +197,6 @@ jobs:
           synchronize_supabase_env() {
             local project_id="$1"
 
-            # Remove all prior copies so the result has one unambiguous entry per
-            # required key and no branch-scoped stale values.
             remove_env_key "$project_id" "SUPABASE_SERVICE_ROLE_KEY"
             remove_env_key "$project_id" "NEXT_PUBLIC_SUPABASE_URL"
             remove_env_key "$project_id" "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
@@ -115,9 +204,9 @@ jobs:
 
             local payload
             payload="$(jq -n \
-              --arg service "$SUPABASE_SERVICE_ROLE_KEY" \
-              --arg url "$NEXT_PUBLIC_SUPABASE_URL" \
-              --arg publishable "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+              --arg service "$service_role_key" \
+              --arg url "$SUPABASE_PROJECT_URL" \
+              --arg publishable "$SUPABASE_PUBLISHABLE_KEY" \
               '[
                 {
                   key: "SUPABASE_SERVICE_ROLE_KEY",
@@ -165,44 +254,68 @@ jobs:
             fi
           }
 
-          # Apply the exact same Supabase values to the canonical and rollback
-          # projects. The service role deliberately has no NEXT_PUBLIC_ prefix.
           synchronize_supabase_env "$CANONICAL_PROJECT_ID"
           synchronize_supabase_env "$LEGACY_PROJECT_ID"
 
-          # Make the legacy project fail closed even if Git disconnection below
-          # is delayed: previews are disabled and any residual Git job is ignored.
-          api_request PATCH "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID" \
-            '{"previewDeploymentsDisabled":true,"commandForIgnoringBuildStep":"exit 0","autoAssignCustomDomains":false}' \
-            >/dev/null
+          deployment_payload="$(jq -n \
+            --arg name "$CANONICAL_PROJECT_NAME" \
+            --arg project "$CANONICAL_PROJECT_ID" \
+            --arg sha "$MAIN_COMMIT_SHA" \
+            --argjson repoId "$GITHUB_REPO_ID" \
+            '{
+              name: $name,
+              project: $project,
+              target: "production",
+              withLatestCommit: true,
+              gitSource: {
+                type: "github",
+                repoId: $repoId,
+                ref: "main",
+                sha: $sha
+              },
+              gitMetadata: {
+                remoteUrl: "https://github.com/ghuser29384/Website2",
+                commitAuthorName: "ghuser29384",
+                commitAuthorEmail: "262476329+ghuser29384@users.noreply.github.com",
+                commitMessage: "Publish the Moral Trade offer bank (#139)",
+                commitRef: "main",
+                commitSha: $sha,
+                ci: true,
+                ciType: "github-actions",
+                ciGitProviderUsername: "ghuser29384",
+                ciGitRepoVisibility: "public"
+              }
+            }')"
 
-          # Disconnect the duplicate project from Git. Keep its last successful
-          # deployment and environment configuration as a rollback shell.
-          mkdir -p .vercel
-          jq -n \
-            --arg orgId "$TEAM_ID" \
-            --arg projectId "$LEGACY_PROJECT_ID" \
-            '{orgId: $orgId, projectId: $projectId, projectName: "moraltrade-site"}' \
-            > .vercel/project.json
-
-          disconnect_status=0
-          CI=1 npx --yes vercel@56.2.0 git disconnect github \
-            --token "$VERCEL_TOKEN" \
-            --scope "$TEAM_SLUG" \
-            --yes \
-            >"$TEMP_DIR/git-disconnect.log" 2>&1 || disconnect_status=$?
-
-          if [[ "$disconnect_status" -ne 0 ]]; then
-            CI=1 npx --yes vercel@56.2.0 git disconnect \
-              --token "$VERCEL_TOKEN" \
-              --scope "$TEAM_SLUG" \
-              --yes \
-              >>"$TEMP_DIR/git-disconnect.log" 2>&1 || true
+          deployment_json="$(api_request POST "/v13/deployments?forceNew=1&skipAutoDetectionConfirmation=1&teamId=$TEAM_ID" "$deployment_payload")"
+          canonical_deployment_id="$(jq -r '.id // empty' <<<"$deployment_json")"
+          if [[ -z "$canonical_deployment_id" ]]; then
+            echo "Canonical production deployment did not return an ID." >&2
+            exit 1
           fi
-          rm -rf .vercel
+          echo "Canonical deployment started: $canonical_deployment_id"
 
-          legacy_project="$(api_request GET "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID")"
-          legacy_git_connected="$(jq -r 'if ((.link // .gitRepository // null) == null) then "false" else "true" end' <<<"$legacy_project")"
+          canonical_deployment_url=""
+          canonical_state=""
+          for attempt in $(seq 1 180); do
+            deployment_status="$(api_request GET "/v13/deployments/$canonical_deployment_id?teamId=$TEAM_ID")"
+            canonical_state="$(jq -r '.readyState // .state // empty' <<<"$deployment_status")"
+            canonical_deployment_url="$(jq -r '.url // empty' <<<"$deployment_status")"
+            case "$canonical_state" in
+              READY)
+                break
+                ;;
+              ERROR|CANCELED)
+                echo "Canonical deployment ended in state $canonical_state." >&2
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          if [[ "$canonical_state" != "READY" ]]; then
+            echo "Canonical production deployment did not become READY before timeout." >&2
+            exit 1
+          fi
 
           get_domains() {
             local project_id="$1"
@@ -233,6 +346,30 @@ jobs:
           move_domain "moraltrade.org"
           move_domain "www.moraltrade.org"
 
+          api_request PATCH "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID" \
+            '{"previewDeploymentsDisabled":true,"commandForIgnoringBuildStep":"exit 0","autoAssignCustomDomains":false}' \
+            >/dev/null
+
+          mkdir -p .vercel
+          jq -n \
+            --arg orgId "$TEAM_ID" \
+            --arg projectId "$LEGACY_PROJECT_ID" \
+            '{orgId: $orgId, projectId: $projectId, projectName: "moraltrade-site"}' \
+            > .vercel/project.json
+
+          disconnect_status=0
+          vercel git disconnect github \
+            --scope "$TEAM_SLUG" \
+            --yes \
+            >"$TEMP_DIR/git-disconnect.log" 2>&1 || disconnect_status=$?
+          if [[ "$disconnect_status" -ne 0 ]]; then
+            vercel git disconnect \
+              --scope "$TEAM_SLUG" \
+              --yes \
+              >>"$TEMP_DIR/git-disconnect.log" 2>&1 || true
+          fi
+          rm -rf .vercel
+
           canonical_domains="$(get_domains "$CANONICAL_PROJECT_ID")"
           legacy_domains="$(get_domains "$LEGACY_PROJECT_ID")"
           for domain in moraltrade.org www.moraltrade.org; do
@@ -246,18 +383,24 @@ jobs:
             fi
           done
 
+          legacy_project="$(api_request GET "/v9/projects/$LEGACY_PROJECT_ID?teamId=$TEAM_ID")"
+          legacy_git_connected="$(jq -r 'if ((.link // .gitRepository // null) == null) then "false" else "true" end' <<<"$legacy_project")"
+
           check_url() {
             local url="$1"
+            local body_file="$TEMP_DIR/health-$(date +%s%N).html"
             local status=""
-            for attempt in 1 2 3 4 5 6; do
+            for attempt in $(seq 1 12); do
               status="$(curl --silent --show-error --location \
-                --output /dev/null \
+                --output "$body_file" \
                 --write-out '%{http_code}' \
                 --max-redirs 5 \
                 --connect-timeout 10 \
                 --max-time 30 \
                 "$url" || true)"
-              if [[ "$status" == "200" ]]; then
+              if [[ "$status" == "200" ]] \
+                && ! grep -q 'Missing SUPABASE_SERVICE_ROLE_KEY' "$body_file" \
+                && ! grep -q '<template data-dgst=' "$body_file"; then
                 printf '%s' "$status"
                 return 0
               fi
@@ -277,6 +420,8 @@ jobs:
           jq -n \
             --arg canonicalProject "$CANONICAL_PROJECT_ID" \
             --arg legacyProject "$LEGACY_PROJECT_ID" \
+            --arg canonicalDeployment "$canonical_deployment_id" \
+            --arg canonicalDeploymentUrl "$canonical_deployment_url" \
             --arg legacyGitConnected "$legacy_git_connected" \
             --arg apexStatus "$apex_status" \
             --arg wwwStatus "$www_status" \
@@ -288,6 +433,8 @@ jobs:
               architecture: {
                 canonicalProjectId: $canonicalProject,
                 rollbackProjectId: $legacyProject,
+                canonicalProductionDeploymentId: $canonicalDeployment,
+                canonicalProductionDeploymentUrl: $canonicalDeploymentUrl,
                 movedDomains: ["moraltrade.org", "www.moraltrade.org"],
                 rollbackProjectGitConnected: ($legacyGitConnected == "true"),
                 rollbackPreviewDeploymentsDisabled: true,
@@ -306,6 +453,19 @@ jobs:
             }' > "$REPORT"
 
           cat "$REPORT"
+          echo "canonical_deployment_id=$canonical_deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Log out and destroy ephemeral credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          vercel logout >/dev/null 2>&1
+          secure_dir="${{ steps.service_role.outputs.secure_dir }}"
+          if [[ -n "$secure_dir" && -d "$secure_dir" ]]; then
+            find "$secure_dir" -type f -exec shred -u {} + 2>/dev/null || rm -rf "$secure_dir"
+            rm -rf "$secure_dir"
+          fi
 
       - name: Upload redacted consolidation report
         if: always()
