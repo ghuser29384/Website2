@@ -72,6 +72,25 @@ interface RegisteredCharityRow {
   summary: string;
 }
 
+interface OfferInventoryRow {
+  id: string;
+  owner_id: string;
+  owner_alias: string;
+  mode: "pledge" | "offset" | "payment";
+  offered_cause: string;
+  requested_cause: string;
+  compromise_cause: string;
+  offer_action: string;
+  request_action: string;
+  verification: string;
+  duration: string;
+  trust_level: number;
+  maximum_burden: string;
+  no_trade_baseline: string;
+  created_at: string;
+  updated_at: string;
+}
+
 function privateJson(body: unknown) {
   return NextResponse.json(body, {
     headers: {
@@ -398,7 +417,7 @@ export async function GET() {
 
   const candidates: LiveNowOfferCandidate[] = [];
   for (let offset = 0; ; offset += OFFER_BATCH_SIZE) {
-    const offersResult = await supabase
+    const offersResult = await typedSupabase
       .from("offers")
       .select(OFFER_SELECT)
       .eq("status", "open")
@@ -415,7 +434,7 @@ export async function GET() {
       return privateJson(emptyPayload("unavailable", true));
     }
 
-    const batch = offersResult.data ?? [];
+    const batch = (offersResult.data ?? []) as OfferInventoryRow[];
     candidates.push(
       ...batch.map((offer) => {
         const opportunityType: RecommendationOpportunityType =

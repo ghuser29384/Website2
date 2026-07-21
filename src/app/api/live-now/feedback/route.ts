@@ -73,6 +73,22 @@ interface CharitySignalRow {
   consensus_label: string;
 }
 
+interface RecommendationInteractionInsertRow {
+  profile_id: string;
+  opportunity_type: RecommendationOpportunityType;
+  opportunity_id: string;
+  event_type: RecommendationEventType;
+  benefit_causes: string[];
+  action_causes: string[];
+  action_key: string;
+  action_label: string;
+  inferred_difficulty: number | null;
+  dwell_ms: number;
+  idempotency_key: string;
+  metadata: { surface?: string; rank?: number; model_version: string };
+  occurred_at: string;
+}
+
 function privateJson(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -279,7 +295,7 @@ export async function POST(request: Request) {
     ((charitiesResult.data ?? []) as CharitySignalRow[]).map((charity) => [charity.id, charity]),
   );
   const occurredAt = new Date().toISOString();
-  const rows = normalizedEvents.flatMap((event) => {
+  const rows = normalizedEvents.flatMap<RecommendationInteractionInsertRow>((event) => {
     if (event.opportunityType === "cause_topic") {
       const cause = safeCause(event.opportunityId.replace(/-/g, " "));
       if (!cause) return [];
