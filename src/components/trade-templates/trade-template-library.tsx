@@ -6,13 +6,15 @@ import { useMemo, useState } from "react";
 import "./trade-template-library.css";
 
 import {
+  findTradeTemplateGuideResult,
   TRADE_TEMPLATE_LIBRARY,
   type TradeTemplateFilter,
+  type TradeTemplateGuideAnswers,
+  type TradeTemplateGuideQuestionKey,
   type TradeTemplateLibraryEntry,
 } from "@/lib/trade-template-library";
 
-type TemplateView = "library" | "anatomy" | "guide";
-type GuideQuestionKey = "moves" | "coordination" | "trust";
+type TemplateView = "library" | "guide";
 
 interface GuideOption {
   value: string;
@@ -22,7 +24,7 @@ interface GuideOption {
 }
 
 interface GuideQuestion {
-  key: GuideQuestionKey;
+  key: TradeTemplateGuideQuestionKey;
   prompt: string;
   helper: string;
   options: readonly GuideOption[];
@@ -33,7 +35,6 @@ const FILTERS: readonly { value: TradeTemplateFilter; label: string }[] = [
   { value: "money", label: "Money" },
   { value: "actions", label: "Actions" },
   { value: "groups", label: "Groups" },
-  { value: "custom", label: "Custom" },
 ];
 
 const GUIDE_QUESTIONS: readonly GuideQuestion[] = [
@@ -74,23 +75,6 @@ const GUIDE_QUESTIONS: readonly GuideQuestion[] = [
   },
 ];
 
-const TEMPLATE_BY_ID = new Map<string, TradeTemplateLibraryEntry>(
-  TRADE_TEMPLATE_LIBRARY.map((template) => [template.id, template]),
-);
-
-function findGuideResult(answers: Partial<Record<GuideQuestionKey, string>>) {
-  const completed = Object.entries(answers).filter(([, value]) => Boolean(value));
-  const ranked = TRADE_TEMPLATE_LIBRARY.map((template, index) => {
-    const score = completed.reduce((total, [key, value]) => {
-      const guideValues = template.guide[key as GuideQuestionKey] as readonly string[];
-      return total + (guideValues.includes(value) ? 3 : 0);
-    }, 0);
-    return { template, score, index };
-  }).sort((left, right) => right.score - left.score || left.index - right.index);
-
-  return ranked[0]?.template ?? TRADE_TEMPLATE_LIBRARY[0];
-}
-
 function guideReason(question: GuideQuestion, value: string | undefined) {
   const option = question.options.find((candidate) => candidate.value === value);
   return option ? `${question.prompt.replace("?", "")}: ${option.label}.` : null;
@@ -104,8 +88,12 @@ function TemplateHandoff({
   template: TradeTemplateLibraryEntry;
 }) {
   return (
-    <Link className={className} href={template.handoff.href}>
-      {template.handoff.label}
+    <Link
+      aria-label={`Use ${template.name} template`}
+      className={className}
+      href={template.handoff.href}
+    >
+      Use {template.name} →
     </Link>
   );
 }
@@ -114,14 +102,13 @@ export function TradeTemplateLibrary() {
   const [view, setView] = useState<TemplateView>("library");
   const [filter, setFilter] = useState<TradeTemplateFilter>("all");
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string>(TRADE_TEMPLATE_LIBRARY[0].id);
   const [guideStep, setGuideStep] = useState(0);
-  const [guideAnswers, setGuideAnswers] = useState<Partial<Record<GuideQuestionKey, string>>>({
-    moves: "action",
-  });
+  const [guideAnswers, setGuideAnswers] = useState<TradeTemplateGuideAnswers>({});
 
-  const selectedTemplate = TEMPLATE_BY_ID.get(selectedId) ?? TRADE_TEMPLATE_LIBRARY[0];
-  const guideResult = useMemo(() => findGuideResult(guideAnswers), [guideAnswers]);
+  const guideResult = useMemo(
+    () => findTradeTemplateGuideResult(guideAnswers),
+    [guideAnswers],
+  );
   const completedGuideAnswers = GUIDE_QUESTIONS.filter((question) => guideAnswers[question.key]).length;
   const alignedGuideQuestions = GUIDE_QUESTIONS.filter((guideQuestion) => {
     const answer = guideAnswers[guideQuestion.key];
@@ -155,22 +142,15 @@ export function TradeTemplateLibrary() {
     window.requestAnimationFrame(() => document.getElementById(id)?.focus());
   }
 
-  function openAnatomy(templateId: string) {
-    setSelectedId(templateId);
-    setView("anatomy");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    focusHeading("template-anatomy-heading");
-  }
-
   function showLibrary() {
     setView("library");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
     focusHeading("template-library-intro-heading");
   }
 
   function showGuide() {
     setView("guide");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "auto" });
     focusHeading("template-guide-heading");
   }
 
@@ -183,7 +163,12 @@ export function TradeTemplateLibrary() {
     focusHeading("template-guide-heading");
   }
 
-  const headerTemplate = view === "anatomy" ? selectedTemplate : view === "guide" ? guideResult : null;
+  function showGuideResult() {
+    document.getElementById("template-guide-result")?.scrollIntoView({
+      behavior: "auto",
+      block: "start",
+    });
+  }
 
   return (
     <div className="mt-template-layer mt-template-page">
@@ -204,7 +189,7 @@ export function TradeTemplateLibrary() {
               onClick={showLibrary}
               type="button"
             >
-              Browse shapes
+              Browse templates
             </button>
             <button
               aria-pressed={view === "guide"}
@@ -218,14 +203,8 @@ export function TradeTemplateLibrary() {
 
           <div className="mt-template-header-actions">
             <Link className="mt-template-button mt-template-button-ghost" href="/#trade">
-              ← Back to draft
+              ← Back to Trade
             </Link>
-            {headerTemplate ? (
-              <TemplateHandoff
-                className="mt-template-button mt-template-button-dark"
-                template={headerTemplate}
-              />
-            ) : null}
           </div>
         </header>
 
@@ -234,17 +213,17 @@ export function TradeTemplateLibrary() {
             <div className="mt-template-library-layout">
               <aside className="mt-template-intro">
                 <div className="mt-template-intro-copy">
-                  <p className="mt-template-kicker">Browse by exchange shape</p>
-                  <h1 id="template-library-intro-heading" tabIndex={-1}>Start from a clear shape.</h1>
+                  <p className="mt-template-kicker">Prefilled starting points</p>
+                  <h1 id="template-library-intro-heading" tabIndex={-1}>Choose a template.</h1>
                   <p>
-                    Choose the mechanism before writing prose. Every shape exposes its baseline,
-                    activation, evidence, burden, fallback, and exit terms before handoff.
+                    Click a template to open a prefilled draft. You can edit every term before
+                    saving or submitting it for review.
                   </p>
                 </div>
                 <div className="mt-template-safety-note">
                   <strong>Draft boundary</strong>
-                  Templates are editable starting points, not live offers, counterparties,
-                  completion claims, or authorization for payment or reliance.
+                  Nothing is published or binding until review and confirmation. No template click
+                  authorizes payment or creates a counterparty commitment.
                 </div>
                 <div className="mt-template-intro-actions">
                   <button
@@ -289,18 +268,17 @@ export function TradeTemplateLibrary() {
                 </div>
 
                 <p aria-live="polite" className="mt-template-count">
-                  {visibleTemplates.length} structure{visibleTemplates.length === 1 ? "" : "s"} shown
+                  {visibleTemplates.length} template{visibleTemplates.length === 1 ? "" : "s"} shown
                 </p>
 
                 {visibleTemplates.length ? (
                   <div className="mt-template-grid">
                     {visibleTemplates.map((template) => (
                       <article className="mt-template-card" key={template.id}>
-                        <button
-                          aria-label={`Inspect ${template.name}`}
-                          className="mt-template-card-open"
-                          onClick={() => openAnatomy(template.id)}
-                          type="button"
+                        <Link
+                          aria-label={`Use ${template.name} template`}
+                          className="mt-template-card-link"
+                          href={template.handoff.href}
                         >
                           <span className="mt-template-card-head">
                             <span aria-hidden="true" className="mt-template-symbol">{template.symbol}</span>
@@ -308,25 +286,18 @@ export function TradeTemplateLibrary() {
                           </span>
                           <h2>{template.name}</h2>
                           <p>{template.summary}</p>
-                        </button>
-                        <div className="mt-template-card-foot">
-                          <span className="mt-template-exchange-type">{template.exchangeType}</span>
-                          <button
-                            aria-label={`Preview ${template.name}`}
-                            className="mt-template-button mt-template-button-small mt-template-button-primary"
-                            onClick={() => openAnatomy(template.id)}
-                            type="button"
-                          >
-                            Preview
-                          </button>
-                        </div>
+                          <span className="mt-template-card-foot">
+                            <span className="mt-template-exchange-type">{template.exchangeType}</span>
+                            <strong className="mt-template-card-use">Use template →</strong>
+                          </span>
+                        </Link>
                       </article>
                     ))}
                   </div>
                 ) : (
                   <div className="mt-template-empty">
                     <div>
-                      <strong>No structure matches that search.</strong>
+                      <strong>No template matches that search.</strong>
                       <span>Clear the search, change the filter, or start a custom draft.</span>
                     </div>
                   </div>
@@ -335,126 +306,17 @@ export function TradeTemplateLibrary() {
             </div>
           ) : null}
 
-          {view === "anatomy" ? (
-            <section className="mt-template-anatomy" aria-labelledby="template-anatomy-heading">
-              <div className="mt-template-anatomy-top">
-                <div className="mt-template-breadcrumb">
-                  <button
-                    className="mt-template-button mt-template-button-small mt-template-button-ghost"
-                    onClick={showLibrary}
-                    type="button"
-                  >
-                    ← Library
-                  </button>
-                  <span aria-hidden="true">/</span>
-                  <span>{selectedTemplate.name}</span>
-                </div>
-                <TemplateHandoff
-                  className="mt-template-button mt-template-button-primary"
-                  template={selectedTemplate}
-                />
-              </div>
-
-              <div className="mt-template-anatomy-grid">
-                <div className="mt-template-anatomy-copy">
-                  <p className="mt-template-kicker">{selectedTemplate.statusLabel}</p>
-                  <h1 id="template-anatomy-heading" tabIndex={-1}>Understand before you insert.</h1>
-                  <p>{selectedTemplate.summary} Source basis: {selectedTemplate.sourceBasis}.</p>
-
-                  <div className="mt-template-exchange" aria-label="Template exchange anatomy">
-                    <div className="mt-template-exchange-row">
-                      <div className="mt-template-exchange-side">
-                        <span>You offer</span>
-                        <strong>{selectedTemplate.youOffer}</strong>
-                      </div>
-                      <div aria-hidden="true" className="mt-template-exchange-arrow">{selectedTemplate.symbol}</div>
-                      <div className="mt-template-exchange-side">
-                        <span>They or the group offer</span>
-                        <strong>{selectedTemplate.theyOffer}</strong>
-                      </div>
-                    </div>
-                    <div className="mt-template-facts">
-                      <div className="mt-template-fact">
-                        <span>No-trade baseline</span>
-                        <strong>{selectedTemplate.baseline}</strong>
-                      </div>
-                      <div className="mt-template-fact">
-                        <span>Activation</span>
-                        <strong>{selectedTemplate.activation}</strong>
-                      </div>
-                      <div className="mt-template-fact">
-                        <span>Evidence</span>
-                        <strong>{selectedTemplate.evidence}</strong>
-                      </div>
-                      <div className="mt-template-fact">
-                        <span>Duration and exit</span>
-                        <strong>{selectedTemplate.duration}. {selectedTemplate.exitRule}</strong>
-                      </div>
-                      {selectedTemplate.unmatchedRule ? (
-                        <div className="mt-template-fact">
-                          <span>Residual or overage rule</span>
-                          <strong>{selectedTemplate.unmatchedRule}</strong>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-template-anatomy-actions">
-                    <TemplateHandoff
-                      className="mt-template-button mt-template-button-primary"
-                      template={selectedTemplate}
-                    />
-                    <button className="mt-template-button" onClick={showLibrary} type="button">
-                      Compare shapes
-                    </button>
-                  </div>
-                  <p className="mt-template-safety-note">{selectedTemplate.handoff.note}</p>
-                </div>
-
-                <aside className="mt-template-anatomy-map" aria-label="Trade anatomy">
-                  <div className="mt-template-map-title">
-                    <h2>Trade anatomy</h2>
-                    <span>Structure signals<br />Not outcome data</span>
-                  </div>
-
-                  <div className="mt-template-signal-list">
-                    {selectedTemplate.signals.map((signal) => (
-                      <div className="mt-template-signal" key={signal.label}>
-                        <div className="mt-template-signal-head">
-                          <span>{signal.label}</span>
-                          <strong>{signal.value}</strong>
-                        </div>
-                        <div aria-hidden="true" className="mt-template-signal-track">
-                          <i style={{ width: `${signal.level * 25}%` }} />
-                        </div>
-                        <p>{signal.note}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-template-clause-map">
-                    {selectedTemplate.clauses.map((clause, index) => (
-                      <div className="mt-template-clause-row" key={clause}>
-                        <i>{index + 1}</i>
-                        <strong>{clause}</strong>
-                        <span>{index === 0 ? "Required" : "Editable"}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-template-caveat">
-                    <strong>Mechanism boundary</strong>
-                    {selectedTemplate.caveat}
-                  </div>
-                </aside>
-              </div>
-            </section>
-          ) : null}
-
           {view === "guide" ? (
             <section className="mt-template-guide" aria-labelledby="template-guide-heading">
               <div className="mt-template-guide-question">
-                <div aria-label={`Question ${guideStep + 1} of ${GUIDE_QUESTIONS.length}`} className="mt-template-guide-progress">
+                <div
+                  aria-label={`Question ${guideStep + 1} of ${GUIDE_QUESTIONS.length}`}
+                  aria-valuemax={GUIDE_QUESTIONS.length}
+                  aria-valuemin={1}
+                  aria-valuenow={guideStep + 1}
+                  className="mt-template-guide-progress"
+                  role="progressbar"
+                >
                   {GUIDE_QUESTIONS.map((guideQuestion, index) => (
                     <i className={index <= guideStep ? "active" : ""} key={guideQuestion.key} />
                   ))}
@@ -483,7 +345,7 @@ export function TradeTemplateLibrary() {
 
                 <div className="mt-template-guide-actions">
                   <button className="mt-template-button" onClick={showLibrary} type="button">
-                    Browse every shape
+                    Browse every template
                   </button>
                   <div>
                     <button
@@ -503,21 +365,27 @@ export function TradeTemplateLibrary() {
                       >
                         Next →
                       </button>
-                    ) : (
+                    ) : currentGuideAnswer ? (
                       <button
                         className="mt-template-button mt-template-button-primary"
-                        disabled={!currentGuideAnswer}
-                        onClick={() => openAnatomy(guideResult.id)}
+                        onClick={showGuideResult}
                         type="button"
                       >
-                        Inspect match →
+                        See recommendation ↓
+                      </button>
+                    ) : (
+                      <button className="mt-template-button mt-template-button-primary" disabled type="button">
+                        See recommendation ↓
                       </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              <aside aria-live="polite" className="mt-template-guide-result">
+              <aside className="mt-template-guide-result" id="template-guide-result">
+                <p aria-live="polite" className="sr-only">
+                  Recommended: {guideResult.name}
+                </p>
                 <p className="mt-template-kicker">
                   {completedGuideAnswers === GUIDE_QUESTIONS.length ? "Best structural fit" : "Live structural fit"}
                 </p>
@@ -532,13 +400,14 @@ export function TradeTemplateLibrary() {
                   {guideReasons.map((reason) => <li key={reason}>{reason}</li>)}
                 </ul>
                 <div className="mt-template-result-actions">
-                  <button
-                    className="mt-template-button mt-template-button-primary"
-                    onClick={() => openAnatomy(guideResult.id)}
-                    type="button"
-                  >
-                    Inspect this shape
-                  </button>
+                  {completedGuideAnswers === GUIDE_QUESTIONS.length ? (
+                    <TemplateHandoff
+                      className="mt-template-button mt-template-button-primary"
+                      template={guideResult}
+                    />
+                  ) : (
+                    <span className="mt-template-result-hint">Answer all three questions to use this template.</span>
+                  )}
                   <button className="mt-template-button mt-template-button-ghost" onClick={showLibrary} type="button">
                     Browse every template
                   </button>

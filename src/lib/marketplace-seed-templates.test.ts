@@ -34,7 +34,8 @@ test("reviewed marketplace seed templates provide the required bootstrap mix", (
       (template) => template.format === "donation_offset",
     ).every(
       (template) =>
-        template.templateHref === `/donation-offsets?template=${template.id}`,
+        template.templateHref ===
+        `/offers/new?entry=draft&template=${template.id}&mode=offset`,
     ),
   );
 });
@@ -48,7 +49,7 @@ test("reviewed seed templates prefill safe draft-only donation offsets and pledg
   assert.equal(directOffset.prefill.mode, "offset");
   assert.equal(directOffset.prefill.offset?.verificationMethod, "receipts_uploaded");
   assert.equal(directOffset.prefill.offset?.compromiseDestinationId, "givewell-top-charities-fund");
-  assert.match(directOffset.reviewSummary, /preview template/);
+  assert.match(directOffset.reviewSummary, /draft template/);
   assert.equal(pledgeSwap?.prefill.mode, "pledge");
   assert.match(pledgeSwap.prefill.exitCondition, /pause|missed evidence/i);
   assert.equal(getReviewedMarketplaceSeedTemplate("missing-template"), null);

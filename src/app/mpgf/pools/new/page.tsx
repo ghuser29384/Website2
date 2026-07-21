@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { TradeDraftSignInGate } from "@/components/core-trade/trade-draft-workbench";
 import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
@@ -23,8 +24,31 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function MpgfNewPoolPage() {
+interface MpgfNewPoolPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function single(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+function buildFutureDeadline(daysFromNow: number) {
+  const deadline = new Date();
+  deadline.setUTCDate(deadline.getUTCDate() + daysFromNow);
+  return deadline.toISOString().slice(0, 10);
+}
+
+export default async function MpgfNewPoolPage({ searchParams }: MpgfNewPoolPageProps) {
+  const resolved = await searchParams;
+  const templateApplied = single(resolved.template) === "threshold-coalition";
   const viewer = await getViewer();
+
+  if (templateApplied && !viewer) {
+    return (
+      <TradeDraftSignInGate returnTo="/mpgf/pools/new?template=threshold-coalition" />
+    );
+  }
+
   const participantState = await loadMpgfParticipantState({
     userId: viewer?.authUser.id,
     displayName: viewer?.displayName,
@@ -41,9 +65,11 @@ export default async function MpgfNewPoolPage() {
     >
       <section className="section section-white">
         <MpgfConsole
+          initialPoolProposalDeadline={buildFutureDeadline(90)}
           initialTab="pools"
           manualEvidenceReadiness={manualEvidenceReadiness}
           participantState={participantState}
+          poolTemplateApplied={templateApplied}
           realMoneyReadiness={realMoneyReadiness}
           viewerPresent={Boolean(viewer)}
         />

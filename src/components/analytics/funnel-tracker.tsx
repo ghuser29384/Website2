@@ -28,7 +28,10 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (target.dataset.intakeRoute) return "marketplace_intake_triage_routed";
   if (
     href.includes("template=") &&
-    (href.includes("/offers/new") || href.includes("/trades/new") || href.includes("/create"))
+    (href.includes("/offers/new") ||
+      href.includes("/trades/new") ||
+      href.includes("/create") ||
+      href.includes("/mpgf/pools/new"))
   ) {
     return "marketplace_seed_template_selected";
   }

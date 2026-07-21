@@ -69,6 +69,10 @@ function concise(value: string, fallback: string) {
   return normalized.length > 88 ? `${normalized.slice(0, 85)}…` : normalized;
 }
 
+function hasUnresolvedTemplatePrompt(value: string) {
+  return value.includes("[Replace:");
+}
+
 function validateStep(step: number, values: TradeDraftValues) {
   if (step === 0 && (!values.offeredCause.trim() || !values.requestedCause.trim())) {
     return "Name both priorities before continuing.";
@@ -90,6 +94,24 @@ function validateStep(step: number, values: TradeDraftValues) {
   }
   if (step === 6 && !values.exitConditions.trim()) {
     return "State how future obligations can end before saving the record.";
+  }
+
+  const valuesForStep: readonly string[] =
+    step === 0
+      ? [values.offeredCause, values.requestedCause]
+      : step === 1
+        ? [values.proposedAction]
+        : step === 2
+          ? [values.requestedAction]
+          : step === 3
+            ? [values.noTradeBaseline]
+            : step === 4
+              ? [values.duration, values.maximumBurden]
+              : step === 5
+                ? [values.evidenceRule, values.privacyScope]
+                : [values.exitConditions];
+  if (valuesForStep.some(hasUnresolvedTemplatePrompt)) {
+    return "Replace every [Replace: ...] template prompt with terms that are true for this trade.";
   }
   return null;
 }
