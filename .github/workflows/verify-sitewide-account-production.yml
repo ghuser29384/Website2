@@ -1,0 +1,46 @@
+name: Verify sitewide account identity on production
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-sitewide-account-production.yml"
+      - "playwright.account-production.config.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-account-identity-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise production account identity
+        run: npx playwright test --config=playwright.account-production.config.ts --reporter=line
+
+      - name: Upload production screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-account-identity-screenshots
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 3
