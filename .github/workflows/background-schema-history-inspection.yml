@@ -1,4 +1,4 @@
-name: Background schema history inspection
+name: One-time Vercel and Supabase consolidation
 
 on:
   pull_request:
@@ -6,88 +6,31 @@ on:
       - main
     paths:
       - ".github/workflows/background-schema-history-inspection.yml"
+      - "scripts/ops/consolidate-vercel-projects.sh"
 
 permissions:
   contents: read
 
 jobs:
-  inspect:
+  consolidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     steps:
-      - name: Check out full history
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Locate the intended background schema
+      - name: Install Vercel CLI
+        run: npm install --global vercel@56.4.0
+
+      - name: Run one-time encrypted consolidation
         shell: bash
-        run: |
-          set -uo pipefail
-          mkdir -p background-schema-history/sql-files
+        run: bash scripts/ops/consolidate-vercel-projects.sh
 
-          commits=(
-            93365980d23ae5f6f5bec9d9f8de586bb4e0cdd7
-            47d6700f2dce25732d810d56ebd8e97f2c1703b2
-            4c48aae3c1e0ad7bb6c41d6d03059ac570e76234
-            1bdc547b74a92fb1fbd5ae27e4b3a9d7c9abc510
-            1ca6268ea7fea510d93a1401671c97eefc8b8cf5
-            f145ae2e5b9b3e0e2f58c126ff895c37a12f1728
-            28cda13500724c307ce48f55742a3c6faebce619
-            81bdc41eccdf50fd36ec57c2b18756f290f7ea63
-            75d2734337500be6067fe32c76ee320e3762ae14
-          )
-
-          git log --all -S'background_intro_packets' --format='%H %s' \
-            > background-schema-history/commits-containing-introduction.txt || true
-
-          : > background-schema-history/relevant-commit-files.txt
-          : > background-schema-history/relevant-sql-patches.diff
-          : > background-schema-history/sql-files-containing-background-intro-packets.txt
-
-          for commit in "${commits[@]}"; do
-            {
-              echo "===== $commit ====="
-              git show -s --format='%H %s' "$commit" || true
-              git diff-tree --no-commit-id --name-only -r "$commit" || true
-            } >> background-schema-history/relevant-commit-files.txt
-
-            {
-              echo "===== $commit ====="
-              git show --format= --no-ext-diff "$commit" -- '*.sql' || true
-            } >> background-schema-history/relevant-sql-patches.diff
-
-            while IFS= read -r path; do
-              [[ -n "$path" ]] || continue
-              if git show "$commit:$path" 2>/dev/null | grep -q -F 'background_intro_packets'; then
-                safe_name="${commit}-$(basename "$path")"
-                git show "$commit:$path" > "background-schema-history/sql-files/$safe_name"
-                printf '%s %s\n' "$commit" "$path" \
-                  >> background-schema-history/sql-files-containing-background-intro-packets.txt
-              fi
-            done < <(git ls-tree -r --name-only "$commit" 2>/dev/null | grep -E '\.sql$' || true)
-          done
-
-          git grep -n -F 'background_intro_packets' HEAD -- '*.sql' 'supabase/**' \
-            > background-schema-history/current-sql-matches.txt || true
-          git grep -n -F 'background_intro_packets' HEAD -- ':!src/lib/supabase/database.types.ts' \
-            > background-schema-history/current-nontype-matches.txt || true
-
-          if [[ -f supabase/schema.sql ]]; then
-            cp supabase/schema.sql background-schema-history/current-schema.sql
-          fi
-          if [[ -d supabase/migrations ]]; then
-            cp -R supabase/migrations background-schema-history/current-migrations
-          fi
-
-          echo "Inspection complete"
-          cat background-schema-history/sql-files-containing-background-intro-packets.txt || true
-
-      - name: Upload inspection artifact
+      - name: Upload redacted consolidation report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: background-schema-history
-          path: background-schema-history
-          if-no-files-found: error
-          retention-days: 3
+          name: vercel-project-consolidation-report
+          path: vercel-project-consolidation-report.json
+          if-no-files-found: warn
+          retention-days: 7
