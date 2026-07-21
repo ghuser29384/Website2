@@ -68,6 +68,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
   const submission = normalizeCompleteProfileSubmission({
     displayName: read(formData, "display_name"),
     role: read(formData, "role"),
+    affiliation: read(formData, "affiliation"),
     bio: read(formData, "bio"),
     maxCommitment: read(formData, "max_commitment"),
     monthlyTime: read(formData, "monthly_time"),
@@ -118,10 +119,11 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     );
   }
 
-  const { error: profileError } = await supabase
+  const { error: profileError } = await (supabase as any)
     .from("profiles")
     .update({
       display_name: submission.displayName,
+      affiliation: submission.affiliation,
       bio: submission.bio,
     })
     .eq("id", viewer.authUser.id);
