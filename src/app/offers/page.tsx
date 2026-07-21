@@ -208,7 +208,7 @@ function LiveProposalCard({ offer }: { offer: OfferRow }) {
       </h3>
       <p className="listing-alias">By {participantName}</p>
       <div className="tag-row" aria-label="Proposal boundaries">
-        <span className="badge">{offer.maximum_burden || "Bounded terms"}</span>
+        <span className="badge">{offer.discount_note || "Bounded terms"}</span>
         <span className="source-pill">Evidence named · additionality stated</span>
       </div>
       <dl>
@@ -221,8 +221,8 @@ function LiveProposalCard({ offer }: { offer: OfferRow }) {
           <dd>{offer.request_action}</dd>
         </div>
         <div>
-          <dt>No-trade baseline</dt>
-          <dd>{offer.no_trade_baseline || "See the complete proposal for baseline details."}</dd>
+          <dt>Terms</dt>
+          <dd>{offer.discount_note || "Open the complete proposal for its baseline and boundaries."}</dd>
         </div>
         <div>
           <dt>Evidence</dt>
