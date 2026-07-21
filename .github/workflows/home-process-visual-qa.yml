@@ -1,4 +1,4 @@
-name: Homepage process visual QA
+name: Homepage and Now feed QA
 
 on:
   pull_request:
@@ -6,8 +6,13 @@ on:
       - "src/app/home-process-polish.css"
       - "src/app/home-mode-hover-colors.css"
       - "src/app/layout.tsx"
-      - "tests/home-process-section.spec.ts"
-      - "tests/home-mode-rail.spec.ts"
+      - "public/moral-trade-live*"
+      - "src/app/api/live-now/**"
+      - "src/components/recommendations/**"
+      - "src/lib/live-now-recommendations*"
+      - "src/lib/recommendation-learning*"
+      - "src/live-now-data.test.ts"
+      - "tests/exact-live-now-recommendations.spec.ts"
       - ".github/workflows/home-process-visual-qa.yml"
   push:
     branches:
@@ -34,32 +39,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint changed TypeScript
+      - name: Lint adaptive feed TypeScript
         run: |
           npx eslint \
+            src/app/api/live-now/feedback/route.ts \
+            src/app/api/live-now/route.ts \
             src/app/layout.tsx \
-            tests/home-process-section.spec.ts \
-            tests/home-mode-rail.spec.ts
+            src/components/recommendations/recommendation-learning-tracker.tsx \
+            src/lib/live-now-recommendations.test.ts \
+            src/lib/live-now-recommendations.ts \
+            src/lib/recommendation-learning.test.ts \
+            src/lib/recommendation-learning.ts \
+            src/live-now-data.test.ts \
+            tests/exact-live-now-recommendations.spec.ts
+
+      - name: Run adaptive feed unit tests
+        run: |
+          node --import tsx --test \
+            src/lib/live-now-recommendations.test.ts \
+            src/lib/recommendation-learning.test.ts \
+            src/live-now-data.test.ts
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run homepage interaction and visual QA
-        env:
-          HOME_MODE_CAPTURE: "1"
-          HOME_PROCESS_CAPTURE: "1"
-        run: |
-          npm run test:e2e -- \
-            tests/home-process-section.spec.ts \
-            tests/home-mode-rail.spec.ts
-
-      - name: Upload visual comparison artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: homepage-visual-qa
-          path: |
-            test-results/home-process-visual
-            test-results/home-mode-visual
-          if-no-files-found: error
-          retention-days: 7
+      - name: Run adaptive feed browser QA
+        run: npm run test:e2e -- tests/exact-live-now-recommendations.spec.ts

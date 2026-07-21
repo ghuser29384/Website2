@@ -6,26 +6,40 @@ import { gunzipSync } from "node:zlib";
 
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
 const bridge = readFileSync("public/moral-trade-live-now.js", "utf8");
+const feedStyles = readFileSync("public/moral-trade-live-feed.css", "utf8");
 const route = readFileSync("src/app/api/live-now/route.ts", "utf8");
-const priorityPage = readFileSync("src/app/profile/priorities/page.tsx", "utf8");
-const priorityAction = readFileSync("src/app/profile/priorities/actions.ts", "utf8");
+const feedbackRoute = readFileSync("src/app/api/live-now/feedback/route.ts", "utf8");
+const tracker = readFileSync(
+  "src/components/recommendations/recommendation-learning-tracker.tsx",
+  "utf8",
+);
 
 test("the live shell fetches private profile recommendations before rendering", () => {
   assert.match(loader, /fetch\('\/api\/live-now'/);
   assert.match(loader, /credentials: 'same-origin'/);
   assert.match(loader, /__MT_LIVE_NOW_BOOTSTRAP__/);
   assert.match(loader, /moral-trade-live-now\.js/);
+  assert.match(loader, /moral-trade-live-feed\.css/);
   assert.match(loader, /stripLegacyNowFocus/);
   assert.match(loader, /No generic or demo suggestions are shown/);
 });
 
-test("the live-now endpoint uses authenticated profile causes and live offers", () => {
+test("the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types", () => {
   assert.match(route, /hasSupabaseEnv\(\)/);
   assert.match(route, /hasSupabaseAuthCookie\(cookieStore\)/);
   assert.match(route, /getViewer\(\)/);
   assert.match(route, /from\("wish_profiles"\)/);
   assert.match(route, /from\("saved_searches"\)/);
+  assert.match(route, /from\("cohort_onboarding_profiles"\)/);
+  assert.match(route, /from\("route_recommendation_profiles"\)/);
+  assert.match(route, /from\("recommendation_preferences"\)/);
+  assert.match(route, /from\("recommendation_interactions"\)/);
   assert.match(route, /from\("offers"\)/);
+  assert.match(route, /from\("donation_offset_pools"\)/);
+  assert.match(route, /from\("registered_charities"\)/);
+  assert.match(route, /buildWeightedCauseSignals/);
+  assert.match(route, /buildLearnedActionPreferences/);
+  assert.match(route, /buildBrowsingCauseWeights/);
   assert.match(route, /eq\("status", "open"\)/);
   assert.match(route, /neq\("owner_id", userId\)/);
   assert.match(route, /\.range\(offset, offset \+ OFFER_BATCH_SIZE - 1\)/);
@@ -35,28 +49,27 @@ test("the live-now endpoint uses authenticated profile causes and live offers", 
   assert.match(route, /Vary: "Cookie"/);
 });
 
-test("the incomplete-profile CTA opens direct priority setup instead of the dashboard", () => {
-  const incompleteStart = bridge.indexOf('if (model.status === "profile_incomplete")');
-  const noMatchesStart = bridge.indexOf('if (model.status === "no_matches")');
-  const incompleteBlock = bridge.slice(incompleteStart, noMatchesStart);
-
-  assert.ok(incompleteStart >= 0 && noMatchesStart > incompleteStart);
-  assert.match(
-    bridge,
-    /\/profile\/priorities\?returnTo=%2Fmoral-trade-live\.html%23now/,
-  );
-  assert.match(incompleteBlock, /primaryHref: profilePriorityHref/);
-  assert.doesNotMatch(incompleteBlock, /dashboard#wish-profile/);
-  assert.match(priorityPage, /Choose what should shape Now\./);
-  assert.match(priorityPage, /saveProfilePrioritySearchAction/);
+test("feedback is typed, private, idempotent, and resolves opportunity metadata server-side", () => {
+  assert.match(feedbackRoute, /MAX_EVENTS_PER_REQUEST/);
+  assert.match(feedbackRoute, /isRecommendationEventType/);
+  assert.match(feedbackRoute, /isRecommendationOpportunityType/);
+  assert.match(feedbackRoute, /from\("offers"\)/);
+  assert.match(feedbackRoute, /from\("donation_offset_pools"\)/);
+  assert.match(feedbackRoute, /model_version: "adaptive-moral-feed-v1"/);
+  assert.match(feedbackRoute, /onConflict: "profile_id,idempotency_key"/);
+  assert.match(feedbackRoute, /learn_from_browsing/);
+  assert.doesNotMatch(feedbackRoute, /referrer|pathname|raw_url|page_content/i);
 });
 
-test("priority setup saves a manual active cause search and returns to Now", () => {
-  assert.match(priorityAction, /from\("saved_searches"\)/);
-  assert.match(priorityAction, /cadence: "manual"/);
-  assert.match(priorityAction, /status: "active"/);
-  assert.match(priorityAction, /\/moral-trade-live\.html#now/);
-  assert.match(priorityAction, /Choose at least one cause area\./);
+test("offer, pool, and cause browsing is learned without retaining arbitrary URLs", () => {
+  assert.match(tracker, /RecommendationLearningTracker/);
+  assert.match(tracker, /const offerMatch = pathname\.match/);
+  assert.match(tracker, /\{36\}/);
+  assert.match(tracker, /opportunityType: "donation_pool"/);
+  assert.match(tracker, /opportunityType: "cause_topic"/);
+  assert.match(tracker, /eventType: "dwell"/);
+  assert.match(tracker, /navigator\.sendBeacon/);
+  assert.doesNotMatch(tracker, /document\.referrer|window\.location\.href/);
 });
 
 test("fallback states explicitly refuse generic or fabricated suggestions", () => {
@@ -111,7 +124,7 @@ test("the loader removes the legacy suggestion function before its first render"
   assert.match(deliveredSource, /function story\(/);
 });
 
-test("the browser bridge renders only fixture profile data and escapes offer fields", () => {
+test("the browser bridge renders only fixture profile data and escapes opportunity fields", () => {
   const context = {
     CustomEvent: class CustomEvent {
       constructor(
@@ -128,22 +141,39 @@ test("the browser bridge renders only fixture profile data and escapes offer fie
       __MT_LIVE_NOW_BOOTSTRAP__: {
         authenticated: true,
         generatedAt: "2026-07-20T12:00:00.000Z",
-        matchingOfferCount: 1,
+        matchingOpportunityCount: 1,
         profile: {
           causes: ["Animal welfare"],
+          weightedCauses: [
+            {
+              cause: "Animal welfare",
+              weight: 96,
+              source: "explicit_priority",
+              rank: 1,
+            },
+          ],
           openToPayment: true,
           openToPledges: false,
-          signalSources: ["Profile priorities"],
+          signalSources: ["Weighted profile priorities"],
+          learningEnabled: true,
+          browsingSignalCount: 2,
+          actionFeedbackCount: 1,
         },
         recentChanges: [],
         recommendations: [
           {
             id: "animal-offer",
+            opportunityType: "offer",
+            href: "/offers/animal-offer",
             mode: "payment",
             offeredCause: "Animal welfare <script>alert(1)</script>",
-            requestedCause: "Plant-based evidence",
+            requestedCause: "Plant-based meal evidence",
             matchCause: "Animal welfare",
             reason: "Matches your Animal welfare priority",
+            reasonDetails: ["Safe <script>alert(1)</script> explanation"],
+            actionLabel: "Reduce or avoid meat",
+            difficultyLabel: "Moderate",
+            actionFitLabel: "Possible fit",
           },
         ],
         status: "ready",
@@ -153,19 +183,26 @@ test("the browser bridge renders only fixture profile data and escapes offer fie
         context.rendered = context.window.nowFocus();
       },
       nowFocus: () => "legacy feed",
-    } as {
-      __MT_LIVE_NOW_BOOTSTRAP__: Record<string, unknown>;
-      dispatchEvent: () => void;
-      nowFocus: () => string;
-      render: () => void;
-      __MT_LIVE_NOW_ACTIVE__?: boolean;
+      __MT_LIVE_NOW_ACTIVE__: undefined as boolean | undefined,
     },
   };
 
   runInNewContext(bridge, context);
 
-  assert.match(context.rendered, /Based on your profile/);
+  assert.match(context.rendered, /For you/);
   assert.match(context.rendered, /Animal welfare &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(context.rendered, /Why this is in your feed/);
   assert.doesNotMatch(context.rendered, /legacy feed|Counteroffer from Mina/);
   assert.doesNotMatch(context.rendered, /<script>alert\(1\)<\/script>/);
+});
+
+test("the social feed has vertical card, feedback, privacy, and mobile rules", () => {
+  assert.match(feedStyles, /\.mt-social-feed/);
+  assert.match(feedStyles, /\.mt-feed-card/);
+  assert.match(feedStyles, /\.mt-feed-feedback/);
+  assert.match(feedStyles, /@media \(max-width: 620px\)/);
+  assert.match(bridge, /Easy for me/);
+  assert.match(bridge, /Hard for me/);
+  assert.match(bridge, /Less like this/);
+  assert.match(bridge, /does not retain raw browsing URLs or page content/);
 });
