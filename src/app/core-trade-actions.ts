@@ -1,5 +1,3 @@
-"use server";
-
 export * from "@/app/core-trade-actions-base";
 export {
   confirmDonationAwareAgreementVersionAction as confirmAgreementVersionAction,
