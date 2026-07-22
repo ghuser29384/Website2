@@ -112,7 +112,7 @@ export default async function CommitmentsPage() {
                     </div>
                     <dl className="deal-economics-grid">
                       <div>
-                        <dt>Exposure</dt>
+                        <dt>Maximum amount</dt>
                         <dd>{summary.chargeState}</dd>
                       </div>
                       <div>

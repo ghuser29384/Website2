@@ -70,7 +70,7 @@ function groupFor(title: string, evidenceType: string) {
   const value = `${title} ${evidenceType}`.toLowerCase();
   if (/(agreement|terms|contract)/.test(value)) return "Terms";
   if (/(payment|completion|confirmation|sign[- ]?off)/.test(value)) return "Payment & confirmation";
-  if (evidenceType === "attestation") return "Attestations";
+  if (evidenceType === "attestation") return "Statements";
   return "Fulfillment";
 }
 
@@ -107,7 +107,7 @@ function buildTimeline(record: Omit<EvidenceRecord, "timeline">, confirmations: 
     at: record.activatedAt,
     label: "Agreement",
     title: "Terms activated",
-    description: "Both participants confirmed the same frozen term version.",
+    description: "Both participants confirmed the same final terms.",
     actor: "Both parties",
   });
   for (const item of record.evidence) {
@@ -117,7 +117,7 @@ function buildTimeline(record: Omit<EvidenceRecord, "timeline">, confirmations: 
       at: item.reviewedAt,
       label: item.state === "challenged" ? "Challenge" : "Review",
       title: item.state === "challenged" ? `${item.title} challenged` : `${item.title} accepted`,
-      description: item.state === "challenged" ? "The counterparty opened a factual or scope challenge." : "The counterparty accepted this evidence item.",
+      description: item.state === "challenged" ? "The other participant said this item may be wrong or may not match the agreement." : "The other participant accepted this evidence item.",
       actor: item.submittedBy === record.proposer ? record.responder : record.proposer,
       evidenceId: item.id,
     });
@@ -161,11 +161,11 @@ async function hydratePublic(
     const rawEvidence = Array.isArray(agreement.evidence) ? agreement.evidence : [];
     const evidence: EvidenceItem[] = await Promise.all(rawEvidence.map(async (item: any) => {
       const evidenceType = clean(item.evidenceType, "file");
-      const title = clean(item.title, evidenceType === "attestation" ? "Participant attestation" : evidenceType === "link" ? "External evidence link" : "Submitted evidence file");
+      const title = clean(item.title, evidenceType === "attestation" ? "Participant statement" : evidenceType === "link" ? "Evidence link" : "Evidence file");
       return {
         id: String(item.id),
         title,
-        summary: clean(item.summary, "Evidence submitted under the parties’ frozen agreement."),
+        summary: clean(item.summary, "Evidence submitted under the final agreement."),
         evidenceType,
         mimeType: clean(item.mimeType, evidenceType),
         state: state(item.state),
@@ -179,7 +179,7 @@ async function hydratePublic(
           : null,
         challengeReason: null,
         redactionState: redaction(item.redactionState),
-        redactionNote: clean(item.redactionNote, "Sensitive identifiers should be removed before publication."),
+        redactionNote: clean(item.redactionNote, "Private details should be hidden before this is made public."),
         fileName: clean(item.fileName),
         publicUrl: includeUrls ? await signedPublicUrl(supabase, item) : null,
         preview: "live" as const,
@@ -194,7 +194,7 @@ async function hydratePublic(
       requestedCause: clean(agreement.requestedCause, "Counterparty priority"),
       proposedAction: clean(agreement.proposedAction, "Action recorded in the agreement."),
       requestedAction: clean(agreement.requestedAction, "Reciprocal action recorded in the agreement."),
-      evidenceRule: clean(agreement.evidenceRule, "Evidence is evaluated against the frozen agreement."),
+      evidenceRule: clean(agreement.evidenceRule, "Evidence is checked against the final agreement."),
       duration: clean(agreement.duration, "Duration recorded in the agreement"),
       privacyScope: clean(agreement.privacyScope, "Public by default with narrow safety exceptions."),
       proposer: label(agreement.proposer, "Proposer"),
@@ -267,12 +267,12 @@ async function hydrateParticipant(
     const responder: any = profiles.get(clean(agreement.responder_id)) ?? {};
     const evidence: EvidenceItem[] = await Promise.all(rawEvidence.map(async (item: any) => {
       const evidenceType = clean(item.evidence_type, "file");
-      const title = clean(item.public_title, evidenceType === "attestation" ? "Participant attestation" : evidenceType === "link" ? "External evidence link" : "Submitted evidence file");
+      const title = clean(item.public_title, evidenceType === "attestation" ? "Participant statement" : evidenceType === "link" ? "Evidence link" : "Evidence file");
       const fileName = clean(item.public_original_filename, clean(item.storage_path).split("/").pop() ?? "");
       return {
         id: String(item.id),
         title,
-        summary: clean(item.public_summary, clean(item.attestation, "Evidence submitted under the parties’ frozen agreement.")),
+        summary: clean(item.public_summary, clean(item.attestation, "Evidence submitted under the final agreement.")),
         evidenceType,
         mimeType: clean(item.public_mime_type, evidenceType),
         state: state(item.status),
@@ -286,7 +286,7 @@ async function hydrateParticipant(
           : null,
         challengeReason: clean(item.challenge_reason) || null,
         redactionState: redaction(item.redaction_status),
-        redactionNote: clean(item.public_redaction_note, "Sensitive identifiers should be removed before publication."),
+        redactionNote: clean(item.public_redaction_note, "Private details should be hidden before this is made public."),
         fileName,
         publicUrl: includeUrls ? await signedPublicUrl(supabase, item) : null,
         preview: "live" as const,
@@ -301,7 +301,7 @@ async function hydrateParticipant(
       requestedCause: clean(offer.requested_cause, "Counterparty priority"),
       proposedAction: clean(version.proposed_action, "Action recorded in the agreement."),
       requestedAction: clean(version.requested_action, "Reciprocal action recorded in the agreement."),
-      evidenceRule: clean(version.evidence_rule, "Evidence is evaluated against the frozen agreement."),
+      evidenceRule: clean(version.evidence_rule, "Evidence is checked against the final agreement."),
       duration: clean(version.duration, "Duration recorded in the agreement"),
       privacyScope: clean(version.privacy_scope, "Public by default with narrow safety exceptions."),
       proposer: label(proposer.display_name, "Proposer"),
@@ -380,12 +380,12 @@ async function getRecord(id: string, viewerId: string | null = null) {
 
 const EXAMPLE_EVIDENCE: EvidenceItem[] = [
   { id:"receipt",title:"Itemized receipt",summary:"The itemized cafe receipt lists a lentil bowl, roasted vegetables, feta, tahini, and sparkling water; no meat, poultry, or fish is listed.",evidenceType:"file",mimeType:"text/plain",state:"submitted",group:"Required evidence",submittedBy:"Jordan M.",submittedById:null,submittedAt:"2026-07-18T19:39:00.000Z",reviewedAt:null,challengeWindowEndsAt:null,challengeReason:null,redactionState:"redacted",redactionNote:"Order and payment identifiers are masked in the shared copy.",fileName:"green-table-receipt.txt",publicUrl:"/evidence/example/green-table-receipt.txt",preview:"receipt" },
-  { id:"before",title:"Before-meal photo",summary:"A time-stamped public-safe photo shows a lentil bowl, roasted vegetables, chickpeas, feta, and tahini before the meal.",evidenceType:"file",mimeType:"image/webp",state:"submitted",group:"Required evidence",submittedBy:"Jordan M.",submittedById:null,submittedAt:"2026-07-18T19:43:00.000Z",reviewedAt:null,challengeWindowEndsAt:null,challengeReason:null,redactionState:"redacted",redactionNote:"Location metadata and unrelated background details are removed.",fileName:"meal-before.webp",publicUrl:"/evidence/example/meal-before.webp",preview:"meal_before" },
-  { id:"after",title:"After-meal photo",summary:"An optional follow-up photo shows the same bowl after the meal and provides additional context beyond the two required artifacts.",evidenceType:"file",mimeType:"image/webp",state:"submitted",group:"Optional context",submittedBy:"Jordan M.",submittedById:null,submittedAt:"2026-07-18T20:01:00.000Z",reviewedAt:null,challengeWindowEndsAt:null,challengeReason:null,redactionState:"redacted",redactionNote:"Location metadata and unrelated background details are removed.",fileName:"meal-after.webp",publicUrl:"/evidence/example/meal-after.webp",preview:"meal_after" },
+  { id:"before",title:"Before-meal photo",summary:"A time-stamped public photo shows a lentil bowl, roasted vegetables, chickpeas, feta, and tahini before the meal.",evidenceType:"file",mimeType:"image/webp",state:"submitted",group:"Required evidence",submittedBy:"Jordan M.",submittedById:null,submittedAt:"2026-07-18T19:43:00.000Z",reviewedAt:null,challengeWindowEndsAt:null,challengeReason:null,redactionState:"redacted",redactionNote:"Location data and unrelated background details are removed.",fileName:"meal-before.webp",publicUrl:"/evidence/example/meal-before.webp",preview:"meal_before" },
+  { id:"after",title:"After-meal photo",summary:"An optional follow-up photo shows the same bowl after the meal and adds context beyond the two required items.",evidenceType:"file",mimeType:"image/webp",state:"submitted",group:"Optional context",submittedBy:"Jordan M.",submittedById:null,submittedAt:"2026-07-18T20:01:00.000Z",reviewedAt:null,challengeWindowEndsAt:null,challengeReason:null,redactionState:"redacted",redactionNote:"Location data and unrelated background details are removed.",fileName:"meal-after.webp",publicUrl:"/evidence/example/meal-after.webp",preview:"meal_after" },
 ];
 
 const EXAMPLE_BASE = {
-  id:"example",isExample:true,accessScope:"public" as const,lifecycle:"evidence_due",offeredCause:"$10 payment",requestedCause:"one meat-free meal",proposedAction:"Casey R. pays Jordan M. $10 after reviewing the agreed public-safe evidence.",requestedAction:"Jordan M. eats one meal without meat, poultry, or fish.",evidenceRule:"A before-meal photo and itemized receipt captured during the agreed meal window; an after-meal photo is optional context.",duration:"One meal · 18 Jul 2026",privacyScope:"Public-safe copies only. Location, order, payment, and unrelated personal details are removed.",proposer:"Casey R.",responder:"Jordan M.",proposerId:null,responderId:null,createdAt:"2026-07-18T18:16:00.000Z",activatedAt:"2026-07-18T18:18:00.000Z",completedAt:null,updatedAt:"2026-07-18T20:02:00.000Z",evidence:EXAMPLE_EVIDENCE,
+  id:"example",isExample:true,accessScope:"public" as const,lifecycle:"evidence_due",offeredCause:"$10 payment",requestedCause:"one meat-free meal",proposedAction:"Casey R. pays Jordan M. $10 after reviewing the agreed public evidence.",requestedAction:"Jordan M. eats one meal without meat, poultry, or fish.",evidenceRule:"A before-meal photo and itemized receipt captured during the agreed meal window; an after-meal photo is optional.",duration:"One meal · 18 Jul 2026",privacyScope:"Only copies prepared for public viewing are shown. Location, order, payment, and unrelated personal details are removed.",proposer:"Casey R.",responder:"Jordan M.",proposerId:null,responderId:null,createdAt:"2026-07-18T18:16:00.000Z",activatedAt:"2026-07-18T18:18:00.000Z",completedAt:null,updatedAt:"2026-07-18T20:02:00.000Z",evidence:EXAMPLE_EVIDENCE,
 };
 const EXAMPLE: EvidenceRecord = { ...EXAMPLE_BASE, timeline: buildTimeline(EXAMPLE_BASE, []) };
 
@@ -410,7 +410,7 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
     <div className={styles.shell} data-testid="evidence-product-shell">
       <aside aria-label="Evidence sections" className={styles.rail}>
         <div className={styles.railGroup}>
-          <p className={styles.railLabel}>Ledger</p>
+          <p className={styles.railLabel}>Evidence</p>
           <nav aria-label="Evidence navigation" className={styles.railNav}>
             <Link
               aria-current="page"
@@ -430,14 +430,14 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
         </div>
 
         <div className={styles.railGroup}>
-          <p className={styles.railLabel}>Scope</p>
+          <p className={styles.railLabel}>How it is shown</p>
           <div className={styles.railFact}>
             <span aria-hidden="true" className={styles.railDot} />
             <span>Grouped by trade</span>
           </div>
           <div className={styles.railFact}>
             <span aria-hidden="true" className={styles.railDot} />
-            <span>Public-safe artifacts</span>
+            <span>Public evidence only</span>
           </div>
           <div className={styles.railFact}>
             <span aria-hidden="true" className={styles.railDot} />
@@ -447,26 +447,25 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
 
         <div className={styles.railNote}>
           <IconMark name="lock" />
-          <strong>Public evidence, not public exposure.</strong>
-          <p>Private identifiers and unrelated personal details stay outside the public ledger.</p>
-          <Link href="/privacy">Read the privacy standard</Link>
+          <strong>Evidence can be public without exposing private details.</strong>
+          <p>Names, account details, and unrelated personal information stay private.</p>
+          <Link href="/privacy">How privacy works</Link>
         </div>
       </aside>
 
       <div className={styles.workspace}>
         <section className={styles.hero}>
           <div>
-            <p className={styles.kicker}>Global evidence ledger</p>
+            <p className={styles.kicker}>Evidence from all trades</p>
             <h1>Evidence</h1>
             <p className={styles.lead}>
-              Every public-safe artifact from every Moral Trade appears here, grouped by trade.
-              Open any record to inspect the complete dossier, review state, redactions, and
-              chronology.
+              All evidence approved for public viewing appears here, grouped by trade. Open a
+              trade to see its evidence, review status, hidden details, and timeline.
             </p>
           </div>
-          <div className={styles.heroFacts} aria-label="Ledger scope">
+          <div className={styles.heroFacts} aria-label="Evidence list summary">
             <div><span>Records</span><strong>{loadState === "ready" ? totalRecords : "Unavailable"}</strong></div>
-            <div><span>Visibility</span><strong>Public-safe only</strong></div>
+            <div><span>Visibility</span><strong>Public evidence only</strong></div>
           </div>
         </section>
 
@@ -485,25 +484,25 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
 
           <div className={styles.resultBar}>
             <span><strong>{loadState === "ready" ? totalRecords : "—"}</strong> public trade records</span>
-            <span>Public-safe artifacts · newest first</span>
+            <span>Public evidence · newest first</span>
           </div>
 
           {loadState === "unavailable" ? (
             <div className={styles.empty} data-testid="evidence-unavailable-state">
               <div aria-hidden="true" className={styles.emptyCount}>—</div>
               <div role="status">
-                <p className={styles.emptyLabel}>Ledger unavailable</p>
+                <p className={styles.emptyLabel}>Evidence unavailable</p>
                 <h3>Evidence could not be loaded.</h3>
                 <p>
-                  Nothing is being reported as empty while the ledger is unavailable. Please try
-                  again before relying on the current count.
+                  We cannot confirm the current count while the evidence list is unavailable.
+                  Please try again.
                 </p>
               </div>
               <div className={styles.emptyActions}>
                 <form action="/evidence" method="get">
                   <button className={styles.primaryAction} type="submit">Try again</button>
                 </form>
-                <Link className={styles.secondaryAction} href="/privacy">Privacy standard</Link>
+                <Link className={styles.secondaryAction} href="/privacy">How privacy works</Link>
               </div>
             </div>
           ) : records.length ? (
@@ -538,11 +537,11 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
                       </div>
                     </dl>
                     <Link
-                      aria-label={`Inspect evidence dossier for ${record.offeredCause} and ${record.requestedCause}`}
+                      aria-label={`View evidence for ${record.offeredCause} and ${record.requestedCause}`}
                       className={styles.inspect}
                       href={`/evidence/${record.id}`}
                     >
-                      Inspect →
+                      View evidence →
                     </Link>
                     <ol
                       aria-label={`Evidence submitted for ${record.offeredCause} and ${record.requestedCause}`}
@@ -574,11 +573,11 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
             <div className={styles.empty} data-testid="evidence-empty-state">
               <div aria-hidden="true" className={styles.emptyCount}>0</div>
               <div role="status">
-                <p className={styles.emptyLabel}>Current ledger</p>
+                <p className={styles.emptyLabel}>Current evidence</p>
                 <h3>No evidence has been submitted yet.</h3>
                 <p>
-                  There are no real Moral Trade evidence artifacts to list. The interface example
-                  below demonstrates the viewer but is not a trade, submission, or evidence record.
+                  No real Moral Trade evidence has been submitted. The example below shows how the
+                  viewer works, but it is not a real trade or evidence submission.
                 </p>
               </div>
               <div className={styles.emptyActions}>
@@ -593,10 +592,10 @@ function Directory({ directory }: { directory: EvidenceDirectoryData }) {
           <article className={styles.example}>
             <div className={styles.exampleCopy}>
               <p className={styles.exampleLabel}>Interface guide · no live data</p>
-              <h2 id="example-evidence-heading">See how an evidence dossier is reviewed.</h2>
+              <h2 id="example-evidence-heading">See how evidence is reviewed.</h2>
               <p>
-                Open an illustrative meat-free-meal record to try artifact review, privacy details,
-                evidence limits, and the proof timeline. It is not listed or counted as evidence.
+                Open an example meat-free-meal record to review files, see what is hidden, understand
+                what the evidence cannot prove, and follow the timeline. It is not counted as real evidence.
               </p>
             </div>
             <Link className={styles.exampleAction} href="/evidence/example">Open illustrated viewer →</Link>
@@ -657,10 +656,10 @@ async function Desk({
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { recordId } = await params;
   const id = recordId?.[0];
-  if (!id) return { title:"Public evidence", description:"Inspect the evidence, review state, redactions, and chronology behind Moral Trade records." };
+  if (!id) return { title:"Public evidence", description:"See the evidence, review status, hidden details, and timeline for Moral Trade records." };
   const record = await getRecord(id);
   if (!record) return { title:"Evidence record unavailable", robots:{index:false,follow:false} };
-  return { title:record.isExample?"Example public evidence record":`${record.offeredCause} ↔ ${record.requestedCause} evidence`, description:"Inspect the public evidence, review state, redactions, and proof timeline for this Moral Trade record.", robots:record.isExample?{index:false,follow:false}:{index:true,follow:true}, alternates:record.isExample?undefined:{canonical:`/evidence/${record.id}`} };
+  return { title:record.isExample?"Example public evidence record":`${record.offeredCause} ↔ ${record.requestedCause} evidence`, description:"See the public evidence, review status, hidden details, and timeline for this Moral Trade record.", robots:record.isExample?{index:false,follow:false}:{index:true,follow:true}, alternates:record.isExample?undefined:{canonical:`/evidence/${record.id}`} };
 }
 
 export default async function EvidencePage({ params, searchParams }: PageProps) {

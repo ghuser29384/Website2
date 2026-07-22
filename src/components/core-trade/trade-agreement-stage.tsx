@@ -167,7 +167,7 @@ function liveCopy(props: TradeAgreementStageProps): LiveCopy {
         ["Evidence submitted", String(props.evidenceCount)],
         ["Accepted evidence", String(props.acceptedEvidenceCount)],
       ],
-      intro: "The action period has reached its evidence checkpoint. Submit or review proof against the frozen rule.",
+    intro: "It is time to provide evidence. Submit or review it using the agreed rule.",
       kicker: "Active deal · Evidence due",
       title: "Proof is next.",
     };
@@ -180,7 +180,7 @@ function liveCopy(props: TradeAgreementStageProps): LiveCopy {
       ["Evidence due", formatDate(props.evidenceDueAt)],
       ["Accepted evidence", String(props.acceptedEvidenceCount)],
     ],
-    intro: "Both participants confirmed the same immutable version. No payment or custody occurs on this route.",
+    intro: "Both people accepted the same final terms. This page does not move or hold money.",
     kicker: "Active deal · Both accepted",
     title: "Trade is live.",
   };
@@ -241,7 +241,7 @@ function PartyPanel({ party, side }: { party: AgreementParty; side: "offer" | "r
   return (
     <section className={styles.confirmSide}>
       <div className={styles.sideTopline}>
-        <span className={styles.sideLabel}>{side === "offer" ? "Offer-maker commits" : "Counterparty commits"}</span>
+        <span className={styles.sideLabel}>{side === "offer" ? "Offer maker agrees to" : "Other participant agrees to"}</span>
         <span className={`${styles.acceptBadge} ${party.confirmed ? styles.accepted : ""}`}>
           {party.confirmed ? "Confirmed" : "Waiting"}
         </span>
@@ -250,7 +250,7 @@ function PartyPanel({ party, side }: { party: AgreementParty; side: "offer" | "r
         <div className={styles.avatar}>{initialFor(party.label)}</div>
         <div>
           <strong>{party.label}</strong>
-          <small>{party.confirmed ? "Confirmed this frozen version" : "Has not confirmed this version"}</small>
+          <small>{party.confirmed ? "Accepted these final terms" : "Has not accepted these terms"}</small>
         </div>
       </div>
       <div className={styles.cause}>{party.cause}</div>
@@ -258,7 +258,7 @@ function PartyPanel({ party, side }: { party: AgreementParty; side: "offer" | "r
         <TradeFlowIcon name={side === "offer" ? "document" : "handshake"} />
         <div>
           <strong>{party.action}</strong>
-          <span>Versioned commitment</span>
+          <span>Agreed action</span>
         </div>
       </div>
     </section>
@@ -288,11 +288,11 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
       </div>
       <main className={styles.confirmMain}>
         <PartyPanel party={props.proposer} side="offer" />
-        <div className={styles.confirmBridge} aria-label={`Frozen agreement version ${props.version.version}`}>
+        <div className={styles.confirmBridge} aria-label={`Final agreement version ${props.version.version}`}>
           <div className={styles.versionRing}>
             <div>
               <strong>V{props.version.version}</strong>
-              <span>Frozen terms</span>
+              <span>Final terms</span>
             </div>
           </div>
           <div className={styles.bridgeLine}>
@@ -302,7 +302,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
           </div>
           <div className={styles.noCustody}>
             <TradeFlowIcon name="shield" />
-            No payment or custody on this route
+            This page does not move or hold money
           </div>
         </div>
         <PartyPanel party={props.responder} side="request" />
@@ -345,7 +345,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
               <label className={styles.reviewCheck}>
                 <input name="terms_reviewed" required type="checkbox" />
                 <span>
-                  I reviewed this frozen version, including the baseline, maximum burden, evidence, privacy, and exit terms.
+                  I reviewed these final terms, including what happens without the trade, the most it can cost, the evidence, privacy, and exit rules.
                 </span>
               </label>
               <PendingSubmitButton
@@ -365,7 +365,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
               className={styles.actionButton}
               pendingLabel="Declining..."
             >
-              Decline before activation
+              Decline before accepting
             </PendingSubmitButton>
           </form>
         </div>
@@ -444,7 +444,7 @@ function LiveDealMap(props: TradeAgreementStageProps) {
               <TradeFlowIcon name="arrow" />
             </Link>
             <Link className={styles.actionButton} href="#terms">
-              Inspect terms
+              Review terms
             </Link>
           </div>
         </aside>
@@ -480,8 +480,8 @@ function LiveDealMap(props: TradeAgreementStageProps) {
 
         <div className={styles.liveLegend}>
           <span className={styles.legendItem}>Blue route = completed path</span>
-          <span className={styles.legendItem}>Every stop uses persisted state</span>
-          <span className={styles.legendItem}>No payment or custody</span>
+          <span className={styles.legendItem}>Every step uses a saved record</span>
+          <span className={styles.legendItem}>This page does not move or hold money</span>
         </div>
       </main>
     </section>

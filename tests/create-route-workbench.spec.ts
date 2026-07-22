@@ -172,7 +172,7 @@ test.describe("Create route workbench", () => {
       "href",
       "/signup?returnTo=%2Fcreate%3Fmode%3Dback",
     );
-    await expect(page.getByRole("button", { name: "Request operator review" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Request review" })).toHaveCount(0);
 
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

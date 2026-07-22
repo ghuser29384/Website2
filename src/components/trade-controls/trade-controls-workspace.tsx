@@ -72,9 +72,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "integrity",
     number: "01",
-    title: "Counterfactual Integrity Check",
-    shortTitle: "Integrity check",
-    description: "Test whether the promised action existed before the trade and was not manufactured for leverage.",
+    title: "Did the trade cause the action?",
+    shortTitle: "Cause check",
+    description: "Check whether the promised action was already planned before the trade.",
     icon: Fingerprint,
     route: "/trades/new",
     routeLabel: "Apply to a trade draft",
@@ -84,9 +84,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "circles",
     number: "02",
-    title: "Multi-party Trade Circles",
-    shortTitle: "Trade circles",
-    description: "Preview a chain in which each person offers one thing and receives another without forcing a single bilateral swap.",
+    title: "Trades with three or more people",
+    shortTitle: "Group trades",
+    description: "Try a chain where each person gives one thing and receives another.",
     icon: CirclesThreePlus,
     route: "/create",
     routeLabel: "Start from Create",
@@ -96,9 +96,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "resolution",
     number: "03",
-    title: "Resolution Center",
-    shortTitle: "Resolution center",
-    description: "Scope an evidence, completion, or terms problem and route it to the existing challenge and review workflow.",
+    title: "Solve a problem",
+    shortTitle: "Problems",
+    description: "Describe a problem with the evidence, action, terms, or safety and send it for review.",
     icon: Gavel,
     route: "/commitments",
     routeLabel: "Open commitments",
@@ -108,9 +108,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "governance",
     number: "04",
-    title: "Pool Governance",
-    shortTitle: "Pool governance",
-    description: "Test a contributor ballot before a material public-good pool change is submitted.",
+    title: "Change a shared fund",
+    shortTitle: "Fund changes",
+    description: "Try a vote before changing how a shared fund works.",
     icon: Scales,
     route: "/mpgf/governance",
     routeLabel: "Open pool governance",
@@ -120,9 +120,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "settlement",
     number: "05",
-    title: "Threshold Settlement and Revalidation",
-    shortTitle: "Threshold settlement",
-    description: "Inspect what should happen when a threshold, authorization, or final condition changes before release.",
+    title: "Check before money moves",
+    shortTitle: "Payment checks",
+    description: "See what happens when a funding goal, payment approval, or final condition changes.",
     icon: SlidersHorizontal,
     route: "/pools/radar",
     routeLabel: "Open threshold radar",
@@ -132,9 +132,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "verifiers",
     number: "06",
-    title: "Verifier Governance",
-    shortTitle: "Verifier governance",
-    description: "Preview scope, conflicts, expiry, quorum, and reassignment before relying on a review.",
+    title: "Choose reviewers",
+    shortTitle: "Reviewers",
+    description: "Choose current reviewers who have no conflicts before asking for a review.",
     icon: ShieldCheck,
     route: "/validation",
     routeLabel: "Open validation policy",
@@ -144,9 +144,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "values",
     number: "07",
-    title: "Private Values Profile",
-    shortTitle: "Private values",
-    description: "Keep priorities and hard constraints private while using them to narrow compatible opportunities.",
+    title: "Keep your priorities private",
+    shortTitle: "Private priorities",
+    description: "Use private priorities and firm limits to find better matches.",
     icon: LockKey,
     route: "/complete-profile",
     routeLabel: "Edit private profile",
@@ -156,9 +156,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "evidence",
     number: "08",
-    title: "Evidence Integrations",
-    shortTitle: "Evidence integrations",
-    description: "Preview a consent grant for reviewed summaries, uploads, and references without exposing raw private data.",
+    title: "Share evidence safely",
+    shortTitle: "Evidence sharing",
+    description: "Choose exactly what evidence to share, with whom, and for how long.",
     icon: Database,
     route: "/background-networking",
     routeLabel: "Review source permissions",
@@ -168,9 +168,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "safeguards",
     number: "09",
-    title: "Affected-party Safeguards",
-    shortTitle: "Affected-party safeguards",
-    description: "Identify unrepresented impacts, standing, and remedy requirements before a trade can be treated as safe to rely on.",
+    title: "Protect people outside the trade",
+    shortTitle: "People affected",
+    description: "Check who else could be affected and how they can raise a concern.",
     icon: HandHeart,
     route: "/safety",
     routeLabel: "Open safety rules",
@@ -180,9 +180,9 @@ const FEATURES: readonly FeatureDefinition[] = [
   {
     id: "authority",
     number: "10",
-    title: "Team Authority",
-    shortTitle: "Team authority",
-    description: "Preview role scope, limits, and distinct-person approval before a team member acts for an organization.",
+    title: "Set team permissions",
+    shortTitle: "Team permissions",
+    description: "Set what a team member may do, how much they may approve, and when access ends.",
     icon: UsersFour,
     route: "/team-and-governance",
     routeLabel: "Open team governance",
@@ -209,8 +209,8 @@ function PreviewNotice({ compact = false }: { compact?: boolean }) {
     <div className={classNames(styles.previewNotice, compact && styles.previewNoticeCompact)}>
       <Info aria-hidden="true" size={18} weight="bold" />
       <p>
-        <strong>Interactive workspace preview.</strong> No durable state, payment, commitment,
-        verification, settlement, or authority change occurs here.
+        <strong>Try this tool.</strong> Nothing is saved. This preview cannot move money, make a
+        commitment, approve evidence, or change permissions.
       </p>
     </div>
   );
@@ -218,13 +218,13 @@ function PreviewNotice({ compact = false }: { compact?: boolean }) {
 
 function ProtocolBadge({ protocol }: { protocol?: TradeControlProtocolSummary }) {
   if (!protocol) {
-    return <span className={styles.protocolBadge}>Protocol summary unavailable</span>;
+    return <span className={styles.protocolBadge}>Safety checks unavailable</span>;
   }
 
   return (
     <span className={classNames(styles.protocolBadge, protocol.status === "pass" && styles.protocolPass)}>
       {protocol.status === "pass" ? <CheckCircle aria-hidden="true" size={15} weight="fill" /> : <Warning aria-hidden="true" size={15} weight="fill" />}
-      Protocol surface {protocol.status} · {protocol.checks} checks
+      Safety checks {protocol.status === "pass" ? "passed" : "need attention"} · {protocol.checks}
     </span>
   );
 }
@@ -239,14 +239,14 @@ function FeatureHeader({ feature, protocol }: { feature: FeatureDefinition; prot
           <FeatureIcon aria-hidden="true" size={28} weight="regular" />
         </div>
         <div>
-          <p className={styles.eyebrow}>{feature.number} · Trade control</p>
+          <p className={styles.eyebrow}>{feature.number} · Trade safety tool</p>
           <h1>{feature.title}</h1>
           <p className={styles.featureDescription}>{feature.description}</p>
         </div>
       </div>
       <div className={styles.featureMeta}>
         <span className={feature.state === "workspace preview" ? styles.previewState : styles.handoffState}>
-          {feature.state}
+          {feature.state === "workspace preview" ? "Try it here" : "Uses live records"}
         </span>
         <ProtocolBadge protocol={protocol} />
       </div>
@@ -258,8 +258,8 @@ function FeatureActions({ feature, onReset }: { feature: FeatureDefinition; onRe
   return (
     <footer className={styles.featureActions}>
       <div>
-        <p className={styles.actionLabel}>Continue in the live product</p>
-        <p>Review the actual record and permissions before creating any durable state.</p>
+        <p className={styles.actionLabel}>Use this with a real trade</p>
+        <p>Check the real record and who can act before you save anything.</p>
       </div>
       <div className={styles.actionButtons}>
         {onReset ? (
@@ -314,23 +314,23 @@ function IntegrityPanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <div className={styles.splitGrid}>
         <section className={styles.surfaceCard}>
-          <p className={styles.cardKicker}>No-trade baseline</p>
+          <p className={styles.cardKicker}>Without the trade</p>
           <h2>Would this action happen without the offer?</h2>
           <div className={styles.controlList}>
-            <ToggleRow checked={answers.predates} description="The plan existed before this proposal was shown." label="The intention predates the offer" onChange={(value) => setAnswer("predates", value)} />
-            <ToggleRow checked={answers.independent} description="The participant can name a reason independent of marketplace leverage." label="There is an independent reason" onChange={(value) => setAnswer("independent", value)} />
-            <ToggleRow checked={answers.evidence} description="A reviewer could inspect a dated, appropriately scoped artifact." label="Supporting evidence can be reviewed" onChange={(value) => setAnswer("evidence", value)} />
-            <ToggleRow checked={answers.noEscalation} description="The harmful or costly baseline was not increased after matching." label="The baseline was not escalated" onChange={(value) => setAnswer("noEscalation", value)} />
+            <ToggleRow checked={answers.predates} description="The plan existed before this offer was shown." label="The plan came first" onChange={(value) => setAnswer("predates", value)} />
+            <ToggleRow checked={answers.independent} description="The person can explain why they would act without the trade." label="There is another reason to act" onChange={(value) => setAnswer("independent", value)} />
+            <ToggleRow checked={answers.evidence} description="A reviewer can inspect dated evidence." label="The plan can be checked" onChange={(value) => setAnswer("evidence", value)} />
+            <ToggleRow checked={answers.noEscalation} description="The harmful or costly action did not grow after the match." label="The action did not get worse" onChange={(value) => setAnswer("noEscalation", value)} />
           </div>
         </section>
         <aside className={classNames(styles.resultCard, passed ? styles.resultPass : styles.resultNeedsWork)}>
           <Fingerprint aria-hidden="true" size={36} weight="regular" />
           <p className={styles.cardKicker}>Readiness result</p>
-          <h2>{passed ? "Ready for human review." : "More baseline evidence is needed."}</h2>
+          <h2>{passed ? "Ready for a person to review." : "Answer every question first."}</h2>
           <p>
             {passed
-              ? "The declaration is internally complete. A reviewer still decides whether the evidence is sufficient."
-              : "Incomplete answers fail closed. This preview cannot authorize matching, payment, or public claims."}
+              ? "The answers are complete. A reviewer still decides whether the evidence is enough."
+              : "This preview cannot approve a match, payment, or public claim."}
           </p>
           <div className={styles.miniLedger}>
             {Object.entries(answers).map(([key, value]) => (
@@ -363,8 +363,8 @@ function TradeCirclesPanel({ feature }: { feature: FeatureDefinition }) {
       <section className={styles.surfaceCard}>
         <div className={styles.sectionHeadingRow}>
           <div>
-            <p className={styles.cardKicker}>Three-leg worked example</p>
-            <h2>One frozen set of terms. Every member confirms.</h2>
+            <p className={styles.cardKicker}>Example with three people</p>
+            <h2>One set of terms. Everyone agrees.</h2>
           </div>
           <span className={styles.smallStatus}>{confirmations.filter(Boolean).length} of 3 confirmed</span>
         </div>
@@ -397,8 +397,8 @@ function TradeCirclesPanel({ feature }: { feature: FeatureDefinition }) {
         <div className={styles.clearingStrip}>
           <Path aria-hidden="true" size={28} weight="regular" />
           <div>
-            <strong>{ran && allConfirmed ? "A complete circle is available." : ran ? "The circle remains blocked." : "Run a clearing preview."}</strong>
-            <p>{ran && allConfirmed ? "Every leg has a provider, recipient, and confirmation on the same worked-example terms." : "Any missing or changed confirmation blocks the complete circle."}</p>
+            <strong>{ran && allConfirmed ? "The group trade can go ahead." : ran ? "The group trade is still waiting." : "Check whether the trade can go ahead."}</strong>
+            <p>{ran && allConfirmed ? "Everyone gives, receives, and agrees to the same terms." : "The trade waits if anyone has not agreed or the terms change."}</p>
           </div>
           <button className={styles.darkButton} onClick={() => setRan(true)} type="button">Run preview</button>
         </div>
@@ -420,7 +420,7 @@ function ResolutionPanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <div className={styles.resolutionGrid}>
         <section className={styles.surfaceCard}>
-          <p className={styles.cardKicker}>Scope a case</p>
+          <p className={styles.cardKicker}>Describe the problem</p>
           <h2>What changed?</h2>
           <div className={styles.segmented} role="group" aria-label="Issue type">
             {[
@@ -434,17 +434,17 @@ function ResolutionPanel({ feature }: { feature: FeatureDefinition }) {
           </div>
           <label className={styles.textAreaLabel}>
             <span>Private case summary</span>
-            <textarea defaultValue={`The ${issue} record does not match the agreed scope. Please review the named claim and attached evidence only.`} key={issue} rows={4} />
+            <textarea defaultValue={`The ${issue} does not match what we agreed. Please review this claim and its evidence.`} key={issue} rows={4} />
           </label>
-          <ToggleRow checked={standing} description="Participant, counterparty, affected party, reviewer, or safety operator." label="Standing is named" onChange={(value) => { setStanding(value); setSubmitted(false); }} />
-          <ToggleRow checked={redacted} description="Private details are removed from any notice shown outside the case." label="Notice is privacy-safe" onChange={(value) => { setRedacted(value); setSubmitted(false); }} />
-          <button className={styles.darkButton} disabled={!ready} onClick={() => setSubmitted(true)} type="button">Preview case routing</button>
+          <ToggleRow checked={standing} description="The person is involved, affected, reviewing, or handling safety." label="This person can raise the concern" onChange={(value) => { setStanding(value); setSubmitted(false); }} />
+          <ToggleRow checked={redacted} description="Any notice shown outside the case leaves out private details." label="Private details are hidden" onChange={(value) => { setRedacted(value); setSubmitted(false); }} />
+          <button className={styles.darkButton} disabled={!ready} onClick={() => setSubmitted(true)} type="button">Preview the review path</button>
         </section>
         <aside className={styles.timelineCard}>
           <p className={styles.cardKicker}>Resolution path</p>
           {[
-            ["Case scoped", true],
-            ["Standing checked", standing],
+            ["Problem described", true],
+            ["Person can raise it", standing],
             ["Privacy notice checked", redacted],
             ["Human review queued", submitted],
           ].map(([label, active], index) => (
@@ -480,7 +480,7 @@ function GovernancePanel({ feature }: { feature: FeatureDefinition }) {
       <div className={styles.splitGrid}>
         <section className={styles.surfaceCard}>
           <div className={styles.sectionHeadingRow}>
-            <div><p className={styles.cardKicker}>Material-change ballot preview</p><h2>Rebalance the next pool cycle.</h2></div>
+            <div><p className={styles.cardKicker}>Preview a fund change</p><h2>Change how the next round is split.</h2></div>
             <strong className={classNames(styles.totalPill, total === 100 ? styles.totalGood : styles.totalBad)}>{total}%</strong>
           </div>
           {Object.entries(allocations).map(([key, value]) => (
@@ -489,11 +489,11 @@ function GovernancePanel({ feature }: { feature: FeatureDefinition }) {
               <input max="100" min="0" onChange={(event) => setAllocation(key as keyof typeof allocations, Number(event.target.value))} type="range" value={value} />
             </label>
           ))}
-          <p className={styles.helperText}>A live ballot uses an eligible-contributor snapshot and immutable open terms. This slider changes only the preview.</p>
+          <p className={styles.helperText}>The people who can vote and the terms are fixed when voting starts. This slider changes only the preview.</p>
         </section>
         <aside className={styles.voteCard}>
           <Scales aria-hidden="true" size={34} weight="regular" />
-          <p className={styles.cardKicker}>Your reviewed choice</p>
+          <p className={styles.cardKicker}>Your choice</p>
           <h2>{consent ? `Choice: ${consent}` : "Review the proposal."}</h2>
           <p>Changing the terms requires a new version and fresh contributor consent.</p>
           <div className={styles.voteButtons}>
@@ -522,7 +522,7 @@ function SettlementPanel({ feature }: { feature: FeatureDefinition }) {
       <section className={styles.settlementCard}>
         <div className={styles.settlementMeterBlock}>
           <p className={styles.cardKicker}>Worked example · $25,000 threshold</p>
-          <h2>{committed}% conditionally pledged.</h2>
+          <h2>{committed}% of the goal is pledged.</h2>
           <label className={styles.rangeRow}>
             <span><strong>Commitment level</strong><output>{Math.round(25000 * committed / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</output></span>
             <input aria-label="Commitment level" max="110" min="0" onChange={(event) => { setCommitted(Number(event.target.value)); setRevalidated(false); }} type="range" value={committed} />
@@ -530,13 +530,13 @@ function SettlementPanel({ feature }: { feature: FeatureDefinition }) {
           <div className={styles.thresholdMarkers}><span>$0</span><span>Threshold $25,000</span><span>$27,500</span></div>
         </div>
         <div className={styles.revalidationList}>
-          <ToggleRow checked={authorizationCurrent} description="Provider status must be checked in the live settlement record." label="Authorization remains current" onChange={(value) => { setAuthorizationCurrent(value); setRevalidated(false); }} />
+          <ToggleRow checked={authorizationCurrent} description="The payment provider must still show approval on the live record." label="Payment approval is still valid" onChange={(value) => { setAuthorizationCurrent(value); setRevalidated(false); }} />
           <ToggleRow checked={conditionCurrent} description="The stated job, delivery, or funding condition is still true." label="Release condition remains current" onChange={(value) => { setConditionCurrent(value); setRevalidated(false); }} />
-          <button className={styles.darkButton} onClick={() => setRevalidated(true)} type="button">Revalidate preview</button>
+          <button className={styles.darkButton} onClick={() => setRevalidated(true)} type="button">Check again</button>
         </div>
         <aside className={classNames(styles.settlementOutcome, releasable && styles.resultPass)}>
           {releasable ? <CheckCircle aria-hidden="true" size={30} weight="fill" /> : <LockKey aria-hidden="true" size={30} />}
-          <div><strong>{releasable ? "All preview conditions align." : "Release remains blocked."}</strong><p>{releasable ? "A provider-backed live record would still control any charge or release." : "Threshold, authorization, condition, and revalidation must all be current."}</p></div>
+          <div><strong>{releasable ? "All conditions are met." : "Money cannot move yet."}</strong><p>{releasable ? "The live payment record still controls any charge or release." : "The goal, payment approval, final condition, and latest check must all be current."}</p></div>
         </aside>
       </section>
       <FeatureActions feature={feature} onReset={() => { setCommitted(82); setAuthorizationCurrent(true); setConditionCurrent(false); setRevalidated(false); }} />
@@ -559,8 +559,8 @@ function VerifierPanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <section className={styles.surfaceCard}>
         <div className={styles.sectionHeadingRow}>
-          <div><p className={styles.cardKicker}>Assignment preview</p><h2>Select two in-scope, conflict-free reviewers.</h2></div>
-          <span className={classNames(styles.smallStatus, quorum && styles.smallStatusGood)}>{quorum ? "Quorum previewed" : `${selected.length} of 2 selected`}</span>
+          <div><p className={styles.cardKicker}>Reviewer preview</p><h2>Select two current reviewers with no conflicts.</h2></div>
+          <span className={classNames(styles.smallStatus, quorum && styles.smallStatusGood)}>{quorum ? "Two reviewers selected" : `${selected.length} of 2 selected`}</span>
         </div>
         <div className={styles.reviewerGrid}>
           {reviewers.map((reviewer) => {
@@ -577,14 +577,14 @@ function VerifierPanel({ feature }: { feature: FeatureDefinition }) {
               >
                 <span className={styles.reviewerAvatar}><UserFocus aria-hidden="true" size={24} /></span>
                 <span><strong>{reviewer.name}</strong><small>{reviewer.scope}</small></span>
-                <span className={styles.reviewerState}>{blocked ? "Recused / expired" : active ? "Selected" : "Available"}</span>
+                <span className={styles.reviewerState}>{blocked ? "Unavailable" : active ? "Selected" : "Available"}</span>
               </button>
             );
           })}
         </div>
         <div className={styles.assignmentSummary}>
           <ShieldCheck aria-hidden="true" size={28} />
-          <div><strong>{quorum ? "Two-person review can be requested." : "Assignment is not ready."}</strong><p>Live reviewer assignment still checks scope, conflicts, expiry, capacity, and participant challenges.</p></div>
+          <div><strong>{quorum ? "You can ask for a two-person review." : "Choose two reviewers."}</strong><p>The live page still checks what each reviewer may review, conflicts, end dates, workload, and challenges.</p></div>
         </div>
       </section>
       <FeatureActions feature={feature} onReset={() => setSelected([])} />
@@ -617,8 +617,8 @@ function ValuesPanel({ feature }: { feature: FeatureDefinition }) {
         </section>
         <aside className={styles.profilePreview}>
           <LockKey aria-hidden="true" size={34} weight="regular" />
-          <p className={styles.cardKicker}>Private recommendation lens</p>
-          <h2>{applied ? "Compatible lanes are narrowed." : "Your private lens is unchanged."}</h2>
+          <p className={styles.cardKicker}>Private matching choices</p>
+          <h2>{applied ? "Matching is more focused." : "Your matching choices are unchanged."}</h2>
           <dl>
             <div><dt>Priority areas selected</dt><dd>{selected.length}</dd></div>
             <div><dt>Hard constraints</dt><dd>{hardVeto ? "Protected" : "Not set"}</dd></div>
@@ -647,7 +647,7 @@ function EvidencePanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <div className={styles.evidenceGrid}>
         <section className={styles.surfaceCard}>
-          <p className={styles.cardKicker}>Permission grant preview</p>
+          <p className={styles.cardKicker}>Evidence sharing preview</p>
           <h2>Share the minimum evidence needed.</h2>
           <div className={styles.sourceList}>
             {sources.map((source) => {
@@ -665,14 +665,14 @@ function EvidencePanel({ feature }: { feature: FeatureDefinition }) {
         </section>
         <aside className={styles.permissionCard}>
           <LockKey aria-hidden="true" size={30} />
-          <p className={styles.cardKicker}>Consent boundary</p>
-          <label><span>Retention period</span><select onChange={(event) => { setRetention(event.target.value); setPreviewed(false); }} value={retention}><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
+          <p className={styles.cardKicker}>Sharing limits</p>
+          <label><span>How long to keep it</span><select onChange={(event) => { setRetention(event.target.value); setPreviewed(false); }} value={retention}><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></label>
           <ul>
-            <li><Check aria-hidden="true" size={14} /> Raw ingestion stays off</li>
-            <li><Check aria-hidden="true" size={14} /> Reviewer purpose is named</li>
+            <li><Check aria-hidden="true" size={14} /> Full source stays private</li>
+            <li><Check aria-hidden="true" size={14} /> Reason for sharing is named</li>
             <li><Check aria-hidden="true" size={14} /> Permission can be revoked</li>
           </ul>
-          <button className={styles.darkButton} onClick={() => setPreviewed(true)} type="button">Preview consent grant</button>
+          <button className={styles.darkButton} onClick={() => setPreviewed(true)} type="button">Preview sharing</button>
           {previewed ? <p className={styles.permissionOutcome}>{enabled.length} source type{enabled.length === 1 ? "" : "s"} · expires after {retention} days · no connection created</p> : null}
         </aside>
       </div>
@@ -694,19 +694,19 @@ function SafeguardsPanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <div className={styles.safeguardGrid}>
         <section className={styles.surfaceCard}>
-          <p className={styles.cardKicker}>Impact screen</p>
+          <p className={styles.cardKicker}>Who else is affected?</p>
           <h2>Who could bear a cost without being at the table?</h2>
-          <ToggleRow checked={unrepresented} description="A person or group affected by the terms is not a direct participant." label="Unrepresented third party" onChange={setUnrepresented} />
+          <ToggleRow checked={unrepresented} description="A person or group affected by the terms is not part of the trade." label="Someone affected is not included" onChange={setUnrepresented} />
           <ToggleRow checked={community} description="The activity could create a local, environmental, or community impact." label="Community or environmental impact" onChange={setCommunity} />
           <div className={styles.divider} />
-          <ToggleRow checked={standing} description="An affected party has a safe way to raise a scoped concern." label="Affected-party standing documented" onChange={setStanding} />
-          <ToggleRow checked={remedy} description="A named response exists if the impact is substantiated." label="Remedy path documented" onChange={setRemedy} />
+          <ToggleRow checked={standing} description="A person who may be affected has a safe way to raise a concern." label="People affected can speak up" onChange={setStanding} />
+          <ToggleRow checked={remedy} description="There is a clear response if the concern is supported by evidence." label="A response is planned" onChange={setRemedy} />
         </section>
         <aside className={classNames(styles.safeguardOutcome, clearedForReview ? styles.resultPass : styles.resultNeedsWork)}>
           {clearedForReview ? <ShieldCheck aria-hidden="true" size={38} weight="fill" /> : <Warning aria-hidden="true" size={38} weight="fill" />}
           <p className={styles.cardKicker}>Safety result</p>
-          <h2>{clearedForReview ? "Ready for scoped human review." : "Reliance must remain blocked."}</h2>
-          <p>{clearedForReview ? "The preview has a standing and remedy path. A live reviewer still evaluates the source evidence." : "A trigger without standing and remedy fails closed. It cannot be waived by the participants."}</p>
+          <h2>{clearedForReview ? "Ready for a person to review." : "The trade must stay paused."}</h2>
+          <p>{clearedForReview ? "People affected can raise a concern, and a response is planned. A reviewer still checks the evidence." : "The trade cannot move ahead until people affected can speak up and a response is planned."}</p>
           <Link href="/contact">Report a safety concern <ArrowRight aria-hidden="true" size={16} /></Link>
         </aside>
       </div>
@@ -728,26 +728,26 @@ function AuthorityPanel({ feature }: { feature: FeatureDefinition }) {
       <PreviewNotice />
       <div className={styles.authorityGrid}>
         <section className={styles.surfaceCard}>
-          <p className={styles.cardKicker}>Delegation preview</p>
+          <p className={styles.cardKicker}>Team permission preview</p>
           <h2>What may this role do?</h2>
           <div className={styles.formGrid}>
             <label><span>Role</span><select><option>Programs lead</option><option>Finance reviewer</option><option>Evidence reviewer</option></select></label>
-            <label><span>Scope</span><select onChange={(event) => { setScope(event.target.value); setChecked(false); }} value={scope}><option value="draft">Draft only</option><option value="publish">Draft and publish</option><option value="lock">Draft, publish, and request lock</option></select></label>
+            <label><span>Allowed actions</span><select onChange={(event) => { setScope(event.target.value); setChecked(false); }} value={scope}><option value="draft">Draft only</option><option value="publish">Draft and publish</option><option value="lock">Draft, publish, and ask to finalize</option></select></label>
             <label><span>Maximum amount</span><div className={styles.moneyInput}><span>$</span><input min="0" onChange={(event) => { setLimit(Number(event.target.value)); setChecked(false); }} type="number" value={limit} /></div></label>
             <label><span>Grant expires</span><input defaultValue="2026-08-31" type="date" /></label>
           </div>
           <div className={styles.approvalGrid}>
             <ToggleRow checked={firstApproval} description="The request creator cannot count twice." label="Approver one confirmed" onChange={(value) => { setFirstApproval(value); setChecked(false); }} />
-            <ToggleRow checked={secondApproval} description="A distinct authorized person confirms the same terms hash." label="Approver two confirmed" onChange={(value) => { setSecondApproval(value); setChecked(false); }} />
+            <ToggleRow checked={secondApproval} description="A different authorized person confirms the same terms." label="Approver two confirmed" onChange={(value) => { setSecondApproval(value); setChecked(false); }} />
           </div>
           <button className={styles.darkButton} onClick={() => setChecked(true)} type="button">Check authority preview</button>
         </section>
         <aside className={styles.authorityReceipt}>
           <UsersFour aria-hidden="true" size={34} />
-          <p className={styles.cardKicker}>Authority receipt</p>
-          <h2>{checked ? approved ? "Request is within the previewed grant." : "A second approver is required." : "No authority check run."}</h2>
+          <p className={styles.cardKicker}>Permission summary</p>
+          <h2>{checked ? approved ? "The request fits these permissions." : "A second approver is required." : "Permissions have not been checked."}</h2>
           <dl>
-            <div><dt>Scope</dt><dd>{scope.replaceAll("_", " ")}</dd></div>
+            <div><dt>Allowed actions</dt><dd>{scope.replaceAll("_", " ")}</dd></div>
             <div><dt>Limit</dt><dd>{limit.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</dd></div>
             <div><dt>Distinct approvals</dt><dd>{Number(firstApproval) + Number(secondApproval)} of 2</dd></div>
             <div><dt>Payment authority</dt><dd>None</dd></div>

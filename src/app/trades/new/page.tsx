@@ -42,7 +42,7 @@ const VICTORIA_EXAMPLE: Partial<TradeDraftValues> = {
     "Without an agreement, I keep my current giving and the counterparty keeps their current diet.",
   duration: "12 months",
   evidenceRule:
-    "Donation receipt for the giving commitment and participant attestation for the diet commitment.",
+    "Donation receipt for the giving promise and a signed statement for the diet promise.",
   maximumBurden: "The stated 1% donation and the stated 12-month dietary commitment only.",
   privacyScope:
     "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",

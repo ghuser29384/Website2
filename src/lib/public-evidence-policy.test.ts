@@ -28,9 +28,9 @@ test("evidence submission requires a certified public-safe copy", () => {
   assert.match(action, /public_redaction_note:/);
   assert.match(agreement, /name="public_safe_copy" required/);
   assert.match(agreement, /Review evidence/);
-  assert.match(agreement, /evidence (?:viewer|dossier)/i);
+  assert.match(agreement, /evidence (?:viewer|page)/i);
   assert.match(agreement, /Visibility:/);
-  assert.match(agreement, /Redaction:/);
+  assert.match(agreement, /Private details:/);
 });
 
 test("the schema is public by default and keeps explicit safety and redaction states", () => {
@@ -43,7 +43,7 @@ test("the schema is public by default and keeps explicit safety and redaction st
   assert.match(migration, /touch_public_evidence_record_trigger/);
 });
 
-test("the evidence dossier exposes section tabs, artifact controls, and privacy details", () => {
+test("the evidence page exposes section tabs, evidence controls, and privacy details", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
   const stage = source("src/components/evidence/evidence-stage.tsx");
   const evidenceSurface = `${page}\n${stage}`;
@@ -62,7 +62,7 @@ test("the evidence dossier exposes section tabs, artifact controls, and privacy 
   assert.doesNotMatch(stage, /new Intl\.DateTimeFormat/);
 });
 
-test("the global directory is evidence-driven while direct trade dossiers can await submission", () => {
+test("the global directory is evidence-driven while direct trade pages can await submission", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
   const hydrateStart = page.indexOf("async function hydratePublic");
   const hydrateEnd = page.indexOf("async function listRecords", hydrateStart);
@@ -91,7 +91,7 @@ test("the Evidence directory uses the shared product language without confusing 
   const directoryStyles = source(
     "src/app/evidence/[[...recordId]]/evidence-directory.module.css",
   );
-  const dossierStyles = source("src/components/evidence/evidence-stage.module.css");
+  const evidenceStyles = source("src/components/evidence/evidence-stage.module.css");
 
   assert.match(page, /data-testid="evidence-product-shell"/);
   assert.match(page, /aria-label="Evidence sections"/);
@@ -105,16 +105,16 @@ test("the Evidence directory uses the shared product language without confusing 
   assert.match(directoryStyles, /font-family: var\(--font-heading\)/);
   assert.match(directoryStyles, /font-family: var\(--font-mono\)/);
   assert.match(directoryStyles, /outline: 2px solid var\(--ledger-blue\)/);
-  assert.match(dossierStyles, /--evidence-accent: var\(--accent\)/);
+  assert.match(evidenceStyles, /--evidence-accent: var\(--accent\)/);
   assert.match(page, /label: "Participant accepted"/);
   assert.match(
     source("src/components/evidence/evidence-stage.tsx"),
     /const allAccepted = record\.evidence\.length > 0 && acceptedCount === record\.evidence\.length/,
   );
-  assert.match(dossierStyles, /\.statusChallenged[\s\S]*var\(--evidence-red\)/);
-  assert.match(dossierStyles, /\.tabs \.activeTab::after \{\s*background: var\(--evidence-accent\)/);
-  assert.match(dossierStyles, /\.timelineAccepted \.timelineMarker[\s\S]*var\(--evidence-green\)/);
-  assert.match(dossierStyles, /\.timelineChallenged \.timelineMarker[\s\S]*var\(--evidence-red\)/);
+  assert.match(evidenceStyles, /\.statusChallenged[\s\S]*var\(--evidence-red\)/);
+  assert.match(evidenceStyles, /\.tabs \.activeTab::after \{\s*background: var\(--evidence-accent\)/);
+  assert.match(evidenceStyles, /\.timelineAccepted \.timelineMarker[\s\S]*var\(--evidence-green\)/);
+  assert.match(evidenceStyles, /\.timelineChallenged \.timelineMarker[\s\S]*var\(--evidence-red\)/);
 });
 
 test("the public evidence read contract projects only approved fields and gates stored files", () => {

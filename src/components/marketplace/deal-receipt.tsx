@@ -89,7 +89,7 @@ export const VICTORIA_PAUL_RECEIPT_ROWS: readonly DealReceiptRow[] = [
     value: "Both commitments remain active together; either side may use the published exit rule.",
   },
   {
-    label: "Maximum exposure",
+    label: "Most this can cost",
     value: "The stated donation percentage and stated action term only.",
     emphasis: true,
   },

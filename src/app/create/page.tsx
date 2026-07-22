@@ -73,7 +73,7 @@ function buildBackPreviewRows(): readonly DealReceiptRow[] {
     { label: "Backer commitment", value: route.receipt.commitment },
     { label: "Candidate commitment", value: route.receipt.other },
     { label: "Condition", value: route.receipt.condition },
-    { label: "Maximum exposure", value: route.receipt.exposure, emphasis: true },
+    { label: "Most this can cost", value: route.receipt.exposure, emphasis: true },
     { label: "Evidence", value: route.receipt.evidence },
     { label: "Exit", value: route.receipt.exit },
   ];

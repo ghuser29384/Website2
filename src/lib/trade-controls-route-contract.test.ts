@@ -17,25 +17,25 @@ const styleSource = readRepoFile(
   "src/components/trade-controls/trade-controls-workspace.module.css",
 );
 
-test("Trade controls exposes all ten selected interactive mechanisms", () => {
+test("Trade controls exposes all ten selected interactive tools", () => {
   for (const label of [
-    "Counterfactual Integrity Check",
-    "Multi-party Trade Circles",
-    "Resolution Center",
-    "Pool Governance",
-    "Threshold Settlement and Revalidation",
-    "Verifier Governance",
-    "Private Values Profile",
-    "Evidence Integrations",
-    "Affected-party Safeguards",
-    "Team Authority",
+    "Did the trade cause the action?",
+    "Trades with three or more people",
+    "Solve a problem",
+    "Change a shared fund",
+    "Check before money moves",
+    "Choose reviewers",
+    "Keep your priorities private",
+    "Share evidence safely",
+    "Protect people outside the trade",
+    "Set team permissions",
   ]) {
     assert.match(componentSource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 
-  assert.match(componentSource, /No durable state, payment, commitment/);
+  assert.match(componentSource, /Nothing is saved/);
   assert.match(componentSource, /A preview never authorizes reliance/);
-  assert.match(componentSource, /Interactive workspace preview/);
+  assert.match(componentSource, /Try this tool/);
 });
 
 test("Trade controls hands preview decisions to existing live workflows", () => {
@@ -54,7 +54,7 @@ test("Trade controls hands preview decisions to existing live workflows", () => 
     assert.match(componentSource, new RegExp(route.replaceAll("/", "\\/")));
   }
 
-  assert.match(componentSource, /Review the actual record and permissions/);
+  assert.match(componentSource, /Check the real record and who can act/);
 });
 
 test("Trade controls is noindex, contract-backed, responsive, and discoverable", () => {

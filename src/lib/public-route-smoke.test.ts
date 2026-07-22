@@ -1693,8 +1693,8 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(agreementPage, /submitAgreementEvidenceAction/);
   assert.match(agreementPage, /requestAgreementReviewAppealAction/);
   assert.match(agreementPage, /No-trade baseline/);
-  assert.match(agreementPage, /Counterfactual declaration/);
-  assert.match(agreementPage, /Privacy scope/);
+  assert.match(agreementPage, /Why this trade changes what happens/);
+  assert.match(agreementPage, /Who can see what/);
   assert.match(agreementPage, /pending_evidence/);
   assert.match(agreementPage, /challenge_window_open/);
   assert.match(agreementPage, /disputed_unresolved/);
@@ -5206,7 +5206,7 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.match(offerDetailSource, /safetyWarningCopy/);
   assert.match(offerDetailSource, /Participant importance/);
   assert.match(offerDetailSource, /importanceScoreNote/);
-  assert.match(offerDetailSource, /Appeal scope/);
+  assert.match(offerDetailSource, /What can be appealed/);
   assert.match(offerDetailSource, /appealCopy/);
   assert.match(offerDetailSource, /Contact after sign-in/);
   assert.match(offerDetailSource, /Save offer/);
@@ -5745,7 +5745,7 @@ test("agreement payment checkout path records no-capture authorization stubs for
 
   assert.match(agreementPage, /buildAgreementPaymentAuthorizationPreview/);
   assert.match(agreementPage, /Record no-capture payment authorization/);
-  assert.match(agreementPage, /Payment authorization gates/);
+  assert.match(agreementPage, /Payment checks/);
   assert.match(actionsSource, /buildAgreementPaymentAuthorizationPreview/);
   assert.match(actionsSource, /No Stripe Checkout was created/);
   assert.match(actionsSource, /authorization_mode: paymentAuthorizationPreview\.authorizationMode/);

@@ -6040,7 +6040,7 @@ export function OfferCreateForm({
 
                 <div className="field-grid">
                   <label className="field">
-                    <span>Maximum exposure</span>
+                    <span>Most this can cost</span>
                     <input
                       min="0.01"
                       name="offset_maximum_exposure_usd"

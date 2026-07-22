@@ -174,15 +174,15 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
       },
       {
         emphasis: true,
-        label: "Maximum exposure",
+        label: "Most that may be requested",
         value:
           draft.requestedCap && draft.duration
-            ? `${requestedCap}; no exposure beyond the stated ${draft.duration} term.`
+            ? `${requestedCap}; nothing beyond the stated ${draft.duration} term.`
             : "Set a hard contribution cap and term before review.",
       },
       {
         label: "Evidence",
-        value: draft.evidence || "Name the documents, milestones, reviewer, and privacy scope.",
+        value: draft.evidence || "Name the documents, milestones, reviewer, and who may see each item.",
       },
       {
         label: "Exit",
@@ -359,7 +359,7 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
                 type="number"
                 value={draft.requestedCap}
               />
-              <small>This hard cap is the maximum proposed exposure across all backers.</small>
+              <small>This is the most that may be requested from all backers combined.</small>
             </label>
 
             <label className={styles.field}>
@@ -379,12 +379,12 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
             </label>
 
             <label className={`${styles.field} ${styles.spanTwo}`}>
-              <span>Clearing condition</span>
+              <span>When this starts</span>
               <textarea
                 name="backing_clearing_condition"
                 onChange={bindField("clearingCondition")}
                 maxLength={300}
-                placeholder="For example: the named offer is accepted, compensation evidence is reviewed, at least $25,000 is conditionally committed by the deadline, and the candidate separately consents to the frozen terms."
+                placeholder="For example: the offer is accepted, pay evidence is reviewed, at least $25,000 is promised by the deadline, and the candidate separately accepts the final terms."
                 required
                 rows={4}
                 value={draft.clearingCondition}
@@ -397,7 +397,7 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
                 name="backing_candidate_commitment"
                 onChange={bindField("candidateCommitment")}
                 maxLength={300}
-                placeholder="State the bounded action the candidate would take if the condition clears. Do not create an open-ended obligation to remain in a role."
+                placeholder="State the specific action the candidate would take if the condition is met. Do not create an open-ended duty to remain in a role."
                 required
                 rows={4}
                 value={draft.candidateCommitment}
@@ -439,7 +439,7 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
                 required
                 value={draft.reviewer}
               />
-              <small>Conflicts and authority must be checked before activation.</small>
+              <small>Conflicts and permission to review must be checked before the request starts.</small>
             </label>
 
             <label className={styles.field}>
@@ -472,8 +472,8 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
           <legend className={styles.stepHeading}>
             <span>04</span>
             <span>
-              <strong>Exit and attestation</strong>
-              <small>Make refusal, expiry, and failure states legible before review.</small>
+              <strong>Exit and confirmation</strong>
+              <small>Explain refusal, end dates, and failure before review.</small>
             </span>
           </legend>
 
@@ -501,14 +501,14 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
             <label className={styles.attestation}>
               <input name="attest_bounded" required type="checkbox" />
               <span>
-                The request is capped, time-bounded, and does not create an indefinite obligation to
+                The request has a spending limit and an end date. It does not create an indefinite duty to
                 remain in a role.
               </span>
             </label>
             <label className={styles.attestation}>
               <input name="attest_review_only" required type="checkbox" />
               <span>
-                I understand that submission queues operator review only; it does not reserve funds,
+                I understand that submission asks for staff review only; it does not reserve funds,
                 certify impact, or create an employment agreement.
               </span>
             </label>
@@ -518,12 +518,12 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
         <div className={styles.submitBar}>
           <p>
             {isAuthenticated
-              ? "The request will enter the private operator queue. No counterparty is contacted and no funds move."
+              ? "The request will enter a private review queue. The other participant is not contacted, and no money moves."
               : "This signed-out preview is not saved. Create an account before entering sensitive details or requesting review."}
           </p>
           {isAuthenticated ? (
             <button className="button button-primary" type="submit">
-              Request operator review
+              Request review
             </button>
           ) : (
             <Link className="button button-primary" href={signupHref}>
@@ -536,7 +536,7 @@ export function BackingCreateForm({ formMessage, isAuthenticated }: BackingCreat
       <aside className={styles.receiptColumn} aria-label="Backing request preview">
         <div className={styles.receiptIntro}>
           <p className="mt-product-kicker">Live preview</p>
-          <h3>Check the bounded record.</h3>
+          <h3>Review the limits.</h3>
           <p>
             The receipt mirrors the review fields. Empty or vague rows are a signal to keep drafting,
             not an invitation to rely on the request.

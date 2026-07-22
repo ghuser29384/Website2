@@ -160,11 +160,11 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
   const defaultStructuredTerms =
     agreement.structured_terms ||
     agreement.offer?.offer_action ||
-    "State the proposed action, reciprocal action, burden, and expected moral surplus.";
+    "State what each person will do, how difficult it will be, and what each person gains.";
   const defaultEvidenceRule =
     agreement.evidence_rule ||
     agreement.offer?.verification ||
-    "Name the receipts, logs, attestations, or provider records that will count.";
+    "Name the receipts, logs, signed statements, or service records that will count.";
   const paymentAuthorizationPreview = buildAgreementPaymentAuthorizationPreview({
     agreementCompletionState: agreement.completion_state,
     agreementSource: agreement.source,
@@ -316,11 +316,11 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                   />
                 </label>
                 <label className="field">
-                  <span>Counterfactual declaration</span>
+                  <span>Why this trade changes what happens</span>
                   <textarea
                     defaultValue={agreement.counterfactual_declaration}
                     name="counterfactual_declaration"
-                    placeholder="Why is this action plausibly caused by the agreement rather than already planned?"
+                    placeholder="Why would this action probably not happen without the trade?"
                     rows={3}
                     required
                   />
@@ -342,11 +342,11 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               </label>
               <div className="field-grid">
                 <label className="field">
-                  <span>Privacy scope</span>
+                  <span>Who can see what</span>
                   <textarea defaultValue={agreement.privacy_scope} name="privacy_scope" rows={3} required />
                 </label>
                 <label className="field">
-                  <span>Disclosure scope</span>
+                  <span>What may be shared</span>
                   <textarea defaultValue={agreement.disclosure_scope} name="disclosure_scope" rows={3} />
                 </label>
               </div>
@@ -364,7 +364,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               <h2 id="performance-bonds-heading">Evidence, challenge windows, and review status</h2>
               <p>
                 These bonds support factual trust about whether each pledged act was performed.
-                They do not replace the no-trade baseline or additionality explanation.
+                They do not explain what would happen without the trade or prove that the trade
+                caused an extra action.
               </p>
             </div>
 
@@ -423,11 +424,11 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                     <p className="route-text">
                       {bond.funding_status === "payment_pending"
                         ? "Manual-payment pending: this record tracks terms and review status, but does not claim live platform custody."
-                        : "Funding and ledger status are shown separately from evidence review."}
+                        : "Payment status is shown separately from evidence review."}
                     </p>
                     <div className="field-grid">
                       <div>
-                        <h4>Evidence schema</h4>
+                        <h4>Evidence rules</h4>
                         <p className="route-text">
                           <strong>Action:</strong> {evidenceSchema.actionToProve}
                         </p>
@@ -444,15 +445,15 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                           <strong>Visibility:</strong>{" "}
                           {formatState(evidenceSchema.visibility)}
                           {evidenceSchema.privateEvidenceAllowed
-                            ? "; private/redacted evidence allowed"
+                            ? "; private evidence or copies with details hidden are allowed"
                             : ""}
                         </p>
                       </div>
                       <div>
                         <h4>Bond terms</h4>
                         <p className="route-text">
-                          <strong>Refunded when:</strong> evidence is accepted under the evidence
-                          schema.
+                          <strong>Refunded when:</strong> evidence is accepted under the agreed
+                          rules.
                         </p>
                         <p className="route-text">
                           <strong>Forfeiture rule:</strong> {formatPerformanceBondDestination(bond)}
@@ -469,7 +470,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                         <p className="route-text">{bond.no_trade_baseline}</p>
                       </div>
                       <div>
-                        <h4>Why this is additional?</h4>
+                        <h4>Why does this trade add something new?</h4>
                         <p className="route-text">{bond.additionality_statement}</p>
                       </div>
                     </div>
@@ -482,7 +483,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                           <span>Submit evidence for your pledge</span>
                           <textarea
                             name="evidence_text"
-                            placeholder="Explain what was completed and how this evidence satisfies the agreed schema."
+                            placeholder="Explain what was completed and how this evidence meets the agreed rules."
                             required
                             rows={4}
                           />
@@ -491,7 +492,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                           <span>Evidence URL</span>
                           <input
                             name="evidence_urls"
-                            placeholder="Optional public log, receipt link, or proof packet URL"
+                            placeholder="Optional public log, receipt, or evidence link"
                             type="url"
                           />
                         </label>
@@ -502,27 +503,27 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                               <option value="counterparty_only">Counterparty only</option>
                               <option value="platform_reviewer_only">Platform reviewer only</option>
                               <option value="public_proof">Public proof</option>
-                              <option value="mixed_redacted">Mixed/redacted</option>
+                              <option value="mixed_redacted">Some details hidden</option>
                             </select>
                           </label>
                           <label className="field">
-                            <span>Redaction notes</span>
+                            <span>Private details hidden</span>
                             <input
                               name="redaction_notes"
-                              placeholder="Receipt IDs, addresses, or personal details redacted"
+                              placeholder="Receipt IDs, addresses, or personal details removed"
                             />
                           </label>
                         </div>
                         <p className="panel-note">
                           Do not upload or link invasive, unsafe, or unnecessary personal evidence.
-                          Redact transaction IDs and private details unless the evidence schema
-                          requires them.
+                          Hide transaction IDs and private details unless the evidence rules require
+                          them.
                         </p>
                         <label className="radio-row">
                           <input name="attestation" required type="checkbox" />
                           <span>
-                            I attest that this evidence is accurate and materially complete under
-                            the agreed evidence standard.
+                            I confirm that this evidence is accurate and complete enough under the
+                            agreed evidence rules.
                           </span>
                         </label>
                         <button className="button button-primary button-mini" type="submit">
@@ -572,7 +573,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                             <span>Acceptance note</span>
                             <textarea
                               name="reason"
-                              placeholder="Optional note confirming why the evidence satisfies the schema."
+                              placeholder="Optional note explaining why the evidence meets the agreed rules."
                             />
                           </label>
                           <button className="button button-primary button-mini" type="submit">
@@ -586,7 +587,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                           <input name="requested_outcome" type="hidden" value="platform_review" />
                           <p className="panel-note">
                             Challenges should identify a specific mismatch with the agreed evidence
-                            schema. Bad-faith challenges may affect account trust.
+                            rules. Bad-faith challenges may affect account trust.
                           </p>
                           <label className="field">
                             <span>Challenge reason</span>
@@ -689,7 +690,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                 <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
                 <div className="field-grid">
                   <label className="field">
-                    <span>Trade schema</span>
+                    <span>Trade type</span>
                     <select name="trade_type" defaultValue={agreement.offer?.mode === "offset" ? "donation_offset" : "pledge_swap"}>
                       <option value="pledge_swap">Pledge swap</option>
                       <option value="donation_offset">Donation offset</option>
@@ -703,7 +704,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                     <select name="evidence_type" defaultValue="manual_attestation">
                       <option value="receipt">Receipt</option>
                       <option value="provider_record">Provider record</option>
-                      <option value="manual_attestation">Manual attestation</option>
+                      <option value="manual_attestation">Written statement</option>
                       <option value="public_log">Public log</option>
                       <option value="timestamped_commitment">Timestamped commitment</option>
                       <option value="third_party_review">Third-party review</option>
@@ -713,19 +714,19 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                 </div>
                 <label className="field">
                   <span>Evidence title</span>
-                  <input name="title" placeholder="Receipt, dated pledge log, provider record, or attestation" required />
+                  <input name="title" placeholder="Receipt, dated log, service record, or signed statement" required />
                 </label>
                 <label className="field">
                   <span>Evidence URL</span>
-                  <input name="evidence_url" placeholder="Optional link to proof packet" type="url" />
+                  <input name="evidence_url" placeholder="Optional link to the evidence" type="url" />
                 </label>
                 <label className="field">
                   <span>Evidence summary</span>
                   <textarea name="evidence_summary" placeholder="What claim does this evidence support?" required />
                 </label>
                 <label className="field">
-                  <span>Review scope</span>
-                  <textarea name="review_scope" placeholder="What should the operator verify, and what should remain out of scope?" />
+                  <span>Review instructions</span>
+                  <textarea name="review_scope" placeholder="What should the reviewer check, and what should they ignore?" />
                 </label>
                 <button className="button button-primary button-mini" type="submit">
                   Submit for review
@@ -734,8 +735,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             </article>
 
             <article className="panel data-card">
-              <p className="detail-kicker">Verification ladder</p>
-              <h3>Transaction-linked trust signals</h3>
+              <p className="detail-kicker">Verification checks</p>
+              <h3>Checks linked to this trade</h3>
               <div className="mini-list">
                 {VERIFICATION_BADGES.map((badge) => (
                   <div className="mini-list-item" key={badge}>
@@ -773,7 +774,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               <div className="empty-state">
                 <div>
                   <strong>No evidence submitted.</strong>
-                  <p>Submit a receipt, log, attestation, or provider record once terms are clear.</p>
+                  <p>Submit a receipt, log, signed statement, or service record once the terms are clear.</p>
                 </div>
               </div>
             )}
@@ -822,10 +823,9 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             <p className="eyebrow">Payments</p>
             <h2>Payment, reminders, refund review, and disputes</h2>
             <p>
-              Payment capture is gated by agreement type. Donation offsets, pledge swaps, and
-              compensated moral-action agreements record no-capture authorization stubs until
-              lock, confirmation, reservation, atomic-settlement, eligibility, and conditional
-              provider gates are non-blocking.
+              Whether payment can be collected depends on the type of trade. No money is collected
+              until both people confirm the final terms, the amount is reserved, eligibility checks
+              pass, and the payment service is ready.
             </p>
           </div>
 
@@ -835,7 +835,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               Trade mode: {paymentAuthorizationPreview.tradeMode.replaceAll("_", " ")}. Capture
               policy: {paymentAuthorizationPreview.capturePolicy.replaceAll("_", " ")}.
             </p>
-            <div className="mini-list" aria-label="Payment authorization gates">
+            <div className="mini-list" aria-label="Payment checks">
               {paymentAuthorizationPreview.gates.map((gate) => (
                 <span className="source-pill" key={gate.key}>
                   {gate.label}: {gate.status.replaceAll("_", " ")}

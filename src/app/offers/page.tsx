@@ -234,7 +234,7 @@ function LiveProposalCard({ offer }: { offer: OfferRow }) {
       <p className="listing-alias">By {participantName}</p>
       <div className="tag-row" aria-label="Proposal boundaries">
         <span className="badge">{offer.discount_note || "Bounded terms"}</span>
-        <span className="source-pill">Evidence named · additionality stated</span>
+        <span className="source-pill">Evidence named · explains what changes</span>
       </div>
       <dl>
         <div>
@@ -461,7 +461,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="mt-product-section-head">
             <div>
               <p className="mt-product-kicker">Other live routes</p>
-              <h2 id="other-routes-heading">Coordinate without a bilateral listing</h2>
+              <h2 id="other-routes-heading">Coordinate without a two-person listing</h2>
             </div>
             <p>
               Use an offset, conditional pool, or consent-gated introduction when a standard public
@@ -482,7 +482,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <p className="mt-market-eyebrow">Conditional funding</p>
                 <h3>Funding pools</h3>
               </div>
-              <p>Review maximum exposure, threshold, deadline, recipient, and failure behavior.</p>
+              <p>Review the most you could owe, the goal, deadline, recipient, and what happens if it fails.</p>
               <span>Open pools ↗</span>
             </Link>
             <Link className="mt-pool-link-card" href="/background-networking">

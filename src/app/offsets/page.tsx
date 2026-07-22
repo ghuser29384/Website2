@@ -54,7 +54,7 @@ const receiptRows: readonly DealReceiptRow[] = [
     value: "Both prior intentions, the match, shared recipient, deadline, and settlement gates pass review.",
   },
   {
-    label: "Maximum exposure",
+    label: "Most this can cost",
     value: "$100. Unmatched amounts keep their published surplus rule.",
     emphasis: true,
   },
