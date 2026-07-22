@@ -4,7 +4,7 @@
  */
 .marketplace-app-shell:has(#marketplace-detail-section-heading)
   main
-  > section:has(> .data-grid > .empty-state) {
+  > section:has(> .data-grid > .empty-state):not(:has(.recommendation-form)) {
   display: none;
 }
 
