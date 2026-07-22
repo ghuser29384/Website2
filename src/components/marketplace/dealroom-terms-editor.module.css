@@ -1,0 +1,132 @@
+.editorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.form,
+.diff {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field span,
+.kicker,
+.diffList span,
+.formActions span {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.field textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.diff {
+  position: sticky;
+  top: 18px;
+  background: color-mix(in srgb, var(--bg) 48%, var(--surface));
+}
+
+.kicker {
+  margin: 0;
+  color: var(--accent);
+}
+
+.diff h3 {
+  margin: -8px 0 0;
+  font-family: var(--font-heading);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.diffList {
+  display: grid;
+  gap: 14px;
+}
+
+.diffList article {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.diffList h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.diffList div {
+  display: grid;
+  gap: 4px;
+}
+
+.diffList div + div {
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.diffList p,
+.emptyDiff {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.diffList div:last-child p {
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .editorGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .diff {
+    position: static;
+    grid-row: 1;
+  }
+}
