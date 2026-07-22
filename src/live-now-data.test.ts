@@ -7,7 +7,10 @@ import { gunzipSync } from "node:zlib";
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
 const bridge = readFileSync("public/moral-trade-live-now.js", "utf8");
 const feedStyles = readFileSync("public/moral-trade-live-feed.css", "utf8");
+const routeBridge = readFileSync("public/moral-trade-live-route-recommendations.js", "utf8");
+const routeStyles = readFileSync("public/moral-trade-live-route-recommendations.css", "utf8");
 const route = readFileSync("src/app/api/live-now/route.ts", "utf8");
+const routeProfile = readFileSync("src/app/api/live-now/route-profile/route.ts", "utf8");
 const feedbackRoute = readFileSync("src/app/api/live-now/feedback/route.ts", "utf8");
 const tracker = readFileSync(
   "src/components/recommendations/recommendation-learning-tracker.tsx",
@@ -20,8 +23,17 @@ test("the live shell fetches private profile recommendations before rendering", 
   assert.match(loader, /__MT_LIVE_NOW_BOOTSTRAP__/);
   assert.match(loader, /moral-trade-live-now\.js/);
   assert.match(loader, /moral-trade-live-feed\.css/);
+  assert.match(loader, /moral-trade-live-route-recommendations\.js/);
+  assert.match(loader, /moral-trade-live-route-recommendations\.css/);
   assert.match(loader, /stripLegacyNowFocus/);
   assert.match(loader, /No generic or demo suggestions are shown/);
+  assert.match(loader, /unavailableLiveNow/);
+  assert.match(loader, /routePlanner:[\s\S]*status: 'unavailable'/);
+  assert.match(
+    loader,
+    /loadingPlan[\s\S]*class="plan-grid"[\s\S]*class="panel plan-control"[\s\S]*class="panel route"[\s\S]*class="stack"/,
+    "the fail-closed Plan shell must retain every mount point used by the recommendation UI",
+  );
 });
 
 test("the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types", () => {
@@ -41,6 +53,10 @@ test("the live-now endpoint combines explicit priorities, browsing, actions, and
   assert.match(route, /buildLearnedActionPreferences/);
   assert.match(route, /buildBrowsingCauseWeights/);
   assert.match(route, /eq\("status", "open"\)/);
+  assert.match(route, /eq\("workflow_status", "published"\)/);
+  assert.match(route, /not\("published_at", "is", null\)/);
+  assert.match(route, /is\("closed_at", null\)/);
+  assert.match(route, /is\("deleted_at", null\)/);
   assert.match(route, /eq\("owner_id", userId\)/);
   assert.match(route, /neq\("owner_id", userId\)/);
   assert.match(route, /ownedOpportunities/);
@@ -48,8 +64,39 @@ test("the live-now endpoint combines explicit priorities, browsing, actions, and
   assert.match(route, /\.range\(offset, offset \+ OFFER_BATCH_SIZE - 1\)/);
   assert.doesNotMatch(route, /\.limit\(240\)/);
   assert.match(route, /rankLiveNowOffers/);
-  assert.match(route, /Cache-Control.*private, no-store/s);
+  assert.match(route, /buildRoutePlanner/);
+  assert.match(route, /presentRoutePlanner/);
+  assert.match(route, /routePlanner/);
+  assert.match(route, /privacyLevel: classifyRoutePrivacyScope\(offer\.privacy_scope\)/);
+  assert.equal(
+    route.match(/summary:\s*text\(offer\.no_trade_baseline/g)?.length,
+    1,
+    "the private baseline may appear only in the owner's private management payload",
+  );
+  assert.match(route, /Cache-Control[\s\S]*private, no-store/);
   assert.match(route, /Vary: "Cookie"/);
+});
+
+test("the Plan surface uses private inputs and live-source-only route cards", () => {
+  assert.match(routeBridge, /data-mt-live-route-composer/);
+  assert.match(routeBridge, /document\.querySelector\("\[data-mt-live-route-planner\]"\)/);
+  assert.match(routeBridge, /mount\.querySelector\("\.plan-grid"\)/);
+  assert.match(routeBridge, /data-mt-lrp-comparison-choice="unsure"/);
+  assert.match(routeBridge, /GUIDED GOAL INTERVIEW/);
+  assert.match(routeBridge, /data-source-live="\$\{step\.live\}"/);
+  assert.match(routeBridge, /These are next actions, not recommendations/);
+  assert.match(routeBridge, /No personalized or demo route is shown while signed out/);
+  assert.match(routeBridge, /\/api\/live-now\/route-profile/);
+  assert.match(routeBridge, /credentials: "same-origin"/);
+  assert.match(routeStyles, /mt-lrp-layout/);
+  assert.doesNotMatch(routeBridge, /Redirect \$20 of political donations/);
+  assert.doesNotMatch(routeBridge, /Fund a verified review/);
+
+  assert.match(routeProfile, /isSameOriginMutation/);
+  assert.match(routeProfile, /encryptBackgroundSensitiveText/);
+  assert.match(routeProfile, /profileId = viewer\.authUser\.id/);
+  assert.match(routeProfile, /updatePairwiseAnswers/);
+  assert.match(routeProfile, /Object\.keys\(answers\)\.length >= 10/);
 });
 
 test("feedback is typed, private, idempotent, and resolves opportunity metadata server-side", () => {
@@ -95,7 +142,7 @@ test("fallback states explicitly refuse generic or fabricated suggestions", () =
   }
 });
 
-test("the loader removes the legacy suggestion function before its first render", () => {
+test("the loader removes legacy feed and route suggestions before first render", () => {
   const names = [
     "0a",
     "0b",
@@ -123,9 +170,16 @@ test("the loader removes the legacy suggestion function before its first render"
   assert.ok(start >= 0 && end > start, "legacy nowFocus boundaries should remain identifiable");
   assert.match(legacySource.slice(start, end), /Counteroffer from Mina/);
 
-  const deliveredSource = `${legacySource.slice(0, start)}function nowFocus(){return "Loading profile";}${legacySource.slice(end)}`;
+  const withoutFocus = `${legacySource.slice(0, start)}function nowFocus(){return "Loading profile";}${legacySource.slice(end)}`;
+  const planStart = withoutFocus.indexOf("function nowPlan(){");
+  const planEnd = withoutFocus.indexOf("\nfunction field(", planStart);
+  assert.ok(planStart >= 0 && planEnd > planStart, "legacy nowPlan boundaries should remain identifiable");
+  assert.match(withoutFocus.slice(planStart, planEnd), /Recommended mixed route/);
+  const deliveredSource = `${withoutFocus.slice(0, planStart)}function nowPlan(){return "Loading routes";}${withoutFocus.slice(planEnd)}`;
   assert.doesNotMatch(deliveredSource, /Counteroffer from Mina|AI-safety research under \$100/);
+  assert.doesNotMatch(deliveredSource, /Recommended mixed route|Redirect \$20 of political donations/);
   assert.match(deliveredSource, /function story\(/);
+  assert.match(deliveredSource, /function field\(/);
 });
 
 test("the browser bridge renders only fixture profile data and escapes opportunity fields", () => {
