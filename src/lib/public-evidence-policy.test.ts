@@ -86,6 +86,37 @@ test("the global directory is evidence-driven while direct trade dossiers can aw
   assert.match(page, /Evidence could not be loaded\./);
 });
 
+test("the Evidence directory uses the shared product language without confusing state colors", () => {
+  const page = source("src/app/evidence/[[...recordId]]/page.tsx");
+  const directoryStyles = source(
+    "src/app/evidence/[[...recordId]]/evidence-directory.module.css",
+  );
+  const dossierStyles = source("src/components/evidence/evidence-stage.module.css");
+
+  assert.match(page, /data-testid="evidence-product-shell"/);
+  assert.match(page, /aria-label="Evidence sections"/);
+  assert.match(page, /<form action="\/evidence" method="get">/);
+  assert.match(page, /aria-labelledby=\{titleId\}/);
+  assert.match(page, /Interface guide · no live data/);
+  assert.match(page, /showSearch/);
+  assert.doesNotMatch(page, /showSearch=\{false\}/);
+  assert.match(directoryStyles, /--ledger-paper: var\(--bg\)/);
+  assert.match(directoryStyles, /--ledger-blue: var\(--accent\)/);
+  assert.match(directoryStyles, /font-family: var\(--font-heading\)/);
+  assert.match(directoryStyles, /font-family: var\(--font-mono\)/);
+  assert.match(directoryStyles, /outline: 2px solid var\(--ledger-blue\)/);
+  assert.match(dossierStyles, /--evidence-accent: var\(--accent\)/);
+  assert.match(page, /label: "Participant accepted"/);
+  assert.match(
+    source("src/components/evidence/evidence-stage.tsx"),
+    /const allAccepted = record\.evidence\.length > 0 && acceptedCount === record\.evidence\.length/,
+  );
+  assert.match(dossierStyles, /\.statusChallenged[\s\S]*var\(--evidence-red\)/);
+  assert.match(dossierStyles, /\.tabs \.activeTab::after \{\s*background: var\(--evidence-accent\)/);
+  assert.match(dossierStyles, /\.timelineAccepted \.timelineMarker[\s\S]*var\(--evidence-green\)/);
+  assert.match(dossierStyles, /\.timelineChallenged \.timelineMarker[\s\S]*var\(--evidence-red\)/);
+});
+
 test("the public evidence read contract projects only approved fields and gates stored files", () => {
   const migration = source(
     "supabase/migrations/20260722104500_public_evidence_read_contract.sql",

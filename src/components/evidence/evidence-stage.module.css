@@ -1,13 +1,14 @@
 .shell {
-  --evidence-paper: #faf9f7;
-  --evidence-matte: #f3f1ed;
-  --evidence-ink: #181817;
-  --evidence-muted: #6f6c68;
-  --evidence-line: #d8d4ce;
-  --evidence-green: #3e754b;
-  --evidence-green-soft: #e7efe8;
+  --evidence-paper: var(--surface);
+  --evidence-matte: var(--surface-muted);
+  --evidence-ink: var(--ink);
+  --evidence-muted: var(--ink-muted);
+  --evidence-line: var(--line);
+  --evidence-accent: var(--accent);
+  --evidence-green: var(--success-ink);
+  --evidence-green-soft: var(--success-soft);
   --evidence-amber: #956116;
-  --evidence-red: #8c3f38;
+  --evidence-red: var(--danger-ink);
   position: relative;
   width: min(1290px, calc(100vw - 48px));
   height: min(852px, calc(100dvh - 48px));
@@ -56,7 +57,7 @@
 .shell [tabindex]:focus-visible,
 .shell select:focus-visible,
 .shell textarea:focus-visible {
-  outline: 2px solid var(--evidence-green);
+  outline: 2px solid var(--evidence-accent);
   outline-offset: 2px;
 }
 
@@ -123,9 +124,21 @@
 
 .lifecycle {
   margin: 8px 0 0;
-  color: var(--evidence-green);
+  color: var(--evidence-amber);
   font-size: 16px;
   line-height: 1.3;
+}
+
+.statusPending {
+  color: var(--evidence-amber);
+}
+
+.statusAccepted {
+  color: var(--evidence-green);
+}
+
+.statusChallenged {
+  color: var(--evidence-red);
 }
 
 .summaryScroll > h1 {
@@ -192,8 +205,26 @@
   font-size: 14px;
 }
 
-.summaryBadges svg {
+.summaryBadges span.statusPending {
+  color: var(--evidence-amber);
+}
+
+.summaryBadges span.statusAccepted {
   color: var(--evidence-green);
+}
+
+.summaryBadges span.statusChallenged {
+  color: var(--evidence-red);
+}
+
+.scopeBadge svg {
+  color: var(--evidence-muted);
+}
+
+.summaryBadges .statusPending svg,
+.summaryBadges .statusAccepted svg,
+.summaryBadges .statusChallenged svg {
+  color: currentColor;
 }
 
 .sideSection {
@@ -301,7 +332,7 @@
 .timelineCopy button {
   margin: 7px 0 0;
   padding: 0;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
   background: transparent;
   border: 0;
   font-size: 11px;
@@ -392,7 +423,7 @@
 }
 
 .tabs .activeTab::after {
-  background: var(--evidence-green);
+  background: var(--evidence-accent);
 }
 
 .evidencePanel {
@@ -673,7 +704,7 @@
 
 .document > p:first-of-type {
   margin: 24px 0 7px;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
 }
 
 .document h2 {
@@ -754,7 +785,7 @@
 .emptyEvidence a {
   display: inline-flex;
   margin-top: 16px;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
   font-size: 12px;
   font-weight: 700;
 }
@@ -838,7 +869,7 @@
 }
 
 .filmstrip .selectedArtifact .thumbnail {
-  border: 2px solid var(--evidence-green);
+  border: 2px solid var(--evidence-accent);
   box-shadow: 0 0 0 1px #fff inset;
 }
 
@@ -871,7 +902,7 @@
   flex: 0 0 auto;
   place-items: center;
   color: #fff;
-  background: var(--evidence-green);
+  background: var(--evidence-accent);
   border-radius: 50%;
   font-size: 8px;
   font-weight: 700;
@@ -916,7 +947,7 @@
   align-items: center;
   margin-top: 4px;
   padding: 0;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
   background: transparent;
   border: 0;
   font-size: 11px;
@@ -1080,7 +1111,7 @@
 }
 
 .panelHeading > p {
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
 }
 
 .panelHeading h2 {
@@ -1128,7 +1159,7 @@
 
 .termExchange article > small {
   margin-top: 17px;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
 }
 
 .termExchange > div {
@@ -1175,7 +1206,7 @@
 }
 
 .verificationGrid svg {
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
 }
 
 .verificationGrid article > span,
@@ -1238,7 +1269,7 @@
 
 .dialogHeader p {
   margin: 0;
-  color: var(--evidence-green);
+  color: var(--evidence-accent);
   font: 700 9px/1 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1413,10 +1444,21 @@
   }
 
   .mobileSummary > span {
-    color: var(--evidence-green);
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
+  }
+
+  .mobileSummary > span.statusPending {
+    color: var(--evidence-amber);
+  }
+
+  .mobileSummary > span.statusAccepted {
+    color: var(--evidence-green);
+  }
+
+  .mobileSummary > span.statusChallenged {
+    color: var(--evidence-red);
   }
 
   .mobileSummary > strong {
