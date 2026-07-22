@@ -24,6 +24,14 @@ const questionPage = readFileSync(
   "src/app/offers/[offerId]/question/page.tsx",
   "utf8",
 );
+const commentThread = readFileSync(
+  "src/components/community/comment-thread.tsx",
+  "utf8",
+);
+const marketplaceCleanup = readFileSync(
+  "src/app/dynamic-marketplace-cleanup.css",
+  "utf8",
+);
 
 test("the live marketplace groups generated combinations into participant offer menus", () => {
   assert.match(offersSurface, /buildParticipantOfferFamilies/);
@@ -80,4 +88,11 @@ test("empty evidence and review modules are omitted from commitment rows", () =>
   assert.match(commitmentsPage, /summary\.reviewState \?/);
   assert.doesNotMatch(commitmentsPage, /No evidence item yet/);
   assert.doesNotMatch(commitmentsPage, /No review case/);
+});
+
+test("dormant social modules do not masquerade as marketplace activity", () => {
+  assert.match(commentThread, /if \(!comments\.length\) \{\s*return null;/);
+  assert.doesNotMatch(commentThread, /No public comments yet/);
+  assert.match(marketplaceCleanup, /:has\(> \.data-grid > \.empty-state\)/);
+  assert.match(marketplaceCleanup, /:has\(#marketplace-detail-section-heading\)/);
 });

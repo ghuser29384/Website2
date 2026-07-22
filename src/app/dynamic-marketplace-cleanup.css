@@ -1,0 +1,16 @@
+/*
+ * Keep dormant marketplace modules from reading as activity.
+ * The selector is restricted to the legacy offer dossier; real records remain visible.
+ */
+.marketplace-app-shell:has(#marketplace-detail-section-heading)
+  main
+  > section:has(> .data-grid > .empty-state) {
+  display: none;
+}
+
+/* The owner still reaches actual response records when they exist. */
+.marketplace-app-shell:has(#marketplace-detail-section-heading)
+  main
+  > section:has(> .data-grid > article) {
+  display: block;
+}
