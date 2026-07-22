@@ -109,9 +109,44 @@
   color: #050505;
 }
 
+.topbarActions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 14px;
+}
+
+.offerButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 4px;
+  background: var(--blue);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.offerButton:hover,
+.offerButton:focus-visible {
+  background: var(--blue-deep);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.offerButtonCompactLabel {
+  display: none;
+}
+
 .accountWrap {
   position: relative;
-  justify-self: end;
 }
 
 .accountButton {
@@ -1039,6 +1074,17 @@
     height: 31px !important;
   }
 
+  .topbarActions {
+    gap: 8px;
+  }
+
+  .offerButton {
+    gap: 7px;
+    height: 42px;
+    padding: 0 13px;
+    font-size: 15px;
+  }
+
   .accountButton {
     min-width: 74px;
   }
@@ -1148,5 +1194,15 @@
   .matchCount,
   .filterGroup {
     padding: 22px 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .offerButtonLabel {
+    display: none;
+  }
+
+  .offerButtonCompactLabel {
+    display: inline;
   }
 }
