@@ -31,6 +31,7 @@ test.describe("Returning-user homepage", () => {
       "Discover",
       "Offer",
       "Activity",
+      "Evidence",
       "Account",
     ]);
     await expect(primary.getByRole("link", { name: "Feed" })).toHaveAttribute(

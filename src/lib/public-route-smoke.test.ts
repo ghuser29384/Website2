@@ -465,6 +465,7 @@ test("returning home page exposes the screenshot navigation contract", () => {
   assert.match(homeSource, /href="\/feed">Feed/);
   assert.match(homeSource, />\s*Now\s*</);
   assert.match(homeSource, /href="\/offers">Discover/);
+  assert.match(homeSource, /href="\/evidence">Evidence/);
   assert.match(homeSource, /href="\/create">Offer/);
   assert.match(homeSource, /href="\/commitments">Activity/);
   assert.match(homeSource, /href="\/profile">Account/);

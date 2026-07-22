@@ -6,9 +6,21 @@ const route = (path: string) => `${externalBase}${path}`;
 test.describe("public evidence desk", () => {
   test("serves the public directory and the clearly labeled example", async ({ page }) => {
     await page.goto(route("/evidence"));
-    await expect(page.getByRole("heading", { name: "Inspect the proof behind every trade." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Evidence", exact: true })).toBeVisible();
     await expect(page.locator('a[href="/evidence/example"]')).toBeVisible();
     await expect(page.getByText("Interface example · not a live trade")).toBeVisible();
+    const recordCards = page.locator(
+      'a[href^="/evidence/"]:not([href="/evidence/example"])',
+    );
+    const status = page.getByRole("status");
+    await expect
+      .poll(async () => (await recordCards.count()) > 0 || (await status.count()) > 0)
+      .toBe(true);
+    if (await status.count()) {
+      await expect(status).toContainText(
+        /No evidence has been submitted yet\.|Evidence could not be loaded\./,
+      );
+    }
   });
 
   test("switches dossier tabs and artifacts, then explains the public-safe copy", async ({ page }) => {

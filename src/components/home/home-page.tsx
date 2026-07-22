@@ -112,6 +112,7 @@ export function HomePage({ displayName }: HomePageProps) {
           <Link href="/offers">Discover</Link>
           <Link href="/create">Offer</Link>
           <Link href="/commitments">Activity</Link>
+          <Link href="/evidence">Evidence</Link>
           <Link href="/profile">Account</Link>
         </nav>
 

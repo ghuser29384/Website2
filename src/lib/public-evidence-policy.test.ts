@@ -62,20 +62,26 @@ test("the evidence dossier exposes section tabs, artifact controls, and privacy 
   assert.doesNotMatch(stage, /new Intl\.DateTimeFormat/);
 });
 
-test("public agreements remain in the directory before their first evidence submission", () => {
+test("the global directory is evidence-driven while direct trade dossiers can await submission", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
   const hydrateStart = page.indexOf("async function hydrate");
   const hydrateEnd = page.indexOf("async function listRecords", hydrateStart);
   const hydrate = page.slice(hydrateStart, hydrateEnd);
+  const directoryStart = page.indexOf("async function listRecords");
+  const directoryEnd = page.indexOf("async function getRecord", directoryStart);
+  const directory = page.slice(directoryStart, directoryEnd);
 
   assert.ok(hydrateStart >= 0 && hydrateEnd > hydrateStart, "could not locate the evidence hydrator");
   assert.match(hydrate, /const rawEvidence = byAgreement\.get\(id\) \?\? \[\]/);
-  assert.doesNotMatch(
-    hydrate,
-    /if\s*\(\s*!rawEvidence\.length\s*\)\s*(?:\{\s*)?continue/,
-    "public agreements must not be skipped solely because they have no evidence items yet",
-  );
   assert.match(hydrate, /records\.push/);
+  assert.ok(directoryStart >= 0 && directoryEnd > directoryStart, "could not locate the evidence directory query");
+  assert.match(directory, /trade_evidence_items!inner\(id\)/);
+  assert.match(directory, /trade_evidence_items\.public_visibility/);
+  assert.match(directory, /\.order\("id", \{ ascending: false \}\)/);
+  assert.doesNotMatch(directory, /\.limit\(50\)/);
+  assert.doesNotMatch(hydrate, /from\("trade_evidence_items"\)\.select\("\*"\)/);
+  assert.match(page, /No evidence has been submitted yet\./);
+  assert.match(page, /Evidence could not be loaded\./);
 });
 
 test("participant evidence decisions stay scoped, confirmed, and inside the review window", () => {

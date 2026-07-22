@@ -304,4 +304,52 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(feed.getByRole("button", { name: "Easy for me" })).toHaveCount(0);
     await expect(feed.getByRole("button", { name: "Hard for me" })).toHaveCount(0);
   });
+
+  test("exposes Evidence as a first-class destination after Commitments", async ({ page }) => {
+    await page.setViewportSize({ width: 1230, height: 900 });
+    await page.route("**/api/live-now", (route) =>
+      route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: false,
+          generatedAt: "2026-07-22T12:00:00.000Z",
+          matchingOpportunityCount: 0,
+          profile: {
+            causes: [],
+            weightedCauses: [],
+            openToPayment: null,
+            openToPledges: null,
+            signalSources: [],
+            learningEnabled: true,
+          },
+          recentChanges: [],
+          recommendations: [],
+          status: "signed_out",
+        }),
+      }),
+    );
+
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
+
+    const navigation = page.locator(".topbar nav").first();
+    await expect(navigation.locator("button, a")).toHaveText([
+      "Feed",
+      "Discover",
+      "Controls",
+      "Trade",
+      "Commitments",
+      "Evidence",
+    ]);
+
+    const evidence = navigation.getByRole("button", { name: "Open Evidence" });
+    await expect(evidence).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+
+    await evidence.click();
+    await expect(page).toHaveURL(/\/evidence$/);
+    await expect(page.getByRole("heading", { name: "Evidence", exact: true })).toBeVisible();
+  });
 });
