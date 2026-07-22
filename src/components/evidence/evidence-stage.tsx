@@ -425,6 +425,13 @@ export function EvidenceStage({
   const status = stateCopy(selected, canReview, reviewWindowOpen);
   const closeHref = viewer.isParticipant && viewer.agreementHref ? viewer.agreementHref : "/evidence";
   const acceptedCount = record.evidence.filter((item) => item.state === "accepted").length;
+  const hasChallenge = record.evidence.some((item) => item.state === "challenged");
+  const allAccepted = record.evidence.length > 0 && acceptedCount === record.evidence.length;
+  const reviewTone = hasChallenge
+    ? styles.statusChallenged
+    : allAccepted
+      ? styles.statusAccepted
+      : styles.statusPending;
 
   const selectArtifact = (id: string) => {
     setSelectedId(id);
@@ -505,7 +512,7 @@ export function EvidenceStage({
         <aside className={styles.summaryPane}>
           <div className={styles.summaryScroll}>
             <p className={styles.eyebrow}>{record.isExample ? "Illustrative moral trade" : "Moral trade evidence"}</p>
-            <p className={styles.lifecycle}>{lifecycleCopy(record)}</p>
+            <p className={`${styles.lifecycle} ${reviewTone}`}>{lifecycleCopy(record)}</p>
             <h1 id="evidence-record-title">{record.proposer} <span aria-hidden="true">→</span> {record.responder}</h1>
 
             <div className={styles.exchange} aria-label={`${record.offeredCause} in exchange for ${record.requestedCause}`}>
@@ -515,19 +522,23 @@ export function EvidenceStage({
             </div>
 
             <div className={styles.summaryBadges}>
-              <span>
+              <span className={styles.scopeBadge}>
                 {record.accessScope === "public" ? <GlobeHemisphereWest aria-hidden="true" size={19} /> : <Lock aria-hidden="true" size={19} />}
                 {record.accessScope === "public" ? "Public evidence record" : "Participant-only record"}
               </span>
-              <span>
-                {record.evidence.some((item) => item.state === "challenged") ? (
+              <span className={reviewTone}>
+                {hasChallenge ? (
                   <Flag aria-hidden="true" size={19} />
                 ) : acceptedCount > 0 ? (
                   <ShieldCheck aria-hidden="true" size={19} />
                 ) : (
                   <Clock aria-hidden="true" size={19} />
                 )}
-                {acceptedCount > 0 ? `${acceptedCount} participant-reviewed` : "Review pending"}
+                {hasChallenge
+                  ? "Evidence challenged"
+                  : acceptedCount > 0
+                    ? `${acceptedCount} participant-reviewed`
+                    : "Review pending"}
               </span>
             </div>
 
@@ -555,7 +566,7 @@ export function EvidenceStage({
 
         <div className={styles.workspace}>
           <div className={styles.mobileSummary}>
-            <span>{lifecycleCopy(record)}</span>
+            <span className={reviewTone}>{lifecycleCopy(record)}</span>
             <strong>{record.proposer} ↔ {record.responder}</strong>
             <small>{record.offeredCause} ↔ {record.requestedCause}</small>
           </div>
