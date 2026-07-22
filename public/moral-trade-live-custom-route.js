@@ -3,6 +3,7 @@
 (function enableCustomRouteWorkbench() {
   "use strict";
 
+  if (window.__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner) return;
   if (window.__MT_CUSTOM_ROUTE_WORKBENCH__) return;
   const accountingApi = window.__MT_ROUTE_RESOURCES_API__;
   if (!accountingApi || typeof nowPlan !== "function" || typeof render !== "function") return;

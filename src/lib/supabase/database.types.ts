@@ -81,6 +81,80 @@ export interface Database {
         };
         Relationships: [];
       };
+      route_recommendation_profiles: {
+        Row: {
+          profile_id: string;
+          goal: string;
+          cause_priorities: string[];
+          money_budget_cents: number;
+          time_budget_minutes: number;
+          action_budget_count: number;
+          horizon: "day" | "week" | "month" | "quarter" | "year";
+          route_formats: Array<"direct" | "threshold" | "redirect" | "personal" | "coalition">;
+          evidence_preference: "standard" | "high" | "connected";
+          uncertainty_preference: "conservative" | "balanced" | "exploratory";
+          interaction_preference: "solo" | "open" | "invite";
+          privacy_preference: "private" | "public-safe" | "public";
+          planned_donation_baseline: boolean | null;
+          planned_donation_cents: number;
+          otherwise_baseline: string;
+          pairwise_answers: Json;
+          interview_answers: Json;
+          sensitive_ciphertexts: Json;
+          sensitive_encryption_version: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          goal?: string;
+          cause_priorities?: string[];
+          money_budget_cents?: number;
+          time_budget_minutes?: number;
+          action_budget_count?: number;
+          horizon?: "day" | "week" | "month" | "quarter" | "year";
+          route_formats?: Array<
+            "direct" | "threshold" | "redirect" | "personal" | "coalition"
+          >;
+          evidence_preference?: "standard" | "high" | "connected";
+          uncertainty_preference?: "conservative" | "balanced" | "exploratory";
+          interaction_preference?: "solo" | "open" | "invite";
+          privacy_preference?: "private" | "public-safe" | "public";
+          planned_donation_baseline?: boolean | null;
+          planned_donation_cents?: number;
+          otherwise_baseline?: string;
+          pairwise_answers?: Json;
+          interview_answers?: Json;
+          sensitive_ciphertexts?: Json;
+          sensitive_encryption_version?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          goal?: string;
+          cause_priorities?: string[];
+          money_budget_cents?: number;
+          time_budget_minutes?: number;
+          action_budget_count?: number;
+          horizon?: "day" | "week" | "month" | "quarter" | "year";
+          route_formats?: Array<
+            "direct" | "threshold" | "redirect" | "personal" | "coalition"
+          >;
+          evidence_preference?: "standard" | "high" | "connected";
+          uncertainty_preference?: "conservative" | "balanced" | "exploratory";
+          interaction_preference?: "solo" | "open" | "invite";
+          privacy_preference?: "private" | "public-safe" | "public";
+          planned_donation_baseline?: boolean | null;
+          planned_donation_cents?: number;
+          otherwise_baseline?: string;
+          pairwise_answers?: Json;
+          interview_answers?: Json;
+          sensitive_ciphertexts?: Json;
+          sensitive_encryption_version?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       offers: {
         Row: {
           id: string;

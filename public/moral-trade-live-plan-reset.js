@@ -1,7 +1,9 @@
-/* global MutationObserver, document, localStorage, render, state, toast */
+/* global MutationObserver, document, localStorage, render, state, toast, window */
 
 (function enablePlanResources() {
   "use strict";
+
+  if (window.__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner) return;
 
   const AVAILABLE_BUDGET = 120;
   const STORAGE_KEY = "moraltrade.plan-resources.v1";
