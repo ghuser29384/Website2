@@ -29,15 +29,26 @@ type EvidenceRecord = EvidenceStageRecord;
 
 type PageProps = {
   params: Promise<{ recordId?: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+type EvidenceDirectoryData = {
+  loadState: "ready" | "unavailable";
+  page: number;
+  records: EvidenceRecord[];
+  totalPages: number;
+  totalRecords: number;
+};
+
+const DIRECTORY_PAGE_SIZE = 24;
 
 const CSS = String.raw`
 :root{--pe-paper:#fffdf8;--pe-ink:#11120f;--pe-muted:#77766f;--pe-line:#d4d0c5;--pe-green:#2f8a4a;--pe-green-dark:#174b2b;--pe-dark:#1d211d;--pe-serif:Georgia,"Times New Roman",serif;--pe-sans:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 .pe-page{min-height:100vh;background-color:#f4f2eb;background-image:linear-gradient(rgba(78,76,68,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(78,76,68,.06) 1px,transparent 1px);background-size:28px 28px;color:var(--pe-ink)}
-.pe-main{width:min(1500px,calc(100vw - 36px));margin:0 auto;padding:34px 0 76px}.pe-main-record{width:100%;min-height:100dvh;display:grid;place-items:center;padding:24px;background:rgba(54,53,49,.30)}.pe-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(330px,.58fr);gap:56px;align-items:end;padding:64px 0 48px;border-bottom:1px solid #aba79d}.pe-hero h1{max-width:850px;margin:0;font:500 clamp(48px,6.5vw,92px)/.94 var(--pe-serif);letter-spacing:-.055em}.pe-lead{max-width:780px;margin:24px 0 0;color:#595a54;font-size:17px;line-height:1.65}.pe-policy{padding:24px;border:1px solid #a9a59a;background:rgba(255,253,248,.9);box-shadow:0 18px 45px rgba(28,27,23,.08)}.pe-policy strong{font:500 25px/1.1 var(--pe-serif)}.pe-policy p{margin:12px 0 16px;color:#696a63;font-size:13px;line-height:1.6}.pe-policy a,.pe-notice a{font-size:12px;font-weight:750;text-decoration:underline;text-underline-offset:4px}.pe-principles{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #b9b5aa;border-top:0;background:#fffdf8}.pe-principles article{padding:28px;min-height:210px}.pe-principles article+article{border-left:1px solid var(--pe-line)}.pe-principles span{font:700 11px/1 ui-monospace,monospace;color:#88877f;letter-spacing:.1em}.pe-principles h2{margin:34px 0 8px;font:500 25px/1.05 var(--pe-serif)}.pe-principles p{margin:0;color:#6d6d66;font-size:12px;line-height:1.58}.pe-section{padding:54px 0 0}.pe-section-head{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:18px}.pe-section-head p{margin:0 0 8px;font:700 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#77766f}.pe-section-head h2{margin:0;font:500 36px/1 var(--pe-serif);letter-spacing:-.035em}.pe-section-head>span{font-size:12px;color:#6f7069}.pe-records{display:grid;gap:10px}.pe-record-card{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(270px,.65fr) auto;gap:24px;align-items:center;padding:22px 24px;border:1px solid #b4b0a5;background:rgba(255,253,248,.92);text-decoration:none;transition:transform .18s,box-shadow .18s,border-color .18s}.pe-record-card:hover{transform:translateY(-2px);border-color:#67645d;box-shadow:0 15px 34px rgba(24,24,21,.1)}.pe-record-title small{display:block;color:var(--pe-green);font-size:10px;font-weight:800;text-transform:uppercase}.pe-record-title strong{display:block;margin-top:7px;font:500 25px/1.08 var(--pe-serif)}.pe-record-title span{display:block;margin-top:7px;color:#74736c;font-size:11px}.pe-record-meta{display:grid;grid-template-columns:1fr 1fr;gap:18px}.pe-record-meta span{display:block;color:#83827a;font-size:9px;text-transform:uppercase}.pe-record-meta strong{display:block;margin-top:5px;font-size:11px}.pe-record-action{font-size:12px;font-weight:800}.pe-empty{padding:30px;border:1px dashed #aaa69c;background:rgba(255,253,248,.64)}.pe-empty strong{font:500 23px/1.1 var(--pe-serif)}.pe-empty p{max-width:700px;margin:9px 0 0;color:#6d6d66;font-size:12px;line-height:1.6}.pe-example{display:grid;grid-template-columns:minmax(0,.9fr) minmax(360px,1.1fr);border:1px solid #928e84;background:#173c28;color:white;overflow:hidden}.pe-example-copy{padding:42px}.pe-example-label{font:750 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#b8d8c1}.pe-example h2{max-width:570px;margin:24px 0 12px;font:500 42px/.98 var(--pe-serif);letter-spacing:-.045em}.pe-example p{max-width:560px;margin:0;color:rgba(255,255,255,.65);font-size:13px;line-height:1.6}.pe-example a{display:inline-flex;margin-top:25px;padding:11px 15px;border:1px solid rgba(255,255,255,.35);border-radius:999px;color:white;font-size:12px;font-weight:800;text-decoration:none}.pe-example-list{display:grid;align-content:center;padding:30px;background:rgba(0,0,0,.14)}.pe-example-list div{display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.14)}.pe-example-list i{font:700 9px/1 ui-monospace,monospace;color:#acd4b6}.pe-example-list strong{display:block;font-size:11px}.pe-example-list span span{display:block;margin-top:4px;color:rgba(255,255,255,.45);font-size:9px}.pe-example-list b{font-size:9px;color:#a9dfb6}.pe-notice{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:15px;padding:14px 17px;border:1px solid #aaa69c;border-left:4px solid var(--pe-green);background:rgba(255,253,248,.96)}.pe-notice.example{border-left-color:#b2711d}.pe-notice strong{display:block;font-size:12px}.pe-notice p{max-width:900px;margin:4px 0 0;color:#707169;font-size:11px;line-height:1.5}
+.pe-main{width:min(1500px,calc(100vw - 36px));margin:0 auto;padding:34px 0 76px}.pe-main-record{width:100%;min-height:100dvh;display:grid;place-items:center;padding:24px;background:rgba(54,53,49,.30)}.pe-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(330px,.58fr);gap:56px;align-items:end;padding:64px 0 48px;border-bottom:1px solid #aba79d}.pe-kicker{margin:0 0 16px;color:var(--pe-green);font:750 10px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}.pe-hero h1{max-width:850px;margin:0;font:500 clamp(58px,8vw,112px)/.86 var(--pe-serif);letter-spacing:-.065em}.pe-lead{max-width:780px;margin:24px 0 0;color:#595a54;font-size:17px;line-height:1.65}.pe-policy{padding:24px;border:1px solid #a9a59a;background:rgba(255,253,248,.9);box-shadow:0 18px 45px rgba(28,27,23,.08)}.pe-policy strong{font:500 25px/1.1 var(--pe-serif)}.pe-policy p{margin:12px 0 16px;color:#696a63;font-size:13px;line-height:1.6}.pe-policy a,.pe-notice a{font-size:12px;font-weight:750;text-decoration:underline;text-underline-offset:4px}.pe-principles{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #b9b5aa;border-top:0;background:#fffdf8}.pe-principles article{padding:28px;min-height:210px}.pe-principles article+article{border-left:1px solid var(--pe-line)}.pe-principles span{font:700 11px/1 ui-monospace,monospace;color:#88877f;letter-spacing:.1em}.pe-principles h2{margin:34px 0 8px;font:500 25px/1.05 var(--pe-serif)}.pe-principles p{margin:0;color:#6d6d66;font-size:12px;line-height:1.58}.pe-section{padding:54px 0 0}.pe-section-head{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:18px}.pe-section-head p{margin:0 0 8px;font:700 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#77766f}.pe-section-head h2{margin:0;font:500 36px/1 var(--pe-serif);letter-spacing:-.035em}.pe-section-head>span{font-size:12px;color:#6f7069}.pe-records{display:grid;gap:10px}.pe-record-card{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(270px,.65fr) auto;gap:24px;align-items:center;padding:22px 24px;border:1px solid #b4b0a5;background:rgba(255,253,248,.92);text-decoration:none;transition:transform .18s,box-shadow .18s,border-color .18s}.pe-record-card:hover{transform:translateY(-2px);border-color:#67645d;box-shadow:0 15px 34px rgba(24,24,21,.1)}.pe-record-title small{display:block;color:var(--pe-green);font-size:10px;font-weight:800;text-transform:uppercase}.pe-record-title strong{display:block;margin-top:7px;font:500 25px/1.08 var(--pe-serif)}.pe-record-title span{display:block;margin-top:7px;color:#74736c;font-size:11px}.pe-record-meta{display:grid;grid-template-columns:1fr 1fr;gap:18px}.pe-record-meta span{display:block;color:#83827a;font-size:9px;text-transform:uppercase}.pe-record-meta strong{display:block;margin-top:5px;font-size:11px}.pe-record-action{font-size:12px;font-weight:800}.pe-record-items{grid-column:1/-1;display:grid;gap:0;margin:0;padding:10px 0 0;border-top:1px solid #d4d0c5;list-style:none}.pe-record-items li{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0}.pe-record-items li+li{border-top:1px solid #e3dfd5}.pe-record-items i{width:26px;height:26px;display:grid;place-items:center;border:1px solid #bbb7ad;border-radius:50%;color:#77766f;font:700 8px/1 ui-monospace,monospace;font-style:normal}.pe-record-items strong{display:block;font-size:11px}.pe-record-items small{display:block;margin-top:3px;color:#77766f;font-size:9px}.pe-record-items b{color:#52534d;font-size:9px;text-transform:capitalize}.pe-empty{padding:34px;border:1px dashed #aaa69c;background:rgba(255,253,248,.64)}.pe-empty strong{font:500 25px/1.1 var(--pe-serif)}.pe-empty p{max-width:700px;margin:9px 0 0;color:#6d6d66;font-size:12px;line-height:1.6}.pe-pagination{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-top:18px}.pe-pagination a{padding:10px 14px;border:1px solid #aaa69c;background:var(--pe-paper);font-size:11px;font-weight:800;text-decoration:none}.pe-pagination span{color:#6f7069;font-size:10px}.pe-example{display:grid;grid-template-columns:minmax(0,.9fr) minmax(360px,1.1fr);border:1px solid #928e84;background:#173c28;color:white;overflow:hidden}.pe-example-copy{padding:42px}.pe-example-label{font:750 10px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#b8d8c1}.pe-example h2{max-width:570px;margin:24px 0 12px;font:500 42px/.98 var(--pe-serif);letter-spacing:-.045em}.pe-example p{max-width:560px;margin:0;color:rgba(255,255,255,.65);font-size:13px;line-height:1.6}.pe-example a{display:inline-flex;margin-top:25px;padding:11px 15px;border:1px solid rgba(255,255,255,.35);border-radius:999px;color:white;font-size:12px;font-weight:800;text-decoration:none}.pe-example-list{display:grid;align-content:center;padding:30px;background:rgba(0,0,0,.14)}.pe-example-list div{display:grid;grid-template-columns:32px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.14)}.pe-example-list i{font:700 9px/1 ui-monospace,monospace;color:#acd4b6}.pe-example-list strong{display:block;font-size:11px}.pe-example-list span span{display:block;margin-top:4px;color:rgba(255,255,255,.45);font-size:9px}.pe-example-list b{font-size:9px;color:#a9dfb6}.pe-notice{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:15px;padding:14px 17px;border:1px solid #aaa69c;border-left:4px solid var(--pe-green);background:rgba(255,253,248,.96)}.pe-notice.example{border-left-color:#b2711d}.pe-notice strong{display:block;font-size:12px}.pe-notice p{max-width:900px;margin:4px 0 0;color:#707169;font-size:11px;line-height:1.5}
 .pe-desk{height:min(820px,calc(100vh - 150px));min-height:690px;border:1px solid rgba(255,255,255,.24);border-radius:18px;overflow:hidden;background:var(--pe-dark);color:#f8f7f2;box-shadow:0 34px 90px rgba(24,24,21,.27),0 8px 25px rgba(24,24,21,.13);font-family:var(--pe-sans)}.pe-topbar{height:60px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 18px 0 22px;border-bottom:1px solid rgba(255,255,255,.13)}.pe-breadcrumbs{display:flex;align-items:center;gap:9px;min-width:0;font-size:11px;color:rgba(255,255,255,.55)}.pe-breadcrumbs a{color:inherit;text-decoration:none}.pe-breadcrumbs strong{color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pe-actions{display:flex;gap:8px;align-items:center}.pe-chip,.pe-actions button{height:36px;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:transparent;color:white;padding:0 11px;font-size:10px;font-weight:750}.pe-chip{color:#c8e6cf;background:rgba(92,173,110,.1)}.pe-actions button{cursor:pointer}.pe-actions button:hover,.pe-actions button[aria-expanded=true]{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.35)}.pe-workbench{height:calc(100% - 60px);display:grid;grid-template-columns:235px minmax(0,1fr)}.pe-nav{border-right:1px solid rgba(255,255,255,.13);padding:18px 14px;overflow:auto}.pe-case{padding:11px 10px 18px;border-bottom:1px solid rgba(255,255,255,.13)}.pe-case>span{font:700 9px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.4)}.pe-case h1{margin:9px 0 0;font:500 22px/1.08 var(--pe-serif);letter-spacing:-.025em}.pe-case p{margin:9px 0 0;color:rgba(255,255,255,.5);font-size:10px}.pe-group-label{margin:18px 10px 8px;font:700 9px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.35)}.pe-doc-button{width:100%;display:grid;grid-template-columns:31px 1fr auto;gap:9px;align-items:center;padding:9px 8px;border:0;border-radius:9px;background:transparent;color:rgba(255,255,255,.62);text-align:left;cursor:pointer}.pe-doc-button:hover,.pe-doc-button.active{background:rgba(255,255,255,.1);color:white}.pe-file-icon{width:31px;height:35px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:4px}.pe-doc-button strong{display:block;font-size:10px}.pe-doc-button small{display:block;margin-top:3px;color:rgba(255,255,255,.38);font-size:8px}.pe-doc-button em{font-style:normal;font-size:8px;color:#9bd7a9}.pe-viewer-area{position:relative;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 295px}.pe-viewer{min-width:0;display:grid;grid-template-rows:48px 1fr;background:#dad9d3;color:var(--pe-ink)}.pe-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #c8c6be;background:#efeee9}.pe-toolgroup{display:flex;align-items:center;gap:6px}.pe-toolgroup button,.pe-toolgroup a{width:31px;height:31px;display:grid;place-items:center;border:1px solid #c9c6bd;border-radius:7px;background:#fbfaf6;color:var(--pe-ink);cursor:pointer}.pe-toolgroup span,.pe-toolbar>span{font-size:9px;color:#77766f}.pe-stage{overflow:auto;display:grid;place-items:start center;padding:28px 30px 52px}.pe-doc-panel{display:none;width:min(650px,100%);transform-origin:top center}.pe-doc-panel.active{display:block}.pe-paper{min-height:650px;padding:42px 45px;background:white;color:var(--pe-ink);box-shadow:0 12px 38px rgba(0,0,0,.18)}.pe-letterhead{display:flex;justify-content:space-between;gap:20px;padding-bottom:21px;border-bottom:2px solid var(--pe-ink)}.pe-letterhead strong{font:500 26px/1 var(--pe-serif)}.pe-letterhead span{text-align:right;color:#77766f;font:700 8px/1.5 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em}.pe-paper-kicker{margin:27px 0 6px;color:var(--pe-green);font:700 9px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em}.pe-paper h2{margin:0;font:500 31px/1.02 var(--pe-serif);letter-spacing:-.035em}.pe-paper-lead{margin:10px 0 0;color:#6c6d66;font-size:10px;line-height:1.55}.pe-terms{display:grid;gap:12px;margin-top:25px}.pe-term{display:grid;grid-template-columns:26px 1fr;gap:11px;font-size:10px;line-height:1.5}.pe-term b{width:24px;height:24px;display:grid;place-items:center;border:1px solid #111;border-radius:50%;font-size:8px}.pe-signatures{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:60px}.pe-signatures div{border-top:1px solid #111;padding-top:8px}.pe-signatures em{display:block;font:italic 18px/1 var(--pe-serif)}.pe-signatures span{display:block;margin-top:5px;color:#77766f;font-size:8px}.pe-trip-table{margin-top:24px;border-top:1px solid #aaa69f}.pe-trip-row{display:grid;grid-template-columns:34px 82px 1fr 85px;align-items:center;min-height:42px;border-bottom:1px solid #d6d2c8;font-size:9px}.pe-trip-row b{font-family:ui-monospace,monospace}.pe-dot{display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%;background:var(--pe-green)}.pe-redact{display:inline-block;height:7px;border-radius:1px;background:#111}.pe-stamp{display:inline-flex;align-items:center;gap:8px;margin-top:27px;padding:11px 13px;border:2px solid var(--pe-green);color:var(--pe-green);font:800 10px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;transform:rotate(-1deg)}.pe-receipts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:26px}.pe-receipt{padding:20px;border:1px dashed #88847d;font-family:ui-monospace,monospace}.pe-receipt>strong,.pe-receipt>small{display:block;text-align:center}.pe-receipt>small{margin-top:5px;color:#77766f;font-size:7px}.pe-receipt hr{margin:15px 0;border:0;border-top:1px dashed #88847d}.pe-receipt div{display:flex;justify-content:space-between;margin:8px 0;font-size:8px}.pe-receipt .total{font-size:13px}.pe-route-map{margin-top:25px;padding:15px;border:1px solid #d2cec3;background:#f5f3ed}.pe-route-map svg{width:100%;height:auto}.pe-payment{text-align:center;margin:35px 0 25px}.pe-payment i{width:66px;height:66px;display:grid;place-items:center;margin:0 auto 17px;border-radius:50%;background:#e8f3ea;color:var(--pe-green)}.pe-payment strong{display:block;font:500 69px/.88 var(--pe-serif);letter-spacing:-.06em}.pe-payment span{display:block;margin-top:8px;color:#77766f;font-size:9px}.pe-facts{margin:0 auto;width:min(370px,100%);border-top:1px solid #d4d0c5}.pe-facts div{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid #d4d0c5;font-size:9px}.pe-completion{display:grid;gap:11px;margin-top:25px}.pe-completion div{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #d4d0c5;background:#faf8f1;font-size:10px}.pe-live-file{margin-top:26px;padding:20px;border:1px solid #d2cec3;background:#faf8f1}.pe-live-file strong{display:block;font-size:12px}.pe-live-file p{margin:8px 0 0;color:#6b6c65;font-size:10px;line-height:1.55}.pe-live-file a{display:inline-flex;margin-top:14px;padding:9px 11px;border:1px solid #aaa69c;font-size:9px;font-weight:800;text-decoration:none}.pe-live-image{display:block;max-width:100%;margin:0 auto;background:white;box-shadow:0 12px 38px rgba(0,0,0,.18)}.pe-live-pdf{width:100%;height:680px;border:0;background:white;box-shadow:0 12px 38px rgba(0,0,0,.18)}.pe-inspector{padding:21px 20px;border-left:1px solid rgba(255,255,255,.13);overflow:auto}.pe-inspector-panel{display:none}.pe-inspector-panel.active{display:block}.pe-inspector>div>p:first-child{margin:0;color:rgba(255,255,255,.4);font:700 9px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em}.pe-inspector h2{margin:9px 0 0;font:500 23px/1.05 var(--pe-serif)}.pe-inspector-copy{margin:10px 0 20px;color:rgba(255,255,255,.55);font-size:10px;line-height:1.55}.pe-inspector dl{margin:0;border-top:1px solid rgba(255,255,255,.13)}.pe-inspector dl div{display:grid;grid-template-columns:88px 1fr;gap:11px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.13);font-size:9px}.pe-inspector dt{color:rgba(255,255,255,.38)}.pe-inspector dd{margin:0;font-weight:650}.pe-review-note{margin-top:18px;padding:14px;border:1px solid rgba(111,205,132,.27);border-radius:10px;background:rgba(111,205,132,.1)}.pe-review-note strong{display:flex;gap:7px;align-items:center;color:#a7e2b4;font-size:10px}.pe-review-note p{margin:6px 0 0;color:rgba(255,255,255,.55);font-size:9px;line-height:1.5}.pe-inspector a{display:inline-flex;align-items:center;gap:7px;margin-top:14px;color:white;font-size:9px;font-weight:750}.pe-timeline{display:none;position:absolute;inset:0 0 0 0;z-index:5;background:var(--pe-paper);color:var(--pe-ink);grid-template-rows:82px 1fr;box-shadow:-20px 0 60px rgba(0,0,0,.28)}.pe-timeline.open{display:grid}.pe-timeline-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;border-bottom:1px solid var(--pe-line)}.pe-timeline-head p{margin:0;color:var(--pe-green);font:700 9px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em}.pe-timeline-head h2{margin:7px 0 0;font:500 25px/1 var(--pe-serif)}.pe-timeline-head button{width:36px;height:36px;border:1px solid var(--pe-line);border-radius:50%;background:white;cursor:pointer}.pe-timeline-scroll{overflow:auto;padding:24px 30px 40px}.pe-timeline-rail{position:relative;padding-left:32px}.pe-timeline-rail:before{content:"";position:absolute;left:7px;top:12px;bottom:12px;width:1px;background:#aaa69c}.pe-event{position:relative;padding:0 0 24px 102px;border-bottom:1px solid var(--pe-line);margin-bottom:20px}.pe-event:last-child{border-bottom:0}.pe-event:before{content:"";position:absolute;left:-31px;top:4px;width:13px;height:13px;border:2px solid var(--pe-green);border-radius:50%;background:var(--pe-paper);box-shadow:0 0 0 4px var(--pe-paper)}.pe-event time{position:absolute;left:0;top:0;width:86px;color:#77766f;font:700 8px/1.4 ui-monospace,monospace;text-transform:uppercase}.pe-event>p{margin:0;color:var(--pe-green);font:700 8px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em}.pe-event h3{margin:6px 0 0;font-size:11px}.pe-event>span{display:block;margin-top:4px;color:#77766f;font-size:9px;line-height:1.5}.pe-event button{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:7px 9px;border:1px solid var(--pe-line);background:white;font-size:8px;font-weight:800;cursor:pointer}.pe-mobile-strip{display:none}
 @media(max-width:1050px){.pe-main{width:calc(100vw - 20px)}.pe-hero{grid-template-columns:1fr}.pe-principles{grid-template-columns:1fr}.pe-principles article+article{border-left:0;border-top:1px solid var(--pe-line)}.pe-record-card{grid-template-columns:1fr auto}.pe-record-meta{display:none}.pe-workbench{grid-template-columns:205px minmax(0,1fr)}.pe-viewer-area{grid-template-columns:minmax(0,1fr)}.pe-inspector{display:none}}
-@media(max-width:720px){.pe-main{width:100%;padding-top:12px}.pe-main.pe-main-record{padding:0}.pe-hero,.pe-section{margin-left:12px;margin-right:12px}.pe-hero{padding:36px 0 32px;gap:26px}.pe-hero h1{font-size:52px}.pe-lead{font-size:15px}.pe-principles{margin:0 12px}.pe-example{grid-template-columns:1fr}.pe-example-copy{padding:30px 24px}.pe-example h2{font-size:35px}.pe-example-list{padding:20px 24px}.pe-record-card{grid-template-columns:1fr;padding:18px}.pe-record-action{margin-top:4px}.pe-notice{margin:0 10px 10px;align-items:flex-start;flex-direction:column}.pe-desk{height:calc(100dvh - 78px);min-height:0;border-radius:16px 16px 0 0}.pe-topbar{height:58px;padding:0 11px}.pe-breadcrumbs span,.pe-chip{display:none}.pe-actions button{width:36px;padding:0;justify-content:center;font-size:0}.pe-workbench{height:calc(100% - 58px);display:block}.pe-nav{height:102px;padding:10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.13);overflow:hidden}.pe-case{display:none}.pe-desktop-list{display:none}.pe-mobile-strip{display:flex;gap:7px;overflow-x:auto}.pe-mobile-strip button{min-width:155px;display:grid;grid-template-columns:27px 1fr;gap:8px;align-items:center;padding:9px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;color:rgba(255,255,255,.6);text-align:left}.pe-mobile-strip button.active{background:rgba(255,255,255,.1);color:white}.pe-mobile-strip strong{display:block;font-size:9px}.pe-mobile-strip small{display:block;margin-top:3px;font-size:7px;color:rgba(255,255,255,.38)}.pe-viewer-area{height:calc(100% - 102px)}.pe-toolbar>span{display:none}.pe-stage{padding:16px 9px 38px}.pe-paper{min-height:610px;padding:28px 22px}.pe-receipts{grid-template-columns:1fr}.pe-timeline{position:fixed;inset:58px 0 0;z-index:100}.pe-timeline-scroll{padding:20px 16px 40px}.pe-event{padding-left:78px}.pe-event time{width:65px}.pe-live-pdf{height:610px}}
+@media(max-width:720px){.pe-main{width:100%;padding-top:12px}.pe-main.pe-main-record{padding:0}.pe-hero,.pe-section{margin-left:12px;margin-right:12px}.pe-hero{padding:36px 0 32px;gap:26px}.pe-hero h1{font-size:62px}.pe-lead{font-size:15px}.pe-principles{margin:0 12px}.pe-example{grid-template-columns:1fr}.pe-example-copy{padding:30px 24px}.pe-example h2{font-size:35px}.pe-example-list{padding:20px 24px}.pe-record-card{grid-template-columns:1fr;padding:18px}.pe-record-items{grid-column:1}.pe-record-items li{grid-template-columns:28px minmax(0,1fr)}.pe-record-items b{grid-column:2}.pe-record-action{margin-top:4px}.pe-pagination{align-items:stretch}.pe-pagination a{flex:1;text-align:center}.pe-pagination span{display:none}.pe-notice{margin:0 10px 10px;align-items:flex-start;flex-direction:column}.pe-desk{height:calc(100dvh - 78px);min-height:0;border-radius:16px 16px 0 0}.pe-topbar{height:58px;padding:0 11px}.pe-breadcrumbs span,.pe-chip{display:none}.pe-actions button{width:36px;padding:0;justify-content:center;font-size:0}.pe-workbench{height:calc(100% - 58px);display:block}.pe-nav{height:102px;padding:10px;border-right:0;border-bottom:1px solid rgba(255,255,255,.13);overflow:hidden}.pe-case{display:none}.pe-desktop-list{display:none}.pe-mobile-strip{display:flex;gap:7px;overflow-x:auto}.pe-mobile-strip button{min-width:155px;display:grid;grid-template-columns:27px 1fr;gap:8px;align-items:center;padding:9px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;color:rgba(255,255,255,.6);text-align:left}.pe-mobile-strip button.active{background:rgba(255,255,255,.1);color:white}.pe-mobile-strip strong{display:block;font-size:9px}.pe-mobile-strip small{display:block;margin-top:3px;font-size:7px;color:rgba(255,255,255,.38)}.pe-viewer-area{height:calc(100% - 102px)}.pe-toolbar>span{display:none}.pe-stage{padding:16px 9px 38px}.pe-paper{min-height:610px;padding:28px 22px}.pe-receipts{grid-template-columns:1fr}.pe-timeline{position:fixed;inset:58px 0 0;z-index:100}.pe-timeline-scroll{padding:20px 16px 40px}.pe-event{padding-left:78px}.pe-event time{width:65px}.pe-live-pdf{height:610px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 `;
 
@@ -150,12 +161,24 @@ async function hydrate(rows: Array<Record<string, any>>, includeUrls: boolean): 
   const profileIds = rows.flatMap((row) => [clean(row.proposer_id), clean(row.responder_id)]).filter(Boolean);
   const versionIds = rows.map((row) => clean(row.current_version_id)).filter(Boolean);
   const [evidenceResult, offerResult, profileResult, versionResult, confirmationResult] = await Promise.all([
-    supabase.from("trade_evidence_items").select("*").in("agreement_id", agreementIds).in("public_visibility", ["public", "withheld_safety"]).order("created_at", { ascending: true }),
+    supabase
+      .from("trade_evidence_items")
+      .select("id,agreement_id,evidence_type,status,submitted_by,created_at,reviewed_at,challenge_window_ends_at,challenge_reason,redaction_status,public_visibility,public_title,public_summary,public_original_filename,public_mime_type,public_redaction_note,public_url,public_storage_path")
+      .in("agreement_id", agreementIds)
+      .in("public_visibility", ["public", "withheld_safety"])
+      .order("created_at", { ascending: true }),
     offerIds.length ? supabase.from("offers").select("id,offered_cause,requested_cause").in("id", offerIds) : Promise.resolve({ data: [] }),
     profileIds.length ? supabase.from("profiles").select("id,display_name").in("id", profileIds) : Promise.resolve({ data: [] }),
     versionIds.length ? supabase.from("trade_agreement_versions").select("id,proposed_action,requested_action,duration,evidence_rule,privacy_scope").in("id", versionIds) : Promise.resolve({ data: [] }),
     supabase.from("trade_completion_confirmations").select("agreement_id,user_id,confirmed_at").in("agreement_id", agreementIds).order("confirmed_at", { ascending: true }),
   ]);
+  const queryError = evidenceResult.error
+    ?? offerResult.error
+    ?? profileResult.error
+    ?? versionResult.error
+    ?? confirmationResult.error;
+  if (queryError) throw queryError;
+
   const byAgreement = new Map<string, Array<Record<string, any>>>();
   for (const item of evidenceResult.data ?? []) {
     const id = String(item.agreement_id);
@@ -231,12 +254,39 @@ async function hydrate(rows: Array<Record<string, any>>, includeUrls: boolean): 
   return records;
 }
 
-async function listRecords() {
+function pageNumber(value: string | string[] | undefined) {
+  const parsed = Number.parseInt(Array.isArray(value) ? value[0] ?? "" : value ?? "", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+async function listRecords(page: number): Promise<EvidenceDirectoryData> {
   try {
     const supabase = createServiceClient() as any;
-    const { data, error } = await supabase.from("agreements").select("id,offer_id,proposer_id,responder_id,lifecycle_status,current_version_id,created_at,updated_at,public_evidence_updated_at,activated_at,completed_at,public_evidence_enabled").eq("public_evidence_enabled", true).order("public_evidence_updated_at", { ascending: false }).limit(50);
-    return error ? [] : hydrate(data ?? [], false);
-  } catch { return []; }
+    const from = (page - 1) * DIRECTORY_PAGE_SIZE;
+    const to = from + DIRECTORY_PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
+      .from("agreements")
+      .select(
+        "id,offer_id,proposer_id,responder_id,lifecycle_status,current_version_id,created_at,updated_at,public_evidence_updated_at,activated_at,completed_at,public_evidence_enabled,trade_evidence_items!inner(id)",
+        { count: "exact" },
+      )
+      .eq("public_evidence_enabled", true)
+      .in("trade_evidence_items.public_visibility", ["public", "withheld_safety"])
+      .order("public_evidence_updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+    if (error) {
+      return { loadState: "unavailable", page, records: [], totalPages: 1, totalRecords: 0 };
+    }
+
+    const totalRecords = count ?? data?.length ?? 0;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / DIRECTORY_PAGE_SIZE));
+    if (totalRecords > 0 && page > totalPages) return listRecords(totalPages);
+    const records = await hydrate(data ?? [], false);
+    return { loadState: "ready", page, records, totalPages, totalRecords };
+  } catch {
+    return { loadState: "unavailable", page, records: [], totalPages: 1, totalRecords: 0 };
+  }
 }
 
 async function getRecord(id: string, viewerId: string | null = null) {
@@ -265,15 +315,19 @@ const EXAMPLE_BASE = {
 };
 const EXAMPLE: EvidenceRecord = { ...EXAMPLE_BASE, timeline: buildTimeline(EXAMPLE_BASE, []) };
 
-function Directory({ records }: { records: EvidenceRecord[] }) {
+function Directory({ directory }: { directory: EvidenceDirectoryData }) {
+  const { loadState, page, records, totalPages, totalRecords } = directory;
+  const visibleEvidenceCount = records.reduce((total, record) => total + record.evidence.length, 0);
+
   return (
     <>
       <section className="pe-hero">
         <div>
-          <h1>Inspect the proof behind every trade.</h1>
+          <p className="pe-kicker">Global evidence ledger</p>
+          <h1>Evidence</h1>
           <p className="pe-lead">
-            Open a record to inspect every published artifact, its review state, applied redactions,
-            and the chronology from agreement through completion.
+            Every public-safe artifact from every Moral Trade appears here, grouped by trade. Open
+            any record to inspect the complete dossier, review state, redactions, and chronology.
           </p>
         </div>
         <aside className="pe-policy">
@@ -286,25 +340,54 @@ function Directory({ records }: { records: EvidenceRecord[] }) {
           <Link href="/privacy">Read the privacy standard</Link>
         </aside>
       </section>
-      <section className="pe-principles">
-        <article><span>01</span><h2>Media first</h2><p>Photos, receipts, documents, and attestations stay one tap apart in an immersive review stage.</p></article>
-        <article><span>02</span><h2>Status stays explicit</h2><p>Submitted, accepted, and challenged evidence remain distinct. Visibility is not presented as independent verification.</p></article>
-        <article><span>03</span><h2>Limits stay visible</h2><p>Every artifact explains what it supports, what it cannot establish, and which details were removed.</p></article>
-      </section>
       <section className="pe-section">
-        <div className="pe-section-head"><div><p>Public directory</p><h2>Live evidence records</h2></div><span>{records.length} public record{records.length === 1 ? "" : "s"}</span></div>
-        {records.length ? (
+        <div className="pe-section-head">
+          <div><p>Every moral trade</p><h2>Published evidence</h2></div>
+          <span>
+            {loadState === "ready"
+              ? `${totalRecords} trade${totalRecords === 1 ? "" : "s"} with evidence${records.length ? ` · ${visibleEvidenceCount} item${visibleEvidenceCount === 1 ? "" : "s"} on this page` : ""}`
+              : "Evidence temporarily unavailable"}
+          </span>
+        </div>
+        {loadState === "unavailable" ? (
+          <div className="pe-empty" role="status">
+            <strong>Evidence could not be loaded.</strong>
+            <p>Nothing is being reported as empty while the ledger is unavailable. Please refresh to try again.</p>
+          </div>
+        ) : records.length ? (
           <div className="pe-records">
             {records.map((record) => (
               <Link className="pe-record-card" href={`/evidence/${record.id}`} key={record.id}>
                 <div className="pe-record-title"><small>{record.lifecycle.replaceAll("_", " ")}</small><strong>{record.offeredCause} ↔ {record.requestedCause}</strong><span>{record.proposer} → {record.responder}</span></div>
                 <div className="pe-record-meta"><div><span>Evidence</span><strong>{record.evidence.length} public item{record.evidence.length === 1 ? "" : "s"}</strong></div><div><span>Updated</span><strong>{formatDate(record.updatedAt)}</strong></div></div>
                 <div className="pe-record-action">Inspect →</div>
+                <ol className="pe-record-items" aria-label={`Evidence submitted for ${record.offeredCause} and ${record.requestedCause}`}>
+                  {record.evidence.map((item, index) => (
+                    <li key={item.id}>
+                      <i>{String(index + 1).padStart(2, "0")}</i>
+                      <span>
+                        <strong>{item.title}</strong>
+                        <small>{item.submittedBy} · {formatDate(item.submittedAt)}</small>
+                      </span>
+                      <b>{item.state} · {item.redactionState.replaceAll("_", " ")}</b>
+                    </li>
+                  ))}
+                </ol>
               </Link>
             ))}
+            {totalPages > 1 ? (
+              <nav aria-label="Evidence pages" className="pe-pagination">
+                {page > 1 ? <Link href={`/evidence?page=${page - 1}`}>← Newer evidence</Link> : <span />}
+                <span>Page {page} of {totalPages}</span>
+                {page < totalPages ? <Link href={`/evidence?page=${page + 1}`}>Older evidence →</Link> : <span />}
+              </nav>
+            ) : null}
           </div>
         ) : (
-          <div className="pe-empty"><strong>No public moral trades are available yet.</strong><p>Every accepted trade receives an evidence page, including an awaiting-submission state before its first artifact. The interface example below is clearly separated from live marketplace activity.</p></div>
+          <div className="pe-empty" role="status">
+            <strong>No evidence has been submitted yet.</strong>
+            <p>There are no real Moral Trade evidence artifacts to list. The interface example below demonstrates the viewer but is not a trade, submission, or evidence record.</p>
+          </div>
         )}
       </section>
       <section className="pe-section">
@@ -383,12 +466,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title:record.isExample?"Example public evidence record":`${record.offeredCause} ↔ ${record.requestedCause} evidence`, description:"Inspect the public evidence, review state, redactions, and proof timeline for this Moral Trade record.", robots:record.isExample?{index:false,follow:false}:{index:true,follow:true}, alternates:record.isExample?undefined:{canonical:`/evidence/${record.id}`} };
 }
 
-export default async function EvidencePage({ params }: PageProps) {
-  const [{ recordId }, viewer] = await Promise.all([params, getViewer()]);
+export default async function EvidencePage({ params, searchParams }: PageProps) {
+  const [{ recordId }, resolvedSearchParams, viewer] = await Promise.all([
+    params,
+    searchParams,
+    getViewer(),
+  ]);
   const id = recordId?.[0];
   const record = id ? await getRecord(id, viewer?.authUser.id ?? null) : null;
   if (id && !record) notFound();
-  const records = id ? [] : await listRecords();
+  const directory = id
+    ? { loadState: "ready" as const, page: 1, records: [], totalPages: 1, totalRecords: 0 }
+    : await listRecords(pageNumber(resolvedSearchParams.page));
   return (
     <div className="pe-page">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
@@ -404,7 +493,7 @@ export default async function EvidencePage({ params }: PageProps) {
         </header>
       ) : null}
       <main className={`pe-main ${record ? "pe-main-record" : ""}`} id="main-content" tabIndex={-1}>
-        {record ? <Desk record={record} viewerId={viewer?.authUser.id ?? null} /> : <Directory records={records} />}
+        {record ? <Desk record={record} viewerId={viewer?.authUser.id ?? null} /> : <Directory directory={directory} />}
       </main>
       {!record ? <SiteFooter /> : null}
     </div>

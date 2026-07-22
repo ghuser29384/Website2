@@ -10,6 +10,8 @@
     ["offer", "/trades/new"],
     ["create", "/trades/new"],
     ["activity", "/commitments"],
+    ["commitments", "/commitments"],
+    ["evidence", "/evidence"],
   ]);
 
   function normalizeLabel(element) {
@@ -66,6 +68,33 @@
 
         patchControl(control, path, label);
         patched = true;
+      }
+
+      const controls = [...nav.querySelectorAll("a, button")];
+      const evidenceControl = controls.find((control) => normalizeLabel(control) === "evidence");
+
+      if (!evidenceControl) {
+        const commitmentsControl = controls.find((control) => {
+          const label = normalizeLabel(control);
+          return label === "activity" || label === "commitments";
+        });
+        const template = commitmentsControl || controls.at(-1);
+
+        if (template) {
+          const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
+          const control = document.createElement(tagName);
+          control.className = template.className;
+          control.textContent = "Evidence";
+
+          if (commitmentsControl?.nextSibling) {
+            nav.insertBefore(control, commitmentsControl.nextSibling);
+          } else {
+            nav.appendChild(control);
+          }
+
+          patchControl(control, "/evidence", "evidence");
+          patched = true;
+        }
       }
     }
 

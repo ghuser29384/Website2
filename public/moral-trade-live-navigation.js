@@ -48,6 +48,12 @@
     window.location.assign("/trade-controls");
   }
 
+  function openEvidence(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    window.location.assign("/evidence");
+  }
+
   function prepareDiscoverControl(control) {
     control.setAttribute("data-mt-discover-link", "true");
     control.removeAttribute("aria-current");
@@ -80,6 +86,24 @@
     }
 
     control.addEventListener("click", openControls, true);
+  }
+
+  function prepareEvidenceControl(control) {
+    control.setAttribute("data-mt-evidence-link", "true");
+    control.setAttribute("aria-label", "Open Evidence");
+    control.removeAttribute("aria-current");
+    control.removeAttribute("data-page");
+    control.removeAttribute("data-action");
+    control.removeAttribute("data-view");
+    control.classList.remove("active");
+
+    if (control instanceof HTMLAnchorElement) {
+      control.href = "/evidence";
+    } else if (control instanceof HTMLButtonElement) {
+      control.type = "button";
+    }
+
+    control.addEventListener("click", openEvidence, true);
   }
 
   function createDiscoverControl(nav, template) {
@@ -115,6 +139,20 @@
       nav.insertBefore(control, discoverControl.nextSibling);
     } else if (discoverControl) {
       nav.appendChild(control);
+    } else {
+      nav.appendChild(control);
+    }
+  }
+
+  function createEvidenceControl(nav, template, commitmentsControl) {
+    const tagName = template instanceof HTMLAnchorElement ? "a" : "button";
+    const control = document.createElement(tagName);
+    control.className = template.className;
+    control.textContent = "Evidence";
+    prepareEvidenceControl(control);
+
+    if (commitmentsControl?.nextSibling) {
+      nav.insertBefore(control, commitmentsControl.nextSibling);
     } else {
       nav.appendChild(control);
     }
@@ -157,6 +195,24 @@
         const template =
           findFeedControl(nav) || updatedControls[0];
         if (template) createControlsControl(nav, template, discoverControl);
+      }
+
+      const finalControls = [...nav.querySelectorAll("a, button")];
+      const evidenceControl = finalControls.find(
+        (control) => normalizeLabel(control) === "evidence",
+      );
+
+      if (evidenceControl) {
+        if (!evidenceControl.hasAttribute("data-mt-evidence-link")) {
+          prepareEvidenceControl(evidenceControl);
+        }
+      } else {
+        const commitmentsControl = finalControls.find((control) => {
+          const label = normalizeLabel(control);
+          return label === "commitments" || label === "activity";
+        });
+        const template = commitmentsControl || findFeedControl(nav) || finalControls[0];
+        if (template) createEvidenceControl(nav, template, commitmentsControl);
       }
 
       patched = true;
