@@ -15,7 +15,11 @@ const participantMenu = readFileSync(
   "utf8",
 );
 const commitmentsPage = readFileSync("src/app/commitments/page.tsx", "utf8");
-const dealroomPage = readFileSync("src/app/deals/[agreementId]/page.tsx", "utf8");
+const dealroomPage = [
+  readFileSync("src/app/deals/[agreementId]/page.tsx", "utf8"),
+  readFileSync("src/app/deals/[agreementId]/dealroom-main-sections.tsx", "utf8"),
+  readFileSync("src/app/deals/[agreementId]/dealroom-history.tsx", "utf8"),
+].join("\n");
 const questionPage = readFileSync(
   "src/app/offers/[offerId]/question/page.tsx",
   "utf8",
