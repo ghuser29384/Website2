@@ -13,10 +13,15 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
   ]);
   if (!context) return <BaseTradeAgreementStage {...props} />;
 
+  const visibleContext =
+    !context.term && !context.provider.ready
+      ? { ...context, eligible: false }
+      : context;
+
   return (
     <TradeDonationAgreementStage
       baseProps={props}
-      context={context}
+      context={visibleContext}
       viewerUserId={viewer?.authUser.id ?? ""}
     />
   );
