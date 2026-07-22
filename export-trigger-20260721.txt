@@ -1,1 +1,1 @@
-Refresh latest-source artifact for the route recommendation production implementation.
+Refresh latest-source artifact for the 24-hour full-stack Moral Trade launch sprint on 2026-07-22.
