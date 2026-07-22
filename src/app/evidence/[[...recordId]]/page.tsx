@@ -16,7 +16,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -131,11 +131,12 @@ function buildTimeline(record: Omit<EvidenceRecord, "timeline">, confirmations: 
   confirmations.forEach((confirmation, index) => {
     const at = clean(confirmation.confirmed_at);
     const confirmerId = clean(confirmation.user_id);
-    const actor = confirmerId === record.proposerId
-      ? record.proposer
-      : confirmerId === record.responderId
-        ? record.responder
-        : "Participant";
+    const actor = clean(confirmation.actor_display_name)
+      || (confirmerId === record.proposerId
+        ? record.proposer
+        : confirmerId === record.responderId
+          ? record.responder
+          : "Participant");
     if (at) events.push({ id: `confirmation-${index}`, at, label: "Confirmation", title: "Completion confirmation recorded", description: "A participant independently confirmed completion.", actor });
   });
   if (record.completedAt) events.push({ id: "completed", at: record.completedAt, label: "Completion", title: "Trade completed", description: "The public record was finalized after both completion confirmations.", actor: "Both parties" });
@@ -143,19 +144,89 @@ function buildTimeline(record: Omit<EvidenceRecord, "timeline">, confirmations: 
 }
 
 async function signedPublicUrl(supabase: any, row: Record<string, any>) {
-  if (clean(row.public_visibility, "public") !== "public") return null;
-  if (!["redacted", "not_required"].includes(redaction(row.redaction_status))) return null;
-  const direct = clean(row.public_url);
+  if (clean(row.public_visibility ?? row.publicVisibility, "public") !== "public") return null;
+  if (!["redacted", "not_required"].includes(redaction(row.redaction_status ?? row.redactionState))) return null;
+  const direct = clean(row.public_url ?? row.publicUrl);
   if (direct) return direct;
-  const path = clean(row.public_storage_path);
+  const path = clean(row.public_storage_path ?? row.publicObjectPath);
   if (!path) return null;
-  const { data, error } = await supabase.storage.from("trade-evidence").createSignedUrl(path, 1800);
+  const { data, error } = await supabase.storage.from("trade-evidence").createSignedUrl(path, 300);
   return error ? null : data?.signedUrl ?? null;
 }
 
-async function hydrate(rows: Array<Record<string, any>>, includeUrls: boolean): Promise<EvidenceRecord[]> {
+async function hydratePublic(
+  rows: Array<Record<string, any>>,
+  includeUrls: boolean,
+  supabase: any,
+): Promise<EvidenceRecord[]> {
   if (!rows.length) return [];
-  const supabase = createServiceClient() as any;
+  const records: EvidenceRecord[] = [];
+  for (const agreement of rows) {
+    if (!agreement || typeof agreement !== "object") continue;
+    const id = String(agreement.id);
+    const rawEvidence = Array.isArray(agreement.evidence) ? agreement.evidence : [];
+    const evidence: EvidenceItem[] = await Promise.all(rawEvidence.map(async (item: any) => {
+      const evidenceType = clean(item.evidenceType, "file");
+      const title = clean(item.title, evidenceType === "attestation" ? "Participant attestation" : evidenceType === "link" ? "External evidence link" : "Submitted evidence file");
+      return {
+        id: String(item.id),
+        title,
+        summary: clean(item.summary, "Evidence submitted under the parties’ frozen agreement."),
+        evidenceType,
+        mimeType: clean(item.mimeType, evidenceType),
+        state: state(item.state),
+        group: groupFor(title, evidenceType),
+        submittedBy: label(item.submittedBy, "Participant"),
+        submittedById: null,
+        submittedAt: clean(item.submittedAt, agreement.createdAt),
+        reviewedAt: item.reviewedAt ? String(item.reviewedAt) : null,
+        challengeWindowEndsAt: item.challengeWindowEndsAt
+          ? String(item.challengeWindowEndsAt)
+          : null,
+        challengeReason: null,
+        redactionState: redaction(item.redactionState),
+        redactionNote: clean(item.redactionNote, "Sensitive identifiers should be removed before publication."),
+        fileName: clean(item.fileName),
+        publicUrl: includeUrls ? await signedPublicUrl(supabase, item) : null,
+        preview: "live" as const,
+      };
+    }));
+    const partial = {
+      id,
+      isExample: false,
+      accessScope: "public" as const,
+      lifecycle: clean(agreement.lifecycle, "active"),
+      offeredCause: clean(agreement.offeredCause, "Moral priority"),
+      requestedCause: clean(agreement.requestedCause, "Counterparty priority"),
+      proposedAction: clean(agreement.proposedAction, "Action recorded in the agreement."),
+      requestedAction: clean(agreement.requestedAction, "Reciprocal action recorded in the agreement."),
+      evidenceRule: clean(agreement.evidenceRule, "Evidence is evaluated against the frozen agreement."),
+      duration: clean(agreement.duration, "Duration recorded in the agreement"),
+      privacyScope: clean(agreement.privacyScope, "Public by default with narrow safety exceptions."),
+      proposer: label(agreement.proposer, "Proposer"),
+      responder: label(agreement.responder, "Responder"),
+      proposerId: null,
+      responderId: null,
+      createdAt: clean(agreement.createdAt, new Date(0).toISOString()),
+      activatedAt: agreement.activatedAt ? String(agreement.activatedAt) : null,
+      completedAt: agreement.completedAt ? String(agreement.completedAt) : null,
+      updatedAt: clean(agreement.updatedAt, agreement.createdAt),
+      evidence,
+    };
+    const confirmations = Array.isArray(agreement.completionConfirmations)
+      ? agreement.completionConfirmations
+      : [];
+    records.push({ ...partial, timeline: buildTimeline(partial, confirmations) });
+  }
+  return records;
+}
+
+async function hydrateParticipant(
+  rows: Array<Record<string, any>>,
+  includeUrls: boolean,
+  supabase: any,
+): Promise<EvidenceRecord[]> {
+  if (!rows.length) return [];
   const agreementIds = rows.map((row) => String(row.id));
   const offerIds = rows.map((row) => clean(row.offer_id)).filter(Boolean);
   const profileIds = rows.flatMap((row) => [clean(row.proposer_id), clean(row.responder_id)]).filter(Boolean);
@@ -261,28 +332,24 @@ function pageNumber(value: string | string[] | undefined) {
 
 async function listRecords(page: number): Promise<EvidenceDirectoryData> {
   try {
-    const supabase = createServiceClient() as any;
+    const supabase = (await createClient()) as any;
     const from = (page - 1) * DIRECTORY_PAGE_SIZE;
-    const to = from + DIRECTORY_PAGE_SIZE - 1;
-    const { data, error, count } = await supabase
-      .from("agreements")
-      .select(
-        "id,offer_id,proposer_id,responder_id,lifecycle_status,current_version_id,created_at,updated_at,public_evidence_updated_at,activated_at,completed_at,public_evidence_enabled,trade_evidence_items!inner(id)",
-        { count: "exact" },
-      )
-      .eq("public_evidence_enabled", true)
-      .in("trade_evidence_items.public_visibility", ["public", "withheld_safety"])
-      .order("public_evidence_updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(from, to);
+    const { data, error } = await supabase.rpc("list_public_moral_trade_evidence_v1", {
+      p_limit: DIRECTORY_PAGE_SIZE,
+      p_offset: from,
+    });
     if (error) {
       return { loadState: "unavailable", page, records: [], totalPages: 1, totalRecords: 0 };
     }
 
-    const totalRecords = count ?? data?.length ?? 0;
+    const totalRecords = Number(data?.totalRecords ?? 0);
     const totalPages = Math.max(1, Math.ceil(totalRecords / DIRECTORY_PAGE_SIZE));
     if (totalRecords > 0 && page > totalPages) return listRecords(totalPages);
-    const records = await hydrate(data ?? [], false);
+    const records = await hydratePublic(
+      Array.isArray(data?.records) ? data.records : [],
+      false,
+      supabase,
+    );
     return { loadState: "ready", page, records, totalPages, totalRecords };
   } catch {
     return { loadState: "unavailable", page, records: [], totalPages: 1, totalRecords: 0 };
@@ -292,15 +359,28 @@ async function listRecords(page: number): Promise<EvidenceDirectoryData> {
 async function getRecord(id: string, viewerId: string | null = null) {
   if (id === "example") return EXAMPLE;
   try {
-    const supabase = createServiceClient() as any;
-    const { data, error } = await supabase.from("agreements").select("id,offer_id,proposer_id,responder_id,lifecycle_status,current_version_id,created_at,updated_at,public_evidence_updated_at,activated_at,completed_at,public_evidence_enabled").eq("id", id).maybeSingle();
-    if (error || !data) return null;
-    const isParticipant = Boolean(
-      viewerId &&
-      (String(data.proposer_id) === viewerId || String(data.responder_id) === viewerId),
+    const supabase = (await createClient()) as any;
+    if (viewerId) {
+      const { data: participantAgreement, error: participantError } = await supabase
+        .from("agreements")
+        .select("id,offer_id,proposer_id,responder_id,lifecycle_status,current_version_id,created_at,updated_at,public_evidence_updated_at,activated_at,completed_at,public_evidence_enabled")
+        .eq("id", id)
+        .maybeSingle();
+      if (!participantError && participantAgreement) {
+        const isParticipant = String(participantAgreement.proposer_id) === viewerId
+          || String(participantAgreement.responder_id) === viewerId;
+        if (isParticipant) {
+          return (await hydrateParticipant([participantAgreement], true, supabase))[0] ?? null;
+        }
+      }
+    }
+
+    const { data: publicAgreement, error: publicError } = await supabase.rpc(
+      "get_public_moral_trade_evidence_v1",
+      { p_record_id: id },
     );
-    if (data.public_evidence_enabled === false && !isParticipant) return null;
-    return (await hydrate([data], true))[0] ?? null;
+    if (publicError || !publicAgreement) return null;
+    return (await hydratePublic([publicAgreement], true, supabase))[0] ?? null;
   } catch { return null; }
 }
 
@@ -425,7 +505,7 @@ async function Desk({
 
   if (isParticipant && !record.isExample) {
     try {
-      const supabase = createServiceClient() as any;
+      const supabase = (await createClient()) as any;
       const { data } = await supabase
         .from("trade_threads")
         .select("id")

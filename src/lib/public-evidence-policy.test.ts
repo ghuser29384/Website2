@@ -64,7 +64,7 @@ test("the evidence dossier exposes section tabs, artifact controls, and privacy 
 
 test("the global directory is evidence-driven while direct trade dossiers can await submission", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
-  const hydrateStart = page.indexOf("async function hydrate");
+  const hydrateStart = page.indexOf("async function hydratePublic");
   const hydrateEnd = page.indexOf("async function listRecords", hydrateStart);
   const hydrate = page.slice(hydrateStart, hydrateEnd);
   const directoryStart = page.indexOf("async function listRecords");
@@ -75,13 +75,41 @@ test("the global directory is evidence-driven while direct trade dossiers can aw
   assert.match(hydrate, /const rawEvidence = byAgreement\.get\(id\) \?\? \[\]/);
   assert.match(hydrate, /records\.push/);
   assert.ok(directoryStart >= 0 && directoryEnd > directoryStart, "could not locate the evidence directory query");
-  assert.match(directory, /trade_evidence_items!inner\(id\)/);
-  assert.match(directory, /trade_evidence_items\.public_visibility/);
-  assert.match(directory, /\.order\("id", \{ ascending: false \}\)/);
+  assert.match(directory, /list_public_moral_trade_evidence_v1/);
+  assert.match(directory, /hydratePublic/);
+  assert.match(directory, /p_limit: DIRECTORY_PAGE_SIZE/);
+  assert.match(directory, /p_offset: from/);
   assert.doesNotMatch(directory, /\.limit\(50\)/);
   assert.doesNotMatch(hydrate, /from\("trade_evidence_items"\)\.select\("\*"\)/);
+  assert.doesNotMatch(page, /createServiceClient/);
   assert.match(page, /No evidence has been submitted yet\./);
   assert.match(page, /Evidence could not be loaded\./);
+});
+
+test("the public evidence read contract projects only approved fields and gates stored files", () => {
+  const migration = source(
+    "supabase/migrations/20260722104500_public_evidence_read_contract.sql",
+  );
+
+  assert.match(migration, /get_public_moral_trade_evidence_v1/);
+  assert.match(migration, /list_public_moral_trade_evidence_v1/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /set search_path = ''/);
+  assert.match(migration, /a\.public_evidence_enabled is true/);
+  assert.match(migration, /e\.public_visibility = 'public'/);
+  assert.match(migration, /e\.public_published_at is not null/);
+  assert.match(migration, /e\.redaction_status in \('redacted', 'not_required'\)/);
+  assert.match(migration, /e\.public_storage_path = target_object_name/);
+  assert.match(migration, /grant execute on function public\.get_public_moral_trade_evidence_v1\(uuid\) to anon, authenticated/);
+  assert.match(migration, /limit least\(greatest\(coalesce\(p_limit, 24\), 1\), 50\)/);
+  assert.doesNotMatch(
+    migration.slice(
+      migration.indexOf("create or replace function public.get_public_moral_trade_evidence_v1"),
+      migration.indexOf("comment on function public.get_public_moral_trade_evidence_v1"),
+    ),
+    /e\.(storage_path|evidence_url|attestation|challenge_reason)/,
+  );
+  assert.doesNotMatch(migration, /public_summary[^\n]+attestation/);
 });
 
 test("participant evidence decisions stay scoped, confirmed, and inside the review window", () => {
