@@ -29,7 +29,6 @@ test.describe("Returning-user homepage", () => {
       "Feed",
       "Now",
       "Discover",
-      "Offer",
       "Activity",
       "Evidence",
       "Account",
@@ -42,6 +41,11 @@ test.describe("Returning-user homepage", () => {
       "aria-current",
       "page",
     );
+    await expect(page.getByTestId("home-offer-trade")).toHaveAttribute(
+      "href",
+      "/offers?view=templates",
+    );
+    await expect(page.getByTestId("home-offer-trade")).toHaveAccessibleName("Offer a trade");
     const accountMenu = page.getByRole("button", { name: "Open account menu" });
     await expect(accountMenu.getByTestId("account-avatar").locator("svg")).toBeVisible();
 
@@ -210,6 +214,11 @@ test.describe("Returning-user homepage", () => {
 
     await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+    await expect(page.getByTestId("home-offer-trade")).toHaveAttribute(
+      "href",
+      "/offers?view=templates",
+    );
+    await expect(page.getByTestId("home-offer-trade")).toBeVisible();
     await expect(page.getByRole("region", { name: "Recommended moral trade" }).locator("article"))
       .toHaveCount(2);
     await expect(page.getByRole("region", { name: "Trade actions" })).toBeVisible();

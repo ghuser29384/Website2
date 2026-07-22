@@ -4,6 +4,7 @@
   if (window.__MT_DISCOVER_NAVIGATION_BRIDGE__) return;
   window.__MT_DISCOVER_NAVIGATION_BRIDGE__ = true;
 
+  const tradeTemplateLibraryHref = "/offers?view=templates";
   const navSelectors = [
     ".topbar nav",
     ".app-header .top-nav",
@@ -24,6 +25,40 @@
       const label = normalizeLabel(candidate);
       return label === "now" || label === "feed";
     });
+  }
+
+  function prepareHomeOfferControl() {
+    const actionBar = document.querySelector(".topbar .top-actions");
+    if (!actionBar) return false;
+
+    let control = actionBar.querySelector("[data-mt-home-offer-trade]");
+    if (!(control instanceof HTMLAnchorElement)) {
+      control = document.createElement("a");
+      control.className = "mt-home-offer-cta";
+      control.setAttribute("data-mt-home-offer-trade", "true");
+
+      const icon = document.createElement("span");
+      icon.className = "mt-home-offer-cta-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = "+";
+
+      const fullLabel = document.createElement("span");
+      fullLabel.className = "mt-home-offer-cta-label";
+      fullLabel.textContent = "Offer a trade";
+
+      const compactLabel = document.createElement("span");
+      compactLabel.className = "mt-home-offer-cta-label-compact";
+      compactLabel.textContent = "Offer";
+
+      control.append(icon, fullLabel, compactLabel);
+      const avatar = actionBar.querySelector(".avatar");
+      actionBar.insertBefore(control, avatar);
+    }
+
+    control.href = tradeTemplateLibraryHref;
+    control.setAttribute("aria-label", "Offer a trade");
+    control.setAttribute("title", "Choose a template and start a prefilled trade");
+    return true;
   }
 
   function prepareFeedControl(control) {
@@ -159,6 +194,7 @@
   }
 
   function patchNavigation() {
+    const offerControlReady = prepareHomeOfferControl();
     const navs = [...new Set(navSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))];
     let patched = false;
 
@@ -218,7 +254,7 @@
       patched = true;
     }
 
-    return patched;
+    return patched || offerControlReady;
   }
 
   if (!patchNavigation()) {

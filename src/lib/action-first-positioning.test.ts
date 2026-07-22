@@ -58,6 +58,8 @@ test("the financial action has a real external payment handoff and explicit boun
 
 test("the returning homepage keeps the action-first screenshot contract", () => {
   assert.doesNotMatch(home, /A trade worth considering\./);
+  assert.match(home, /href="\/offers\?view=templates"/);
+  assert.match(home, /Offer a trade/);
   assert.match(home, /Offer this trade/);
   assert.match(home, /Verifiable financial contribution/);
   assert.match(home, /Proof method/);

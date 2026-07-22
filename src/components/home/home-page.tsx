@@ -110,40 +110,51 @@ export function HomePage({ displayName }: HomePageProps) {
             Now
           </Link>
           <Link href="/offers">Discover</Link>
-          <Link href="/create">Offer</Link>
           <Link href="/commitments">Activity</Link>
           <Link href="/evidence">Evidence</Link>
           <Link href="/profile">Account</Link>
         </nav>
 
-        <div className={styles.accountWrap}>
-          <button
-            aria-expanded={accountOpen}
-            aria-haspopup="menu"
-            aria-label="Open account menu"
-            className={styles.accountButton}
-            data-testid="account-menu"
-            onClick={() => setAccountOpen((open) => !open)}
-            type="button"
+        <div className={styles.topbarActions}>
+          <Link
+            aria-label="Offer a trade"
+            className={styles.offerButton}
+            data-testid="home-offer-trade"
+            href="/offers?view=templates"
           >
-            <span aria-hidden="true" data-testid="account-avatar">
-              {initials ?? <UserCircle size={24} weight="thin" />}
-            </span>
-            <CaretDown aria-hidden="true" size={17} weight="regular" />
-          </button>
-          {accountOpen ? (
-            <div className={styles.accountMenu} role="menu">
-              <Link href="/profile" role="menuitem">
-                Profile
-              </Link>
-              <Link href="/settings" role="menuitem">
-                Settings
-              </Link>
-              <Link href="/logout" role="menuitem">
-                Sign out
-              </Link>
-            </div>
-          ) : null}
+            <Plus aria-hidden="true" size={18} weight="bold" />
+            <span className={styles.offerButtonLabel}>Offer a trade</span>
+            <span className={styles.offerButtonCompactLabel}>Offer</span>
+          </Link>
+          <div className={styles.accountWrap}>
+            <button
+              aria-expanded={accountOpen}
+              aria-haspopup="menu"
+              aria-label="Open account menu"
+              className={styles.accountButton}
+              data-testid="account-menu"
+              onClick={() => setAccountOpen((open) => !open)}
+              type="button"
+            >
+              <span aria-hidden="true" data-testid="account-avatar">
+                {initials ?? <UserCircle size={24} weight="thin" />}
+              </span>
+              <CaretDown aria-hidden="true" size={17} weight="regular" />
+            </button>
+            {accountOpen ? (
+              <div className={styles.accountMenu} role="menu">
+                <Link href="/profile" role="menuitem">
+                  Profile
+                </Link>
+                <Link href="/settings" role="menuitem">
+                  Settings
+                </Link>
+                <Link href="/logout" role="menuitem">
+                  Sign out
+                </Link>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
