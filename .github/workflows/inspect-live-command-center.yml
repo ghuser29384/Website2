@@ -42,6 +42,16 @@ jobs:
             }
             console.log(`NEEDLE ${JSON.stringify(needle)} COUNT ${count}`);
           }
+          fs.writeFileSync('command-center-context.txt', contexts.join('\n'));
+          fs.writeFileSync('live-source.html', source);
           console.log(`SOURCE_LENGTH ${source.length}`);
-          console.log(contexts.join('\n').slice(0, 120000));
+          console.log(`CONTEXT_LENGTH ${contexts.join('\n').length}`);
           NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: live-command-center-source
+          path: |
+            command-center-context.txt
+            live-source.html
+          if-no-files-found: error
+          retention-days: 1
