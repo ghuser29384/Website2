@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { TradeFlowIcon } from "@/components/core-trade/trade-flow-icons";
+import { consumeCommandCenterHandoff } from "@/lib/command-center-handoff";
 import { deriveCommitmentLimit } from "@/lib/trade-draft-standards";
 
 import styles from "./trade-draft-workbench.module.css";
@@ -29,6 +30,7 @@ export interface TradeDraftValues {
 }
 
 interface TradeDraftWorkbenchProps {
+  acceptCommandHandoff?: boolean;
   formMessage?: { text: string; tone: "error" | "success" } | null;
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
@@ -65,6 +67,8 @@ const STEP_LABELS = [
 ] as const;
 
 const DATE_SNAPSHOT_SUBSCRIBE = () => () => {};
+
+type CommandHandoffState = "loading" | "loaded" | "unavailable" | null;
 
 function localDateSnapshot() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -153,6 +157,7 @@ function validateStep(step: number, values: TradeDraftValues, localToday = "") {
 }
 
 export function TradeDraftWorkbench({
+  acceptCommandHandoff = false,
   formMessage,
   initialValues,
   saveAction,
@@ -183,6 +188,50 @@ export function TradeDraftWorkbench({
   );
   const [isCommitmentLimitEditorOpen, setIsCommitmentLimitEditorOpen] =
     useState(false);
+  const [commandHandoffState, setCommandHandoffState] =
+    useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+  const commandHandoff = useRef<
+    ReturnType<typeof consumeCommandCenterHandoff> | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (!acceptCommandHandoff) return;
+
+    if (commandHandoff.current === undefined) {
+      try {
+        commandHandoff.current = consumeCommandCenterHandoff(window.sessionStorage);
+      } catch {
+        commandHandoff.current = null;
+      }
+    }
+
+    const restoredHandoff = commandHandoff.current;
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (!restoredHandoff) {
+        setCommandHandoffState("unavailable");
+        return;
+      }
+
+      setValues((current) => {
+        const next: TradeDraftValues = { ...current, ...restoredHandoff.values };
+        next.maximumBurden = deriveCommitmentLimit(next);
+        return next;
+      });
+      setUsesCustomCommitmentLimit(false);
+      setIsCommitmentLimitEditorOpen(false);
+      setError(null);
+      setStep(0);
+      setCommandHandoffState("loaded");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptCommandHandoff]);
+
   const localToday = useSyncExternalStore(
     DATE_SNAPSHOT_SUBSCRIBE,
     localDateSnapshot,
@@ -286,6 +335,18 @@ export function TradeDraftWorkbench({
               role="status"
             >
               {formMessage.text}
+            </div>
+          ) : commandHandoffState === "loading" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Loading your command into the editor…
+            </div>
+          ) : commandHandoffState === "loaded" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Command loaded into the editable terms below. Review the no-trade baseline and add any missing dates and evidence before saving. No draft has been saved yet.
+            </div>
+          ) : commandHandoffState === "unavailable" ? (
+            <div className={`${styles.message} ${styles.messageError}`} role="alert">
+              The command could not be restored. Enter the terms below. No draft was created.
             </div>
           ) : templateLabel ? (
             <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
