@@ -187,31 +187,31 @@ test("the handoff is consumed once before the editor uses it", () => {
   assert.deepEqual(removed, [COMMAND_CENTER_HANDOFF_KEY]);
 });
 
-test("the live shell intercepts the false-success path and opens the real editor", () => {
+test("the live drawer opens universal Command while the real editor still accepts prepared trade handoffs", () => {
   const script = readRepoFile("public/moral-trade-live-command-center.js");
   const shell = readRepoFile("public/moral-trade-live.html");
   const page = readRepoFile("src/app/trades/new/page.tsx");
   const workbench = readRepoFile(
     "src/components/core-trade/trade-draft-workbench.tsx",
   );
+  const commandPage = readRepoFile("src/app/command/page.tsx");
 
   assert.match(shell, /moral-trade-live-command-center\.js/);
   assert.match(script, /\[data-action="from-command"\]/);
   assert.match(script, /stopImmediatePropagation/);
-  assert.match(script, /window\.sessionStorage\.setItem/);
+  assert.match(script, /moral-trade\.command\.pending\.v1/);
   assert.match(
     script,
-    /window\.location\.assign\("\/trades\/new\?handoff=command-center"\)/,
+    /window\.location\.assign\("\/command\?source=drawer"\)/,
   );
   assert.doesNotMatch(script, /innerHTML\s*=/);
   assert.doesNotMatch(script, /Draft created with editable exact terms/);
+  assert.match(commandPage, /CommandWorkspace/);
 
   assert.match(page, /resolvedSearchParams\.handoff/);
   assert.match(page, /returnParams\.set\("handoff", "command-center"\)/);
   assert.match(page, /acceptCommandHandoff=\{acceptsCommandHandoff\}/);
-
   assert.match(workbench, /consumeCommandCenterHandoff\(window\.sessionStorage\)/);
   assert.match(workbench, /No draft has been saved yet/);
   assert.match(workbench, /No draft was created/);
-  assert.doesNotMatch(workbench, /Draft created with editable exact terms/);
 });
