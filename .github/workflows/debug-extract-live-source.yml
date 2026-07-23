@@ -73,3 +73,42 @@ jobs:
           path: debug-live-source
           if-no-files-found: error
           retention-days: 1
+
+  diagnose-pr-179:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/exact-live-trade-autocomplete-20260723
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Capture source and adaptive test output
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          set +e
+          node --import tsx --test src/lib/exact-live-autocomplete.test.ts > diagnostics/exact-live-source-test.txt 2>&1
+          echo $? > diagnostics/exact-live-source-test.exit
+          node --import tsx --test \
+            src/lib/live-now-recommendations.test.ts \
+            src/lib/recommendation-learning.test.ts \
+            src/live-now-data.test.ts \
+            src/live-now-priority-route.test.ts > diagnostics/adaptive-tests.txt 2>&1
+          echo $? > diagnostics/adaptive-tests.exit
+          npx eslint \
+            public/moral-trade-live-token-autocomplete.js \
+            src/lib/exact-live-autocomplete.test.ts \
+            tests/exact-live-autocomplete.spec.ts > diagnostics/eslint.txt 2>&1
+          echo $? > diagnostics/eslint.exit
+          cat diagnostics/exact-live-source-test.txt
+          cat diagnostics/adaptive-tests.txt
+          cat diagnostics/eslint.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-179-diagnostics
+          path: diagnostics
+          if-no-files-found: error
+          retention-days: 1
