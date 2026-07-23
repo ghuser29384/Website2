@@ -111,10 +111,6 @@ if grep -Eq 'COPY auth\.users|INSERT INTO auth\.users' "$history_data_file"; the
   exit 1
 fi
 
-cat >"$prod_manifest" <<'SQL'
--- generated below
-SQL
-
 manifest_query="
 select 'table:' || table_name
 from information_schema.tables
@@ -291,7 +287,15 @@ if [[ -n "$artifact_dir" ]]; then
   cp "$history_data_file" "$artifact_dir/migration-history-data.sql"
   cp "$prod_manifest" "$artifact_dir/production-manifest.txt"
   cp "$qa_manifest" "$artifact_dir/qa-manifest.txt"
-  sha256sum "$artifact_dir"/* >"$artifact_dir/SHA256SUMS"
+  (
+    cd "$artifact_dir"
+    sha256sum \
+      production-baseline.sql \
+      migration-history-schema.sql \
+      migration-history-data.sql \
+      production-manifest.txt \
+      qa-manifest.txt >SHA256SUMS
+  )
   echo "Wrote reviewable baseline artifacts to $artifact_dir"
 fi
 
