@@ -36,7 +36,10 @@ jobs:
           echo "c59276c826d3e0819a77007e7e40bb94c741df606a9b0216ee6e1d196b287ea1  /tmp/universal-command.patch.gz.b64" | sha256sum --check
           base64 --decode /tmp/universal-command.patch.gz.b64 | gunzip > /tmp/universal-command.patch
           echo "d9e880695fcd21498fa3f49a799f4273982a52941747f1c9b49f59103a72e51e  /tmp/universal-command.patch" | sha256sum --check
-          git apply --check --verbose /tmp/universal-command.patch
+          if ! git apply --check --verbose /tmp/universal-command.patch > patch-apply.log 2>&1; then
+            cat patch-apply.log
+            exit 1
+          fi
           git apply /tmp/universal-command.patch
           python <<'PY'
           from pathlib import Path
@@ -62,6 +65,15 @@ jobs:
             .github/workflows/apply-universal-command.yml \
             .github/workflows/export-universal-command-source.yml
           git status --short
+
+      - name: Upload patch diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal-command-patch-error
+          path: patch-apply.log
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
