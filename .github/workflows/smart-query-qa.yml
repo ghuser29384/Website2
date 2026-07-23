@@ -49,6 +49,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint smart query code
+        run: npx eslint src/lib/smart-query.ts src/lib/smart-query.test.ts tests/discover-query-audit.spec.ts
+
+      - name: Test deterministic and semantic query interpretation
+        run: node --import tsx --test src/lib/smart-query.test.ts
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
