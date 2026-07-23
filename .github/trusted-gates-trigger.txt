@@ -1,1 +1,1 @@
-Trigger the hydrated-content browser evidence repair and rerun trusted exact-head gates.
+Trigger the consolidated trusted repair and exact-head launch gate workflow.
