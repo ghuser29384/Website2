@@ -2,10 +2,18 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import {
+  CompleteProfileConnections,
+  type CompleteProfileXConnectionSummary,
+} from "@/components/profile/complete-profile-connections";
 import { CompleteProfileReview } from "@/components/profile/complete-profile-review";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import {
+  getDisconnectedXProfileConnectorStatus,
+  getXProfileConnectorStatus,
+} from "@/lib/x-profile-connector";
 import {
   getWalkthroughProfileDraft,
   type WalkthroughProfileDraft,
@@ -48,6 +56,10 @@ function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>)
     .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
 }
 
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
 export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
@@ -66,13 +78,37 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   const initialAffiliation = (
     viewer?.profile as unknown as { affiliation?: string | null } | undefined
   )?.affiliation ?? "";
+  const formMessage = getFormMessage(resolvedSearchParams);
+  const xConnectorStatus = viewer
+    ? await getXProfileConnectorStatus(viewer.authUser.id)
+    : getDisconnectedXProfileConnectorStatus();
+  const xConnection: CompleteProfileXConnectionSummary = {
+    accessStatus: xConnectorStatus.accessStatus,
+    connected: xConnectorStatus.accessStatus === "connected",
+    retentionExpiresAt: xConnectorStatus.retentionExpiresAt,
+    username: xConnectorStatus.username,
+  };
   const returnTo = buildCompleteProfilePath(walkthroughDraft);
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
-  const formMessage = getFormMessage(resolvedSearchParams);
+  const initialConnectionsOpen =
+    readSearchParam(resolvedSearchParams.sources) === "x" ||
+    readSearchParam(resolvedSearchParams.panel) === "connections";
 
   return (
     <div className={styles.pageShell}>
+      <CompleteProfileConnections
+        feedback={formMessage}
+        initialOpen={initialConnectionsOpen}
+        isAuthenticated={Boolean(viewer)}
+        loginHref={loginHref}
+        returnTo={returnTo}
+        signupHref={signupHref}
+        xAvailabilityReason={xConnectorStatus.availability.reason}
+        xConnection={xConnection}
+        xEnabled={xConnectorStatus.availability.enabled}
+      />
+
       <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className={`${styles.statusBanner} ${styles.statusError}`} role="alert">
