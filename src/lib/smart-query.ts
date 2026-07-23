@@ -291,37 +291,34 @@ const STOP_WORDS = new Set([
   "with",
 ]);
 
-const MONTH_INDEX = new Map(
-  [
-    ["january", 0],
-    ["jan", 0],
-    ["february", 1],
-    ["feb", 1],
-    ["march", 2],
-    ["mar", 2],
-    ["april", 3],
-    ["apr", 3],
-    ["may", 4],
-    ["june", 5],
-    ["jun", 5],
-    ["july", 6],
-    ["jul", 6],
-    ["august", 7],
-    ["aug", 7],
-    ["september", 8],
-    ["sep", 8],
-    ["sept", 8],
-    ["october", 9],
-    ["oct", 9],
-    ["november", 10],
-    ["nov", 10],
-    ["december", 11],
-    ["dec", 11],
-  ] as const,
-);
+const MONTH_INDEX: Record<string, number> = {
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
+  may: 4,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sept: 8,
+  sep: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
+};
 
-const MONTH_PATTERN =
-  "january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|november|nov|december|dec";
+const MONTH_PATTERN = Object.keys(MONTH_INDEX).join("|");
 
 function emptyFacets(): SmartQueryFacets {
   return {
@@ -370,6 +367,10 @@ function unique<T>(values: readonly T[]) {
   return [...new Set(values)];
 }
 
+function pushUnique<T>(target: T[], value: T) {
+  if (!target.includes(value)) target.push(value);
+}
+
 function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -393,10 +394,8 @@ function formatIsoDate(year: number, month: number, day: number) {
 
 function parseNaturalDate(value: string, now: Date) {
   const normalized = normalizeSmartQueryText(value).replace(/,/g, "");
-  const isoMatch = normalized.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
-  if (isoMatch) {
-    return formatIsoDate(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
-  }
+  const iso = normalized.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) return formatIsoDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
 
   const monthFirst = normalized.match(
     new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(20\\d{2}))?\\b`, "i"),
@@ -407,10 +406,10 @@ function parseNaturalDate(value: string, now: Date) {
   const match = monthFirst ?? dayFirst;
   if (!match) return null;
 
-  const monthName = monthFirst ? match[1] : match[2];
-  const month = MONTH_INDEX.get(monthName.toLowerCase());
+  const monthName = (monthFirst ? match[1] : match[2]).toLowerCase();
+  const month = MONTH_INDEX[monthName];
   const day = Number(monthFirst ? match[2] : match[1]);
-  const explicitYear = Number(monthFirst ? match[3] : match[3]);
+  const explicitYear = Number(match[3]);
   if (month === undefined || !Number.isInteger(day)) return null;
 
   let year = Number.isInteger(explicitYear) && explicitYear >= 2000
@@ -418,13 +417,9 @@ function parseNaturalDate(value: string, now: Date) {
     : now.getUTCFullYear();
   let result = formatIsoDate(year, month, day);
   if (!result) return null;
-
-  if (!explicitYear) {
-    const nowDate = now.toISOString().slice(0, 10);
-    if (result < nowDate) {
-      year += 1;
-      result = formatIsoDate(year, month, day);
-    }
+  if (!explicitYear && result < now.toISOString().slice(0, 10)) {
+    year += 1;
+    result = formatIsoDate(year, month, day);
   }
   return result;
 }
@@ -432,11 +427,15 @@ function parseNaturalDate(value: string, now: Date) {
 function parseScaledNumber(rawValue: string, rawScale = "") {
   const numeric = Number(rawValue.replace(/,/g, ""));
   if (!Number.isFinite(numeric) || numeric < 0) return null;
-  const scale = rawScale.toLowerCase() === "m" ? 1_000_000 : rawScale.toLowerCase() === "k" ? 1_000 : 1;
+  const scale = rawScale.toLowerCase() === "m"
+    ? 1_000_000
+    : rawScale.toLowerCase() === "k"
+      ? 1_000
+      : 1;
   return Math.round(numeric * scale * 100);
 }
 
-function levenshtein(left: string, right: string) {
+function editDistance(left: string, right: string) {
   if (left === right) return 0;
   if (!left.length) return right.length;
   if (!right.length) return left.length;
@@ -445,11 +444,11 @@ function levenshtein(left: string, right: string) {
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
     current[0] = leftIndex;
     for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-      const substitution = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
       current[rightIndex] = Math.min(
         current[rightIndex - 1] + 1,
         previous[rightIndex] + 1,
-        previous[rightIndex - 1] + substitution,
+        previous[rightIndex - 1] +
+          (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
       );
     }
     previous.splice(0, previous.length, ...current);
@@ -460,7 +459,8 @@ function levenshtein(left: string, right: string) {
 function fuzzyTokenMatch(left: string, right: string) {
   if (left === right || left.includes(right) || right.includes(left)) return true;
   const maximumDistance = Math.max(left.length, right.length) >= 8 ? 2 : 1;
-  return Math.min(left.length, right.length) >= 4 && levenshtein(left, right) <= maximumDistance;
+  return Math.min(left.length, right.length) >= 4 &&
+    editDistance(left, right) <= maximumDistance;
 }
 
 function aliasMatches(normalizedQuery: string, alias: string) {
@@ -489,28 +489,22 @@ export function getSmartQueryCauseAliases(id: string) {
   return cause ? [cause.label, ...cause.aliases] : [id];
 }
 
-function inferIntent(normalizedQuery: string, surface: SmartQuerySurface): SmartQueryIntent {
+function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryIntent {
   if (surface !== "global") return surface;
-  if (/\b(member|members|person|people|participant|participants|counterparties|counterparty|who)\b/.test(normalizedQuery)) {
+  if (/\b(member|members|person|people|participant|participants|counterparties|counterparty|who)\b/.test(query)) {
     return "people";
   }
-  if (/\b(wish|wishes|wish registry|private match|introduction)\b/.test(normalizedQuery)) {
-    return "wishes";
-  }
-  if (/\b(evidence|proof|receipt|receipts|attestation|verification record|ledger)\b/.test(normalizedQuery)) {
+  if (/\b(wish|wishes|wish registry|private match|introduction)\b/.test(query)) return "wishes";
+  if (/\b(evidence|proof|receipt|receipts|attestation|verification record|ledger)\b/.test(query)) {
     return "evidence";
   }
-  if (/\b(mpgf|moral public goods fund|consensus good|hybrid good)\b/.test(normalizedQuery)) {
+  if (/\b(mpgf|moral public goods fund|consensus good|hybrid good)\b/.test(query)) {
     return "mpgf_pools";
   }
-  if (/\b(pool|pools|threshold|conditional funding|group buying|group-buying)\b/.test(normalizedQuery)) {
+  if (/\b(pool|pools|threshold|conditional funding|group buying|group-buying)\b/.test(query)) {
     return "pools";
   }
   return "offers";
-}
-
-function pushUnique<T>(target: T[], value: T) {
-  if (!target.includes(value)) target.push(value);
 }
 
 function countConstraints(facets: SmartQueryFacets) {
@@ -534,36 +528,33 @@ function countConstraints(facets: SmartQueryFacets) {
 }
 
 function firstMaterialClarification(
-  codes: string[],
+  reasonCodes: readonly string[],
   facets: SmartQueryFacets,
 ): SmartQueryClarification | null {
-  if (codes.includes("ambiguous_amount")) {
+  if (reasonCodes.includes("ambiguous_amount")) {
     return {
       field: "amount",
       question: "Should the stated amount be a maximum, a minimum, or an exact amount?",
       options: ["Maximum", "Minimum", "Exact amount"],
     };
   }
-  if (codes.includes("conflicting_amount_bounds")) {
+  if (reasonCodes.includes("conflicting_amount_bounds")) {
     return {
       field: "amount",
       question: "The minimum is above the maximum. Which spending limit should apply?",
     };
   }
-  if (codes.includes("ambiguous_date")) {
+  if (reasonCodes.includes("ambiguous_date")) {
     return {
       field: "deadline",
       question: "Should that date be treated as a deadline, a start date, or an exact date?",
       options: ["Deadline", "Start date", "Exact date"],
     };
   }
-  if (codes.includes("near_me_without_location")) {
-    return {
-      field: "location",
-      question: "Which city or region should “near me” use?",
-    };
+  if (reasonCodes.includes("near_me_without_location")) {
+    return { field: "location", question: "Which city or region should “near me” use?" };
   }
-  if (codes.includes("conflicting_verification")) {
+  if (reasonCodes.includes("conflicting_verification")) {
     return {
       field: "verified",
       question: "Should results require verification or exclude verified records?",
@@ -590,7 +581,7 @@ function consumeMatch(
   return working.replace(match[0], " ").replace(/\s+/g, " ").trim();
 }
 
-function extractDateConstraint(
+function extractDateConstraints(
   working: string,
   now: Date,
   facets: SmartQueryFacets,
@@ -598,24 +589,32 @@ function extractDateConstraint(
   ambiguityCodes: string[],
 ) {
   const dateBody = `(?:${MONTH_PATTERN})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+20\\d{2})?|\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${MONTH_PATTERN})(?:,?\\s+20\\d{2})?|20\\d{2}-\\d{1,2}-\\d{1,2}`;
-  const beforePattern = new RegExp(`\\b(before|by|until|through|no later than|deadline(?: is| of|:)?)\\s+(${dateBody})`, "i");
-  const afterPattern = new RegExp(`\\b(after|since|from|no earlier than|starting)\\s+(${dateBody})`, "i");
-  const beforeMatch = working.match(beforePattern);
-  if (beforeMatch) {
-    const parsed = parseNaturalDate(beforeMatch[2], now);
+  const beforePattern = new RegExp(
+    `\\b(before|by|until|through|no later than|deadline(?: is| of|:)?)\\s+(${dateBody})`,
+    "i",
+  );
+  const afterPattern = new RegExp(
+    `\\b(after|since|from|no earlier than|starting)\\s+(${dateBody})`,
+    "i",
+  );
+
+  const before = working.match(beforePattern);
+  if (before) {
+    const parsed = parseNaturalDate(before[2], now);
     if (parsed) {
       facets.deadlineBefore = parsed;
-      facets.deadlineBeforeInclusive = !/^before$/i.test(beforeMatch[1]);
-      working = consumeMatch(working, beforeMatch, recognizedPhrases);
+      facets.deadlineBeforeInclusive = !/^before$/i.test(before[1]);
+      working = consumeMatch(working, before, recognizedPhrases);
     }
   }
-  const afterMatch = working.match(afterPattern);
-  if (afterMatch) {
-    const parsed = parseNaturalDate(afterMatch[2], now);
+
+  const after = working.match(afterPattern);
+  if (after) {
+    const parsed = parseNaturalDate(after[2], now);
     if (parsed) {
       facets.deadlineAfter = parsed;
-      facets.deadlineAfterInclusive = !/^after$/i.test(afterMatch[1]);
-      working = consumeMatch(working, afterMatch, recognizedPhrases);
+      facets.deadlineAfterInclusive = !/^after$/i.test(after[1]);
+      working = consumeMatch(working, after, recognizedPhrases);
     }
   }
 
@@ -633,11 +632,9 @@ function extractMoneyConstraints(
   ambiguityCodes: string[],
 ) {
   const number = "([0-9]+(?:,[0-9]{3})*(?:\\.[0-9]{1,2})?)\\s*([km]?)";
-  const rangePattern = new RegExp(
-    `(?:\\$|usd\\s*)${number}\\s*(?:-|to|through)\\s*(?:\\$|usd\\s*)?${number}`,
-    "i",
+  const range = working.match(
+    new RegExp(`(?:\\$|usd\\s*)${number}\\s*(?:-|to|through)\\s*(?:\\$|usd\\s*)?${number}`, "i"),
   );
-  const range = working.match(rangePattern);
   if (range) {
     const first = parseScaledNumber(range[1], range[2]);
     const second = parseScaledNumber(range[3], range[4]);
@@ -650,11 +647,12 @@ function extractMoneyConstraints(
     }
   }
 
-  const maximumPattern = new RegExp(
-    `\\b(under|below|less than|no more than|at most|up to|maximum(?: of)?|max(?:imum)?(?: of)?)\\s*(?:usd\\s*)?\\$?\\s*${number}`,
-    "i",
+  const maximum = working.match(
+    new RegExp(
+      `\\b(under|below|less than|no more than|at most|up to|maximum(?: of)?|max(?:imum)?(?: of)?)\\s*(?:usd\\s*)?\\$?\\s*${number}`,
+      "i",
+    ),
   );
-  const maximum = working.match(maximumPattern);
   if (maximum) {
     const cents = parseScaledNumber(maximum[2], maximum[3]);
     if (cents !== null) {
@@ -676,11 +674,12 @@ function extractMoneyConstraints(
     }
   }
 
-  const minimumPattern = new RegExp(
-    `\\b(over|above|more than|at least|minimum(?: of)?|min(?:imum)?(?: of)?)\\s*(?:usd\\s*)?\\$?\\s*${number}`,
-    "i",
+  const minimum = working.match(
+    new RegExp(
+      `\\b(over|above|more than|at least|minimum(?: of)?|min(?:imum)?(?: of)?)\\s*(?:usd\\s*)?\\$?\\s*${number}`,
+      "i",
+    ),
   );
-  const minimum = working.match(minimumPattern);
   if (minimum) {
     const cents = parseScaledNumber(minimum[2], minimum[3]);
     if (cents !== null) {
@@ -697,8 +696,9 @@ function extractMoneyConstraints(
     working = consumeMatch(working, free, recognizedPhrases);
   }
 
-  const standaloneAmount = working.match(new RegExp(`(?:usd\\s*)?\\$\\s*${number}`, "i"));
-  if (standaloneAmount) ambiguityCodes.push("ambiguous_amount");
+  if (working.match(new RegExp(`(?:usd\\s*)?\\$\\s*${number}`, "i"))) {
+    ambiguityCodes.push("ambiguous_amount");
+  }
   return working;
 }
 
@@ -735,16 +735,15 @@ export function parseSmartQuery(
     ambiguityCodes.push("conflicting_verification");
   } else if (positiveVerification || negativeVerification) {
     facets.verified = positiveVerification;
-    const match = working.match(
-      positiveVerification
-        ? /\b(verified|verification required|reviewed|evidence[- ]backed|proof[- ]backed|with proof|independently checked)\b/i
-        : /\b(unverified|not verified|without verification|no proof required|exclude verified)\b/i,
-    );
+    const pattern = positiveVerification
+      ? /\b(verified|verification required|reviewed|evidence[- ]backed|proof[- ]backed|with proof|independently checked)\b/i
+      : /\b(unverified|not verified|without verification|no proof required|exclude verified)\b/i;
+    const match = working.match(pattern);
     if (match) working = consumeMatch(working, match, recognizedPhrases);
   }
 
   working = extractMoneyConstraints(working, facets, recognizedPhrases, ambiguityCodes);
-  working = extractDateConstraint(working, now, facets, recognizedPhrases, ambiguityCodes);
+  working = extractDateConstraints(working, now, facets, recognizedPhrases, ambiguityCodes);
 
   const actionPatterns: ReadonlyArray<[SmartQueryActionType, RegExp]> = [
     ["pledge", /\b(pledge|pledges|pledge swap|reciprocal action|commitment swap)\b/i],
@@ -782,10 +781,10 @@ export function parseSmartQuery(
     working = consumeMatch(working, pledgeOpen, recognizedPhrases);
   }
 
-  const creditMatch = working.match(/\b(?:credit(?: score)?|score)\s*(?:of\s*)?(?:at least|over|above|>=|minimum)?\s*(\d{1,3})\+?\b/i);
-  if (creditMatch) {
-    facets.minCredit = Math.min(100, Number(creditMatch[1]));
-    working = consumeMatch(working, creditMatch, recognizedPhrases);
+  const credit = working.match(/\b(?:credit(?: score)?|score)\s*(?:of\s*)?(?:at least|over|above|>=|minimum)?\s*(\d{1,3})\+?\b/i);
+  if (credit) {
+    facets.minCredit = Math.min(100, Number(credit[1]));
+    working = consumeMatch(working, credit, recognizedPhrases);
   }
 
   const evidencePatterns: ReadonlyArray<[SmartQueryEvidenceState, RegExp]> = [
@@ -827,10 +826,10 @@ export function parseSmartQuery(
     break;
   }
 
-  const locationMatch = working.match(/\b(?:in|near|around)\s+([a-z][a-z .'-]{2,50})$/i);
-  if (locationMatch && !/^me$/i.test(locationMatch[1].trim())) {
-    facets.location = locationMatch[1].trim();
-    working = consumeMatch(working, locationMatch, recognizedPhrases);
+  const location = working.match(/\b(?:in|near|around)\s+([a-z][a-z .'-]{2,50})$/i);
+  if (location && !/^me$/i.test(location[1].trim())) {
+    facets.location = location[1].trim();
+    working = consumeMatch(working, location, recognizedPhrases);
   } else if (/\bnear me\b/i.test(normalizedQuery)) {
     ambiguityCodes.push("near_me_without_location");
   }
@@ -850,20 +849,20 @@ export function parseSmartQuery(
     ...facets.causes.flatMap((id) => getSmartQueryCauseAliases(id).flatMap(smartQueryTokens)),
   ]);
   const parsedConstraintCount = countConstraints(facets);
-  const clarification = firstMaterialClarification(unique(ambiguityCodes), facets);
+  const uniqueAmbiguities = unique(ambiguityCodes);
+  const clarification = firstMaterialClarification(uniqueAmbiguities, facets);
   const needsClarification = Boolean(clarification);
 
   if (parsedConstraintCount) reasonCodes.push("deterministic_constraints");
   if (facets.causes.length) reasonCodes.push("semantic_cause_resolution");
   if (residualTerms.length) reasonCodes.push("residual_semantic_search");
   if (surface === "global") reasonCodes.push(`routed_to_${intent}`);
-  reasonCodes.push(...unique(ambiguityCodes));
+  reasonCodes.push(...uniqueAmbiguities);
 
   let confidence = surface === "global" ? 0.92 : 0.95;
   if (!normalizedQuery) confidence = 1;
   if (facets.causes.length || parsedConstraintCount >= 2) confidence += 0.03;
   if (needsClarification) confidence = Math.min(confidence, 0.78);
-  confidence = clamp(confidence);
 
   return {
     version: SMART_QUERY_VERSION,
@@ -873,11 +872,11 @@ export function parseSmartQuery(
     intent,
     route: ROUTES[intent],
     stage: facets.causes.length || residualTerms.length ? "semantic" : "deterministic",
-    confidence,
+    confidence: clamp(confidence),
     facets,
     semanticTerms,
     residualTerms,
-    recognizedPhrases: unique(recognizedPhrases.map((phrase) => phrase.trim()).filter(Boolean)),
+    recognizedPhrases: unique(recognizedPhrases.map((value) => value.trim()).filter(Boolean)),
     parsedConstraintCount,
     needsClarification,
     clarification,
@@ -908,11 +907,19 @@ export function serializeSmartQueryFacets(
     params.set("deadline_after_inclusive", facets.deadlineAfterInclusive ? "1" : "0");
   }
   if (facets.actionTypes.length) params.set("action_types", facets.actionTypes.join(","));
-  if (facets.participantKinds.length) params.set("participant_kinds", facets.participantKinds.join(","));
-  if (facets.openToPayment !== null) params.set("open_to_payment", facets.openToPayment ? "1" : "0");
-  if (facets.openToPledges !== null) params.set("open_to_pledges", facets.openToPledges ? "1" : "0");
+  if (facets.participantKinds.length) {
+    params.set("participant_kinds", facets.participantKinds.join(","));
+  }
+  if (facets.openToPayment !== null) {
+    params.set("open_to_payment", facets.openToPayment ? "1" : "0");
+  }
+  if (facets.openToPledges !== null) {
+    params.set("open_to_pledges", facets.openToPledges ? "1" : "0");
+  }
   if (facets.minCredit !== null) params.set("min_credit", String(facets.minCredit));
-  if (facets.evidenceStates.length) params.set("evidence_states", facets.evidenceStates.join(","));
+  if (facets.evidenceStates.length) {
+    params.set("evidence_states", facets.evidenceStates.join(","));
+  }
   if (facets.poolKinds.length) params.set("pool_kinds", facets.poolKinds.join(","));
   if (facets.location) params.set("location", facets.location);
   if (facets.sort) params.set("smart_sort", facets.sort);
@@ -927,15 +934,11 @@ export function buildSmartQueryTarget(interpretation: SmartQueryInterpretation) 
     : "q";
   if (interpretation.originalQuery) params.set(queryName, interpretation.originalQuery);
   serializeSmartQueryFacets(params, interpretation.facets);
-
   if (interpretation.intent === "offers") params.set("view", "live");
   if (interpretation.intent === "discover") {
-    const domain = interpretation.facets.actionTypes.includes("pool") ? "pools" : "offers";
-    params.set("domain", domain);
+    params.set("domain", interpretation.facets.actionTypes.includes("pool") ? "pools" : "offers");
   }
-
-  const query = params.toString();
-  return query ? `${interpretation.route}?${query}` : interpretation.route;
+  return `${interpretation.route}?${params.toString()}`;
 }
 
 export function parseSerializedSmartQueryFacets(
@@ -958,10 +961,10 @@ export function parseSerializedSmartQueryFacets(
   };
   const boolean = (key: string) => read(key) === "1" ? true : read(key) === "0" ? false : null;
   const date = (key: string) => /^20\d{2}-\d{2}-\d{2}$/.test(read(key)) ? read(key) : null;
-  const knownCauseIds = CAUSES.map((cause) => cause.id);
+  const causeIds = CAUSES.map((cause) => cause.id);
 
   return {
-    causes: list("smart_causes", knownCauseIds),
+    causes: list("smart_causes", causeIds),
     verified: boolean("verified"),
     minAmountCents: integer("min_amount_cents"),
     minAmountInclusive: boolean("min_amount_inclusive") ?? true,
@@ -1020,16 +1023,18 @@ export function semanticTextScore(
     for (const field of fields) {
       const normalizedField = normalizeSmartQueryText(field.value);
       if (!normalizedField) continue;
-      const weight = clamp(field.weight ?? 1);
-      best = Math.max(best, termScore(term, smartQueryTokens(normalizedField), normalizedField) * weight);
+      best = Math.max(
+        best,
+        termScore(term, smartQueryTokens(normalizedField), normalizedField) * clamp(field.weight ?? 1),
+      );
     }
     total += best;
   }
 
-  const normalizedOriginal = interpretation.normalizedQuery;
   const phraseBonus = fields.some((field) => {
     const normalizedField = normalizeSmartQueryText(field.value);
-    return normalizedOriginal.length >= 4 && normalizedField.includes(normalizedOriginal);
+    return interpretation.normalizedQuery.length >= 4 &&
+      normalizedField.includes(interpretation.normalizedQuery);
   })
     ? 0.1
     : 0;
@@ -1041,14 +1046,9 @@ export function smartQueryCauseScore(
   fields: readonly WeightedSemanticField[],
 ) {
   if (!causeIds.length) return 0.5;
-  const scores = causeIds.map((id) => {
-    const aliases = getSmartQueryCauseAliases(id);
-    return Math.max(
-      ...aliases.map((alias) =>
-        semanticTextScore(alias, fields),
-      ),
-    );
-  });
+  const scores = causeIds.map((id) =>
+    Math.max(...getSmartQueryCauseAliases(id).map((alias) => semanticTextScore(alias, fields))),
+  );
   return scores.reduce((sum, score) => sum + score, 0) / scores.length;
 }
 
@@ -1097,15 +1097,21 @@ export function matchesSmartDeadlineConstraint(
   const parsed = deadline instanceof Date ? deadline : new Date(deadline);
   if (!Number.isFinite(parsed.getTime())) return options.unknownMatches ?? false;
   const value = parsed.toISOString().slice(0, 10);
-  if (facets.deadlineBefore) {
-    if (facets.deadlineBeforeInclusive ? value > facets.deadlineBefore : value >= facets.deadlineBefore) {
-      return false;
-    }
+  if (
+    facets.deadlineBefore &&
+    (facets.deadlineBeforeInclusive
+      ? value > facets.deadlineBefore
+      : value >= facets.deadlineBefore)
+  ) {
+    return false;
   }
-  if (facets.deadlineAfter) {
-    if (facets.deadlineAfterInclusive ? value < facets.deadlineAfter : value <= facets.deadlineAfter) {
-      return false;
-    }
+  if (
+    facets.deadlineAfter &&
+    (facets.deadlineAfterInclusive
+      ? value < facets.deadlineAfter
+      : value <= facets.deadlineAfter)
+  ) {
+    return false;
   }
   return true;
 }
@@ -1134,11 +1140,11 @@ export function getSmartPersonalFit(
   causeIds: readonly string[],
   personalPriorities: readonly string[],
 ) {
-  if (!personalPriorities.length || !causeIds.length) return 0.5;
-  const priorityFields = personalPriorities.map((value) => ({ value, weight: 1 }));
+  if (!causeIds.length || !personalPriorities.length) return 0.5;
+  const fields = personalPriorities.map((value) => ({ value, weight: 1 }));
   return Math.max(
     ...causeIds.map((id) =>
-      Math.max(...getSmartQueryCauseAliases(id).map((alias) => semanticTextScore(alias, priorityFields))),
+      Math.max(...getSmartQueryCauseAliases(id).map((alias) => semanticTextScore(alias, fields))),
     ),
   );
 }
