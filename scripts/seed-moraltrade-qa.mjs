@@ -107,70 +107,58 @@ async function main() {
     password,
   });
 
+  // This deterministic offer is the root of the QA transaction graph. Production
+  // foreign keys cascade its deletion through interests, carts, comments,
+  // agreements, and agreement events, making a rerun a clean QA reset.
+  const { error: resetError } = await supabase
+    .from("offers")
+    .delete()
+    .eq("id", QA_OFFER_ID);
+  if (resetError) throw resetError;
+
   const now = new Date().toISOString();
-  const { error: offerError } = await supabase.from("offers").upsert(
-    {
-      id: QA_OFFER_ID,
-      owner_id: owner.id,
-      owner_alias: "QA Offer Owner",
-      mode: "pledge",
-      offered_cause: "Global health",
-      requested_cause: "Animal welfare",
-      offer_action:
-        "Review a two-page public report and provide a five-bullet, public-safe summary.",
-      request_action:
-        "Complete one documented animal-welfare action from an agreed bounded list.",
-      compromise_cause: "Mutually agreed evidence quality",
-      offer_impact: 2,
-      min_counterparty_impact: 2,
-      verification:
-        "Timestamped public-safe summary plus a receipt or participant attestation for the reciprocal action.",
-      duration: "14 days after both parties confirm the final terms",
-      trust_level: 1,
-      notes:
-        "Synthetic QA fixture. No payment, donation, sensitive evidence, or real-world beneficiary is involved.",
-      discount_note:
-        "Bounded to one short report summary and one reversible animal-welfare action.",
-      status: "open",
-      workflow_status: "published",
-      moderation_reason: "",
-      submission_key: "qa-pr-158-marketplace-fixture",
-      fingerprint: "qa-pr-158-marketplace-fixture-v1",
-      no_trade_baseline:
-        "Without a match, neither QA participant performs a new action and the fixture remains an unaccepted proposal.",
-      exit_conditions:
-        "Either participant may decline before acceptance. After acceptance, future obligations may be cancelled through the recorded agreement flow.",
-      maximum_burden:
-        "At most one five-bullet summary and one reversible, non-financial action; no payment or sensitive evidence.",
-      privacy_scope:
-        "Public-safe proposal terms; messages, account data, and any test evidence remain participant or reviewer only.",
-      submitted_at: now,
-      published_at: now,
-      closed_at: null,
-      deleted_at: null,
-      terms_version: 1,
-    },
-    { onConflict: "id" },
-  );
+  const { error: offerError } = await supabase.from("offers").insert({
+    id: QA_OFFER_ID,
+    owner_id: owner.id,
+    owner_alias: "QA Offer Owner",
+    mode: "pledge",
+    offered_cause: "Global health",
+    requested_cause: "Animal welfare",
+    offer_action:
+      "Review a two-page public report and provide a five-bullet, public-safe summary.",
+    request_action:
+      "Complete one documented animal-welfare action from an agreed bounded list.",
+    compromise_cause: "Mutually agreed evidence quality",
+    offer_impact: 2,
+    min_counterparty_impact: 2,
+    verification:
+      "Timestamped public-safe summary plus a receipt or participant attestation for the reciprocal action.",
+    duration: "14 days after both parties confirm the final terms",
+    trust_level: 1,
+    notes:
+      "Synthetic QA fixture. No payment, donation, sensitive evidence, or real-world beneficiary is involved.",
+    discount_note:
+      "Bounded to one short report summary and one reversible animal-welfare action.",
+    status: "open",
+    workflow_status: "published",
+    moderation_reason: "",
+    submission_key: "qa-pr-158-marketplace-fixture",
+    fingerprint: "qa-pr-158-marketplace-fixture-v1",
+    no_trade_baseline:
+      "Without a match, neither QA participant performs a new action and the fixture remains an unaccepted proposal.",
+    exit_conditions:
+      "Either participant may decline before acceptance. After acceptance, future obligations may be cancelled through the recorded agreement flow.",
+    maximum_burden:
+      "At most one five-bullet summary and one reversible, non-financial action; no payment or sensitive evidence.",
+    privacy_scope:
+      "Public-safe proposal terms; messages, account data, and any test evidence remain participant or reviewer only.",
+    submitted_at: now,
+    published_at: now,
+    closed_at: null,
+    deleted_at: null,
+    terms_version: 1,
+  });
   if (offerError) throw offerError;
-
-  const { error: cleanupInterestError } = await supabase
-    .from("interests")
-    .delete()
-    .eq("offer_id", QA_OFFER_ID);
-  if (cleanupInterestError) throw cleanupInterestError;
-
-  const { error: cleanupCartError } = await supabase
-    .from("offer_carts")
-    .delete()
-    .eq("offer_id", QA_OFFER_ID);
-  if (cleanupCartError) throw cleanupCartError;
-
-  const { error: cleanupCommentError } = await supabase
-    .from("offer_comments")
-    .delete()
-    .eq("offer_id", QA_OFFER_ID);
-  if (cleanupCommentError) throw cleanupCommentError;
 
   console.log(
     JSON.stringify(
