@@ -15,6 +15,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  start:
+    if: github.event.pull_request.number == 174
+    name: Announce trusted launch gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "Trusted launch gates started for exact head \`$HEAD_SHA\` in workflow run \`$RUN_ID\`."
+
+  source:
+    if: github.event.pull_request.number == 174
+    name: Preserve exact release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Package release source and migrations
+        run: |
+          tar -czf trusted-launch-source.tar.gz \
+            .github/workflows/core-launch-gates.yml \
+            package.json package-lock.json playwright.config.ts vercel.json \
+            scripts/core-test-quarantine.json scripts/run-core-tests.mjs scripts/run-quarantined-tests.mjs \
+            src/app/api/health src/app/core-trade-actions.ts src/app/core-trade-actions-hardened.ts \
+            src/app/trade-agreements src/app/trades/new \
+            src/components/core-trade/trade-draft-workbench-hardened.tsx \
+            src/lib/core-health.ts src/lib/supabase/auth-errors.ts src/lib/supabase/server.ts \
+            supabase/migrations/20260723090000_core_launch_security_performance_health.sql \
+            supabase/migrations/20260723090100_core_launch_atomic_discussion_and_terms.sql \
+            supabase/migrations/20260723090200_core_launch_atomic_evidence.sql \
+            supabase/migrations/20260723090300_core_launch_atomic_completion_exit.sql \
+            supabase/migrations/20260723090400_core_launch_guard_fixes.sql \
+            supabase/migrations/20260723090500_core_launch_final_grant_cutover.sql \
+            supabase/tests/core_launch_workflow.sql \
+            tests/core-launch-release.spec.ts
+      - name: Upload exact release source
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-launch-source-${{ github.event.pull_request.head.sha }}
+          path: trusted-launch-source.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
   tests:
     if: github.event.pull_request.number == 174
     name: Trusted repository tests
@@ -142,6 +194,7 @@ jobs:
     if: always() && github.event.pull_request.number == 174
     name: Report trusted launch gates
     needs:
+      - source
       - tests
       - lint
       - build
@@ -154,20 +207,24 @@ jobs:
       - name: Post exact-head gate results
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_RESULT: ${{ needs.source.result }}
           TEST_RESULT: ${{ needs.tests.result }}
           LINT_RESULT: ${{ needs.lint.result }}
           BUILD_RESULT: ${{ needs.build.result }}
           PLAYWRIGHT_RESULT: ${{ needs.playwright.result }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
           body=$(cat <<EOF
           ### Trusted launch gate run
 
-          Exact head: \`$HEAD_SHA\`
+          Exact head: \`$HEAD_SHA\`  
+          Workflow run: \`$RUN_ID\`
 
           | Gate | Result |
           |---|---|
+          | Exact source artifact | $SOURCE_RESULT |
           | Repository tests | $TEST_RESULT |
           | Repository lint | $LINT_RESULT |
           | Production build | $BUILD_RESULT |
