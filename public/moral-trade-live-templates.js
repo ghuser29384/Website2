@@ -5,6 +5,7 @@
   window.__MT_TRADE_TEMPLATE_NAVIGATION__ = true;
 
   const libraryHref = "/offers?view=templates";
+  const overflowLabels = new Set(["...", "…"]);
 
   function normalizeLabel(value) {
     return String(value || "")
@@ -21,6 +22,34 @@
     );
   }
 
+  function isOverflowControl(element) {
+    return (
+      element instanceof HTMLElement &&
+      element.matches("button, a") &&
+      overflowLabels.has(normalizeLabel(element.textContent))
+    );
+  }
+
+  function removeAdjacentOverflowControl(templateControl) {
+    const controlGroup = templateControl.parentElement;
+    if (!controlGroup) return;
+
+    Array.from(controlGroup.children).forEach((candidate) => {
+      if (candidate === templateControl) return;
+
+      if (isOverflowControl(candidate)) {
+        candidate.remove();
+        return;
+      }
+
+      if (!(candidate instanceof HTMLElement)) return;
+      const nestedControls = Array.from(candidate.querySelectorAll("button, a"));
+      if (nestedControls.length === 1 && isOverflowControl(nestedControls[0])) {
+        candidate.remove();
+      }
+    });
+  }
+
   function prepareControls(root) {
     const scope = root instanceof Element || root instanceof Document ? root : document;
     scope.querySelectorAll("button, a").forEach((control) => {
@@ -28,6 +57,7 @@
       control.setAttribute("aria-label", "Open trade template library");
       control.setAttribute("title", "Choose a template and open a prefilled editable draft");
       control.setAttribute("data-mt-template-library", "true");
+      removeAdjacentOverflowControl(control);
     });
   }
 
