@@ -5,8 +5,10 @@ on:
     paths:
       - "src/lib/smart-query*"
       - "src/lib/smart-discovery-ranking.ts"
+      - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
       - "src/app/api/query/**"
+      - "src/app/layout.tsx"
       - "src/app/offers/**"
       - "src/app/people/**"
       - "src/app/wish-registry/**"
@@ -60,14 +62,19 @@ jobs:
             src/lib/smart-query-clarification.ts \
             src/lib/smart-query-facets.ts \
             src/lib/smart-query-llm.ts \
+            src/lib/smart-query-personalization.ts \
             src/lib/smart-query-records.ts \
             src/lib/smart-query-scoring.ts \
             src/lib/smart-query.test.ts \
             src/lib/smart-discovery-ranking.ts \
+            src/lib/smart-people-ranking.ts \
             src/lib/site-search-smart.ts \
             src/app/api/query/interpret/route.ts \
+            src/app/layout.tsx \
             src/app/offers/page.tsx \
+            src/app/people/page.tsx \
             src/components/layout/site-topbar.tsx \
+            src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
             tests/discover-query-audit.spec.ts 2>&1 | tee test-results/smart-query-lint.txt
 
