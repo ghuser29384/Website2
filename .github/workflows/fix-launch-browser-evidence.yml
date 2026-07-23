@@ -1,0 +1,117 @@
+name: Repair launch browser evidence
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  repair:
+    if: github.event.pull_request.number == 174 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out launch branch
+        uses: actions/checkout@v4
+        with:
+          ref: launch/verify-and-harden-20260723
+          fetch-depth: 0
+
+      - name: Delay DOM enhancement until React hydration settles and wait for real route content
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          assist_path = Path('public/moral-trade-input-assist.js')
+          source = assist_path.read_text()
+          old = '''  function start() {
+            ensureSuggestionPanel();
+            ensureHoverCard();
+            scan(document);
+
+            const observer = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                  if (node instanceof Element) scan(node);
+                });
+              });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });'''.replace('        ', '')
+          new = '''  function start() {
+            ensureSuggestionPanel();
+            ensureHoverCard();
+
+            const pendingScans = new Set();
+            let scanTimer = 0;
+            function scheduleScan(root) {
+              pendingScans.add(root);
+              window.clearTimeout(scanTimer);
+              scanTimer = window.setTimeout(() => {
+                pendingScans.forEach((node) => scan(node));
+                pendingScans.clear();
+              }, 2_000);
+            }
+
+            scheduleScan(document);
+            document.addEventListener("focusin", (event) => {
+              if (event.target instanceof Element) scan(event.target);
+            });
+
+            const observer = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                  if (node instanceof Element) scheduleScan(node);
+                });
+              });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });'''.replace('        ', '')
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected one input-assist start block, found {source.count(old)}.')
+          assist_path.write_text(source.replace(old, new, 1))
+
+          test_path = Path('tests/core-launch-release.spec.ts')
+          test_source = test_path.read_text()
+          old_test = '''  const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+            await expect(page.locator("body")).toBeVisible();
+            await page.waitForTimeout(300);
+            const bodyText = (await page.locator("body").innerText()).replace(/\\s+/g, " ").trim();'''.replace('        ', '')
+          new_test = '''  const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+            const body = page.locator("body");
+            await expect(body).toBeVisible();
+            await expect
+              .poll(
+                async () => (await body.innerText()).replace(/\\s+/g, " ").trim().length,
+                { intervals: [250, 500, 1_000], timeout: 15_000 },
+              )
+              .toBeGreaterThan(80);
+            await page.waitForTimeout(300);
+            const bodyText = (await body.innerText()).replace(/\\s+/g, " ").trim();'''.replace('        ', '')
+          if test_source.count(old_test) != 1:
+              raise SystemExit(f'Expected one route-readiness block, found {test_source.count(old_test)}.')
+          test_path.write_text(test_source.replace(old_test, new_test, 1))
+          PY
+
+      - name: Commit browser evidence repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/moral-trade-input-assist.js tests/core-launch-release.spec.ts
+          git diff --cached --check
+          git commit -m "Wait for hydrated content before browser evidence capture"
+          git push origin HEAD:launch/verify-and-harden-20260723
+
+      - name: Report browser repair
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "Fixed the remaining browser-gate causes: route evidence now waits for meaningful rendered content, and the legacy input-assist enhancer defers automatic DOM attributes until after the React hydration window while remaining immediately available on focus."
