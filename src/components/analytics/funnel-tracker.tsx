@@ -96,6 +96,12 @@ function getTemplateMetadata(href: string) {
 }
 
 function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, unknown>) {
+  // Invitation URLs contain bearer secrets in their path. They are intentionally
+  // invisible to page-view, click, referrer, and web-vital analytics.
+  if (/^\/invitations\/[^/]+(?:\/|$)/.test(window.location.pathname)) {
+    return;
+  }
+
   if (
     document.cookie
       .split(";")

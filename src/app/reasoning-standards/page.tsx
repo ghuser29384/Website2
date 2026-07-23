@@ -129,7 +129,7 @@ export default async function ReasoningStandardsPage() {
             <h2>A valid offer should name the whole exchange</h2>
             <p>
               Public offers should show the action, reciprocal request, cause areas, minimum
-              reciprocal impact, duration, exit rule, and evidence rule. Donation offsets add a
+              reciprocal impact, duration, exit rule, and evidence requirements. Donation offsets add a
               named compromise destination, matched-redirection rule, unmatched-surplus rule,
               threshold, expiry, and anti-threat certification.
             </p>

@@ -2185,7 +2185,7 @@ export function OfferCreateForm({
       },
       {
         id: "evidence",
-        title: "Set evidence rules",
+        title: "Set evidence",
         detail: isOffset
           ? "Offset fields, evidence method, surplus rule, and pool safeguards must pass checks."
           : isPledge
@@ -2416,7 +2416,7 @@ export function OfferCreateForm({
           ratioBoundsStatus: "not_required_for_stage",
           unmatchedResidualCents: 0,
           residualNoTradeAction:
-            "No pledged action starts until a final lock proposal is confirmed.",
+            "No commitment starts until a final lock proposal is confirmed.",
           fallbackRule: pledgeWithdrawalBeforeLockRule,
           commitmentReservationStatus: "needs_review",
           doubleCountStatus: "needs_review",
@@ -2775,7 +2775,7 @@ export function OfferCreateForm({
       {canPublishOffer ? (
         <div className="status-banner status-banner-success" aria-live="polite">
           Ready to publish. Server-side checks will still verify authentication, moderation, and
-          evidence rules before the offer is saved.
+          evidence requirements before the offer is saved.
         </div>
       ) : null}
 

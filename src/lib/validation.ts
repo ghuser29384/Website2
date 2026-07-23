@@ -18,7 +18,7 @@ export const LAUNCH_WEDGE_ROUTES = [
   {
     title: "Bounded pledge swap",
     description:
-      "Trade short-horizon commitments with explicit baselines, exit conditions, and reviewable evidence rules.",
+      "Trade short-horizon commitments with explicit baselines, exit conditions, and reviewable evidence.",
     href: "/pledge-swaps",
     cta: "Draft a pledge swap",
     icon: "swap",
@@ -41,7 +41,7 @@ export const VALIDATION_STATUS_STATES = [
   },
   {
     state: "Submitted",
-    meaning: "The participant has stated the action, reciprocal request, baseline, duration, exit condition, and evidence rule.",
+    meaning: "The participant has stated the action, reciprocal request, baseline, duration, exit condition, and evidence.",
     reviewerAction: "Completeness and safety screen.",
   },
   {

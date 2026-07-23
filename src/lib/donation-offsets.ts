@@ -2219,7 +2219,7 @@ export function validateDonationOffsetExternalityEvidenceInput(
   }
 
   if (!input.participantAcknowledgedLeastIntrusiveEvidence) {
-    errors.push("Acknowledge the least-intrusive-sufficient-evidence rule.");
+    errors.push("Acknowledge the least-intrusive sufficient evidence requirement.");
   }
 
   if (!input.participantAcknowledgedNoImpactClaimFromReceipt) {

@@ -1099,7 +1099,7 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
     title: `${offer.offered_cause} for ${offer.requested_cause}`,
     summary: truncateDescription(
       offer.notes ||
-        `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules and ${baselineConfidence.toLowerCase()} baseline confidence.`,
+        `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence requirements and ${baselineConfidence.toLowerCase()} baseline confidence.`,
       260,
     ),
     format: publicFormatFromMode(offer.mode),

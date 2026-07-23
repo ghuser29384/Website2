@@ -78,12 +78,12 @@
 
         html = html.replace(
           "</head>",
-          `${firstVisitStyles}<link rel="stylesheet" href="/walkthrough-profile-enhancement.css">${accountScripts}</head>`
+          `${firstVisitStyles}<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"><link rel="stylesheet" href="/moral-trade-input-assist.css">${accountScripts}</head>`
         );
         html = html.replace("<body>", `<body>${firstVisitControl}`);
         html = html.replace(
           "</body>",
-          '<script src="/walkthrough-profile-enhancement.js"><\/script><script src="/moral-trade-brand.js"><\/script></body>'
+          '<script src="/walkthrough-profile-enhancement.js"><\/script><script src="/moral-trade-brand.js"><\/script><script src="/moral-trade-input-assist.js"><\/script></body>'
         );
 
         document.open();

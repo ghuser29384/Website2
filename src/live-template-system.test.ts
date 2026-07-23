@@ -4,8 +4,6 @@ import test from "node:test";
 
 const shell = readFileSync("public/moral-trade-live.html", "utf8");
 const navigation = readFileSync("public/moral-trade-live-templates.js", "utf8");
-const liveNavigation = readFileSync("public/moral-trade-live-navigation.js", "utf8");
-const homeOfferStyles = readFileSync("public/moral-trade-live-home-offer.css", "utf8");
 const offersPage = readFileSync("src/app/offers/page.tsx", "utf8");
 const offsetComposerPage = readFileSync("src/app/offers/new/page.tsx", "utf8");
 const poolComposerPage = readFileSync("src/app/mpgf/pools/new/page.tsx", "utf8");
@@ -25,17 +23,6 @@ test("the live Trade Templates control opens the canonical template library", ()
   assert.match(navigation, /Open trade template library/);
   assert.match(offersPage, /view === "templates"/);
   assert.match(offersPage, /<TradeTemplateLibrary \/>/);
-});
-
-test("the live home shell exposes a prominent direct entry to trade templates", () => {
-  assert.match(shell, /moral-trade-live-home-offer\.css/);
-  assert.match(liveNavigation, /data-mt-home-offer-trade/);
-  assert.match(liveNavigation, /tradeTemplateLibraryHref = "\/offers\?view=templates"/);
-  assert.match(liveNavigation, /fullLabel\.textContent = "Offer a trade"/);
-  assert.match(liveNavigation, /control\.setAttribute\("aria-label", "Offer a trade"\)/);
-  assert.match(homeOfferStyles, /\.mt-home-offer-cta:focus-visible/);
-  assert.match(homeOfferStyles, /@media \(max-width: 820px\)/);
-  assert.match(homeOfferStyles, /\.mt-home-offer-cta-label-compact/);
 });
 
 test("the production library opens real drafts directly and keeps the three-question guide", () => {

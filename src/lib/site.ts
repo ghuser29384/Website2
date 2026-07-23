@@ -3,6 +3,7 @@ export function getPrimaryNavLinks(_isAuthenticated = false) {
     { href: "/feed", label: "Feed" },
     { href: "/discover", label: "Discover" },
     { href: "/trades/new", label: "Create" },
+    { href: "/invite", label: "Invite" },
     { href: "/messages", label: "Messages" },
     { href: "/commitments", label: "Commitments" },
     { href: "/evidence", label: "Evidence" },
