@@ -13,7 +13,7 @@
   }
 
   function getQueryInput(form) {
-    return form?.querySelector('input[name="q"]');
+    return form?.querySelector('input[name="q"], input[name="command"], #command-input');
   }
 
   function getSubmitButton(form) {
@@ -294,7 +294,12 @@
 
   document.addEventListener("input", (event) => {
     const target = event.target;
-    if (target instanceof HTMLInputElement && target.name === "q") clearGenerated();
+    if (
+      target instanceof HTMLInputElement &&
+      (target.name === "q" || target.name === "command" || target.id === "command-input")
+    ) {
+      clearGenerated();
+    }
   });
 
   applyStoredSummary();
