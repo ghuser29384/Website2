@@ -40,6 +40,13 @@
   }
 
   function tokenContext(token) {
+    if (token.getAttribute("data-mt-autocomplete-disabled") === "true") return null;
+
+    const explicitContext = token.getAttribute("data-mt-autocomplete-context");
+    if (["priorities", "commitments", "evidence", "exits"].includes(explicitContext)) {
+      return explicitContext;
+    }
+
     const clause = token.closest(".clause");
     if (!clause) return null;
 
@@ -55,6 +62,8 @@
         "time",
         "behavior",
         "skill",
+        "behavior or commitment",
+        "help or service",
         "donation redirect",
         "threshold",
       ].includes(label)
