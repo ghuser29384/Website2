@@ -1,20 +1,20 @@
-name: Finalize universal Command against current main
+name: Finalize universal Command from trusted feature base
 
 on:
   pull_request:
     branches:
-      - main
+      - feat/universal-command-workspace
 
 permissions:
   contents: write
 
 concurrency:
-  group: finalize-universal-command
+  group: finalize-universal-command-from-child-pr
   cancel-in-progress: false
 
 jobs:
   finalize-verify-push:
-    if: github.head_ref == 'feat/universal-command-workspace'
+    if: github.head_ref == 'trigger/finalize-universal-command'
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
@@ -23,7 +23,7 @@ jobs:
           ref: feat/universal-command-workspace
           fetch-depth: 0
 
-      - name: Merge current main and add numeric safety guards
+      - name: Merge current main and apply final guardrails
         shell: bash
         run: |
           set -euo pipefail
@@ -31,282 +31,9 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git merge --no-edit origin/main
-          python <<'PY'
-          from pathlib import Path
-
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{label}: expected one match, found {count}")
-              return text.replace(old, new, 1)
-
-          page_path = Path('src/app/mpgf/pools/new/page.tsx')
-          page = page_path.read_text()
-          page = replace_once(
-              page,
-              '''function positiveNumber(value: string, maximum: number) {
-            const parsed = Number(value);
-            return Number.isFinite(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
-          }
-          ''',
-              '''const MAX_SAFE_FUNDING_DOLLARS = Math.floor(Number.MAX_SAFE_INTEGER / 100);
-
-          function positiveInteger(value: string, maximum: number) {
-            const parsed = Number(value);
-            return Number.isInteger(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
-          }
-
-          function positiveMoney(value: string) {
-            const parsed = Number(value);
-            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_SAFE_FUNDING_DOLLARS) return 0;
-            return Math.round(parsed * 100) / 100;
-          }
-          ''',
-              'pool numeric parser',
-          )
-          page = replace_once(
-              page,
-              '''  const commandParticipants = positiveNumber(single(resolved.participants), 1_000_000_000);
-            const commandContribution = positiveNumber(single(resolved.contribution), 1_000_000_000);
-            const commandThreshold = positiveNumber(single(resolved.threshold), 1_000_000_000);
-          ''',
-              '''  const requestedParticipants = positiveInteger(single(resolved.participants), 1_000_000_000);
-            const requestedContribution = positiveMoney(single(resolved.contribution));
-            const requestedThreshold = positiveInteger(single(resolved.threshold), 1_000_000_000);
-            const commandTermsAreSafe =
-              requestedParticipants >= 2 &&
-              requestedThreshold >= 1 &&
-              requestedThreshold <= requestedParticipants &&
-              requestedContribution > 0 &&
-              requestedContribution <= MAX_SAFE_FUNDING_DOLLARS / requestedParticipants;
-            const commandParticipants = commandTermsAreSafe ? requestedParticipants : 0;
-            const commandContribution = commandTermsAreSafe ? requestedContribution : 0;
-            const commandThreshold = commandTermsAreSafe ? requestedThreshold : 0;
-          ''',
-              'pool query safeguards',
-          )
-          page_path.write_text(page)
-
-          console_path = Path('src/components/mpgf/mpgf-console.tsx')
-          console = console_path.read_text()
-          console = replace_once(
-              console,
-              '''function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
-            const value = Number(readFormControlValue(event));
-
-            return Number.isFinite(value) ? value : 0;
-          }
-          ''',
-              '''function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
-            const value = Number(readFormControlValue(event));
-
-            return Number.isFinite(value) ? value : 0;
-          }
-
-          const MAX_SAFE_FUNDING_DOLLARS = Math.floor(Number.MAX_SAFE_INTEGER / 100);
-
-          function safeFundingProduct(count: number, amount: number) {
-            if (!Number.isInteger(count) || count <= 0 || !Number.isFinite(amount) || amount <= 0) return 0;
-            if (amount > MAX_SAFE_FUNDING_DOLLARS / count) return 0;
-            return Math.round(count * amount * 100) / 100;
-          }
-          ''',
-              'console funding helper',
-          )
-          console = replace_once(
-              console,
-              '''  const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
-          ''',
-              '''  const commandMaximumFunding = safeFundingProduct(
-            initialPoolParticipantCount,
-            initialPoolContributionAmount,
-          );
-            const commandThresholdFunding = safeFundingProduct(
-            initialPoolThresholdCount,
-            initialPoolContributionAmount,
-          );
-            const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
-          ''',
-              'console prefill totals',
-          )
-          console = replace_once(
-              console,
-              '''    initialPoolParticipantCount && initialPoolContributionAmount
-                ? initialPoolParticipantCount * initialPoolContributionAmount
-                : 50_000,
-          ''',
-              '''    commandMaximumFunding || 50_000,
-          ''',
-              'maximum funding prefill',
-          )
-          threshold_block = '''    initialPoolThresholdCount && initialPoolContributionAmount
-                ? initialPoolThresholdCount * initialPoolContributionAmount
-                : 10_000,
-          '''
-          if console.count(threshold_block) != 2:
-              raise SystemExit(f"threshold funding prefills: expected two matches, found {console.count(threshold_block)}")
-          console = console.replace(threshold_block, '''    commandThresholdFunding || 10_000,
-          ''')
-          console_path.write_text(console)
-
-          executor_path = Path('src/lib/command/executor.ts')
-          executor = executor_path.read_text()
-          executor = replace_once(
-              executor,
-              '''function number(value: unknown) {
-            return typeof value === "number" && Number.isFinite(value) ? value : null;
-          }
-          ''',
-              '''function number(value: unknown) {
-            return typeof value === "number" && Number.isFinite(value) ? value : null;
-          }
-
-          const MAX_SAFE_FUNDING_CENTS = Number.MAX_SAFE_INTEGER;
-          ''',
-              'executor safe-cent constant',
-          )
-          executor = replace_once(
-              executor,
-              '''    case "create_public_good_proposal": {
-                const params = new URLSearchParams({
-                  template: "threshold-coalition",
-                  title: text(proposal.arguments.title, 180),
-                  cause: text(proposal.arguments.cause, 180),
-                  participants: String(number(proposal.arguments.participantCount) ?? ""),
-                  contribution: String(number(proposal.arguments.contributionAmount) ?? ""),
-                  threshold: String(number(proposal.arguments.thresholdCount) ?? ""),
-                  source: "command",
-                });
-          ''',
-              '''    case "create_public_good_proposal": {
-                const participantCount = number(proposal.arguments.participantCount);
-                const contributionAmount = number(proposal.arguments.contributionAmount);
-                const thresholdCount = number(proposal.arguments.thresholdCount);
-                if (
-                  participantCount === null ||
-                  contributionAmount === null ||
-                  thresholdCount === null ||
-                  !Number.isInteger(participantCount) ||
-                  !Number.isInteger(thresholdCount) ||
-                  participantCount < 2 ||
-                  thresholdCount < 1 ||
-                  thresholdCount > participantCount
-                ) {
-                  return result(
-                    "failed",
-                    "The public-good threshold terms are inconsistent.",
-                    "No proposal or pool was created.",
-                    { blockers: ["The threshold must be a positive integer no greater than the participant count."] },
-                  );
-                }
-                const contributionCents = Math.round(contributionAmount * 100);
-                if (
-                  contributionCents <= 0 ||
-                  Math.abs(contributionAmount * 100 - contributionCents) > Number.EPSILON * 100 ||
-                  contributionCents > Math.floor(MAX_SAFE_FUNDING_CENTS / participantCount)
-                ) {
-                  return result(
-                    "failed",
-                    "The proposed contribution or total cannot be represented exactly in cents.",
-                    "No proposal or pool was created.",
-                    { blockers: ["Use a positive two-decimal contribution and reduce the participant count or contribution if needed."] },
-                  );
-                }
-                const normalizedContributionAmount = contributionCents / 100;
-                const params = new URLSearchParams({
-                  template: "threshold-coalition",
-                  title: text(proposal.arguments.title, 180),
-                  cause: text(proposal.arguments.cause, 180),
-                  participants: String(participantCount),
-                  contribution: String(normalizedContributionAmount),
-                  threshold: String(thresholdCount),
-                  source: "command",
-                });
-          ''',
-              'public-good executor guard',
-          )
-          executor_path.write_text(executor)
-
-          capabilities_path = Path('src/lib/command/capabilities.ts')
-          capabilities = capabilities_path.read_text()
-          capabilities = replace_once(
-              capabilities,
-              'contributionAmount: { type: ["number", "null"], minimum: 0 },',
-              'contributionAmount: { type: ["number", "null"], minimum: 0, maximum: Math.floor(Number.MAX_SAFE_INTEGER / 100) },',
-              'public-good contribution schema',
-          )
-          capabilities_path.write_text(capabilities)
-
-          test_path = Path('src/lib/command/executor.test.ts')
-          tests = test_path.read_text()
-          marker = 'public-good proposals reject thresholds above the participant count'
-          if marker in tests:
-              raise SystemExit('numeric safety tests already exist')
-          tests += '''
-
-test("public-good proposals reject thresholds above the participant count", async () => {
-  const output = await executeCommandProposal({
-    profileId: "00000000-0000-0000-0000-000000000001",
-    proposal: {
-      capabilityKey: "create_public_good_proposal",
-      confidence: 0.99,
-      rationale: "Threshold proposal.",
-      arguments: {
-        title: "Animal-welfare assurance pool",
-        participantCount: 100,
-        contributionAmount: 20,
-        thresholdCount: 101,
-        cause: "Animal welfare",
-      },
-    },
-  });
-  assert.equal(output.status, "failed");
-  assert.match(output.blockers[0] ?? "", /threshold/i);
-});
-
-test("public-good proposals reject totals that cannot be represented exactly in cents", async () => {
-  const output = await executeCommandProposal({
-    profileId: "00000000-0000-0000-0000-000000000001",
-    proposal: {
-      capabilityKey: "create_public_good_proposal",
-      confidence: 0.99,
-      rationale: "Very large threshold proposal.",
-      arguments: {
-        title: "Large assurance pool",
-        participantCount: 1_000_000_000,
-        contributionAmount: 1_000_000_000,
-        thresholdCount: 900_000_000,
-        cause: "Global public goods",
-      },
-    },
-  });
-  assert.equal(output.status, "failed");
-  assert.match(output.summary, /exactly in cents/i);
-});
-
-test("public-good proposals reject sub-cent contributions", async () => {
-  const output = await executeCommandProposal({
-    profileId: "00000000-0000-0000-0000-000000000001",
-    proposal: {
-      capabilityKey: "create_public_good_proposal",
-      confidence: 0.99,
-      rationale: "Sub-cent threshold proposal.",
-      arguments: {
-        title: "Micro-contribution pool",
-        participantCount: 100,
-        contributionAmount: 0.001,
-        thresholdCount: 80,
-        cause: "Global public goods",
-      },
-    },
-  });
-  assert.equal(output.status, "failed");
-  assert.match(output.summary, /exactly in cents/i);
-});
-'''
-          test_path.write_text(tests)
-          PY
-          git rm -f \
+          python .github/finalize-command.py
+          git rm -f --ignore-unmatch \
+            .github/finalize-command.py \
             .github/workflows/finalize-command-public-good-safety.yml \
             .github/workflows/sync-universal-command-with-main.yml
           git status --short
@@ -323,11 +50,12 @@ test("public-good proposals reject sub-cent contributions", async () => {
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
 
-      - name: Commit verified final implementation
+      - name: Restore registered QA workflow and push verified feature branch
         shell: bash
         run: |
           set -euo pipefail
           git checkout HEAD -- next-env.d.ts
+          git checkout origin/main -- .github/workflows/smart-query-qa.yml
           git add -A
           git commit -m "Finalize universal Command safety and main synchronization"
           git push origin HEAD:feat/universal-command-workspace
