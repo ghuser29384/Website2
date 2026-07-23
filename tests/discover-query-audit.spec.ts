@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+
 import { expect, test } from "@playwright/test";
 
 test("inspect the rendered Discover query controls", async ({ page }) => {
@@ -48,10 +50,18 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
       .filter((key) => /search|query|filter|constraint|discover/i.test(key))
       .sort();
 
-    return { controls, textMatches, globals, title: document.title, url: location.href };
+    const scripts = [...document.scripts].map((script) => ({
+      src: script.src,
+      text: script.src ? "" : script.textContent?.slice(0, 500) ?? "",
+    }));
+
+    return { controls, textMatches, globals, scripts, title: document.title, url: location.href };
   });
 
-  console.log("DISCOVER_QUERY_AUDIT_START");
-  console.log(JSON.stringify(audit, null, 2));
-  console.log("DISCOVER_QUERY_AUDIT_END");
+  await mkdir("test-results", { recursive: true });
+  await writeFile(
+    "test-results/discover-query-audit.json",
+    `${JSON.stringify(audit, null, 2)}\n`,
+    "utf8",
+  );
 });
