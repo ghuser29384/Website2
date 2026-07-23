@@ -48,7 +48,18 @@ jobs:
           cat > debug-production/production-autocomplete.spec.ts <<'TS'
           import { expect, test } from "@playwright/test";
 
-          test("production #trade serves and uses exact-live autocomplete", async ({ page }, testInfo) => {
+          test("production #trade serves and uses exact-live autocomplete", async ({ context, page }, testInfo) => {
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: ".moraltrade.org",
+                path: "/",
+                sameSite: "Lax",
+                secure: true,
+              },
+            ]);
+
             const relevantErrors: string[] = [];
             page.on("console", (message) => {
               if (message.type() !== "error") return;
