@@ -80,6 +80,10 @@
     const offeredCause = string(value.offeredCause, 120);
     const requestedCause = string(value.requestedCause, 120);
     if (!id || !offeredCause || !requestedCause) return null;
+    const metadata =
+      value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
+        ? value.metadata
+        : {};
     const opportunityType = allowedOpportunityTypes.has(value.opportunityType)
       ? value.opportunityType
       : value.mode === "offset"
@@ -121,6 +125,11 @@
         0,
         Math.floor(number(value.learnedActionSignalCount, 0, 0, 100000)),
       ),
+      assuranceMinimumCents: Math.max(
+        0,
+        Math.floor(number(metadata.assuranceMinimumCents, 0, 0, 100000000000)),
+      ),
+      offsetRatio: number(metadata.offsetRatio, 1, 0, 100000),
       saved: value.saved === true,
       updatedAt: string(value.updatedAt, 40),
     };
@@ -237,12 +246,6 @@
     return `/offers?${query.toString()}`;
   }
 
-  function settingLabel(value) {
-    if (value === true) return "Open";
-    if (value === false) return "Not open";
-    return "Not specified";
-  }
-
   function sourceLabel(source) {
     if (source === "explicit_priority") return "explicit priority";
     if (source === "profile_priority") return "profile priority";
@@ -261,11 +264,6 @@
     }).format(date)}`;
   }
 
-  function initials(value) {
-    const parts = string(value, 100).split(/\s+/).filter(Boolean);
-    return (parts[0]?.[0] || "M") + (parts[1]?.[0] || "");
-  }
-
   function whyList(recommendation) {
     const details = recommendation.reasonDetails.length
       ? recommendation.reasonDetails
@@ -273,120 +271,222 @@
     return details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join("");
   }
 
-  function recommendationCard(recommendation, rank) {
-    const summary =
-      recommendation.summary ||
-      recommendation.offerAction ||
-      `A moral trade involving ${recommendation.offeredCause} and ${recommendation.requestedCause}.`;
-    const savedLabel = recommendation.saved ? "Saved" : "Save";
-    const learnedLabel = recommendation.learnedActionSignalCount
-      ? `${recommendation.learnedActionSignalCount} action signals used`
-      : "Initial action estimate";
+  function opportunityVisual(type) {
+    if (type === "donation_redirect") {
+      return {
+        key: "redirect",
+        label: "Redirect",
+        symbol: "↗",
+        fromLabel: "You offer",
+        toLabel: "Redirect advances",
+        connector: "→",
+      };
+    }
+    if (type === "donation_pool") {
+      return {
+        key: "public-goods",
+        label: "Public Goods",
+        symbol: "◎",
+        fromLabel: "Your contribution",
+        toLabel: "Group target",
+        connector: "+",
+      };
+    }
+    return {
+      key: "action",
+      label: "Action",
+      symbol: "↔",
+      fromLabel: "You offer",
+      toLabel: "Trade advances",
+      connector: "→",
+    };
+  }
 
-    return `<article class="story mt-feed-card" data-mt-live-now-recommendation="${escapeHtml(
+  function fitLevel(label) {
+    if (label === "Strong fit") return 3;
+    if (label === "Possible fit") return 2;
+    return 1;
+  }
+
+  function fitMeter(recommendation) {
+    const level = fitLevel(recommendation.actionFitLabel);
+    return `<span class="mt-feed-fit" aria-label="${escapeHtml(
+      recommendation.actionFitLabel,
+    )}"><span class="${level >= 1 ? "is-on" : ""}"></span><span class="${
+      level >= 2 ? "is-on" : ""
+    }"></span><span class="${level >= 3 ? "is-on" : ""}"></span></span>`;
+  }
+
+  function formatCurrencyFromCents(value) {
+    if (!value) return "";
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: value % 100 === 0 ? 0 : 2,
+    }).format(value / 100);
+  }
+
+  function recommendationCard(recommendation, rank) {
+    const visual = opportunityVisual(recommendation.opportunityType);
+    const requestedAction = recommendation.requestAction || recommendation.requestedCause;
+    const unlockedOutcome = recommendation.offerAction || recommendation.offeredCause;
+    const savedLabel = recommendation.saved ? "Saved" : "Save";
+    const threshold = formatCurrencyFromCents(recommendation.assuranceMinimumCents);
+    const publicGoodsNote =
+      recommendation.opportunityType === "donation_pool"
+        ? threshold
+          ? `<p class="mt-feed-threshold-note">Your contribution helps the group reach the ${escapeHtml(
+              threshold,
+            )} threshold.</p>`
+          : '<p class="mt-feed-threshold-note">Your contribution joins the group route.</p>'
+        : "";
+    const visibleSignals = [
+      `<span class="mt-feed-signal is-fit">${escapeHtml(
+        recommendation.actionFitLabel,
+      )}</span>`,
+      `<span class="mt-feed-signal">${escapeHtml(
+        recommendation.difficultyLabel,
+      )} effort</span>`,
+      threshold
+        ? `<span class="mt-feed-signal">${escapeHtml(threshold)} threshold</span>`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
+    const detailRows = [
+      recommendation.summary
+        ? `<div><dt>About</dt><dd>${escapeHtml(recommendation.summary)}</dd></div>`
+        : "",
+      recommendation.duration
+        ? `<div><dt>Timing</dt><dd>${escapeHtml(recommendation.duration)}</dd></div>`
+        : "",
+      recommendation.verification
+        ? `<div><dt>Evidence</dt><dd>${escapeHtml(recommendation.verification)}</dd></div>`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
+
+    return `<article class="story mt-feed-card mt-feed-card--${visual.key}" data-mt-live-now-recommendation="${escapeHtml(
       recommendation.id,
     )}" data-opportunity-type="${escapeHtml(
       recommendation.opportunityType,
     )}" data-opportunity-id="${escapeHtml(recommendation.id)}" data-rank="${rank}">
+      <div class="mt-feed-type-rail" aria-hidden="true"><span>${escapeHtml(
+        visual.symbol,
+      )}</span></div>
       <div class="mt-feed-card-main">
         <div class="mt-feed-card-head">
-          <div class="mt-feed-avatar" aria-hidden="true">${escapeHtml(
-            initials(recommendation.ownerAlias).toUpperCase(),
-          )}</div>
-          <div class="mt-feed-owner"><strong>${escapeHtml(
+          <span class="mt-feed-type-label"><i aria-hidden="true">${escapeHtml(
+            visual.symbol,
+          )}</i>${escapeHtml(visual.label)}</span>
+          <span class="mt-feed-owner-line">${escapeHtml(
             recommendation.ownerAlias,
-          )}</strong><span>${escapeHtml(recommendation.sourceLabel)}</span></div>
-          <div class="mt-feed-rank-reason">${escapeHtml(
+          )} · ${escapeHtml(
             recommendation.reason || `Matches ${recommendation.matchCause}`,
+          )}</span>
+          <button class="mt-feed-bookmark${
+            recommendation.saved ? " is-active" : ""
+          }" type="button" data-action="save" aria-pressed="${
+            recommendation.saved ? "true" : "false"
+          }" aria-label="${
+            recommendation.saved ? "Remove saved opportunity" : "Save opportunity"
+          }" title="${escapeHtml(savedLabel)}">${recommendation.saved ? "★" : "☆"}</button>
+        </div>
+        <h3>${escapeHtml(recommendation.offeredCause)}</h3>
+        <div class="mt-feed-mechanism" aria-label="${escapeHtml(
+          `${visual.label}: ${requestedAction} for ${unlockedOutcome}`,
+        )}">
+          <div class="mt-feed-mechanism-node"><span>${escapeHtml(
+            visual.fromLabel,
+          )}</span><b>${escapeHtml(requestedAction)}</b></div>
+          <div class="mt-feed-mechanism-arrow" aria-hidden="true">${escapeHtml(
+            visual.connector,
           )}</div>
+          <div class="mt-feed-mechanism-node is-outcome"><span>${escapeHtml(
+            visual.toLabel,
+          )}</span><b>${escapeHtml(unlockedOutcome)}</b></div>
         </div>
-        <h3>${escapeHtml(recommendation.offeredCause)} ↔ ${escapeHtml(
-          recommendation.requestedCause,
-        )}</h3>
-        <p class="mt-feed-summary">${escapeHtml(summary)}</p>
-        <div class="mt-feed-exchange">
-          <div class="mt-feed-exchange-block"><span>You can advance</span><b>${escapeHtml(
-            recommendation.offerAction || recommendation.offeredCause,
-          )}</b></div>
-          <div class="mt-feed-exchange-arrow" aria-hidden="true">↔</div>
-          <div class="mt-feed-exchange-block"><span>By offering</span><b>${escapeHtml(
-            recommendation.requestAction || recommendation.requestedCause,
-          )}</b></div>
-        </div>
-        <div class="mt-feed-why"><strong>Why this is in your feed</strong><ul>${whyList(
-          recommendation,
-        )}</ul></div>
-        <div class="mt-feed-meta">
-          <span><b>${escapeHtml(recommendation.actionFitLabel)}</b> action fit</span>
-          <span><b>${escapeHtml(recommendation.difficultyLabel)}</b> estimated burden</span>
-          <span>${escapeHtml(learnedLabel)}</span>
-          ${
-            recommendation.duration
-              ? `<span>${escapeHtml(recommendation.duration)}</span>`
-              : ""
-          }
-          ${
-            recommendation.verification
-              ? `<span>Evidence: ${escapeHtml(recommendation.verification)}</span>`
-              : ""
-          }
-        </div>
+        ${publicGoodsNote}
+        <div class="mt-feed-signal-row">${visibleSignals}</div>
+        <details class="mt-feed-details">
+          <summary>Why this match <span aria-hidden="true">＋</span></summary>
+          <div class="mt-feed-details-grid">
+            <div class="mt-feed-why"><strong>Why it fits</strong><ul>${whyList(
+              recommendation,
+            )}</ul></div>
+            ${
+              detailRows
+                ? `<dl class="mt-feed-terms">${detailRows}</dl>`
+                : '<p class="mt-feed-detail-empty">Open the opportunity to review its full terms.</p>'
+            }
+          </div>
+        </details>
       </div>
       <div class="mt-feed-actions">
         <a class="btn primary" href="${escapeHtml(
           recommendation.href,
         )}" data-action="open">${escapeHtml(recommendation.ctaLabel)} →</a>
-        <button class="mt-feed-feedback${
-          recommendation.saved ? " is-active" : ""
-        }" type="button" data-action="save" aria-pressed="${
-          recommendation.saved ? "true" : "false"
-        }">${escapeHtml(savedLabel)}</button>
-        <button class="mt-feed-feedback" type="button" data-action="easy" aria-pressed="false">Easy for me</button>
-        <button class="mt-feed-feedback" type="button" data-action="hard" aria-pressed="false">Hard for me</button>
-        <button class="mt-feed-feedback" type="button" data-action="not_for_me">Less like this</button>
+        <span class="mt-feed-fit-label">${fitMeter(recommendation)}${escapeHtml(
+          recommendation.actionFitLabel,
+        )}</span>
+        <details class="mt-feed-overflow">
+          <summary aria-label="Tune this recommendation">•••</summary>
+          <div>
+            <strong>Help the feed learn</strong>
+            <button class="mt-feed-feedback" type="button" data-action="easy" aria-pressed="false">Easy for me</button>
+            <button class="mt-feed-feedback" type="button" data-action="hard" aria-pressed="false">Hard for me</button>
+            <button class="mt-feed-feedback is-muted" type="button" data-action="not_for_me">Less like this</button>
+          </div>
+        </details>
       </div>
     </article>`;
   }
 
   function ownedOpportunityCard(opportunity) {
-    const summary =
-      opportunity.summary ||
-      opportunity.offerAction ||
-      'Your live route involving ' +
-        opportunity.offeredCause +
-        ' and ' +
-        opportunity.requestedCause +
-        '.';
-    const duration = opportunity.duration
-      ? '<span>' + escapeHtml(opportunity.duration) + '</span>'
-      : '';
-    const verification = opportunity.verification
-      ? '<span>Evidence: ' + escapeHtml(opportunity.verification) + '</span>'
-      : '';
+    const visual = opportunityVisual(opportunity.opportunityType);
+    const detailRows = [
+      opportunity.summary
+        ? '<div><dt>About</dt><dd>' + escapeHtml(opportunity.summary) + '</dd></div>'
+        : "",
+      opportunity.duration
+        ? '<div><dt>Timing</dt><dd>' + escapeHtml(opportunity.duration) + '</dd></div>'
+        : "",
+      opportunity.verification
+        ? '<div><dt>Evidence</dt><dd>' + escapeHtml(opportunity.verification) + '</dd></div>'
+        : "",
+    ]
+      .filter(Boolean)
+      .join("");
 
     return [
-      '<article class="story mt-owned-card" data-owned-opportunity-id="',
+      '<article class="story mt-owned-card mt-feed-card--',
+      visual.key,
+      '" data-owned-opportunity-id="',
       escapeHtml(opportunity.id),
-      '"><div class="mt-feed-card-main"><div class="mt-feed-card-head">',
-      '<div class="mt-feed-avatar mt-owned-avatar" aria-hidden="true">YOU</div>',
-      '<div class="mt-feed-owner"><strong>Your listing</strong><span>',
+      '"><div class="mt-feed-type-rail" aria-hidden="true"><span>',
+      escapeHtml(visual.symbol),
+      '</span></div><div class="mt-feed-card-main"><div class="mt-feed-card-head">',
+      '<span class="mt-feed-type-label"><i aria-hidden="true">',
+      escapeHtml(visual.symbol),
+      "</i>",
+      escapeHtml(visual.label),
+      '</span><span class="mt-feed-owner-line">Your listing · ',
       escapeHtml(opportunity.sourceLabel),
-      '</span></div><div class="mt-feed-rank-reason">Live · ready to share</div></div><h3>',
+      '</span><span class="mt-owned-status">Live</span></div><h3>',
       escapeHtml(opportunity.offeredCause),
-      ' ↔ ',
-      escapeHtml(opportunity.requestedCause),
-      '</h3><p class="mt-feed-summary">',
-      escapeHtml(summary),
-      '</p><div class="mt-feed-exchange"><div class="mt-feed-exchange-block"><span>You offer</span><b>',
+      '</h3><div class="mt-feed-mechanism"><div class="mt-feed-mechanism-node"><span>You offer</span><b>',
       escapeHtml(opportunity.offerAction || opportunity.offeredCause),
-      '</b></div><div class="mt-feed-exchange-arrow" aria-hidden="true">↔</div>',
-      '<div class="mt-feed-exchange-block"><span>You seek</span><b>',
+      '</b></div><div class="mt-feed-mechanism-arrow" aria-hidden="true">→</div>',
+      '<div class="mt-feed-mechanism-node is-outcome"><span>You seek</span><b>',
       escapeHtml(opportunity.requestAction || opportunity.requestedCause),
-      '</b></div></div><div class="mt-feed-meta">',
-      '<span>Shown here as your own listing, not as a match</span>',
-      duration,
-      verification,
-      '</div></div><div class="mt-feed-actions mt-owned-actions"><a class="btn primary" href="',
+      '</b></div></div><div class="mt-feed-signal-row"><span class="mt-feed-signal">Shown here as your own listing, not as a match</span></div>',
+      detailRows
+        ? '<details class="mt-feed-details"><summary>Listing details <span aria-hidden="true">＋</span></summary><div class="mt-feed-details-grid"><dl class="mt-feed-terms">' +
+            detailRows +
+            "</dl></div></details>"
+        : "",
+      '</div><div class="mt-feed-actions mt-owned-actions"><a class="btn primary" href="',
       escapeHtml(opportunity.href),
       '">',
       escapeHtml(opportunity.ctaLabel),
@@ -402,7 +502,7 @@
     return [
       '<section class="mt-owned-feed" aria-label="Your live listings">',
       '<div class="mt-owned-feed-heading"><div><div class="eyebrow blue">Your live routes</div>',
-      '<h3>Bring counterparties into offers you already published.</h3></div>',
+      '<h3>Manage or invite people.</h3></div>',
       '<a class="btn ghost small" href="/dashboard#my-trades">View all your listings →</a></div>',
       '<div class="mt-owned-feed-cards">',
       model.ownedOpportunities.map(ownedOpportunityCard).join(''),
@@ -560,79 +660,59 @@
       .join("");
   }
 
-  function opportunityTypeCounts() {
-    const counts = new Map();
+  function opportunityTypeLegend() {
+    const counts = new Map([
+      ["offer", 0],
+      ["donation_redirect", 0],
+      ["donation_pool", 0],
+    ]);
     model.recommendations.forEach((recommendation) => {
       counts.set(
-        recommendation.sourceLabel,
-        (counts.get(recommendation.sourceLabel) || 0) + 1,
+        recommendation.opportunityType,
+        (counts.get(recommendation.opportunityType) || 0) + 1,
       );
     });
-    return [...counts.entries()].map(([label, count]) => `${label} · ${count}`);
+    return [...counts.entries()]
+      .filter(([, count]) => count > 0)
+      .map(([type, count]) => {
+        const visual = opportunityVisual(type);
+        return `<span class="mt-feed-legend-item mt-feed-legend-item--${escapeHtml(
+          visual.key,
+        )}"><i aria-hidden="true">${escapeHtml(visual.symbol)}</i>${escapeHtml(
+          visual.label,
+        )}<b>${count}</b></span>`;
+      })
+      .join("");
   }
 
   function renderReadyState() {
     const cards = model.recommendations
       .map((recommendation, index) => recommendationCard(recommendation, index + 1))
       .join("");
-    const prioritySummary = model.profile.causes.slice(0, 3).join(", ");
-    const changeItems = model.recentChanges.length
-      ? model.recentChanges.map((change) => change.label)
-      : ["No matched opportunity changed in the last 24 hours"];
-    const signalItems = [
-      `Browsing learning: ${model.profile.learningEnabled ? "on" : "off"}`,
-      `${model.profile.browsingSignalCount} browsing signals`,
-      `${model.profile.actionFeedbackCount} action-feedback signals`,
-      `Discovery diversity: ${model.profile.explorationPercent}%`,
-    ];
 
-    return `<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="ready"><main>
-      <section class="panel black mt-feed-header">
-        <div class="mt-feed-header-top"><div><div class="eyebrow orange">For you</div><h2>${escapeHtml(
+    return `<div class="focus-layout mt-feed-layout" data-mt-live-now="adaptive" data-mt-live-now-state="ready"><main class="mt-feed-main">
+      <section class="mt-feed-toolbar" aria-label="Personalized feed controls">
+        <div class="mt-feed-toolbar-title"><div class="eyebrow blue">For you</div><h2>Live opportunities <span>${escapeHtml(
           String(model.matchingOpportunityCount),
-        )} live ${
-          model.matchingOpportunityCount === 1 ? "moral opportunity" : "moral opportunities"
-        } match your current view.</h2><p class="muted">Ranked by what you want to advance, the moral value of the requested action, and how difficult that action appears for you. ${escapeHtml(
-          formatRefreshTime(model.generatedAt),
-        )}.</p></div><div class="mt-feed-header-controls"><button class="mt-feed-control" type="button" data-feed-control="learning" aria-pressed="${
-          model.profile.learningEnabled ? "true" : "false"
-        }">Learn from browsing: ${
-          model.profile.learningEnabled ? "on" : "off"
-        }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear learned signals</button></div></div>
-        <div class="mt-feed-priority-row" aria-label="Priority signals used">${weightedPriorityChips()}</div>
+        )}</span></h2><p>${escapeHtml(formatRefreshTime(model.generatedAt))}</p></div>
+        <div class="mt-feed-legend" aria-label="Opportunity types in this feed">${opportunityTypeLegend()}</div>
+        <details class="mt-feed-settings">
+          <summary aria-label="Open feed settings">Tune feed <span aria-hidden="true">⚙</span></summary>
+          <div class="mt-feed-settings-popover">
+            <div><strong>Your priorities</strong><div class="mt-feed-priority-row" aria-label="Priority signals used">${weightedPriorityChips()}</div></div>
+            <div class="mt-feed-header-controls"><button class="mt-feed-control" type="button" data-feed-control="learning" aria-pressed="${
+              model.profile.learningEnabled ? "true" : "false"
+            }">Learn from browsing: ${
+              model.profile.learningEnabled ? "on" : "off"
+            }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear learned signals</button></div>
+            <p class="mt-feed-privacy-note">The feed stores typed in-product signals, not raw browsing URLs or page content.</p>
+            <div class="mt-feed-settings-links"><a href="/complete-profile">Edit priorities</a><a href="/dashboard#wish-profile">Participation settings</a></div>
+          </div>
+        </details>
       </section>
       <section class="mt-social-feed" aria-label="Personalized moral opportunities">${cards}</section>
       ${renderOwnedOpportunities()}
-    </main><aside class="stack">
-      ${sidePanel(
-        "Moral priorities used",
-        model.profile.weightedCauses.slice(0, 8).map(
-          (cause) =>
-            `${cause.rank ? `#${cause.rank} · ` : ""}${cause.cause} · ${sourceLabel(
-              cause.source,
-            )}`,
-        ),
-        '<a class="btn ghost small" href="/complete-profile">Edit priorities →</a>',
-      )}
-      ${sidePanel("Opportunity types", opportunityTypeCounts(), '<a class="btn ghost small" href="/offers?view=live">Browse all →</a>')}
-      ${sidePanel("Learning model", signalItems, "")}
-      ${sidePanel(
-        "Today’s matched changes",
-        changeItems,
-        `<a class="btn ghost small" href="${escapeHtml(
-          browseHref(model.recommendations[0]?.matchCause || prioritySummary),
-        )}">Review matching opportunities →</a>`,
-      )}
-      ${sidePanel(
-        "Participation settings",
-        [
-          `Payment: ${settingLabel(model.profile.openToPayment)}`,
-          `Pledges: ${settingLabel(model.profile.openToPledges)}`,
-        ],
-        '<a class="btn ghost small" href="/dashboard#wish-profile">Review settings →</a>',
-      )}
-      <section class="panel side-card"><h4>Privacy</h4><p class="mt-feed-privacy-note">The learning model stores typed in-product signals such as which opportunity you opened and whether an action felt easy or hard. It does not retain raw browsing URLs or page content. You can pause or clear learning here.</p></section>
-    </aside><div class="mt-feed-toast" role="status" aria-live="polite"></div></div>`;
+    </main><div class="mt-feed-toast" role="status" aria-live="polite"></div></div>`;
   }
 
   function feedbackId(prefix) {
@@ -651,7 +731,16 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       keepalive: true,
-    }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+    })
+      .then((response) => {
+        if (!response.ok) return null;
+        return response.json().catch(() => ({ accepted: true }));
+      })
+      .catch(() => null);
+  }
+
+  function feedbackEventAccepted(result) {
+    return Boolean(result && Number(result.acceptedEventCount) >= 1);
   }
 
   function showToast(root, message) {
@@ -679,6 +768,46 @@
     };
   }
 
+  function setPreferencePending(card, pending) {
+    card
+      .querySelectorAll(
+        '[data-action="save"],[data-action="easy"],[data-action="hard"],[data-action="not_for_me"]',
+      )
+      .forEach((control) => {
+        if (pending) control.setAttribute("disabled", "disabled");
+        else control.removeAttribute("disabled");
+      });
+    card.classList.toggle("is-pending", pending);
+  }
+
+  function setSaveState(control, saved) {
+    control.setAttribute("aria-pressed", saved ? "true" : "false");
+    control.setAttribute(
+      "aria-label",
+      saved ? "Remove saved opportunity" : "Save opportunity",
+    );
+    control.setAttribute("title", saved ? "Saved" : "Save");
+    control.classList.toggle("is-active", saved);
+    control.textContent = saved ? "★" : "☆";
+  }
+
+  function syncReviewedBatchState(root) {
+    const feed = root.querySelector(".mt-social-feed");
+    if (!feed) return;
+    const existing = feed.querySelector(".mt-feed-empty-inline");
+    const visibleCards = feed.querySelectorAll(".mt-feed-card:not([hidden])");
+    if (visibleCards.length) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (!existing) {
+      feed.insertAdjacentHTML(
+        "beforeend",
+        '<section class="panel mt-feed-empty-inline"><h3>You have reviewed this batch.</h3><p class="muted">Refresh later or adjust your priorities to see a different set.</p></section>',
+      );
+    }
+  }
+
   function bindFeedInteractions() {
     if (!document || typeof document.querySelector !== "function") return;
     const root = document.querySelector('[data-mt-live-now="adaptive"]');
@@ -702,44 +831,76 @@
 
       if (action === "save") {
         const saved = target.getAttribute("aria-pressed") === "true";
-        target.setAttribute("aria-pressed", saved ? "false" : "true");
-        target.classList.toggle("is-active", !saved);
-        target.textContent = saved ? "Save" : "Saved";
-        void postFeedback({ events: [eventForCard(card, saved ? "unsave" : "save")] });
-        showToast(root, saved ? "Removed from saved signals." : "Saved. The feed will learn from this.");
+        setSaveState(target, !saved);
+        setPreferencePending(card, true);
+        void postFeedback({
+          events: [eventForCard(card, saved ? "unsave" : "save")],
+        }).then((result) => {
+          setPreferencePending(card, false);
+          if (!feedbackEventAccepted(result)) {
+            setSaveState(target, saved);
+            showToast(root, "Could not save that change. Your feed was not updated.");
+            return;
+          }
+          showToast(
+            root,
+            saved ? "Removed from saved signals." : "Saved. The feed will learn from this.",
+          );
+        });
         return;
       }
 
       if (action === "easy" || action === "hard") {
-        card.querySelectorAll('[data-action="easy"],[data-action="hard"]').forEach((button) => {
+        const controls = [
+          ...card.querySelectorAll('[data-action="easy"],[data-action="hard"]'),
+        ];
+        const priorState = controls.map((button) => ({
+          button,
+          pressed: button.getAttribute("aria-pressed") === "true",
+          active: button.classList.contains("is-active"),
+        }));
+        controls.forEach((button) => {
           const active = button === target;
           button.classList.toggle("is-active", active);
           button.setAttribute("aria-pressed", active ? "true" : "false");
         });
-        void postFeedback({ events: [eventForCard(card, action)] });
-        showToast(
-          root,
-          action === "easy"
-            ? "Recorded as easy for you. Similar actions may rank higher."
-            : "Recorded as hard for you. The burden model has been corrected.",
-        );
+        setPreferencePending(card, true);
+        void postFeedback({ events: [eventForCard(card, action)] }).then((result) => {
+          setPreferencePending(card, false);
+          if (!feedbackEventAccepted(result)) {
+            priorState.forEach(({ button, pressed, active }) => {
+              button.setAttribute("aria-pressed", pressed ? "true" : "false");
+              button.classList.toggle("is-active", active);
+            });
+            showToast(root, "Could not save that rating. Your feed was not updated.");
+            return;
+          }
+          showToast(
+            root,
+            action === "easy"
+              ? "Recorded as easy for you. Similar actions may rank higher."
+              : "Recorded as hard for you. The burden model has been corrected.",
+          );
+        });
         return;
       }
 
       if (action === "not_for_me") {
         card.hidden = true;
-        void postFeedback({ events: [eventForCard(card, "not_for_me")] });
-        showToast(root, "Removed. Similar opportunities will rank lower.");
-        const visibleCards = root.querySelectorAll(".mt-feed-card:not([hidden])");
-        if (!visibleCards.length) {
-          const feed = root.querySelector(".mt-social-feed");
-          if (feed) {
-            feed.insertAdjacentHTML(
-              "beforeend",
-              '<section class="panel mt-feed-empty-inline"><h3>You have reviewed this batch.</h3><p class="muted">Refresh later or adjust your priorities to see a different set.</p></section>',
-            );
+        syncReviewedBatchState(root);
+        setPreferencePending(card, true);
+        void postFeedback({ events: [eventForCard(card, "not_for_me")] }).then(
+          (result) => {
+            setPreferencePending(card, false);
+            if (!feedbackEventAccepted(result)) {
+              card.hidden = false;
+              syncReviewedBatchState(root);
+              showToast(root, "Could not hide that opportunity. Your feed was not updated.");
+              return;
+            }
+            showToast(root, "Removed. Similar opportunities will rank lower.");
           }
-        }
+        );
       }
     });
 
@@ -750,17 +911,28 @@
       const action = control.getAttribute("data-feed-control");
 
       if (action === "learning") {
+        const wasEnabled = control.getAttribute("aria-pressed") === "true";
         const enabled = control.getAttribute("aria-pressed") !== "true";
         control.setAttribute("aria-pressed", enabled ? "true" : "false");
         control.textContent = `Learn from browsing: ${enabled ? "on" : "off"}`;
         model.profile.learningEnabled = enabled;
-        void postFeedback({ learningEnabled: enabled });
-        showToast(
-          root,
-          enabled
-            ? "Browsing learning is on. Only typed in-product signals are stored."
-            : "Browsing learning is paused. Explicit feedback still applies.",
-        );
+        control.setAttribute("disabled", "disabled");
+        void postFeedback({ learningEnabled: enabled }).then((result) => {
+          control.removeAttribute("disabled");
+          if (!result) {
+            control.setAttribute("aria-pressed", wasEnabled ? "true" : "false");
+            control.textContent = `Learn from browsing: ${wasEnabled ? "on" : "off"}`;
+            model.profile.learningEnabled = wasEnabled;
+            showToast(root, "Could not change learning. Your feed was not updated.");
+            return;
+          }
+          showToast(
+            root,
+            enabled
+              ? "Browsing learning is on. Only typed in-product signals are stored."
+              : "Browsing learning is paused. Explicit feedback still applies.",
+          );
+        });
       }
 
       if (action === "clear") {
