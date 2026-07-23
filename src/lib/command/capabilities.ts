@@ -323,7 +323,7 @@ export const COMMAND_CAPABILITIES = [
       properties: {
         title: string("Public-good proposal title", 180),
         participantCount: { type: ["integer", "null"], minimum: 2, maximum: 1000000000 },
-        contributionAmount: { type: ["number", "null"], minimum: 0 },
+        contributionAmount: { type: ["number", "null"], minimum: 0, maximum: Math.floor(Number.MAX_SAFE_INTEGER / 100) },
         thresholdCount: { type: ["integer", "null"], minimum: 1, maximum: 1000000000 },
         cause: string("Shared moral public good", 180),
       },

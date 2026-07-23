@@ -36,6 +36,8 @@ function number(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+const MAX_SAFE_FUNDING_CENTS = Number.MAX_SAFE_INTEGER;
+
 function safeOfferQuery(value: string) {
   return value.replace(/[,%()]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
 }
@@ -396,13 +398,47 @@ export async function executeCommandProposal({
       });
     }
     case "create_public_good_proposal": {
+      const participantCount = number(proposal.arguments.participantCount);
+      const contributionAmount = number(proposal.arguments.contributionAmount);
+      const thresholdCount = number(proposal.arguments.thresholdCount);
+      if (
+        participantCount === null ||
+        contributionAmount === null ||
+        thresholdCount === null ||
+        !Number.isInteger(participantCount) ||
+        !Number.isInteger(thresholdCount) ||
+        participantCount < 2 ||
+        thresholdCount < 1 ||
+        thresholdCount > participantCount
+      ) {
+        return result(
+          "failed",
+          "The public-good threshold terms are inconsistent.",
+          "No proposal or pool was created.",
+          { blockers: ["The threshold must be a positive integer no greater than the participant count."] },
+        );
+      }
+      const contributionCents = Math.round(contributionAmount * 100);
+      if (
+        contributionCents <= 0 ||
+        Math.abs(contributionAmount * 100 - contributionCents) > Number.EPSILON * 100 ||
+        contributionCents > Math.floor(MAX_SAFE_FUNDING_CENTS / participantCount)
+      ) {
+        return result(
+          "failed",
+          "The proposed contribution or total cannot be represented exactly in cents.",
+          "No proposal or pool was created.",
+          { blockers: ["Use a positive two-decimal contribution and reduce the participant count or contribution if needed."] },
+        );
+      }
+      const normalizedContributionAmount = contributionCents / 100;
       const params = new URLSearchParams({
         template: "threshold-coalition",
         title: text(proposal.arguments.title, 180),
         cause: text(proposal.arguments.cause, 180),
-        participants: String(number(proposal.arguments.participantCount) ?? ""),
-        contribution: String(number(proposal.arguments.contributionAmount) ?? ""),
-        threshold: String(number(proposal.arguments.thresholdCount) ?? ""),
+        participants: String(participantCount),
+        contribution: String(normalizedContributionAmount),
+        threshold: String(thresholdCount),
         source: "command",
       });
       return result(

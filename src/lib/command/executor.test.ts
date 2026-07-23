@@ -73,3 +73,64 @@ test("low-confidence tool calls never execute", async () => {
   assert.equal(output.status, "blocked");
   assert.match(output.blockers[0] ?? "", /Clarification/);
 });
+
+
+test("public-good proposals reject thresholds above the participant count", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Threshold proposal.",
+      arguments: {
+        title: "Animal-welfare assurance pool",
+        participantCount: 100,
+        contributionAmount: 20,
+        thresholdCount: 101,
+        cause: "Animal welfare",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.blockers[0] ?? "", /threshold/i);
+});
+
+test("public-good proposals reject totals that cannot be represented exactly in cents", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Very large threshold proposal.",
+      arguments: {
+        title: "Large assurance pool",
+        participantCount: 1_000_000_000,
+        contributionAmount: 1_000_000_000,
+        thresholdCount: 900_000_000,
+        cause: "Global public goods",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.summary, /exactly in cents/i);
+});
+
+test("public-good proposals reject sub-cent contributions", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Sub-cent threshold proposal.",
+      arguments: {
+        title: "Micro-contribution pool",
+        participantCount: 100,
+        contributionAmount: 0.001,
+        thresholdCount: 80,
+        cause: "Global public goods",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.summary, /exactly in cents/i);
+});
