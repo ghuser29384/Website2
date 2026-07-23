@@ -8,9 +8,13 @@ import {
   normalizeEncryptedFieldMap,
 } from "@/lib/background-field-encryption";
 import {
+  applyKnownFeasibilityToHybridFeed,
+  buildHybridLiveNowFeed,
+  emptyHybridLiveNowFeedDiagnostics,
+} from "@/lib/live-now-hybrid-feed";
+import {
   buildLiveNowRecentChanges,
   buildWeightedCauseSignals,
-  rankLiveNowOffers,
   uniqueProfileCauses,
   type LiveNowOfferCandidate,
   type LiveNowPriorityAllocation,
@@ -36,10 +40,10 @@ export const revalidate = 0;
 
 const OFFER_BATCH_SIZE = 1_000;
 const OWNED_OPPORTUNITY_LIMIT = 6;
+const INTERACTION_LIMIT = 500;
 const OFFER_PUBLIC_SELECT =
   "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at";
 const OWNED_OFFER_SELECT = `${OFFER_PUBLIC_SELECT},no_trade_baseline`;
-const INTERACTION_LIMIT = 500;
 const ROUTE_PROFILE_SELECT =
   "profile_id,goal,cause_priorities,money_budget_cents,time_budget_minutes,action_budget_count,horizon,route_formats,evidence_preference,uncertainty_preference,interaction_preference,privacy_preference,planned_donation_baseline,planned_donation_cents,otherwise_baseline,pairwise_answers,interview_answers,sensitive_ciphertexts,sensitive_encryption_version,created_at,updated_at";
 const GOAL_FIELD = "route_recommendation_profiles.goal";
@@ -114,28 +118,6 @@ interface OfferInventoryRow {
   updated_at: string;
 }
 
-function buildOwnedOpportunity(offer: OfferInventoryRow) {
-  const opportunityType: RecommendationOpportunityType =
-    offer.mode === "offset" ? "donation_redirect" : "offer";
-
-  return {
-    id: offer.id,
-    opportunityType,
-    href: `/trades/${encodeURIComponent(offer.id)}/manage`,
-    ctaLabel: "Manage & invite",
-    sourceLabel: opportunityType === "donation_redirect" ? "Your donation redirect" : "Your live offer",
-    ownerAlias: text(offer.owner_alias, 100) || "You",
-    offeredCause: text(offer.offered_cause, 120),
-    requestedCause: text(offer.requested_cause, 120),
-    offerAction: text(offer.offer_action, 420),
-    requestAction: text(offer.request_action, 420),
-    verification: text(offer.verification, 320),
-    duration: text(offer.duration, 160),
-    summary: text(offer.no_trade_baseline, 320),
-    updatedAt: offer.updated_at,
-  };
-}
-
 function privateJson(body: unknown) {
   return NextResponse.json(body, {
     headers: {
@@ -148,7 +130,7 @@ function privateJson(body: unknown) {
 function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
   return cookieStore
     .getAll()
-    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
+    .some(({ name }: { name: string }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
 }
 
 function text(value: string | null | undefined, maximum = 240) {
@@ -164,6 +146,14 @@ function object(value: unknown) {
 function safePrivateText(value: string, maximum: number) {
   if (!value || value === BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE) return "";
   return value.trim().slice(0, maximum);
+}
+
+function asStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [] as string[];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => text(item, 120))
+    .filter(Boolean);
 }
 
 function decryptRouteProfile(value: unknown) {
@@ -222,14 +212,6 @@ function poolDurationDays(deadline: string | null, checkedAt: Date) {
   return Math.max(0, Math.ceil((timestamp - checkedAt.getTime()) / 86_400_000));
 }
 
-function asStringArray(value: unknown) {
-  if (!Array.isArray(value)) return [] as string[];
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => text(item, 120))
-    .filter(Boolean);
-}
-
 function asPriorityAllocations(value: unknown) {
   if (!Array.isArray(value)) return [] as LiveNowPriorityAllocation[];
   return value
@@ -265,6 +247,27 @@ function formatPoolDuration(deadline: string | null) {
   const timestamp = Date.parse(deadline);
   if (!Number.isFinite(timestamp)) return "Open while the pool remains active";
   return `Assurance deadline ${new Date(timestamp).toISOString().slice(0, 10)}`;
+}
+
+function buildOwnedOpportunity(offer: OfferInventoryRow) {
+  const opportunityType: RecommendationOpportunityType =
+    offer.mode === "offset" ? "donation_redirect" : "offer";
+  return {
+    id: offer.id,
+    opportunityType,
+    href: `/trades/${encodeURIComponent(offer.id)}/manage`,
+    ctaLabel: "Manage & invite",
+    sourceLabel: opportunityType === "donation_redirect" ? "Your donation redirect" : "Your live offer",
+    ownerAlias: text(offer.owner_alias, 100) || "You",
+    offeredCause: text(offer.offered_cause, 120),
+    requestedCause: text(offer.requested_cause, 120),
+    offerAction: text(offer.offer_action, 420),
+    requestAction: text(offer.request_action, 420),
+    verification: text(offer.verification, 320),
+    duration: text(offer.duration, 160),
+    summary: text(offer.no_trade_baseline, 320),
+    updatedAt: offer.updated_at,
+  };
 }
 
 function buildPoolCandidate(
@@ -332,6 +335,8 @@ function emptyPayload(
     generatedAt,
     matchingOfferCount: 0,
     matchingOpportunityCount: 0,
+    feedOpportunityCount: 0,
+    feedDiagnostics: emptyHybridLiveNowFeedDiagnostics(new Date(generatedAt), 0),
     profile: {
       causes: [] as string[],
       weightedCauses: [] as Array<{
@@ -365,6 +370,81 @@ function emptyPayload(
   };
 }
 
+async function loadPublishedOfferCandidates(
+  typedSupabase: any,
+  userId: string,
+) {
+  const candidates: LiveNowOfferCandidate[] = [];
+  for (let offset = 0; ; offset += OFFER_BATCH_SIZE) {
+    const offersResult = await typedSupabase
+      .from("offers")
+      .select(OFFER_PUBLIC_SELECT)
+      .eq("status", "open")
+      .eq("workflow_status", "published")
+      .not("published_at", "is", null)
+      .is("closed_at", null)
+      .is("deleted_at", null)
+      .neq("owner_id", userId)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + OFFER_BATCH_SIZE - 1);
+
+    if (offersResult.error) throw offersResult.error;
+    const batch = (offersResult.data ?? []) as OfferInventoryRow[];
+    const liveBatch = batch.filter(isPublishedLiveOffer);
+    if (liveBatch.length !== batch.length) {
+      console.error("[live-now] Dropped rows that failed the published-live offer guard", {
+        droppedCount: batch.length - liveBatch.length,
+        userId,
+      });
+    }
+    candidates.push(
+      ...liveBatch.map((offer) => {
+        const opportunityType: RecommendationOpportunityType =
+          offer.mode === "offset" ? "donation_redirect" : "offer";
+        return {
+          id: offer.id,
+          ownerId: offer.owner_id,
+          ownerAlias: text(offer.owner_alias, 100) || "Participant",
+          mode: offer.mode,
+          offeredCause: text(offer.offered_cause, 120),
+          requestedCause: text(offer.requested_cause, 120),
+          compromiseCause: text(offer.compromise_cause, 120),
+          offerAction: text(offer.offer_action, 320),
+          requestAction: text(offer.request_action, 320),
+          verification: text(offer.verification, 320),
+          duration: text(offer.duration, 160),
+          trustLevel: offer.trust_level,
+          createdAt: offer.created_at,
+          updatedAt: offer.updated_at,
+          opportunityType,
+          sourceLabel: opportunityType === "donation_redirect" ? "Donation redirect" : undefined,
+          summary: text(
+            offer.compromise_cause && offer.compromise_cause !== "Not needed"
+              ? offer.compromise_cause
+              : `${offer.requested_cause} ↔ ${offer.offered_cause}`,
+            240,
+          ),
+          benefitCauses: uniqueProfileCauses(
+            [offer.offered_cause],
+            offer.compromise_cause && offer.compromise_cause !== "Not needed"
+              ? [offer.compromise_cause]
+              : [],
+          ),
+          actionCauses: uniqueProfileCauses([offer.requested_cause]),
+          metadata: {
+            maximumBurden: text(offer.maximum_burden, 180),
+            privacyLevel: classifyRoutePrivacyScope(offer.privacy_scope),
+            invitationBacked: false,
+          },
+        } satisfies LiveNowOfferCandidate;
+      }),
+    );
+    if (batch.length < OFFER_BATCH_SIZE) break;
+  }
+  return candidates;
+}
+
 export async function GET() {
   const cookieStore = await cookies();
   if (!hasSupabaseEnv() || !hasSupabaseAuthCookie(cookieStore)) {
@@ -372,13 +452,11 @@ export async function GET() {
   }
 
   const viewer = await getViewer();
-  if (!viewer) {
-    return privateJson(emptyPayload("signed_out", false));
-  }
+  if (!viewer) return privateJson(emptyPayload("signed_out", false));
 
   const supabase = await createClient();
-  const userId = viewer.authUser.id;
   const typedSupabase = supabase as any;
+  const userId = viewer.authUser.id;
   const checkedAt = new Date();
   const [
     wishProfileResult,
@@ -482,7 +560,9 @@ export async function GET() {
   const wishProfile = wishProfileResult.data;
   const savedSearchCauses = savedSearchesResult.error
     ? []
-    : (savedSearchesResult.data ?? []).flatMap((search) => search.causes ?? []);
+    : (savedSearchesResult.data ?? []).flatMap(
+        (search: { causes?: string[] | null }) => search.causes ?? [],
+      );
   const priorityAllocations = onboardingResult.error
     ? []
     : asPriorityAllocations(onboardingResult.data?.priority_allocations);
@@ -588,85 +668,19 @@ export async function GET() {
   }
   const routeInventoryUnavailable = Boolean(poolsResult.error || charitiesResult.error);
 
-  const candidates: LiveNowOfferCandidate[] = [];
-  for (let offset = 0; ; offset += OFFER_BATCH_SIZE) {
-    const offersResult = await typedSupabase
-      .from("offers")
-      .select(OFFER_PUBLIC_SELECT)
-      .eq("status", "open")
-      .eq("workflow_status", "published")
-      .not("published_at", "is", null)
-      .is("closed_at", null)
-      .is("deleted_at", null)
-      .neq("owner_id", userId)
-      .order("updated_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(offset, offset + OFFER_BATCH_SIZE - 1);
-
-    if (offersResult.error) {
-      console.error("[live-now] Failed to load open opportunity inventory", {
-        message: offersResult.error.message,
-        userId,
-      });
-      return privateJson({
-        ...emptyPayload("unavailable", true),
-        ownedOpportunities,
-        ownedOpportunityCount: ownedOpportunities.length,
-      });
-    }
-
-    const batch = (offersResult.data ?? []) as OfferInventoryRow[];
-    const liveBatch = batch.filter(isPublishedLiveOffer);
-    if (liveBatch.length !== batch.length) {
-      console.error("[live-now] Dropped rows that failed the published-live offer guard", {
-        droppedCount: batch.length - liveBatch.length,
-        userId,
-      });
-    }
-    candidates.push(
-      ...liveBatch.map((offer) => {
-        const opportunityType: RecommendationOpportunityType =
-          offer.mode === "offset" ? "donation_redirect" : "offer";
-        return {
-          id: offer.id,
-          ownerId: offer.owner_id,
-          ownerAlias: text(offer.owner_alias, 100) || "Participant",
-          mode: offer.mode,
-          offeredCause: text(offer.offered_cause, 120),
-          requestedCause: text(offer.requested_cause, 120),
-          compromiseCause: text(offer.compromise_cause, 120),
-          offerAction: text(offer.offer_action, 320),
-          requestAction: text(offer.request_action, 320),
-          verification: text(offer.verification, 320),
-          duration: text(offer.duration, 160),
-          trustLevel: offer.trust_level,
-          createdAt: offer.created_at,
-          updatedAt: offer.updated_at,
-          opportunityType,
-          sourceLabel: opportunityType === "donation_redirect" ? "Donation redirect" : undefined,
-          summary: text(
-            offer.compromise_cause && offer.compromise_cause !== "Not needed"
-              ? offer.compromise_cause
-              : `${offer.requested_cause} ↔ ${offer.offered_cause}`,
-            240,
-          ),
-          benefitCauses: uniqueProfileCauses(
-            [offer.offered_cause],
-            offer.compromise_cause && offer.compromise_cause !== "Not needed"
-              ? [offer.compromise_cause]
-              : [],
-          ),
-          actionCauses: uniqueProfileCauses([offer.requested_cause]),
-          metadata: {
-            maximumBurden: text(offer.maximum_burden, 180),
-            privacyLevel: classifyRoutePrivacyScope(offer.privacy_scope),
-            invitationBacked: false,
-          },
-        } satisfies LiveNowOfferCandidate;
-      }),
-    );
-
-    if (batch.length < OFFER_BATCH_SIZE) break;
+  let candidates: LiveNowOfferCandidate[];
+  try {
+    candidates = await loadPublishedOfferCandidates(typedSupabase, userId);
+  } catch (error) {
+    console.error("[live-now] Failed to load open opportunity inventory", {
+      message: error instanceof Error ? error.message : String(error),
+      userId,
+    });
+    return privateJson({
+      ...emptyPayload("unavailable", true),
+      ownedOpportunities,
+      ownedOpportunityCount: ownedOpportunities.length,
+    });
   }
 
   const charityById = new Map(
@@ -699,12 +713,30 @@ export async function GET() {
     savedOpportunityKeys: feedbackState.savedOpportunityKeys,
     explorationPercent,
   };
-  const ranked = rankLiveNowOffers(candidates, profile);
-  const recommendations = ranked.slice(0, 12);
+  // The hybrid builder retains rankLiveNowOffers as its lexical and action-learning prior,
+  // then adds public-only semantic retrieval and reciprocal acceptance estimates.
+  let hybridFeed = await buildHybridLiveNowFeed({
+    candidates,
+    profile,
+    now: checkedAt,
+  });
+  const feasibilityProbe = buildRoutePlanner({
+    profile: runtimeRouteProfile,
+    recommendations: hybridFeed.directRecommendations,
+    checkedAt,
+    fallbackCauses: causes,
+  });
+  if (!routeProfileResult.error && feasibilityProbe.missingProfileFields.length === 0) {
+    hybridFeed = applyKnownFeasibilityToHybridFeed(
+      hybridFeed,
+      feasibilityProbe.blockedSources,
+    );
+  }
+  const recommendations = hybridFeed.recommendations.slice(0, 12);
   const routePlannerResult = presentRoutePlanner(
     buildRoutePlanner({
       profile: runtimeRouteProfile,
-      recommendations: ranked,
+      recommendations: hybridFeed.directRecommendations,
       checkedAt,
       fallbackCauses: causes,
     }),
@@ -724,24 +756,33 @@ export async function GET() {
       signal.eventType,
     ),
   ).length;
+  const semanticSignalSource = hybridFeed.diagnostics.retrievalMode === "lexical_only"
+    ? null
+    : hybridFeed.diagnostics.retrievalMode === "deterministic_fallback"
+      ? "Local semantic fallback"
+      : "Public semantic embeddings";
 
   return privateJson({
     authenticated: true,
     generatedAt: checkedAt.toISOString(),
-    matchingOfferCount: ranked.length,
-    matchingOpportunityCount: ranked.length,
+    matchingOfferCount: hybridFeed.diagnostics.directCount,
+    matchingOpportunityCount: hybridFeed.diagnostics.directCount,
+    feedOpportunityCount: recommendations.length,
+    feedDiagnostics: hybridFeed.diagnostics,
     profile: {
       causes,
       weightedCauses: causeSignals,
       openToPayment: wishProfile?.openness_to_payment ?? null,
       openToPledges: wishProfile?.openness_to_pledges ?? null,
-      signalSources,
+      signalSources: semanticSignalSource
+        ? [...signalSources, semanticSignalSource]
+        : signalSources,
       learningEnabled,
       explorationPercent,
       browsingSignalCount,
       actionFeedbackCount,
     },
-    recentChanges: buildLiveNowRecentChanges(ranked),
+    recentChanges: buildLiveNowRecentChanges(hybridFeed.directRecommendations),
     recommendations,
     ownedOpportunities,
     ownedOpportunityCount: ownedOpportunities.length,
