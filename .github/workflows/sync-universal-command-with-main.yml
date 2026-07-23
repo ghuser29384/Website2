@@ -29,13 +29,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "REMOTE_HEAD=$(git rev-parse origin/feat/universal-command-workspace)" >> "$GITHUB_ENV"
           git fetch origin main
           git merge --no-edit origin/main
           python .github/finalize-command.py
-          git rm -f --ignore-unmatch \
-            .github/finalize-command.py \
-            .github/workflows/finalize-command-public-good-safety.yml \
-            .github/workflows/sync-universal-command-with-main.yml
           git status --short
 
       - uses: actions/setup-node@v4
@@ -50,12 +47,18 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
 
-      - name: Restore registered QA workflow and push verified feature branch
+      - name: Push verified application changes to the feature branch
         shell: bash
         run: |
           set -euo pipefail
           git checkout HEAD -- next-env.d.ts
-          git checkout origin/main -- .github/workflows/smart-query-qa.yml
-          git add -A
-          git commit -m "Finalize universal Command safety and main synchronization"
-          git push origin HEAD:feat/universal-command-workspace
+          git add \
+            src/app/mpgf/pools/new/page.tsx \
+            src/components/mpgf/mpgf-console.tsx \
+            src/lib/command/capabilities.ts \
+            src/lib/command/executor.ts \
+            src/lib/command/executor.test.ts
+          git commit -m "Guard universal Command public-good numeric terms"
+          git push \
+            --force-with-lease=refs/heads/feat/universal-command-workspace:${REMOTE_HEAD} \
+            origin HEAD:refs/heads/feat/universal-command-workspace
