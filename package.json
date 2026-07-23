@@ -16,7 +16,7 @@
     "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "auth:configure-oauth": "node scripts/configure-supabase-oauth.mjs",
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "node --import tsx --test --test-reporter=dot src/**/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
