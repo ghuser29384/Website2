@@ -68,6 +68,8 @@ jobs:
             src/lib/smart-query-clarification.ts \
             src/lib/smart-query-facets.ts \
             src/lib/smart-query-llm.ts \
+            src/lib/smart-query-llm-gate.ts \
+            src/lib/smart-query-llm-gate.test.ts \
             src/lib/smart-query-personalization.ts \
             src/lib/smart-query-records.ts \
             src/lib/smart-query-scoring.ts \
@@ -96,6 +98,7 @@ jobs:
           set -o pipefail
           node --import tsx --test \
             src/lib/smart-query.test.ts \
+            src/lib/smart-query-llm-gate.test.ts \
             src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
 
       - name: Build production application

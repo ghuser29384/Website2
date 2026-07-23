@@ -1,0 +1,70 @@
+name: Synchronize launch branch from pull request target
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-launch-with-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.pull_request.number == 174 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the launch branch with full history
+        uses: actions/checkout@v4
+        with:
+          ref: launch/verify-and-harden-20260723
+          fetch-depth: 0
+
+      - name: Prepare the reviewed synchronization script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/sync-launch-with-main.yml').read_text().splitlines()
+          marker = '        run: |'
+          start = workflow.index(marker) + 1
+          script_lines = []
+          for line in workflow[start:]:
+              script_lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/sync-launch.sh').write_text('\n'.join(script_lines) + '\n')
+          PY
+
+      - name: Execute synchronization and retain diagnostics
+        id: synchronize
+        shell: bash
+        run: |
+          set +e
+          bash /tmp/sync-launch.sh 2>&1 | tee /tmp/sync-launch.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report synchronization result on the launch pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_STATUS: ${{ steps.synchronize.outputs.status }}
+        shell: bash
+        run: |
+          status_label="failed"
+          if [[ "$SYNC_STATUS" == "0" ]]; then status_label="succeeded"; fi
+          diagnostics="$(tail -c 6000 /tmp/sync-launch.log 2>/dev/null || true)"
+          body=$(printf 'Automated main-branch synchronization **%s**.\n\n```text\n%s\n```' "$status_label" "$diagnostics")
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Fail the workflow when synchronization failed
+        if: steps.synchronize.outputs.status != '0'
+        run: exit 1
