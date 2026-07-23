@@ -36,7 +36,7 @@ const projectCards: ReadonlyArray<{
     title: "Worked examples",
     status: "Public learning surface",
     description:
-      "Review complete examples with terms, baselines, evidence rules, and review notes before drafting or relying on a participant record.",
+      "Review complete examples with terms, baselines, evidence, and review notes before drafting or relying on a participant record.",
     href: "/worked-examples",
     icon: "example",
     actionLabel: "Browse examples",

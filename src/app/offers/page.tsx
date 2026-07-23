@@ -308,7 +308,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <h1 id="explore-heading">Find a live proposal you can evaluate quickly.</h1>
             <p>
               Browse every published proposal in bounded pages, inspect the no-trade baseline and
-              evidence rule, then open the complete terms before expressing interest.
+              evidence requirements, then open the complete terms before expressing interest.
             </p>
             <div className="mt-product-actions">
               <Link className="button button-primary" href={createHref}>Create a proposal</Link>

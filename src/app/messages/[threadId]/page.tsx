@@ -66,10 +66,10 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
     ["Counterparty action", offer.request_action, current.requested_action],
     ["Duration", offer.duration, current.duration],
     ["Start date", offer.start_date, current.start_date],
-    ["Evidence rule", offer.verification, current.evidence_rule],
+    ["Evidence", offer.verification, current.evidence_rule],
     ["Evidence due date", offer.evidence_due_date, current.evidence_due_date],
     ["Exit conditions", offer.exit_conditions, current.exit_conditions],
-    ["Maximum burden", offer.maximum_burden, current.maximum_burden],
+    ["Commitment limit", offer.maximum_burden, current.maximum_burden],
     ["Privacy scope", offer.privacy_scope, current.privacy_scope],
     ["No-trade baseline", offer.no_trade_baseline, current.no_trade_baseline],
   ] as const;
@@ -201,7 +201,7 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                   <dd>{current.evidence_rule}</dd>
                 </div>
                 <div>
-                  <dt>Maximum burden</dt>
+                  <dt>Commitment limit</dt>
                   <dd>{current.maximum_burden}</dd>
                 </div>
                 <div>
@@ -309,11 +309,11 @@ export default async function ThreadPage({ params, searchParams }: ThreadPagePro
                 </label>
               </div>
               <label className="field">
-                <span>Evidence rule</span>
+                <span>Evidence</span>
                 <textarea defaultValue={current.evidence_rule} name="evidence_rule" required rows={3} />
               </label>
               <label className="field">
-                <span>Maximum burden</span>
+                <span>Commitment limit</span>
                 <textarea defaultValue={current.maximum_burden} name="maximum_burden" required rows={3} />
               </label>
               <label className="field">

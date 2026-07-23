@@ -209,11 +209,11 @@ export default async function TradeAgreementPage({
                 <dd>{formatDate(version.start_date)}</dd>
               </div>
               <div>
-                <dt>Maximum burden</dt>
+                <dt>Commitment limit</dt>
                 <dd>{version.maximum_burden}</dd>
               </div>
               <div>
-                <dt>Evidence rule</dt>
+                <dt>Evidence</dt>
                 <dd>{version.evidence_rule}</dd>
               </div>
               <div>
@@ -277,11 +277,11 @@ export default async function TradeAgreementPage({
                   </label>
                 </div>
                 <label className="field">
-                  <span>Evidence rule</span>
+                  <span>Evidence</span>
                   <textarea defaultValue={String(version.evidence_rule)} name="evidence_rule" required rows={3} />
                 </label>
                 <label className="field">
-                  <span>Maximum burden</span>
+                  <span>Commitment limit</span>
                   <textarea defaultValue={String(version.maximum_burden)} name="maximum_burden" required rows={3} />
                 </label>
                 <label className="field">
@@ -337,7 +337,7 @@ export default async function TradeAgreementPage({
             <p className="route-text">
               {detail.evidence.length
                 ? "Inspect public-safe source copies, exact terms, participant review state, privacy notes, and the full verification history in one place."
-                : "Open the awaiting-evidence state now to inspect the frozen terms, evidence rule, privacy scope, and trade history."}
+                : "Open the awaiting-evidence state now to inspect the frozen terms, evidence requirements, privacy scope, and trade history."}
             </p>
             <Link className="button button-primary" href={`/evidence/${agreementId}`}>
               {detail.evidence.length ? "Review evidence" : "Open evidence page"}

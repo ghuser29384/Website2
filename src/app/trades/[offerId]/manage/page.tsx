@@ -255,13 +255,13 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
                   />
                 </label>
               </div>
-              <label className="field">
-                <span>Evidence rule</span>
-                <textarea defaultValue={offer.verification} name="evidence_rule" required rows={3} />
-              </label>
-              <label className="field">
-                <span>Maximum burden</span>
-                <textarea
+                <label className="field">
+                  <span>Evidence</span>
+                  <textarea defaultValue={offer.verification} name="evidence_rule" required rows={3} />
+                </label>
+                <label className="field">
+                  <span>Commitment limit</span>
+                  <textarea
                   defaultValue={offer.maximum_burden}
                   name="maximum_burden"
                   required

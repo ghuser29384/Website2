@@ -105,7 +105,7 @@ export default async function PaidActionOffersPage() {
         >
           <TradeFlowDiagram
             title="Paid action offer flow"
-            steps={["Defer public creation", "Design evidence rules", "Mature disputes", "Pilot by invitation"]}
+            steps={["Defer public creation", "Design evidence requirements", "Mature disputes", "Pilot by invitation"]}
           />
         </PageHero>
       </header>

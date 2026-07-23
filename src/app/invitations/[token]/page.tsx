@@ -94,7 +94,7 @@ export default async function InvitationPage({ params, searchParams }: Invitatio
                   <dd>{offer.duration}</dd>
                 </div>
                 <div>
-                  <dt>Maximum burden</dt>
+                  <dt>Commitment limit</dt>
                   <dd>{offer.maximum_burden}</dd>
                 </div>
                 <div>

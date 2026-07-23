@@ -194,13 +194,13 @@ function stateCopy(item: EvidenceStageItem | undefined, canReview: boolean, revi
     return {
       label: "Awaiting evidence",
       title: "No evidence has been submitted",
-      copy: "This page is ready for the first artifact. The agreed evidence rule and trade history remain visible in the meantime.",
+      copy: "This page is ready for the first artifact. The agreed evidence requirements and trade history remain visible in the meantime.",
     };
   }
   if (item.state === "accepted") {
     return {
       label: "Accepted",
-      title: "Accepted against the agreed evidence rule",
+      title: "Accepted against the agreed evidence requirements",
       copy: "The other participant accepted this item. Acceptance records their review; it is not independent verification.",
     };
   }
@@ -220,7 +220,7 @@ function stateCopy(item: EvidenceStageItem | undefined, canReview: boolean, revi
   }
   return {
     label: canReview ? "Ready for your review" : "Awaiting participant review",
-    title: canReview ? "Ready for your decision" : "Submitted under the agreed evidence rule",
+    title: canReview ? "Ready for your decision" : "Submitted under the agreed evidence requirements",
     copy: "Submission alone does not mean the claim has been accepted or independently verified.",
   };
 }
@@ -327,7 +327,7 @@ function ArtifactMedia({ item, record }: { item: EvidenceStageItem; record: Evid
       <dl>
         <div><dt>Status</dt><dd>{item.state}</dd></div>
         <div><dt>Submitted by</dt><dd>{item.submittedBy}</dd></div>
-        <div><dt>Evidence rule</dt><dd>{record.evidenceRule}</dd></div>
+        <div><dt>Evidence</dt><dd>{record.evidenceRule}</dd></div>
         <div><dt>Privacy</dt><dd>{item.redactionNote}</dd></div>
       </dl>
       {item.publicUrl ? (
@@ -791,7 +791,7 @@ export function EvidenceStage({
         <>
           <dialog aria-labelledby="accept-dialog-title" className={styles.dialog} ref={acceptDialogRef}>
             <div className={styles.dialogHeader}>
-              <div><p>Accept selected evidence</p><h2 id="accept-dialog-title">Does this meet the frozen evidence rule?</h2></div>
+              <div><p>Accept selected evidence</p><h2 id="accept-dialog-title">Does this meet the frozen evidence requirements?</h2></div>
               <button aria-label="Close acceptance confirmation" onClick={() => acceptDialogRef.current?.close()} type="button"><X aria-hidden="true" size={19} /></button>
             </div>
             <p className={styles.dialogCopy}>Accepting records your participant review of “{selected.title}.” It is not independent verification and this screen does not itself move money.</p>

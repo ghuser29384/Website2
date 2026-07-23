@@ -5300,7 +5300,7 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /Choose a launch route/);
   assert.match(offerForm, /State reciprocal terms/);
   assert.match(offerForm, /Explain baseline and exit/);
-  assert.match(offerForm, /Set evidence rules/);
+  assert.match(offerForm, /Set evidence/);
   assert.match(offerForm, /Ready for review/);
   assert.match(offerForm, /Protocol review preview/);
   assert.match(offerForm, /getOfferReviewWorkflowCards/);
