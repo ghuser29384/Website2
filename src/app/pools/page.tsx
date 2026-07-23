@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 const mechanismFacts = [
-  ["Maximum exposure", "Every person sees the most they can be charged before authorizing."],
+  ["Most you can pay", "Every person sees the most they can be charged before agreeing."],
   [
     "Funding condition",
     "The threshold, eligible amount, deadline, and review gates are published together.",

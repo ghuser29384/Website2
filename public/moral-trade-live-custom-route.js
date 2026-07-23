@@ -160,7 +160,7 @@
         <span class="eyebrow">${label}</span>
         <div class="mt-cr-range-head"><label for="mt-cr-limit-${key}">Available</label><output>${displayedLimit}</output></div>
         <input id="mt-cr-limit-${key}" data-mt-cr-input="limit" data-resource="${key}" type="range" min="${key === "money" ? 0 : key === "minutes" ? 5 : 1}" max="${maximum}" step="${step}" value="${limit}">
-        <p>${key === "money" ? "Only marginal money counts; conditional pledges count at maximum exposure." : key === "minutes" ? "Only additional active time counts; waiting time is excluded." : "Only additional commitments created by this route count."}</p>
+        <p>${key === "money" ? "Only extra money counts. For a conditional pledge, the full pledged amount counts." : key === "minutes" ? "Only extra active time counts; waiting time does not." : "Only new commitments created by this plan count."}</p>
       </div>
     </div>`;
   }
@@ -173,7 +173,7 @@
 
     return `<section class="mt-cr-ledger" aria-labelledby="mt-cr-ledger-title">
       <div class="mt-cr-ledger-head">
-        <div><span class="eyebrow orange">BASELINE FLOW · KEPT SEPARATE</span><h3 id="mt-cr-ledger-title">Planned-donation ledger</h3><p>A donation you would make anyway is not an added resource. Confirm that baseline for this exact period; top-ups, fees, setup time, and extra actions still count.</p></div>
+        <div><span class="eyebrow orange">PLANNED DONATION · KEPT SEPARATE</span><h3 id="mt-cr-ledger-title">Planned donations</h3><p>A donation you would make anyway is not new money created by this plan. Confirm what you already planned for this period; added money, fees, setup time, and extra actions still count.</p></div>
         <div class="mt-cr-periods" role="group" aria-label="Budget period">
           ${["week", "month"].map((item) => `<button type="button" data-mt-cr-action="period" data-period="${item}" aria-pressed="${period === item}" class="${period === item ? "is-active" : ""}">${periodLabel(item)}</button>`).join("")}
         </div>
@@ -203,7 +203,7 @@
           <label><span>Incremental fee</span><span>$ <input data-mt-cr-input="fee" aria-label="Incremental fee" type="number" min="0" max="100" step="0.25" value="${periodState.fee}"></span><small>Always added money</small></label>
         </div>
       </div>
-      <div class="mt-cr-ledger-result ${redirect.confirmed ? "is-confirmed" : "is-unconfirmed"}" aria-live="polite"><strong>${redirectSelected ? redirect.moneyLabel : "Redirect not selected"}</strong><span>${redirectSelected ? redirect.unmatchedLabel : "No planned-donation principal is being used by this draft."}</span></div>
+      <div class="mt-cr-ledger-result ${redirect.confirmed ? "is-confirmed" : "is-unconfirmed"}" aria-live="polite"><strong>${redirectSelected ? redirect.moneyLabel : "Redirect not selected"}</strong><span>${redirectSelected ? redirect.unmatchedLabel : "This draft does not use money from a planned donation."}</span></div>
     </section>`;
   }
 
@@ -265,7 +265,7 @@
         <button class="mt-cr-review-close" type="button" data-mt-cr-action="close-review" aria-label="Close final review">×</button>
         <span class="eyebrow blue">FINAL REVIEW · ITEMIZED EFFECTS</span>
         <h2 id="mt-cr-review-title">Review what this route would add.</h2>
-        <p>The planned-donation principal remains visible as baseline flow. It is excluded from the added-resource ceiling only to the extent you confirmed it for ${periodLabel(model.period).toLowerCase()}.</p>
+        <p>The amount you already planned to donate stays visible and separate. It does not count toward the extra-money limit when you confirm it for ${periodLabel(model.period).toLowerCase()}.</p>
         <div class="mt-cr-effect-list">${effects.map((effect, index) => `<label class="mt-cr-effect">
           <input type="checkbox" data-mt-cr-input="effect" data-effect-id="${effect.id}" ${ui.confirmedEffects.has(effect.id) ? "checked" : ""}>
           <span class="mt-cr-custom-check" aria-hidden="true">✓</span>
@@ -274,7 +274,7 @@
           <span class="mt-cr-effect-money">${effect.money}</span>
         </label>`).join("")}</div>
         <div class="mt-cr-review-totals">
-          <div><span>Planned donation used</span><strong>$${formatMoney(model.totals.plannedDonation)}</strong></div>
+          <div><span>Planned donation redirected</span><strong>$${formatMoney(model.totals.plannedDonation)}</strong></div>
           <div><span>Added-money maximum</span><strong>$${formatMoney(model.totals.added.money)}</strong></div>
           <div><span>Added active time</span><strong>${model.totals.added.minutes} min</strong></div>
           <div><span>Added actions</span><strong>${model.totals.added.actions}</strong></div>
@@ -297,17 +297,17 @@
       <div class="mt-cr-workbench panel">
         ${renderLedger(model)}
         <section class="mt-cr-added-resources" aria-labelledby="mt-cr-added-title">
-          <div class="mt-cr-section-heading"><div><span class="eyebrow blue">ADDED RESOURCES</span><h3 id="mt-cr-added-title">What this route adds to your ${model.period}.</h3></div><p>Baseline principal is not mixed into these meters after confirmation.</p></div>
+          <div class="mt-cr-section-heading"><div><span class="eyebrow blue">WHAT THIS ADDS</span><h3 id="mt-cr-added-title">What this plan adds to your ${model.period}.</h3></div><p>Your already-planned donation stays separate after you confirm it.</p></div>
           <div class="mt-cr-reservoirs">
             ${renderReservoir({ key: "money", label: "ADDED-MONEY CEILING", used: totals.added.money, limit: totals.limits.money, unit: "", maximum: 120, step: 5 })}
             ${renderReservoir({ key: "minutes", label: "ACTIVE-TIME CEILING", used: totals.added.minutes, limit: totals.limits.minutes, unit: "m", maximum: 180, step: 5 })}
             ${renderReservoir({ key: "actions", label: "ADDED-ACTION CEILING", used: totals.added.actions, limit: totals.limits.actions, unit: "", maximum: 12, step: 1 })}
           </div>
         </section>
-        <section class="mt-cr-mechanisms" aria-label="Mechanism options">${Object.keys(MECHANISMS).map((mechanism) => renderLane(mechanism, model)).join("")}</section>
+        <section class="mt-cr-mechanisms" aria-label="Trade options">${Object.keys(MECHANISMS).map((mechanism) => renderLane(mechanism, model)).join("")}</section>
         <footer class="mt-cr-footer">
           <div class="mt-cr-assembled"><span class="eyebrow">ASSEMBLED ROUTE · ${selected.length} STEP${selected.length === 1 ? "" : "S"}</span><div class="mt-cr-route-strip">${selected.length ? selected.map((item, index) => `<div class="tone-${MECHANISMS[item.mechanism].tone}"><span>${index + 1}</span><p>${item.title}</p><small>${item.id === "redirect" ? totals.redirect.moneyLabel : `$${formatMoney(addedMoneyForItem(item, totals))} added`}</small></div>`).join("") : `<p class="mt-cr-empty">Select actions above or fit a route automatically.</p>`}</div></div>
-          <div class="mt-cr-actions">${anyOver ? `<p class="mt-cr-over" role="alert">This draft exceeds ${Object.entries(totals.over).filter(([, value]) => value).map(([key]) => key === "minutes" ? "time" : key).join(" and ")} ceiling${Object.values(totals.over).filter(Boolean).length > 1 ? "s" : ""}.</p>` : ""}<button class="btn ghost" type="button" data-mt-cr-action="reset">Reset ${model.period}</button><button class="btn" type="button" data-mt-cr-action="clear">Clear</button><button class="btn" type="button" data-mt-cr-action="fit">Fit automatically</button><button class="btn primary" type="button" data-mt-cr-action="review" ${selected.length === 0 || anyOver ? "disabled" : ""}>Review mix</button></div>
+          <div class="mt-cr-actions">${anyOver ? `<p class="mt-cr-over" role="alert">This draft exceeds your ${Object.entries(totals.over).filter(([, value]) => value).map(([key]) => key === "minutes" ? "time" : key).join(" and ")} limit${Object.values(totals.over).filter(Boolean).length > 1 ? "s" : ""}.</p>` : ""}<button class="btn ghost" type="button" data-mt-cr-action="reset">Reset ${model.period}</button><button class="btn" type="button" data-mt-cr-action="clear">Clear</button><button class="btn" type="button" data-mt-cr-action="fit">Fit automatically</button><button class="btn primary" type="button" data-mt-cr-action="review" ${selected.length === 0 || anyOver ? "disabled" : ""}>Review mix</button></div>
         </footer>
       </div>
       ${renderReview(model)}

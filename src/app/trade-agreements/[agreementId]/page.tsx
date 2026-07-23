@@ -104,7 +104,7 @@ export default async function TradeAgreementPage({
           <section className="section section-white">
             <div className="status-banner status-banner-error">
               <strong>Agreement version unavailable</strong>
-              <p>No participant should rely on this record until a frozen term version exists.</p>
+              <p>Do not act on this record until the final terms are available.</p>
             </div>
             {detail.threadId ? (
               <Link className="button button-secondary" href={`/messages/${detail.threadId}`}>
@@ -178,11 +178,11 @@ export default async function TradeAgreementPage({
 
         <section className="section section-white" id="terms" aria-labelledby="terms-heading">
           <div className="section-head section-head-compact">
-            <p className="eyebrow">Frozen Deal Receipt</p>
-            <h2 id="terms-heading">Version {version.version} is the only version anyone may confirm.</h2>
+            <p className="eyebrow">Final trade terms</p>
+            <h2 id="terms-heading">Review version {version.version} before you confirm.</h2>
             <p>
-              Material changes create a new immutable version and clear prior confirmations. No payment,
-              custody, or blanket verification claim is created by this record.
+              If the terms change, a new version is created and both people must confirm again.
+              This record does not collect money or verify the whole trade by itself.
             </p>
           </div>
 
@@ -197,7 +197,7 @@ export default async function TradeAgreementPage({
                 <dd>{version.proposed_action}</dd>
               </div>
               <div>
-                <dt>Counterparty commits</dt>
+                <dt>Other participant commits</dt>
                 <dd>{version.requested_action}</dd>
               </div>
               <div>
@@ -209,7 +209,7 @@ export default async function TradeAgreementPage({
                 <dd>{formatDate(version.start_date)}</dd>
               </div>
               <div>
-                <dt>Maximum burden</dt>
+                <dt>Most this can cost</dt>
                 <dd>{version.maximum_burden}</dd>
               </div>
               <div>
@@ -221,7 +221,7 @@ export default async function TradeAgreementPage({
                 <dd>{formatDate(version.evidence_due_date)}</dd>
               </div>
               <div>
-                <dt>Privacy scope</dt>
+                <dt>Who can see what</dt>
                 <dd>{version.privacy_scope}</dd>
               </div>
               <div>
@@ -230,7 +230,7 @@ export default async function TradeAgreementPage({
               </div>
             </dl>
             <p className="panel-note">
-              Terms hash: {String(version.terms_hash).slice(0, 16)}… · proposed by{" "}
+              Record code: {String(version.terms_hash).slice(0, 16)}… · proposed by{" "}
               {participantLabel(
                 String(version.proposed_by),
                 viewer.authUser.id,
@@ -285,7 +285,7 @@ export default async function TradeAgreementPage({
                   <textarea defaultValue={String(version.maximum_burden)} name="maximum_burden" required rows={3} />
                 </label>
                 <label className="field">
-                  <span>Privacy scope</span>
+                  <span>Who can see what</span>
                   <textarea defaultValue={String(version.privacy_scope)} name="privacy_scope" required rows={3} />
                 </label>
                 <label className="field">
@@ -331,13 +331,13 @@ export default async function TradeAgreementPage({
             <p className="detail-kicker">Evidence viewer</p>
             <h3>
               {detail.evidence.length
-                ? `Review ${detail.evidence.length} submitted artifact${detail.evidence.length === 1 ? "" : "s"} together`
+                ? `Review ${detail.evidence.length} evidence item${detail.evidence.length === 1 ? "" : "s"} together`
                 : "Your evidence page is ready before the first submission"}
             </h3>
             <p className="route-text">
               {detail.evidence.length
-                ? "Inspect public-safe source copies, exact terms, participant review state, privacy notes, and the full verification history in one place."
-                : "Open the awaiting-evidence state now to inspect the frozen terms, evidence rule, privacy scope, and trade history."}
+                ? "See public evidence copies, exact terms, participant decisions, privacy notes, and the full review history in one place."
+                : "Open the evidence page now to see the final terms, evidence rule, privacy choices, and trade history."}
             </p>
             <Link className="button button-primary" href={`/evidence/${agreementId}`}>
               {detail.evidence.length ? "Review evidence" : "Open evidence page"}
@@ -360,7 +360,7 @@ export default async function TradeAgreementPage({
                 <input name="evidence_url" placeholder="https://..." type="url" />
               </label>
               <label className="field">
-                <span>Participant attestation</span>
+                  <span>What you confirm</span>
                 <textarea
                   name="attestation"
                   placeholder="State exactly what action was completed and over what period"
@@ -415,7 +415,7 @@ export default async function TradeAgreementPage({
                         Visibility: {String(item.public_visibility ?? "public").replaceAll("_", " ")}
                       </span>
                       <span className="source-pill">
-                        Redaction: {String(item.redaction_status ?? "pending_review").replaceAll("_", " ")}
+                        Private details: {String(item.redaction_status ?? "pending_review").replaceAll("_", " ")}
                       </span>
                     </div>
                     {item.attestation ? <p className="route-text">{item.attestation}</p> : null}
@@ -457,7 +457,7 @@ export default async function TradeAgreementPage({
                             <span>Challenge reason</span>
                             <textarea
                               name="challenge_reason"
-                              placeholder="Identify the factual, scope, duplicate-proof, or coercion issue"
+                              placeholder="Explain what may be wrong, outside the agreement, duplicated, or pressured"
                               required
                               rows={3}
                             />
@@ -478,7 +478,7 @@ export default async function TradeAgreementPage({
               <div className="empty-state">
                 <div>
                   <strong>No evidence submitted.</strong>
-                  <p>Use a file, link, or attestation after bilateral activation.</p>
+                  <p>Use a file, link, or signed statement after both people accept the final terms.</p>
                 </div>
               </div>
             )}

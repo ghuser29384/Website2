@@ -17,13 +17,12 @@ export function SiteFooter() {
         <div className="footer-intro mt-footer-intro">
           <h2>A marketplace for productive difference.</h2>
           <p>
-            Trade commitments, redirect offsetting donations, and join conditional funding pools.
-            Moral Trade keeps the no-deal default, maximum exposure, evidence, settlement, and exit
-            terms visible before reliance.
+            Trade commitments, redirect offsetting donations, and join funding pools that activate
+            only when their goal is met. Before you agree, Moral Trade shows what happens without a
+            deal, the most you can commit, the evidence needed, payment terms, and how to leave.
           </p>
           <p>
-            Research supports the mechanism. The public product is the marketplace and coordination
-            infrastructure.
+            Research informs how Moral Trade works. The public product is the marketplace itself.
           </p>
         </div>
 
@@ -46,8 +45,8 @@ export function SiteFooter() {
       <div className="footer-meta mt-footer-meta">
         <p>
           Moral Trade does not provide legal, tax, investment, or blanket impact certification.
-          Payment, custody, authorization, settlement, and refund capabilities are disclosed at the
-          point where a user could rely on them.
+          Before you make a payment, the site tells you whether it can hold, charge, send, or refund
+          money for that specific trade.
         </p>
         <p>© 2026 Moral Trade</p>
         <div className="mt-footer-legal">

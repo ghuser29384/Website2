@@ -39,7 +39,7 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Safety & transparency",
     links: [
-      { href: "/credibility", label: "Contextual credibility" },
+      { href: "/credibility", label: "Reliability" },
       { href: "/evidence", label: "Public evidence" },
       { href: "/status", label: "Service status" },
       { href: "/safety", label: "Safety and anti-threat rules" },

@@ -260,7 +260,7 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
                 <textarea defaultValue={offer.verification} name="evidence_rule" required rows={3} />
               </label>
               <label className="field">
-                <span>Maximum burden</span>
+                <span>Most this can cost</span>
                 <textarea
                   defaultValue={offer.maximum_burden}
                   name="maximum_burden"
@@ -278,7 +278,7 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
                 />
               </label>
               <label className="field">
-                <span>Privacy scope</span>
+                <span>Who can see what</span>
                 <textarea defaultValue={offer.privacy_scope} name="privacy_scope" required rows={3} />
               </label>
               <label className="field">

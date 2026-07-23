@@ -177,10 +177,10 @@ function mediaKind(item: EvidenceStageItem) {
 }
 
 function redactionCopy(state: EvidenceStageRedactionState) {
-  if (state === "not_required") return "Public-safe copy";
-  if (state === "redacted") return "Privacy-redacted copy";
+  if (state === "not_required") return "Ready to share publicly";
+  if (state === "redacted") return "Private details hidden";
   if (state === "withheld") return "Source withheld for safety";
-  return "Source pending review";
+  return "Waiting for privacy review";
 }
 
 function reviewWindowIsOpen(value: string | null, now: number) {
@@ -194,7 +194,7 @@ function stateCopy(item: EvidenceStageItem | undefined, canReview: boolean, revi
     return {
       label: "Awaiting evidence",
       title: "No evidence has been submitted",
-      copy: "This page is ready for the first artifact. The agreed evidence rule and trade history remain visible in the meantime.",
+      copy: "This page is ready for the first evidence item. The evidence rule and trade history are still available.",
     };
   }
   if (item.state === "accepted") {
@@ -208,7 +208,7 @@ function stateCopy(item: EvidenceStageItem | undefined, canReview: boolean, revi
     return {
       label: "Challenged",
       title: "This evidence has been challenged",
-      copy: "A participant identified a factual or scope issue. The agreement remains disputed until that issue is resolved.",
+      copy: "A participant said this item may be wrong or may not match the agreement. The trade remains disputed until the issue is resolved.",
     };
   }
   if (!reviewWindowOpen) {
@@ -239,7 +239,7 @@ function ReceiptPreview({ compact = false }: { compact?: boolean }) {
       <h4>THE GREEN TABLE</h4>
       {!compact ? (
         <p>
-          Cafe receipt · public-safe copy
+          Cafe receipt · public copy
           <br />
           July 18, 2026 · 12:39 PM
         </p>
@@ -335,7 +335,7 @@ function ArtifactMedia({ item, record }: { item: EvidenceStageItem; record: Evid
           <LinkSimple aria-hidden="true" size={17} /> Open public source
         </a>
       ) : (
-        <p className={styles.metadataOnly}>The metadata is public; no public-safe source file is available.</p>
+        <p className={styles.metadataOnly}>The file details are public, but the original file is not available here.</p>
       )}
     </article>
   );
@@ -495,7 +495,7 @@ export function EvidenceStage({
     <section
       aria-labelledby="evidence-record-title"
       className={styles.shell}
-      data-evidence-dossier
+      data-evidence-record
       data-pe-desk
       data-stage-evidence-viewer
     >
@@ -644,7 +644,7 @@ export function EvidenceStage({
                   <div className={styles.emptyEvidence}>
                     <File aria-hidden="true" size={46} weight="thin" />
                     <h2>No evidence submitted yet</h2>
-                    <p>The trade terms and verification history are available now. Artifacts will appear here after submission.</p>
+                    <p>The trade terms and review history are available now. Evidence will appear here after it is submitted.</p>
                     {viewer.isParticipant && viewer.agreementHref ? <Link href={viewer.agreementHref}>Open the trade to submit evidence</Link> : null}
                   </div>
                 )}
@@ -689,7 +689,7 @@ export function EvidenceStage({
                       <p>{redactionCopy(selected.redactionState)}</p>
                       <button onClick={() => privacyDialogRef.current?.showModal()} type="button">Privacy details</button>
                       {viewer.isParticipant && viewer.threadHref ? <Link href={viewer.threadHref}>Ask counterparty</Link> : null}
-                      <h2>Evidence mapping</h2>
+                      <h2>What this supports</h2>
                       <p className={styles.artifactGroup}>{selected.group}</p>
                       <p className={styles.artifactSummary}>{selected.summary}</p>
                       <p className={styles.artifactLimit}>This item supports only what is visible or stated here; it cannot establish behavior outside the submitted record.</p>
@@ -729,7 +729,7 @@ export function EvidenceStage({
 
           {activeTab === "terms" ? (
             <div aria-labelledby="evidence-tab-terms" className={styles.tabPanel} id="evidence-panel-terms" role="tabpanel">
-              <div className={styles.panelHeading}><p>Frozen agreement</p><h2>The exact exchange both parties accepted</h2></div>
+              <div className={styles.panelHeading}><p>Final agreement</p><h2>The exact exchange both parties accepted</h2></div>
               <div className={styles.termExchange}>
                 <article><span>{record.proposer}</span><strong>{record.proposedAction}</strong><small>{record.offeredCause}</small></article>
                 <div aria-hidden="true">↔</div>
@@ -752,12 +752,12 @@ export function EvidenceStage({
                   <ShieldCheck aria-hidden="true" size={28} weight="thin" />
                   <span>Participant review</span>
                   <strong>{acceptedCount} of {record.evidence.length} accepted</strong>
-                  <p>An acceptance means the counterparty reviewed the item against the frozen rule. It is not an independent platform finding.</p>
+                  <p>An acceptance means the other participant checked the item against the agreed rule. It is not an independent platform finding.</p>
                 </article>
                 <article>
                   <Lock aria-hidden="true" size={28} weight="thin" />
-                  <span>Privacy scope</span>
-                  <strong>{record.accessScope === "public" ? "Public evidence scope" : "Participant-only evidence scope"}</strong>
+                  <span>Who can see it</span>
+                  <strong>{record.accessScope === "public" ? "Public evidence" : "Participants only"}</strong>
                   <p>{record.privacyScope} The selected item is {redactionCopy(selected?.redactionState ?? "pending_review").toLowerCase()}.</p>
                 </article>
               </div>
@@ -777,13 +777,13 @@ export function EvidenceStage({
         </div>
         {selected ? (
           <dl className={styles.dialogDetails}>
-            <div><dt>What is shared</dt><dd>{selected.publicUrl ? "The available evidence artifact and its review record." : "The evidence record and metadata; no source copy is available here."}</dd></div>
-            <div><dt>Redaction state</dt><dd>{selected.redactionState.replaceAll("_", " ")}</dd></div>
+            <div><dt>What is shared</dt><dd>{selected.publicUrl ? "The evidence file and its review record." : "The evidence description and file details; the original file is not available here."}</dd></div>
+            <div><dt>Private details</dt><dd>{redactionCopy(selected.redactionState)}</dd></div>
             <div><dt>What is hidden</dt><dd>{selected.redactionNote}</dd></div>
-            <div><dt>Viewer access</dt><dd>This viewer exposes only the public copy or public metadata recorded for this item.</dd></div>
+            <div><dt>Who can see this</dt><dd>This page shows only the public copy or public file details saved for this item.</dd></div>
             <div><dt>Privacy rule</dt><dd>{record.privacyScope}</dd></div>
           </dl>
-        ) : <p className={styles.dialogCopy}>No artifact has been submitted.</p>}
+        ) : <p className={styles.dialogCopy}>No evidence has been submitted.</p>}
         <button className={styles.dialogClose} onClick={() => privacyDialogRef.current?.close()} type="button">Done</button>
       </dialog>
 
@@ -791,7 +791,7 @@ export function EvidenceStage({
         <>
           <dialog aria-labelledby="accept-dialog-title" className={styles.dialog} ref={acceptDialogRef}>
             <div className={styles.dialogHeader}>
-              <div><p>Accept selected evidence</p><h2 id="accept-dialog-title">Does this meet the frozen evidence rule?</h2></div>
+              <div><p>Accept selected evidence</p><h2 id="accept-dialog-title">Does this meet the agreed evidence rule?</h2></div>
               <button aria-label="Close acceptance confirmation" onClick={() => acceptDialogRef.current?.close()} type="button"><X aria-hidden="true" size={19} /></button>
             </div>
             <p className={styles.dialogCopy}>Accepting records your participant review of “{selected.title}.” It is not independent verification and this screen does not itself move money.</p>
@@ -823,7 +823,7 @@ export function EvidenceStage({
                 <select name="challenge_category" required defaultValue="">
                   <option disabled value="">Choose the closest issue</option>
                   <option value="factual_mismatch">Factual mismatch</option>
-                  <option value="outside_scope">Outside the agreed scope</option>
+                  <option value="outside_scope">Does not match the agreement</option>
                   <option value="duplicate_proof">Duplicate or reused proof</option>
                   <option value="privacy_or_coercion">Privacy or coercion concern</option>
                 </select>

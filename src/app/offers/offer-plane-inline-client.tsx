@@ -26,7 +26,7 @@ interface OfferPlaneInlineClientProps {
 }
 
 const EXPOSURE_OPTIONS = [
-  { label: "Any stated exposure", value: "any" },
+  { label: "Any stated maximum", value: "any" },
   { label: "$25 or less", value: "2500" },
   { label: "$100 or less", value: "10000" },
   { label: "$500 or less", value: "50000" },
@@ -307,7 +307,7 @@ export function OfferPlaneInlineClient({
         <summary>More filters</summary>
         <div>
           <label className={styles.field}>
-            <span>Evidence burden</span>
+            <span>Evidence needed</span>
             <select value={evidence} onChange={(event) => setEvidence(event.target.value as EvidenceFilter)}>
               <option value="all">Any evidence level</option>
               <option value="light">Light-touch</option>
@@ -316,7 +316,7 @@ export function OfferPlaneInlineClient({
           </label>
 
           <label className={styles.field}>
-            <span>Maximum exposure</span>
+            <span>Most this can cost</span>
             <select value={maxExposure} onChange={(event) => setMaxExposure(event.target.value)}>
               {EXPOSURE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>

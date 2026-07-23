@@ -2697,7 +2697,7 @@ export function summarizeDonationOffsetParticipantConfirmationForNotes(
     `Baseline snapshot: ${preview.baselineSnapshotId}`,
     `Terms snapshot: ${preview.termsSnapshotId}`,
     `Policy snapshot: ${preview.policySnapshotId}`,
-    `Maximum exposure: ${preview.maximumExposureUsd}`,
+    `Most this can cost: ${preview.maximumExposureUsd}`,
     `Confirmation scope: ${preview.confirmationScope.replaceAll("_", " ")}`,
     `Amendment status: ${preview.amendmentStatus.replaceAll("_", " ")}`,
     `Affected participant count: ${preview.affectedParticipantCount}`,

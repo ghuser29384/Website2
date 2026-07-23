@@ -280,7 +280,7 @@
       `A moral trade involving ${recommendation.offeredCause} and ${recommendation.requestedCause}.`;
     const savedLabel = recommendation.saved ? "Saved" : "Save";
     const learnedLabel = recommendation.learnedActionSignalCount
-      ? `${recommendation.learnedActionSignalCount} action signals used`
+      ? `${recommendation.learnedActionSignalCount} difficulty answers used`
       : "Initial action estimate";
 
     return `<article class="story mt-feed-card" data-mt-live-now-recommendation="${escapeHtml(
@@ -318,7 +318,7 @@
         )}</ul></div>
         <div class="mt-feed-meta">
           <span><b>${escapeHtml(recommendation.actionFitLabel)}</b> action fit</span>
-          <span><b>${escapeHtml(recommendation.difficultyLabel)}</b> estimated burden</span>
+          <span><b>${escapeHtml(recommendation.difficultyLabel)}</b> estimated difficulty</span>
           <span>${escapeHtml(learnedLabel)}</span>
           ${
             recommendation.duration
@@ -525,12 +525,12 @@
       ${renderOwnedOpportunities()}
       <section class="panel attention">
         <div class="iconbox bluebg">◎</div>
-        <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities select the benefit. Your action model estimates the burden.</h3></div>
-        <div><b>Explicit preferences outrank inferred signals.</b><p class="muted" style="font-size:11px">Browsing can refine the feed only when learning is on. Easy/hard feedback corrects action estimates directly.</p></div>
+        <div class="lead"><div class="eyebrow blue">How matching works</div><h3>Your priorities choose the causes. Your answers help estimate which actions are easy or hard for you.</h3></div>
+        <div><b>What you tell us matters more than what the feed learns.</b><p class="muted" style="font-size:11px">When learning is on, the feed can use which offers you open. Easy and hard feedback updates its estimates directly.</p></div>
         <a class="btn" href="/complete-profile">Review profile →</a>
       </section>
     </main><aside class="stack">
-      ${sidePanel("Profile basis", model.profile.causes, "")}
+      ${sidePanel("Priorities used", model.profile.causes, "")}
       ${sidePanel(
         "Feed rule",
         ["No guessed priorities", "No demo records", "Live opportunities only"],
@@ -580,10 +580,10 @@
       ? model.recentChanges.map((change) => change.label)
       : ["No matched opportunity changed in the last 24 hours"];
     const signalItems = [
-      `Browsing learning: ${model.profile.learningEnabled ? "on" : "off"}`,
-      `${model.profile.browsingSignalCount} browsing signals`,
-      `${model.profile.actionFeedbackCount} action-feedback signals`,
-      `Discovery diversity: ${model.profile.explorationPercent}%`,
+      `Learning from browsing: ${model.profile.learningEnabled ? "on" : "off"}`,
+      `${model.profile.browsingSignalCount} page choices used`,
+      `${model.profile.actionFeedbackCount} easy or hard answers`,
+      `New kinds of offers: ${model.profile.explorationPercent}%`,
     ];
 
     return `<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="ready"><main>
@@ -598,8 +598,8 @@
           model.profile.learningEnabled ? "true" : "false"
         }">Learn from browsing: ${
           model.profile.learningEnabled ? "on" : "off"
-        }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear learned signals</button></div></div>
-        <div class="mt-feed-priority-row" aria-label="Priority signals used">${weightedPriorityChips()}</div>
+        }</button><button class="mt-feed-control" type="button" data-feed-control="clear">Clear feed learning</button></div></div>
+        <div class="mt-feed-priority-row" aria-label="Priorities used">${weightedPriorityChips()}</div>
       </section>
       <section class="mt-social-feed" aria-label="Personalized moral opportunities">${cards}</section>
       ${renderOwnedOpportunities()}
@@ -615,7 +615,7 @@
         '<a class="btn ghost small" href="/complete-profile">Edit priorities →</a>',
       )}
       ${sidePanel("Opportunity types", opportunityTypeCounts(), '<a class="btn ghost small" href="/offers?view=live">Browse all →</a>')}
-      ${sidePanel("Learning model", signalItems, "")}
+      ${sidePanel("How the feed learns", signalItems, "")}
       ${sidePanel(
         "Today’s matched changes",
         changeItems,
@@ -631,7 +631,7 @@
         ],
         '<a class="btn ghost small" href="/dashboard#wish-profile">Review settings →</a>',
       )}
-      <section class="panel side-card"><h4>Privacy</h4><p class="mt-feed-privacy-note">The learning model stores typed in-product signals such as which opportunity you opened and whether an action felt easy or hard. It does not retain raw browsing URLs or page content. You can pause or clear learning here.</p></section>
+      <section class="panel side-card"><h4>Privacy</h4><p class="mt-feed-privacy-note">The feed can remember which Moral Trade offers you opened and whether an action felt easy or hard. It does not save other websites you visit or the contents of those pages. You can pause or clear this learning here.</p></section>
     </aside><div class="mt-feed-toast" role="status" aria-live="polite"></div></div>`;
   }
 
@@ -721,7 +721,7 @@
           root,
           action === "easy"
             ? "Recorded as easy for you. Similar actions may rank higher."
-            : "Recorded as hard for you. The burden model has been corrected.",
+            : "Recorded as hard for you. The feed updated its estimate.",
         );
         return;
       }
@@ -758,7 +758,7 @@
         showToast(
           root,
           enabled
-            ? "Browsing learning is on. Only typed in-product signals are stored."
+            ? "Feed learning is on. Only your actions inside Moral Trade are stored."
             : "Browsing learning is paused. Explicit feedback still applies.",
         );
       }
@@ -773,14 +773,14 @@
         })
           .then((response) => {
             if (!response.ok) throw new Error("clear");
-            showToast(root, "Learned browsing and action signals cleared.");
+            showToast(root, "Feed learning cleared.");
             if (typeof location !== "undefined" && typeof location.reload === "function") {
               setTimeout(() => location.reload(), 450);
             }
           })
           .catch(() => {
             control.removeAttribute("disabled");
-            showToast(root, "Learned signals could not be cleared.");
+            showToast(root, "Feed learning could not be cleared.");
           });
       }
     });

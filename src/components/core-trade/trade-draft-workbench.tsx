@@ -90,7 +90,7 @@ function validateStep(step: number, values: TradeDraftValues) {
     return "Add the duration and the maximum burden before continuing.";
   }
   if (step === 5 && (!values.evidenceRule.trim() || !values.privacyScope.trim())) {
-    return "Add the evidence rule and privacy scope before continuing.";
+    return "Add the evidence rule and privacy choices before continuing.";
   }
   if (step === 6 && !values.exitConditions.trim()) {
     return "State how future obligations can end before saving the record.";
@@ -280,7 +280,7 @@ export function TradeDraftWorkbench({
                       />
                     </label>
                     <span className={styles.helper}>
-                      Avoid open-ended promises. State quantity, scope, or frequency where possible.
+                      Avoid open-ended promises. State how much, what is included, or how often.
                     </span>
                   </div>
                 </>
@@ -371,7 +371,7 @@ export function TradeDraftWorkbench({
                       </label>
                     </div>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Maximum burden or exposure</span>
+                      <span className={styles.fieldLabel}>Most this could cost you</span>
                       <textarea
                         className={styles.textarea}
                         maxLength={5000}
@@ -398,12 +398,12 @@ export function TradeDraftWorkbench({
                         className={styles.textarea}
                         maxLength={5000}
                         onChange={(event) => update("evidenceRule", event.target.value)}
-                        placeholder="Receipt, external record, log, or participant attestation that will count"
+                        placeholder="Receipt, service record, log, or signed statement that will count"
                         value={values.evidenceRule}
                       />
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Public evidence and safety scope</span>
+                      <span className={styles.fieldLabel}>What evidence may be public</span>
                       <textarea
                         className={styles.textarea}
                         maxLength={5000}
@@ -618,7 +618,8 @@ export function TradeDraftSignInGate({ returnTo = "/trades/new" }: { returnTo?: 
           <span className={styles.kicker}>Private draft</span>
           <h1>Sign in to build a trade.</h1>
           <p>
-            The card stack saves real proposal terms to your account. Nothing is public or binding until review, invitation, and separate bilateral confirmation.
+            The card stack saves real proposal terms to your account. Nothing is public or binding
+            until it is reviewed, shared, and confirmed separately by both people.
           </p>
           <div className={styles.gateActions}>
             <Link className={`${styles.button} ${styles.buttonPrimary}`} href={`/signup?returnTo=${encodedReturnTo}`}>

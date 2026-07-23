@@ -286,5 +286,5 @@ test("the social feed has vertical card, feedback, privacy, and mobile rules", (
   assert.match(bridge, /Hard for me/);
   assert.match(bridge, /Less like this/);
   assert.match(bridge, /Your live routes/);
-  assert.match(bridge, /does not retain raw browsing URLs or page content/);
+  assert.match(bridge, /does not save other websites you visit or the contents of those pages/);
 });

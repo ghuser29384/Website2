@@ -454,8 +454,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               ) : (
                 <strong>{offer.owner_alias}</strong>
               )}
-              . This dossier combines public terms, discussion, recommendations, interest,
-              and transaction tracking in one record.
+              . This page brings the public terms, discussion, recommendations, responses, and
+              payment progress together.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/offers">
@@ -573,9 +573,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             <p className="eyebrow">Marketplace terms</p>
             <h2 id="marketplace-detail-section-heading">Commitment preview</h2>
             <p>
-              The marketplace view puts exposure, timing, verification, and failure rules before
-              the full review dossier. It does not bypass the existing response, payment, or review
-              gates.
+              See the maximum amount, timing, evidence, and what happens if the trade fails before
+              opening every detail. The usual response, payment, and review checks still apply.
             </p>
           </div>
           <div className="marketplace-detail-grid">
@@ -599,7 +598,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           <div className="status-banner status-banner-error">
             This donation offset is publicly visible but flagged because the baseline donation is not
             yet well verified. Ask for receipts, third-party payment confirmation, or a third-party
-            audit before relying on it.
+            review before acting on it.
           </div>
         ) : null}
 
@@ -707,7 +706,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <p>{participantReviewCopy.importanceScoreNote}</p>
             </article>
             <article className="panel protocol-contract-card">
-              <p className="detail-kicker">Appeal scope</p>
+              <p className="detail-kicker">What can be appealed</p>
               <p>{participantReviewCopy.appealCopy}</p>
             </article>
           </div>
@@ -716,7 +715,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">
             <article className="panel detail-block">
-              <p className="detail-kicker">Offer dossier</p>
+              <p className="detail-kicker">Offer details</p>
               <h3>
                 {offer.ownerProfile ? (
                   <Link className="inline-link" href={`/people/${offer.ownerProfile.id}`}>
@@ -760,7 +759,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     <p className="route-text">
                       This offer includes an optional platform-reviewed performance bond attached to
                       the offer-maker&apos;s pledge. It supports factual trust without replacing the
-                      no-trade baseline or additionality claim.
+                      explanation of what would happen without the trade or whether the trade caused
+                      an extra action.
                     </p>
                     <PerformanceBondSummary bond={offererPerformanceBond} />
                   </div>
@@ -865,7 +865,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                             </a>
                           </p>
                         ) : offer.donationOffset.baseline_bond_evidence_url ? (
-                          <p>Baseline evidence was submitted for reviewer-only provenance review.</p>
+                          <p>Baseline evidence was submitted. Only reviewers can see its source details.</p>
                         ) : null}
                         {isOwner && baselineBondStatus === "evidence_due" ? (
                           <form action={submitBaselineBondEvidenceAction} className="stack-form">
@@ -1101,7 +1101,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       </p>
                       <label className="radio-row">
                         <input name="accept_offerer_performance_bond_terms" required type="checkbox" />
-                        <span>I accept the offer-maker&apos;s evidence schema and forfeiture rule.</span>
+                        <span>I accept the offer-maker&apos;s evidence rules and what happens if the evidence is rejected.</span>
                       </label>
                     </section>
                   ) : null}
@@ -1204,7 +1204,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                             <option value="counterparty_only">Counterparty only</option>
                             <option value="platform_reviewer_only">Platform reviewer only</option>
                             <option value="public_proof">Public proof</option>
-                            <option value="mixed_redacted">Mixed/redacted</option>
+                            <option value="mixed_redacted">Some details hidden</option>
                           </select>
                         </label>
                         <label className="radio-row">
@@ -1213,7 +1213,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                             name="taker_performance_bond_private_evidence_allowed"
                             type="checkbox"
                           />
-                          <span>Private/redacted evidence is allowed.</span>
+                          <span>Private evidence or copies with details hidden are allowed.</span>
                         </label>
                       </div>
 
