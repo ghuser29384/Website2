@@ -50,7 +50,7 @@ jobs:
             install_status=$?
 
             if [ "$install_status" -eq 0 ]; then
-              npx playwright test tests/exact-live-autocomplete.spec.ts --project=chromium > tmp/live-offer-structure-validation/browser.log 2>&1
+              npx playwright test tests/exact-live-autocomplete.spec.ts > tmp/live-offer-structure-validation/browser.log 2>&1
               browser_status=$?
             fi
           fi
@@ -82,7 +82,7 @@ jobs:
 
           ## Browser tail
           \`\`\`
-          $(tail -n 60 tmp/live-offer-structure-validation/browser.log 2>/dev/null)
+          $(tail -n 80 tmp/live-offer-structure-validation/browser.log 2>/dev/null)
           \`\`\`
           EOF
 
