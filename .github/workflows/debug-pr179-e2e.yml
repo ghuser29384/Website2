@@ -1,0 +1,44 @@
+name: Debug PR 179 exact-live E2E
+
+on:
+  push:
+    branches:
+      - debug/extract-live-source-20260723
+
+permissions:
+  contents: read
+
+jobs:
+  exact-live-autocomplete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/exact-live-trade-autocomplete-20260723
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run source regression and lint
+        run: |
+          node --import tsx --test src/lib/exact-live-autocomplete.test.ts
+          npx eslint \
+            public/moral-trade-live-token-autocomplete.js \
+            src/lib/exact-live-autocomplete.test.ts \
+            tests/exact-live-autocomplete.spec.ts
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run exact live autocomplete E2E
+        run: npm run test:e2e -- tests/exact-live-autocomplete.spec.ts
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-179-exact-live-e2e
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 1
