@@ -167,6 +167,9 @@ export default async function DonationOffsetsPage() {
               <Link className="button button-secondary" href="/offers?mode=offset">
                 View offset examples
               </Link>
+              <Link className="button button-secondary" href="/donation-offsets/conditional">
+                Create a conditional donation
+              </Link>
             </>
           }
         >
