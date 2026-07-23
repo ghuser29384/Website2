@@ -1,2 +1,2 @@
 Trigger trusted finalization of PR #180 from the feature branch workflow.
-Package the fully verified application files for an explicit branch update.
+Push the fully verified application files to the dedicated release branch.
