@@ -18,20 +18,38 @@ function readExactLiveSource() {
   return gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
 }
 
-test("the exact live shell loads autocomplete for its contenteditable trade tokens", () => {
+test("the exact live shell loads structured offer types and autocomplete for editable terms", () => {
   const loader = readRepoFile("public/moral-trade-live.html");
   const adapter = readRepoFile("public/moral-trade-live-token-autocomplete.js");
+  const structure = readRepoFile("public/moral-trade-live-offer-structure.js");
+  const styles = readRepoFile("public/moral-trade-live-offer-structure.css");
   const source = readExactLiveSource();
 
   assert.match(loader, /moral-trade-input-assist\.js/);
   assert.match(loader, /moral-trade-live-token-autocomplete\.js/);
+  assert.match(loader, /moral-trade-live-offer-structure\.js/);
+  assert.match(loader, /moral-trade-live-offer-structure\.css/);
   assert.match(source, /class="token" contenteditable="true"/);
-  assert.match(source, /\['◷','Time'\]/);
+
+  assert.match(structure, /label: "Money"/);
+  assert.match(structure, /label: "Behavior or commitment"/);
+  assert.match(structure, /label: "Help or service"/);
+  assert.match(structure, /Estimated time/);
+  assert.match(structure, /Relevant skills/);
+  assert.match(structure, /Deliverable or completion condition/);
+  assert.match(structure, /Verification method/);
+  assert.match(structure, /Conditions and safeguards/);
+  assert.match(structure, /legacyIngredients\.forEach/);
+  assert.match(styles, /mt-offer-attributes/);
+  assert.match(styles, /grid-template-columns: repeat\(2/);
+
   assert.match(adapter, /TOKEN_SELECTOR/);
   assert.match(adapter, /data-mt-live-token-panel/);
+  assert.match(adapter, /data-mt-autocomplete-disabled/);
+  assert.match(adapter, /const explicitContext/);
+  assert.match(adapter, /"behavior or commitment"/);
+  assert.match(adapter, /"help or service"/);
   assert.match(adapter, /return index === 0 \? null : "priorities"/);
-  assert.match(adapter, /"only if they"/);
-  assert.match(adapter, /"time"/);
   assert.match(adapter, /return "commitments"/);
   assert.match(adapter, /\["proof", "verification"\]/);
   assert.match(adapter, /return "evidence"/);
@@ -39,7 +57,6 @@ test("the exact live shell loads autocomplete for its contenteditable trade toke
   assert.match(adapter, /return "exits"/);
   assert.match(adapter, /suggestion\.label \|\| suggestion\.value/);
   assert.doesNotMatch(adapter, /"activation condition"/);
-  assert.doesNotMatch(adapter, /"deadline"/);
   assert.match(adapter, /new MutationObserver/);
   assert.match(adapter, /aria-autocomplete/);
 });
