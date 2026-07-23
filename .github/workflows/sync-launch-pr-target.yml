@@ -1,0 +1,355 @@
+name: Trusted core launch repair and gates
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+concurrency:
+  group: trusted-core-launch-repair-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: github.event.pull_request.number == 174
+    name: Repair deterministic launch contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - name: Check out launch branch
+        uses: actions/checkout@v4
+        with:
+          ref: launch/verify-and-harden-20260723
+          fetch-depth: 0
+
+      - name: Apply deterministic browser and database-fixture compatibility fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_or_verify(path: Path, old: str, new: str, label: str) -> None:
+              source = path.read_text()
+              if old in source:
+                  if source.count(old) != 1:
+                      raise SystemExit(f"{label}: expected one old block, found {source.count(old)}")
+                  path.write_text(source.replace(old, new, 1))
+                  return
+              if new not in source:
+                  raise SystemExit(f"{label}: neither the expected old nor new block was found")
+
+          assist_path = Path("public/moral-trade-input-assist.js")
+          old_assist = '''  function start() {
+            ensureSuggestionPanel();
+            ensureHoverCard();
+            scan(document);
+
+            const observer = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                  if (node instanceof Element) scan(node);
+                });
+              });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });'''
+          new_assist = '''  function start() {
+            ensureSuggestionPanel();
+            ensureHoverCard();
+
+            const pendingScans = new Set();
+            let scanTimer = 0;
+            function scheduleScan(root) {
+              pendingScans.add(root);
+              window.clearTimeout(scanTimer);
+              scanTimer = window.setTimeout(() => {
+                pendingScans.forEach((node) => scan(node));
+                pendingScans.clear();
+              }, 2_000);
+            }
+
+            scheduleScan(document);
+            document.addEventListener("focusin", (event) => {
+              if (event.target instanceof Element) scan(event.target);
+            });
+
+            const observer = new MutationObserver((mutations) => {
+              mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                  if (node instanceof Element) scheduleScan(node);
+                });
+              });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });'''
+          replace_or_verify(assist_path, old_assist, new_assist, "input-assist hydration")
+
+          browser_path = Path("tests/core-launch-release.spec.ts")
+          old_browser = '''  const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+            await expect(page.locator("body")).toBeVisible();
+            await page.waitForTimeout(300);
+            const bodyText = (await page.locator("body").innerText()).replace(/\\s+/g, " ").trim();'''.replace("          ", "")
+          new_browser = '''  const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+            const body = page.locator("body");
+            await expect(body).toBeVisible();
+            await expect
+              .poll(
+                async () => (await body.innerText()).replace(/\\s+/g, " ").trim().length,
+                { intervals: [250, 500, 1_000], timeout: 15_000 },
+              )
+              .toBeGreaterThan(80);
+            await page.waitForTimeout(300);
+            const bodyText = (await body.innerText()).replace(/\\s+/g, " ").trim();'''.replace("          ", "")
+          replace_or_verify(browser_path, old_browser, new_browser, "browser readiness")
+
+          workflow_path = Path("supabase/tests/core_launch_workflow.sql")
+          workflow_source = workflow_path.read_text()
+          old_key = "response->>'activated'"
+          new_key = "response->>'active'"
+          if old_key in workflow_source:
+              if workflow_source.count(old_key) != 3:
+                  raise SystemExit(
+                      f"agreement activation response: expected three old keys, found {workflow_source.count(old_key)}"
+                  )
+              workflow_path.write_text(workflow_source.replace(old_key, new_key))
+          elif workflow_source.count(new_key) < 3:
+              raise SystemExit("agreement activation response: expected active response checks were not found")
+          PY
+
+      - name: Commit deterministic repairs when needed
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            public/moral-trade-input-assist.js \
+            tests/core-launch-release.spec.ts \
+            supabase/tests/core_launch_workflow.sql
+          git diff --cached --check
+          git commit -m "Stabilize launch browser evidence and validation responses"
+          git push origin HEAD:launch/verify-and-harden-20260723
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Report a committed repair
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "Applied deterministic launch repairs: meaningful-content readiness, hydration-safe input enhancement, and the current agreement activation response contract. A new exact-head gate run will start automatically."
+
+  source:
+    if: github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs: repair
+    name: Preserve exact release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Package release source and migrations
+        run: |
+          tar -czf trusted-launch-source.tar.gz \
+            .github/workflows/core-launch-gates.yml \
+            package.json package-lock.json playwright.config.ts vercel.json \
+            scripts/core-test-quarantine.json scripts/run-core-tests.mjs scripts/run-quarantined-tests.mjs \
+            public/moral-trade-input-assist.js \
+            src/app/api/health src/app/api/live-now/feedback \
+            src/app/core-trade-actions.ts src/app/core-trade-actions-hardened.ts \
+            src/app/trade-agreements src/app/trades/new \
+            src/components/core-trade/trade-draft-workbench-hardened.tsx \
+            src/lib/core-health.ts src/lib/supabase/auth-errors.ts src/lib/supabase/server.ts \
+            supabase/migrations/20260723090000_core_launch_security_performance_health.sql \
+            supabase/migrations/20260723090100_core_launch_atomic_discussion_and_terms.sql \
+            supabase/migrations/20260723090200_core_launch_atomic_evidence.sql \
+            supabase/migrations/20260723090300_core_launch_atomic_completion_exit.sql \
+            supabase/migrations/20260723090400_core_launch_guard_fixes.sql \
+            supabase/migrations/20260723090500_core_launch_final_grant_cutover.sql \
+            supabase/tests/core_launch_workflow.sql \
+            tests/core-launch-release.spec.ts
+      - name: Upload exact release source
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-launch-source-${{ github.event.pull_request.head.sha }}
+          path: trusted-launch-source.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  tests:
+    if: github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs: repair
+    name: Trusted repository tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run repository tests
+        run: npm test > test.log 2>&1
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-tests-${{ github.event.pull_request.head.sha }}
+          path: test.log
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    if: github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs: repair
+    name: Trusted repository lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run repository lint
+        run: npm run lint -- --quiet > lint.log 2>&1
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-lint-${{ github.event.pull_request.head.sha }}
+          path: lint.log
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    if: github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs: repair
+    name: Trusted production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > build.log 2>&1
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-production-build-${{ github.event.pull_request.head.sha }}
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
+
+  playwright:
+    if: github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs: repair
+    name: Trusted core Playwright suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+        run: npm run test:e2e > playwright.log 2>&1
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-core-playwright-${{ github.event.pull_request.head.sha }}
+          path: |
+            playwright.log
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    if: always() && github.event.pull_request.number == 174 && needs.repair.outputs.changed == 'false'
+    needs:
+      - repair
+      - source
+      - tests
+      - lint
+      - build
+      - playwright
+    name: Report trusted launch gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post exact-head gate results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RESULT: ${{ needs.source.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PLAYWRIGHT_RESULT: ${{ needs.playwright.result }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          ### Trusted launch gate run
+
+          Exact head: \`$HEAD_SHA\`  
+          Workflow run: \`$RUN_ID\`
+
+          | Gate | Result |
+          |---|---|
+          | Exact source artifact | $SOURCE_RESULT |
+          | Repository tests | $TEST_RESULT |
+          | Repository lint | $LINT_RESULT |
+          | Production build | $BUILD_RESULT |
+          | Core Playwright suite | $PLAYWRIGHT_RESULT |
+
+          Artifacts are retained for 14 days on this workflow run.
+          EOF
+          )
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "$body"
