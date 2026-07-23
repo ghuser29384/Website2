@@ -7,10 +7,11 @@
   const HANDOFF_KEY = "moral-trade.command-center.handoff.v1";
   const HANDOFF_VERSION = 1;
   const MAX_COMMAND_LENGTH = 2_000;
+  const PENDING_COMMAND_KEY = "moral-trade.command.pending.v1";
   const LEGACY_DEMO_COMMAND =
     "Offer $80 for AI-safety research if 12 transit trips are replaced";
   const COMMAND_PLACEHOLDER =
-    "$5 donation to animal welfare if you eat 1 vegetarian meal";
+    "Ask Command to do anything in Moral Trade…";
   const DEFAULT_EXIT_CONDITIONS =
     "Either participant may withdraw before both participants confirm the final terms; no commitment begins before that confirmation.";
 
@@ -308,13 +309,12 @@
     status.textContent = message;
   }
 
-  function storeHandoff(command) {
+  function storePendingCommand(command) {
     try {
-      const record = createHandoffRecord(command);
-      window.sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(record));
+      window.sessionStorage.setItem(PENDING_COMMAND_KEY, command);
       return true;
     } catch (error) {
-      console.warn("[Moral Trade] Command handoff could not be stored.", error);
+      console.warn("[Moral Trade] Command could not be transferred.", error);
       return false;
     }
   }
@@ -326,19 +326,19 @@
     event?.stopImmediatePropagation?.();
 
     if (!command) {
-      showTransferError(button, "Describe both sides of the proposed exchange first.");
+      showTransferError(button, "Enter a Moral Trade request first.");
       return false;
     }
 
-    if (!storeHandoff(command)) {
+    if (!storePendingCommand(command)) {
       showTransferError(
         button,
-        "The command could not be transferred securely. Copy it, then open the trade editor.",
+        "The request could not be transferred securely. Copy it, then open Command.",
       );
       return false;
     }
 
-    window.location.assign("/trades/new?handoff=command-center");
+    window.location.assign("/command?source=drawer");
     return true;
   }
 
@@ -351,8 +351,40 @@
 
     if (clean(input.value) === LEGACY_DEMO_COMMAND) input.value = "";
     input.placeholder = COMMAND_PLACEHOLDER;
-    input.setAttribute("aria-label", "Describe the proposed exchange");
+    input.setAttribute("aria-label", "Ask Moral Trade Command");
     input.setAttribute("autocomplete", "off");
+
+    const eyebrow = drawer.querySelector(".eyebrow");
+    if (eyebrow && /command center/i.test(eyebrow.textContent || "")) {
+      eyebrow.textContent = "COMMAND";
+    }
+    const heading = drawer.querySelector("h1, h2");
+    if (heading && /create the next commitment/i.test(heading.textContent || "")) {
+      heading.textContent = "Ask Moral Trade.";
+    }
+    const descriptiveCopy = Array.from(drawer.querySelectorAll("p")).find((element) =>
+      /describe the value you will offer/i.test(element.textContent || ""),
+    );
+    if (descriptiveCopy) {
+      descriptiveCopy.textContent =
+        "Search, plan, compare, draft, navigate, and prepare authorized actions in one persistent conversation.";
+    }
+    const buildButton = drawer.querySelector('[data-action="from-command"]');
+    if (buildButton && /build this offer/i.test(buildButton.textContent || "")) {
+      buildButton.textContent = "Send to Command";
+      buildButton.setAttribute("aria-label", "Send request to the Command workspace");
+    }
+    if (buildButton && !drawer.querySelector('[data-mt-full-command="true"]')) {
+      const fullLink = document.createElement("a");
+      fullLink.href = "/command";
+      fullLink.dataset.mtFullCommand = "true";
+      fullLink.textContent = "Open full Command workspace →";
+      fullLink.style.display = "inline-block";
+      fullLink.style.marginTop = "12px";
+      fullLink.style.color = "inherit";
+      fullLink.style.fontSize = "13px";
+      buildButton.insertAdjacentElement("afterend", fullLink);
+    }
   }
 
   function start() {
@@ -391,6 +423,7 @@
   window.MoralTradeCommandHandoff = {
     HANDOFF_KEY,
     HANDOFF_VERSION,
+    PENDING_COMMAND_KEY,
     LEGACY_DEMO_COMMAND,
     createHandoffRecord,
     commandTextFor,

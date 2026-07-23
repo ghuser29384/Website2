@@ -1,0 +1,47 @@
+.gate {
+  display: grid;
+  min-height: 64vh;
+  place-items: center;
+  padding: 64px 24px;
+}
+
+.gateCard {
+  display: grid;
+  width: min(620px, 100%);
+  gap: 18px;
+  padding: clamp(28px, 5vw, 54px);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.gateCard h1,
+.gateCard p {
+  margin: 0;
+}
+
+.gateCard h1 {
+  font: 600 clamp(36px, 6vw, 58px)/0.98 var(--font-heading);
+  letter-spacing: -0.035em;
+}
+
+.gateCard > p:not(.gateLabel) {
+  max-width: 56ch;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.gateLabel {
+  color: var(--accent-deep);
+  font: 700 11px/1.2 var(--font-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.gateActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+}

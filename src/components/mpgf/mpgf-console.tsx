@@ -52,6 +52,11 @@ type MpgfConsoleTab = "contribute" | "pools" | "ballot" | "summary";
 
 interface MpgfConsoleProps {
   initialPoolProposalDeadline?: string;
+  initialPoolProposalTitle?: string;
+  initialPoolProposalCause?: string;
+  initialPoolParticipantCount?: number;
+  initialPoolContributionAmount?: number;
+  initialPoolThresholdCount?: number;
   initialTab?: MpgfConsoleTab;
   participantState?: MpgfParticipantState;
   manualEvidenceReadiness?: MpgfManualEvidenceReadiness;
@@ -119,6 +124,11 @@ function donateHrefFromPayload(payload: unknown) {
 
 export function MpgfConsole({
   initialPoolProposalDeadline = "",
+  initialPoolProposalTitle = "",
+  initialPoolProposalCause = "",
+  initialPoolParticipantCount = 0,
+  initialPoolContributionAmount = 0,
+  initialPoolThresholdCount = 0,
   initialTab = "contribute",
   manualEvidenceReadiness,
   participantState,
@@ -180,17 +190,33 @@ export function MpgfConsole({
     "Production participation is pledge-only and uses external handoff. Moral Trade does not store a payment method.",
   );
   const [proposalTitle, setProposalTitle] = useState(
-    poolTemplateApplied ? "New conditional public-good pool" : "Community public-goods evaluation reserve",
+    initialPoolProposalTitle || (poolTemplateApplied ? "New conditional public-good pool" : "Community public-goods evaluation reserve"),
   );
-  const [proposalSummary, setProposalSummary] = useState("");
-  const [proposalCauseArea, setProposalCauseArea] = useState("");
+  const [proposalSummary, setProposalSummary] = useState(
+    initialPoolParticipantCount && initialPoolContributionAmount && initialPoolThresholdCount
+      ? `${initialPoolParticipantCount} potential participants may each contribute up to $${initialPoolContributionAmount}; the proposal activates only if at least ${initialPoolThresholdCount} participants join under the reviewed threshold and fallback rules.`
+      : "",
+  );
+  const [proposalCauseArea, setProposalCauseArea] = useState(initialPoolProposalCause);
   const [proposalProblem, setProposalProblem] = useState(
     "Many cause areas lack comparable public evidence that different moral views can inspect together.",
   );
   const [proposalIntervention, setProposalIntervention] = useState("");
-  const [proposalMoralPublicGoodRationale, setProposalMoralPublicGoodRationale] = useState("");
-  const [proposalRequestedMaximumFunding, setProposalRequestedMaximumFunding] = useState(50_000);
-  const [proposalMinimumViableFunding, setProposalMinimumViableFunding] = useState(10_000);
+  const [proposalMoralPublicGoodRationale, setProposalMoralPublicGoodRationale] = useState(
+    initialPoolProposalCause
+      ? `${initialPoolProposalCause} is proposed as a shared moral public good. Review who benefits, who bears externalities, and why the threshold mechanism is preferable to the no-pool baseline.`
+      : "",
+  );
+  const [proposalRequestedMaximumFunding, setProposalRequestedMaximumFunding] = useState(
+    initialPoolParticipantCount && initialPoolContributionAmount
+      ? initialPoolParticipantCount * initialPoolContributionAmount
+      : 50_000,
+  );
+  const [proposalMinimumViableFunding, setProposalMinimumViableFunding] = useState(
+    initialPoolThresholdCount && initialPoolContributionAmount
+      ? initialPoolThresholdCount * initialPoolContributionAmount
+      : 10_000,
+  );
   const [proposalOutcomeUnitLabel, setProposalOutcomeUnitLabel] = useState("");
   const [proposalOutcomeUnitDefinition, setProposalOutcomeUnitDefinition] = useState("");
   const [proposalReferenceAlternative, setProposalReferenceAlternative] = useState("");
@@ -206,8 +232,14 @@ export function MpgfConsole({
   const [proposalDestinationType, setProposalDestinationType] =
     useState<MpgfPublicGoodsDestinationType>("external_charity");
   const [proposalDestinationRef, setProposalDestinationRef] = useState("");
-  const [proposalThresholdAmount, setProposalThresholdAmount] = useState(10_000);
-  const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(25);
+  const [proposalThresholdAmount, setProposalThresholdAmount] = useState(
+    initialPoolThresholdCount && initialPoolContributionAmount
+      ? initialPoolThresholdCount * initialPoolContributionAmount
+      : 10_000,
+  );
+  const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(
+    initialPoolThresholdCount || 25,
+  );
   const [proposalDeadlineAt, setProposalDeadlineAt] = useState(initialPoolProposalDeadline);
   const [proposalVerificationMethod, setProposalVerificationMethod] = useState("");
   const [proposalBaselineRule, setProposalBaselineRule] = useState("");

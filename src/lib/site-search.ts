@@ -10,6 +10,13 @@ export interface SiteSearchItem {
 
 export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
+    href: "/command",
+    label: "Command workspace",
+    summary: "Use a persistent conversational workspace to search, plan, preview, draft, navigate, and confirm authorized Moral Trade actions.",
+    kind: "account",
+    keywords: ["command", "assistant", "agent", "chat", "plan", "tools", "automation", "copilot", "conversation"],
+  },
+  {
     href: "/feed",
     label: "Personalized opportunity feed",
     summary: "See live moral-trade opportunities ranked by your priorities, action preferences, and explicit feedback.",

@@ -32,6 +32,11 @@ function single(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
+function positiveNumber(value: string, maximum: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
+}
+
 function buildFutureDeadline(daysFromNow: number) {
   const deadline = new Date();
   deadline.setUTCDate(deadline.getUTCDate() + daysFromNow);
@@ -41,6 +46,11 @@ function buildFutureDeadline(daysFromNow: number) {
 export default async function MpgfNewPoolPage({ searchParams }: MpgfNewPoolPageProps) {
   const resolved = await searchParams;
   const templateApplied = single(resolved.template) === "threshold-coalition";
+  const commandTitle = single(resolved.title).slice(0, 180);
+  const commandCause = single(resolved.cause).slice(0, 180);
+  const commandParticipants = positiveNumber(single(resolved.participants), 1_000_000_000);
+  const commandContribution = positiveNumber(single(resolved.contribution), 1_000_000_000);
+  const commandThreshold = positiveNumber(single(resolved.threshold), 1_000_000_000);
   const viewer = await getViewer();
 
   if (templateApplied && !viewer) {
@@ -66,6 +76,11 @@ export default async function MpgfNewPoolPage({ searchParams }: MpgfNewPoolPageP
       <section className="section section-white">
         <MpgfConsole
           initialPoolProposalDeadline={buildFutureDeadline(90)}
+          initialPoolProposalTitle={commandTitle}
+          initialPoolProposalCause={commandCause}
+          initialPoolParticipantCount={commandParticipants}
+          initialPoolContributionAmount={commandContribution}
+          initialPoolThresholdCount={commandThreshold}
           initialTab="pools"
           manualEvidenceReadiness={manualEvidenceReadiness}
           participantState={participantState}

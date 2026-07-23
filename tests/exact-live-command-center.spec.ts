@@ -1,50 +1,39 @@
 import { expect, test } from "@playwright/test";
 
 const command = "$5 donation to animal welfare if you eat 1 vegetarian meal";
-const handoffKey = "moral-trade.command-center.handoff.v1";
+const pendingKey = "moral-trade.command.pending.v1";
 
-test.describe("live Command Center", () => {
-  test("hands the command to the real private draft editor without a false success", async ({
-    page,
-  }) => {
+test.describe("universal live Command", () => {
+  test("sends any drawer request into the shared persistent workspace", async ({ page }) => {
     await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
 
     await page.getByRole("button", { name: /Command$/ }).click();
-    const input = page.getByLabel("Describe the proposed exchange");
+    const input = page.getByLabel("Ask Moral Trade Command");
     await expect(input).toBeVisible();
     await expect(input).toHaveValue("");
+    await expect(input).toHaveAttribute(
+      "placeholder",
+      "Ask Command to do anything in Moral Trade…",
+    );
     await input.fill(command);
 
-    await page.getByRole("button", { name: "Build this offer" }).click();
+    await page.getByRole("button", { name: "Send request to the Command workspace" }).click();
 
-    await expect(page).toHaveURL(/\/trades\/new\?handoff=command-center$/);
-    await expect(
-      page.getByRole("heading", { name: "Sign in to build a trade." }),
-    ).toBeVisible();
+    await expect(page).toHaveURL(/\/command\?source=drawer$/);
+    await expect(page.getByRole("heading", { name: "Sign in to use Command." })).toBeVisible();
     await expect(page.getByText("Draft created with editable exact terms.")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create account" })).toHaveAttribute(
       "href",
-      "/signup?returnTo=%2Ftrades%2Fnew%3Fhandoff%3Dcommand-center",
+      "/signup?returnTo=%2Fcommand",
     );
 
-    const handoff = await page.evaluate((key) => {
-      const raw = window.sessionStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    }, handoffKey);
+    const pending = await page.evaluate((key) => window.sessionStorage.getItem(key), pendingKey);
+    expect(pending).toBe(command);
+  });
 
-    expect(handoff).toMatchObject({
-      version: 1,
-      source: "command-center",
-      values: {
-        offeredCause: "Animal welfare",
-        requestedCause: "Animal welfare",
-        proposedAction: "Donate $5 to an agreed animal welfare organization.",
-        requestedAction: "Eat 1 vegetarian meal.",
-        duration: "One meal",
-        evidenceRule: "",
-      },
-    });
-    expect(handoff).not.toHaveProperty("command");
-    expect(handoff).not.toHaveProperty("rawCommand");
+  test("the dedicated workspace explains its authorization boundary when signed out", async ({ page }) => {
+    await page.goto("/command", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Sign in to use Command." })).toBeVisible();
+    await expect(page.getByText(/cannot bypass consent, review, payment, or safety controls/i)).toBeVisible();
   });
 });
