@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addOfferCommentAction } from "@/app/actions";
 import { CommentThread } from "@/components/community/comment-thread";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -10,6 +9,8 @@ import { getOfferById, getViewer, listOfferComments } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+import { OfferQuestionForm } from "./offer-question-form";
 
 interface OfferQuestionPageProps {
   params: Promise<{ offerId: string }>;
@@ -43,6 +44,8 @@ export default async function OfferQuestionPage({
   const formMessage = getFormMessage(resolvedSearchParams);
   const returnTo = `/offers/${offer.id}/question`;
   const loginHref = `/login?returnTo=${encodeURIComponent(returnTo)}`;
+  const successfulResetToken =
+    formMessage?.tone === "success" ? formMessage.text : "";
 
   return (
     <div className="page-shell marketplace-app-shell">
@@ -95,46 +98,39 @@ export default async function OfferQuestionPage({
       <main id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
+            aria-live="polite"
             className={`status-banner ${
               formMessage.tone === "error"
                 ? "status-banner-error"
                 : "status-banner-success"
             }`}
+            role={formMessage.tone === "error" ? "alert" : "status"}
           >
             {formMessage.text}
           </div>
         ) : null}
 
-        <section className="section section-white" aria-labelledby="question-heading">
+        <section
+          className="section section-white"
+          aria-labelledby="question-heading"
+          id="question-thread"
+        >
           <div className="section-head">
             <p className="eyebrow">Public discussion</p>
             <h2 id="question-heading">Ask a clarifying question</h2>
             <p>
-              The thread is empty until a real participant posts. The marketplace does
-              not display a zero-count social module as evidence of activity.
+              {comments.length
+                ? `${comments.length} public question${comments.length === 1 ? "" : "s"} or discussion thread${comments.length === 1 ? "" : "s"} are recorded below.`
+                : "The thread will appear after a real participant posts. Empty social counters are not presented as marketplace activity."}
             </p>
           </div>
 
           {viewer ? (
-            <form action={addOfferCommentAction} className="stack-form comment-compose-form">
-              <input name="offer_id" type="hidden" value={offer.id} />
-              <input name="return_to" type="hidden" value={returnTo} />
-              <label className="field">
-                <span>Your question</span>
-                <textarea
-                  autoFocus
-                  name="body"
-                  placeholder="For example: What receipt or review would count as sufficient evidence?"
-                  required
-                  rows={5}
-                />
-              </label>
-              <div className="form-actions">
-                <button className="button button-primary" type="submit">
-                  Post public question
-                </button>
-              </div>
-            </form>
+            <OfferQuestionForm
+              offerId={offer.id}
+              resetToken={successfulResetToken}
+              returnTo={returnTo}
+            />
           ) : (
             <div className="panel empty-state">
               <h3>Sign in to ask a public question.</h3>
