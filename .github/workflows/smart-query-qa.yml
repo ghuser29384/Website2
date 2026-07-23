@@ -5,6 +5,7 @@ on:
     paths:
       - "src/lib/smart-query*"
       - "src/lib/smart-discovery-ranking.ts"
+      - "src/lib/smart-evidence-ranking.ts"
       - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
       - "src/app/api/query/**"
@@ -27,7 +28,7 @@ on:
       - feat/smart-query-pipeline
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   smart-query-qa:
@@ -35,14 +36,37 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Check out repository
+      - name: Check out feature branch
         uses: actions/checkout@v4
+        with:
+          ref: feat/smart-query-pipeline
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - name: Apply evidence integration if needed
+        run: |
+          if rg -q 'filterAndRankEvidenceRecords' 'src/app/evidence/[[...recordId]]/page.tsx'; then
+            echo "Evidence smart-query integration is already present."
+            exit 0
+          fi
+          node scripts/apply-smart-query-evidence-patch.mjs
+
+      - name: Commit evidence integration if produced
+        run: |
+          if git diff --quiet -- 'src/app/evidence/[[...recordId]]/page.tsx'; then
+            echo "No evidence integration commit is required."
+            exit 0
+          fi
+          git config user.name "moral-trade-query-bot"
+          git config user.email "moral-trade-query-bot@users.noreply.github.com"
+          git add 'src/app/evidence/[[...recordId]]/page.tsx'
+          git commit -m "Make public evidence search semantic and privacy-safe"
+          git push origin HEAD:feat/smart-query-pipeline
 
       - name: Inventory query surfaces
         run: |
@@ -65,14 +89,20 @@ jobs:
             src/lib/smart-query-personalization.ts \
             src/lib/smart-query-records.ts \
             src/lib/smart-query-scoring.ts \
+            src/lib/smart-query-surface-policy.ts \
             src/lib/smart-query.test.ts \
             src/lib/smart-discovery-ranking.ts \
+            src/lib/smart-evidence-ranking.ts \
             src/lib/smart-people-ranking.ts \
             src/lib/site-search-smart.ts \
             src/app/api/query/interpret/route.ts \
             src/app/layout.tsx \
             src/app/offers/page.tsx \
             src/app/people/page.tsx \
+            src/app/pools/page.tsx \
+            src/app/mpgf/pools/page.tsx \
+            src/app/wish-registry/page.tsx \
+            'src/app/evidence/[[...recordId]]/page.tsx' \
             src/components/layout/site-topbar.tsx \
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
