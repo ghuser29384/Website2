@@ -7,6 +7,7 @@ import {
   matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
   matchesSmartVerificationConstraint,
+  parseSmartQuery,
   serializeSmartQueryFacets,
   type SmartQueryFacets,
   type SmartQueryInterpretation,
@@ -138,24 +139,10 @@ function offerAmounts(offer: OfferRow) {
 }
 
 function offerCauseIds(offer: OfferRow) {
-  return smartCauseMatchScore
-    ? []
-    : [];
-}
-
-function parsedOfferCauseIds(offer: OfferRow, interpretation: SmartQueryInterpretation) {
-  const normalizedTerms = `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`
-    .toLocaleLowerCase("en-US")
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-
-  return interpretation.facets.causes.filter((cause) => {
-    const causeTerms = cause
-      .toLocaleLowerCase("en-US")
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean);
-    return causeTerms.some((term) => normalizedTerms.includes(term));
-  });
+  return parseSmartQuery(
+    `${offer.offered_cause} ${offer.requested_cause} ${offer.compromise_cause}`,
+    { surface: "offers" },
+  ).facets.causes;
 }
 
 function strictAmountMatch(facets: SmartQueryFacets, amounts: readonly number[]) {
@@ -203,7 +190,7 @@ function rankOffer(
 ): RankedOffer | null {
   const fields = offerTextFields(offer);
   const amountCents = offerAmounts(offer);
-  const causeIds = parsedOfferCauseIds(offer, interpretation);
+  const causeIds = offerCauseIds(offer);
   const deadline = extractSmartRecordDeadline(
     [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
     now,
