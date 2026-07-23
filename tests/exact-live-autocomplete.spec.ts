@@ -88,6 +88,7 @@ test("the exact live trade clauses autocomplete causes, charities, and organizat
 
   await recipientToken.fill("Red Cross");
   await expect(panel.getByText("American National Red Cross", { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-mt-suggestion-kind="cause"]')).toHaveCount(0);
   await expect(
     panel.getByText(/Organization · 501\(c\)\(3\) charity · Washington, DC/),
   ).toBeVisible();
@@ -98,6 +99,8 @@ test("the exact live trade clauses autocomplete causes, charities, and organizat
 
   await panel.getByText("American National Red Cross", { exact: true }).click();
   await expect(recipientToken).toHaveText("American National Red Cross");
+  await expect(recipientToken).toHaveAttribute("data-mt-selected-kind", "organization");
+  await expect(recipientToken).toHaveAttribute("data-mt-selected-ein", "53-0196605");
   await expect(panel).toBeHidden();
 
   const proofToken = page
