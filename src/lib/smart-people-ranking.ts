@@ -20,9 +20,7 @@ import {
 } from "@/lib/smart-query-scoring";
 
 interface SmartProfileSignals {
-  causeIds: string[];
   credit: number;
-  evidenceQuality: number;
   profile: ProfileDiscoveryLike;
   score: number;
   semanticRelevance: number;
@@ -150,7 +148,6 @@ function matchesSmartProfileConstraints(
 function explicitFiltersWithoutLexicalQuery(filters: PeopleDiscoveryFilters): PeopleDiscoveryFilters {
   return {
     ...filters,
-    cause: "",
     search: "",
   };
 }
@@ -177,7 +174,7 @@ function rankSmartProfiles<T extends ProfileDiscoveryLike>(
       deadlineUrgency: 0,
       credit,
     });
-    return { causeIds, credit, evidenceQuality, profile, score, semanticRelevance };
+    return { credit, profile, score, semanticRelevance };
   });
 
   return signals
