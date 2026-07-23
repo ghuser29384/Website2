@@ -29,6 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Reset to the latest remote head so an earlier queued run cannot overwrite newer work.
           git config user.name "moral-trade-query-bot"
           git config user.email "moral-trade-query-bot@users.noreply.github.com"
           git fetch origin main feat/smart-query-pipeline
