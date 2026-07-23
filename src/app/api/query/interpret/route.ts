@@ -3,9 +3,12 @@ import { NextResponse } from "next/server";
 import {
   SMART_QUERY_SURFACES,
   buildSmartQueryTarget,
-  parseSmartQuery,
   type SmartQuerySurface,
 } from "@/lib/smart-query";
+import {
+  parseSmartQueryWithClarification,
+  type SmartQueryClarificationAnswer,
+} from "@/lib/smart-query-clarification";
 import { resolveSmartQueryWithLlm } from "@/lib/smart-query-llm";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +24,15 @@ function badRequest(message: string) {
     { error: message },
     { status: 400, headers: RESPONSE_HEADERS },
   );
+}
+
+function readClarification(value: unknown): SmartQueryClarificationAnswer | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.field !== "string" || typeof record.answer !== "string") return null;
+  const field = record.field.trim().slice(0, 40);
+  const answer = record.answer.trim().slice(0, 120);
+  return field && answer ? { field, answer } : null;
 }
 
 export async function POST(request: Request) {
@@ -43,16 +55,22 @@ export async function POST(request: Request) {
   const now = typeof record.now === "string" && Number.isFinite(Date.parse(record.now))
     ? record.now
     : undefined;
+  const clarification = readClarification(record.clarification);
 
   if (!query) return badRequest("Enter a query before running the search.");
 
-  const deterministic = parseSmartQuery(query, { now, surface });
+  const { interpretation: deterministic, refinedQuery } = parseSmartQueryWithClarification(
+    query,
+    clarification,
+    { now, surface },
+  );
   const resolved = await resolveSmartQueryWithLlm(deterministic);
   const interpretation = resolved.interpretation;
 
   return NextResponse.json(
     {
       interpretation,
+      refinedQuery,
       target: resolved.target || buildSmartQueryTarget(interpretation),
       usedLlm: resolved.usedLlm,
     },
