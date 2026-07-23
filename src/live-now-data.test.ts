@@ -199,7 +199,7 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
       __MT_LIVE_NOW_BOOTSTRAP__: {
         authenticated: true,
         generatedAt: "2026-07-20T12:00:00.000Z",
-        matchingOpportunityCount: 1,
+        matchingOpportunityCount: 3,
         profile: {
           causes: ["Animal welfare"],
           weightedCauses: [
@@ -230,8 +230,79 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
             reason: "Matches your Animal welfare priority",
             reasonDetails: ["Safe <script>alert(1)</script> explanation"],
             actionLabel: "Reduce or avoid meat",
+            offerAction: "Fund a reviewed animal-welfare project",
+            requestAction: "Prepare one plant-based meal",
+            verification: "Meal photo or counterparty confirmation",
+            duration: "Within 7 days",
             difficultyLabel: "Moderate",
             actionFitLabel: "Possible fit",
+          },
+          {
+            id: "redirect-offer",
+            opportunityType: "donation_redirect",
+            href: "/offers/redirect-offer",
+            mode: "offset",
+            ownerAlias: "Redirect participant",
+            sourceLabel: "Donation redirect",
+            offeredCause: "Existential risk reduction",
+            requestedCause: "Animal welfare",
+            offerAction: "Redirect a planned donation toward existential-risk research",
+            requestAction: "Avoid meat for exactly three meals",
+            verification: "Counterparty confirmation",
+            duration: "Within 14 days",
+            matchCause: "Animal welfare",
+            reason: "Matches your Animal welfare priority",
+            reasonDetails: ["The requested action overlaps with Animal welfare."],
+            difficultyLabel: "Moderate",
+            actionFitLabel: "Strong fit",
+          },
+          {
+            id: "public-goods-pool",
+            opportunityType: "donation_pool",
+            href: "/donation-offsets?pool=public-goods-pool",
+            mode: "offset",
+            ownerAlias: "Donation redirect pool",
+            sourceLabel: "Donation redirect pool",
+            offeredCause: "Shared moral-priorities research",
+            requestedCause: "Either side of the pool",
+            offerAction: "Matched planned donations support the shared project",
+            requestAction: "Join with a planned donation",
+            verification: "Pool evidence terms",
+            duration: "Closes in 9 days",
+            summary: "An assurance pool with a group threshold.",
+            matchCause: "Animal welfare",
+            reason: "Matches your Animal welfare priority",
+            reasonDetails: ["The pool overlaps with a saved priority."],
+            difficultyLabel: "Easy",
+            actionFitLabel: "Possible fit",
+            metadata: {
+              assuranceMinimumCents: 100000,
+              offsetRatio: 1,
+            },
+          },
+          {
+            id: "public-goods-no-threshold",
+            opportunityType: "donation_pool",
+            href: "/donation-offsets?pool=public-goods-no-threshold",
+            mode: "offset",
+            ownerAlias: "Open donation pool",
+            sourceLabel: "Donation redirect pool",
+            offeredCause: "Shared animal-welfare research",
+            requestedCause: "Either side of the pool",
+            offerAction: "Matched planned donations support the shared project",
+            requestAction: "Join with a planned donation",
+            verification: "Pool evidence terms",
+            duration: "Open",
+            summary: "A group route without a published threshold.",
+            matchCause: "Animal welfare",
+            reason: "Matches your Animal welfare priority",
+            reasonDetails: ["The pool overlaps with a saved priority."],
+            difficultyLabel: "Easy",
+            actionFitLabel: "Possible fit",
+            metadata: {
+              assuranceMinimumCents: 0,
+              offsetRatio: 1,
+            },
           },
         ],
         ownedOpportunities: [
@@ -268,23 +339,62 @@ test("the browser bridge renders only fixture profile data and escapes opportuni
 
   assert.match(context.rendered, /For you/);
   assert.match(context.rendered, /Animal welfare &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
-  assert.match(context.rendered, /Why this is in your feed/);
+  assert.match(context.rendered, />Action</);
+  assert.match(context.rendered, />Redirect</);
+  assert.match(context.rendered, />Public Goods</);
+  assert.match(context.rendered, /Avoid meat for exactly three meals/);
+  assert.match(context.rendered, /Your contribution helps the group reach the \$1,000 threshold/);
+  assert.match(context.rendered, /Your contribution joins the group route/);
+  assert.doesNotMatch(context.rendered, /the shared threshold/);
+  assert.match(context.rendered, /<details class="mt-feed-details">/);
+  assert.match(context.rendered, /Why this match/);
+  assert.match(context.rendered, /Meal photo or counterparty confirmation/);
   assert.match(context.rendered, /Your live routes/);
   assert.match(context.rendered, /Shown here as your own listing, not as a match/);
   assert.match(context.rendered, /Manage &amp; invite/);
+  assert.doesNotMatch(context.rendered, /mt-feed-summary|mt-feed-exchange-block/);
+  assert.doesNotMatch(context.rendered, /You unlock the shared threshold/);
   assert.doesNotMatch(context.rendered, /legacy feed|Counteroffer from Mina/);
   assert.doesNotMatch(context.rendered, /<script>alert\(1\)<\/script>/);
 });
 
-test("the social feed has vertical card, feedback, privacy, and mobile rules", () => {
+test("the mixed visual feed is compact, truthful, reversible, private, and mobile-safe", () => {
   assert.match(feedStyles, /\.mt-social-feed/);
   assert.match(feedStyles, /\.mt-feed-card/);
   assert.match(feedStyles, /\.mt-owned-feed/);
+  assert.match(feedStyles, /\[data-opportunity-type="offer"\]/);
+  assert.match(feedStyles, /\[data-opportunity-type="donation_redirect"\]/);
+  assert.match(feedStyles, /\[data-opportunity-type="donation_pool"\]/);
+  assert.match(feedStyles, /\.mt-feed-mechanism/);
+  assert.match(feedStyles, /\.mt-feed-details/);
+  assert.match(feedStyles, /\.mt-feed-overflow/);
   assert.match(feedStyles, /\.mt-feed-feedback/);
+  assert.match(
+    feedStyles,
+    /\.mt-feed-card,[\s\S]*?\.mt-owned-card\s*\{[\s\S]*?min-height:\s*0/,
+  );
+  assert.match(feedStyles, /\.mt-feed-settings\[open\][\s\S]*?z-index:\s*80/);
+  assert.match(feedStyles, /\.mt-feed-overflow\[open\][\s\S]*?z-index:\s*80/);
+  assert.match(feedStyles, /bottom:\s*calc\(76px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(feedStyles, /--mt-feed-redirect:\s*#a84100/);
+  assert.match(feedStyles, /--mt-feed-public-goods:\s*#526b00/);
   assert.match(feedStyles, /@media \(max-width: 620px\)/);
+  assert.match(bridge, /label: "Action"/);
+  assert.match(bridge, /label: "Redirect"/);
+  assert.match(bridge, /label: "Public Goods"/);
+  assert.match(bridge, /recommendation\.requestAction \|\| recommendation\.requestedCause/);
+  assert.match(bridge, /Your contribution helps the group reach/);
+  assert.match(bridge, /Your contribution joins the group route/);
+  assert.match(bridge, /feedbackEventAccepted/);
+  assert.match(bridge, /Number\(result\.acceptedEventCount\) >= 1/);
   assert.match(bridge, /Easy for me/);
   assert.match(bridge, /Hard for me/);
   assert.match(bridge, /Less like this/);
+  assert.match(bridge, /Could not save that change/);
+  assert.match(bridge, /Could not save that rating/);
+  assert.match(bridge, /Could not hide that opportunity/);
+  assert.match(bridge, /card\.hidden = false/);
+  assert.match(bridge, /syncReviewedBatchState\(root\)/);
   assert.match(bridge, /Your live routes/);
-  assert.match(bridge, /does not retain raw browsing URLs or page content/);
+  assert.match(bridge, /not raw browsing URLs or page content/);
 });
