@@ -6,7 +6,12 @@
 
   const TOKEN_SELECTOR = '.token[contenteditable]:not([contenteditable="false"])';
   const LISTBOX_ID = "mt-live-token-assist-listbox";
+  const RECIPIENT_CONTEXT = "recipients";
+  const REMOTE_SEARCH_URL = "/api/nonprofits/search";
+  const MAX_RESULTS = 9;
   const MAX_CATALOG_WAIT_MS = 2500;
+  const REMOTE_MIN_QUERY_LENGTH = 2;
+  const REMOTE_DEBOUNCE_MS = 180;
 
   let panel = null;
   let activeToken = null;
@@ -14,8 +19,12 @@
   let activeIndex = -1;
   let catalogWaitStartedAt = 0;
   let catalogRetryTimer = 0;
+  let remoteSearchTimer = 0;
+  let remoteSearchController = null;
+  let renderSequence = 0;
 
   const preparedTokens = new WeakSet();
+  const organizationSearchCache = new Map();
 
   function normalize(value) {
     return String(value || "")
@@ -35,7 +44,8 @@
     return Boolean(
       assist &&
         typeof assist.rankSuggestions === "function" &&
-        assist.rankSuggestions("priorities", "").length,
+        assist.rankSuggestions("priorities", "").length &&
+        assist.rankSuggestions("organizations", "").length,
     );
   }
 
@@ -47,7 +57,7 @@
     const tokens = Array.from(clause.querySelectorAll(TOKEN_SELECTOR));
     const index = tokens.indexOf(token);
 
-    if (label === "i offer") return index === 0 ? null : "priorities";
+    if (label === "i offer") return index === 0 ? null : RECIPIENT_CONTEXT;
     if (
       [
         "only if they",
@@ -85,7 +95,7 @@
     const element = ensurePanel();
     const rect = token.getBoundingClientRect();
     const viewportPadding = 12;
-    const width = Math.min(Math.max(rect.width, 300), Math.min(520, window.innerWidth - 24));
+    const width = Math.min(Math.max(rect.width, 330), Math.min(560, window.innerWidth - 24));
     const left = Math.min(
       Math.max(viewportPadding, rect.left),
       Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
@@ -103,10 +113,19 @@
     }
   }
 
+  function cancelRemoteSearch() {
+    window.clearTimeout(remoteSearchTimer);
+    remoteSearchTimer = 0;
+    if (remoteSearchController) remoteSearchController.abort();
+    remoteSearchController = null;
+  }
+
   function closePanel() {
     window.clearTimeout(catalogRetryTimer);
     catalogRetryTimer = 0;
     catalogWaitStartedAt = 0;
+    cancelRemoteSearch();
+    renderSequence += 1;
 
     if (panel) {
       panel.hidden = true;
@@ -118,6 +137,7 @@
     if (activeToken) {
       activeToken.setAttribute("aria-expanded", "false");
       activeToken.removeAttribute("aria-activedescendant");
+      activeToken.removeAttribute("aria-busy");
     }
   }
 
@@ -147,6 +167,11 @@
     if (!token || !suggestion) return;
 
     token.textContent = suggestionValue(suggestion);
+    token.setAttribute("data-mt-selected-kind", suggestion.kind || "standardized-term");
+    if (suggestion.ein) token.setAttribute("data-mt-selected-ein", suggestion.ein);
+    else token.removeAttribute("data-mt-selected-ein");
+    if (suggestion.source) token.setAttribute("data-mt-selected-source", suggestion.source);
+    else token.removeAttribute("data-mt-selected-source");
     token.dispatchEvent(new Event("input", { bubbles: true }));
     token.dispatchEvent(new Event("change", { bubbles: true }));
     token.focus();
@@ -167,6 +192,198 @@
     }, 80);
   }
 
+  function suggestionRank(suggestion) {
+    const score = Number(suggestion._rank ?? suggestion.score);
+    return Number.isFinite(score) ? score : 0;
+  }
+
+  function mergeSuggestions(...groups) {
+    const seen = new Set();
+    return groups
+      .flat()
+      .filter((suggestion) => suggestion && suggestionValue(suggestion))
+      .sort((a, b) => suggestionRank(b) - suggestionRank(a))
+      .filter((suggestion) => {
+        const key = normalize(suggestionValue(suggestion));
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, MAX_RESULTS);
+  }
+
+  function localSuggestions(context, query) {
+    const assist = getAssistApi();
+    if (!assist) return [];
+
+    if (context === RECIPIENT_CONTEXT) {
+      const organizations = assist.rankSuggestions("organizations", query).map((suggestion, index) => ({
+        ...suggestion,
+        kind: "organization",
+        source: suggestion.provider || "Curated organization",
+        _rank: Number(suggestion.score || 0) + 34 - index / 100,
+      }));
+      const priorities = assist.rankSuggestions("priorities", query).map((suggestion, index) => ({
+        ...suggestion,
+        kind: "cause",
+        source: "Moral Trade cause areas",
+        _rank: Number(suggestion.score || 0) - index / 100,
+      }));
+      return mergeSuggestions(organizations, priorities);
+    }
+
+    return assist.rankSuggestions(context, query).map((suggestion, index) => ({
+      ...suggestion,
+      kind: context,
+      _rank: Number(suggestion.score || 0) - index / 100,
+    }));
+  }
+
+  function remoteSuggestions(payload) {
+    if (!payload || !Array.isArray(payload.results)) return [];
+    return payload.results
+      .filter((suggestion) => suggestion && typeof suggestion.label === "string")
+      .map((suggestion, index) => ({
+        label: String(suggestion.label).trim(),
+        description: String(suggestion.description || "US tax-exempt organization").trim(),
+        aliases: Array.isArray(suggestion.aliases) ? suggestion.aliases : [],
+        kind: "organization",
+        source: String(suggestion.source || payload.source || "Nonprofit directory"),
+        ein: suggestion.ein ? String(suggestion.ein) : null,
+        profileUrl: suggestion.profileUrl ? String(suggestion.profileUrl) : null,
+        _rank: Number(suggestion.score || 0) + 8 - index / 100,
+      }));
+  }
+
+  function resultDescription(suggestion) {
+    const description = suggestion.description || suggestionValue(suggestion);
+    if (suggestion.kind === "organization") return `Organization · ${description}`;
+    if (suggestion.kind === "cause") return `Cause area · ${description}`;
+    return description;
+  }
+
+  function renderPanel(context, results, status = {}) {
+    const element = ensurePanel();
+    activeResults = results;
+    activeIndex = activeResults.length ? 0 : -1;
+    element.replaceChildren();
+
+    const heading = document.createElement("div");
+    heading.className = "mt-input-assist-heading";
+    const title = document.createElement("strong");
+    title.textContent =
+      context === RECIPIENT_CONTEXT ? "Cause areas and organizations" : "Suggested completions";
+    const hint = document.createElement("span");
+    hint.textContent = "↑↓ choose · Enter use · Esc close";
+    heading.append(title, hint);
+    element.appendChild(heading);
+
+    if (!activeResults.length) {
+      const empty = document.createElement("p");
+      empty.className = "mt-input-assist-empty";
+      empty.textContent = status.loading
+        ? "Searching nonprofit records…"
+        : context === RECIPIENT_CONTEXT
+          ? "No matching cause area or organization. Custom text is fine."
+          : "No standardized match yet. Custom text is fine.";
+      element.appendChild(empty);
+    } else {
+      activeResults.forEach((suggestion, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "mt-input-assist-option";
+        option.id = `mt-live-token-assist-option-${index}`;
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", index === activeIndex ? "true" : "false");
+        option.setAttribute("data-mt-suggestion-kind", suggestion.kind || "standardized-term");
+
+        const label = document.createElement("strong");
+        label.textContent = suggestion.label;
+        const description = document.createElement("span");
+        description.textContent = resultDescription(suggestion);
+        option.append(label, description);
+        option.addEventListener("pointerenter", () => setActiveIndex(index));
+        option.addEventListener("click", () => selectSuggestion(index));
+        element.appendChild(option);
+      });
+
+      if (status.loading || status.sourceUnavailable) {
+        const note = document.createElement("p");
+        note.className = "mt-input-assist-empty";
+        note.textContent = status.loading
+          ? "Searching the broader nonprofit directory…"
+          : "Broad nonprofit lookup is temporarily unavailable; curated suggestions and custom text still work.";
+        element.appendChild(note);
+      }
+    }
+
+    element.hidden = false;
+    if (activeToken) {
+      activeToken.setAttribute("role", "combobox");
+      activeToken.setAttribute("aria-autocomplete", "list");
+      activeToken.setAttribute("aria-controls", LISTBOX_ID);
+      activeToken.setAttribute("aria-expanded", "true");
+      if (status.loading) activeToken.setAttribute("aria-busy", "true");
+      else activeToken.removeAttribute("aria-busy");
+      setActiveIndex(activeIndex);
+      positionPanel(activeToken);
+    }
+  }
+
+  function searchOrganizations(token, query, localResults, sequence) {
+    const cacheKey = normalize(query);
+    if (!cacheKey || cacheKey.length < REMOTE_MIN_QUERY_LENGTH) return;
+
+    if (organizationSearchCache.has(cacheKey)) {
+      if (sequence !== renderSequence || activeToken !== token) return;
+      renderPanel(
+        RECIPIENT_CONTEXT,
+        mergeSuggestions(localResults, organizationSearchCache.get(cacheKey)),
+      );
+      return;
+    }
+
+    cancelRemoteSearch();
+    remoteSearchTimer = window.setTimeout(async () => {
+      remoteSearchTimer = 0;
+      remoteSearchController = new AbortController();
+
+      try {
+        const response = await fetch(`${REMOTE_SEARCH_URL}?q=${encodeURIComponent(query)}`, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: remoteSearchController.signal,
+        });
+        if (!response.ok) throw new Error(`Nonprofit search returned ${response.status}`);
+
+        const payload = await response.json();
+        const results = remoteSuggestions(payload);
+        organizationSearchCache.set(cacheKey, results);
+
+        if (
+          sequence === renderSequence &&
+          activeToken === token &&
+          document.activeElement === token
+        ) {
+          renderPanel(RECIPIENT_CONTEXT, mergeSuggestions(localResults, results), {
+            sourceUnavailable: payload.sourceUnavailable === true,
+          });
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        if (
+          sequence === renderSequence &&
+          activeToken === token &&
+          document.activeElement === token
+        ) {
+          renderPanel(RECIPIENT_CONTEXT, localResults, { sourceUnavailable: true });
+        }
+      } finally {
+        remoteSearchController = null;
+      }
+    }, REMOTE_DEBOUNCE_MS);
+  }
+
   function renderSuggestions(token) {
     const context = tokenContext(token);
     activeToken = token;
@@ -181,54 +398,15 @@
     }
 
     catalogWaitStartedAt = 0;
-    const assist = getAssistApi();
-    activeResults = assist.rankSuggestions(context, token.textContent || "");
-    activeIndex = activeResults.length ? 0 : -1;
+    cancelRemoteSearch();
+    const sequence = ++renderSequence;
+    const query = String(token.textContent || "").trim();
+    const localResults = localSuggestions(context, query);
+    const shouldSearchOrganizations =
+      context === RECIPIENT_CONTEXT && normalize(query).length >= REMOTE_MIN_QUERY_LENGTH;
 
-    const element = ensurePanel();
-    element.replaceChildren();
-
-    const heading = document.createElement("div");
-    heading.className = "mt-input-assist-heading";
-    const title = document.createElement("strong");
-    title.textContent = "Suggested completions";
-    const hint = document.createElement("span");
-    hint.textContent = "↑↓ choose · Enter use · Esc close";
-    heading.append(title, hint);
-    element.appendChild(heading);
-
-    if (!activeResults.length) {
-      const empty = document.createElement("p");
-      empty.className = "mt-input-assist-empty";
-      empty.textContent = "No standardized match yet. Custom text is fine.";
-      element.appendChild(empty);
-    } else {
-      activeResults.forEach((suggestion, index) => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.className = "mt-input-assist-option";
-        option.id = `mt-live-token-assist-option-${index}`;
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", index === activeIndex ? "true" : "false");
-
-        const label = document.createElement("strong");
-        label.textContent = suggestion.label;
-        const description = document.createElement("span");
-        description.textContent = suggestion.description || suggestionValue(suggestion);
-        option.append(label, description);
-        option.addEventListener("pointerenter", () => setActiveIndex(index));
-        option.addEventListener("click", () => selectSuggestion(index));
-        element.appendChild(option);
-      });
-    }
-
-    element.hidden = false;
-    token.setAttribute("role", "combobox");
-    token.setAttribute("aria-autocomplete", "list");
-    token.setAttribute("aria-controls", LISTBOX_ID);
-    token.setAttribute("aria-expanded", "true");
-    setActiveIndex(activeIndex);
-    positionPanel(token);
+    renderPanel(context, localResults, { loading: shouldSearchOrganizations });
+    if (shouldSearchOrganizations) searchOrganizations(token, query, localResults, sequence);
   }
 
   function prepareToken(token) {
@@ -243,10 +421,18 @@
     token.setAttribute("data-mt-autocomplete-ready", "true");
     token.setAttribute("aria-autocomplete", "list");
     token.setAttribute("aria-haspopup", "listbox");
-    token.setAttribute("title", "Type to see standardized suggestions");
+    token.setAttribute(
+      "title",
+      context === RECIPIENT_CONTEXT
+        ? "Type a cause area, charity, or organization"
+        : "Type to see standardized suggestions",
+    );
 
     token.addEventListener("focus", () => renderSuggestions(token));
     token.addEventListener("input", () => {
+      token.removeAttribute("data-mt-selected-kind");
+      token.removeAttribute("data-mt-selected-ein");
+      token.removeAttribute("data-mt-selected-source");
       if (document.activeElement === token) renderSuggestions(token);
     });
     token.addEventListener("keydown", (event) => {
