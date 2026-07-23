@@ -1,0 +1,260 @@
+2026-07-23T09:53:17.1781385Z ok 4 - profile order breaks otherwise equal matches transparently
+2026-07-23T09:53:17.1782190Z   ---
+2026-07-23T09:53:17.1782721Z   duration_ms: 0.775448
+2026-07-23T09:53:17.1783274Z   type: 'test'
+2026-07-23T09:53:17.1783771Z   ...
+2026-07-23T09:53:17.1784624Z # Subtest: short profile terms match phrase boundaries instead of substrings
+2026-07-23T09:53:17.1786014Z ok 5 - short profile terms match phrase boundaries instead of substrings
+2026-07-23T09:53:17.1782721Z   duration_ms: 0.775448
+2026-07-23T09:53:17.1783274Z   type: 'test'
+2026-07-23T09:53:17.1783771Z   ...
+2026-07-23T09:53:17.1784624Z # Subtest: short profile terms match phrase boundaries instead of substrings
+2026-07-23T09:53:17.1786014Z ok 5 - short profile terms match phrase boundaries instead of substrings
+2026-07-23T09:53:17.1786811Z   ---
+2026-07-23T09:53:17.1787309Z   duration_ms: 0.605885
+2026-07-23T09:53:17.1787905Z   type: 'test'
+2026-07-23T09:53:17.1788547Z   ...
+2026-07-23T09:53:17.1789895Z # Subtest: missing priorities and incompatible participation settings do not produce filler suggestions
+2026-07-23T09:53:17.1792391Z ok 6 - missing priorities and incompatible participation settings do not produce filler suggestions
+2026-07-23T09:53:17.1787309Z   duration_ms: 0.605885
+2026-07-23T09:53:17.1787905Z   type: 'test'
+2026-07-23T09:53:17.1788547Z   ...
+2026-07-23T09:53:17.1789895Z # Subtest: missing priorities and incompatible participation settings do not produce filler suggestions
+2026-07-23T09:53:17.1792391Z ok 6 - missing priorities and incompatible participation settings do not produce filler suggestions
+2026-07-23T09:53:17.1794004Z   ---
+2026-07-23T09:53:17.1794646Z   duration_ms: 0.418605
+2026-07-23T09:53:17.1795463Z   type: 'test'
+2026-07-23T09:53:17.1796045Z   ...
+2026-07-23T09:53:17.1797625Z # Subtest: profile sources are de-duplicated without changing their stated order
+2026-07-23T09:53:17.1798877Z ok 7 - profile sources are de-duplicated without changing their stated order
+2026-07-23T09:53:17.1794646Z   duration_ms: 0.418605
+2026-07-23T09:53:17.1795463Z   type: 'test'
+2026-07-23T09:53:17.1796045Z   ...
+2026-07-23T09:53:17.1797625Z # Subtest: profile sources are de-duplicated without changing their stated order
+2026-07-23T09:53:17.1798877Z ok 7 - profile sources are de-duplicated without changing their stated order
+2026-07-23T09:53:17.1799695Z   ---
+2026-07-23T09:53:17.1800199Z   duration_ms: 0.37443
+2026-07-23T09:53:17.1800741Z   type: 'test'
+2026-07-23T09:53:17.1801219Z   ...
+2026-07-23T09:53:17.1802109Z # Subtest: recent-change counts include only matched records changed in the last 24 hours
+2026-07-23T09:53:17.1803424Z ok 8 - recent-change counts include only matched records changed in the last 24 hours
+2026-07-23T09:53:17.1800199Z   duration_ms: 0.37443
+2026-07-23T09:53:17.1800741Z   type: 'test'
+2026-07-23T09:53:17.1801219Z   ...
+2026-07-23T09:53:17.1802109Z # Subtest: recent-change counts include only matched records changed in the last 24 hours
+2026-07-23T09:53:17.1803424Z ok 8 - recent-change counts include only matched records changed in the last 24 hours
+2026-07-23T09:53:17.1804324Z   ---
+2026-07-23T09:53:17.1804827Z   duration_ms: 11.235444
+2026-07-23T09:53:17.1805782Z   type: 'test'
+2026-07-23T09:53:17.1806284Z   ...
+2026-07-23T09:53:17.1807144Z # Subtest: action taxonomy distinguishes meat, plastic, and donation actions
+2026-07-23T09:53:17.1808319Z ok 9 - action taxonomy distinguishes meat, plastic, and donation actions
+2026-07-23T09:53:17.1804827Z   duration_ms: 11.235444
+2026-07-23T09:53:17.1805782Z   type: 'test'
+2026-07-23T09:53:17.1806284Z   ...
+2026-07-23T09:53:17.1807144Z # Subtest: action taxonomy distinguishes meat, plastic, and donation actions
+2026-07-23T09:53:17.1808319Z ok 9 - action taxonomy distinguishes meat, plastic, and donation actions
+2026-07-23T09:53:17.1809103Z   ---
+2026-07-23T09:53:17.1809527Z   duration_ms: 2.574947
+2026-07-23T09:53:17.1810070Z   type: 'test'
+2026-07-23T09:53:17.1810893Z   ...
+2026-07-23T09:53:17.1811598Z # Subtest: explicit difficulty feedback updates an action model without erasing willingness
+2026-07-23T09:53:17.1812455Z ok 10 - explicit difficulty feedback updates an action model without erasing willingness
+2026-07-23T09:53:17.1809527Z   duration_ms: 2.574947
+2026-07-23T09:53:17.1810070Z   type: 'test'
+2026-07-23T09:53:17.1810893Z   ...
+2026-07-23T09:53:17.1811598Z # Subtest: explicit difficulty feedback updates an action model without erasing willingness
+2026-07-23T09:53:17.1812455Z ok 10 - explicit difficulty feedback updates an action model without erasing willingness
+2026-07-23T09:53:17.1813037Z   ---
+2026-07-23T09:53:17.1813401Z   duration_ms: 0.746215
+2026-07-23T09:53:17.1813784Z   type: 'test'
+2026-07-23T09:53:17.1814141Z   ...
+2026-07-23T09:53:17.1814678Z # Subtest: browsing contributes bounded, lower-confidence cause weights
+2026-07-23T09:53:17.1815829Z ok 11 - browsing contributes bounded, lower-confidence cause weights
+2026-07-23T09:53:17.1813401Z   duration_ms: 0.746215
+2026-07-23T09:53:17.1813784Z   type: 'test'
+2026-07-23T09:53:17.1814141Z   ...
+2026-07-23T09:53:17.1814678Z # Subtest: browsing contributes bounded, lower-confidence cause weights
+2026-07-23T09:53:17.1815829Z ok 11 - browsing contributes bounded, lower-confidence cause weights
+2026-07-23T09:53:17.1816694Z   ---
+2026-07-23T09:53:17.1817004Z   duration_ms: 0.658103
+2026-07-23T09:53:17.1817351Z   type: 'test'
+2026-07-23T09:53:17.1817681Z   ...
+2026-07-23T09:53:17.1818309Z # Subtest: the latest save or hide state controls feed persistence
+2026-07-23T09:53:17.1819111Z ok 12 - the latest save or hide state controls feed persistence
+2026-07-23T09:53:17.1817004Z   duration_ms: 0.658103
+2026-07-23T09:53:17.1817351Z   type: 'test'
+2026-07-23T09:53:17.1817681Z   ...
+2026-07-23T09:53:17.1818309Z # Subtest: the latest save or hide state controls feed persistence
+2026-07-23T09:53:17.1819111Z ok 12 - the latest save or hide state controls feed persistence
+2026-07-23T09:53:17.1819619Z   ---
+2026-07-23T09:53:17.1819927Z   duration_ms: 0.581629
+2026-07-23T09:53:17.1820280Z   type: 'test'
+2026-07-23T09:53:17.1820576Z   ...
+2026-07-23T09:53:17.1821226Z # Subtest: the live shell fetches private profile recommendations before rendering
+2026-07-23T09:53:17.1822199Z ok 13 - the live shell fetches private profile recommendations before rendering
+2026-07-23T09:53:17.1819927Z   duration_ms: 0.581629
+2026-07-23T09:53:17.1820280Z   type: 'test'
+2026-07-23T09:53:17.1820576Z   ...
+2026-07-23T09:53:17.1821226Z # Subtest: the live shell fetches private profile recommendations before rendering
+2026-07-23T09:53:17.1822199Z ok 13 - the live shell fetches private profile recommendations before rendering
+2026-07-23T09:53:17.1822797Z   ---
+2026-07-23T09:53:17.1823098Z   duration_ms: 1.857855
+2026-07-23T09:53:17.1823341Z   type: 'test'
+2026-07-23T09:53:17.1823543Z   ...
+2026-07-23T09:53:17.1824099Z # Subtest: the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types
+2026-07-23T09:53:17.1825175Z ok 14 - the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types
+2026-07-23T09:53:17.1823098Z   duration_ms: 1.857855
+2026-07-23T09:53:17.1823341Z   type: 'test'
+2026-07-23T09:53:17.1823543Z   ...
+2026-07-23T09:53:17.1824099Z # Subtest: the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types
+2026-07-23T09:53:17.1825175Z ok 14 - the live-now endpoint combines explicit priorities, browsing, actions, and multiple opportunity types
+2026-07-23T09:53:17.1825934Z   ---
+2026-07-23T09:53:17.1826209Z   duration_ms: 0.782069
+2026-07-23T09:53:17.1826544Z   type: 'test'
+2026-07-23T09:53:17.1826876Z   ...
+2026-07-23T09:53:17.1827563Z # Subtest: the Plan surface uses private inputs and live-source-only route cards
+2026-07-23T09:53:17.1828558Z ok 15 - the Plan surface uses private inputs and live-source-only route cards
+2026-07-23T09:53:17.1826209Z   duration_ms: 0.782069
+2026-07-23T09:53:17.1826544Z   type: 'test'
+2026-07-23T09:53:17.1826876Z   ...
+2026-07-23T09:53:17.1827563Z # Subtest: the Plan surface uses private inputs and live-source-only route cards
+2026-07-23T09:53:17.1828558Z ok 15 - the Plan surface uses private inputs and live-source-only route cards
+2026-07-23T09:53:17.1829186Z   ---
+2026-07-23T09:53:17.1829499Z   duration_ms: 0.347679
+2026-07-23T09:53:17.1829859Z   type: 'test'
+2026-07-23T09:53:17.1830182Z   ...
+2026-07-23T09:53:17.1830981Z # Subtest: feedback is typed, private, idempotent, and resolves opportunity metadata server-side
+2026-07-23T09:53:17.1832286Z ok 16 - feedback is typed, private, idempotent, and resolves opportunity metadata server-side
+2026-07-23T09:53:17.1829499Z   duration_ms: 0.347679
+2026-07-23T09:53:17.1829859Z   type: 'test'
+2026-07-23T09:53:17.1830182Z   ...
+2026-07-23T09:53:17.1830981Z # Subtest: feedback is typed, private, idempotent, and resolves opportunity metadata server-side
+2026-07-23T09:53:17.1832286Z ok 16 - feedback is typed, private, idempotent, and resolves opportunity metadata server-side
+2026-07-23T09:53:17.1832729Z   ---
+2026-07-23T09:53:17.1832932Z   duration_ms: 0.322341
+2026-07-23T09:53:17.1833168Z   type: 'test'
+2026-07-23T09:53:17.1833370Z   ...
+2026-07-23T09:53:17.1833794Z # Subtest: offer, pool, and cause browsing is learned without retaining arbitrary URLs
+2026-07-23T09:53:17.1834413Z ok 17 - offer, pool, and cause browsing is learned without retaining arbitrary URLs
+2026-07-23T09:53:17.1832932Z   duration_ms: 0.322341
+2026-07-23T09:53:17.1833168Z   type: 'test'
+2026-07-23T09:53:17.1833370Z   ...
+2026-07-23T09:53:17.1833794Z # Subtest: offer, pool, and cause browsing is learned without retaining arbitrary URLs
+2026-07-23T09:53:17.1834413Z ok 17 - offer, pool, and cause browsing is learned without retaining arbitrary URLs
+2026-07-23T09:53:17.1835293Z   ---
+2026-07-23T09:53:17.1835496Z   duration_ms: 0.369072
+2026-07-23T09:53:17.1835723Z   type: 'test'
+2026-07-23T09:53:17.1835924Z   ...
+2026-07-23T09:53:17.1836341Z # Subtest: fallback states explicitly refuse generic or fabricated suggestions
+2026-07-23T09:53:17.1836918Z ok 18 - fallback states explicitly refuse generic or fabricated suggestions
+2026-07-23T09:53:17.1835496Z   duration_ms: 0.369072
+2026-07-23T09:53:17.1835723Z   type: 'test'
+2026-07-23T09:53:17.1835924Z   ...
+2026-07-23T09:53:17.1836341Z # Subtest: fallback states explicitly refuse generic or fabricated suggestions
+2026-07-23T09:53:17.1836918Z ok 18 - fallback states explicitly refuse generic or fabricated suggestions
+2026-07-23T09:53:17.1837292Z   ---
+2026-07-23T09:53:17.1837487Z   duration_ms: 0.576902
+2026-07-23T09:53:17.1837713Z   type: 'test'
+2026-07-23T09:53:17.1837919Z   ...
+2026-07-23T09:53:17.1838333Z # Subtest: the loader removes legacy feed and route suggestions before first render
+2026-07-23T09:53:17.1838942Z ok 19 - the loader removes legacy feed and route suggestions before first render
+2026-07-23T09:53:17.1837487Z   duration_ms: 0.576902
+2026-07-23T09:53:17.1837713Z   type: 'test'
+2026-07-23T09:53:17.1837919Z   ...
+2026-07-23T09:53:17.1838333Z # Subtest: the loader removes legacy feed and route suggestions before first render
+2026-07-23T09:53:17.1838942Z ok 19 - the loader removes legacy feed and route suggestions before first render
+2026-07-23T09:53:17.1839320Z   ---
+2026-07-23T09:53:17.1839528Z   duration_ms: 4.776315
+2026-07-23T09:53:17.1839753Z   type: 'test'
+2026-07-23T09:53:17.1839954Z   ...
+2026-07-23T09:53:17.1840406Z # Subtest: the browser bridge renders only fixture profile data and escapes opportunity fields
+2026-07-23T09:53:17.1841271Z ok 20 - the browser bridge renders only fixture profile data and escapes opportunity fields
+2026-07-23T09:53:17.1839528Z   duration_ms: 4.776315
+2026-07-23T09:53:17.1839753Z   type: 'test'
+2026-07-23T09:53:17.1839954Z   ...
+2026-07-23T09:53:17.1840406Z # Subtest: the browser bridge renders only fixture profile data and escapes opportunity fields
+2026-07-23T09:53:17.1841271Z ok 20 - the browser bridge renders only fixture profile data and escapes opportunity fields
+2026-07-23T09:53:17.1841703Z   ---
+2026-07-23T09:53:17.1841903Z   duration_ms: 36.414308
+2026-07-23T09:53:17.1842138Z   type: 'test'
+2026-07-23T09:53:17.1842339Z   ...
+2026-07-23T09:53:17.1842915Z # Subtest: the mixed visual feed is compact, truthful, reversible, private, and mobile-safe
+2026-07-23T09:53:17.1843652Z ok 21 - the mixed visual feed is compact, truthful, reversible, private, and mobile-safe
+2026-07-23T09:53:17.1841903Z   duration_ms: 36.414308
+2026-07-23T09:53:17.1842138Z   type: 'test'
+2026-07-23T09:53:17.1842339Z   ...
+2026-07-23T09:53:17.1842915Z # Subtest: the mixed visual feed is compact, truthful, reversible, private, and mobile-safe
+2026-07-23T09:53:17.1843652Z ok 21 - the mixed visual feed is compact, truthful, reversible, private, and mobile-safe
+2026-07-23T09:53:17.1844060Z   ---
+2026-07-23T09:53:17.1844267Z   duration_ms: 0.935918
+2026-07-23T09:53:17.1844495Z   type: 'test'
+2026-07-23T09:53:17.1844700Z   ...
+2026-07-23T09:53:17.4198396Z # Subtest: the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.4203603Z not ok 22 - the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.1844267Z   duration_ms: 0.935918
+2026-07-23T09:53:17.1844495Z   type: 'test'
+2026-07-23T09:53:17.1844700Z   ...
+2026-07-23T09:53:17.4198396Z # Subtest: the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.4203603Z not ok 22 - the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.4204653Z   ---
+2026-07-23T09:53:17.4205227Z   duration_ms: 3.825946
+2026-07-23T09:53:17.4205580Z   type: 'test'
+2026-07-23T09:53:17.4206358Z   location: '/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:2:1249'
+2026-07-23T09:53:17.4207206Z   failureType: 'testCodeFailure'
+2026-07-23T09:53:17.4207886Z   error: "Cannot read properties of undefined (reading 'pathname')"
+2026-07-23T09:53:17.1844495Z   type: 'test'
+2026-07-23T09:53:17.1844700Z   ...
+2026-07-23T09:53:17.4198396Z # Subtest: the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.4203603Z not ok 22 - the home Set priorities links open the Complete Profile page
+2026-07-23T09:53:17.4204653Z   ---
+2026-07-23T09:53:17.4205227Z   duration_ms: 3.825946
+2026-07-23T09:53:17.4205580Z   type: 'test'
+2026-07-23T09:53:17.4206358Z   location: '/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:2:1249'
+2026-07-23T09:53:17.4207206Z   failureType: 'testCodeFailure'
+2026-07-23T09:53:17.4207886Z   error: "Cannot read properties of undefined (reading 'pathname')"
+2026-07-23T09:53:17.4208493Z   code: 'ERR_TEST_FAILURE'
+2026-07-23T09:53:17.4205227Z   duration_ms: 3.825946
+2026-07-23T09:53:17.4205580Z   type: 'test'
+2026-07-23T09:53:17.4206358Z   location: '/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:2:1249'
+2026-07-23T09:53:17.4207206Z   failureType: 'testCodeFailure'
+2026-07-23T09:53:17.4207886Z   error: "Cannot read properties of undefined (reading 'pathname')"
+2026-07-23T09:53:17.4208493Z   code: 'ERR_TEST_FAILURE'
+2026-07-23T09:53:17.4208907Z   name: 'TypeError'
+2026-07-23T09:53:17.4209281Z   stack: |-
+2026-07-23T09:53:17.4209760Z     profilePriorityHref (evalmachine.<anonymous>:8:38)
+2026-07-23T09:53:17.4210490Z     routeProfilePriorityActions (evalmachine.<anonymous>:14:18)
+2026-07-23T09:53:17.4211595Z     Object.renderNowWithProfilePriorityRoute [as nowFocus] (evalmachine.<anonymous>:38:12)
+2026-07-23T09:53:17.4205580Z   type: 'test'
+2026-07-23T09:53:17.4206358Z   location: '/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:2:1249'
+2026-07-23T09:53:17.4207206Z   failureType: 'testCodeFailure'
+2026-07-23T09:53:17.4207886Z   error: "Cannot read properties of undefined (reading 'pathname')"
+2026-07-23T09:53:17.4208493Z   code: 'ERR_TEST_FAILURE'
+2026-07-23T09:53:17.4208907Z   name: 'TypeError'
+2026-07-23T09:53:17.4209281Z   stack: |-
+2026-07-23T09:53:17.4209760Z     profilePriorityHref (evalmachine.<anonymous>:8:38)
+2026-07-23T09:53:17.4210490Z     routeProfilePriorityActions (evalmachine.<anonymous>:14:18)
+2026-07-23T09:53:17.4211595Z     Object.renderNowWithProfilePriorityRoute [as nowFocus] (evalmachine.<anonymous>:38:12)
+2026-07-23T09:53:17.4212895Z     Object.render (/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:41:43)
+2026-07-23T09:53:17.4206358Z   location: '/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:2:1249'
+2026-07-23T09:53:17.4207206Z   failureType: 'testCodeFailure'
+2026-07-23T09:53:17.4207886Z   error: "Cannot read properties of undefined (reading 'pathname')"
+2026-07-23T09:53:17.4208493Z   code: 'ERR_TEST_FAILURE'
+2026-07-23T09:53:17.4208907Z   name: 'TypeError'
+2026-07-23T09:53:17.4209281Z   stack: |-
+2026-07-23T09:53:17.4209760Z     profilePriorityHref (evalmachine.<anonymous>:8:38)
+2026-07-23T09:53:17.4210490Z     routeProfilePriorityActions (evalmachine.<anonymous>:14:18)
+2026-07-23T09:53:17.4211595Z     Object.renderNowWithProfilePriorityRoute [as nowFocus] (evalmachine.<anonymous>:38:12)
+2026-07-23T09:53:17.4212895Z     Object.render (/home/runner/work/Website2/Website2/src/live-now-priority-route.test.ts:41:43)
+2026-07-23T09:53:17.4213957Z     enforceNowProfilePriorityRoute (evalmachine.<anonymous>:42:12)
+2026-07-23T09:53:17.4363412Z # skipped 0
+2026-07-23T09:53:17.4363905Z # todo 0
+2026-07-23T09:53:17.4364251Z # duration_ms 923.278287
+2026-07-23T09:53:17.4430486Z ##[error]Process completed with exit code 1.
+2026-07-23T09:53:17.4605472Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-23T09:53:17.4606856Z Post job cleanup.
+2026-07-23T09:53:17.5479642Z [command]/usr/bin/git version
+2026-07-23T09:53:17.5521723Z git version 2.54.0
+2026-07-23T09:53:17.5557275Z Temporarily overriding HOME='/home/runner/work/_temp/fb1b6f4e-0c0a-4651-907b-daf3bb5ead60' before making global git config changes
+2026-07-23T09:53:17.5558787Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-23T09:53:17.5563316Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Website2/Website2
