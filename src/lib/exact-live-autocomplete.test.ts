@@ -21,6 +21,7 @@ function readExactLiveSource() {
 test("the exact live shell loads autocomplete for its contenteditable trade tokens", () => {
   const loader = readRepoFile("public/moral-trade-live.html");
   const adapter = readRepoFile("public/moral-trade-live-token-autocomplete.js");
+  const nonprofitRoute = readRepoFile("src/app/api/nonprofits/search/route.ts");
   const source = readExactLiveSource();
 
   assert.match(loader, /moral-trade-input-assist\.js/);
@@ -29,7 +30,12 @@ test("the exact live shell loads autocomplete for its contenteditable trade toke
   assert.match(source, /\['◷','Time'\]/);
   assert.match(adapter, /TOKEN_SELECTOR/);
   assert.match(adapter, /data-mt-live-token-panel/);
-  assert.match(adapter, /return index === 0 \? null : "priorities"/);
+  assert.match(adapter, /return index === 0 \? null : RECIPIENT_CONTEXT/);
+  assert.match(adapter, /rankSuggestions\("organizations", query\)/);
+  assert.match(adapter, /rankSuggestions\("priorities", query\)/);
+  assert.match(adapter, /\/api\/nonprofits\/search/);
+  assert.match(adapter, /Cause areas and organizations/);
+  assert.match(adapter, /data-mt-suggestion-kind/);
   assert.match(adapter, /"only if they"/);
   assert.match(adapter, /"time"/);
   assert.match(adapter, /return "commitments"/);
@@ -42,4 +48,6 @@ test("the exact live shell loads autocomplete for its contenteditable trade toke
   assert.doesNotMatch(adapter, /"deadline"/);
   assert.match(adapter, /new MutationObserver/);
   assert.match(adapter, /aria-autocomplete/);
+  assert.match(nonprofitRoute, /buildProPublicaSearchUrl/);
+  assert.match(nonprofitRoute, /mapProPublicaOrganizations/);
 });
