@@ -3,8 +3,13 @@ import Link from "next/link";
 
 import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { SmartQueryForm } from "@/components/search/smart-query-form";
 import { getViewer } from "@/lib/app-data";
-import { demoAlternatives, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import {
+  demoAlternatives,
+  demoCycle,
+  demoMpgfPublicGoodsCampaigns,
+} from "@/lib/mpgf/data";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
 import {
   MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS,
@@ -14,13 +19,32 @@ import {
 } from "@/lib/mpgf/public-goods-cg-vqaf";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
+import { smartDiscoveryScore } from "@/lib/smart-discovery-ranking";
+import {
+  getSmartDeadlineUrgency,
+  getSmartQueryCauseLabel,
+  matchesSmartAmountConstraint,
+  matchesSmartDeadlineConstraint,
+  matchesSmartVerificationConstraint,
+  parseSerializedSmartQueryFacets,
+  parseSmartQuery,
+  type SmartQueryFacets,
+} from "@/lib/smart-query";
+import {
+  hasSmartQueryConstraints,
+  mergeSmartQueryFacets,
+} from "@/lib/smart-query-facets";
+import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
+import {
+  smartCauseMatchScore,
+  smartInterpretationScore,
+  smartPersonalPriorityScore,
+} from "@/lib/smart-query-scoring";
 
 export const metadata: Metadata = {
   title: "MPGF Pools",
   description: "Approved demo ordinary-pool alternatives for the Moral Public Goods Fund.",
-  alternates: {
-    canonical: "/mpgf/pools",
-  },
+  alternates: { canonical: "/mpgf/pools" },
   openGraph: {
     title: "MPGF Pools",
     description: "Approved demo ordinary-pool alternatives for the Moral Public Goods Fund.",
@@ -32,117 +56,254 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type PoolKindFilter = "all" | "consensus" | "hybrid";
-type PoolSortMode = "common_ground" | "default" | "preference" | "reliability";
+type PoolSortMode = "best_match" | "common_ground" | "default" | "preference" | "reliability";
+type DemoAlternative = (typeof demoAlternatives)[number];
 
 interface MpgfPoolsPageProps {
-  searchParams?: Promise<{
-    kind?: string | string[];
-    sort?: string | string[];
-    cluster?: string | string[];
-    min_intensity?: string | string[];
-  }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+interface RankedAlternative {
+  alternative: DemoAlternative;
+  commonGroundOrder: number;
+  commonGroundScore: number;
+  evidenceQuality: number;
+  score: number;
+  semanticRelevance: number;
 }
 
 function readSearchValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function readParam(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+  key: string,
+) {
+  return readSearchValue(searchParams?.[key]) ?? "";
+}
+
 function normalizeKindFilter(value: string | string[] | undefined): PoolKindFilter {
   const normalized = readSearchValue(value);
-
   return normalized === "consensus" || normalized === "hybrid" ? normalized : "all";
 }
 
 function normalizeSortMode(value: string | string[] | undefined): PoolSortMode {
   const normalized = readSearchValue(value);
-
-  return normalized === "default" || normalized === "preference" || normalized === "reliability"
+  return normalized === "common_ground" ||
+    normalized === "default" ||
+    normalized === "preference" ||
+    normalized === "reliability" ||
+    normalized === "best_match"
     ? normalized
-    : "common_ground";
+    : "best_match";
 }
 
 function normalizeMoralCluster(value: string | string[] | undefined): MpgfPublicGoodsMoralCluster {
   const normalized = readSearchValue(value);
-
   return isMpgfPublicGoodsMoralCluster(normalized) ? normalized : "institutional_pluralist";
 }
 
 function normalizeMinimumIntensity(value: string | string[] | undefined) {
   const parsed = Number(readSearchValue(value) ?? 0);
-
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(10_000, Math.round(parsed)));
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(10_000, Math.round(parsed))) : 0;
 }
 
 function formatBasisPoints(value: number) {
   return `${(value / 100).toFixed(0)}%`;
 }
 
-function getGoodTypeLabel(alternative: (typeof demoAlternatives)[number]) {
-  if (alternative.isConsensus && alternative.isHybrid) {
-    return "Consensus + hybrid";
-  }
-
+function getGoodTypeLabel(alternative: DemoAlternative) {
+  if (alternative.isConsensus && alternative.isHybrid) return "Consensus + hybrid";
   return alternative.isConsensus ? "Consensus" : "Hybrid";
+}
+
+function alternativeFields(alternative: DemoAlternative) {
+  return [
+    { value: alternative.causeArea, weight: 1 },
+    { value: `${alternative.name} ${alternative.shortName}`, weight: 0.96 },
+    { value: alternative.description, weight: 0.9 },
+    { value: alternative.moralPublicGoodRationale, weight: 0.88 },
+    { value: `${alternative.outcomeUnit} ${alternative.recipientName}`, weight: 0.7 },
+  ] as const;
+}
+
+function alternativeCauseIds(alternative: DemoAlternative) {
+  return parseSmartQuery(
+    `${alternative.causeArea} ${alternative.name} ${alternative.description}`,
+    { surface: "mpgf_pools" },
+  ).facets.causes;
+}
+
+function alternativeMatchesHardConstraints(
+  alternative: DemoAlternative,
+  facets: SmartQueryFacets,
+  kindFilter: PoolKindFilter,
+  minimumIntensity: number,
+) {
+  if (kindFilter === "consensus" && !alternative.isConsensus) return false;
+  if (kindFilter === "hybrid" && !alternative.isHybrid) return false;
+  if (alternative.demoPriorityBps < minimumIntensity) return false;
+  if (facets.poolKinds.includes("consensus") && !alternative.isConsensus) return false;
+  if (facets.poolKinds.includes("hybrid") && !alternative.isHybrid) return false;
+  if (facets.causes.length && smartCauseMatchScore(facets.causes, alternativeFields(alternative)) < 0.42) {
+    return false;
+  }
+  if (!matchesSmartVerificationConstraint(facets, alternative.status === "approved_demo")) return false;
+  if (!matchesSmartAmountConstraint(facets, [demoCycle.budgetCents])) return false;
+  if (!matchesSmartDeadlineConstraint(facets, demoCycle.ballotClosesAt)) return false;
+  if (facets.actionTypes.length && !facets.actionTypes.includes("pool")) return false;
+  if (
+    facets.participantKinds.length ||
+    facets.openToPayment !== null ||
+    facets.openToPledges !== null ||
+    facets.minCredit !== null ||
+    facets.evidenceStates.length ||
+    facets.location
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function rankAlternatives({
+  commonGroundByCampaignId,
+  facets,
+  kindFilter,
+  minimumIntensity,
+  personalPriorities,
+  query,
+  sortMode,
+}: {
+  commonGroundByCampaignId: Map<string, { order: number; coordinatabilityScoreBps: number }>;
+  facets: SmartQueryFacets;
+  kindFilter: PoolKindFilter;
+  minimumIntensity: number;
+  personalPriorities: readonly string[];
+  query: string;
+  sortMode: PoolSortMode;
+}) {
+  const parsed = parseSmartQuery(query, { surface: "mpgf_pools" });
+  const interpretation = { ...parsed, facets };
+  const ranked = demoAlternatives
+    .filter((alternative) =>
+      alternativeMatchesHardConstraints(alternative, facets, kindFilter, minimumIntensity),
+    )
+    .map((alternative): RankedAlternative | null => {
+      const campaign = demoMpgfPublicGoodsCampaigns.find(
+        (candidate) => candidate.poolAlternativeId === alternative.id,
+      );
+      const commonGround = campaign ? commonGroundByCampaignId.get(campaign.id) : null;
+      const semanticRelevance = smartInterpretationScore(
+        interpretation,
+        alternativeFields(alternative),
+      );
+      if (
+        (interpretation.residualTerms.length || facets.causes.length) &&
+        semanticRelevance < 0.16
+      ) {
+        return null;
+      }
+      const causeIds = alternativeCauseIds(alternative);
+      const evidenceQuality = Math.min(
+        1,
+        0.55 + 0.45 * (alternative.operationalReliabilityBps / 10_000),
+      );
+      const score = smartDiscoveryScore({
+        semanticRelevance,
+        evidenceQuality,
+        personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
+        deadlineUrgency: getSmartDeadlineUrgency(demoCycle.ballotClosesAt),
+        credit: 0,
+      });
+      return {
+        alternative,
+        commonGroundOrder: commonGround?.order ?? Number.MAX_SAFE_INTEGER,
+        commonGroundScore: (commonGround?.coordinatabilityScoreBps ?? 0) / 10_000,
+        evidenceQuality,
+        score,
+        semanticRelevance,
+      };
+    })
+    .filter((entry): entry is RankedAlternative => Boolean(entry));
+
+  return ranked
+    .sort((left, right) => {
+      if (sortMode === "common_ground" || (sortMode === "best_match" && !query && !facets.causes.length)) {
+        return left.commonGroundOrder - right.commonGroundOrder ||
+          right.commonGroundScore - left.commonGroundScore ||
+          left.alternative.id.localeCompare(right.alternative.id);
+      }
+      if (sortMode === "preference") {
+        return right.alternative.demoPriorityBps - left.alternative.demoPriorityBps ||
+          right.score - left.score || left.alternative.id.localeCompare(right.alternative.id);
+      }
+      if (sortMode === "reliability") {
+        return right.alternative.operationalReliabilityBps - left.alternative.operationalReliabilityBps ||
+          right.score - left.score || left.alternative.id.localeCompare(right.alternative.id);
+      }
+      if (sortMode === "default") return left.alternative.id.localeCompare(right.alternative.id);
+      return right.score - left.score ||
+        right.semanticRelevance - left.semanticRelevance ||
+        right.commonGroundScore - left.commonGroundScore ||
+        left.alternative.id.localeCompare(right.alternative.id);
+    })
+    .map((entry) => entry.alternative);
 }
 
 export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps) {
   const resolvedSearchParams = await searchParams;
+  const query = readParam(resolvedSearchParams, "q").trim().slice(0, 500);
+  const parsed = parseSmartQuery(query, { surface: "mpgf_pools" });
+  const facets = mergeSmartQueryFacets(
+    parsed.facets,
+    parseSerializedSmartQueryFacets(resolvedSearchParams ?? {}),
+  );
   const kindFilter = normalizeKindFilter(resolvedSearchParams?.kind);
-  const sortMode = normalizeSortMode(resolvedSearchParams?.sort);
+  const sortMode = normalizeSortMode(resolvedSearchParams?.sort ?? facets.sort ?? undefined);
   const moralCluster = normalizeMoralCluster(resolvedSearchParams?.cluster);
   const minimumIntensity = normalizeMinimumIntensity(resolvedSearchParams?.min_intensity);
   const commonGroundDiscovery = buildMpgfPublicGoodsCommonGroundDiscovery({ moralCluster });
   const commonGroundByCampaignId = new Map(
-    commonGroundDiscovery.rows.map((row, index) => [row.campaignId, { ...row, order: index }]),
+    commonGroundDiscovery.rows.map((row, index) => [
+      row.campaignId,
+      {
+        order: index,
+        coordinatabilityScoreBps: row.coordinatabilityScoreBps,
+      },
+    ]),
   );
-  const visibleAlternatives = demoAlternatives
-    .filter((alternative) => {
-      if (kindFilter === "consensus") {
-        return alternative.isConsensus;
-      }
-
-      if (kindFilter === "hybrid") {
-        return alternative.isHybrid;
-      }
-
-      return true;
-    })
-    .filter((alternative) => alternative.demoPriorityBps >= minimumIntensity)
-    .sort((left, right) => {
-      if (sortMode === "common_ground") {
-        const leftCampaign = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.poolAlternativeId === left.id);
-        const rightCampaign = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.poolAlternativeId === right.id);
-        const leftDiscovery = leftCampaign ? commonGroundByCampaignId.get(leftCampaign.id) : null;
-        const rightDiscovery = rightCampaign ? commonGroundByCampaignId.get(rightCampaign.id) : null;
-
-        return (
-          (leftDiscovery?.order ?? Number.MAX_SAFE_INTEGER) -
-            (rightDiscovery?.order ?? Number.MAX_SAFE_INTEGER) ||
-          left.id.localeCompare(right.id)
-        );
-      }
-
-      if (sortMode === "preference") {
-        return right.demoPriorityBps - left.demoPriorityBps || left.id.localeCompare(right.id);
-      }
-
-      if (sortMode === "reliability") {
-        return right.operationalReliabilityBps - left.operationalReliabilityBps || left.id.localeCompare(right.id);
-      }
-
-      return left.id.localeCompare(right.id);
-    });
   const viewer = await getViewer();
+  const personalPriorities = await loadSmartQueryCausePriorities(viewer?.authUser.id);
+  const visibleAlternatives = rankAlternatives({
+    commonGroundByCampaignId,
+    facets,
+    kindFilter,
+    minimumIntensity,
+    personalPriorities,
+    query,
+    sortMode,
+  });
   const participantState = await loadMpgfParticipantState({
     userId: viewer?.authUser.id,
     displayName: viewer?.displayName,
   });
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
+  const hasFilters = Boolean(
+    query || kindFilter !== "all" || minimumIntensity || hasSmartQueryConstraints(facets),
+  );
+  const activeConstraints = [
+    ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
+    ...facets.poolKinds.map((kind) => `${kind === "consensus" ? "Consensus" : "Hybrid"} good`),
+    facets.verified === true ? "Approved demo only" : facets.verified === false ? "Not approved" : null,
+    facets.deadlineBefore
+      ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}`
+      : null,
+    facets.maxAmountCents !== null
+      ? `Cycle budget ${facets.maxAmountInclusive ? "≤" : "<"} $${(facets.maxAmountCents / 100).toLocaleString()}`
+      : null,
+  ].filter((label): label is string => Boolean(label));
 
   return (
     <MpgfPageFrame
@@ -152,17 +313,26 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
-      <form className="mpgf-panel stack-form" action="/mpgf/pools">
+      <SmartQueryForm action="/mpgf/pools" className="mpgf-panel stack-form" method="get" queryName="q" surface="mpgf_pools">
         <div className="section-head auth-head">
           <p className="eyebrow">Consensus and hybrid goods</p>
-          <h2>Filter demo pools by common-ground coordination signals</h2>
+          <h2>Find demo pools by shared goal and coordination signal</h2>
           <p>
-            Consensus goods are framed as shared coordination targets. Hybrid goods can attract
-            support from different moral views for different reasons. These filters affect only the
-            demo directory and do not authorize allocation or payout.
+            Describe a cause or good in ordinary language. Hard constraints run before semantic fit,
+            approved-demo review quality, saved cause priorities, and the current cycle deadline.
+            Common-ground ordering remains an explicit coordinatability lens, not a claim about moral truth.
           </p>
         </div>
         <div className="field-grid">
+          <label className="field">
+            <span>Search demo pools</span>
+            <input
+              defaultValue={query}
+              name="q"
+              placeholder="e.g. approved animal-welfare hybrid goods"
+              type="search"
+            />
+          </label>
           <label className="field">
             <span>Good type</span>
             <select defaultValue={kindFilter} name="kind">
@@ -174,6 +344,7 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
           <label className="field">
             <span>Sort by</span>
             <select defaultValue={sortMode} name="sort">
+              <option value="best_match">Best match</option>
               <option value="common_ground">Common-ground ordering</option>
               <option value="default">Stable directory order</option>
               <option value="preference">Default preference intensity</option>
@@ -184,9 +355,7 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
             <span>Common-ground lens</span>
             <select defaultValue={moralCluster} name="cluster">
               {MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </label>
@@ -204,14 +373,20 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
           </label>
         </div>
         <div className="form-actions">
-          <button className="button button-secondary" type="submit">
-            Apply filters
-          </button>
-          <Link className="button button-secondary" href="/mpgf/pools">
-            Reset
-          </Link>
+          <button className="button button-secondary" type="submit">Apply smart search</button>
+          {hasFilters ? <Link className="button button-secondary" href="/mpgf/pools">Reset</Link> : null}
         </div>
-      </form>
+        {query || activeConstraints.length ? (
+          <div className="tag-row" aria-live="polite">
+            {query ? <span className="badge">Query: {query}</span> : null}
+            {activeConstraints.map((label) => <span className="badge" key={label}>{label}</span>)}
+          </div>
+        ) : null}
+        <p className="mpgf-small">
+          Generic amount and deadline constraints apply to the published demo cycle budget and close,
+          because these alternatives do not expose separate live-money targets.
+        </p>
+      </SmartQueryForm>
 
       <section className="mpgf-panel mpgf-panel-primary">
         <div className="section-head auth-head">
@@ -226,28 +401,19 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
         <dl className="mpgf-summary-grid">
           <div>
             <dt>Lens</dt>
-            <dd>
-              {MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS.find((option) => option.value === moralCluster)?.label}
-            </dd>
+            <dd>{MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS.find((option) => option.value === moralCluster)?.label}</dd>
           </div>
-          <div>
-            <dt>Experiment</dt>
-            <dd>common-ground personalization</dd>
-          </div>
-          <div>
-            <dt>Ranking boundary</dt>
-            <dd>coordinatability only</dd>
-          </div>
-          <div>
-            <dt>Privacy</dt>
-            <dd>aggregate scores only</dd>
-          </div>
+          <div><dt>Experiment</dt><dd>common-ground personalization</dd></div>
+          <div><dt>Ranking boundary</dt><dd>coordinatability only</dd></div>
+          <div><dt>Privacy</dt><dd>aggregate scores only</dd></div>
         </dl>
       </section>
 
       <section className="mpgf-pool-directory">
         {visibleAlternatives.map((alternative) => {
-          const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.poolAlternativeId === alternative.id);
+          const campaign = demoMpgfPublicGoodsCampaigns.find(
+            (candidate) => candidate.poolAlternativeId === alternative.id,
+          );
           const discovery = campaign ? commonGroundByCampaignId.get(campaign.id) : null;
 
           return (
@@ -262,7 +428,7 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
                   Default intensity {formatBasisPoints(alternative.demoPriorityBps)}
                 </span>
                 {discovery ? (
-                  <span className="badge badge-secondary" title={discovery.reasonCodes.join(", ")}>
+                  <span className="badge badge-secondary" title="Common-ground coordinatability under the selected lens">
                     Common-ground {formatBasisPoints(discovery.coordinatabilityScoreBps)}
                   </span>
                 ) : null}
@@ -272,27 +438,16 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
               <p>{alternative.moralPublicGoodRationale}</p>
               {campaign ? (
                 <dl className="mpgf-summary-grid">
-                  <div>
-                    <dt>Public progress</dt>
-                    <dd>Sealed before close</dd>
-                  </div>
-                  <div>
-                    <dt>Supporter breadth</dt>
-                    <dd>Sealed before close</dd>
-                  </div>
-                  <div>
-                    <dt>Base unlock</dt>
-                    <dd>Shown after close in final reports</dd>
-                  </div>
-                  <div>
-                    <dt>Bonus range</dt>
-                    <dd>Shown after close in final reports</dd>
-                  </div>
+                  <div><dt>Public progress</dt><dd>Sealed before close</dd></div>
+                  <div><dt>Supporter breadth</dt><dd>Sealed before close</dd></div>
+                  <div><dt>Base unlock</dt><dd>Shown after close in final reports</dd></div>
+                  <div><dt>Bonus range</dt><dd>Shown after close in final reports</dd></div>
                 </dl>
               ) : null}
               {discovery ? (
                 <p className="mpgf-small">
-                  Discovery basis: {discovery.reasonCodes.map((code) => code.replaceAll("_", " ")).join(", ")}.
+                  Discovery basis: {commonGroundDiscovery.rows.find((row) => row.campaignId === campaign?.id)?.reasonCodes
+                    .map((code) => code.replaceAll("_", " ")).join(", ")}.
                 </p>
               ) : null}
               <Link className="inline-link" href={`/mpgf/pools/${alternative.id}`}>View pool</Link>
@@ -302,10 +457,10 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
         {visibleAlternatives.length === 0 ? (
           <article className="mpgf-panel">
             <p className="eyebrow">No matching demo pools</p>
-            <h2>Try a broader filter.</h2>
+            <h2>No alternative satisfies every hard constraint.</h2>
             <p>
-              The current filter only affects the public demo directory. It does not change MPGF
-              allocation logic or create a personal funding instruction.
+              Broaden the cause, good type, cycle budget, deadline, or approval requirement. The
+              directory never treats missing or private fields as matches.
             </p>
           </article>
         ) : null}

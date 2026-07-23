@@ -5,29 +5,73 @@
   window.__MT_TRADE_TEMPLATE_NAVIGATION__ = true;
 
   const libraryHref = "/offers?view=templates";
+  const templateEntryLabels = new Set(["templates", "new trade"]);
+  const overflowLabels = new Set(["...", "…"]);
 
   function normalizeLabel(value) {
     return String(value || "")
       .replace(/\s+/g, " ")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/^\+\s*/, "");
   }
 
   function isTemplatesControl(element) {
     return (
       element instanceof HTMLElement &&
       element.matches("button, a") &&
-      normalizeLabel(element.textContent) === "templates"
+      (element.hasAttribute("data-mt-template-library") ||
+        templateEntryLabels.has(normalizeLabel(element.textContent)) ||
+        templateEntryLabels.has(normalizeLabel(element.getAttribute("aria-label"))))
     );
+  }
+
+  function isOverflowControl(element) {
+    return (
+      element instanceof HTMLElement &&
+      element.matches("button, a") &&
+      overflowLabels.has(normalizeLabel(element.textContent))
+    );
+  }
+
+  function removeAdjacentOverflowControl(templateControl) {
+    const controlGroup = templateControl.parentElement;
+    if (!controlGroup) return;
+
+    Array.from(controlGroup.children).forEach((candidate) => {
+      if (candidate === templateControl) return;
+
+      if (isOverflowControl(candidate)) {
+        candidate.remove();
+        return;
+      }
+
+      if (!(candidate instanceof HTMLElement)) return;
+      const nestedControls = Array.from(candidate.querySelectorAll("button, a"));
+      if (nestedControls.length === 1 && isOverflowControl(nestedControls[0])) {
+        candidate.remove();
+      }
+    });
   }
 
   function prepareControls(root) {
     const scope = root instanceof Element || root instanceof Document ? root : document;
     scope.querySelectorAll("button, a").forEach((control) => {
       if (!isTemplatesControl(control)) return;
-      control.setAttribute("aria-label", "Open trade template library");
+      const isNewTrade =
+        normalizeLabel(control.textContent) === "new trade" ||
+        normalizeLabel(control.getAttribute("aria-label")) === "new trade";
+
+      if (!control.hasAttribute("aria-label")) {
+        control.setAttribute(
+          "aria-label",
+          isNewTrade ? "Start a new trade from a template" : "Open trade template library",
+        );
+      }
       control.setAttribute("title", "Choose a template and open a prefilled editable draft");
       control.setAttribute("data-mt-template-library", "true");
+      if (control instanceof HTMLAnchorElement) control.href = libraryHref;
+      removeAdjacentOverflowControl(control);
     });
   }
 

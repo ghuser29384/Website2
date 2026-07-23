@@ -1,0 +1,132 @@
+name: Smart query QA
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/smart-query*"
+      - "src/lib/smart-discovery-ranking.ts"
+      - "src/lib/smart-evidence-ranking*"
+      - "src/lib/smart-people-ranking.ts"
+      - "src/lib/site-search-smart.ts"
+      - "src/app/api/query/**"
+      - "src/app/layout.tsx"
+      - "src/app/offers/**"
+      - "src/app/people/**"
+      - "src/app/wish-registry/**"
+      - "src/app/evidence/**"
+      - "src/app/pools/**"
+      - "src/app/mpgf/pools/**"
+      - "src/components/layout/site-topbar.tsx"
+      - "src/components/search/**"
+      - "public/moral-trade-smart-query.js"
+      - "public/moral-trade-discover.html"
+      - "tests/smart-query*.spec.ts"
+      - "tests/discover-query-audit.spec.ts"
+      - ".github/workflows/smart-query-qa.yml"
+  push:
+    branches:
+      - feat/smart-query-pipeline
+
+permissions:
+  contents: read
+
+# Only the newest branch head should consume the full build and browser-test budget.
+concurrency:
+  group: smart-query-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smart-query-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Inventory query surfaces
+        run: |
+          mkdir -p qa-results
+          rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
+            'role="search"|type="search"|name="(search|q|query|sort|filter)"|searchParams|URLSearchParams|\.order\(' \
+            src public tests > qa-results/query-surface-audit.txt || true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint smart query code and integrated surfaces
+        run: |
+          set -o pipefail
+          npx eslint \
+            src/lib/smart-query.ts \
+            src/lib/smart-query-clarification.ts \
+            src/lib/smart-query-facets.ts \
+            src/lib/smart-query-llm.ts \
+            src/lib/smart-query-llm-gate.ts \
+            src/lib/smart-query-llm-gate.test.ts \
+            src/lib/smart-query-personalization.ts \
+            src/lib/smart-query-records.ts \
+            src/lib/smart-query-scoring.ts \
+            src/lib/smart-query-surface-policy.ts \
+            src/lib/smart-query.test.ts \
+            src/lib/smart-discovery-ranking.ts \
+            src/lib/smart-evidence-ranking.ts \
+            src/lib/smart-evidence-ranking.test.ts \
+            src/lib/smart-people-ranking.ts \
+            src/lib/site-search-smart.ts \
+            src/app/api/query/interpret/route.ts \
+            src/app/layout.tsx \
+            src/app/offers/page.tsx \
+            src/app/people/page.tsx \
+            src/app/pools/page.tsx \
+            src/app/mpgf/pools/page.tsx \
+            src/app/wish-registry/page.tsx \
+            'src/app/evidence/[[...recordId]]/page.tsx' \
+            src/components/layout/site-topbar.tsx \
+            src/components/search/smart-query-auto-enhancer.tsx \
+            src/components/search/smart-query-form.tsx \
+            tests/discover-query-audit.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
+
+      - name: Test deterministic and semantic query interpretation
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/smart-query.test.ts \
+            src/lib/smart-query-llm-gate.test.ts \
+            src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
+
+      - name: Build production application
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee qa-results/smart-query-build.txt
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit rendered Discover query controls
+        run: |
+          set -o pipefail
+          npx playwright test tests/discover-query-audit.spec.ts --reporter=line 2>&1 | \
+            tee qa-results/smart-query-e2e.txt
+
+      - name: Upload query audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-query-audit
+          path: |
+            test-results/discover-query-audit.json
+            test-results/discover-inline-source.js
+            qa-results/query-surface-audit.txt
+            qa-results/smart-query-lint.txt
+            qa-results/smart-query-test.txt
+            qa-results/smart-query-build.txt
+            qa-results/smart-query-e2e.txt
+          if-no-files-found: warn
+          retention-days: 7

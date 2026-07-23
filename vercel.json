@@ -20,6 +20,10 @@
     {
       "path": "/api/jobs/background-networking",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/jobs/conditional-redirects",
+      "schedule": "15 * * * *"
     }
   ]
 }

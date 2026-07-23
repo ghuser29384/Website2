@@ -1440,11 +1440,19 @@ export async function reconcileConditionalRefund(refund: Stripe.Refund) {
     })
     .eq("id", attempt.id);
   if (refund.status === "succeeded") {
-    await supabase
-      .from("conditional_payment_mandates")
-      .update({ status: "refunded" })
-      .eq("id", attempt.mandate_id)
-      .neq("status", "disputed");
+    const { data: newerAttempts } = await supabase
+      .from("conditional_payment_attempts")
+      .select("id")
+      .eq("mandate_id", attempt.mandate_id)
+      .gt("attempt_number", attempt.attempt_number)
+      .limit(1);
+    if (!newerAttempts?.length) {
+      await supabase
+        .from("conditional_payment_mandates")
+        .update({ status: "refunded" })
+        .eq("id", attempt.mandate_id)
+        .neq("status", "disputed");
+    }
   }
   return { handled: true as const };
 }

@@ -60,9 +60,12 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
   const templateId = valueOf(resolvedSearchParams.template);
   const structure = valueOf(resolvedSearchParams.structure);
+  const acceptsCommandHandoff =
+    valueOf(resolvedSearchParams.handoff) === "command-center";
   const returnParams = new URLSearchParams();
   if (templateId) returnParams.set("template", templateId);
   if (structure) returnParams.set("structure", structure);
+  if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
   const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
 
   if (!viewer) {
@@ -77,6 +80,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     <>
       <style>{WORKBENCH_GRID}</style>
       <HardenedTradeDraftWorkbench
+        acceptCommandHandoff={acceptsCommandHandoff}
         formMessage={getFormMessage(resolvedSearchParams)}
         initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
         saveAction={saveCoreOfferAction}

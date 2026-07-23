@@ -1,12 +1,21 @@
 import { createHash } from "node:crypto";
 
 export type ConditionalPaymentsMode = "disabled" | "test" | "live";
-export type ConditionalPaymentPurpose = "donation_offset" | "public_goods_pool";
+export type ConditionalPaymentPurpose =
+  | "donation_offset"
+  | "public_goods_pool"
+  | "conditional_redirect";
 export type ConditionalPaymentSubjectType =
   | "donation_offset_match"
   | "donation_offset_pool"
-  | "mpgf_campaign";
-export type ConditionalPaymentParticipantRole = "owner" | "counterparty" | "pledger";
+  | "mpgf_campaign"
+  | "conditional_redirect_offer";
+export type ConditionalPaymentParticipantRole =
+  | "owner"
+  | "counterparty"
+  | "pledger"
+  | "creator"
+  | "matcher";
 
 export interface ConditionalPaymentsEnvironment {
   enabled: boolean;

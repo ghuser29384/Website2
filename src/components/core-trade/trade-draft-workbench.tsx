@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { TradeFlowIcon } from "@/components/core-trade/trade-flow-icons";
+import { consumeCommandCenterHandoff } from "@/lib/command-center-handoff";
 import { deriveCommitmentLimit } from "@/lib/trade-draft-standards";
 
 import styles from "./trade-draft-workbench.module.css";
@@ -29,6 +30,7 @@ export interface TradeDraftValues {
 }
 
 interface TradeDraftWorkbenchProps {
+  acceptCommandHandoff?: boolean;
   formMessage?: { text: string; tone: "error" | "success" } | null;
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
@@ -65,6 +67,8 @@ const STEP_LABELS = [
 ] as const;
 
 const DATE_SNAPSHOT_SUBSCRIBE = () => () => {};
+
+type CommandHandoffState = "loading" | "loaded" | "unavailable" | null;
 
 function localDateSnapshot() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -153,6 +157,7 @@ function validateStep(step: number, values: TradeDraftValues, localToday = "") {
 }
 
 export function TradeDraftWorkbench({
+  acceptCommandHandoff = false,
   formMessage,
   initialValues,
   saveAction,
@@ -183,6 +188,50 @@ export function TradeDraftWorkbench({
   );
   const [isCommitmentLimitEditorOpen, setIsCommitmentLimitEditorOpen] =
     useState(false);
+  const [commandHandoffState, setCommandHandoffState] =
+    useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+  const commandHandoff = useRef<
+    ReturnType<typeof consumeCommandCenterHandoff> | undefined
+  >(undefined);
+
+  useEffect(() => {
+    if (!acceptCommandHandoff) return;
+
+    if (commandHandoff.current === undefined) {
+      try {
+        commandHandoff.current = consumeCommandCenterHandoff(window.sessionStorage);
+      } catch {
+        commandHandoff.current = null;
+      }
+    }
+
+    const restoredHandoff = commandHandoff.current;
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (!restoredHandoff) {
+        setCommandHandoffState("unavailable");
+        return;
+      }
+
+      setValues((current) => {
+        const next: TradeDraftValues = { ...current, ...restoredHandoff.values };
+        next.maximumBurden = deriveCommitmentLimit(next);
+        return next;
+      });
+      setUsesCustomCommitmentLimit(false);
+      setIsCommitmentLimitEditorOpen(false);
+      setError(null);
+      setStep(0);
+      setCommandHandoffState("loaded");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptCommandHandoff]);
+
   const localToday = useSyncExternalStore(
     DATE_SNAPSHOT_SUBSCRIBE,
     localDateSnapshot,
@@ -287,6 +336,18 @@ export function TradeDraftWorkbench({
             >
               {formMessage.text}
             </div>
+          ) : commandHandoffState === "loading" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Loading your command into the editor…
+            </div>
+          ) : commandHandoffState === "loaded" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Command loaded into the editable terms below. Review the no-trade baseline and add any missing dates and evidence before saving. No draft has been saved yet.
+            </div>
+          ) : commandHandoffState === "unavailable" ? (
+            <div className={`${styles.message} ${styles.messageError}`} role="alert">
+              The command could not be restored. Enter the terms below. No draft was created.
+            </div>
           ) : templateLabel ? (
             <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
               {templateLabel} loaded as an editable starting point. Review every field before saving or submitting.
@@ -324,6 +385,9 @@ export function TradeDraftWorkbench({
                         placeholder="For example: global poverty reduction"
                         value={values.offeredCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Suggestions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Priority you want advanced</span>
@@ -336,6 +400,9 @@ export function TradeDraftWorkbench({
                         placeholder="For example: animal welfare"
                         value={values.requestedCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Try “Animal” to see related priorities.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -360,6 +427,9 @@ export function TradeDraftWorkbench({
                         placeholder="A concrete action, amount, service, or behavior you are willing to undertake"
                         value={values.proposedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       Avoid open-ended promises. State quantity, scope, or frequency where possible.
@@ -387,6 +457,9 @@ export function TradeDraftWorkbench({
                         placeholder="A concrete reciprocal action"
                         value={values.requestedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       The other participant will review this exact text before confirming anything.
@@ -414,6 +487,9 @@ export function TradeDraftWorkbench({
                         placeholder="What each side would actually do if no agreement forms"
                         value={values.noTradeBaseline}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized no-trade baselines appear as you type.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -438,6 +514,9 @@ export function TradeDraftWorkbench({
                           placeholder="For example: 12 months"
                           value={values.duration}
                         />
+                        <span className={styles.autocompleteHint}>
+                          Suggested durations appear as you type.
+                        </span>
                       </label>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>Start date</span>
@@ -532,6 +611,9 @@ export function TradeDraftWorkbench({
                         placeholder="Receipt, external record, log, or participant attestation that will count"
                         value={values.evidenceRule}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized evidence types appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Public evidence and safety scope</span>
@@ -569,6 +651,9 @@ export function TradeDraftWorkbench({
                         placeholder="How either side can end future obligations"
                         value={values.exitConditions}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized exit conditions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Context or constraints (optional)</span>

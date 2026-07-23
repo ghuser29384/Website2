@@ -1,1 +1,0 @@
-Trigger the pull_request_target synchronization with diagnostic reporting after the workflow update.
