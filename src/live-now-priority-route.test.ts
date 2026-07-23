@@ -37,6 +37,7 @@ test("the home Set priorities links open the Complete Profile page", () => {
         status: "profile_incomplete",
       },
       dispatchEvent() {},
+      location: { pathname: "/" },
       render() {
         context.rendered = context.window.nowFocus();
       },
