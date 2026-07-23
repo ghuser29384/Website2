@@ -67,6 +67,13 @@ jobs:
               '  let initialSessions: CommandSessionView[] = [];\n  let initialSession: CommandSessionView | null = null;\n',
           )
           page_path.write_text(page_text)
+
+          executor_path = Path('src/lib/command/executor.ts')
+          executor_text = executor_path.read_text().replace(
+              '  if (capability.permissionTier === "prohibited" || capability.executionMode === "blocked") {\n',
+              '  if (capability.executionMode === "blocked") {\n',
+          )
+          executor_path.write_text(executor_text)
           PY
           git rm -rf --ignore-unmatch \
             .github/universal-command-patch \
