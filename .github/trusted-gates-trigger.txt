@@ -1,1 +1,1 @@
-Run the trusted exact-head repository, lint, build, and browser gates after the deterministic release fixes.
+Trigger the current Supabase Auth fixture compatibility update and rerun trusted exact-head gates.
