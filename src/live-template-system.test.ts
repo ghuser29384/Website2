@@ -21,6 +21,8 @@ test("the live Trade Templates control opens the canonical template library", ()
   assert.match(shell, /moral-trade-live-templates\.js/);
   assert.match(navigation, /\/offers\?view=templates/);
   assert.match(navigation, /Open trade template library/);
+  assert.match(navigation, /overflowLabels/);
+  assert.match(navigation, /removeAdjacentOverflowControl/);
   assert.match(offersPage, /view === "templates"/);
   assert.match(offersPage, /<TradeTemplateLibrary \/>/);
 });
