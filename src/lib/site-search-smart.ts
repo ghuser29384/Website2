@@ -1,8 +1,5 @@
-import {
-  buildSmartQueryTarget,
-  parseSmartQuery,
-  semanticTextScore,
-} from "@/lib/smart-query";
+import { buildSmartQueryTarget, parseSmartQuery } from "@/lib/smart-query";
+import { smartInterpretationScore } from "@/lib/smart-query-scoring";
 import { SITE_SEARCH_ITEMS, type SiteSearchItem } from "@/lib/site-search";
 
 function routeIntentBoost(item: SiteSearchItem, route: string) {
@@ -19,7 +16,7 @@ export function filterSmartSiteSearchItems(query: string, limit = 7) {
   if (!interpretation.normalizedQuery) return SITE_SEARCH_ITEMS.slice(0, limit);
 
   return SITE_SEARCH_ITEMS.map((item, index) => {
-    const semantic = semanticTextScore(interpretation, [
+    const semantic = smartInterpretationScore(interpretation, [
       { value: item.label, weight: 1 },
       { value: item.keywords.join(" "), weight: 0.92 },
       { value: item.summary, weight: 0.72 },
