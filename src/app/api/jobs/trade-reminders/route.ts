@@ -82,7 +82,7 @@ async function processTradeReminders(request: Request) {
           title: isOverdue ? "Evidence is overdue" : "Evidence is due soon",
           body: isOverdue
             ? "The agreement evidence due date has passed. Submit evidence, amend the terms, or use the published exit rule."
-            : `Evidence is due on ${dueDate}. Review the evidence rule and submit a file, link, or attestation.`,
+            : `Evidence is due on ${dueDate}. Review the evidence requirements and submit a file, link, or attestation.`,
           href,
           dedupe_key: dedupeKey,
         })

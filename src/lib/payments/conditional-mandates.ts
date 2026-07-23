@@ -54,7 +54,7 @@ async function recordAuditEvent(input: {
   }
 }
 
-async function ensureStripeCustomer(profileId: string, livemode: boolean) {
+export async function ensureStripeCustomer(profileId: string, livemode: boolean) {
   const supabase = getDb();
   const { data: existing, error: existingError } = await supabase
     .from("conditional_payment_customers")

@@ -111,7 +111,7 @@ export const ONBOARDING_GOALS = [
   {
     value: "support_public_good",
     label: "Support a public good",
-    description: "Log or join a shared public-good commitment with evidence rules.",
+    description: "Log or join a shared public-good commitment with clear evidence.",
   },
   {
     value: "browse_examples",

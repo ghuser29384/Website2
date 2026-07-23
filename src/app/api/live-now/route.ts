@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
 import {
+  BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE,
+  decryptBackgroundSensitiveText,
+  normalizeEncryptedFieldMap,
+} from "@/lib/background-field-encryption";
+import {
   buildLiveNowRecentChanges,
   buildWeightedCauseSignals,
   rankLiveNowOffers,
@@ -18,6 +23,11 @@ import {
   type RecommendationInteractionSignal,
   type RecommendationOpportunityType,
 } from "@/lib/recommendation-learning";
+import { presentRoutePlanner } from "@/lib/route-planner-presentation";
+import {
+  buildRoutePlanner,
+  classifyRoutePrivacyScope,
+} from "@/lib/route-recommendations";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,9 +36,15 @@ export const revalidate = 0;
 
 const OFFER_BATCH_SIZE = 1_000;
 const OWNED_OPPORTUNITY_LIMIT = 6;
-const OFFER_SELECT =
-  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,no_trade_baseline,created_at,updated_at";
+const OFFER_PUBLIC_SELECT =
+  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at";
+const OWNED_OFFER_SELECT = `${OFFER_PUBLIC_SELECT},no_trade_baseline`;
 const INTERACTION_LIMIT = 500;
+const ROUTE_PROFILE_SELECT =
+  "profile_id,goal,cause_priorities,money_budget_cents,time_budget_minutes,action_budget_count,horizon,route_formats,evidence_preference,uncertainty_preference,interaction_preference,privacy_preference,planned_donation_baseline,planned_donation_cents,otherwise_baseline,pairwise_answers,interview_answers,sensitive_ciphertexts,sensitive_encryption_version,created_at,updated_at";
+const GOAL_FIELD = "route_recommendation_profiles.goal";
+const CAUSE_PRIORITIES_FIELD = "route_recommendation_profiles.cause_priorities";
+const OTHERWISE_BASELINE_FIELD = "route_recommendation_profiles.otherwise_baseline";
 
 interface RecommendationPreferenceRow {
   learn_from_browsing: boolean;
@@ -87,7 +103,13 @@ interface OfferInventoryRow {
   duration: string;
   trust_level: number;
   maximum_burden: string;
-  no_trade_baseline: string;
+  no_trade_baseline?: string;
+  privacy_scope: string;
+  status: string;
+  workflow_status: string;
+  published_at: string | null;
+  closed_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +153,73 @@ function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>)
 
 function text(value: string | null | undefined, maximum = 240) {
   return (value ?? "").trim().slice(0, maximum);
+}
+
+function object(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function safePrivateText(value: string, maximum: number) {
+  if (!value || value === BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE) return "";
+  return value.trim().slice(0, maximum);
+}
+
+function decryptRouteProfile(value: unknown) {
+  const row = object(value);
+  const ciphertexts = normalizeEncryptedFieldMap(row.sensitive_ciphertexts);
+  const decrypted = (fieldKey: string, fallback: unknown, maximum: number) =>
+    safePrivateText(
+      ciphertexts[fieldKey]
+        ? decryptBackgroundSensitiveText(ciphertexts[fieldKey], fieldKey)
+        : typeof fallback === "string"
+          ? fallback
+          : "",
+      maximum,
+    );
+  let causePriorities = asStringArray(row.cause_priorities);
+  if (ciphertexts[CAUSE_PRIORITIES_FIELD]) {
+    try {
+      causePriorities = asStringArray(
+        JSON.parse(decrypted(CAUSE_PRIORITIES_FIELD, "", 4_000)),
+      );
+    } catch {
+      causePriorities = [];
+    }
+  }
+
+  return {
+    ...row,
+    goal: decrypted(GOAL_FIELD, row.goal, 180),
+    cause_priorities: causePriorities,
+    otherwise_baseline: decrypted(OTHERWISE_BASELINE_FIELD, row.otherwise_baseline, 700),
+    sensitive_ciphertexts: undefined,
+  };
+}
+
+function isPublishedLiveOffer(row: OfferInventoryRow) {
+  return (
+    row.status === "open" &&
+    row.workflow_status === "published" &&
+    Boolean(row.published_at) &&
+    row.closed_at === null &&
+    row.deleted_at === null
+  );
+}
+
+function isOpenDonationPool(row: DonationPoolRow, checkedAt: Date) {
+  if (!["open", "assurance_pending"].includes(row.status)) return false;
+  if (!row.assurance_deadline_at) return true;
+  const deadline = Date.parse(row.assurance_deadline_at);
+  return Number.isFinite(deadline) && deadline > checkedAt.getTime();
+}
+
+function poolDurationDays(deadline: string | null, checkedAt: Date) {
+  if (!deadline) return null;
+  const timestamp = Date.parse(deadline);
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, Math.ceil((timestamp - checkedAt.getTime()) / 86_400_000));
 }
 
 function asStringArray(value: unknown) {
@@ -181,6 +270,7 @@ function formatPoolDuration(deadline: string | null) {
 function buildPoolCandidate(
   pool: DonationPoolRow,
   charity: RegisteredCharityRow | undefined,
+  checkedAt: Date,
 ): LiveNowOfferCandidate {
   const destinationName = charity?.name || pool.compromise_charity_id;
   const benefitCause =
@@ -222,6 +312,9 @@ function buildPoolCandidate(
       assuranceMinimumCents: minimum,
       offsetRatio: Number(pool.offset_ratio) || 1,
       destinationName,
+      durationDays: poolDurationDays(pool.assurance_deadline_at, checkedAt),
+      privacyLevel: "public-safe",
+      invitationBacked: false,
     },
   };
 }
@@ -230,9 +323,13 @@ function emptyPayload(
   status: "profile_incomplete" | "signed_out" | "unavailable",
   authenticated: boolean,
 ) {
+  const generatedAt = new Date().toISOString();
+  const routePlanner = presentRoutePlanner(
+    buildRoutePlanner({ profile: null, recommendations: [], checkedAt: generatedAt }),
+  );
   return {
     authenticated,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     matchingOfferCount: 0,
     matchingOpportunityCount: 0,
     profile: {
@@ -255,6 +352,15 @@ function emptyPayload(
     recommendations: [],
     ownedOpportunities: [],
     ownedOpportunityCount: 0,
+    routePlanner: {
+      ...routePlanner,
+      status:
+        status === "signed_out"
+          ? "signed_out"
+          : status === "unavailable"
+            ? "unavailable"
+            : "incomplete",
+    },
     status,
   };
 }
@@ -273,6 +379,7 @@ export async function GET() {
   const supabase = await createClient();
   const userId = viewer.authUser.id;
   const typedSupabase = supabase as any;
+  const checkedAt = new Date();
   const [
     wishProfileResult,
     savedSearchesResult,
@@ -307,7 +414,7 @@ export async function GET() {
       .maybeSingle(),
     typedSupabase
       .from("route_recommendation_profiles")
-      .select("cause_priorities")
+      .select(ROUTE_PROFILE_SELECT)
       .eq("profile_id", userId)
       .maybeSingle(),
     typedSupabase
@@ -325,8 +432,12 @@ export async function GET() {
       .limit(INTERACTION_LIMIT),
     typedSupabase
       .from("offers")
-      .select(OFFER_SELECT)
+      .select(OWNED_OFFER_SELECT)
       .eq("status", "open")
+      .eq("workflow_status", "published")
+      .not("published_at", "is", null)
+      .is("closed_at", null)
+      .is("deleted_at", null)
       .eq("owner_id", userId)
       .order("updated_at", { ascending: false })
       .order("id", { ascending: true })
@@ -335,7 +446,9 @@ export async function GET() {
 
   const ownedOpportunities = ownedOffersResult.error
     ? []
-    : ((ownedOffersResult.data ?? []) as OfferInventoryRow[]).map(buildOwnedOpportunity);
+    : ((ownedOffersResult.data ?? []) as OfferInventoryRow[])
+        .filter(isPublishedLiveOffer)
+        .map(buildOwnedOpportunity);
 
   if (wishProfileResult.error) {
     console.error("[live-now] Failed to load profile priorities", {
@@ -373,9 +486,12 @@ export async function GET() {
   const priorityAllocations = onboardingResult.error
     ? []
     : asPriorityAllocations(onboardingResult.data?.priority_allocations);
+  const runtimeRouteProfile = routeProfileResult.error
+    ? null
+    : decryptRouteProfile(routeProfileResult.data);
   const declaredPriorities = uniqueProfileCauses(
     synthesisResult.error ? [] : asStringArray(synthesisResult.data?.cause_priorities),
-    routeProfileResult.error ? [] : asStringArray(routeProfileResult.data?.cause_priorities),
+    runtimeRouteProfile ? asStringArray(runtimeRouteProfile.cause_priorities) : [],
   );
   const preference = (preferenceResult.error
     ? null
@@ -410,6 +526,13 @@ export async function GET() {
   ].filter((source): source is string => Boolean(source));
 
   if (!causes.length) {
+    const routePlanner = presentRoutePlanner(
+      buildRoutePlanner({
+        profile: runtimeRouteProfile,
+        recommendations: [],
+        checkedAt,
+      }),
+    );
     return privateJson({
       ...emptyPayload("profile_incomplete", true),
       profile: {
@@ -425,6 +548,9 @@ export async function GET() {
       },
       ownedOpportunities,
       ownedOpportunityCount: ownedOpportunities.length,
+      routePlanner: routeProfileResult.error
+        ? { ...routePlanner, status: "unavailable" }
+        : routePlanner,
     });
   }
 
@@ -435,8 +561,9 @@ export async function GET() {
         "id,created_by,name,description,compromise_charity_id,offset_ratio,verification_method,assurance_minimum_cents,assurance_deadline_at,side_a_label,side_b_label,status,created_at,updated_at",
       )
       .neq("created_by", userId)
-      .neq("status", "closed")
+      .in("status", ["open", "assurance_pending"])
       .eq("moderation_status", "clear")
+      .or(`assurance_deadline_at.is.null,assurance_deadline_at.gt.${checkedAt.toISOString()}`)
       .order("updated_at", { ascending: false })
       .limit(250),
     typedSupabase
@@ -459,13 +586,18 @@ export async function GET() {
       userId,
     });
   }
+  const routeInventoryUnavailable = Boolean(poolsResult.error || charitiesResult.error);
 
   const candidates: LiveNowOfferCandidate[] = [];
   for (let offset = 0; ; offset += OFFER_BATCH_SIZE) {
     const offersResult = await typedSupabase
       .from("offers")
-      .select(OFFER_SELECT)
+      .select(OFFER_PUBLIC_SELECT)
       .eq("status", "open")
+      .eq("workflow_status", "published")
+      .not("published_at", "is", null)
+      .is("closed_at", null)
+      .is("deleted_at", null)
       .neq("owner_id", userId)
       .order("updated_at", { ascending: false })
       .order("id", { ascending: true })
@@ -484,8 +616,15 @@ export async function GET() {
     }
 
     const batch = (offersResult.data ?? []) as OfferInventoryRow[];
+    const liveBatch = batch.filter(isPublishedLiveOffer);
+    if (liveBatch.length !== batch.length) {
+      console.error("[live-now] Dropped rows that failed the published-live offer guard", {
+        droppedCount: batch.length - liveBatch.length,
+        userId,
+      });
+    }
     candidates.push(
-      ...batch.map((offer) => {
+      ...liveBatch.map((offer) => {
         const opportunityType: RecommendationOpportunityType =
           offer.mode === "offset" ? "donation_redirect" : "offer";
         return {
@@ -505,7 +644,12 @@ export async function GET() {
           updatedAt: offer.updated_at,
           opportunityType,
           sourceLabel: opportunityType === "donation_redirect" ? "Donation redirect" : undefined,
-          summary: text(offer.no_trade_baseline, 240),
+          summary: text(
+            offer.compromise_cause && offer.compromise_cause !== "Not needed"
+              ? offer.compromise_cause
+              : `${offer.requested_cause} ↔ ${offer.offered_cause}`,
+            240,
+          ),
           benefitCauses: uniqueProfileCauses(
             [offer.offered_cause],
             offer.compromise_cause && offer.compromise_cause !== "Not needed"
@@ -515,6 +659,8 @@ export async function GET() {
           actionCauses: uniqueProfileCauses([offer.requested_cause]),
           metadata: {
             maximumBurden: text(offer.maximum_burden, 180),
+            privacyLevel: classifyRoutePrivacyScope(offer.privacy_scope),
+            invitationBacked: false,
           },
         } satisfies LiveNowOfferCandidate;
       }),
@@ -528,9 +674,11 @@ export async function GET() {
   );
   if (!poolsResult.error) {
     candidates.push(
-      ...((poolsResult.data ?? []) as DonationPoolRow[]).map((pool) =>
-        buildPoolCandidate(pool, charityById.get(pool.compromise_charity_id)),
-      ),
+      ...((poolsResult.data ?? []) as DonationPoolRow[])
+        .filter((pool) => isOpenDonationPool(pool, checkedAt))
+        .map((pool) =>
+          buildPoolCandidate(pool, charityById.get(pool.compromise_charity_id), checkedAt),
+        ),
     );
   }
 
@@ -553,6 +701,17 @@ export async function GET() {
   };
   const ranked = rankLiveNowOffers(candidates, profile);
   const recommendations = ranked.slice(0, 12);
+  const routePlannerResult = presentRoutePlanner(
+    buildRoutePlanner({
+      profile: runtimeRouteProfile,
+      recommendations: ranked,
+      checkedAt,
+      fallbackCauses: causes,
+    }),
+  );
+  const routePlanner = routeProfileResult.error || routeInventoryUnavailable
+    ? { ...routePlannerResult, status: "unavailable" as const }
+    : routePlannerResult;
   const browsingSignalCount = learningEnabled
     ? interactionSignals.filter((signal) =>
         ["cause_view", "open", "dwell", "save", "unsave", "hide", "not_for_me"].includes(
@@ -568,7 +727,7 @@ export async function GET() {
 
   return privateJson({
     authenticated: true,
-    generatedAt: new Date().toISOString(),
+    generatedAt: checkedAt.toISOString(),
     matchingOfferCount: ranked.length,
     matchingOpportunityCount: ranked.length,
     profile: {
@@ -586,6 +745,7 @@ export async function GET() {
     recommendations,
     ownedOpportunities,
     ownedOpportunityCount: ownedOpportunities.length,
+    routePlanner,
     status: recommendations.length ? "ready" : "no_matches",
   });
 }

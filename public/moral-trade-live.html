@@ -26,9 +26,33 @@
           const loadingState = `function nowFocus(){
  return '<div class="focus-layout" data-mt-live-now="adaptive" data-mt-live-now-state="loading"><main><section class="panel black urgent"><div><div class="eyebrow orange">Loading your profile</div><h2>Finding live moral opportunities that match your priorities and action preferences.</h2><p class="muted">No generic or demo suggestions are shown.</p></div></section></main></div>';
 }`;
-          return `${source.slice(0, start)}${loadingState}${source.slice(end)}`;
+          const withoutFocus = `${source.slice(0, start)}${loadingState}${source.slice(end)}`;
+          const planStartMarker = 'function nowPlan(){';
+          const planEndMarker = '\nfunction field(';
+          const planStart = withoutFocus.indexOf(planStartMarker);
+          const planEnd = withoutFocus.indexOf(planEndMarker, planStart);
+          if (planStart < 0 || planEnd < 0) throw new Error('live Plan source markers');
+          const loadingPlan = `function nowPlan(){
+ return '<div class="plan-grid" data-mt-live-route-planner="loading"><aside class="panel plan-control"><div class="eyebrow orange">Private route profile</div><p class="muted">Loading your limits…</p></aside><main><section class="panel route"><div class="eyebrow orange">Checking live routes</div><h2>Loading private limits and current opportunities.</h2><p class="muted">No fixed or fallback route is shown.</p></section></main><aside class="stack"><section class="panel"><div class="eyebrow">Route tools</div><p class="muted">Loading only when useful…</p></section></aside></div>';
+}`;
+          return `${withoutFocus.slice(0, planStart)}${loadingPlan}${withoutFocus.slice(planEnd)}`;
         };
         const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+        const unavailableLiveNow = (payload = {}) => ({
+          ...payload,
+          authenticated: payload.authenticated === true,
+          recommendations: Array.isArray(payload.recommendations) ? payload.recommendations : [],
+          status: payload.status || 'unavailable',
+          routePlanner: {
+            status: 'unavailable',
+            checkedAt: new Date().toISOString(),
+            profile: {},
+            needsMoreInput: [],
+            routes: [],
+            comparison: null,
+            candidateCount: 0,
+          },
+        });
         const accountPromise = fetch('/api/live-account', {
           credentials: 'same-origin',
           headers: { Accept: 'application/json' },
@@ -39,12 +63,14 @@
           credentials: 'same-origin',
           headers: { Accept: 'application/json' },
         })
-          .then((response) =>
-            response.ok
-              ? response.json()
-              : { authenticated: false, recommendations: [], status: 'unavailable' },
-          )
-          .catch(() => ({ authenticated: false, recommendations: [], status: 'unavailable' }));
+          .then(async (response) => {
+            if (!response.ok) return unavailableLiveNow();
+            const payload = await response.json();
+            return payload && typeof payload === 'object' && payload.routePlanner
+              ? payload
+              : unavailableLiveNow(payload);
+          })
+          .catch(() => unavailableLiveNow());
         const [chunks, liveAccount, liveNow] = await Promise.all([
           Promise.all(
             names.map((name) =>
@@ -88,6 +114,9 @@
           '<link id="mt-custom-route-styles" rel="stylesheet" href="/moral-trade-live-custom-route.css">',
           '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
           '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
+          '<link id="mt-live-route-recommendations-styles" rel="stylesheet" href="/moral-trade-live-route-recommendations.css">',
+          '<link id="mt-input-assist-styles" rel="stylesheet" href="/moral-trade-input-assist.css">',
+          '<link id="mt-live-offer-structure-styles" rel="stylesheet" href="/moral-trade-live-offer-structure.css">',
         ].join('');
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
@@ -110,8 +139,13 @@
           '<script src="/moral-trade-live-verification.js"><\/script>',
           '<script src="/moral-trade-live-templates.js"><\/script>',
           '<script src="/moral-trade-live-now.js"><\/script>',
+          '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
           '<script src="/moral-trade-live-priority-route.js"><\/script>',
           '<script src="/moral-trade-requester-identity.js"><\/script>',
+          '<script src="/moral-trade-live-command-center.js"><\/script>',
+          '<script src="/moral-trade-input-assist.js"><\/script>',
+          '<script src="/moral-trade-live-token-autocomplete.js"><\/script>',
+          '<script src="/moral-trade-live-offer-structure.js"><\/script>',
         ].join('');
         const enhancedSource = accountAwareSource.includes('</body>')
           ? accountAwareSource.replace('</body>', `${enhancementScripts}</body>`)

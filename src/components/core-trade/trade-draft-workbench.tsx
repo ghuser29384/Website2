@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { TradeFlowIcon } from "@/components/core-trade/trade-flow-icons";
+import { consumeCommandCenterHandoff } from "@/lib/command-center-handoff";
+import { deriveCommitmentLimit } from "@/lib/trade-draft-standards";
 
 import styles from "./trade-draft-workbench.module.css";
 
@@ -28,6 +30,7 @@ export interface TradeDraftValues {
 }
 
 interface TradeDraftWorkbenchProps {
+  acceptCommandHandoff?: boolean;
   formMessage?: { text: string; tone: "error" | "success" } | null;
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
@@ -59,9 +62,33 @@ const STEP_LABELS = [
   "Their commitment",
   "Baseline",
   "Bounds",
-  "Proof",
+  "Evidence",
   "Review",
 ] as const;
+
+const DATE_SNAPSHOT_SUBSCRIBE = () => () => {};
+
+type CommandHandoffState = "loading" | "loaded" | "unavailable" | null;
+
+function localDateSnapshot() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
+
+function localTimeZoneSnapshot() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+}
+
+function serverDateSnapshot() {
+  return "";
+}
 
 function concise(value: string, fallback: string) {
   const normalized = value.trim().replace(/\s+/g, " ");
@@ -73,7 +100,20 @@ function hasUnresolvedTemplatePrompt(value: string) {
   return value.includes("[Replace:");
 }
 
-function validateStep(step: number, values: TradeDraftValues) {
+function validateStep(step: number, values: TradeDraftValues, localToday = "") {
+  if (localToday && values.startDate && values.startDate < localToday) {
+    return "Choose a start date that has not passed.";
+  }
+  if (localToday && values.evidenceDueDate && values.evidenceDueDate < localToday) {
+    return "Choose an evidence due date that has not passed.";
+  }
+  if (
+    values.startDate &&
+    values.evidenceDueDate &&
+    values.evidenceDueDate < values.startDate
+  ) {
+    return "Evidence cannot be due before the commitment starts.";
+  }
   if (step === 0 && (!values.offeredCause.trim() || !values.requestedCause.trim())) {
     return "Name both priorities before continuing.";
   }
@@ -87,10 +127,10 @@ function validateStep(step: number, values: TradeDraftValues) {
     return "Describe what both sides would actually do without this trade.";
   }
   if (step === 4 && (!values.duration.trim() || !values.maximumBurden.trim())) {
-    return "Add the duration and the maximum burden before continuing.";
+    return "Add the duration and commitment limit before continuing.";
   }
   if (step === 5 && (!values.evidenceRule.trim() || !values.privacyScope.trim())) {
-    return "Add the evidence rule and privacy scope before continuing.";
+    return "Add the evidence and privacy scope before continuing.";
   }
   if (step === 6 && !values.exitConditions.trim()) {
     return "State how future obligations can end before saving the record.";
@@ -117,6 +157,7 @@ function validateStep(step: number, values: TradeDraftValues) {
 }
 
 export function TradeDraftWorkbench({
+  acceptCommandHandoff = false,
   formMessage,
   initialValues,
   saveAction,
@@ -125,23 +166,105 @@ export function TradeDraftWorkbench({
 }: TradeDraftWorkbenchProps) {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [values, setValues] = useState<TradeDraftValues>(() => ({
-    ...DEFAULT_VALUES,
-    ...initialValues,
-  }));
+  const [values, setValues] = useState<TradeDraftValues>(() => {
+    const seededValues = {
+      ...DEFAULT_VALUES,
+      ...initialValues,
+    };
+    if (!seededValues.maximumBurden) {
+      seededValues.maximumBurden = deriveCommitmentLimit(seededValues);
+    }
+    return seededValues;
+  });
+  const [usesCustomCommitmentLimit, setUsesCustomCommitmentLimit] = useState(
+    () => {
+      const initialLimit = initialValues?.maximumBurden?.trim() ?? "";
+      const generatedLimit = deriveCommitmentLimit({
+        ...DEFAULT_VALUES,
+        ...initialValues,
+      });
+      return Boolean(initialLimit && initialLimit !== generatedLimit);
+    },
+  );
+  const [isCommitmentLimitEditorOpen, setIsCommitmentLimitEditorOpen] =
+    useState(false);
+  const [commandHandoffState, setCommandHandoffState] =
+    useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+  const commandHandoff = useRef<
+    ReturnType<typeof consumeCommandCenterHandoff> | undefined
+  >(undefined);
 
-  const finalTermsComplete = useMemo(
-    () => validateStep(6, values) === null,
-    [values],
+  useEffect(() => {
+    if (!acceptCommandHandoff) return;
+
+    if (commandHandoff.current === undefined) {
+      try {
+        commandHandoff.current = consumeCommandCenterHandoff(window.sessionStorage);
+      } catch {
+        commandHandoff.current = null;
+      }
+    }
+
+    const restoredHandoff = commandHandoff.current;
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      if (!restoredHandoff) {
+        setCommandHandoffState("unavailable");
+        return;
+      }
+
+      setValues((current) => {
+        const next: TradeDraftValues = { ...current, ...restoredHandoff.values };
+        next.maximumBurden = deriveCommitmentLimit(next);
+        return next;
+      });
+      setUsesCustomCommitmentLimit(false);
+      setIsCommitmentLimitEditorOpen(false);
+      setError(null);
+      setStep(0);
+      setCommandHandoffState("loaded");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [acceptCommandHandoff]);
+
+  const localToday = useSyncExternalStore(
+    DATE_SNAPSHOT_SUBSCRIBE,
+    localDateSnapshot,
+    serverDateSnapshot,
+  );
+  const localTimeZone = useSyncExternalStore(
+    DATE_SNAPSHOT_SUBSCRIBE,
+    localTimeZoneSnapshot,
+    serverDateSnapshot,
+  );
+  const evidenceMinimumDate =
+    values.startDate && values.startDate > localToday ? values.startDate : localToday;
+
+  const finalTermsComplete = STEP_LABELS.every(
+    (_label, index) => validateStep(index, values, localToday) === null,
   );
 
   function update<K extends keyof TradeDraftValues>(key: K, value: TradeDraftValues[K]) {
-    setValues((current) => ({ ...current, [key]: value }));
+    setValues((current) => {
+      const next: TradeDraftValues = { ...current, [key]: value };
+      if (
+        !usesCustomCommitmentLimit &&
+        (key === "proposedAction" || key === "requestedAction" || key === "duration")
+      ) {
+        next.maximumBurden = deriveCommitmentLimit(next);
+      }
+      return next;
+    });
     setError(null);
   }
 
   function nextStep() {
-    const validationError = validateStep(step, values);
+    const validationError = validateStep(step, values, localToday);
     if (validationError) {
       setError(validationError);
       return;
@@ -163,6 +286,8 @@ export function TradeDraftWorkbench({
     <main className={styles.page} id="main-content" tabIndex={-1}>
       <form action={saveAction} className={styles.shell}>
         <input name="submission_key" type="hidden" value={submissionKey} />
+        <input name="client_local_date" type="hidden" value={localToday} />
+        <input name="client_time_zone" type="hidden" value={localTimeZone} />
         <input name="offered_cause" type="hidden" value={values.offeredCause} />
         <input name="requested_cause" type="hidden" value={values.requestedCause} />
         <input name="proposed_action" type="hidden" value={values.proposedAction} />
@@ -211,6 +336,18 @@ export function TradeDraftWorkbench({
             >
               {formMessage.text}
             </div>
+          ) : commandHandoffState === "loading" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Loading your command into the editor…
+            </div>
+          ) : commandHandoffState === "loaded" ? (
+            <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
+              Command loaded into the editable terms below. Review the no-trade baseline and add any missing dates and evidence before saving. No draft has been saved yet.
+            </div>
+          ) : commandHandoffState === "unavailable" ? (
+            <div className={`${styles.message} ${styles.messageError}`} role="alert">
+              The command could not be restored. Enter the terms below. No draft was created.
+            </div>
           ) : templateLabel ? (
             <div className={`${styles.message} ${styles.messageSuccess}`} role="status">
               {templateLabel} loaded as an editable starting point. Review every field before saving or submitting.
@@ -239,23 +376,33 @@ export function TradeDraftWorkbench({
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Priority you advance</span>
                       <input
+                        autoComplete="off"
                         autoFocus
                         className={styles.input}
+                        data-mt-autocomplete="priorities"
                         maxLength={180}
                         onChange={(event) => update("offeredCause", event.target.value)}
                         placeholder="For example: global poverty reduction"
                         value={values.offeredCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Suggestions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Priority you want advanced</span>
                       <input
+                        autoComplete="off"
                         className={styles.input}
+                        data-mt-autocomplete="priorities"
                         maxLength={180}
                         onChange={(event) => update("requestedCause", event.target.value)}
                         placeholder="For example: animal welfare"
                         value={values.requestedCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Try “Animal” to see related priorities.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -271,13 +418,18 @@ export function TradeDraftWorkbench({
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Your commitment</span>
                       <textarea
+                        autoComplete="off"
                         autoFocus
                         className={`${styles.textarea} ${styles.commitmentInput}`}
+                        data-mt-autocomplete="commitments"
                         maxLength={5000}
                         onChange={(event) => update("proposedAction", event.target.value)}
                         placeholder="A concrete action, amount, service, or behavior you are willing to undertake"
                         value={values.proposedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       Avoid open-ended promises. State quantity, scope, or frequency where possible.
@@ -296,13 +448,18 @@ export function TradeDraftWorkbench({
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Counterparty commitment</span>
                       <textarea
+                        autoComplete="off"
                         autoFocus
                         className={`${styles.textarea} ${styles.commitmentInput}`}
+                        data-mt-autocomplete="commitments"
                         maxLength={5000}
                         onChange={(event) => update("requestedAction", event.target.value)}
                         placeholder="A concrete reciprocal action"
                         value={values.requestedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       The other participant will review this exact text before confirming anything.
@@ -321,13 +478,18 @@ export function TradeDraftWorkbench({
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>No-trade baseline</span>
                       <textarea
+                        autoComplete="off"
                         autoFocus
                         className={`${styles.textarea} ${styles.baselineInput}`}
+                        data-mt-autocomplete="baselines"
                         maxLength={5000}
                         onChange={(event) => update("noTradeBaseline", event.target.value)}
                         placeholder="What each side would actually do if no agreement forms"
                         value={values.noTradeBaseline}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized no-trade baselines appear as you type.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -336,25 +498,31 @@ export function TradeDraftWorkbench({
               {step === 4 ? (
                 <>
                   <div className={styles.prompt}>
-                    <h1>How is the burden bounded?</h1>
-                    <p>Set the duration, optional dates, and the largest burden either side can incur.</p>
+                    <h1>When does this trade happen?</h1>
+                    <p>Set the duration and dates. The commitment limit is generated from the commitments you already entered.</p>
                   </div>
                   <div className={styles.fields}>
                     <div className={`${styles.fieldGrid} ${styles.fieldGridThree}`}>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>Duration</span>
                         <input
+                          autoComplete="off"
                           autoFocus
                           className={styles.input}
+                          data-mt-autocomplete="durations"
                           onChange={(event) => update("duration", event.target.value)}
                           placeholder="For example: 12 months"
                           value={values.duration}
                         />
+                        <span className={styles.autocompleteHint}>
+                          Suggested durations appear as you type.
+                        </span>
                       </label>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>Start date</span>
                         <input
                           className={styles.input}
+                          min={localToday || undefined}
                           onChange={(event) => update("startDate", event.target.value)}
                           type="date"
                           value={values.startDate}
@@ -364,22 +532,62 @@ export function TradeDraftWorkbench({
                         <span className={styles.fieldLabel}>Evidence due</span>
                         <input
                           className={styles.input}
+                          min={evidenceMinimumDate || undefined}
                           onChange={(event) => update("evidenceDueDate", event.target.value)}
                           type="date"
                           value={values.evidenceDueDate}
                         />
                       </label>
                     </div>
-                    <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Maximum burden or exposure</span>
-                      <textarea
-                        className={styles.textarea}
-                        maxLength={5000}
-                        onChange={(event) => update("maximumBurden", event.target.value)}
-                        placeholder="The maximum money, time, action burden, and duration"
-                        value={values.maximumBurden}
-                      />
-                    </label>
+                    <div className={styles.limitCard}>
+                      <div>
+                        <span className={styles.fieldLabel}>Commitment limit</span>
+                        <p>
+                          {values.maximumBurden ||
+                            "Complete both commitments and the duration to generate this limit."}
+                        </p>
+                      </div>
+                      {isCommitmentLimitEditorOpen ? (
+                        <>
+                          <label className={styles.field}>
+                            <span className={styles.fieldLabel}>Stricter commitment limit</span>
+                            <textarea
+                              autoComplete="off"
+                              className={styles.textarea}
+                              maxLength={5000}
+                              onChange={(event) => update("maximumBurden", event.target.value)}
+                              placeholder="Add only a stricter cap, safety boundary, or excluded exposure"
+                              value={values.maximumBurden}
+                            />
+                          </label>
+                          <button
+                            className={styles.inlineButton}
+                            onClick={() => {
+                              setUsesCustomCommitmentLimit(false);
+                              setIsCommitmentLimitEditorOpen(false);
+                              update("maximumBurden", deriveCommitmentLimit(values));
+                            }}
+                            type="button"
+                          >
+                            Use the generated limit
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className={styles.inlineButton}
+                          disabled={!values.maximumBurden}
+                          onClick={() => {
+                            setUsesCustomCommitmentLimit(true);
+                            setIsCommitmentLimitEditorOpen(true);
+                          }}
+                          type="button"
+                        >
+                          {usesCustomCommitmentLimit
+                            ? "Edit commitment limit"
+                            : "Set a stricter limit"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : null}
@@ -387,24 +595,30 @@ export function TradeDraftWorkbench({
               {step === 5 ? (
                 <>
                   <div className={styles.prompt}>
-                    <h1>How is completion proved?</h1>
-                    <p>Define the proof that counts. Evidence records and certified public-safe source copies are public by default; private messages remain private.</p>
+                    <h1>What evidence will show completion?</h1>
+                    <p>Choose a standardized evidence type or describe another clear record. Certified public-safe copies are public by default; private messages remain private.</p>
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Evidence rule</span>
+                      <span className={styles.fieldLabel}>Evidence</span>
                       <textarea
+                        autoComplete="off"
                         autoFocus
                         className={styles.textarea}
+                        data-mt-autocomplete="evidence"
                         maxLength={5000}
                         onChange={(event) => update("evidenceRule", event.target.value)}
                         placeholder="Receipt, external record, log, or participant attestation that will count"
                         value={values.evidenceRule}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized evidence types appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Public evidence and safety scope</span>
                       <textarea
+                        autoComplete="off"
                         className={styles.textarea}
                         maxLength={5000}
                         onChange={(event) => update("privacyScope", event.target.value)}
@@ -428,17 +642,23 @@ export function TradeDraftWorkbench({
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Exit conditions</span>
                       <textarea
+                        autoComplete="off"
                         autoFocus
                         className={styles.textarea}
+                        data-mt-autocomplete="exits"
                         maxLength={5000}
                         onChange={(event) => update("exitConditions", event.target.value)}
                         placeholder="How either side can end future obligations"
                         value={values.exitConditions}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized exit conditions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Context or constraints (optional)</span>
                       <textarea
+                        autoComplete="off"
                         className={styles.textarea}
                         maxLength={5000}
                         onChange={(event) => update("notes", event.target.value)}

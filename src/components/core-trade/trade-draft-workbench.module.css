@@ -239,6 +239,63 @@
   line-height: 1.45;
 }
 
+.autocompleteHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #1744b7;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.autocompleteHint::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  background: var(--flow-blue);
+  content: "";
+}
+
+.limitCard {
+  display: grid;
+  gap: 13px;
+  border: 1px solid var(--flow-ink);
+  background: rgba(255, 255, 255, 0.42);
+  padding: 16px;
+}
+
+.limitCard p {
+  margin: 8px 0 0;
+  color: var(--flow-muted);
+  font-size: 13px;
+  line-height: 1.48;
+}
+
+.inlineButton {
+  width: max-content;
+  min-height: 36px;
+  border: 1px solid var(--flow-ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--flow-ink);
+  padding: 8px 11px;
+  font: 750 11px/1.2 var(--flow-sans);
+  cursor: pointer;
+}
+
+.inlineButton:hover:not(:disabled),
+.inlineButton:focus-visible {
+  background: var(--flow-ink);
+  color: var(--flow-white);
+  outline: none;
+}
+
+.inlineButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
 .summary {
   margin-top: auto;
   padding-top: 18px;

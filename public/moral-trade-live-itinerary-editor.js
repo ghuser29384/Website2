@@ -1,6 +1,7 @@
 (function installInlineItineraryEditor() {
   "use strict";
 
+  if (window.__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner) return;
   if (window.__MT_INLINE_ITINERARY_EDITOR__) return;
   window.__MT_INLINE_ITINERARY_EDITOR__ = true;
 

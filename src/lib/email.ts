@@ -3,10 +3,12 @@ export function hasEmailEnv() {
 }
 
 export async function sendEmail({
+  idempotencyKey,
   to,
   subject,
   text,
 }: {
+  idempotencyKey?: string;
   to: string;
   subject: string;
   text: string;
@@ -23,6 +25,7 @@ export async function sendEmail({
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body: JSON.stringify({
       from,

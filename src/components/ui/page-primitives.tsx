@@ -417,7 +417,7 @@ export function MoralTradeHeroVisual() {
       </div>
       <div className="visual-review-strip">
         <span>Voluntary terms</span>
-        <span>Evidence rule</span>
+        <span>Evidence</span>
         <span>Manual review</span>
       </div>
     </aside>

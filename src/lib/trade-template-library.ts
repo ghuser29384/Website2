@@ -210,7 +210,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
     youOffer: "A scoped review, analysis, introduction, or other defined contribution",
     theyOffer: "A concrete action, service, or allocation with a clear endpoint",
     baseline: "Whether either contribution was already planned without the exchange",
-    activation: "Both sides accept scope, sequence, deadline, and maximum burden",
+    activation: "Both sides accept scope, sequence, deadline, and the commitment limit",
     evidence: "Deliverable link, acceptance checklist, or proportionate attestation",
     duration: "One deliverable or a fixed number of hours",
     exitRule: "Unstarted work may end; completed work and accepted deliverables remain recorded",
@@ -221,7 +221,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
       "No-trade baseline",
       "Scope you provide",
       "Counterparty action",
-      "Maximum time or burden",
+      "Commitment limit",
       "Acceptance evidence",
       "Confidentiality and ownership",
       "Exit and partial completion",
@@ -334,7 +334,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
     youOffer: "A bounded favor, action, or allocation",
     theyOffer: "A concrete reciprocal or sponsored moral action",
     baseline: "Whether the favored action was already planned and why the exchange changes it",
-    activation: "The requested action, maximum burden, and evidence rule are accepted",
+    activation: "The requested action, commitment limit, and evidence requirements are accepted",
     evidence: "A timestamped artifact, attestation, or independent check chosen for the consequence",
     duration: "One favor or a short fixed sequence",
     exitRule: "Future action can end before performance; unresolved proof is not marked complete",
@@ -345,7 +345,7 @@ export const TRADE_TEMPLATE_LIBRARY = [
       "No-trade baseline",
       "Favor or sponsored action",
       "Reciprocal moral leg",
-      "Maximum burden",
+      "Commitment limit",
       "Proportional evidence",
       "Privacy and affected parties",
       "Exit and unresolved state",
@@ -404,7 +404,7 @@ const STRUCTURAL_TRADE_TEMPLATE_INITIAL_VALUES: Readonly<
     offeredCause: "[Replace: priority advanced by your favor]",
     requestedCause: "[Replace: priority advanced by the reciprocal action]",
     proposedAction:
-      "Complete [Replace: one bounded favor or action] by [Replace: date], with a maximum burden of [Replace: limit].",
+      "Complete [Replace: one bounded favor or action] by [Replace: date], within a commitment limit of [Replace: limit].",
     requestedAction:
       "Complete [Replace: one concrete reciprocal or sponsored moral action] by [Replace: date].",
     noTradeBaseline:
@@ -415,7 +415,7 @@ const STRUCTURAL_TRADE_TEMPLATE_INITIAL_VALUES: Readonly<
     exitConditions:
       "Either side may withdraw before terms are locked. Missing or disputed proof remains unresolved rather than completed.",
     notes:
-      "Confirm voluntariness, authority, affected-party safety, privacy, maximum burden, and the exact claim the evidence can support.",
+      "Confirm voluntariness, authority, affected-party safety, privacy, the commitment limit, and the exact claim the evidence can support.",
   },
 };
 

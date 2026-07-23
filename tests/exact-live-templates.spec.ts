@@ -6,6 +6,11 @@ test.describe("live Trade template system", () => {
     await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
     await expect(page.locator(".compose-grid")).toBeVisible();
 
+    const obsoleteOverflowControl = page
+      .locator(".compose-grid button, .compose-grid a")
+      .filter({ hasText: /^\s*(?:\.\.\.|…)\s*$/ });
+    await expect(obsoleteOverflowControl).toHaveCount(0);
+
     await page.getByRole("button", { name: "Open trade template library" }).click();
     await expect(page).toHaveURL(/\/offers\?view=templates$/);
     await expect(page.getByRole("heading", { name: "Choose a template." })).toBeVisible();
