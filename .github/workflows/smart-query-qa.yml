@@ -12,6 +12,7 @@ on:
       - "src/app/pools/**"
       - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
+      - "src/components/search/**"
       - "public/moral-trade-smart-query.js"
       - "public/moral-trade-discover.html"
       - "tests/smart-query*.spec.ts"
@@ -50,10 +51,21 @@ jobs:
         run: npm ci
 
       - name: Lint smart query code
-        run: npx eslint src/lib/smart-query.ts src/lib/smart-query.test.ts tests/discover-query-audit.spec.ts
+        run: |
+          set -o pipefail
+          npx eslint \
+            src/lib/smart-query.ts \
+            src/lib/smart-query-clarification.ts \
+            src/lib/smart-query-llm.ts \
+            src/lib/smart-query.test.ts \
+            src/app/api/query/interpret/route.ts \
+            src/components/search/smart-query-form.tsx \
+            tests/discover-query-audit.spec.ts 2>&1 | tee test-results/smart-query-lint.txt
 
       - name: Test deterministic and semantic query interpretation
-        run: node --import tsx --test src/lib/smart-query.test.ts
+        run: |
+          set -o pipefail
+          node --import tsx --test src/lib/smart-query.test.ts 2>&1 | tee test-results/smart-query-test.txt
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -70,5 +82,7 @@ jobs:
             test-results/discover-query-audit.json
             test-results/discover-inline-source.js
             test-results/query-surface-audit.txt
-          if-no-files-found: error
+            test-results/smart-query-lint.txt
+            test-results/smart-query-test.txt
+          if-no-files-found: warn
           retention-days: 7
