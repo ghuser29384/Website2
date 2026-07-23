@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 
 import { saveCoreOfferAction } from "@/app/core-trade-actions";
 import {
-  TradeDraftSignInGate,
-  TradeDraftWorkbench,
+  HardenedTradeDraftWorkbench,
   type TradeDraftValues,
-} from "@/components/core-trade/trade-draft-workbench";
+} from "@/components/core-trade/trade-draft-workbench-hardened";
+import { TradeDraftSignInGate } from "@/components/core-trade/trade-draft-workbench";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
@@ -45,20 +45,14 @@ const VICTORIA_EXAMPLE: Partial<TradeDraftValues> = {
     "Donation receipt for the giving commitment and participant attestation for the diet commitment.",
   maximumBurden: "The stated 1% donation and the stated 12-month dietary commitment only.",
   privacyScope:
-    "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
+    "Agreement evidence is private to the two participants and the operator. Publishing any evidence requires a separate, explicit redaction and publication step.",
   exitConditions:
     "Either participant may end future obligations by notifying the other; completed periods remain recorded.",
 };
 
 const WORKBENCH_GRID = `
   #main-content > form {
-    grid-template-rows: 76px auto minmax(0, 1fr) 96px;
-  }
-
-  @media (max-width: 840px) {
-    #main-content > form {
-      grid-template-rows: 68px auto auto 88px;
-    }
+    min-height: 0;
   }
 `;
 
@@ -82,7 +76,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   return (
     <>
       <style>{WORKBENCH_GRID}</style>
-      <TradeDraftWorkbench
+      <HardenedTradeDraftWorkbench
         formMessage={getFormMessage(resolvedSearchParams)}
         initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
         saveAction={saveCoreOfferAction}
