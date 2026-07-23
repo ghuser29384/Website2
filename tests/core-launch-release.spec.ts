@@ -60,6 +60,7 @@ async function captureRouteEvidence(
 
   await page.screenshot({
     animations: "disabled",
+    caret: "initial",
     fullPage: true,
     path: test.info().outputPath(`${label}.png`),
   });
