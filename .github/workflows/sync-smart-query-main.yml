@@ -1,0 +1,87 @@
+name: Sync main into smart-query branch
+
+on:
+  push:
+    branches:
+      - feat/smart-query-pipeline
+    paths:
+      - ".github/workflows/sync-smart-query-main.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-smart-query-main
+  cancel-in-progress: false
+
+jobs:
+  merge-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/smart-query-pipeline
+          fetch-depth: 0
+
+      - name: Merge current main with a strict conflict allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "moral-trade-query-bot"
+          git config user.email "moral-trade-query-bot@users.noreply.github.com"
+          git fetch origin main feat/smart-query-pipeline
+          git reset --hard origin/feat/smart-query-pipeline
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "The feature branch already contains main."
+            exit 0
+          fi
+
+          set +e
+          git merge --no-ff --no-commit origin/main
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+            printf 'Conflicts detected:\n%s\n' "${conflicts[*]:-none}"
+
+            allowed=(
+              ".env.example"
+              "public/moral-trade-discover.html"
+              "src/app/layout.tsx"
+              "src/app/offers/page.tsx"
+            )
+
+            for conflict in "${conflicts[@]}"; do
+              permitted=false
+              for expected in "${allowed[@]}"; do
+                if [ "$conflict" = "$expected" ]; then
+                  permitted=true
+                  break
+                fi
+              done
+              if [ "$permitted" != true ]; then
+                echo "Unexpected merge conflict: $conflict"
+                git merge --abort
+                exit 1
+              fi
+            done
+
+            for conflict in "${conflicts[@]}"; do
+              git checkout --ours -- "$conflict"
+              git add "$conflict"
+            done
+          fi
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "Unresolved merge conflicts remain."
+            git diff --name-only --diff-filter=U
+            git merge --abort
+            exit 1
+          fi
+
+          git commit -m "Merge main into smart-query pipeline"
+          git push origin HEAD:feat/smart-query-pipeline
