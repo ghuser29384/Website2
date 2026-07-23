@@ -1,0 +1,38 @@
+name: Apply people smart-query patch
+
+on:
+  push:
+    branches:
+      - feat/smart-query-pipeline
+    paths:
+      - "scripts/apply-smart-query-people-patch.mjs"
+      - ".github/workflows/apply-smart-query-people-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/smart-query-pipeline
+          fetch-depth: 0
+
+      - name: Apply deterministic patch
+        run: node scripts/apply-smart-query-people-patch.mjs
+
+      - name: Commit patched page
+        run: |
+          if git diff --quiet -- src/app/people/page.tsx; then
+            echo "No patch changes were required."
+            exit 0
+          fi
+          git config user.name "moral-trade-query-bot"
+          git config user.email "moral-trade-query-bot@users.noreply.github.com"
+          git add src/app/people/page.tsx
+          git commit -m "Make people search semantic and constraint-aware"
+          git push origin HEAD:feat/smart-query-pipeline
