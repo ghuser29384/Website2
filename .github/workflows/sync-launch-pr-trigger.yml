@@ -1,0 +1,43 @@
+name: Run launch synchronization from pull request
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sync-launch-pr-trigger.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-launch-with-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event.pull_request.number == 174 && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out launch branch with full history
+        uses: actions/checkout@v4
+        with:
+          ref: launch/verify-and-harden-20260723
+          fetch-depth: 0
+
+      - name: Execute the reviewed synchronization script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/sync-launch-with-main.yml').read_text().splitlines()
+          marker = '        run: |'
+          start = workflow.index(marker) + 1
+          script_lines = []
+          for line in workflow[start:]:
+              script_lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/sync-launch.sh').write_text('\n'.join(script_lines) + '\n')
+          PY
+          bash /tmp/sync-launch.sh
