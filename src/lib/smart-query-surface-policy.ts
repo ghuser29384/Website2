@@ -25,7 +25,29 @@ function unsupportedDecision(
   const facets = query.facets;
   const surface = query.surface;
 
-  if (surface === "global" || surface === "discover") return null;
+  if (surface === "global") return null;
+
+  if (surface === "discover") {
+    if (facets.poolKinds.length) {
+      return { reason: "moral-public-good pool type", target: "mpgf_pools" };
+    }
+    if (facets.evidenceStates.length) {
+      return { reason: "evidence-review state", target: "evidence" };
+    }
+    if (
+      facets.participantKinds.length ||
+      facets.openToPayment !== null ||
+      facets.openToPledges !== null ||
+      facets.minCredit !== null ||
+      facets.location
+    ) {
+      return { reason: "participant-profile constraints", target: "people" };
+    }
+    if (facets.minAmountCents !== null || facets.deadlineAfter) {
+      return { reason: "minimum budget or start-date constraints", target: "offers" };
+    }
+    return null;
+  }
 
   if (surface === "offers") {
     if (facets.actionTypes.includes("pool") || facets.poolKinds.length) {
