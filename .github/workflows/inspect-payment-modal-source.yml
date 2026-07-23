@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/payment-method-entry-20260723
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
