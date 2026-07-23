@@ -1,0 +1,333 @@
+{
+  "priorities": [
+    {
+      "label": "Animal welfare",
+      "description": "Broad work to improve the lives of animals.",
+      "aliases": ["animals", "animal", "animal wellbeing"]
+    },
+    {
+      "label": "Wild animal suffering",
+      "description": "Reduce severe suffering experienced by animals living in the wild.",
+      "aliases": ["animal", "animals", "wild animals", "wild animal welfare", "wildlife suffering"]
+    },
+    {
+      "label": "Factory farming",
+      "description": "Reduce suffering caused by intensive animal agriculture.",
+      "aliases": ["animal", "animals", "farmed animals", "farm animal welfare", "meat", "vegetarian"]
+    },
+    {
+      "label": "Global poverty",
+      "description": "Improve income, health, and opportunity for people in extreme poverty.",
+      "aliases": ["poverty", "global development", "economic development"]
+    },
+    {
+      "label": "Global health",
+      "description": "Prevent disease and improve health in underserved populations.",
+      "aliases": ["public health", "malaria", "health", "disease prevention"]
+    },
+    {
+      "label": "Existential risk",
+      "description": "Reduce risks that could permanently curtail humanity's future.",
+      "aliases": ["x-risk", "xrisk", "catastrophic risk", "global catastrophic risk"]
+    },
+    {
+      "label": "AI safety",
+      "description": "Reduce severe risks from advanced artificial intelligence.",
+      "aliases": ["artificial intelligence", "ai risk", "alignment", "safe ai"]
+    },
+    {
+      "label": "Biological risks",
+      "description": "Reduce catastrophic risks from pandemics and biotechnology.",
+      "aliases": ["biosecurity", "pandemic", "biological risk", "biorisk"]
+    },
+    {
+      "label": "Future flourishing",
+      "description": "Improve the quality and potential of the long-term future.",
+      "aliases": ["long-term future", "longtermism", "future generations"]
+    },
+    {
+      "label": "S-risks",
+      "description": "Reduce risks of suffering on an enormous scale.",
+      "aliases": ["s-risk", "suffering risk", "astronomical suffering"]
+    },
+    {
+      "label": "Concentration of power",
+      "description": "Reduce dangerous or unaccountable concentrations of power.",
+      "aliases": ["power concentration", "authoritarianism", "centralized power"]
+    },
+    {
+      "label": "Democracy",
+      "description": "Strengthen representative, accountable institutions.",
+      "aliases": ["democratic institutions", "elections", "governance"]
+    },
+    {
+      "label": "Civil liberties",
+      "description": "Protect fundamental freedoms and individual rights.",
+      "aliases": ["civil rights", "human rights", "freedom"]
+    },
+    {
+      "label": "Climate change",
+      "description": "Reduce climate risks and the harms of pollution.",
+      "aliases": ["climate", "environment", "clean energy", "global warming"]
+    },
+    {
+      "label": "Priorities research",
+      "description": "Improve decisions about which problems and interventions matter most.",
+      "aliases": ["cause prioritization", "global priorities research", "impact research"]
+    },
+    {
+      "label": "Building altruism",
+      "description": "Help more people take sustained, effective action for others.",
+      "aliases": ["effective altruism", "altruism", "movement building"]
+    },
+    {
+      "label": "Scientific progress",
+      "description": "Accelerate beneficial and responsibly governed science.",
+      "aliases": ["science", "research", "innovation"]
+    },
+    {
+      "label": "Mental health",
+      "description": "Prevent and relieve serious mental illness and distress.",
+      "aliases": ["wellbeing", "psychological health", "depression"]
+    },
+    {
+      "label": "Space governance",
+      "description": "Improve cooperation and risk management in space.",
+      "aliases": ["space policy", "space safety", "space"]
+    },
+    {
+      "label": "Moral status of digital minds",
+      "description": "Understand and protect potentially sentient digital beings.",
+      "aliases": ["digital minds", "ai welfare", "digital sentience"]
+    }
+  ],
+  "commitments": [
+    {
+      "label": "Avoid meat for one meal",
+      "value": "Avoid meat for one meal during the agreed action window.",
+      "description": "A small, time-bounded dietary commitment.",
+      "aliases": ["vegetarian", "vegan", "meal", "animal", "food"]
+    },
+    {
+      "label": "Donate a fixed amount",
+      "value": "Donate the stated fixed amount to the agreed organization by the agreed date.",
+      "description": "A bounded donation with recipient, amount, and deadline recorded.",
+      "aliases": ["donation", "give", "money", "charity", "website"]
+    },
+    {
+      "label": "Redirect a planned donation",
+      "value": "Redirect the stated planned donation to the agreed destination if the trade is confirmed.",
+      "description": "Changes the destination of money already planned for donation.",
+      "aliases": ["redirect", "offset", "donation", "charity"]
+    },
+    {
+      "label": "Volunteer a fixed number of hours",
+      "value": "Volunteer the stated number of hours for the agreed organization or project by the agreed date.",
+      "description": "A time-limited service commitment.",
+      "aliases": ["time", "help", "volunteer", "service", "work"]
+    },
+    {
+      "label": "Complete one defined task",
+      "value": "Complete the agreed task by the agreed deadline and provide the agreed evidence.",
+      "description": "A single deliverable with an observable finish.",
+      "aliases": ["task", "deliverable", "project", "finish"]
+    },
+    {
+      "label": "Publish a public statement",
+      "value": "Publish the agreed public statement and keep it available for the stated duration.",
+      "description": "A bounded communication commitment.",
+      "aliases": ["post", "statement", "share", "publish", "advocacy"]
+    },
+    {
+      "label": "Change a recurring behavior",
+      "value": "Follow the agreed behavior for the stated duration, subject to the agreed safety and exit terms.",
+      "description": "A repeated action with a clear duration and exit rule.",
+      "aliases": ["habit", "behavior", "weekly", "daily", "pledge"]
+    }
+  ],
+  "evidence": [
+    {
+      "label": "Redacted donation receipt",
+      "value": "A redacted receipt showing the recipient, amount, and date, with payment identifiers and unrelated personal information removed.",
+      "description": "Best for a completed donation.",
+      "aliases": ["receipt", "donation", "payment", "charity"]
+    },
+    {
+      "label": "Time-stamped photo or activity log",
+      "value": "A time-stamped photo or activity log covering the agreed action window, with private location and identity details removed.",
+      "description": "Useful for a physical action when a receipt does not exist.",
+      "aliases": ["photo", "log", "meal", "screenshot", "tracker"]
+    },
+    {
+      "label": "Participant attestation",
+      "value": "A dated participant attestation that the commitment was completed, subject to challenge under the agreed review process.",
+      "description": "Low-burden evidence for a small, low-stakes commitment.",
+      "aliases": ["self attestation", "statement", "confirmation", "honor"]
+    },
+    {
+      "label": "Counterparty confirmation",
+      "value": "The counterparty confirms completion after reviewing the agreed completion record.",
+      "description": "Useful when the counterparty can directly observe completion.",
+      "aliases": ["confirmation", "counterparty", "acceptance"]
+    },
+    {
+      "label": "Independent witness confirmation",
+      "value": "A named independent witness confirms the specific observable fact required by the agreement.",
+      "description": "Adds corroboration without exposing unnecessary personal data.",
+      "aliases": ["witness", "third party", "verification", "reviewer"]
+    },
+    {
+      "label": "Public link or external record",
+      "value": "A stable public link or external record showing the agreed deliverable, publication, or transaction.",
+      "description": "Best for work that already has a durable online record.",
+      "aliases": ["url", "website", "link", "record", "publication"]
+    }
+  ],
+  "durations": [
+    {
+      "label": "One meal",
+      "description": "One clearly identified meal or equivalent action window.",
+      "aliases": ["meal", "food", "short"]
+    },
+    {
+      "label": "One day",
+      "description": "A single calendar day in the participant's local time.",
+      "aliases": ["day", "24 hours"]
+    },
+    {
+      "label": "One week",
+      "description": "Seven consecutive days.",
+      "aliases": ["week", "7 days"]
+    },
+    {
+      "label": "30 days",
+      "description": "A fixed 30-day action window.",
+      "aliases": ["month", "one month"]
+    },
+    {
+      "label": "3 months",
+      "description": "A fixed three-month action window.",
+      "aliases": ["quarter", "three months"]
+    },
+    {
+      "label": "6 months",
+      "description": "A fixed six-month action window.",
+      "aliases": ["half year", "six months"]
+    },
+    {
+      "label": "12 months",
+      "description": "A fixed one-year action window.",
+      "aliases": ["year", "one year", "annual"]
+    }
+  ],
+  "baselines": [
+    {
+      "label": "Both sides continue their current plans",
+      "value": "Without this trade, both participants continue their current plans and neither added commitment occurs.",
+      "description": "Use when neither commitment is already planned.",
+      "aliases": ["status quo", "nothing changes", "current plans"]
+    },
+    {
+      "label": "One donation is already planned",
+      "value": "Without this trade, the stated donation still occurs but goes to its original planned destination; the reciprocal commitment does not occur.",
+      "description": "Use for donation redirection rather than new donation.",
+      "aliases": ["planned donation", "redirect", "original charity"]
+    },
+    {
+      "label": "One action is already planned",
+      "value": "Without this trade, the already-planned action still occurs; only the additional reciprocal commitment is counterfactual.",
+      "description": "Makes the pre-existing action explicit.",
+      "aliases": ["already planned", "would do anyway", "existing action"]
+    },
+    {
+      "label": "Current behavior continues",
+      "value": "Without this trade, each participant continues the behavior they currently expect to follow during the action window.",
+      "description": "Useful for behavioral commitments.",
+      "aliases": ["habit", "behavior", "meal", "routine"]
+    }
+  ],
+  "exits": [
+    {
+      "label": "Withdraw before final confirmation",
+      "value": "Either participant may withdraw before both participants confirm the final terms; no commitment begins before that confirmation.",
+      "description": "The default for a proposal that has not yet been locked.",
+      "aliases": ["withdraw", "before lock", "cancel"]
+    },
+    {
+      "label": "End future obligations with notice",
+      "value": "Either participant may end future obligations by notifying the other participant; completed periods remain recorded.",
+      "description": "Stops future performance without rewriting completed history.",
+      "aliases": ["notice", "end", "future", "cancel"]
+    },
+    {
+      "label": "Pause for safety or health",
+      "value": "Either participant may pause immediately for a documented safety or health concern, with future terms reviewed before performance resumes.",
+      "description": "A fail-safe for commitments that could become unsafe.",
+      "aliases": ["safety", "health", "pause", "risk"]
+    },
+    {
+      "label": "End if the counterparty materially breaches",
+      "value": "A material missed commitment, after the agreed notice and review window, releases the other participant from future obligations.",
+      "description": "A reciprocal remedy for material non-performance.",
+      "aliases": ["breach", "missed", "failure", "nonperformance"]
+    }
+  ],
+  "organizations": [
+    {
+      "label": "GiveWell Top Charities Fund",
+      "description": "Curated Every.org route for global health and poverty.",
+      "aliases": ["givewell", "global health", "poverty"],
+      "website": "https://www.givewell.org/",
+      "donationRoute": "https://www.every.org/givewell-top-charities-fund#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "Against Malaria Foundation",
+      "description": "Malaria-prevention nonprofit with a verified Every.org page.",
+      "aliases": ["amf", "malaria", "againstmalaria"],
+      "website": "https://www.againstmalaria.com/",
+      "donationRoute": "https://www.every.org/againstmalaria#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "Malaria Consortium",
+      "description": "Global-health nonprofit with a verified Every.org page.",
+      "aliases": ["smc", "malaria"],
+      "website": "https://www.malariaconsortium.org/",
+      "donationRoute": "https://www.every.org/malaria-consortium#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "New Incentives",
+      "description": "Vaccination nonprofit with a verified Every.org page.",
+      "aliases": ["vaccination", "cash incentives"],
+      "website": "https://www.newincentives.org/",
+      "donationRoute": "https://www.every.org/newincentives#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "ACE Recommended Charity Fund",
+      "description": "Curated Every.org route for animal welfare.",
+      "aliases": ["animal charity evaluators", "ace", "animal welfare"],
+      "website": "https://animalcharityevaluators.org/",
+      "donationRoute": "https://www.every.org/animalcharityevaluators/f/recommended-charity-c87e#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "Founders Pledge Climate Fund",
+      "description": "Curated Every.org route for climate work.",
+      "aliases": ["climate fund", "founders pledge", "climate"],
+      "website": "https://www.founderspledge.com/",
+      "donationRoute": "https://www.every.org/climate.fund#/donate",
+      "provider": "Every.org"
+    },
+    {
+      "label": "EA Long-Term Future Fund",
+      "description": "Curated Every.org route for long-term-future work.",
+      "aliases": ["long-term future fund", "ltff", "ea funds", "existential risk"],
+      "website": "https://funds.effectivealtruism.org/funds/far-future",
+      "donationRoute": "https://www.every.org/ea-long-term-future-fund#/donate",
+      "provider": "Every.org"
+    }
+  ]
+}

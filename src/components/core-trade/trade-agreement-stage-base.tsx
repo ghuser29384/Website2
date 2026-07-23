@@ -345,7 +345,7 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
               <label className={styles.reviewCheck}>
                 <input name="terms_reviewed" required type="checkbox" />
                 <span>
-                  I reviewed this frozen version, including the baseline, maximum burden, evidence, privacy, and exit terms.
+                  I reviewed this frozen version, including the baseline, commitment limit, evidence, privacy, and exit terms.
                 </span>
               </label>
               <PendingSubmitButton
@@ -434,7 +434,7 @@ function LiveDealMap(props: TradeAgreementStageProps) {
               </div>
             ))}
             <div className={styles.detailRow}>
-              <strong>Evidence rule</strong>
+              <strong>Evidence</strong>
               <span>{props.version.evidenceRule}</span>
             </div>
           </div>

@@ -337,7 +337,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                 </label>
               </div>
               <label className="field">
-                <span>Evidence rule</span>
+                <span>Evidence</span>
                 <textarea defaultValue={defaultEvidenceRule} name="evidence_rule" rows={3} required />
               </label>
               <div className="field-grid">

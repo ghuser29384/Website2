@@ -8674,7 +8674,7 @@ export async function saveAgreementTermsAction(formData: FormData) {
     event_type: "terms_updated",
     summary: "Structured agreement terms updated.",
     details:
-      "Baseline, counterfactual declaration, duration, exit conditions, evidence rule, and privacy/disclosure scope were saved.",
+      "Baseline, counterfactual declaration, duration, exit conditions, evidence, and privacy/disclosure scope were saved.",
   });
 
   revalidatePath("/dashboard");

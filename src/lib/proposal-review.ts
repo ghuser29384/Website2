@@ -677,7 +677,7 @@ const REQUIRED_DRAFT_FIELD_LABELS: Array<{
   { key: "requestedAction", label: "Requested action", minLength: 12 },
   { key: "baselineStatement", label: "No-trade baseline", minLength: 20 },
   { key: "duration", label: "Duration or review period" },
-  { key: "exitConditions", label: "Exit, pause, expiry, or unresolved-evidence rule", minLength: 20 },
+  { key: "exitConditions", label: "Exit, pause, expiry, or unresolved evidence", minLength: 20 },
   { key: "verificationMethod", label: "Verification method" },
   { key: "publicDescription", label: "Public description and boundaries", minLength: 20 },
 ];
@@ -859,7 +859,7 @@ const CLARIFICATION_QUESTION_BY_FIELD: Record<string, string> = {
   "No-trade baseline":
     "What would you do if this trade did not happen, and what prior intent or behavior could support that baseline?",
   "Duration or review period": "How long does the commitment run, and when should evidence be reviewed?",
-  "Exit, pause, expiry, or unresolved-evidence rule":
+  "Exit, pause, expiry, or unresolved evidence":
     "What should happen if evidence is missing, disputed, stale, or outside the agreed scope?",
   "Verification method":
     "Which receipt, public log, attestation, provider record, or audit trail would count as evidence?",
@@ -1689,7 +1689,7 @@ export function evaluateMoralTradeProtocolDraft(
     summary = "Required fields are missing or too terse for review.";
   } else if (factualTrust.rating === "low") {
     status = "needs_evidence";
-    summary = "The terms are structured, but the evidence rule is not specific enough for reliance.";
+    summary = "The terms are structured, but the evidence is not specific enough for reliance.";
   } else if (privacyRedaction.rating === "low") {
     status = "needs_clarification";
     summary =

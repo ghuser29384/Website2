@@ -1,0 +1,235 @@
+.mt-input-assist-panel,
+.mt-donation-hover-card {
+  position: fixed;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  color: #161611;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.mt-input-assist-panel {
+  max-height: min(360px, 48vh);
+  overflow: auto;
+  border: 1px solid rgba(22, 22, 17, 0.34);
+  border-radius: 12px;
+  background: #fffef9;
+  box-shadow: 0 18px 56px rgba(16, 18, 26, 0.24);
+  padding: 7px;
+}
+
+.mt-input-assist-panel[hidden],
+.mt-donation-hover-card[hidden] {
+  display: none;
+}
+
+.mt-input-assist-heading {
+  position: sticky;
+  top: -7px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -1px -1px 5px;
+  padding: 9px 10px 8px;
+  border-bottom: 1px solid rgba(22, 22, 17, 0.12);
+  background: rgba(255, 254, 249, 0.97);
+  color: #5f5c54;
+}
+
+.mt-input-assist-heading strong,
+.mt-input-assist-heading span {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.mt-input-assist-heading strong {
+  color: #161611;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mt-input-assist-heading span {
+  text-align: right;
+}
+
+.mt-input-assist-option {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #161611;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mt-input-assist-option:hover,
+.mt-input-assist-option:focus-visible,
+.mt-input-assist-option[aria-selected="true"] {
+  border-color: rgba(29, 91, 255, 0.25);
+  background: #eef3ff;
+  outline: none;
+}
+
+.mt-input-assist-option[aria-selected="true"] {
+  box-shadow: inset 3px 0 0 #1d5bff;
+}
+
+.mt-input-assist-option strong {
+  color: #161611;
+  font-size: 14px;
+  font-weight: 740;
+  line-height: 1.28;
+}
+
+.mt-input-assist-option span,
+.mt-input-assist-empty {
+  color: #67645c;
+  font-size: 12px;
+  line-height: 1.38;
+}
+
+.mt-input-assist-empty {
+  margin: 0;
+  padding: 12px 10px;
+}
+
+.mt-website-mention-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 4px;
+  color: #5f5c54;
+  font: 650 12px/1.35
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.mt-website-mention-label {
+  color: inherit;
+}
+
+.mt-website-mention-preview a {
+  max-width: min(100%, 420px);
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid rgba(29, 91, 255, 0.28);
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #1744b7;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mt-website-mention-preview a:hover,
+.mt-website-mention-preview a:focus-visible {
+  border-color: #1d5bff;
+  color: #0e318c;
+  outline: 2px solid rgba(29, 91, 255, 0.2);
+  outline-offset: 2px;
+}
+
+.mt-donation-hover-card {
+  display: grid;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 24px));
+  padding: 15px;
+  border: 1px solid rgba(22, 22, 17, 0.32);
+  border-radius: 12px;
+  background: #fffef9;
+  box-shadow: 0 18px 56px rgba(16, 18, 26, 0.26);
+}
+
+.mt-donation-hover-kicker {
+  color: #5f5c54;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.mt-donation-hover-card > strong {
+  color: #161611;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.mt-donation-hover-card p {
+  margin: 0;
+  color: #5f5c54;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mt-donation-hover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.mt-donation-hover-actions a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border: 1px solid #161611;
+  border-radius: 7px;
+  color: #161611;
+  font-size: 11px;
+  font-weight: 740;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.mt-donation-hover-actions a:hover,
+.mt-donation-hover-actions a:focus-visible {
+  box-shadow: 2px 2px 0 #161611;
+  outline: none;
+  transform: translate(-1px, -1px);
+}
+
+.mt-donation-hover-actions .mt-donation-hover-primary {
+  border-color: #1d5bff;
+  background: #1d5bff;
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  .mt-input-assist-heading span {
+    display: none;
+  }
+
+  .mt-input-assist-panel {
+    max-height: min(300px, 43vh);
+  }
+
+  .mt-donation-hover-actions {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-donation-hover-actions a {
+    transition: none;
+  }
+}

@@ -8,7 +8,8 @@ import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getSiteUrl } from "@/lib/supabase/config";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { validateTradeCalendarDates } from "@/lib/trade-draft-standards";
 
 const MAX_MESSAGE_LENGTH = 4_000;
 const MAX_TERM_LENGTH = 5_000;
@@ -134,9 +135,9 @@ function readTerms(formData: FormData): CoreTerms {
     ["Your commitment", terms.proposedAction],
     ["Requested commitment", terms.requestedAction],
     ["Duration", terms.duration],
-    ["Evidence rule", terms.evidenceRule],
+    ["Evidence", terms.evidenceRule],
     ["Exit conditions", terms.exitConditions],
-    ["Maximum burden", terms.maximumBurden],
+    ["Commitment limit", terms.maximumBurden],
     ["Privacy scope", terms.privacyScope],
     ["No-trade baseline", terms.noTradeBaseline],
   ] as const;
@@ -159,12 +160,12 @@ function readTerms(formData: FormData): CoreTerms {
     }
   }
 
-  if (terms.startDate && Number.isNaN(Date.parse(terms.startDate))) {
-    throw new Error("Start date is invalid.");
-  }
-  if (terms.evidenceDueDate && Number.isNaN(Date.parse(terms.evidenceDueDate))) {
-    throw new Error("Evidence due date is invalid.");
-  }
+  const calendarDateError = validateTradeCalendarDates({
+    evidenceDueDate: terms.evidenceDueDate,
+    startDate: terms.startDate,
+    timeZone: read(formData, "client_time_zone"),
+  });
+  if (calendarDateError) throw new Error(calendarDateError);
 
   return terms;
 }
@@ -175,6 +176,7 @@ async function recordCoreEvent({
   eventType,
   metadata = {},
   profileId,
+  supabaseClient,
 }: {
   entityId?: string | null;
   entityType?: string;
@@ -190,8 +192,9 @@ async function recordCoreEvent({
     | "agreement_completed";
   metadata?: Record<string, unknown>;
   profileId: string;
+  supabaseClient?: Awaited<ReturnType<typeof createClient>>;
 }) {
-  const supabase = createServiceClient() as any;
+  const supabase = (supabaseClient ?? createServiceClient()) as any;
   const idempotencyKey = `${eventType}:${profileId}:${entityType ?? ""}:${entityId ?? ""}`;
   await supabase.from("core_loop_events").upsert(
     {
@@ -339,7 +342,7 @@ function offerTerms(offer: Record<string, any>): CoreTerms {
 
 export async function saveCoreOfferAction(formData: FormData) {
   const viewer = await requireViewer("/trades/new");
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
   const intent = read(formData, "intent") === "submit" ? "submit" : "draft";
   const submissionKey = read(formData, "submission_key") || randomUUID();
   const offeredCause = read(formData, "offered_cause");
@@ -458,6 +461,7 @@ export async function saveCoreOfferAction(formData: FormData) {
       eventType: "offer_draft_saved",
       entityType: "offer",
       entityId: inserted.id,
+      supabaseClient: supabase,
     });
 
     if (intent === "submit") {
@@ -467,6 +471,7 @@ export async function saveCoreOfferAction(formData: FormData) {
           eventType: "offer_submitted",
           entityType: "offer",
           entityId: inserted.id,
+          supabaseClient: supabase,
         }),
         supabase.from("trade_review_events").insert({
           offer_id: inserted.id,
@@ -498,7 +503,7 @@ export async function updateCoreOfferAction(formData: FormData) {
   const offerId = read(formData, "offer_id");
   const returnTo = safeInternalPath(read(formData, "return_to"), `/trades/${offerId}/manage`);
   const viewer = await requireViewer(returnTo);
-  const supabase = createServiceClient() as any;
+  const supabase = (await createClient()) as any;
 
   try {
     const { data: offer } = await supabase
@@ -563,6 +568,7 @@ export async function updateCoreOfferAction(formData: FormData) {
           eventType: "offer_submitted",
           entityType: "offer",
           entityId: offerId,
+          supabaseClient: supabase,
         }),
         supabase.from("trade_review_events").insert({
           offer_id: offerId,

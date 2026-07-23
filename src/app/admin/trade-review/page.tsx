@@ -163,7 +163,7 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                           <dd>{offer.no_trade_baseline}</dd>
                         </div>
                         <div>
-                          <dt>Maximum burden</dt>
+                          <dt>Commitment limit</dt>
                           <dd>{offer.maximum_burden}</dd>
                         </div>
                         <div>

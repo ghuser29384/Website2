@@ -16,7 +16,7 @@ import { buildBreadcrumbJsonLd, getAbsoluteUrl, truncateDescription } from "@/li
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const workedExamplesDescription =
-  "Public Moral Trade worked examples with structured actions, reciprocal requests, baselines, evidence rules, and manual-review notes.";
+  "Public Moral Trade worked examples with structured actions, reciprocal requests, baselines, evidence, and manual-review notes.";
 
 export const metadata: Metadata = {
   title: "Worked examples",
