@@ -126,7 +126,12 @@ test("the exact live offer palette uses three offer types and collects shared at
     "data-mt-autocomplete-context",
     "evidence",
   );
-  await expect(behaviorTokens).toHaveAttribute("data-mt-autocomplete-ready", "true");
+  for (let index = 0; index < 5; index += 1) {
+    await expect(behaviorTokens.nth(index)).toHaveAttribute(
+      "data-mt-autocomplete-ready",
+      "true",
+    );
+  }
 
   await page.locator('[data-mt-offer-type="service"]').click();
   const serviceClause = page.locator(".clause").filter({
