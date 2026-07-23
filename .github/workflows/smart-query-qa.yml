@@ -44,7 +44,7 @@ jobs:
           mkdir -p test-results
           rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
             'role="search"|type="search"|name="(search|q|query|sort|filter)"|searchParams|URLSearchParams|\.order\(' \
-            src public tests | head -n 1000 > test-results/query-surface-audit.txt
+            src public tests > test-results/query-surface-audit.txt || true
 
       - name: Install dependencies
         run: npm ci
@@ -62,6 +62,7 @@ jobs:
           name: smart-query-audit
           path: |
             test-results/discover-query-audit.json
+            test-results/discover-inline-source.js
             test-results/query-surface-audit.txt
           if-no-files-found: error
           retention-days: 7
