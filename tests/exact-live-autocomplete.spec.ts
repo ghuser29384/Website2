@@ -28,7 +28,7 @@ async function installLiveFixtures(page: import("@playwright/test").Page) {
   );
 }
 
-test("the exact live trade clauses autocomplete their contenteditable terms", async ({ page }) => {
+test("the exact live trade clauses autocomplete their contenteditable terms", async ({ page }, testInfo) => {
   await installLiveFixtures(page);
   await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
 
@@ -57,6 +57,10 @@ test("the exact live trade clauses autocomplete their contenteditable terms", as
     "Wild animal suffering",
     "Factory farming",
   ]);
+  await page.screenshot({
+    path: testInfo.outputPath("autocomplete-visible.png"),
+    fullPage: false,
+  });
 
   await panel.locator(".mt-input-assist-option").first().click();
   await expect(causeToken).toHaveText("Animal welfare");
