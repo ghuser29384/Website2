@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
-    images: [SITE_IMAGE_PATH],
+    images: [getAbsoluteUrl(SITE_IMAGE_PATH)],
   },
   appleWebApp: {
     capable: true,
