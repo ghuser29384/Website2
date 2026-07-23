@@ -12,6 +12,7 @@
   const MAX_CATALOG_WAIT_MS = 2500;
   const REMOTE_MIN_QUERY_LENGTH = 2;
   const REMOTE_DEBOUNCE_MS = 180;
+  const RECIPIENT_CAUSE_SCORE_MINIMUM = 45;
 
   let panel = null;
   let activeToken = null;
@@ -22,6 +23,7 @@
   let remoteSearchTimer = 0;
   let remoteSearchController = null;
   let renderSequence = 0;
+  let selectingSuggestion = false;
 
   const preparedTokens = new WeakSet();
   const organizationSearchCache = new Map();
@@ -166,6 +168,7 @@
     const suggestion = activeResults[index];
     if (!token || !suggestion) return;
 
+    selectingSuggestion = true;
     token.textContent = suggestionValue(suggestion);
     token.setAttribute("data-mt-selected-kind", suggestion.kind || "standardized-term");
     if (suggestion.ein) token.setAttribute("data-mt-selected-ein", suggestion.ein);
@@ -174,6 +177,7 @@
     else token.removeAttribute("data-mt-selected-source");
     token.dispatchEvent(new Event("input", { bubbles: true }));
     token.dispatchEvent(new Event("change", { bubbles: true }));
+    selectingSuggestion = false;
     token.focus();
     closePanel();
   }
@@ -221,14 +225,21 @@
         ...suggestion,
         kind: "organization",
         source: suggestion.provider || "Curated organization",
-        _rank: Number(suggestion.score || 0) + 34 - index / 100,
+        _rank: Number(suggestion.score || 0) + 8 - index / 100,
       }));
-      const priorities = assist.rankSuggestions("priorities", query).map((suggestion, index) => ({
-        ...suggestion,
-        kind: "cause",
-        source: "Moral Trade cause areas",
-        _rank: Number(suggestion.score || 0) - index / 100,
-      }));
+      const normalizedQuery = normalize(query);
+      const priorities = assist
+        .rankSuggestions("priorities", query)
+        .filter(
+          (suggestion) =>
+            !normalizedQuery || Number(suggestion.score || 0) >= RECIPIENT_CAUSE_SCORE_MINIMUM,
+        )
+        .map((suggestion, index) => ({
+          ...suggestion,
+          kind: "cause",
+          source: "Moral Trade cause areas",
+          _rank: Number(suggestion.score || 0) - index / 100,
+        }));
       return mergeSuggestions(organizations, priorities);
     }
 
@@ -358,7 +369,7 @@
 
         const payload = await response.json();
         const results = remoteSuggestions(payload);
-        organizationSearchCache.set(cacheKey, results);
+        if (payload.sourceUnavailable !== true) organizationSearchCache.set(cacheKey, results);
 
         if (
           sequence === renderSequence &&
@@ -430,9 +441,11 @@
 
     token.addEventListener("focus", () => renderSuggestions(token));
     token.addEventListener("input", () => {
-      token.removeAttribute("data-mt-selected-kind");
-      token.removeAttribute("data-mt-selected-ein");
-      token.removeAttribute("data-mt-selected-source");
+      if (!selectingSuggestion) {
+        token.removeAttribute("data-mt-selected-kind");
+        token.removeAttribute("data-mt-selected-ein");
+        token.removeAttribute("data-mt-selected-source");
+      }
       if (document.activeElement === token) renderSuggestions(token);
     });
     token.addEventListener("keydown", (event) => {
