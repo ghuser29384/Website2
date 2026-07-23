@@ -21,7 +21,7 @@ import type {
   CommandToolStatus,
 } from "@/lib/command/types";
 import { COMMAND_SESSION_VERSION } from "@/lib/command/types";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 
 const SESSION_TITLE_FIELD = "command_sessions.title";
 const SESSION_SUMMARY_FIELD = "command_sessions.summary";
@@ -176,7 +176,7 @@ function viewSession(
 }
 
 export async function createCommandSession(profileId: string, prompt = "") {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const title = encryptText(sessionTitleFromPrompt(prompt), SESSION_TITLE_FIELD);
   const summary = encryptText("", SESSION_SUMMARY_FIELD);
   const { data, error } = await supabase
@@ -206,7 +206,7 @@ export async function createCommandSession(profileId: string, prompt = "") {
 }
 
 export async function listCommandSessions(profileId: string) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const { data, error } = await supabase
     .from("command_sessions")
     .select("*")
@@ -218,7 +218,7 @@ export async function listCommandSessions(profileId: string) {
 }
 
 export async function getCommandSession(profileId: string, sessionId: string) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const [sessionResult, messagesResult, runsResult, toolsResult] = await Promise.all([
     supabase
       .from("command_sessions")
@@ -270,7 +270,7 @@ export async function updateCommandSession({
   title?: string;
   summary?: string;
 }) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString() };
   if (state) patch.state = state;
   if (title !== undefined) {
@@ -315,7 +315,7 @@ export async function insertCommandMessage({
   messageKind?: "message" | "clarification" | "status";
   metadata?: Record<string, unknown>;
 }) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const encrypted = encryptText(body, MESSAGE_BODY_FIELD);
   const { data, error } = await supabase
     .from("command_messages")
@@ -363,7 +363,7 @@ export async function createCommandRun({
   modelName: string;
   status: CommandRunStatus;
 }) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const intent = encryptText(intentSummary, RUN_INTENT_FIELD);
   const encryptedPlan = encryptJson(plan, RUN_PLAN_FIELD);
   const encryptedClarification = encryptJson(clarification, RUN_CLARIFICATION_FIELD);
@@ -406,7 +406,7 @@ export async function updateCommandRun({
   status: CommandRunStatus;
   plan?: CommandPlanStep[];
 }) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const patch: Record<string, unknown> = { status };
   if (plan) patch.plan_ciphertext = encryptJson(plan, RUN_PLAN_FIELD).ciphertext;
   if (["completed", "blocked", "failed"].includes(status)) {
@@ -447,7 +447,7 @@ export async function insertCommandToolCall({
 }) {
   const capability = getCommandCapability(proposal.capabilityKey);
   if (!capability) throw new Error(`Unknown Command capability: ${proposal.capabilityKey}`);
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const payload = encryptJson(
     { arguments: proposal.arguments, rationale: proposal.rationale },
     TOOL_PAYLOAD_FIELD,
@@ -481,7 +481,7 @@ export async function insertCommandToolCall({
 }
 
 export async function getCommandToolCall(profileId: string, toolCallId: string) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const { data, error } = await supabase
     .from("command_tool_calls")
     .select("*")
@@ -506,7 +506,7 @@ export async function updateCommandToolCall({
   result?: CommandToolResult | null;
   confirmed?: boolean;
 }) {
-  const supabase = (await createClient()) as any;
+  const supabase = createServiceClient() as any;
   const patch: Record<string, unknown> = { status };
   if (result !== undefined) patch.result = result;
   if (confirmed) patch.confirmed_at = new Date().toISOString();
@@ -550,7 +550,7 @@ export async function appendCommandAuditEvent({
   metadata?: Record<string, unknown>;
   supabase?: any;
 }) {
-  const supabase = suppliedSupabase ?? ((await createClient()) as any);
+  const supabase = suppliedSupabase ?? (createServiceClient() as any);
   const { data: previous, error: previousError } = await supabase
     .from("command_audit_events")
     .select("entry_hash")

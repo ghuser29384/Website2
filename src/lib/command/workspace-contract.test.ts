@@ -15,6 +15,10 @@ test("Command persists private conversation and tool payloads with owner-scoped 
   assert.match(migration, /enable row level security/g);
   assert.match(migration, /profile_id = \(select auth\.uid\(\)\)/g);
   assert.doesNotMatch(migration, /grant .* to anon/);
+  assert.match(migration, /revoke all on public\.command_sessions from anon, authenticated/);
+  assert.doesNotMatch(migration, /grant .* to authenticated/);
+  assert.match(persistence, /createServiceClient/);
+  assert.doesNotMatch(persistence, /createClient\(\)/);
   assert.match(persistence, /encryptBackgroundSensitiveText/);
   assert.match(persistence, /decryptBackgroundSensitiveText/);
   assert.match(persistence, /command_tool_calls\.payload/);

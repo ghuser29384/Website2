@@ -135,12 +135,12 @@ alter table public.command_runs enable row level security;
 alter table public.command_tool_calls enable row level security;
 alter table public.command_audit_events enable row level security;
 
-grant select, insert, update, delete on public.command_sessions to authenticated;
-grant select, insert on public.command_messages to authenticated;
-grant select, insert, update on public.command_runs to authenticated;
-grant select, insert, update on public.command_tool_calls to authenticated;
-grant select, insert on public.command_audit_events to authenticated;
-grant usage, select on sequence public.command_audit_events_seq_seq to authenticated;
+revoke all on public.command_sessions from anon, authenticated;
+revoke all on public.command_messages from anon, authenticated;
+revoke all on public.command_runs from anon, authenticated;
+revoke all on public.command_tool_calls from anon, authenticated;
+revoke all on public.command_audit_events from anon, authenticated;
+revoke all on sequence public.command_audit_events_seq_seq from anon, authenticated;
 
 grant all on public.command_sessions to service_role;
 grant all on public.command_messages to service_role;
