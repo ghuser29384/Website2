@@ -1,5 +1,6 @@
 name: Finalize Command public-good numeric safety
 
+# One-shot verification workflow; removed by its successful run.
 on:
   pull_request:
     branches:
