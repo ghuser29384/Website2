@@ -65,6 +65,8 @@ const WORKBENCH_GRID = `
 export default async function NewTradePage({ searchParams }: NewTradePageProps) {
   const resolvedSearchParams = await searchParams;
   const sourceOfferId = valueOf(resolvedSearchParams.source_offer);
+  const acceptsCommandHandoff =
+    valueOf(resolvedSearchParams.handoff) === "command-center";
   const [viewer, sourceOffer] = await Promise.all([
     getViewer(),
     sourceOfferId ? getOfferById(sourceOfferId) : Promise.resolve(null),
@@ -75,6 +77,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   if (templateId) returnParams.set("template", templateId);
   if (structure) returnParams.set("structure", structure);
   if (sourceOfferId) returnParams.set("source_offer", sourceOfferId);
+  if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
   const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
 
   if (!viewer) {
@@ -111,6 +114,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     <>
       <style>{WORKBENCH_GRID}</style>
       <TradeDraftWorkbench
+        acceptCommandHandoff={acceptsCommandHandoff}
         formMessage={getFormMessage(resolvedSearchParams) ?? sourceMessage}
         initialValues={
           counterofferValues ??
