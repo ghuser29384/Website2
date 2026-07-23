@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - agent/inspect-live-offer-types-20260723
 
 permissions:
   contents: read
@@ -16,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract the deployed Live source and relevant picker context
+        with:
+          ref: 2c8f62b62b479a1925f2eed4c60bd2ee381deeae
+      - name: Extract the production Live source and relevant picker context
         shell: bash
         run: |
           node <<'NODE'
@@ -28,50 +27,40 @@ jobs:
             .map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8'))
             .join('');
           const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
-          fs.writeFileSync('live-source.html', source);
+          fs.writeFileSync('production-live-source.html', source);
 
           const needles = [
             'Find a trade partner',
             'What are you offering?',
             'MONEY',
             'ACTION',
-            '#trade',
+            'data-page="trade"',
           ];
           const contexts = [];
           for (const needle of needles) {
-            const index = source.indexOf(needle);
-            console.log(`NEEDLE ${JSON.stringify(needle)} INDEX ${index}`);
-            if (index < 0) continue;
-            const start = Math.max(0, index - 5000);
-            const end = Math.min(source.length, index + 10000);
-            contexts.push(`\n===== ${needle} @ ${index} =====\n${source.slice(start, end)}\n`);
-          }
-
-          const lower = source.toLowerCase();
-          const classNeedles = ['offer-type', 'offering', 'trade partner', 'data-page="trade"'];
-          for (const needle of classNeedles) {
             let cursor = 0;
             let count = 0;
-            while (count < 8) {
-              const index = lower.indexOf(needle.toLowerCase(), cursor);
+            while (count < 12) {
+              const index = source.toLowerCase().indexOf(needle.toLowerCase(), cursor);
               if (index < 0) break;
-              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${source.slice(Math.max(0, index - 1800), Math.min(source.length, index + 3600))}\n`);
+              console.log(`NEEDLE ${JSON.stringify(needle)} OCCURRENCE ${count + 1} INDEX ${index}`);
+              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${source.slice(Math.max(0, index - 6000), Math.min(source.length, index + 14000))}\n`);
               cursor = index + needle.length;
               count += 1;
             }
           }
 
           const unique = [...new Set(contexts)];
-          fs.writeFileSync('live-offer-picker-context.txt', unique.join('\n'));
+          fs.writeFileSync('production-live-offer-picker-context.txt', unique.join('\n'));
           console.log(`SOURCE_LENGTH ${source.length}`);
           console.log(`CONTEXT_BLOCKS ${unique.length}`);
-          console.log(unique.join('\n').slice(0, 50000));
+          console.log(unique.join('\n').slice(0, 90000));
           NODE
       - uses: actions/upload-artifact@v4
         with:
-          name: live-offer-picker-source
+          name: production-live-offer-picker-source
           path: |
-            live-source.html
-            live-offer-picker-context.txt
+            production-live-source.html
+            production-live-offer-picker-context.txt
           if-no-files-found: error
           retention-days: 1
