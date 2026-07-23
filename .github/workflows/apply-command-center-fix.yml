@@ -1,0 +1,80 @@
+name: Apply and verify Command Center fix
+
+on:
+  push:
+    branches:
+      - fix/command-center-draft-handoff
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-command-center-fix
+  cancel-in-progress: false
+
+jobs:
+  apply-verify-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply implementation patch and remove temporary diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .github/command-center-fix.patch.gz.b64 | gunzip > /tmp/command-center-fix.patch
+          git apply --check /tmp/command-center-fix.patch
+          git apply /tmp/command-center-fix.patch
+          git rm -f \
+            .github/command-center-fix.patch.gz.b64 \
+            .github/workflows/apply-command-center-fix.yml \
+            .github/workflows/inspect-live-command-center.yml \
+            src/app/api/debug/live-command-center/route.ts
+          git status --short
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check browser script syntax
+        run: node --check public/moral-trade-live-command-center.js
+
+      - name: Lint changed TypeScript
+        run: |
+          npx eslint \
+            src/app/trades/new/page.tsx \
+            src/components/core-trade/trade-draft-workbench.tsx \
+            src/lib/command-center-handoff.ts \
+            src/lib/command-center-handoff.test.ts \
+            tests/exact-live-command-center.spec.ts
+
+      - name: Run focused unit tests
+        run: node --import tsx --test src/lib/command-center-handoff.test.ts
+
+      - name: Build application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Command Center browser QA
+        run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix Command Center draft handoff"
+          git push origin HEAD:fix/command-center-draft-handoff
