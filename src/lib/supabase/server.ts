@@ -2,14 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+import { isExpectedMissingSessionError } from "@/lib/supabase/auth-errors";
 import { getSupabaseEnv, getSupabaseServiceEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
 export async function createClient() {
   const cookieStore = await cookies();
   const { url, publishableKey } = getSupabaseEnv();
-
-  return createServerClient<Database>(url, publishableKey, {
+  const supabase = createServerClient<Database>(url, publishableKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -25,6 +25,22 @@ export async function createClient() {
       },
     },
   });
+
+  const getUser = supabase.auth.getUser.bind(supabase.auth);
+  supabase.auth.getUser = (async (jwt?: string) => {
+    const result = await getUser(jwt);
+
+    if (isExpectedMissingSessionError(result.error)) {
+      return {
+        data: { user: null },
+        error: null,
+      };
+    }
+
+    return result;
+  }) as typeof supabase.auth.getUser;
+
+  return supabase;
 }
 
 export function createServiceClient() {
