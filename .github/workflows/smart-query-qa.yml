@@ -9,6 +9,8 @@ on:
       - "src/app/people/**"
       - "src/app/wish-registry/**"
       - "src/app/evidence/**"
+      - "src/app/pools/**"
+      - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
       - "public/moral-trade-smart-query.js"
       - "public/moral-trade-discover.html"
@@ -39,11 +41,10 @@ jobs:
 
       - name: Inventory query surfaces
         run: |
-          echo QUERY_SURFACE_AUDIT_START
+          mkdir -p test-results
           rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
             'role="search"|type="search"|name="(search|q|query|sort|filter)"|searchParams|URLSearchParams|\.order\(' \
-            src public tests | head -n 700
-          echo QUERY_SURFACE_AUDIT_END
+            src public tests | head -n 1000 > test-results/query-surface-audit.txt
 
       - name: Install dependencies
         run: npm ci
@@ -53,3 +54,14 @@ jobs:
 
       - name: Audit rendered Discover query controls
         run: npx playwright test tests/discover-query-audit.spec.ts --reporter=line
+
+      - name: Upload query audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-query-audit
+          path: |
+            test-results/discover-query-audit.json
+            test-results/query-surface-audit.txt
+          if-no-files-found: error
+          retention-days: 7
