@@ -6,6 +6,7 @@ import {
   markConditionalMandateReadyFromSetupIntent,
   markConditionalMandateSetupFailed,
 } from "@/lib/payments/conditional-mandates";
+import { handleConditionalRedirectSetupSucceeded } from "@/lib/payments/conditional-redirect-service";
 import {
   attemptDonationOffsetSettlement,
   reconcileConditionalDispute,
@@ -165,11 +166,19 @@ async function reconcileChargeRefunded(charge: Stripe.Charge) {
     })
     .eq("id", attempt.id);
   if (charge.refunded) {
-    await supabase
-      .from("conditional_payment_mandates")
-      .update({ status: "refunded" })
-      .eq("id", attempt.mandate_id)
-      .neq("status", "disputed");
+    const { data: newerAttempts } = await supabase
+      .from("conditional_payment_attempts")
+      .select("id")
+      .eq("mandate_id", attempt.mandate_id)
+      .gt("attempt_number", attempt.attempt_number)
+      .limit(1);
+    if (!newerAttempts?.length) {
+      await supabase
+        .from("conditional_payment_mandates")
+        .update({ status: "refunded" })
+        .eq("id", attempt.mandate_id)
+        .neq("status", "disputed");
+    }
   }
   return { handled: true as const };
 }
@@ -247,6 +256,11 @@ async function processConditionalEvent(event: Stripe.Event) {
     if (!isConditionalMetadata(session.metadata)) {
       return { handled: false as const };
     }
+    if (session.metadata?.purpose === "conditional_redirect") {
+      // The SetupIntent success event is the authoritative provider-timestamped
+      // transition for arbitration. This event is still ledgered as processed.
+      return { handled: true as const };
+    }
     const setupIntentId =
       typeof session.setup_intent === "string"
         ? session.setup_intent
@@ -270,6 +284,9 @@ async function processConditionalEvent(event: Stripe.Event) {
     const setupIntent = object as Stripe.SetupIntent;
     if (!isConditionalMetadata(setupIntent.metadata)) {
       return { handled: false as const };
+    }
+    if (setupIntent.metadata?.purpose === "conditional_redirect") {
+      return handleConditionalRedirectSetupSucceeded({ event, setupIntent });
     }
     const result = await markConditionalMandateReadyFromSetupIntent(setupIntent);
     if (
