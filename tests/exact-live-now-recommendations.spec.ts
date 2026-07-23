@@ -130,8 +130,13 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(personalized).toContainText("Matches your Animal welfare priority");
     await expect(personalized).toContainText("Why this match");
     await expect(personalized.locator('a[href="/offers/animal-offer"]')).toHaveCount(1);
-    await expect(personalized.getByRole("button", { name: "Easy for me" })).toHaveCount(1);
-    await expect(personalized.getByRole("button", { name: "Hard for me" })).toHaveCount(1);
+    const tuneRecommendation = personalized.locator(
+      'summary[aria-label="Tune this recommendation"]',
+    );
+    await expect(tuneRecommendation).toHaveCount(1);
+    await tuneRecommendation.click();
+    await expect(personalized.getByRole("button", { name: "Easy for me" })).toBeVisible();
+    await expect(personalized.getByRole("button", { name: "Hard for me" })).toBeVisible();
     await expect(page.getByText("Counteroffer from Mina.", { exact: true })).toHaveCount(0);
     await expect(page.getByText("AI-safety research under $100.", { exact: true })).toHaveCount(0);
 
