@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - feat/universal-command-workspace
 
 permissions:
   contents: write
@@ -17,7 +14,7 @@ concurrency:
 
 jobs:
   apply-verify-push:
-    if: github.head_ref == 'feat/universal-command-workspace' || github.ref_name == 'feat/universal-command-workspace'
+    if: github.head_ref == 'feat/universal-command-workspace'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -44,8 +41,8 @@ jobs:
           python <<'PY'
           from pathlib import Path
 
-          path = Path('.env.example')
-          text = path.read_text()
+          env_path = Path('.env.example')
+          env_text = env_path.read_text()
           addition = '''
           # Universal Command planning. The model may propose typed capability calls but cannot
           # directly mutate application, payment, or agreement state. Set false to force the
@@ -53,11 +50,23 @@ jobs:
           MORAL_TRADE_COMMAND_MODEL=gpt-5-mini
           MORAL_TRADE_COMMAND_LLM_ENABLED=true
           '''.lstrip()
-          if 'MORAL_TRADE_COMMAND_MODEL=' not in text:
-              if text and not text.endswith('\n'):
-                  text += '\n'
-              text += addition
-              path.write_text(text)
+          if 'MORAL_TRADE_COMMAND_MODEL=' not in env_text:
+              if env_text and not env_text.endswith('\n'):
+                  env_text += '\n'
+              env_text += addition
+              env_path.write_text(env_text)
+
+          page_path = Path('src/app/command/page.tsx')
+          page_text = page_path.read_text()
+          page_text = page_text.replace(
+              'import { getCommandSession, listCommandSessions } from "@/lib/command/persistence";\n',
+              'import { getCommandSession, listCommandSessions } from "@/lib/command/persistence";\nimport type { CommandSessionView } from "@/lib/command/types";\n',
+          )
+          page_text = page_text.replace(
+              '  let initialSessions = [] as Awaited<ReturnType<typeof listCommandSessions>>;\n  let initialSession = null as Awaited<ReturnType<typeof getCommandSession>>;\n',
+              '  let initialSessions: CommandSessionView[] = [];\n  let initialSession: CommandSessionView | null = null;\n',
+          )
+          page_path.write_text(page_text)
           PY
           git rm -rf --ignore-unmatch \
             .github/universal-command-patch \
