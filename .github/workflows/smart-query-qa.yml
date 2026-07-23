@@ -5,7 +5,7 @@ on:
     paths:
       - "src/lib/smart-query*"
       - "src/lib/smart-discovery-ranking.ts"
-      - "src/lib/smart-evidence-ranking.ts"
+      - "src/lib/smart-evidence-ranking*"
       - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
       - "src/app/api/query/**"
@@ -70,6 +70,7 @@ jobs:
             src/lib/smart-query.test.ts \
             src/lib/smart-discovery-ranking.ts \
             src/lib/smart-evidence-ranking.ts \
+            src/lib/smart-evidence-ranking.test.ts \
             src/lib/smart-people-ranking.ts \
             src/lib/site-search-smart.ts \
             src/app/api/query/interpret/route.ts \
@@ -88,7 +89,9 @@ jobs:
       - name: Test deterministic and semantic query interpretation
         run: |
           set -o pipefail
-          node --import tsx --test src/lib/smart-query.test.ts 2>&1 | tee test-results/smart-query-test.txt
+          node --import tsx --test \
+            src/lib/smart-query.test.ts \
+            src/lib/smart-evidence-ranking.test.ts 2>&1 | tee test-results/smart-query-test.txt
 
       - name: Build production application
         run: |
