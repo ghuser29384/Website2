@@ -2,7 +2,7 @@ TAP version 13
 # Subtest: the exact live shell loads structured offer types and autocomplete for editable terms
 ok 1 - the exact live shell loads structured offer types and autocomplete for editable terms
   ---
-  duration_ms: 2.514071
+  duration_ms: 3.238575
   type: 'test'
   ...
 1..1
@@ -13,4 +13,4 @@ ok 1 - the exact live shell loads structured offer types and autocomplete for ed
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 312.067945
+# duration_ms 349.976175
