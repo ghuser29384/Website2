@@ -1,1 +1,1 @@
-Trigger the current offer-impact fixture compatibility update and rerun trusted exact-head gates.
+Trigger the hydrated-content browser evidence repair and rerun trusted exact-head gates.
