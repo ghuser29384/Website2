@@ -168,6 +168,7 @@ export default async function TradeAgreementPage({
             evidenceDueDate: String(version.evidence_due_date),
             evidenceRule: String(version.evidence_rule),
             exitConditions: String(version.exit_conditions),
+            id: String(version.id),
             maximumBurden: String(version.maximum_burden),
             noTradeBaseline: String(version.no_trade_baseline),
             privacyScope: String(version.privacy_scope),

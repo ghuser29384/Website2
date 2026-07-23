@@ -1,4 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import {
+  decryptTradeInvitationToken,
+  hashTradeInvitationToken,
+  type TradeInvitationPreview,
+} from "@/lib/trade-invitations";
 
 export const CORE_OFFER_STATES = [
   "draft",
@@ -54,10 +59,14 @@ export interface CoreInvitation {
   recipient_user_id: string | null;
   recipient_email: string;
   token: string;
+  delivery_kind: "email" | "share_link";
   message: string;
   status: string;
   opened_at: string | null;
   responded_at: string | null;
+  expires_at: string;
+  revoked_at: string | null;
+  revocation_reason: string;
   created_at: string;
 }
 
@@ -220,15 +229,39 @@ export async function listCoreOffersForOwner(ownerId: string): Promise<CoreOffer
   return (data ?? []).map(toCoreOffer);
 }
 
-export async function listTradeInvitationsForOffer(offerId: string, senderId: string) {
+export async function listTradeInvitationsForOffer(
+  offerId: string,
+  senderId: string,
+): Promise<CoreInvitation[]> {
   const supabase = createServiceClient() as any;
   const { data } = await supabase
     .from("trade_invitations")
-    .select("*")
+    .select(
+      "id,offer_id,sender_id,recipient_user_id,recipient_email,token_ciphertext,delivery_kind,message,status,opened_at,responded_at,expires_at,revoked_at,revocation_reason,created_at",
+    )
     .eq("offer_id", offerId)
     .eq("sender_id", senderId)
     .order("created_at", { ascending: false });
-  return (data ?? []) as CoreInvitation[];
+  return (data ?? []).map((row: Record<string, any>) => ({
+    id: String(row.id),
+    offer_id: String(row.offer_id),
+    sender_id: String(row.sender_id),
+    recipient_user_id: row.recipient_user_id ? String(row.recipient_user_id) : null,
+    recipient_email: String(row.recipient_email ?? ""),
+    token: decryptTradeInvitationToken(
+      row.token_ciphertext ? String(row.token_ciphertext) : "",
+      String(row.id),
+    ),
+    delivery_kind: row.delivery_kind === "email" ? "email" : "share_link",
+    message: String(row.message ?? ""),
+    status: String(row.status),
+    opened_at: row.opened_at ? String(row.opened_at) : null,
+    responded_at: row.responded_at ? String(row.responded_at) : null,
+    expires_at: String(row.expires_at),
+    revoked_at: row.revoked_at ? String(row.revoked_at) : null,
+    revocation_reason: String(row.revocation_reason ?? ""),
+    created_at: String(row.created_at),
+  })) satisfies CoreInvitation[];
 }
 
 export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer[]> {
@@ -247,36 +280,15 @@ export async function listReciprocalMatches(offer: CoreOffer): Promise<CoreOffer
   return (data ?? []).map(toCoreOffer);
 }
 
-export async function getInvitationByToken(token: string) {
+export async function getInvitationByToken(token: string, actorId?: string | null) {
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return null;
   const supabase = createServiceClient() as any;
-  const { data, error } = await supabase
-    .from("trade_invitations")
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
-  if (error || !data || data.status === "revoked") return null;
-
-  if (data.status === "sent") {
-    await supabase
-      .from("trade_invitations")
-      .update({ status: "opened", opened_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", data.id)
-      .eq("status", "sent");
-    data.status = "opened";
-    data.opened_at = new Date().toISOString();
-  }
-
-  const [{ data: offer }, { data: sender }] = await Promise.all([
-    supabase.from("offers").select("*").eq("id", data.offer_id).maybeSingle(),
-    supabase.from("profiles").select("id,email,display_name").eq("id", data.sender_id).maybeSingle(),
-  ]);
-
-  if (!offer) return null;
-  return {
-    invitation: data as CoreInvitation,
-    offer: toCoreOffer(offer),
-    sender: toProfile(sender),
-  };
+  const { data, error } = await supabase.rpc("preview_trade_invitation_v2", {
+    p_actor_id: actorId ?? null,
+    p_token_hash: hashTradeInvitationToken(token),
+  });
+  if (error || !data) return null;
+  return data as TradeInvitationPreview;
 }
 
 export async function listThreadsForUser(userId: string): Promise<CoreThreadSummary[]> {

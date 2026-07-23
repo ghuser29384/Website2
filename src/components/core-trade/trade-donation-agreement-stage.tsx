@@ -266,6 +266,11 @@ function ConfirmationStage({
           {baseProps.canConfirm ? (
             <form action={baseProps.confirmAction} className={styles.confirmForm}>
               <input name="agreement_id" type="hidden" value={baseProps.agreementId} />
+              <input
+                name="agreement_version_id"
+                type="hidden"
+                value={baseProps.version.id}
+              />
               <label className={styles.reviewCheck}>
                 <input name="terms_reviewed" required type="checkbox" />
                 <span>I accept the donation-first sequence and the complete frozen terms.</span>

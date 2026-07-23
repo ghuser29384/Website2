@@ -62,33 +62,6 @@ function termsHash(version: Record<string, unknown>, donation: Record<string, un
   return createHash("sha256").update(JSON.stringify(frozenTerms)).digest("hex");
 }
 
-async function insertNotifications(
-  rows: Array<{
-    userId: string;
-    type: string;
-    title: string;
-    body: string;
-    href: string;
-    dedupeKey: string;
-  }>,
-) {
-  const supabase = createServiceClient() as any;
-  const { error } = await supabase.from("trade_notifications").upsert(
-    rows.map((row) => ({
-      user_id: row.userId,
-      notification_type: row.type,
-      title: row.title,
-      body: row.body,
-      href: row.href,
-      dedupe_key: row.dedupeKey,
-    })),
-    { onConflict: "dedupe_key", ignoreDuplicates: true },
-  );
-  if (error) {
-    console.error("[trade-donation] notification write failed", { message: error.message });
-  }
-}
-
 async function insertAgreementSystemMessage(agreementId: string, body: string) {
   const supabase = createServiceClient() as any;
   const { data: thread } = await supabase
@@ -226,8 +199,16 @@ export async function configureTradeDonationAction(formData: FormData) {
 
 export async function confirmDonationAwareAgreementVersionAction(formData: FormData) {
   const agreementId = read(formData, "agreement_id");
+  const agreementVersionId = read(formData, "agreement_version_id");
   if (!isUuid(agreementId)) {
     redirectWithMessage(agreementId, "error", "A valid agreement is required.");
+  }
+  if (!isUuid(agreementVersionId)) {
+    redirectWithMessage(
+      agreementId,
+      "error",
+      "The exact frozen version you reviewed is required.",
+    );
   }
 
   const context = await loadTradeDonationAgreementContext(agreementId);
@@ -245,122 +226,38 @@ export async function confirmDonationAwareAgreementVersionAction(formData: FormD
   if (read(formData, "terms_reviewed") !== "on") {
     redirectWithMessage(agreementId, "error", "Review and accept the complete frozen terms first.");
   }
+  if (context.term.agreement_version_id !== agreementVersionId) {
+    redirectWithMessage(
+      agreementId,
+      "error",
+      "The agreement changed after you reviewed it. Review the current frozen version.",
+    );
+  }
 
   const returnTo = safeAgreementPath(agreementId);
   const viewer = await requireViewer(returnTo);
-  const agreement = context.agreement as Record<string, any>;
-  if (
-    String(agreement.proposer_id) !== viewer.authUser.id &&
-    String(agreement.responder_id) !== viewer.authUser.id
-  ) {
-    redirectWithMessage(agreementId, "error", "Only an agreement participant can confirm these terms.");
-  }
-  if (
-    String(agreement.lifecycle_status) !== "proposed" ||
-    String(agreement.current_version_id) !== context.term.agreement_version_id
-  ) {
-    redirectWithMessage(agreementId, "error", "This frozen version is no longer awaiting confirmation.");
-  }
-
   const supabase = createServiceClient() as any;
-  const { error: confirmationError } = await supabase
-    .from("trade_agreement_confirmations")
-    .upsert(
-      {
-        agreement_version_id: context.term.agreement_version_id,
-        user_id: viewer.authUser.id,
-        confirmed_at: new Date().toISOString(),
-      },
-      { onConflict: "agreement_version_id,user_id" },
-    );
-  if (confirmationError) {
-    redirectWithMessage(agreementId, "error", confirmationError.message);
-  }
-
-  const { count, error: countError } = await supabase
-    .from("trade_agreement_confirmations")
-    .select("user_id", { count: "exact", head: true })
-    .eq("agreement_version_id", context.term.agreement_version_id);
-  if (countError) {
-    redirectWithMessage(agreementId, "error", countError.message);
-  }
-
-  const counterpartId =
-    String(agreement.proposer_id) === viewer.authUser.id
-      ? String(agreement.responder_id)
-      : String(agreement.proposer_id);
-
-  if ((count ?? 0) >= 2) {
-    const now = new Date().toISOString();
-    const { data: updated, error: updateError } = await supabase
-      .from("agreements")
-      .update({
-        status: "proposed",
-        lifecycle_status: "awaiting_donation",
-        activated_at: null,
-        updated_at: now,
-      })
-      .eq("id", agreementId)
-      .eq("current_version_id", context.term.agreement_version_id)
-      .eq("lifecycle_status", "proposed")
-      .select("id")
-      .maybeSingle();
-    if (updateError) {
-      redirectWithMessage(agreementId, "error", updateError.message);
-    }
-    if (updated?.id) {
-      await Promise.all([
-        supabase
-          .from("offers")
-          .update({ status: "matched", workflow_status: "closed", closed_at: now, updated_at: now })
-          .eq("id", agreement.offer_id),
-        insertNotifications([
-          {
-            userId: String(agreement.proposer_id),
-            type: "pledge_donation_required",
-            title: "Donation required before activation",
-            body: `Both parties confirmed. The ${context.term.payer_role} must complete the frozen Every.org donation before the reciprocal action starts.`,
-            href: returnTo,
-            dedupeKey: `pledge_donation_required:${agreementId}:${agreement.proposer_id}:${context.term.id}`,
-          },
-          {
-            userId: String(agreement.responder_id),
-            type: "pledge_donation_required",
-            title: "Donation required before activation",
-            body: `Both parties confirmed. The ${context.term.payer_role} must complete the frozen Every.org donation before the reciprocal action starts.`,
-            href: returnTo,
-            dedupeKey: `pledge_donation_required:${agreementId}:${agreement.responder_id}:${context.term.id}`,
-          },
-        ]),
-        insertAgreementSystemMessage(
-          agreementId,
-          "Both participants confirmed the frozen donation-backed agreement. The reciprocal action remains inactive until Every.org confirms the exact donation.",
-        ),
-      ]);
-    }
-    revalidatePath(returnTo);
-    redirectWithMessage(
-      agreementId,
-      "message",
-      "Both participants confirmed. The donation must now be completed and verified before the reciprocal action starts.",
-    );
-  }
-
-  await insertNotifications([
+  const { data, error } = await supabase.rpc(
+    "confirm_trade_donation_version_v2",
     {
-      userId: counterpartId,
-      type: "final_confirmation_required",
-      title: "Your confirmation is required",
-      body: "The other participant confirmed the frozen donation-backed agreement version.",
-      href: returnTo,
-      dedupeKey: `pledge_donation_confirmation_waiting:${context.term.agreement_version_id}:${counterpartId}`,
+      p_actor_id: viewer.authUser.id,
+      p_agreement_id: agreementId,
+      p_agreement_version_id: agreementVersionId,
     },
-  ]);
+  );
+  if (error) {
+    redirectWithMessage(agreementId, "error", error.message);
+  }
+  const result = rpcRow<Record<string, unknown>>(data);
+
+  revalidatePath("/offers");
   revalidatePath(returnTo);
   redirectWithMessage(
     agreementId,
     "message",
-    "Your confirmation was recorded. No donation or reciprocal action starts until the other participant confirms.",
+    result?.awaitingDonation === true
+      ? "Both participants confirmed. The donation must now be completed and verified before the reciprocal action starts."
+      : "Your confirmation was recorded. No donation or reciprocal action starts until the other participant confirms.",
   );
 }
 

@@ -10,6 +10,11 @@ import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-s
 import { getSiteUrl } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { validateTradeCalendarDates } from "@/lib/trade-draft-standards";
+import {
+  createTradeInvitationToken,
+  encryptTradeInvitationToken,
+  hashTradeInvitationToken,
+} from "@/lib/trade-invitations";
 
 const MAX_MESSAGE_LENGTH = 4_000;
 const MAX_TERM_LENGTH = 5_000;
@@ -90,18 +95,24 @@ function buildFingerprint(values: string[]) {
 }
 
 function buildTermsHash(terms: CoreTerms) {
-  return buildFingerprint([
-    terms.proposedAction,
-    terms.requestedAction,
-    terms.duration,
-    terms.startDate ?? "",
-    terms.evidenceRule,
-    terms.evidenceDueDate ?? "",
-    terms.exitConditions,
-    terms.maximumBurden,
-    terms.privacyScope,
-    terms.noTradeBaseline,
-  ]);
+  return createHash("sha256")
+    .update(
+      [
+        terms.proposedAction,
+        terms.requestedAction,
+        terms.duration,
+        terms.startDate ?? "",
+        terms.evidenceRule,
+        terms.evidenceDueDate ?? "",
+        terms.exitConditions,
+        terms.maximumBurden,
+        terms.privacyScope,
+        terms.noTradeBaseline,
+      ]
+        .map((value) => value.trim().toLowerCase())
+        .join("\x1f"),
+    )
+    .digest("hex");
 }
 
 interface CoreTerms {
@@ -652,74 +663,32 @@ export async function changeCoreOfferStateAction(formData: FormData) {
 
 export async function createTradeInvitationAction(formData: FormData) {
   const offerId = read(formData, "offer_id");
-  const returnTo = `/trades/${offerId}/manage`;
+  const returnTo = `/trades/${offerId}/invite`;
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
 
   try {
-    const { data: offer } = await supabase
-      .from("offers")
-      .select("id,owner_id,workflow_status")
-      .eq("id", offerId)
-      .eq("owner_id", viewer.authUser.id)
-      .maybeSingle();
-    if (!offer) throw new Error("Offer not found.");
-    if (offer.workflow_status !== "published") {
-      throw new Error("Publish the proposal before inviting a counterparty.");
-    }
-
     const recipientEmail = read(formData, "recipient_email").toLowerCase();
-    const message = read(formData, "message").slice(0, MAX_MESSAGE_LENGTH);
-    const token = randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
-    const status = recipientEmail ? "sent" : "drafted";
-    const { data: recipient } = recipientEmail
-      ? await supabase.from("profiles").select("id").ilike("email", recipientEmail).maybeSingle()
-      : { data: null };
-
-    const { data: invitation, error } = await supabase
-      .from("trade_invitations")
-      .insert({
-        offer_id: offerId,
-        sender_id: viewer.authUser.id,
-        recipient_user_id: recipient?.id ?? null,
-        recipient_email: recipientEmail,
-        token,
-        message,
-        status,
-      })
-      .select("id")
-      .single();
-    if (error || !invitation?.id) throw new Error(error?.message ?? "Invitation could not be created.");
-
+    const message = read(formData, "message");
+    const invitationId = randomUUID();
+    const token = createTradeInvitationToken();
     const href = `/invitations/${token}`;
-    if (recipient?.id) {
-      await queuePrivateNotification({
-        userId: recipient.id,
-        type: "invitation_received",
-        title: "Invitation received",
-        body: "A participant invited you to review a bounded Moral Trade proposal.",
-        href,
-        dedupeKey: `invitation_received:${invitation.id}:${recipient.id}`,
-      });
-    } else if (recipientEmail) {
-      const absoluteUrl = new URL(href, getSiteUrl()).toString();
-      await supabase.from("email_outbox").insert({
-        profile_id: null,
-        recipient_email: recipientEmail,
-        subject: "Moral Trade: invitation received",
-        body: `A participant invited you to review a private Moral Trade proposal. Open ${absoluteUrl}. The email does not include proposal terms or evidence.`,
-        status: "queued",
-        provider: "core_trade",
-      });
-    }
-
-    await recordCoreEvent({
-      profileId: viewer.authUser.id,
-      eventType: "invitation_sent",
-      entityType: "invitation",
-      entityId: invitation.id,
-      metadata: { delivery: recipientEmail ? "email" : "share_link" },
+    const absoluteUrl = new URL(href, getSiteUrl()).toString();
+    const { error } = await supabase.rpc("create_trade_invitation_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_email_body:
+        `A Moral Trade participant invited you to review a private, bounded proposal. ` +
+        `Inspect the complete terms before creating an account or responding: ${absoluteUrl}\n\n` +
+        "The invitation expires in 14 days and creates no obligation.",
+      p_email_subject: "Moral Trade: private proposal invitation",
+      p_invitation_id: invitationId,
+      p_message: message,
+      p_offer_id: offerId,
+      p_recipient_email: recipientEmail,
+      p_token_ciphertext: encryptTradeInvitationToken(token, invitationId),
+      p_token_hash: hashTradeInvitationToken(token),
     });
+    if (error) throw new Error(error.message);
 
     revalidatePath(returnTo);
     redirectWithMessage(
@@ -737,18 +706,25 @@ export async function createTradeInvitationAction(formData: FormData) {
 export async function revokeTradeInvitationAction(formData: FormData) {
   const invitationId = read(formData, "invitation_id");
   const offerId = read(formData, "offer_id");
-  const returnTo = `/trades/${offerId}/manage`;
+  const returnTo = `/trades/${offerId}/invite`;
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
-  const { error } = await supabase
-    .from("trade_invitations")
-    .update({ status: "revoked", updated_at: new Date().toISOString() })
-    .eq("id", invitationId)
-    .eq("sender_id", viewer.authUser.id)
-    .eq("offer_id", offerId);
-  if (error) redirectWithMessage(returnTo, "error", error.message);
-  revalidatePath(returnTo);
-  redirectWithMessage(returnTo, "message", "Invitation revoked.");
+  try {
+    const { error } = await supabase.rpc("revoke_trade_invitation_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_invitation_id: invitationId,
+      p_offer_id: offerId,
+    });
+    if (error) throw new Error(error.message);
+    revalidatePath(returnTo);
+    redirectWithMessage(returnTo, "message", "Invitation revoked and queued delivery suppressed.");
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Invitation could not be revoked.",
+    );
+  }
 }
 
 export async function respondToTradeInvitationAction(formData: FormData) {
@@ -759,141 +735,47 @@ export async function respondToTradeInvitationAction(formData: FormData) {
   const decision = read(formData, "decision");
 
   try {
-    const { data: invitation } = await supabase
-      .from("trade_invitations")
-      .select("*")
-      .eq("token", token)
-      .not("status", "in", "(revoked,declined)")
-      .maybeSingle();
-    if (!invitation) throw new Error("Invitation is unavailable or has been revoked.");
-    if (String(invitation.sender_id) === viewer.authUser.id) {
-      throw new Error("The sender cannot respond to their own invitation.");
-    }
+    const { data, error } = await supabase.rpc("respond_trade_invitation_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_decision: decision,
+      p_duration: read(formData, "duration"),
+      p_evidence_due_date: readOptional(formData, "evidence_due_date"),
+      p_evidence_rule: read(formData, "evidence_rule"),
+      p_exit_conditions: read(formData, "exit_conditions"),
+      p_maximum_burden: read(formData, "maximum_burden"),
+      p_message: read(formData, "message"),
+      p_no_trade_baseline: read(formData, "no_trade_baseline"),
+      p_privacy_scope: read(formData, "privacy_scope"),
+      p_proposed_action: read(formData, "proposed_action"),
+      p_requested_action: read(formData, "requested_action"),
+      p_start_date: readOptional(formData, "start_date"),
+      p_token_hash: hashTradeInvitationToken(token),
+    });
+    if (error) throw new Error(error.message);
 
-    if (decision === "decline") {
-      await supabase
-        .from("trade_invitations")
-        .update({
-          status: "declined",
-          recipient_user_id: viewer.authUser.id,
-          responded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", invitation.id);
-      await queuePrivateNotification({
-        userId: String(invitation.sender_id),
-        type: "invitation_declined",
-        title: "Invitation declined",
-        body: "The invited participant declined the proposal. No obligation was created.",
-        href: `/trades/${invitation.offer_id}/manage`,
-        dedupeKey: `invitation_declined:${invitation.id}`,
-      });
+    const result = (data ?? {}) as {
+      agreementId?: string;
+      status?: string;
+      threadId?: string;
+    };
+    if (result.status === "declined") {
       redirectWithMessage("/offers", "message", "Invitation declined. No obligation was created.");
     }
-
-    const { data: offer } = await supabase
-      .from("offers")
-      .select("*")
-      .eq("id", invitation.offer_id)
-      .maybeSingle();
-    if (!offer || offer.workflow_status !== "published") {
-      throw new Error("This proposal is no longer published.");
-    }
-
-    const message = read(formData, "message").slice(0, MAX_MESSAGE_LENGTH);
-    const { data: interest, error: interestError } = await supabase
-      .from("interests")
-      .upsert(
-        {
-          offer_id: offer.id,
-          user_id: viewer.authUser.id,
-          interested_alias: viewer.displayName,
-          message,
-          status: "pending",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "offer_id,user_id" },
-      )
-      .select("id")
-      .single();
-    if (interestError || !interest?.id) throw new Error(interestError?.message ?? "Response could not be saved.");
-
-    let { data: thread } = await supabase
-      .from("trade_threads")
-      .select("*")
-      .eq("offer_id", offer.id)
-      .or(
-        `and(participant_a.eq.${offer.owner_id},participant_b.eq.${viewer.authUser.id}),and(participant_a.eq.${viewer.authUser.id},participant_b.eq.${offer.owner_id})`,
-      )
-      .neq("status", "closed")
-      .maybeSingle();
-
-    if (!thread) {
-      const created = await supabase
-        .from("trade_threads")
-        .insert({
-          offer_id: offer.id,
-          invitation_id: invitation.id,
-          participant_a: offer.owner_id,
-          participant_b: viewer.authUser.id,
-          status: "active",
-        })
-        .select("*")
-        .single();
-      if (created.error || !created.data) throw new Error(created.error?.message ?? "Thread could not be created.");
-      thread = created.data;
-    }
-
-    const { data: existingProposal } = await supabase
-      .from("trade_counterproposals")
-      .select("id")
-      .eq("thread_id", thread.id)
-      .limit(1)
-      .maybeSingle();
-    if (!existingProposal) {
-      await supabase.from("trade_counterproposals").insert(
-        proposalRow(offerTerms(offer), {
-          thread_id: thread.id,
-          offer_id: offer.id,
-          proposer_id: viewer.authUser.id,
-          version: 1,
-          status: "proposed",
-        }),
+    if (result.agreementId) {
+      redirectWithMessage(
+        `/trade-agreements/${result.agreementId}`,
+        "message",
+        "Terms accepted. Both participants must confirm the same frozen version.",
       );
     }
-
-    await Promise.all([
-      supabase
-        .from("trade_invitations")
-        .update({
-          status: "responded",
-          recipient_user_id: viewer.authUser.id,
-          responded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", invitation.id),
-      insertSystemMessage(
-        thread.id,
-        "The invited participant responded. Review the current terms before accepting or counterproposing.",
-        { invitationId: invitation.id },
-      ),
-      recordCoreEvent({
-        profileId: viewer.authUser.id,
-        eventType: "response_sent",
-        entityType: "interest",
-        entityId: interest.id,
-      }),
-      queuePrivateNotification({
-        userId: String(invitation.sender_id),
-        type: "response_sent",
-        title: "New response",
-        body: "An invited participant responded to your proposal.",
-        href: `/messages/${thread.id}`,
-        dedupeKey: `response_sent:${interest.id}:${invitation.sender_id}`,
-      }),
-    ]);
-
-    redirectWithMessage(`/messages/${thread.id}`, "message", "Response sent. Continue in the private thread.");
+    if (result.threadId) {
+      redirectWithMessage(
+        `/messages/${result.threadId}`,
+        "message",
+        "Counterproposal sent in a private thread.",
+      );
+    }
+    throw new Error("The invitation response did not return a destination.");
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Response failed.");
   }
@@ -1031,24 +913,18 @@ export async function blockTradeThreadAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
   try {
-    const { counterpartId } = await getThreadParticipant(threadId, viewer.authUser.id);
-    await Promise.all([
-      supabase.from("trade_blocks").upsert(
-        {
-          thread_id: threadId,
-          blocker_id: viewer.authUser.id,
-          blocked_id: counterpartId,
-          reason: read(formData, "reason").slice(0, 1_000),
-        },
-        { onConflict: "thread_id,blocker_id,blocked_id" },
-      ),
-      supabase
-        .from("trade_threads")
-        .update({ status: "blocked", updated_at: new Date().toISOString() })
-        .eq("id", threadId),
-    ]);
+    const { error } = await supabase.rpc("block_trade_pair_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_reason: read(formData, "reason"),
+      p_thread_id: threadId,
+    });
+    if (error) throw new Error(error.message);
     revalidatePath(returnTo);
-    redirectWithMessage(returnTo, "message", "Thread blocked. No further private messages can be sent.");
+    redirectWithMessage(
+      returnTo,
+      "message",
+      "Participant blocked across every private thread and open invitation.",
+    );
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Block failed.");
   }
@@ -1152,132 +1028,29 @@ export async function decideCounterproposalAction(formData: FormData) {
   const decision = read(formData, "decision");
 
   try {
-    const { thread, counterpartId } = await getThreadParticipant(threadId, viewer.authUser.id);
-    const { data: proposal } = await supabase
-      .from("trade_counterproposals")
-      .select("*")
-      .eq("id", proposalId)
-      .eq("thread_id", threadId)
-      .eq("status", "proposed")
-      .maybeSingle();
-    if (!proposal) throw new Error("The current proposal is no longer awaiting a decision.");
-    if (String(proposal.proposer_id) === viewer.authUser.id) {
-      throw new Error("The proposer cannot accept their own proposal.");
-    }
-
-    if (decision === "reject") {
-      await supabase
-        .from("trade_counterproposals")
-        .update({ status: "rejected", responded_at: new Date().toISOString() })
-        .eq("id", proposalId);
-      await Promise.all([
-        insertSystemMessage(threadId, `Counterproposal v${proposal.version} was rejected.`),
-        queuePrivateNotification({
-          userId: String(proposal.proposer_id),
-          type: "proposal_rejected",
-          title: "Proposal rejected",
-          body: "The current counterproposal was rejected. The private thread remains available.",
-          href: returnTo,
-          dedupeKey: `proposal_rejected:${proposalId}`,
-        }),
-      ]);
-      revalidatePath(returnTo);
-      redirectWithMessage(returnTo, "message", "Counterproposal rejected. No agreement was formed.");
-    }
-
-    if (decision !== "accept") throw new Error("Unknown decision.");
-    await supabase
-      .from("trade_counterproposals")
-      .update({ status: "accepted", responded_at: new Date().toISOString() })
-      .eq("id", proposalId);
-
-    let agreementId = thread.agreement_id ? String(thread.agreement_id) : "";
-    if (!agreementId) {
-      const { data: interest } = await supabase
-        .from("interests")
-        .select("id")
-        .eq("offer_id", thread.offer_id)
-        .in("user_id", [String(thread.participant_a), String(thread.participant_b)])
-        .neq("user_id", String((await supabase.from("offers").select("owner_id").eq("id", thread.offer_id).single()).data?.owner_id ?? ""))
-        .limit(1)
-        .maybeSingle();
-      const { data: offer } = await supabase.from("offers").select("owner_id").eq("id", thread.offer_id).single();
-      const proposerId = String(offer?.owner_id ?? thread.participant_a);
-      const responderId = proposerId === String(thread.participant_a) ? String(thread.participant_b) : String(thread.participant_a);
-      const created = await supabase
-        .from("agreements")
-        .insert({
-          offer_id: thread.offer_id,
-          interest_id: interest?.id ?? null,
-          proposer_id: proposerId,
-          responder_id: responderId,
-          status: "proposed",
-          lifecycle_status: "proposed",
-          notes: "Created from an accepted structured counterproposal. Both parties must confirm the same immutable version.",
-          evidence_due_at: proposal.evidence_due_date,
-        })
-        .select("id")
-        .single();
-      if (created.error || !created.data?.id) throw new Error(created.error?.message ?? "Agreement could not be created.");
-      agreementId = String(created.data.id);
-
-      const versionInsert = await supabase
-        .from("trade_agreement_versions")
-        .insert({
-          agreement_id: agreementId,
-          version: 1,
-          proposed_by: proposal.proposer_id,
-          proposed_action: proposal.proposed_action,
-          requested_action: proposal.requested_action,
-          duration: proposal.duration,
-          start_date: proposal.start_date,
-          evidence_rule: proposal.evidence_rule,
-          evidence_due_date: proposal.evidence_due_date,
-          exit_conditions: proposal.exit_conditions,
-          maximum_burden: proposal.maximum_burden,
-          privacy_scope: proposal.privacy_scope,
-          no_trade_baseline: proposal.no_trade_baseline,
-          terms_hash: proposal.terms_hash,
-        })
-        .select("id")
-        .single();
-      if (versionInsert.error || !versionInsert.data?.id) throw new Error(versionInsert.error?.message ?? "Agreement terms could not be frozen.");
-
-      await Promise.all([
-        supabase
-          .from("agreements")
-          .update({ current_version_id: versionInsert.data.id, updated_at: new Date().toISOString() })
-          .eq("id", agreementId),
-        supabase
-          .from("trade_threads")
-          .update({ agreement_id: agreementId, updated_at: new Date().toISOString() })
-          .eq("id", threadId),
-        supabase.from("interests").update({ status: "accepted", updated_at: new Date().toISOString() }).eq("offer_id", thread.offer_id),
-      ]);
-    }
-
-    await Promise.all([
-      insertSystemMessage(threadId, "Terms accepted. An agreement record now requires separate confirmation from both parties."),
-      queuePrivateNotification({
-        userId: String(thread.participant_a),
-        type: "final_confirmation_required",
-        title: "Final confirmation required",
-        body: "Review and confirm the frozen agreement version. It is not active until both parties confirm.",
-        href: `/trade-agreements/${agreementId}`,
-        dedupeKey: `final_confirmation:${agreementId}:${thread.participant_a}`,
-      }),
-      queuePrivateNotification({
-        userId: String(thread.participant_b),
-        type: "final_confirmation_required",
-        title: "Final confirmation required",
-        body: "Review and confirm the frozen agreement version. It is not active until both parties confirm.",
-        href: `/trade-agreements/${agreementId}`,
-        dedupeKey: `final_confirmation:${agreementId}:${thread.participant_b}`,
-      }),
-    ]);
-
+    const { data, error } = await supabase.rpc("decide_counterproposal_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_decision: decision,
+      p_proposal_id: proposalId,
+      p_thread_id: threadId,
+    });
+    if (error) throw new Error(error.message);
+    const result = (data ?? {}) as { agreementId?: string; status?: string };
     revalidatePath(returnTo);
-    redirectWithMessage(`/trade-agreements/${agreementId}`, "message", "Terms accepted. Both parties must now confirm the same frozen version.");
+    if (result.agreementId) {
+      redirectWithMessage(
+        `/trade-agreements/${result.agreementId}`,
+        "message",
+        "Terms accepted. Both participants must confirm the same frozen version.",
+      );
+    }
+    redirectWithMessage(
+      returnTo,
+      "message",
+      result.status === "rejected"
+        ? "Counterproposal rejected. No agreement was formed."
+        : "Decision recorded.",
+    );
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Decision failed.");
   }
@@ -1323,108 +1096,31 @@ export async function withdrawTradeResponseAction(formData: FormData) {
 
 export async function confirmAgreementVersionAction(formData: FormData) {
   const agreementId = read(formData, "agreement_id");
+  const agreementVersionId = read(formData, "agreement_version_id");
   const returnTo = `/trade-agreements/${agreementId}`;
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
 
   try {
-    const { data: agreement } = await supabase
-      .from("agreements")
-      .select("*")
-      .eq("id", agreementId)
-      .or(`proposer_id.eq.${viewer.authUser.id},responder_id.eq.${viewer.authUser.id}`)
-      .maybeSingle();
-    if (!agreement || !agreement.current_version_id) throw new Error("Agreement version is unavailable.");
-    if (["cancelled", "completed", "expired"].includes(String(agreement.lifecycle_status))) {
-      throw new Error("This agreement can no longer be confirmed.");
+    if (!agreementVersionId) {
+      throw new Error("The exact frozen version you reviewed is required.");
     }
-
-    await supabase.from("trade_agreement_confirmations").upsert(
-      {
-        agreement_version_id: agreement.current_version_id,
-        user_id: viewer.authUser.id,
-        confirmed_at: new Date().toISOString(),
-      },
-      { onConflict: "agreement_version_id,user_id" },
-    );
-    const { count } = await supabase
-      .from("trade_agreement_confirmations")
-      .select("user_id", { count: "exact", head: true })
-      .eq("agreement_version_id", agreement.current_version_id);
-
-    const counterpartId =
-      String(agreement.proposer_id) === viewer.authUser.id
-        ? String(agreement.responder_id)
-        : String(agreement.proposer_id);
-
-    if ((count ?? 0) >= 2) {
-      const now = new Date().toISOString();
-      const { data: version } = await supabase
-        .from("trade_agreement_versions")
-        .select("evidence_due_date")
-        .eq("id", agreement.current_version_id)
-        .single();
-      await Promise.all([
-        supabase
-          .from("agreements")
-          .update({
-            status: "active",
-            lifecycle_status: "active",
-            activated_at: now,
-            evidence_due_at: version?.evidence_due_date ?? agreement.evidence_due_at,
-            updated_at: now,
-          })
-          .eq("id", agreementId),
-        supabase
-          .from("offers")
-          .update({ status: "matched", workflow_status: "closed", closed_at: now, updated_at: now })
-          .eq("id", agreement.offer_id),
-        recordCoreEvent({
-          profileId: String(agreement.proposer_id),
-          eventType: "agreement_confirmed_by_both",
-          entityType: "agreement",
-          entityId: agreementId,
-        }),
-        recordCoreEvent({
-          profileId: String(agreement.responder_id),
-          eventType: "agreement_confirmed_by_both",
-          entityType: "agreement",
-          entityId: agreementId,
-        }),
-        queuePrivateNotification({
-          userId: String(agreement.proposer_id),
-          type: "agreement_active",
-          title: "Agreement active",
-          body: "Both parties confirmed the frozen terms. Evidence and exit rules are now active.",
-          href: returnTo,
-          dedupeKey: `agreement_active:${agreementId}:${agreement.proposer_id}`,
-        }),
-        queuePrivateNotification({
-          userId: String(agreement.responder_id),
-          type: "agreement_active",
-          title: "Agreement active",
-          body: "Both parties confirmed the frozen terms. Evidence and exit rules are now active.",
-          href: returnTo,
-          dedupeKey: `agreement_active:${agreementId}:${agreement.responder_id}`,
-        }),
-      ]);
-      const { data: thread } = await supabase.from("trade_threads").select("id").eq("agreement_id", agreementId).maybeSingle();
-      if (thread?.id) await insertSystemMessage(thread.id, "Both parties confirmed the frozen agreement version. The agreement is active.");
-      revalidatePath("/offers");
-      revalidatePath(returnTo);
-      redirectWithMessage(returnTo, "message", "Both parties confirmed. The agreement is active.");
-    }
-
-    await queuePrivateNotification({
-      userId: counterpartId,
-      type: "final_confirmation_required",
-      title: "Your confirmation is required",
-      body: "The other participant confirmed the current frozen agreement version.",
-      href: returnTo,
-      dedupeKey: `confirmation_waiting:${agreement.current_version_id}:${counterpartId}`,
+    const { data, error } = await supabase.rpc("confirm_agreement_version_v2", {
+      p_actor_id: viewer.authUser.id,
+      p_agreement_id: agreementId,
+      p_agreement_version_id: agreementVersionId,
     });
+    if (error) throw new Error(error.message);
+    const result = (data ?? {}) as { active?: boolean };
+    revalidatePath("/offers");
     revalidatePath(returnTo);
-    redirectWithMessage(returnTo, "message", "Your confirmation was recorded. The agreement remains proposed until the other party confirms.");
+    redirectWithMessage(
+      returnTo,
+      "message",
+      result.active
+        ? "Both participants confirmed this exact version. The agreement is active."
+        : "Your confirmation was recorded. The agreement remains proposed until the other participant confirms.",
+    );
   } catch (error) {
     redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Confirmation failed.");
   }

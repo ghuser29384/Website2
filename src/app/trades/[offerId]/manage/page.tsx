@@ -4,8 +4,6 @@ import { notFound } from "next/navigation";
 
 import {
   changeCoreOfferStateAction,
-  createTradeInvitationAction,
-  revokeTradeInvitationAction,
   startSuggestedMatchAction,
   updateCoreOfferAction,
 } from "@/app/core-trade-actions";
@@ -17,11 +15,9 @@ import { requireViewer } from "@/lib/app-data";
 import {
   getCoreOfferForOwner,
   listReciprocalMatches,
-  listTradeInvitationsForOffer,
 } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { getSiteUrl } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -61,12 +57,9 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
   const offer = await getCoreOfferForOwner(offerId, viewer.authUser.id);
   if (!offer) notFound();
 
-  const [invitations, matches] = await Promise.all([
-    listTradeInvitationsForOffer(offer.id, viewer.authUser.id),
-    offer.workflow_status === "published" ? listReciprocalMatches(offer) : Promise.resolve([]),
-  ]);
+  const matches =
+    offer.workflow_status === "published" ? await listReciprocalMatches(offer) : [];
   const formMessage = getFormMessage(resolvedSearchParams);
-  const invitationBase = new URL("/invitations/", getSiteUrl()).toString();
   const editable = ["draft", "changes_requested", "rejected", "paused"].includes(
     offer.workflow_status,
   );
@@ -314,70 +307,15 @@ export default async function ManageOfferPage({ params, searchParams }: ManageOf
           <>
             <section className="section section-white" aria-labelledby="invite-heading">
               <div className="section-head section-head-compact">
-                <p className="eyebrow">Direct invitation</p>
-                <h2 id="invite-heading">Invite one specific person to review this proposal.</h2>
+                <p className="eyebrow">Invitation-first trade</p>
+                <h2 id="invite-heading">Bring a specific person into this proposal.</h2>
                 <p>
-                  The link is private and tied to this offer. Email is optional; a shareable link can
-                  be copied into an existing conversation.
+                  They can inspect every term before joining, then accept, counter, or decline.
+                  Email invitations are account-bound; share links bind to their first claimant.
                 </p>
-              </div>
-
-              <div className="detail-grid detail-grid-wide">
-                <form action={createTradeInvitationAction} className="panel stack-form">
-                  <input name="offer_id" type="hidden" value={offer.id} />
-                  <label className="field">
-                    <span>Recipient email (optional)</span>
-                    <input name="recipient_email" placeholder="person@example.org" type="email" />
-                  </label>
-                  <label className="field">
-                    <span>Private invitation note</span>
-                    <textarea
-                      name="message"
-                      placeholder="Why this particular trade may be worth evaluating"
-                      rows={4}
-                    />
-                  </label>
-                  <PendingSubmitButton pendingLabel="Creating invitation...">
-                    Create invitation
-                  </PendingSubmitButton>
-                </form>
-
-                <article className="panel detail-block">
-                  <p className="detail-kicker">Invitation status</p>
-                  <h3>{invitations.length} invitation{invitations.length === 1 ? "" : "s"}</h3>
-                  {invitations.length ? (
-                    <div className="mini-list">
-                      {invitations.map((invitation) => (
-                        <div className="subtle-panel" key={invitation.id}>
-                          <strong>{invitation.status}</strong>
-                          <p className="route-text">
-                            {invitation.recipient_email || "Share-link only"} · created {formatDate(invitation.created_at)}
-                          </p>
-                          <a
-                            className="inline-link"
-                            href={`${invitationBase}${invitation.token}`}
-                          >
-                            {`${invitationBase}${invitation.token}`}
-                          </a>
-                          {!['responded', 'declined', 'revoked'].includes(invitation.status) ? (
-                            <form action={revokeTradeInvitationAction}>
-                              <input name="invitation_id" type="hidden" value={invitation.id} />
-                              <input name="offer_id" type="hidden" value={offer.id} />
-                              <PendingSubmitButton
-                                className="button button-secondary button-mini"
-                                pendingLabel="Revoking..."
-                              >
-                                Revoke
-                              </PendingSubmitButton>
-                            </form>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="route-text">No invitations yet.</p>
-                  )}
-                </article>
+                <Link className="button button-primary" href={`/trades/${offer.id}/invite`}>
+                  Invite someone
+                </Link>
               </div>
             </section>
 
