@@ -26,11 +26,9 @@ on:
   push:
     branches:
       - feat/smart-query-pipeline
-    paths-ignore:
-      - ".github/smart-query-qa-status.txt"
 
 permissions:
-  contents: write
+  contents: read
 
 # Only the newest branch head should consume the full build and browser-test budget.
 concurrency:
@@ -53,7 +51,6 @@ jobs:
           cache: npm
 
       - name: Inventory query surfaces
-        id: inventory
         run: |
           mkdir -p qa-results
           rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
@@ -61,11 +58,9 @@ jobs:
             src public tests > qa-results/query-surface-audit.txt || true
 
       - name: Install dependencies
-        id: install
         run: npm ci
 
       - name: Lint smart query code and integrated surfaces
-        id: lint
         run: |
           set -o pipefail
           npx eslint \
@@ -97,7 +92,6 @@ jobs:
             tests/discover-query-audit.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
       - name: Test deterministic and semantic query interpretation
-        id: unit
         run: |
           set -o pipefail
           node --import tsx --test \
@@ -105,24 +99,20 @@ jobs:
             src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
 
       - name: Build production application
-        id: build
         run: |
           set -o pipefail
           npm run build 2>&1 | tee qa-results/smart-query-build.txt
 
       - name: Install Chromium
-        id: chromium
         run: npx playwright install --with-deps chromium
 
       - name: Audit rendered Discover query controls
-        id: e2e
         run: |
           set -o pipefail
           npx playwright test tests/discover-query-audit.spec.ts --reporter=line 2>&1 | \
             tee qa-results/smart-query-e2e.txt
 
       - name: Upload query audit evidence
-        id: artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -137,40 +127,3 @@ jobs:
             qa-results/smart-query-e2e.txt
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Record inspectable QA receipt
-        if: always() && github.event_name == 'push'
-        env:
-          JOB_STATUS: ${{ job.status }}
-          INSTALL_OUTCOME: ${{ steps.install.outcome }}
-          LINT_OUTCOME: ${{ steps.lint.outcome }}
-          UNIT_OUTCOME: ${{ steps.unit.outcome }}
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
-          CHROMIUM_OUTCOME: ${{ steps.chromium.outcome }}
-          E2E_OUTCOME: ${{ steps.e2e.outcome }}
-          ARTIFACT_OUTCOME: ${{ steps.artifact.outcome }}
-        run: |
-          set -euo pipefail
-          git fetch origin feat/smart-query-pipeline
-          remote_head="$(git rev-parse origin/feat/smart-query-pipeline)"
-          if [ "$remote_head" != "$GITHUB_SHA" ]; then
-            echo "A newer branch head exists; skipping the stale QA receipt."
-            exit 0
-          fi
-          cat > .github/smart-query-qa-status.txt <<EOF
-          verified_head=${GITHUB_SHA}
-          workflow_run=${GITHUB_RUN_ID}
-          job_status=${JOB_STATUS}
-          install=${INSTALL_OUTCOME}
-          lint=${LINT_OUTCOME}
-          unit=${UNIT_OUTCOME}
-          build=${BUILD_OUTCOME}
-          chromium=${CHROMIUM_OUTCOME}
-          e2e=${E2E_OUTCOME}
-          artifact=${ARTIFACT_OUTCOME}
-          EOF
-          git config user.name "moral-trade-query-bot"
-          git config user.email "moral-trade-query-bot@users.noreply.github.com"
-          git add .github/smart-query-qa-status.txt
-          git commit -m "Record smart-query QA outcome"
-          git push origin HEAD:feat/smart-query-pipeline
