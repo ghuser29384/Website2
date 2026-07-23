@@ -32,6 +32,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: smart-query-qa-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smart-query-qa:
     runs-on: ubuntu-latest
