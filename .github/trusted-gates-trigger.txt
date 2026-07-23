@@ -1,1 +1,1 @@
-Trigger the deterministic anonymous-feedback, lint, and browser-gate repair for this launch head.
+Run the trusted exact-head repository, lint, build, and browser gates after the deterministic release fixes.
