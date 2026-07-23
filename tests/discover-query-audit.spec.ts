@@ -50,18 +50,31 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
       .filter((key) => /search|query|filter|constraint|discover/i.test(key))
       .sort();
 
+    const inlineSources = [...document.scripts]
+      .filter((script) => !script.src && (script.textContent?.length ?? 0) > 1_000)
+      .map((script) => script.textContent ?? "");
     const scripts = [...document.scripts].map((script) => ({
       src: script.src,
-      text: script.src ? "" : script.textContent?.slice(0, 500) ?? "",
+      textLength: script.textContent?.length ?? 0,
     }));
 
-    return { controls, textMatches, globals, scripts, title: document.title, url: location.href };
+    return {
+      audit: { controls, textMatches, globals, scripts, title: document.title, url: location.href },
+      inlineSources,
+    };
   });
 
   await mkdir("test-results", { recursive: true });
-  await writeFile(
-    "test-results/discover-query-audit.json",
-    `${JSON.stringify(audit, null, 2)}\n`,
-    "utf8",
-  );
+  await Promise.all([
+    writeFile(
+      "test-results/discover-query-audit.json",
+      `${JSON.stringify(audit.audit, null, 2)}\n`,
+      "utf8",
+    ),
+    writeFile(
+      "test-results/discover-inline-source.js",
+      audit.inlineSources.join("\n\n/* --- INLINE SCRIPT BOUNDARY --- */\n\n"),
+      "utf8",
+    ),
+  ]);
 });
