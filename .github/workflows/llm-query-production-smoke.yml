@@ -1,0 +1,55 @@
+name: LLM query production smoke
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/lib/smart-query-llm.ts"
+      - "src/lib/smart-query-llm-gate.ts"
+      - "src/app/api/query/interpret/route.ts"
+      - ".github/workflows/llm-query-production-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: llm-query-production-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Wait for production and verify the ambiguity resolver
+        env:
+          ENDPOINT: https://www.moraltrade.org/api/query/interpret
+        run: |
+          set -euo pipefail
+          payload='{"query":"Verified animal welfare work for $50","surface":"offers","now":"2026-07-23T10:40:00Z"}'
+          : > response.json
+
+          for attempt in $(seq 1 18); do
+            response="$(
+              curl --silent --show-error --max-time 20 \
+                --request POST "$ENDPOINT" \
+                --header 'content-type: application/json' \
+                --data "$payload" || true
+            )"
+            printf '%s' "$response" > response.json
+
+            if jq -e '.usedLlm == true and .interpretation.stage == "llm"' response.json >/dev/null 2>&1; then
+              jq '{usedLlm, stage: .interpretation.stage, needsClarification: .interpretation.needsClarification, reasonCodes: .interpretation.reasonCodes}' response.json
+              exit 0
+            fi
+
+            echo "Production LLM fallback not ready on attempt ${attempt}; retrying in 20 seconds."
+            sleep 20
+          done
+
+          echo "Production did not report a successful LLM interpretation."
+          cat response.json
+          exit 1
