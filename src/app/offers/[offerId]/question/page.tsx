@@ -25,6 +25,10 @@ export const metadata: Metadata = {
   },
 };
 
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
 export default async function OfferQuestionPage({
   params,
   searchParams,
@@ -45,7 +49,9 @@ export default async function OfferQuestionPage({
   const returnTo = `/offers/${offer.id}/question`;
   const loginHref = `/login?returnTo=${encodeURIComponent(returnTo)}`;
   const successfulResetToken =
-    formMessage?.tone === "success" ? formMessage.text : "";
+    formMessage?.tone === "success"
+      ? firstParam(resolvedSearchParams.posted) || formMessage.text
+      : "";
 
   return (
     <div className="page-shell marketplace-app-shell">
