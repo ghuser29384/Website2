@@ -15,6 +15,10 @@ import {
   smartInterpretationScore,
   smartPersonalPriorityScore,
 } from "./smart-query-scoring";
+import {
+  applySmartQuerySurfacePolicy,
+  smartQuerySurfaceFromClarification,
+} from "./smart-query-surface-policy";
 
 test("parses the verified civic budget and deadline example without clarification", () => {
   const interpretation = parseSmartQuery(
@@ -151,4 +155,39 @@ test("detects contradictory amount limits", () => {
   });
   assert.equal(interpretation.needsClarification, true);
   assert.match(interpretation.reasonCodes.join(" "), /conflicting_amount_bounds/);
+});
+
+test("asks before moving unsupported wish constraints to the people directory", () => {
+  const parsed = parseSmartQuery("verified civic collectives", { surface: "wishes" });
+  const interpretation = applySmartQuerySurfacePolicy(parsed);
+
+  assert.equal(interpretation.needsClarification, true);
+  assert.equal(interpretation.clarification?.field, "route");
+  assert.match(interpretation.clarification?.question ?? "", /search public people instead/i);
+  assert.deepEqual(interpretation.facets.causes, ["civic-infrastructure"]);
+  assert.equal(interpretation.facets.verified, true);
+  assert.equal(
+    smartQuerySurfaceFromClarification("wishes", "route", "Search public people"),
+    "people",
+  );
+});
+
+test("asks before applying offer-only amount constraints to people", () => {
+  const interpretation = applySmartQuerySurfacePolicy(
+    parseSmartQuery("civic people under $50", { surface: "people" }),
+  );
+  assert.equal(interpretation.needsClarification, true);
+  assert.equal(interpretation.clarification?.field, "route");
+  assert.deepEqual(interpretation.clarification?.options, ["Search live offers"]);
+});
+
+test("does not add a cross-directory clarification to broad Discover searches", () => {
+  const interpretation = applySmartQuerySurfacePolicy(
+    parseSmartQuery("verified civic opportunities under $50 before August 1", {
+      now: "2026-07-23T00:00:00Z",
+      surface: "discover",
+    }),
+  );
+  assert.equal(interpretation.needsClarification, false);
+  assert.equal(interpretation.parsedConstraintCount, 4);
 });
