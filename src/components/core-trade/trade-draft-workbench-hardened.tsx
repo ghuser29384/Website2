@@ -85,9 +85,15 @@ export function HardenedTradeDraftWorkbench({
 
     const restoredHandoff = commandHandoff.current;
     const form = formRef.current;
+    const scheduleState = (nextState: CommandHandoffState) => {
+      const frame = window.requestAnimationFrame(() => {
+        setCommandHandoffState(nextState);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    };
+
     if (!restoredHandoff || !form) {
-      setCommandHandoffState("unavailable");
-      return;
+      return scheduleState("unavailable");
     }
 
     for (const [key, handoffValue] of Object.entries(restoredHandoff.values) as Array<
@@ -102,7 +108,7 @@ export function HardenedTradeDraftWorkbench({
       }
     }
 
-    setCommandHandoffState("loaded");
+    return scheduleState("loaded");
   }, [acceptCommandHandoff]);
 
   return (

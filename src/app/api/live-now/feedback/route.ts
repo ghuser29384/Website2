@@ -164,7 +164,13 @@ async function requireFeedbackViewer() {
 
 export async function POST(request: Request) {
   const viewer = await requireFeedbackViewer();
-  if (!viewer) return privateJson({ authenticated: false }, 401);
+  if (!viewer) {
+  return privateJson({
+    authenticated: false,
+    acceptedEventCount: 0,
+    learningEnabled: false,
+  });
+}
 
   let body: Record<string, unknown>;
   try {

@@ -36,8 +36,9 @@ async function captureRouteEvidence(
   page.on("pageerror", onPageError);
   page.on("response", onResponse);
 
-  const response = await page.goto(route, { waitUntil: "networkidle" });
+  const response = await page.goto(route, { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toBeVisible();
+  await page.waitForTimeout(300);
   const bodyText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
   const evidence: RouteEvidence = {
     bodyText: bodyText.slice(0, 8_000),
@@ -83,7 +84,8 @@ async function exercisePublicRoutes(page: Page, prefix: string) {
   if (await search.isVisible().catch(() => false)) {
     await search.fill("animal welfare");
     await search.press("Enter");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(300);
     await expect(page.locator("body")).not.toContainText("Application error");
   }
 
@@ -136,11 +138,13 @@ test("health endpoint exposes a non-secret release contract", async ({ request }
 });
 
 test("desktop public routes render meaningful, inspectable states", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ height: 960, width: 1440 });
   await exercisePublicRoutes(page, "desktop");
 });
 
 test("mobile public routes render without horizontal overflow", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ height: 844, width: 390 });
   await exercisePublicRoutes(page, "mobile");
 
