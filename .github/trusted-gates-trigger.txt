@@ -1,0 +1,1 @@
+Run the registered trusted repair and exact-head launch gates for the transaction-validated release candidate.

@@ -135,7 +135,7 @@ export default function RootLayout({
           <RecommendationLearningTracker />
           <SmartQueryAutoEnhancer />
         </Suspense>
-        <Script src="/moral-trade-input-assist.js" strategy="afterInteractive" />
+        <Script src="/moral-trade-input-assist.js" strategy="lazyOnload" />
         {children}
       </body>
     </html>

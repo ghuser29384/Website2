@@ -16,8 +16,10 @@
     "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "auth:configure-oauth": "node scripts/configure-supabase-oauth.mjs",
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
-    "test": "node --import tsx --test src/**/*.test.ts",
-    "test:e2e": "playwright test"
+    "test": "node scripts/run-core-tests.mjs",
+    "test:quarantined": "node scripts/run-quarantined-tests.mjs",
+    "test:e2e": "playwright test tests/core-launch-release.spec.ts",
+    "test:e2e:all": "playwright test"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
