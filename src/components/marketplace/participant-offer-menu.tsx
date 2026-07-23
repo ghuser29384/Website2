@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { toggleCartAction } from "@/app/actions";
 import type {
@@ -53,6 +54,28 @@ function getVariantLabel(variant: MarketplaceOfferVariant) {
 
 function getPairingLabel(pairing: MarketplaceOfferPairing) {
   return `${pairing.requestAction} · ${pairing.requestedCause}`;
+}
+
+function SaveOfferSubmitButton({ saved }: { saved: boolean }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      aria-busy={pending}
+      aria-live="polite"
+      className={styles.secondaryAction}
+      disabled={pending}
+      type="submit"
+    >
+      {pending
+        ? saved
+          ? "Removing…"
+          : "Saving…"
+        : saved
+          ? "Remove saved"
+          : "Save"}
+    </button>
+  );
 }
 
 export function ParticipantOfferMenu({
@@ -211,9 +234,7 @@ export function ParticipantOfferMenu({
               <form action={toggleCartAction}>
                 <input name="offer_id" type="hidden" value={selectedPairing.id} />
                 <input name="return_to" type="hidden" value={returnTo} />
-                <button className={styles.secondaryAction} type="submit">
-                  {saved ? "Remove saved" : "Save"}
-                </button>
+                <SaveOfferSubmitButton saved={saved} />
               </form>
             ) : (
               <Link
