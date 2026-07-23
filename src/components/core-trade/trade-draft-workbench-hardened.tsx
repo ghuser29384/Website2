@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
+import { consumeCommandCenterHandoff } from "@/lib/command-center-handoff";
 
 export interface TradeDraftValues {
   duration: string;
@@ -21,12 +23,29 @@ export interface TradeDraftValues {
 }
 
 interface HardenedTradeDraftWorkbenchProps {
+  acceptCommandHandoff?: boolean;
   formMessage?: { text: string; tone: "error" | "success" } | null;
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
   submissionKey: string;
   templateLabel?: string | null;
 }
+
+type CommandHandoffState = "loading" | "loaded" | "unavailable" | null;
+
+const HANDOFF_FIELD_NAMES: Partial<Record<keyof TradeDraftValues, string>> = {
+  duration: "duration",
+  evidenceDueDate: "evidence_due_date",
+  evidenceRule: "evidence_rule",
+  exitConditions: "exit_conditions",
+  noTradeBaseline: "no_trade_baseline",
+  notes: "notes",
+  offeredCause: "offered_cause",
+  proposedAction: "proposed_action",
+  requestedAction: "requested_action",
+  requestedCause: "requested_cause",
+  startDate: "start_date",
+};
 
 const DEFAULT_PRIVACY_SCOPE =
   "Agreement evidence is private to the two participants and the operator. Publishing any evidence requires a separate, explicit redaction and publication step.";
@@ -39,12 +58,53 @@ function value(initialValues: Partial<TradeDraftValues> | undefined, key: keyof 
 }
 
 export function HardenedTradeDraftWorkbench({
+  acceptCommandHandoff = false,
   formMessage,
   initialValues,
   saveAction,
   submissionKey,
   templateLabel,
 }: HardenedTradeDraftWorkbenchProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const commandHandoff = useRef<
+    ReturnType<typeof consumeCommandCenterHandoff> | undefined
+  >(undefined);
+  const [commandHandoffState, setCommandHandoffState] =
+    useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+
+  useEffect(() => {
+    if (!acceptCommandHandoff) return;
+
+    if (commandHandoff.current === undefined) {
+      try {
+        commandHandoff.current = consumeCommandCenterHandoff(window.sessionStorage);
+      } catch {
+        commandHandoff.current = null;
+      }
+    }
+
+    const restoredHandoff = commandHandoff.current;
+    const form = formRef.current;
+    if (!restoredHandoff || !form) {
+      setCommandHandoffState("unavailable");
+      return;
+    }
+
+    for (const [key, handoffValue] of Object.entries(restoredHandoff.values) as Array<
+      [keyof TradeDraftValues, string]
+    >) {
+      const fieldName = HANDOFF_FIELD_NAMES[key];
+      if (!fieldName) continue;
+      const field = form.elements.namedItem(fieldName);
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+        field.value = handoffValue;
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+
+    setCommandHandoffState("loaded");
+  }, [acceptCommandHandoff]);
+
   return (
     <main className="page-shell marketplace-app-shell" id="main-content" tabIndex={-1}>
       <header className="v72-route-header">
@@ -81,6 +141,24 @@ export function HardenedTradeDraftWorkbench({
             <strong>{formMessage.tone === "error" ? "Could not save" : "Saved"}</strong>
             <p>{formMessage.text}</p>
           </div>
+        ) : commandHandoffState === "loading" ? (
+          <div className="status-banner" role="status">
+            <strong>Loading command</strong>
+            <p>Restoring the one-time command into the editable terms.</p>
+          </div>
+        ) : commandHandoffState === "loaded" ? (
+          <div className="status-banner" role="status">
+            <strong>Command loaded</strong>
+            <p>
+              Review every term, add any missing bounds, and save only when the proposal is
+              accurate. No draft has been saved yet.
+            </p>
+          </div>
+        ) : commandHandoffState === "unavailable" ? (
+          <div className="status-banner status-banner-error" role="alert">
+            <strong>Command unavailable</strong>
+            <p>Enter the terms below. No draft was created.</p>
+          </div>
         ) : templateLabel ? (
           <div className="status-banner" role="status">
             <strong>{templateLabel}</strong>
@@ -88,7 +166,7 @@ export function HardenedTradeDraftWorkbench({
           </div>
         ) : null}
 
-        <form action={saveAction} className="panel stack-form">
+        <form action={saveAction} className="panel stack-form" ref={formRef}>
           <input name="submission_key" type="hidden" value={submissionKey} />
 
           <div className="field-grid">
