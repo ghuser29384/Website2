@@ -30,7 +30,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run repository tests
-        run: npm test
+        run: npm test > test.log 2>&1
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-test-diagnostics-${{ github.run_id }}
+          path: test.log
+          if-no-files-found: error
+          retention-days: 14
 
   lint:
     name: Repository lint
@@ -47,7 +55,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run repository lint
-        run: npm run lint
+        run: npm run lint -- --quiet > lint.log 2>&1
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-lint-diagnostics-${{ github.run_id }}
+          path: lint.log
+          if-no-files-found: error
+          retention-days: 14
 
   build:
     name: Production build
@@ -68,7 +84,15 @@ jobs:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
           VERCEL: "1"
           VERCEL_ENV: preview
-        run: npm run build
+        run: npm run build > build.log 2>&1
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-diagnostics-${{ github.run_id }}
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
 
   playwright:
     name: Core Playwright suite
