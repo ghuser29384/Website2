@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - qa/production-charity-autocomplete-20260723
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
