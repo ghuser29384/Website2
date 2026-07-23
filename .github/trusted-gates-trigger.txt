@@ -1,1 +1,1 @@
-Run the trusted pull_request_target release gates for this exact launch head.
+Run the trusted pull_request_target release gates with exact-source preservation for this launch head.
