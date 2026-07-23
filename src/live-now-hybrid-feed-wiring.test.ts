@@ -7,7 +7,7 @@ const hybrid = readFileSync("src/lib/live-now-hybrid-feed.ts", "utf8");
 const concepts = readFileSync("src/lib/live-now-hybrid-concepts.ts", "utf8");
 const embeddings = readFileSync("src/lib/public-semantic-embeddings.ts", "utf8");
 const migration = readFileSync(
-  "supabase/migrations/20260723124500_public_semantic_embedding_cache.sql",
+  "supabase/migrations/20260723132050_public_semantic_embedding_cache.sql",
   "utf8",
 );
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
