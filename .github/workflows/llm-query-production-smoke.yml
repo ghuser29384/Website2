@@ -55,7 +55,8 @@ jobs:
 
           post_status pending "Waiting for the production ambiguity resolver"
 
-          payload='{"query":"Verified animal welfare work for $50","surface":"offers","now":"2026-07-23T10:40:00Z"}'
+          # A fresh main deployment is required after production-secret changes.
+          payload='{"query":"Verified animal welfare work for $50","surface":"offers","now":"2026-07-23T13:46:00Z"}'
           : > response.json
 
           for attempt in $(seq 1 18); do
