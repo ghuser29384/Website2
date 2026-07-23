@@ -1,0 +1,102 @@
+name: Apply and verify universal Command
+
+on:
+  push:
+    branches:
+      - feat/universal-command-workspace
+
+permissions:
+  contents: write
+
+concurrency:
+  group: universal-command-implementation
+  cancel-in-progress: false
+
+jobs:
+  apply-verify-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/universal-command-workspace
+          fetch-depth: 0
+
+      - name: Apply implementation and remove one-shot machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .github/universal-command.patch.gz.b64 | gunzip > /tmp/universal-command.patch
+          git apply --check /tmp/universal-command.patch
+          git apply /tmp/universal-command.patch
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('.env.example')
+          text = path.read_text()
+          addition = '''
+          # Universal Command planning. The model may propose typed capability calls but cannot
+          # directly mutate application, payment, or agreement state. Set false to force the
+          # deterministic planner even when an API key is configured.
+          MORAL_TRADE_COMMAND_MODEL=gpt-5-mini
+          MORAL_TRADE_COMMAND_LLM_ENABLED=true
+          '''.lstrip()
+          if 'MORAL_TRADE_COMMAND_MODEL=' not in text:
+              if text and not text.endswith('\n'):
+                  text += '\n'
+              text += addition
+              path.write_text(text)
+          PY
+          git rm -f \
+            .github/universal-command.patch.gz.b64 \
+            .github/workflows/apply-universal-command.yml
+          git status --short
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check browser script syntax
+        run: node --check public/moral-trade-live-command-center.js
+
+      - name: Lint changed application code
+        run: |
+          npx eslint \
+            src/app/api/command \
+            src/app/command/page.tsx \
+            src/components/command \
+            src/lib/command \
+            src/app/mpgf/pools/new/page.tsx \
+            src/components/mpgf/mpgf-console.tsx \
+            src/lib/site-search.ts \
+            src/lib/site.ts \
+            src/lib/command-center-handoff.test.ts \
+            tests/exact-live-command-center.spec.ts
+
+      - name: Run focused Command tests
+        run: node --import tsx --test src/lib/command/*.test.ts src/lib/command-center-handoff.test.ts
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact Command browser QA
+        run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Build the universal Moral Trade Command workspace"
+          git push origin HEAD:feat/universal-command-workspace
