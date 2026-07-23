@@ -32,9 +32,17 @@ function single(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
-function positiveNumber(value: string, maximum: number) {
+const MAX_SAFE_FUNDING_DOLLARS = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+
+function positiveInteger(value: string, maximum: number) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
+}
+
+function positiveMoney(value: string) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_SAFE_FUNDING_DOLLARS) return 0;
+  return Math.round(parsed * 100) / 100;
 }
 
 function buildFutureDeadline(daysFromNow: number) {
@@ -48,9 +56,18 @@ export default async function MpgfNewPoolPage({ searchParams }: MpgfNewPoolPageP
   const templateApplied = single(resolved.template) === "threshold-coalition";
   const commandTitle = single(resolved.title).slice(0, 180);
   const commandCause = single(resolved.cause).slice(0, 180);
-  const commandParticipants = positiveNumber(single(resolved.participants), 1_000_000_000);
-  const commandContribution = positiveNumber(single(resolved.contribution), 1_000_000_000);
-  const commandThreshold = positiveNumber(single(resolved.threshold), 1_000_000_000);
+  const requestedParticipants = positiveInteger(single(resolved.participants), 1_000_000_000);
+  const requestedContribution = positiveMoney(single(resolved.contribution));
+  const requestedThreshold = positiveInteger(single(resolved.threshold), 1_000_000_000);
+  const commandTermsAreSafe =
+    requestedParticipants >= 2 &&
+    requestedThreshold >= 1 &&
+    requestedThreshold <= requestedParticipants &&
+    requestedContribution > 0 &&
+    requestedContribution <= MAX_SAFE_FUNDING_DOLLARS / requestedParticipants;
+  const commandParticipants = commandTermsAreSafe ? requestedParticipants : 0;
+  const commandContribution = commandTermsAreSafe ? requestedContribution : 0;
+  const commandThreshold = commandTermsAreSafe ? requestedThreshold : 0;
   const viewer = await getViewer();
 
   if (templateApplied && !viewer) {
