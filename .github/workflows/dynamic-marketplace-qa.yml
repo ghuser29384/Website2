@@ -60,10 +60,19 @@ jobs:
         run: |
           npx eslint \
             src/app/commitments/page.tsx \
-            src/app/deals/[agreementId]/*.tsx \
-            src/app/offers/*.tsx \
-            src/app/offers/[offerId]/question/*.tsx \
+            'src/app/deals/[agreementId]/dealroom-history.tsx' \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            'src/app/deals/[agreementId]/page.tsx' \
+            src/app/offers/offers-market-directory.tsx \
+            src/app/offers/offers-market-intro.tsx \
+            src/app/offers/offers-market-secondary.tsx \
+            src/app/offers/page.tsx \
+            'src/app/offers/[offerId]/question/actions.ts' \
+            'src/app/offers/[offerId]/question/offer-question-form.tsx' \
+            'src/app/offers/[offerId]/question/page.tsx' \
+            src/app/offers/new/page.tsx \
             src/app/trades/new/page.tsx \
-            src/components/marketplace/*.tsx \
+            src/components/marketplace/dealroom-terms-editor.tsx \
+            src/components/marketplace/participant-offer-menu.tsx \
             src/lib/marketplace-clearing-round.ts \
             src/lib/marketplace-offer-families.ts
