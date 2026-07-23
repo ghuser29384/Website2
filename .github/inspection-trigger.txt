@@ -1,1 +1,1 @@
-historical live picker scan
+historical live picker scan: persist result
