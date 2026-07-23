@@ -430,6 +430,12 @@ function selectedFeed(scored: readonly ScoredCandidate[], explorationPercent: nu
   );
   for (const item of fill) {
     if (selected.size >= FEED_LIMIT) break;
+    if (item.recommendation.matchClass === "discovery") {
+      const selectedDiscoveryCount = [...selected.values()].filter(
+        (selectedItem) => selectedItem.recommendation.matchClass === "discovery",
+      ).length;
+      if (selectedDiscoveryCount >= discoverySlots) continue;
+    }
     selected.set(candidateKey(item.recommendation), item);
   }
   return [...selected.values()]
