@@ -267,8 +267,16 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(card).toBeVisible();
     await expect(card).toContainText("Avoid meat for exactly three meals");
     await expect(card.locator("a.btn.primary")).toBeVisible();
-    const bottomNav = page.locator(".marketplace-bottom-nav");
+    const bottomNav = page.locator(".topbar nav");
     await expect(bottomNav).toBeVisible();
+    await expect
+      .poll(() =>
+        bottomNav.evaluate((element) => ({
+          position: getComputedStyle(element).position,
+          zIndex: Number(getComputedStyle(element).zIndex),
+        })),
+      )
+      .toMatchObject({ position: "fixed", zIndex: 50 });
     const settingsSummary = page.locator('summary[aria-label="Open feed settings"]');
     await expect(settingsSummary).toBeVisible();
     await settingsSummary.click();
