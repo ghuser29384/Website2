@@ -76,6 +76,7 @@ jobs:
 
   diagnose-pr-179:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,10 +107,22 @@ jobs:
           cat diagnostics/exact-live-source-test.txt
           cat diagnostics/adaptive-tests.txt
           cat diagnostics/eslint.txt
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Capture exact-live autocomplete E2E output
+        shell: bash
+        run: |
+          set +e
+          npm run test:e2e -- tests/exact-live-autocomplete.spec.ts > diagnostics/exact-live-e2e.txt 2>&1
+          echo $? > diagnostics/exact-live-e2e.exit
+          cat diagnostics/exact-live-e2e.txt
       - uses: actions/upload-artifact@v4
         with:
           name: pr-179-diagnostics
-          path: diagnostics
+          path: |
+            diagnostics
+            test-results
+            playwright-report
           if-no-files-found: error
           retention-days: 1
 
