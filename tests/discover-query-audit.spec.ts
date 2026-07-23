@@ -134,7 +134,9 @@ test("Discover sends natural-language queries through the shared interpreter", a
 
   const form = page.locator("#command-form");
   await expect(form).toBeVisible();
-  await form.locator('input[name="q"]').fill("Verified animal welfare work for $50");
+  const queryInput = form.locator('input[name="q"], input[name="command"], #command-input');
+  await expect(queryInput).toBeVisible();
+  await queryInput.fill("Verified animal welfare work for $50");
   await form.locator('button[type="submit"]').click();
 
   const clarification = page.getByTestId("discover-smart-query-clarification");
