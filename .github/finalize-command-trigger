@@ -1,2 +1,3 @@
 Trigger Vercel Protection Bypass for Automation configuration and direct protected-preview smoke verification.
 Synchronize after the one-shot workflow is present on the Command feature branch.
+Run from the trusted feature-base workflow definition.
