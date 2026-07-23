@@ -32,6 +32,7 @@ on:
 permissions:
   contents: write
 
+# Only the newest branch head should consume the full build and browser-test budget.
 concurrency:
   group: smart-query-qa-${{ github.ref }}
   cancel-in-progress: true
