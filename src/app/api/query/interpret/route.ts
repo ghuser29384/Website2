@@ -9,6 +9,7 @@ import {
   parseSmartQueryWithClarification,
   type SmartQueryClarificationAnswer,
 } from "@/lib/smart-query-clarification";
+import { activateProductionSmartQueryLlmFallback } from "@/lib/smart-query-llm-gate";
 import { resolveSmartQueryWithLlm } from "@/lib/smart-query-llm";
 import {
   applySmartQuerySurfacePolicy,
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     parserClarification,
     { now, surface },
   );
+  activateProductionSmartQueryLlmFallback();
   const resolved = await resolveSmartQueryWithLlm(deterministic);
   const interpretation = applySmartQuerySurfacePolicy(resolved.interpretation);
 
