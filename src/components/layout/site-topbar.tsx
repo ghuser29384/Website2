@@ -152,6 +152,7 @@ export function SiteTopbar({
 }: SiteTopbarProps) {
   const router = useRouter();
   const searchInputId = useId();
+  const searchResultsId = useId();
   const clarificationInputId = useId();
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
@@ -278,9 +279,12 @@ export function SiteTopbar({
               Search
             </span>
             <input
-              aria-expanded={searchOpen}
+              aria-autocomplete="list"
+              aria-controls={searchResultsId}
+              aria-expanded={searchOpen && Boolean(searchQuery.trim())}
               aria-haspopup="listbox"
               id={searchInputId}
+              role="combobox"
               name="search"
               placeholder="Search offers, people, pools, or evidence"
               type="search"
@@ -322,7 +326,12 @@ export function SiteTopbar({
             </button>
           </div>
           {searchOpen && searchQuery.trim() ? (
-            <div className="topbar-search-results" role="listbox" aria-label="Search suggestions">
+            <div
+              aria-label="Search suggestions"
+              className="topbar-search-results"
+              id={searchResultsId}
+              role="listbox"
+            >
               {searchClarification ? (
                 <div className="topbar-search-empty" data-testid="global-search-clarification" role="status">
                   <strong>{searchClarification.question}</strong>
