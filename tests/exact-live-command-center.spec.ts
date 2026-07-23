@@ -36,4 +36,28 @@ test.describe("universal live Command", () => {
     await expect(page.getByRole("heading", { name: "Sign in to use Command." })).toBeVisible();
     await expect(page.getByText(/cannot bypass consent, review, payment, or safety controls/i)).toBeVisible();
   });
+
+  test("public-good Command terms survive the sign-in handoff", async ({ page }) => {
+    const params = new URLSearchParams({
+      template: "threshold-coalition",
+      title: "Animal welfare pool",
+      cause: "Animal welfare",
+      participants: "100",
+      contribution: "20",
+      threshold: "80",
+      source: "command",
+    });
+    const returnTo = `/mpgf/pools/new?${params.toString()}`;
+
+    await page.goto(returnTo, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create account" })).toHaveAttribute(
+      "href",
+      `/signup?returnTo=${encodeURIComponent(returnTo)}`,
+    );
+    await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      `/login?returnTo=${encodeURIComponent(returnTo)}`,
+    );
+  });
 });
