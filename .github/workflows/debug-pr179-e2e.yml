@@ -1,44 +1,118 @@
-name: Debug PR 179 exact-live E2E
+name: Debug production exact-live autocomplete
 
 on:
-  push:
+  pull_request:
     branches:
-      - debug/extract-live-source-20260723
+      - main
 
 permissions:
   contents: read
 
 jobs:
-  exact-live-autocomplete:
+  production-autocomplete:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/exact-live-trade-autocomplete-20260723
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Run source regression and lint
-        run: |
-          node --import tsx --test src/lib/exact-live-autocomplete.test.ts
-          npx eslint \
-            public/moral-trade-live-token-autocomplete.js \
-            src/lib/exact-live-autocomplete.test.ts \
-            tests/exact-live-autocomplete.spec.ts
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Run exact live autocomplete E2E
-        run: npm run test:e2e -- tests/exact-live-autocomplete.spec.ts
-      - name: Upload test evidence
+      - name: Create production smoke test
+        run: |
+          mkdir -p debug-production
+          cat > debug-production/playwright.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: ".",
+            testMatch: "production-autocomplete.spec.ts",
+            timeout: 60_000,
+            retries: 0,
+            workers: 1,
+            reporter: "line",
+            outputDir: "../debug-production-results",
+            use: {
+              headless: true,
+              viewport: { width: 1440, height: 900 },
+              trace: "retain-on-failure",
+              screenshot: "only-on-failure",
+            },
+          });
+          TS
+          cat > debug-production/production-autocomplete.spec.ts <<'TS'
+          import { expect, test } from "@playwright/test";
+
+          test("production #trade serves and uses exact-live autocomplete", async ({ page }, testInfo) => {
+            const relevantErrors: string[] = [];
+            page.on("console", (message) => {
+              if (message.type() !== "error") return;
+              const text = message.text();
+              if (/autocomplete|input assist|input standards|token assist/i.test(text)) {
+                relevantErrors.push(text);
+              }
+            });
+            page.on("pageerror", (error) => {
+              if (/autocomplete|input assist|input standards|token assist/i.test(error.message)) {
+                relevantErrors.push(error.message);
+              }
+            });
+
+            const adapterResponse = page.waitForResponse((response) =>
+              response.url().includes("/moral-trade-live-token-autocomplete.js"),
+            );
+            const catalogResponse = page.waitForResponse((response) =>
+              response.url().includes("/moral-trade-input-standards.json"),
+            );
+
+            const navigation = await page.goto("https://www.moraltrade.org/#trade", {
+              waitUntil: "domcontentloaded",
+            });
+            expect(navigation?.ok()).toBeTruthy();
+            expect((await adapterResponse).status()).toBe(200);
+            expect((await catalogResponse).status()).toBe(200);
+
+            await expect(
+              page.getByRole("heading", { name: "Build a trade that works for both sides." }),
+            ).toBeVisible({ timeout: 30_000 });
+
+            const offerClause = page.locator(".clause").filter({
+              has: page.locator(".clause-label", { hasText: "I offer" }),
+            });
+            const causeToken = offerClause.locator('.token[contenteditable="true"]').nth(1);
+            await expect(causeToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
+            await expect(causeToken).toHaveAttribute("data-mt-autocomplete-context", "priorities");
+
+            await causeToken.fill("Animal");
+            const panel = page.locator('[data-mt-live-token-panel="true"]');
+            await expect(panel).toBeVisible();
+            await expect(panel.locator(".mt-input-assist-option strong")).toHaveText([
+              "Animal welfare",
+              "Wild animal suffering",
+              "Factory farming",
+            ]);
+
+            await page.screenshot({
+              path: testInfo.outputPath("production-autocomplete-visible.png"),
+              fullPage: false,
+            });
+            await panel.locator(".mt-input-assist-option").first().click();
+            await expect(causeToken).toHaveText("Animal welfare");
+            expect(relevantErrors).toEqual([]);
+          });
+          TS
+      - name: Run production autocomplete smoke test
+        run: npx playwright test --config=debug-production/playwright.config.ts
+      - name: Upload production evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr-179-exact-live-e2e
-          path: |
-            test-results
-            playwright-report
+          name: production-exact-live-autocomplete
+          path: debug-production-results
           if-no-files-found: ignore
           retention-days: 1
