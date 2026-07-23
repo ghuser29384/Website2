@@ -5,6 +5,17 @@ import { expect, test } from "@playwright/test";
 test("inspect the rendered Discover query controls", async ({ page }) => {
   await page.goto("/discover", { waitUntil: "networkidle" });
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean(
+          (window as Window & { __moralTradeSmartQueryLoaded?: boolean })
+            .__moralTradeSmartQueryLoaded,
+        ),
+      ),
+    )
+    .toBe(true);
+  await expect(page.locator('script[src$="/moral-trade-smart-query.js"]')).toHaveCount(1);
 
   const audit = await page.evaluate(() => {
     const controls = [...document.querySelectorAll("input, textarea, select, button, form")]
@@ -77,4 +88,62 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
       "utf8",
     ),
   ]);
+});
+
+test("Discover sends natural-language queries through the shared interpreter", async ({ page }) => {
+  const requests: Array<Record<string, unknown>> = [];
+
+  await page.route("**/api/query/interpret", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    requests.push(body);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        interpretation: {
+          originalQuery: body.query,
+          normalizedQuery: "verified animal welfare work for $50",
+          parsedConstraintCount: 2,
+          confidence: 0.72,
+          reasonCodes: ["ambiguous_amount"],
+          needsClarification: true,
+          clarification: {
+            field: "amount",
+            question: "Should $50 be a maximum, a minimum, or an exact amount?",
+            options: ["Maximum", "Minimum", "Exact"],
+          },
+        },
+        target: "/discover?q=verified%20animal%20welfare%20work%20for%20%2450",
+        usedLlm: false,
+      }),
+    });
+  });
+
+  await page.goto("/discover", { waitUntil: "networkidle" });
+  await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean(
+          (window as Window & { __moralTradeSmartQueryLoaded?: boolean })
+            .__moralTradeSmartQueryLoaded,
+        ),
+      ),
+    )
+    .toBe(true);
+
+  const form = page.locator("#command-form");
+  await expect(form).toBeVisible();
+  await form.locator('input[name="q"]').fill("Verified animal welfare work for $50");
+  await form.locator('button[type="submit"]').click();
+
+  const clarification = page.getByTestId("discover-smart-query-clarification");
+  await expect(clarification).toContainText("One detail changes the results.");
+  await expect(clarification).toContainText("Should $50 be a maximum, a minimum, or an exact amount?");
+  await expect(clarification.getByRole("button", { name: "Maximum" })).toBeVisible();
+  await expect.poll(() => requests.length).toBe(1);
+  expect(requests[0]).toMatchObject({
+    query: "Verified animal welfare work for $50",
+    surface: "discover",
+  });
 });
