@@ -1,1 +1,1 @@
-Trigger the consolidated trusted repair and exact-head launch gate workflow.
+Trigger the installed registered repair workflow, then run exact-head launch gates.
