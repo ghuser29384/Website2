@@ -14,53 +14,81 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 2c8f62b62b479a1925f2eed4c60bd2ee381deeae
-      - name: Extract the production Live source and relevant picker context
+          fetch-depth: 0
+      - name: Find the historical Live source matching the reported picker
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
           const { gunzipSync } = require('node:zlib');
 
           const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
-          const encoded = names
-            .map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8'))
-            .join('');
-          const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
-          fs.writeFileSync('production-live-source.html', source);
+          const commits = execFileSync(
+            'git',
+            ['log', '--all', '--format=%H', '--', 'public/mt-live-0d0e0f03-0a.txt'],
+            { encoding: 'utf8' },
+          ).trim().split(/\s+/).filter(Boolean);
 
           const needles = [
             'Find a trade partner',
             'What are you offering?',
-            'MONEY',
-            'ACTION',
-            'data-page="trade"',
+            'Avery Kim',
+            'Research Lead',
           ];
+          const report = [];
+          let found = null;
+
+          for (const sha of commits) {
+            try {
+              const encoded = names.map((name) => execFileSync(
+                'git',
+                ['show', `${sha}:public/mt-live-0d0e0f03-${name}.txt`],
+                { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 },
+              )).join('');
+              const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+              const matches = needles.filter((needle) => source.toLowerCase().includes(needle.toLowerCase()));
+              report.push(`${sha} source=${source.length} matches=${matches.join('|') || 'none'}`);
+              if (!found && matches.length >= 2) {
+                found = { sha, source, matches };
+              }
+            } catch (error) {
+              report.push(`${sha} ERROR ${String(error.message || error).slice(0, 300)}`);
+            }
+          }
+
+          fs.writeFileSync('live-history-scan.txt', report.join('\n') + '\n');
+          console.log(report.join('\n'));
+
+          if (!found) {
+            throw new Error('No historical compressed Live source matched at least two reported picker markers.');
+          }
+
+          fs.writeFileSync('reported-picker-live-source.html', found.source);
+          const lower = found.source.toLowerCase();
           const contexts = [];
-          for (const needle of needles) {
+          for (const needle of [...needles, 'money', 'action', 'offer']) {
             let cursor = 0;
             let count = 0;
             while (count < 12) {
-              const index = source.toLowerCase().indexOf(needle.toLowerCase(), cursor);
+              const index = lower.indexOf(needle.toLowerCase(), cursor);
               if (index < 0) break;
-              console.log(`NEEDLE ${JSON.stringify(needle)} OCCURRENCE ${count + 1} INDEX ${index}`);
-              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${source.slice(Math.max(0, index - 6000), Math.min(source.length, index + 14000))}\n`);
+              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${found.source.slice(Math.max(0, index - 6000), Math.min(found.source.length, index + 14000))}\n`);
               cursor = index + needle.length;
               count += 1;
             }
           }
-
-          const unique = [...new Set(contexts)];
-          fs.writeFileSync('production-live-offer-picker-context.txt', unique.join('\n'));
-          console.log(`SOURCE_LENGTH ${source.length}`);
-          console.log(`CONTEXT_BLOCKS ${unique.length}`);
-          console.log(unique.join('\n').slice(0, 90000));
+          fs.writeFileSync('reported-picker-context.txt', [...new Set(contexts)].join('\n'));
+          fs.writeFileSync('reported-picker-commit.txt', `${found.sha}\n${found.matches.join('\n')}\n`);
+          console.log(`FOUND ${found.sha} ${found.matches.join(', ')}`);
           NODE
       - uses: actions/upload-artifact@v4
         with:
-          name: production-live-offer-picker-source
+          name: historical-live-offer-picker-source
           path: |
-            production-live-source.html
-            production-live-offer-picker-context.txt
+            live-history-scan.txt
+            reported-picker-live-source.html
+            reported-picker-context.txt
+            reported-picker-commit.txt
           if-no-files-found: error
           retention-days: 1
