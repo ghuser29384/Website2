@@ -1,0 +1,1 @@
+Trigger the one-shot pull_request_target synchronization after the workflow was installed on main.
