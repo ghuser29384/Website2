@@ -42,22 +42,22 @@ declare
   public_record jsonb;
 begin
   insert into auth.users(
-    id, aud, role, email, encrypted_password, email_confirmed_at, confirmed_at,
+    id, aud, role, email, encrypted_password, email_confirmed_at,
     raw_app_meta_data, raw_user_meta_data, created_at, updated_at
   ) values
     (
       actor_a, 'authenticated', 'authenticated', 'launch-a-20260723@example.test', '',
-      now(), now(), '{"provider":"email","providers":["email"]}'::jsonb,
+      now(), '{"provider":"email","providers":["email"]}'::jsonb,
       '{"display_name":"Launch Participant A"}'::jsonb, now(), now()
     ),
     (
       actor_b, 'authenticated', 'authenticated', 'launch-b-20260723@example.test', '',
-      now(), now(), '{"provider":"email","providers":["email"]}'::jsonb,
+      now(), '{"provider":"email","providers":["email"]}'::jsonb,
       '{"display_name":"Launch Participant B"}'::jsonb, now(), now()
     ),
     (
       outsider, 'authenticated', 'authenticated', 'launch-c-20260723@example.test', '',
-      now(), now(), '{"provider":"email","providers":["email"]}'::jsonb,
+      now(), '{"provider":"email","providers":["email"]}'::jsonb,
       '{"display_name":"Launch Outsider"}'::jsonb, now(), now()
     );
 
