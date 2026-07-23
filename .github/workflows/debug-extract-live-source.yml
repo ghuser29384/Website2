@@ -1,0 +1,69 @@
+name: Debug extract live source
+
+on:
+  push:
+    branches:
+      - debug/extract-live-source-20260723
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract exact live payload
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const zlib = require('node:zlib');
+
+          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+          const encoded = names
+            .map((name) => fs.readFileSync(path.join('public', `mt-live-0d0e0f03-${name}.txt`), 'utf8').trim())
+            .join('');
+          const source = zlib.gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+
+          fs.mkdirSync('debug-live-source', { recursive: true });
+          fs.writeFileSync('debug-live-source/moral-trade-live-source.html', source);
+
+          const terms = [
+            'Build a trade',
+            'Structured clauses',
+            'Two-sided exchange table',
+            'Potential matches',
+            'function trade',
+            'tradeHome',
+            'contenteditable',
+            'input',
+            'textarea',
+            'data-page="trade"',
+            'I will give',
+            'Only if they',
+            'Proof via',
+          ];
+          const snippets = [];
+          for (const term of terms) {
+            let cursor = 0;
+            let count = 0;
+            while (cursor < source.length && count < 25) {
+              const index = source.toLowerCase().indexOf(term.toLowerCase(), cursor);
+              if (index < 0) break;
+              const start = Math.max(0, index - 1200);
+              const end = Math.min(source.length, index + term.length + 2200);
+              snippets.push(`\n===== ${term} @ ${index} =====\n${source.slice(start, end)}\n`);
+              cursor = index + term.length;
+              count += 1;
+            }
+          }
+          fs.writeFileSync('debug-live-source/snippets.txt', snippets.join('\n'));
+          console.log(`Extracted ${source.length} characters and ${snippets.length} snippets.`);
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-live-source
+          path: debug-live-source
+          if-no-files-found: error
+          retention-days: 1
