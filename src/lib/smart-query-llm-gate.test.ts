@@ -38,4 +38,5 @@ test("honors the explicit production disable override", () => {
   };
 
   assert.equal(activateProductionSmartQueryLlmFallback(environment), false);
+  assert.equal(environment.AI_QUERY_FALLBACK_ENABLED, "false");
 });
