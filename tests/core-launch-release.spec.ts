@@ -37,9 +37,16 @@ async function captureRouteEvidence(
   page.on("response", onResponse);
 
   const response = await page.goto(route, { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).toBeVisible();
+  const body = page.locator("body");
+  await expect(body).toBeVisible();
+  await expect
+    .poll(
+      async () => (await body.innerText()).replace(/\s+/g, " ").trim().length,
+      { intervals: [250, 500, 1_000], timeout: 15_000 },
+    )
+    .toBeGreaterThan(80);
   await page.waitForTimeout(300);
-  const bodyText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
+  const bodyText = (await body.innerText()).replace(/\s+/g, " ").trim();
   const evidence: RouteEvidence = {
     bodyText: bodyText.slice(0, 8_000),
     consoleErrors,
