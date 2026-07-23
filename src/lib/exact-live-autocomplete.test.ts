@@ -35,6 +35,7 @@ test("the exact live shell loads structured offer types and cause or organizatio
   assert.match(structure, /label: "Money"/);
   assert.match(structure, /label: "Behavior or commitment"/);
   assert.match(structure, /label: "Help or service"/);
+  assert.match(structure, /"a person, project, or cause", "recipients"/);
   assert.match(structure, /Estimated time/);
   assert.match(structure, /Relevant skills/);
   assert.match(structure, /Deliverable or completion condition/);
