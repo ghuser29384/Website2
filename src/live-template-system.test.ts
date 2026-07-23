@@ -27,6 +27,12 @@ test("the live Trade Templates control opens the canonical template library", ()
   assert.match(offersPage, /<TradeTemplateLibrary \/>/);
 });
 
+test("the live New trade action opens the canonical template library", () => {
+  assert.match(navigation, /templateEntryLabels = new Set\(\["templates", "new trade"\]\)/);
+  assert.ok(navigation.includes('.replace(/^\\+\\s*/, "");'));
+  assert.match(navigation, /window\.location\.assign\(libraryHref\)/);
+});
+
 test("the production library opens real drafts directly and keeps the three-question guide", () => {
   assert.match(component, /Choose a template/);
   assert.match(component, /href=\{template\.handoff\.href\}/);
