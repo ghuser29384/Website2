@@ -7,7 +7,7 @@ import {
   TradeDraftWorkbench,
   type TradeDraftValues,
 } from "@/components/core-trade/trade-draft-workbench";
-import { getViewer } from "@/lib/app-data";
+import { getOfferById, getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
   getPledgeTemplateInitialValues,
@@ -63,12 +63,18 @@ const WORKBENCH_GRID = `
 `;
 
 export default async function NewTradePage({ searchParams }: NewTradePageProps) {
-  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
+  const resolvedSearchParams = await searchParams;
+  const sourceOfferId = valueOf(resolvedSearchParams.source_offer);
+  const [viewer, sourceOffer] = await Promise.all([
+    getViewer(),
+    sourceOfferId ? getOfferById(sourceOfferId) : Promise.resolve(null),
+  ]);
   const templateId = valueOf(resolvedSearchParams.template);
   const structure = valueOf(resolvedSearchParams.structure);
   const returnParams = new URLSearchParams();
   if (templateId) returnParams.set("template", templateId);
   if (structure) returnParams.set("structure", structure);
+  if (sourceOfferId) returnParams.set("source_offer", sourceOfferId);
   const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
 
   if (!viewer) {
@@ -78,16 +84,46 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const example = valueOf(resolvedSearchParams.example);
   const templateValues = getPledgeTemplateInitialValues(templateId);
   const templateLabel = templateValues ? getTradeDraftTemplateLabel(templateId) : null;
+  const counterofferValues: Partial<TradeDraftValues> | undefined = sourceOffer
+    ? {
+        offeredCause: sourceOffer.requested_cause,
+        requestedCause: sourceOffer.offered_cause,
+        proposedAction: sourceOffer.request_action,
+        requestedAction: sourceOffer.offer_action,
+        noTradeBaseline:
+          "Without this counteroffer, the original proposal remains unchanged and neither participant takes on a new commitment.",
+        duration: sourceOffer.duration,
+        evidenceRule: sourceOffer.verification,
+        exitConditions:
+          "Either participant may decline before acceptance. After an agreement is formed, either participant may end future obligations under the final negotiated exit terms.",
+        notes: `Counteroffer to proposal ${sourceOffer.id}. Original participant: ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}. Review every reversed term before submitting.`,
+      }
+    : undefined;
+  const sourceMessage =
+    sourceOfferId && !sourceOffer
+      ? {
+          tone: "error" as const,
+          text: "The source proposal is no longer available. Start a new draft only if you can restate every term independently.",
+        }
+      : null;
 
   return (
     <>
       <style>{WORKBENCH_GRID}</style>
       <TradeDraftWorkbench
-        formMessage={getFormMessage(resolvedSearchParams)}
-        initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
+        formMessage={getFormMessage(resolvedSearchParams) ?? sourceMessage}
+        initialValues={
+          counterofferValues ??
+          templateValues ??
+          (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)
+        }
         saveAction={saveCoreOfferAction}
         submissionKey={randomUUID()}
-        templateLabel={templateLabel}
+        templateLabel={
+          sourceOffer
+            ? `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`
+            : templateLabel
+        }
       />
     </>
   );
