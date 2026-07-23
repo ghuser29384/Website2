@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { FunnelTracker } from "@/components/analytics/funnel-tracker";
 import { RecommendationLearningTracker } from "@/components/recommendations/recommendation-learning-tracker";
+import { SmartQueryAutoEnhancer } from "@/components/search/smart-query-auto-enhancer";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
@@ -55,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: SITE_NAME,
     description: SITE_DESCRIPTION,
-    images: [getAbsoluteUrl(SITE_IMAGE_PATH)],
+    images: [SITE_IMAGE_PATH],
   },
   appleWebApp: {
     capable: true,
@@ -126,6 +127,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <FunnelTracker />
           <RecommendationLearningTracker />
+          <SmartQueryAutoEnhancer />
         </Suspense>
         {children}
       </body>
