@@ -1,6 +1,12 @@
 name: Apply evidence smart-query patch
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "scripts/apply-smart-query-evidence-patch.mjs"
+      - ".github/workflows/apply-smart-query-evidence-patch.yml"
   push:
     branches:
       - feat/smart-query-pipeline
@@ -17,6 +23,7 @@ concurrency:
 
 jobs:
   apply:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
