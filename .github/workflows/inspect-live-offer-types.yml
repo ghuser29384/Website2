@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - agent/inspect-live-offer-types-20260723
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -18,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Find the historical Live source matching the reported picker
+      - name: Find the source matching the reported picker across Live history and branch heads
         shell: bash
         run: |
           node <<'NODE'
@@ -26,12 +23,13 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const { gunzipSync } = require('node:zlib');
 
-          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
-          const commits = execFileSync(
-            'git',
-            ['log', '--all', '--format=%H', '--', 'public/mt-live-0d0e0f03-0a.txt'],
-            { encoding: 'utf8' },
-          ).trim().split(/\s+/).filter(Boolean);
+          function git(args, options = {}) {
+            return execFileSync('git', args, {
+              encoding: 'utf8',
+              maxBuffer: 100 * 1024 * 1024,
+              ...options,
+            });
+          }
 
           const needles = [
             'Find a trade partner',
@@ -42,50 +40,90 @@ jobs:
           const report = [];
           let found = null;
 
-          for (const sha of commits) {
+          const wrapperCommits = [...new Set(
+            git(['log', '--all', '--format=%H', '--', 'public/moral-trade-live.html'])
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean),
+          )];
+          report.push(`WRAPPER_COMMITS ${wrapperCommits.length}`);
+
+          for (const sha of wrapperCommits) {
             try {
-              const encoded = names.map((name) => execFileSync(
-                'git',
-                ['show', `${sha}:public/mt-live-0d0e0f03-${name}.txt`],
-                { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 },
-              )).join('');
+              const wrapper = git(['show', `${sha}:public/moral-trade-live.html`]);
+              const namesMatch = wrapper.match(/const names\s*=\s*\[([^\]]+)\]/s);
+              const prefixMatch = wrapper.match(/\/mt-live-([^/`$]+)-\$\{name\}\.txt/);
+              if (!namesMatch || !prefixMatch) {
+                report.push(`${sha} wrapper-unrecognized`);
+                continue;
+              }
+
+              const names = [...namesMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]);
+              const prefix = prefixMatch[1];
+              const encoded = names.map((name) => git([
+                'show',
+                `${sha}:public/mt-live-${prefix}-${name}.txt`,
+              ])).join('');
               const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
               const matches = needles.filter((needle) => source.toLowerCase().includes(needle.toLowerCase()));
-              report.push(`${sha} source=${source.length} matches=${matches.join('|') || 'none'}`);
+              report.push(`${sha} prefix=${prefix} chunks=${names.length} source=${source.length} matches=${matches.join('|') || 'none'}`);
+
               if (!found && matches.length >= 2) {
-                found = { sha, source, matches };
+                found = { sha, source, matches, prefix };
               }
             } catch (error) {
-              report.push(`${sha} ERROR ${String(error.message || error).slice(0, 300)}`);
+              report.push(`${sha} ERROR ${String(error.message || error).replace(/\s+/g, ' ').slice(0, 500)}`);
+            }
+          }
+
+          const branchHeads = [...new Set(
+            git(['for-each-ref', '--format=%(objectname)', 'refs/remotes/origin'])
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean),
+          )];
+          report.push(`BRANCH_HEADS ${branchHeads.length}`);
+          for (const sha of branchHeads) {
+            for (const needle of needles) {
+              try {
+                const output = git(['grep', '-I', '-n', '-F', needle, sha, '--', ':!*.txt']);
+                if (output.trim()) report.push(`GIT_GREP ${sha} ${needle}\n${output.trim()}`);
+              } catch (error) {
+                if (error.status !== 1) {
+                  report.push(`GIT_GREP_ERROR ${sha} ${needle} ${String(error.message || error).replace(/\s+/g, ' ').slice(0, 300)}`);
+                }
+              }
             }
           }
 
           fs.writeFileSync('live-history-scan.txt', report.join('\n') + '\n');
           console.log(report.join('\n'));
 
-          if (!found) {
-            throw new Error('No historical compressed Live source matched at least two reported picker markers.');
-          }
-
-          fs.writeFileSync('reported-picker-live-source.html', found.source);
-          const lower = found.source.toLowerCase();
-          const contexts = [];
-          for (const needle of [...needles, 'money', 'action', 'offer']) {
-            let cursor = 0;
-            let count = 0;
-            while (count < 12) {
-              const index = lower.indexOf(needle.toLowerCase(), cursor);
-              if (index < 0) break;
-              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${found.source.slice(Math.max(0, index - 6000), Math.min(found.source.length, index + 14000))}\n`);
-              cursor = index + needle.length;
-              count += 1;
+          if (found) {
+            fs.writeFileSync('reported-picker-live-source.html', found.source);
+            const lower = found.source.toLowerCase();
+            const contexts = [];
+            for (const needle of [...needles, 'money', 'action', 'offer']) {
+              let cursor = 0;
+              let count = 0;
+              while (count < 12) {
+                const index = lower.indexOf(needle.toLowerCase(), cursor);
+                if (index < 0) break;
+                contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${found.source.slice(Math.max(0, index - 6000), Math.min(found.source.length, index + 14000))}\n`);
+                cursor = index + needle.length;
+                count += 1;
+              }
             }
+            fs.writeFileSync('reported-picker-context.txt', [...new Set(contexts)].join('\n'));
+            fs.writeFileSync('reported-picker-commit.txt', `${found.sha}\nprefix=${found.prefix}\n${found.matches.join('\n')}\n`);
+            console.log(`FOUND ${found.sha} prefix=${found.prefix} ${found.matches.join(', ')}`);
+          } else {
+            fs.writeFileSync('reported-picker-commit.txt', 'NOT_FOUND\n');
+            console.log('NOT_FOUND');
           }
-          fs.writeFileSync('reported-picker-context.txt', [...new Set(contexts)].join('\n'));
-          fs.writeFileSync('reported-picker-commit.txt', `${found.sha}\n${found.matches.join('\n')}\n`);
-          console.log(`FOUND ${found.sha} ${found.matches.join(', ')}`);
           NODE
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: historical-live-offer-picker-source
           path: |
@@ -93,5 +131,5 @@ jobs:
             reported-picker-live-source.html
             reported-picker-context.txt
             reported-picker-commit.txt
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 1
