@@ -1,6 +1,9 @@
 name: Apply and verify universal Command
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - feat/universal-command-workspace
@@ -14,6 +17,7 @@ concurrency:
 
 jobs:
   apply-verify-push:
+    if: github.head_ref == 'feat/universal-command-workspace' || github.ref_name == 'feat/universal-command-workspace'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
