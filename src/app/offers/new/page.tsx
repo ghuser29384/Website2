@@ -4,8 +4,15 @@ import { redirect } from "next/navigation";
 import { TradeDraftSignInGate } from "@/components/core-trade/trade-draft-workbench";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { OfferCreateForm } from "@/components/offers/offer-create-form";
-import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
+import {
+  OfferCreateForm,
+  type OfferTemplate,
+} from "@/components/offers/offer-create-form";
+import {
+  getDonationOffsetOverview,
+  getOfferById,
+  getViewer,
+} from "@/lib/app-data";
 import { isPaymentBondsEnabled } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getReviewedMarketplaceSeedTemplate } from "@/lib/marketplace-seed-templates";
@@ -42,6 +49,7 @@ function single(value: string | string[] | undefined) {
 export default async function OfferCreatePage({ searchParams }: OfferCreatePageProps) {
   const resolved = await searchParams;
   const example = single(resolved.example);
+  const sourceOfferId = single(resolved.source_offer);
   const requestedTemplateId = single(resolved.template);
   const requestedTemplate = getReviewedMarketplaceSeedTemplate(requestedTemplateId);
   const requestedOffsetTemplate =
@@ -50,32 +58,59 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
   const isOffsetRequest = Boolean(requestedOffsetTemplate) || mode === "offset";
 
   if (!isOffsetRequest) {
+    const destinationParams = new URLSearchParams();
+    if (sourceOfferId) destinationParams.set("source_offer", sourceOfferId);
+
     if (example === "seed-victoria") {
-      redirect("/trades/new?example=seed-victoria");
+      destinationParams.set("example", "seed-victoria");
     }
 
     if (requestedTemplate?.format === "pledge_swap") {
-      redirect(`/trades/new?template=${encodeURIComponent(requestedTemplate.id)}`);
+      destinationParams.set("template", requestedTemplate.id);
     }
 
     if (mode === "pool") {
       redirect("/mpgf/pools/new?template=threshold-coalition");
     }
 
-    redirect("/trades/new");
+    redirect(
+      `/trades/new${destinationParams.size ? `?${destinationParams.toString()}` : ""}`,
+    );
   }
 
+  const supabaseReady = hasSupabaseEnv();
+  const [viewer, sourceOffer] = await Promise.all([
+    supabaseReady ? getViewer() : Promise.resolve(null),
+    sourceOfferId ? getOfferById(sourceOfferId) : Promise.resolve(null),
+  ]);
   const requestedParticipationModeValue = single(resolved.offset_participation_mode);
+  const sourceParticipationMode =
+    sourceOffer?.mode === "offset"
+      ? sourceOffer.donationOffset?.participation_mode
+      : undefined;
   const requestedParticipationMode =
     requestedParticipationModeValue === "direct" || requestedParticipationModeValue === "pool"
       ? requestedParticipationModeValue
       : undefined;
   const initialParticipationMode =
-    requestedParticipationMode ?? requestedOffsetTemplate?.prefill.offset?.participationMode ?? "direct";
-  const initialPoolId = single(resolved.offset_pool_id);
+    requestedParticipationMode ??
+    sourceParticipationMode ??
+    requestedOffsetTemplate?.prefill.offset?.participationMode ??
+    "direct";
+  const initialPoolId =
+    single(resolved.offset_pool_id) ||
+    (sourceOffer?.mode === "offset" ? sourceOffer.donationOffset?.pool_id ?? "" : "");
   const requestedPoolSide = single(resolved.offset_pool_side);
+  const sourcePoolSide =
+    sourceOffer?.mode === "offset" && sourceOffer.donationOffset?.pool_side
+      ? sourceOffer.donationOffset.pool_side === "side_a"
+        ? "side_b"
+        : "side_a"
+      : "";
   const initialPoolSide =
-    requestedPoolSide === "side_a" || requestedPoolSide === "side_b" ? requestedPoolSide : "";
+    requestedPoolSide === "side_a" || requestedPoolSide === "side_b"
+      ? requestedPoolSide
+      : sourcePoolSide;
   const template =
     requestedOffsetTemplate
       ? requestedOffsetTemplate
@@ -87,6 +122,51 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
     redirect("/offers?view=templates");
   }
 
+  const sourceCounterofferTemplate: OfferTemplate | null =
+    sourceOffer?.mode === "offset"
+      ? {
+          title: `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`,
+          description:
+            "The original proposal is linked below. Its non-financial roles are reversed, while amounts remain blank so the counteroffer maker must state new terms explicitly.",
+          mode: "offset",
+          offeredCause: sourceOffer.requested_cause,
+          requestedCause: sourceOffer.offered_cause,
+          compromiseCause: sourceOffer.compromise_cause,
+          offerAction: sourceOffer.request_action,
+          requestAction: sourceOffer.offer_action,
+          baselineStatement:
+            "Without this counteroffer, the original offset remains unchanged and neither participant takes on a new commitment.",
+          exitCondition:
+            "Either participant may decline before acceptance. Any accepted offset must retain explicit cancellation, evidence, and unmatched-surplus terms.",
+          notes: `Counteroffer to proposal ${sourceOffer.id}. Re-enter both financial amounts; no amount is inferred from the original proposal.`,
+          offerImpact: String(sourceOffer.min_counterparty_impact),
+          minCounterpartyImpact: String(sourceOffer.offer_impact),
+          verification: sourceOffer.verification,
+          duration: sourceOffer.duration,
+          paymentIntervalUnit: "none",
+          paymentIntervalValue: "",
+          trustLevel: String(sourceOffer.trust_level),
+          offset: {
+            baselineAmountUsd: "",
+            requestedMatchingAmountUsd: "",
+            baselineOpposedCause:
+              sourceOffer.donationOffset?.requested_opposed_cause ?? sourceOffer.requested_cause,
+            requestedOpposedCause:
+              sourceOffer.donationOffset?.baseline_opposed_cause ?? sourceOffer.offered_cause,
+            participationMode: initialParticipationMode,
+            compromiseDestinationId:
+              sourceOffer.donationOffset?.compromise_charity_id ?? undefined,
+            offsetRatio: "1",
+            timeHorizon: sourceOffer.donationOffset?.time_horizon ?? "one_off",
+            verificationMethod:
+              sourceOffer.donationOffset?.verification_method ?? "receipts_uploaded",
+            unmatchedSurplusRule:
+              sourceOffer.donationOffset?.unmatched_surplus_rule ??
+              "donate_to_compromise_destination",
+          },
+        }
+      : null;
+  const initialTemplate = sourceCounterofferTemplate ?? template.prefill;
   const returnParams = new URLSearchParams({
     entry: "draft",
     template: template.id,
@@ -99,14 +179,22 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
   if (initialPoolSide) {
     returnParams.set("offset_pool_side", initialPoolSide);
   }
+  if (sourceOfferId) {
+    returnParams.set("source_offer", sourceOfferId);
+  }
   const returnTo = `/offers/new?${returnParams.toString()}`;
-  const supabaseReady = hasSupabaseEnv();
-  const viewer = supabaseReady ? await getViewer() : null;
 
   if (!viewer) {
     return <TradeDraftSignInGate returnTo={returnTo} />;
   }
 
+  const sourceMessage =
+    sourceOfferId && !sourceOffer
+      ? {
+          tone: "error" as const,
+          text: "The source proposal is no longer available. No counteroffer terms were inferred.",
+        }
+      : null;
   const donationOffsetOverview = await getDonationOffsetOverview().catch((error: unknown) => {
     console.error("[offers/new] Donation-offset pool options could not be loaded", error);
     return null;
@@ -153,12 +241,14 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head section-head-compact">
-            <p className="eyebrow">Donation offset template</p>
-            <h1>{template.prefill.title}</h1>
+            <p className="eyebrow">
+              {sourceCounterofferTemplate ? "Donation offset counteroffer" : "Donation offset template"}
+            </p>
+            <h1>{initialTemplate.title}</h1>
             <p>
-              Template applied. Review and replace every factual claim, amount, destination,
-              deadline, and evidence term before saving. Nothing is authorized by opening this
-              draft.
+              {sourceCounterofferTemplate
+                ? "The source proposal is retained as context. Review the reversed actions and enter fresh amounts, destination, deadline, and evidence terms before saving."
+                : "Template applied. Review and replace every factual claim, amount, destination, deadline, and evidence term before saving. Nothing is authorized by opening this draft."}
             </p>
           </div>
 
@@ -166,12 +256,12 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
             <OfferCreateForm
               availablePools={availablePools}
               directTemplateEntry
-              formMessage={getFormMessage(resolved)}
+              formMessage={getFormMessage(resolved) ?? sourceMessage}
               initialMode="offset"
               initialOffsetParticipationMode={initialParticipationMode}
               initialOffsetPoolId={initialPoolId}
               initialOffsetPoolSide={initialPoolSide}
-              initialTemplate={template.prefill}
+              initialTemplate={initialTemplate}
               liveBondPaymentsEnabled={performanceBondConfig.livePaymentsEnabled}
               paymentBondsEnabled={isPaymentBondsEnabled()}
               performanceBondMaxCents={performanceBondConfig.maxAmountCents}
