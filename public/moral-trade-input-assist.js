@@ -155,6 +155,10 @@
   }
 
   function inferContext(control) {
+    const explicit = normalize(control.getAttribute("data-mt-autocomplete"));
+    if (["off", "none", "false"].includes(explicit)) return null;
+    if (explicit === "search" || CONTEXT_KEYS.includes(explicit)) return explicit;
+
     const descriptor = normalize(controlDescriptor(control));
 
     if (control instanceof HTMLInputElement && control.type === "search") {
@@ -586,7 +590,12 @@
     preparedControls.add(control);
 
     const context = inferContext(control);
-    if (context) control.setAttribute("data-mt-autocomplete-context", context);
+    if (context) {
+      control.setAttribute("data-mt-autocomplete-context", context);
+      control.setAttribute("data-mt-autocomplete-ready", "true");
+      control.setAttribute("aria-autocomplete", "list");
+      control.setAttribute("aria-haspopup", "listbox");
+    }
 
     control.addEventListener("focus", () => {
       if (inferContext(control)) renderSuggestions(control);
@@ -627,6 +636,10 @@
     });
 
     updateWebsitePreview(control);
+
+    if (context && document.activeElement === control) {
+      renderSuggestions(control);
+    }
   }
 
   function scan(root) {

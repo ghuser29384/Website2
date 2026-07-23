@@ -246,6 +246,8 @@ export function TradeTemplateLibrary() {
                     <span aria-hidden="true">⌕</span>
                     <span className="sr-only">Search templates</span>
                     <input
+                      autoComplete="off"
+                      data-mt-autocomplete="off"
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Search by outcome, action, or mechanism…"
                       type="search"
