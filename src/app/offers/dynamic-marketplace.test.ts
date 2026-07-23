@@ -42,7 +42,15 @@ const marketplaceCleanup = readFileSync(
   "src/app/dynamic-marketplace-cleanup.css",
   "utf8",
 );
+const serverActions = readFileSync("src/app/actions.ts", "utf8");
 
+function extractFunction(source: string, startMarker: string, endMarker: string) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  assert.ok(start >= 0, `Missing function marker: ${startMarker}`);
+  assert.ok(end > start, `Missing function end marker: ${endMarker}`);
+  return source.slice(start, end);
+}
 
 test("the live marketplace groups generated combinations into participant offer menus", () => {
   assert.match(offersSurface, /buildParticipantOfferFamilies/);
@@ -122,6 +130,16 @@ test("private commitments enter a dealroom with real term and event actions", ()
   assert.match(dealroomPage, /value="counterproposal"/);
   assert.match(dealroomPage, /action=\{updateAgreementStatusAction\}/);
   assert.match(dealroomPage, /What changed, when, and why/);
+});
+
+test("email notifications use the server-only outbox client", () => {
+  const queueEmailOutbox = extractFunction(
+    serverActions,
+    "async function queueEmailOutbox({",
+    "async function requireAdminViewer",
+  );
+  assert.match(queueEmailOutbox, /const supabase = createServiceClient\(\);/);
+  assert.doesNotMatch(queueEmailOutbox, /await createClient\(\)/);
 });
 
 test("empty evidence and review modules are omitted from commitment rows", () => {
