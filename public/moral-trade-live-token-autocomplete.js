@@ -49,14 +49,19 @@
 
     if (label === "i offer") return index === 0 ? null : "priorities";
     if (
-      ["only if they", "money", "behavior", "skill", "donation redirect", "threshold"].includes(
-        label,
-      )
+      [
+        "only if they",
+        "money",
+        "time",
+        "behavior",
+        "skill",
+        "donation redirect",
+        "threshold",
+      ].includes(label)
     ) {
       return "commitments";
     }
     if (["proof", "verification"].includes(label)) return "evidence";
-    if (["activation condition", "deadline", "time"].includes(label)) return "durations";
     if (label === "if it fails") return "exits";
     return null;
   }
@@ -133,7 +138,7 @@
   }
 
   function suggestionValue(suggestion) {
-    return String(suggestion.value || suggestion.label || "").trim();
+    return String(suggestion.label || suggestion.value || "").trim();
   }
 
   function selectSuggestion(index) {
