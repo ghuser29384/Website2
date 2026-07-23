@@ -1,0 +1,57 @@
+name: Validate live offer structure
+
+on:
+  push:
+    branches:
+      - fix/live-offer-structure-20260723
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check focused JavaScript and source contract
+        run: |
+          node --check public/moral-trade-live-token-autocomplete.js
+          node --check public/moral-trade-live-offer-structure.js
+          node --import tsx --test src/lib/exact-live-autocomplete.test.ts
+          npx eslint public/moral-trade-live-token-autocomplete.js public/moral-trade-live-offer-structure.js src/lib/exact-live-autocomplete.test.ts tests/exact-live-autocomplete.spec.ts
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise the exact live trade composer
+        run: npx playwright test tests/exact-live-autocomplete.spec.ts --project=chromium
+      - uses: actions/upload-artifact@v4
+        with:
+          name: structured-live-offer-qa
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Record successful validation
+        shell: bash
+        run: |
+          mkdir -p tmp/live-offer-structure-validation
+          cat > tmp/live-offer-structure-validation/result.md <<'EOF'
+          # Structured Live offer validation
+
+          - JavaScript syntax: passed
+          - Exact-live source contract: passed
+          - Focused ESLint: passed
+          - Chromium Playwright: passed
+          - Route: `/moral-trade-live.html#trade`
+          - Offer types: Money; Behavior or commitment; Help or service
+          - Shared attributes: Estimated time; Relevant skills; Deliverable or completion condition; Verification method
+          EOF
+          git config user.name "moral-trade-offer-structure-bot"
+          git config user.email "moral-trade-offer-structure-bot@users.noreply.github.com"
+          git add tmp/live-offer-structure-validation/result.md
+          git commit -m "Record structured live offer validation [skip ci]"
+          git push origin HEAD:fix/live-offer-structure-20260723
