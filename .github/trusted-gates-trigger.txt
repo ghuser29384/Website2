@@ -1,1 +1,1 @@
-Run the registered trusted pull_request_target release gates with source preservation for this launch head.
+Trigger the deterministic anonymous-feedback, lint, and browser-gate repair for this launch head.
