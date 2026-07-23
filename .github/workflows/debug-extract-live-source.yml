@@ -112,3 +112,29 @@ jobs:
           path: diagnostics
           if-no-files-found: error
           retention-days: 1
+
+  diagnose-pr-179-base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: c1c83a92e19b7d17a58c3a8ebeac15cb6dfee144
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Capture base test output
+        shell: bash
+        run: |
+          mkdir -p base-diagnostics
+          set +e
+          node --import tsx --test src/live-now-priority-route.test.ts > base-diagnostics/live-now-priority-route.txt 2>&1
+          echo $? > base-diagnostics/live-now-priority-route.exit
+          cat base-diagnostics/live-now-priority-route.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-179-base-diagnostics
+          path: base-diagnostics
+          if-no-files-found: error
+          retention-days: 1
