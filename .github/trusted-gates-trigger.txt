@@ -1,1 +1,1 @@
-Trigger the current Supabase Auth fixture compatibility update and rerun trusted exact-head gates.
+Trigger the current offer-impact fixture compatibility update and rerun trusted exact-head gates.
