@@ -24,6 +24,16 @@ const questionPage = readFileSync(
   "src/app/offers/[offerId]/question/page.tsx",
   "utf8",
 );
+const questionAction = readFileSync(
+  "src/app/offers/[offerId]/question/actions.ts",
+  "utf8",
+);
+const questionForm = readFileSync(
+  "src/app/offers/[offerId]/question/offer-question-form.tsx",
+  "utf8",
+);
+const pledgeCounteroffer = readFileSync("src/app/trades/new/page.tsx", "utf8");
+const offsetCounteroffer = readFileSync("src/app/offers/new/page.tsx", "utf8");
 const commentThread = readFileSync(
   "src/components/community/comment-thread.tsx",
   "utf8",
@@ -33,12 +43,23 @@ const marketplaceCleanup = readFileSync(
   "utf8",
 );
 
+
 test("the live marketplace groups generated combinations into participant offer menus", () => {
   assert.match(offersSurface, /buildParticipantOfferFamilies/);
   assert.match(offersSurface, /distinct participants/);
   assert.match(offersSurface, /distinct offer families/);
   assert.match(offersSurface, /available combinations/);
-  assert.match(offersSurface, /Pagination applies to people, not generated combinations/);
+  assert.match(offersSurface, /Pagination applies to participants rather than generated pairings/);
+});
+
+test("participant menus retain the constraint-aware smart-search pipeline", () => {
+  assert.match(offersSurface, /parseSmartQuery/);
+  assert.match(offersSurface, /mergeSmartQueryFacets/);
+  assert.match(offersSurface, /matchesSmartAmountConstraint/);
+  assert.match(offersSurface, /matchesSmartDeadlineConstraint/);
+  assert.match(offersSurface, /matchesSmartVerificationConstraint/);
+  assert.match(offersSurface, /preserveInputOrder: true/);
+  assert.match(offersSurface, /SmartQueryForm/);
 });
 
 test("the weekly clearing round is explicit without promising a match", () => {
@@ -51,9 +72,23 @@ test("the weekly clearing round is explicit without promising a match", () => {
 test("participant cards expose the core transaction actions directly", () => {
   assert.match(participantMenu, />\s*Propose match\s*</);
   assert.match(participantMenu, />\s*Counteroffer\s*</);
-  assert.match(participantMenu, /\{saved \? "Remove saved" : "Save"\}/);
+  assert.match(participantMenu, /SaveOfferSubmitButton/);
+  assert.match(participantMenu, /"Saving…"/);
+  assert.match(participantMenu, /"Removing…"/);
   assert.match(participantMenu, />\s*Ask a question\s*</);
   assert.match(participantMenu, /Eligible for weekly review/);
+});
+
+test("counteroffers preserve and visibly reverse their source proposal", () => {
+  assert.match(participantMenu, /source_offer=\$\{selectedPairing\.id\}/);
+  assert.match(pledgeCounteroffer, /sourceOffer\.requested_cause/);
+  assert.match(pledgeCounteroffer, /sourceOffer\.offer_action/);
+  assert.match(pledgeCounteroffer, /Counteroffer to proposal/);
+  assert.match(pledgeCounteroffer, /acceptCommandHandoff=\{acceptsCommandHandoff\}/);
+  assert.match(offsetCounteroffer, /source_offer/);
+  assert.match(offsetCounteroffer, /baselineAmountUsd: ""/);
+  assert.match(offsetCounteroffer, /requestedMatchingAmountUsd: ""/);
+  assert.match(offsetCounteroffer, /no amount is inferred/i);
 });
 
 test("empty outcome claims remain truthful and worked examples stay separate", () => {
@@ -67,9 +102,15 @@ test("the template path remains available and the walkthrough behavior is not re
   assert.doesNotMatch(offersPage, /redirect\([^)]*walkthrough/);
 });
 
-test("the question path posts a real public comment without an empty counter widget", () => {
-  assert.match(questionPage, /action=\{addOfferCommentAction\}/);
-  assert.match(questionPage, /comments\.length \?/);
+test("the question path refreshes, confirms, and clears after a real public comment", () => {
+  assert.match(questionPage, /OfferQuestionForm/);
+  assert.match(questionPage, /comments\.length/);
+  assert.match(questionPage, /role=\{formMessage\.tone === "error" \? "alert" : "status"\}/);
+  assert.doesNotMatch(questionPage, /The thread is empty until/);
+  assert.match(questionAction, /revalidatePath\(`\/offers\/\$\{offerId\}\/question`\)/);
+  assert.match(questionAction, /addOfferCommentAction\(formData\)/);
+  assert.match(questionForm, /formRef\.current\?\.reset\(\)/);
+  assert.match(questionForm, /Posting question…/);
   assert.doesNotMatch(questionPage, /0 comment/);
 });
 
