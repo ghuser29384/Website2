@@ -1246,7 +1246,7 @@ async function queueEmailOutbox({
     return;
   }
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { error } = await supabase.from("email_outbox").insert({
     profile_id: profileId,
     recipient_email: recipientEmail,
