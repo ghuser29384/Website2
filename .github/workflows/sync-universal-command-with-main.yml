@@ -6,14 +6,14 @@ on:
       - feat/universal-command-workspace
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: finalize-universal-command-from-child-pr
   cancel-in-progress: false
 
 jobs:
-  finalize-verify-push:
+  finalize-verify-package:
     if: github.head_ref == 'trigger/finalize-universal-command'
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -29,7 +29,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          echo "REMOTE_HEAD=$(git rev-parse origin/feat/universal-command-workspace)" >> "$GITHUB_ENV"
           git fetch origin main
           git merge --no-edit origin/main
           python .github/finalize-command.py
@@ -47,18 +46,30 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
 
-      - name: Push verified application changes to the feature branch
+      - name: Package verified application files
         shell: bash
         run: |
           set -euo pipefail
-          git checkout HEAD -- next-env.d.ts
-          git add \
+          mkdir -p verified-command
+          cp --parents \
+            src/app/mpgf/pools/new/page.tsx \
+            src/components/mpgf/mpgf-console.tsx \
+            src/lib/command/capabilities.ts \
+            src/lib/command/executor.ts \
+            src/lib/command/executor.test.ts \
+            verified-command/
+          git rev-parse origin/main > verified-command/main-sha.txt
+          git rev-parse origin/feat/universal-command-workspace > verified-command/feature-head-sha.txt
+          git diff --check origin/feat/universal-command-workspace -- \
             src/app/mpgf/pools/new/page.tsx \
             src/components/mpgf/mpgf-console.tsx \
             src/lib/command/capabilities.ts \
             src/lib/command/executor.ts \
             src/lib/command/executor.test.ts
-          git commit -m "Guard universal Command public-good numeric terms"
-          git push \
-            --force-with-lease=refs/heads/feat/universal-command-workspace:${REMOTE_HEAD} \
-            origin HEAD:refs/heads/feat/universal-command-workspace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-universal-command-finalization
+          path: verified-command
+          if-no-files-found: error
+          retention-days: 1
