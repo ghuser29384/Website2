@@ -26,7 +26,7 @@ jobs:
           ref: launch/verify-and-harden-20260723
           fetch-depth: 0
 
-      - name: Merge current main and preserve both launch and current product behavior
+      - name: Merge current main and preserve the hardened bilateral workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -156,137 +156,16 @@ jobs:
           sed -i 's/^          //' src/app/trades/new/page.tsx
           git add src/app/trades/new/page.tsx
 
-          cat > /tmp/hardened-handoff.patch <<'EOF'
-          diff --git a/src/components/core-trade/trade-draft-workbench-hardened.tsx b/src/components/core-trade/trade-draft-workbench-hardened.tsx
-          index 49767ee..0000000 100644
-          --- a/src/components/core-trade/trade-draft-workbench-hardened.tsx
-          +++ b/src/components/core-trade/trade-draft-workbench-hardened.tsx
-          @@ -1,10 +1,12 @@
-           "use client";
-           
-           import Link from "next/link";
-          +import { useEffect, useRef, useState } from "react";
-           
-           import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
-          +import { consumeCommandCenterHandoff } from "@/lib/command-center-handoff";
-           
-           export interface TradeDraftValues {
-          @@ -23,12 +25,29 @@ export interface TradeDraftValues {
-           }
-           
-           interface HardenedTradeDraftWorkbenchProps {
-          +  acceptCommandHandoff?: boolean;
-             formMessage?: { text: string; tone: "error" | "success" } | null;
-             initialValues?: Partial<TradeDraftValues>;
-             saveAction: (formData: FormData) => void | Promise<void>;
-             submissionKey: string;
-             templateLabel?: string | null;
-           }
-          +
-          +type CommandHandoffState = "loading" | "loaded" | "unavailable" | null;
-          +
-          +const HANDOFF_FIELD_NAMES: Partial<Record<keyof TradeDraftValues, string>> = {
-          +  duration: "duration",
-          +  evidenceDueDate: "evidence_due_date",
-          +  evidenceRule: "evidence_rule",
-          +  exitConditions: "exit_conditions",
-          +  noTradeBaseline: "no_trade_baseline",
-          +  notes: "notes",
-          +  offeredCause: "offered_cause",
-          +  proposedAction: "proposed_action",
-          +  requestedAction: "requested_action",
-          +  requestedCause: "requested_cause",
-          +  startDate: "start_date",
-          +};
-           
-           const DEFAULT_PRIVACY_SCOPE =
-             "Agreement evidence is private to the two participants and the operator. Publishing any evidence requires a separate, explicit redaction and publication step.";
-          @@ -41,12 +60,54 @@ function value(initialValues: Partial<TradeDraftValues> | undefined, key: keyof TradeDraftValues) {
-           }
-           
-           export function HardenedTradeDraftWorkbench({
-          +  acceptCommandHandoff = false,
-             formMessage,
-             initialValues,
-             saveAction,
-             submissionKey,
-             templateLabel,
-           }: HardenedTradeDraftWorkbenchProps) {
-          +  const formRef = useRef<HTMLFormElement>(null);
-          +  const commandHandoff = useRef<
-          +    ReturnType<typeof consumeCommandCenterHandoff> | undefined
-          +  >(undefined);
-          +  const [commandHandoffState, setCommandHandoffState] =
-          +    useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
-          +
-          +  useEffect(() => {
-          +    if (!acceptCommandHandoff) return;
-          +
-          +    if (commandHandoff.current === undefined) {
-          +      try {
-          +        commandHandoff.current = consumeCommandCenterHandoff(window.sessionStorage);
-          +      } catch {
-          +        commandHandoff.current = null;
-          +      }
-          +    }
-          +
-          +    const restoredHandoff = commandHandoff.current;
-          +    const form = formRef.current;
-          +    if (!restoredHandoff || !form) {
-          +      setCommandHandoffState("unavailable");
-          +      return;
-          +    }
-          +
-          +    for (const [key, handoffValue] of Object.entries(restoredHandoff.values) as Array<
-          +      [keyof TradeDraftValues, string]
-          +    >) {
-          +      const fieldName = HANDOFF_FIELD_NAMES[key];
-          +      if (!fieldName) continue;
-          +      const field = form.elements.namedItem(fieldName);
-          +      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-          +        field.value = handoffValue;
-          +        field.dispatchEvent(new Event("input", { bubbles: true }));
-          +      }
-          +    }
-          +
-          +    setCommandHandoffState("loaded");
-          +  }, [acceptCommandHandoff]);
-          +
-             return (
-               <main className="page-shell marketplace-app-shell" id="main-content" tabIndex={-1}>
-          @@ -83,14 +144,29 @@ export function HardenedTradeDraftWorkbench({
-                 <strong>{formMessage.tone === "error" ? "Could not save" : "Saved"}</strong>
-                 <p>{formMessage.text}</p>
-               </div>
-          +    ) : commandHandoffState === "loading" ? (
-          +      <div className="status-banner" role="status">
-          +        <strong>Loading command</strong>
-          +        <p>Restoring the one-time command into the editable terms.</p>
-          +      </div>
-          +    ) : commandHandoffState === "loaded" ? (
-          +      <div className="status-banner" role="status">
-          +        <strong>Command loaded</strong>
-          +        <p>Review every term, add any missing bounds, and save only when the proposal is accurate.</p>
-          +      </div>
-          +    ) : commandHandoffState === "unavailable" ? (
-          +      <div className="status-banner status-banner-error" role="alert">
-          +        <strong>Command unavailable</strong>
-          +        <p>Enter the terms below. No draft was created.</p>
-          +      </div>
-               ) : templateLabel ? (
-                 <div className="status-banner" role="status">
-                   <strong>{templateLabel}</strong>
-                   <p>Template text is only a starting point. Replace every term with one that is true.</p>
-                 </div>
-               ) : null}
-           
-          -    <form action={saveAction} className="panel stack-form">
-          +    <form action={saveAction} className="panel stack-form" ref={formRef}>
-                 <input name="submission_key" type="hidden" value={submissionKey} />
-          EOF
-          sed -i 's/^          //' /tmp/hardened-handoff.patch
-          git apply /tmp/hardened-handoff.patch
-          git add src/components/core-trade/trade-draft-workbench-hardened.tsx
+          for temporary_path in \
+            .github/launch-sync-trigger.txt \
+            .github/workflows/sync-launch-with-main.yml \
+            .github/workflows/sync-launch-pr-trigger.yml \
+            .github/workflows/sync-launch-branch-one-shot.yml \
+            .github/workflows/sync-launch-pr-target.yml; do
+            if [[ -e "$temporary_path" ]]; then
+              git rm -f "$temporary_path"
+            fi
+          done
 
           unresolved="$(git diff --name-only --diff-filter=U || true)"
           if [[ -n "$unresolved" ]]; then
@@ -295,7 +174,7 @@ jobs:
             exit 1
           fi
 
-          git rm .github/workflows/sync-launch-with-main.yml
           git add -A
+          git status --short
           git commit -m "Merge current main into launch verification branch"
           git push origin HEAD:launch/verify-and-harden-20260723
