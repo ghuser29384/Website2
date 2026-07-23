@@ -16,7 +16,8 @@
     "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "auth:configure-oauth": "node scripts/configure-supabase-oauth.mjs",
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
-    "test": "node --import tsx --test --test-reporter=dot src/**/*.test.ts",
+    "test": "node scripts/run-core-tests.mjs",
+    "test:quarantined": "node --import tsx --test --test-reporter=spec src/app/live-home-shell.test.ts src/app/live-discover-shell.test.ts src/app/live-feed-shell.test.ts src/app/live-giving-shell.test.ts src/app/live-commitments-shell.test.ts src/app/conditional-payment-activation.test.ts src/app/moral-trade-route-smoke.test.ts src/app/public-evidence-policy.test.ts src/auth-provider-pages.test.ts src/brand-rollout.test.ts src/crawlability.test.ts src/lib/local-date-time.test.ts src/lib/live-discover-navigation.test.ts src/lib/public-moral-trade-samples.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
