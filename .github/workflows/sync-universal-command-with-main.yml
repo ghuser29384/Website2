@@ -1,0 +1,68 @@
+name: Sync universal Command with main
+
+on:
+  push:
+    branches:
+      - feat/universal-command-workspace
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-universal-command-with-main
+  cancel-in-progress: false
+
+jobs:
+  sync-verify-push:
+    if: github.event.head_commit.message == 'Add one-shot Command main synchronization'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/universal-command-workspace
+          fetch-depth: 0
+
+      - name: Merge current main locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: node --check public/moral-trade-live-command-center.js
+      - name: Lint Command integration
+        run: |
+          npx eslint \
+            src/app/api/command \
+            src/app/command/page.tsx \
+            src/components/command \
+            src/lib/command \
+            src/app/mpgf/pools/new/page.tsx \
+            src/components/mpgf/mpgf-console.tsx \
+            src/lib/site-search.ts \
+            src/lib/site.ts \
+            src/lib/command-center-handoff.test.ts \
+            tests/exact-live-command-center.spec.ts
+      - run: node --import tsx --test src/lib/command/*.test.ts src/lib/command-center-handoff.test.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
+
+      - name: Remove one-shot workflow and push verified merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout HEAD -- next-env.d.ts
+          git rm .github/workflows/sync-universal-command-with-main.yml
+          git add -A
+          git commit -m "Verify universal Command against current main"
+          git push origin HEAD:feat/universal-command-workspace
