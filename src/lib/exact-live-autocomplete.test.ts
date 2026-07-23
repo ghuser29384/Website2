@@ -18,11 +18,12 @@ function readExactLiveSource() {
   return gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
 }
 
-test("the exact live shell loads structured offer types and autocomplete for editable terms", () => {
+test("the exact live shell loads structured offer types and cause or organization autocomplete", () => {
   const loader = readRepoFile("public/moral-trade-live.html");
   const adapter = readRepoFile("public/moral-trade-live-token-autocomplete.js");
   const structure = readRepoFile("public/moral-trade-live-offer-structure.js");
   const styles = readRepoFile("public/moral-trade-live-offer-structure.css");
+  const nonprofitRoute = readRepoFile("src/app/api/nonprofits/search/route.ts");
   const source = readExactLiveSource();
 
   assert.match(loader, /moral-trade-input-assist\.js/);
@@ -47,9 +48,15 @@ test("the exact live shell loads structured offer types and autocomplete for edi
   assert.match(adapter, /data-mt-live-token-panel/);
   assert.match(adapter, /data-mt-autocomplete-disabled/);
   assert.match(adapter, /const explicitContext/);
+  assert.match(adapter, /RECIPIENT_CONTEXT/);
   assert.match(adapter, /"behavior or commitment"/);
   assert.match(adapter, /"help or service"/);
-  assert.match(adapter, /return index === 0 \? null : "priorities"/);
+  assert.match(adapter, /return index === 0 \? null : RECIPIENT_CONTEXT/);
+  assert.match(adapter, /rankSuggestions\("organizations", query\)/);
+  assert.match(adapter, /rankSuggestions\("priorities", query\)/);
+  assert.match(adapter, /\/api\/nonprofits\/search/);
+  assert.match(adapter, /Cause areas and organizations/);
+  assert.match(adapter, /data-mt-suggestion-kind/);
   assert.match(adapter, /return "commitments"/);
   assert.match(adapter, /\["proof", "verification"\]/);
   assert.match(adapter, /return "evidence"/);
@@ -59,4 +66,6 @@ test("the exact live shell loads structured offer types and autocomplete for edi
   assert.doesNotMatch(adapter, /"activation condition"/);
   assert.match(adapter, /new MutationObserver/);
   assert.match(adapter, /aria-autocomplete/);
+  assert.match(nonprofitRoute, /buildProPublicaSearchUrl/);
+  assert.match(nonprofitRoute, /mapProPublicaOrganizations/);
 });
