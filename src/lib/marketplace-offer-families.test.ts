@@ -62,6 +62,52 @@ test("deduplicates identical generated request routes without inflating menus", 
   assert.equal(families[0]?.offerVariants[0]?.pairings[0]?.id, "new");
 });
 
+test("preserves smart-ranked participant, variant, and pairing order when requested", () => {
+  const families = buildParticipantOfferFamilies(
+    [
+      row({
+        id: "rank-1",
+        owner_alias: "Sam",
+        owner_id: "owner-2",
+        request_action: "Top-ranked request",
+        updated_at: "2026-07-19T10:00:00.000Z",
+      }),
+      row({
+        id: "rank-2",
+        owner_alias: "Ellen",
+        owner_id: "owner-1",
+        offer_action: "Top-ranked offer variant",
+        request_action: "First ranked pairing",
+        updated_at: "2026-07-18T10:00:00.000Z",
+      }),
+      row({
+        id: "rank-3",
+        owner_alias: "Ellen",
+        owner_id: "owner-1",
+        offer_action: "Top-ranked offer variant",
+        request_action: "Second ranked pairing",
+        requested_cause: "Climate",
+        updated_at: "2026-07-22T10:00:00.000Z",
+      }),
+      row({
+        id: "rank-4",
+        owner_alias: "Ellen",
+        owner_id: "owner-1",
+        offer_action: "Lower-ranked offer variant",
+        updated_at: "2026-07-23T10:00:00.000Z",
+      }),
+    ],
+    { preserveInputOrder: true },
+  );
+
+  assert.equal(families[0]?.ownerId, "owner-2");
+  assert.equal(families[1]?.offerVariants[0]?.offerAction, "Top-ranked offer variant");
+  assert.deepEqual(
+    families[1]?.offerVariants[0]?.pairings.map((pairing) => pairing.id),
+    ["rank-2", "rank-3"],
+  );
+});
+
 test("reports participants, distinct offer families, and possible pairings separately", () => {
   const families = buildParticipantOfferFamilies([
     row({ id: "pair-1" }),
