@@ -13,7 +13,7 @@ interface SmartQueryLlmGateEnvironment {
  * still enforced by resolveSmartQueryWithLlm before any request is sent.
  */
 export function activateProductionSmartQueryLlmFallback(
-  environment: SmartQueryLlmGateEnvironment = process.env,
+  environment: SmartQueryLlmGateEnvironment = process.env as SmartQueryLlmGateEnvironment,
 ) {
   if (environment.AI_QUERY_FALLBACK_KILL_SWITCH === "true") return false;
   if (environment.AI_QUERY_FALLBACK_ENABLED === "true") return true;
