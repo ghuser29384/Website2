@@ -1,6 +1,9 @@
 name: Inspect live offer picker
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - agent/inspect-live-offer-types-20260723
