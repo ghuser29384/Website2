@@ -1,0 +1,47 @@
+name: Inspect live command center
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.head_ref == 'fix/command-center-draft-handoff'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract command-center source context
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { gunzipSync } = require('node:zlib');
+          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+          const encoded = names.map((name) => fs.readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8')).join('');
+          const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+          const needles = [
+            'COMMAND CENTER',
+            'Build this offer',
+            'Draft created with editable exact terms.',
+            'Create the next commitment.',
+          ];
+          const contexts = [];
+          for (const needle of needles) {
+            let cursor = 0;
+            let count = 0;
+            while (count < 6) {
+              const index = source.indexOf(needle, cursor);
+              if (index < 0) break;
+              contexts.push(`\n===== ${needle} occurrence ${count + 1} @ ${index} =====\n${source.slice(Math.max(0, index - 5000), Math.min(source.length, index + 12000))}\n`);
+              cursor = index + needle.length;
+              count += 1;
+            }
+            console.log(`NEEDLE ${JSON.stringify(needle)} COUNT ${count}`);
+          }
+          console.log(`SOURCE_LENGTH ${source.length}`);
+          console.log(contexts.join('\n').slice(0, 120000));
+          NODE
