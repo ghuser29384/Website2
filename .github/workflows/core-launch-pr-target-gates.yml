@@ -1,0 +1,179 @@
+name: Trusted core launch gates
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trusted-core-launch-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    if: github.event.pull_request.number == 174
+    name: Trusted repository tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run repository tests
+        run: npm test > test.log 2>&1
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-tests-${{ github.event.pull_request.head.sha }}
+          path: test.log
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    if: github.event.pull_request.number == 174
+    name: Trusted repository lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run repository lint
+        run: npm run lint -- --quiet > lint.log 2>&1
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-lint-${{ github.event.pull_request.head.sha }}
+          path: lint.log
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    if: github.event.pull_request.number == 174
+    name: Trusted production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > build.log 2>&1
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-production-build-${{ github.event.pull_request.head.sha }}
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
+
+  playwright:
+    if: github.event.pull_request.number == 174
+    name: Trusted core Playwright suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+        run: npm run test:e2e > playwright.log 2>&1
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-core-playwright-${{ github.event.pull_request.head.sha }}
+          path: |
+            playwright.log
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    if: always() && github.event.pull_request.number == 174
+    name: Report trusted launch gates
+    needs:
+      - tests
+      - lint
+      - build
+      - playwright
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post exact-head gate results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_RESULT: ${{ needs.tests.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PLAYWRIGHT_RESULT: ${{ needs.playwright.result }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          body=$(cat <<EOF
+          ### Trusted launch gate run
+
+          Exact head: \`$HEAD_SHA\`
+
+          | Gate | Result |
+          |---|---|
+          | Repository tests | $TEST_RESULT |
+          | Repository lint | $LINT_RESULT |
+          | Production build | $BUILD_RESULT |
+          | Core Playwright suite | $PLAYWRIGHT_RESULT |
+
+          Artifacts are retained for 14 days on this workflow run.
+          EOF
+          )
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "$body"
