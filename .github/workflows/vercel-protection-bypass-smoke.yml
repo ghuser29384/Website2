@@ -1,7 +1,7 @@
 name: Configure Vercel protection bypass and smoke preview
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - feat/universal-command-workspace
     types:
