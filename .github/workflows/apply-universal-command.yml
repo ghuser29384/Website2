@@ -59,7 +59,7 @@ jobs:
               text += addition
               path.write_text(text)
           PY
-          git rm -rf \
+          git rm -rf --ignore-unmatch \
             .github/universal-command-patch \
             .github/universal-command.patch.gz.b64 \
             .github/workflows/apply-universal-command.yml \
