@@ -21,8 +21,16 @@ test("the live Trade Templates control opens the canonical template library", ()
   assert.match(shell, /moral-trade-live-templates\.js/);
   assert.match(navigation, /\/offers\?view=templates/);
   assert.match(navigation, /Open trade template library/);
+  assert.match(navigation, /overflowLabels/);
+  assert.match(navigation, /removeAdjacentOverflowControl/);
   assert.match(offersPage, /view === "templates"/);
   assert.match(offersPage, /<TradeTemplateLibrary \/>/);
+});
+
+test("the live New trade action opens the canonical template library", () => {
+  assert.match(navigation, /templateEntryLabels = new Set\(\["templates", "new trade"\]\)/);
+  assert.ok(navigation.includes('.replace(/^\\+\\s*/, "");'));
+  assert.match(navigation, /window\.location\.assign\(libraryHref\)/);
 });
 
 test("the production library opens real drafts directly and keeps the three-question guide", () => {
