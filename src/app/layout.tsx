@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Suspense } from "react";
 
 import { FunnelTracker } from "@/components/analytics/funnel-tracker";
 import { RecommendationLearningTracker } from "@/components/recommendations/recommendation-learning-tracker";
+import { SmartQueryAutoEnhancer } from "@/components/search/smart-query-auto-enhancer";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
@@ -108,6 +110,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* The same static stylesheet also serves the legacy HTML shells. */}
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link href="/moral-trade-input-assist.css" rel="stylesheet" />
+      </head>
       <body>
         <script
           dangerouslySetInnerHTML={{
@@ -127,7 +134,9 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <FunnelTracker />
           <RecommendationLearningTracker />
+          <SmartQueryAutoEnhancer />
         </Suspense>
+        <Script src="/moral-trade-input-assist.js" strategy="afterInteractive" />
         {children}
       </body>
     </html>
