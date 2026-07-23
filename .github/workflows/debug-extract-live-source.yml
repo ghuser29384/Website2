@@ -31,6 +31,9 @@ jobs:
 
           fs.mkdirSync('debug-live-source', { recursive: true });
           fs.writeFileSync('debug-live-source/moral-trade-live-source.html', source);
+          fs.copyFileSync('public/moral-trade-input-assist.js', 'debug-live-source/moral-trade-input-assist.js');
+          fs.copyFileSync('public/moral-trade-input-assist.css', 'debug-live-source/moral-trade-input-assist.css');
+          fs.copyFileSync('public/moral-trade-input-standards.json', 'debug-live-source/moral-trade-input-standards.json');
 
           const terms = [
             'Build a trade',
