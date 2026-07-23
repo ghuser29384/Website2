@@ -10,6 +10,10 @@ import {
   type SmartQueryClarificationAnswer,
 } from "@/lib/smart-query-clarification";
 import { resolveSmartQueryWithLlm } from "@/lib/smart-query-llm";
+import {
+  applySmartQuerySurfacePolicy,
+  smartQuerySurfaceFromClarification,
+} from "@/lib/smart-query-surface-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,29 +53,35 @@ export async function POST(request: Request) {
 
   const record = body as Record<string, unknown>;
   const query = typeof record.query === "string" ? record.query.trim().slice(0, 500) : "";
-  const surface = SMART_QUERY_SURFACES.includes(record.surface as SmartQuerySurface)
+  const requestedSurface = SMART_QUERY_SURFACES.includes(record.surface as SmartQuerySurface)
     ? (record.surface as SmartQuerySurface)
     : "global";
   const now = typeof record.now === "string" && Number.isFinite(Date.parse(record.now))
     ? record.now
     : undefined;
   const clarification = readClarification(record.clarification);
+  const surface = smartQuerySurfaceFromClarification(
+    requestedSurface,
+    clarification?.field,
+    clarification?.answer,
+  );
+  const parserClarification = clarification?.field === "route" ? null : clarification;
 
   if (!query) return badRequest("Enter a query before running the search.");
 
   const { interpretation: deterministic, refinedQuery } = parseSmartQueryWithClarification(
     query,
-    clarification,
+    parserClarification,
     { now, surface },
   );
   const resolved = await resolveSmartQueryWithLlm(deterministic);
-  const interpretation = resolved.interpretation;
+  const interpretation = applySmartQuerySurfacePolicy(resolved.interpretation);
 
   return NextResponse.json(
     {
       interpretation,
       refinedQuery,
-      target: resolved.target || buildSmartQueryTarget(interpretation),
+      target: buildSmartQueryTarget(interpretation),
       usedLlm: resolved.usedLlm,
     },
     { status: 200, headers: RESPONSE_HEADERS },
