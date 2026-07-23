@@ -1,0 +1,58 @@
+name: One-time email outbox service-client repair
+
+on:
+  push:
+    branches:
+      - agent/dynamic-marketplace-clearing-rounds
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-time-email-outbox-service-client-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out the branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/dynamic-marketplace-clearing-rounds
+          fetch-depth: 0
+
+      - name: Replace the user-scoped outbox client only
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = "src/app/actions.ts";
+          const source = fs.readFileSync(path, "utf8");
+          const start = source.indexOf("async function queueEmailOutbox({");
+          const end = source.indexOf("\n}\n\nasync function requireAdminViewer", start);
+          if (start < 0 || end < 0) {
+            throw new Error("Could not isolate queueEmailOutbox in src/app/actions.ts");
+          }
+          const prefix = source.slice(0, start);
+          const helper = source.slice(start, end + 2);
+          const suffix = source.slice(end + 2);
+          const from = "const supabase = await createClient();";
+          const to = "const supabase = createServiceClient();";
+          const occurrences = helper.split(from).length - 1;
+          if (occurrences !== 1) {
+            throw new Error(`Expected one user-scoped client in queueEmailOutbox; found ${occurrences}.`);
+          }
+          fs.writeFileSync(path, prefix + helper.replace(from, to) + suffix);
+          NODE
+
+      - name: Commit the repair and remove this one-time workflow
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-time-email-outbox-service-client.yml
+          git add src/app/actions.ts
+          git commit -m "Use service client for email outbox writes"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
