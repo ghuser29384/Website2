@@ -2,11 +2,23 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Fragment, useId, useMemo, useState, useTransition, type FormEvent } from "react";
+import {
+  Fragment,
+  useId,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
+import type { SmartQueryClarification, SmartQueryInterpretation } from "@/lib/smart-query";
+import {
+  filterSmartSiteSearchItems,
+  getSmartSiteSearchTarget,
+} from "@/lib/site-search-smart";
 import { createClient } from "@/lib/supabase/browser";
-import { filterSiteSearchItems } from "@/lib/site-search";
 
 interface NavRouteItem {
   href: string;
@@ -30,6 +42,12 @@ interface SiteTopbarProps {
   showSearch?: boolean;
   showLogout?: boolean;
   logoutRedirectTo?: string;
+}
+
+interface QueryApiResponse {
+  error?: string;
+  interpretation?: SmartQueryInterpretation;
+  target?: string;
 }
 
 function getHrefPath(href: string) {
@@ -134,11 +152,20 @@ export function SiteTopbar({
 }: SiteTopbarProps) {
   const router = useRouter();
   const searchInputId = useId();
+  const clarificationInputId = useId();
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchClarification, setSearchClarification] =
+    useState<SmartQueryClarification | null>(null);
+  const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
-  const searchResults = useMemo(() => filterSiteSearchItems(searchQuery, 6), [searchQuery]);
+  const searchResults = useMemo(
+    () => filterSmartSiteSearchItems(searchQuery, 6),
+    [searchQuery],
+  );
 
   function handleMenuOpenChange(menuKey: string, isOpen: boolean) {
     if (isOpen) {
@@ -150,8 +177,7 @@ export function SiteTopbar({
     setOpenMenuKey((currentMenuKey) => (currentMenuKey === menuKey ? null : currentMenuKey));
   }
 
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runSmartSearch(clarification?: { field: string; answer: string }) {
     const trimmedQuery = searchQuery.trim();
     setOpenMenuKey(null);
 
@@ -160,8 +186,53 @@ export function SiteTopbar({
       return;
     }
 
-    setSearchOpen(false);
-    router.push(`/offers?search=${encodeURIComponent(trimmedQuery)}`);
+    setSearchBusy(true);
+    setSearchError("");
+    setSearchOpen(true);
+    try {
+      const response = await fetch("/api/query/interpret", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: trimmedQuery, surface: "global", clarification }),
+      });
+      const payload = await response.json() as QueryApiResponse;
+      if (!response.ok || !payload.interpretation || !payload.target) {
+        throw new Error(payload.error || "The search could not be interpreted.");
+      }
+
+      if (payload.interpretation.needsClarification && payload.interpretation.clarification) {
+        setSearchClarification(payload.interpretation.clarification);
+        setClarificationAnswer("");
+        return;
+      }
+
+      setSearchClarification(null);
+      setSearchOpen(false);
+      router.push(payload.target);
+    } catch (caught) {
+      setSearchError(caught instanceof Error ? caught.message : "The search could not be interpreted.");
+      setSearchOpen(false);
+      router.push(getSmartSiteSearchTarget(trimmedQuery));
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runSmartSearch();
+  }
+
+  function submitClarification(answer: string) {
+    if (!searchClarification || !answer.trim()) return;
+    void runSmartSearch({ field: searchClarification.field, answer: answer.trim() });
+  }
+
+  function handleClarificationKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitClarification(clarificationAnswer);
   }
 
   function handleLogout() {
@@ -200,24 +271,30 @@ export function SiteTopbar({
       {showSearch ? (
         <form className="topbar-search" role="search" onSubmit={handleSearchSubmit}>
           <label className="sr-only" htmlFor={searchInputId}>
-            Search trades
+            Search the site
           </label>
           <div className="topbar-search-box">
             <span aria-hidden="true" className="topbar-search-icon">
               Search
             </span>
             <input
+              aria-expanded={searchOpen}
+              aria-haspopup="listbox"
               id={searchInputId}
               name="search"
-              placeholder="Search trades"
+              placeholder="Search offers, people, pools, or evidence"
               type="search"
               value={searchQuery}
-              onBlur={() => {
+              onBlur={(event) => {
+                const next = event.relatedTarget;
+                if (next instanceof Node && event.currentTarget.form?.contains(next)) return;
                 globalThis.setTimeout(() => setSearchOpen(false), 120);
               }}
               onChange={(event) => {
                 setSearchQuery(event.target.value);
                 setSearchOpen(true);
+                setSearchClarification(null);
+                setSearchError("");
                 setOpenMenuKey(null);
               }}
               onFocus={() => {
@@ -233,18 +310,58 @@ export function SiteTopbar({
                 onClick={() => {
                   setSearchQuery("");
                   setSearchOpen(false);
+                  setSearchClarification(null);
+                  setSearchError("");
                 }}
               >
                 Clear
               </button>
             ) : null}
-            <button className="topbar-search-submit" type="submit">
-              Go
+            <button className="topbar-search-submit" disabled={searchBusy} type="submit">
+              {searchBusy ? "…" : "Go"}
             </button>
           </div>
           {searchOpen && searchQuery.trim() ? (
             <div className="topbar-search-results" role="listbox" aria-label="Search suggestions">
-              {searchResults.length ? (
+              {searchClarification ? (
+                <div className="topbar-search-empty" data-testid="global-search-clarification" role="status">
+                  <strong>{searchClarification.question}</strong>
+                  {searchClarification.options?.length ? (
+                    <div className="form-actions" aria-label="Clarification choices">
+                      {searchClarification.options.map((option) => (
+                        <button
+                          className="button button-secondary"
+                          disabled={searchBusy}
+                          key={option}
+                          onClick={() => submitClarification(option)}
+                          type="button"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="field">
+                      <label htmlFor={clarificationInputId}>Your answer</label>
+                      <input
+                        autoFocus
+                        id={clarificationInputId}
+                        onChange={(event) => setClarificationAnswer(event.target.value)}
+                        onKeyDown={handleClarificationKeyDown}
+                        value={clarificationAnswer}
+                      />
+                      <button
+                        className="button button-secondary"
+                        disabled={searchBusy || !clarificationAnswer.trim()}
+                        onClick={() => submitClarification(clarificationAnswer)}
+                        type="button"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : searchResults.length ? (
                 searchResults.map((result) => (
                   <Link
                     className="topbar-search-result"
@@ -259,9 +376,10 @@ export function SiteTopbar({
                 ))
               ) : (
                 <div className="topbar-search-empty" role="status">
-                  No matching routes yet. Press Go to search offers.
+                  No direct route match. Press Go to run a semantic search.
                 </div>
               )}
+              {searchError ? <div className="topbar-search-empty" role="alert">{searchError}</div> : null}
             </div>
           ) : null}
         </form>
