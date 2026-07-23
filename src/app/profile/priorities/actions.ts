@@ -6,9 +6,12 @@ import { redirect } from "next/navigation";
 import { requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
-  NOW_PROFILE_PRIORITY_SEARCH_LABEL,
-  normalizeNowProfilePriorityCauses,
-} from "@/lib/profile-priority-search";
+  buildPersistedProfilePriorities,
+  getRankedProfileCauseAreas,
+  getRankedProfilePriorityLabels,
+  normalizeProfilePriorityAllocation,
+} from "@/lib/profile-priorities";
+import { NOW_PROFILE_PRIORITY_SEARCH_LABEL } from "@/lib/profile-priority-search";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,22 +36,104 @@ export async function saveProfilePrioritySearchAction(formData: FormData) {
   );
   const successTo = getSafeInternalPath(
     readOptional(formData, "success_to"),
-    "/moral-trade-live.html#now",
+    "/feed",
   );
 
   if (!hasSupabaseEnv()) {
     redirectWithMessage(returnTo, "error", "Account storage is unavailable.");
   }
 
-  const viewer = await requireViewer(returnTo);
-  const causes = normalizeNowProfilePriorityCauses(formData.getAll("cause_area"));
-
-  if (!causes.length) {
-    redirectWithMessage(returnTo, "error", "Choose at least one cause area.");
+  const allocation = normalizeProfilePriorityAllocation(
+    readOptional(formData, "priority_allocation"),
+  );
+  if (!allocation) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Assign at least five of your 100 sparks before saving.",
+    );
   }
 
+  const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  const { data: existingSearch, error: lookupError } = await supabase
+  const typedSupabase = supabase as any;
+  const priorityAllocations = buildPersistedProfilePriorities(allocation);
+  const causes = getRankedProfileCauseAreas(allocation);
+  const causePriorities = getRankedProfilePriorityLabels(allocation);
+  const updatedAt = new Date().toISOString();
+
+  const { data: updatedOnboarding, error: onboardingUpdateError } = await typedSupabase
+    .from("cohort_onboarding_profiles")
+    .update({
+      cause_areas: causes,
+      priority_allocations: priorityAllocations,
+      updated_at: updatedAt,
+    })
+    .eq("profile_id", viewer.authUser.id)
+    .select("profile_id")
+    .maybeSingle();
+
+  if (onboardingUpdateError) {
+    console.error("[profile-priorities] Failed to update the saved spark allocation", {
+      message: onboardingUpdateError.message,
+      profileId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", "We could not save your priority allocation.");
+  }
+
+  if (!updatedOnboarding) {
+    const { error: onboardingInsertError } = await typedSupabase
+      .from("cohort_onboarding_profiles")
+      .insert({
+        cause_areas: causes,
+        completed_at: updatedAt,
+        first_action: "Review matching opportunities",
+        participant_kind: "individual",
+        primary_goal: "Personalize live opportunities",
+        priority_allocations: priorityAllocations,
+        profile_id: viewer.authUser.id,
+        referral_source: "Profile priorities",
+        status: "completed",
+        updated_at: updatedAt,
+      });
+
+    if (onboardingInsertError) {
+      console.error("[profile-priorities] Failed to create the saved spark allocation", {
+        message: onboardingInsertError.message,
+        profileId: viewer.authUser.id,
+      });
+      redirectWithMessage(returnTo, "error", "We could not save your priority allocation.");
+    }
+  }
+
+  const { error: synthesisError } = await typedSupabase
+    .from("profile_syntheses")
+    .upsert(
+      {
+        cause_priorities: causePriorities,
+        profile_id: viewer.authUser.id,
+      },
+      { onConflict: "profile_id" },
+    );
+  if (synthesisError) {
+    console.error("[profile-priorities] Failed to synchronize ranked priority labels", {
+      message: synthesisError.message,
+      profileId: viewer.authUser.id,
+    });
+  }
+
+  const { error: wishProfileError } = await typedSupabase
+    .from("wish_profiles")
+    .update({ causes })
+    .eq("profile_id", viewer.authUser.id);
+  if (wishProfileError) {
+    console.error("[profile-priorities] Failed to synchronize broad profile causes", {
+      message: wishProfileError.message,
+      profileId: viewer.authUser.id,
+    });
+  }
+
+  const { data: existingSearch, error: searchLookupError } = await supabase
     .from("saved_searches")
     .select("id")
     .eq("profile_id", viewer.authUser.id)
@@ -57,39 +142,49 @@ export async function saveProfilePrioritySearchAction(formData: FormData) {
     .limit(1)
     .maybeSingle();
 
-  if (lookupError) {
+  if (searchLookupError) {
     console.error("[profile-priorities] Failed to load the Now priority search", {
-      message: lookupError.message,
+      message: searchLookupError.message,
       profileId: viewer.authUser.id,
     });
-    redirectWithMessage(returnTo, "error", "We could not load your saved priorities.");
-  }
+  } else {
+    const searchPayload = {
+      cadence: "manual" as const,
+      causes,
+      min_score: 50,
+      query: "",
+      status: "active" as const,
+      updated_at: updatedAt,
+    };
+    const searchWriteResult = existingSearch
+      ? await supabase.from("saved_searches").update(searchPayload).eq("id", existingSearch.id)
+      : await supabase.from("saved_searches").insert({
+          ...searchPayload,
+          label: NOW_PROFILE_PRIORITY_SEARCH_LABEL,
+          profile_id: viewer.authUser.id,
+        });
 
-  const searchPayload = {
-    cadence: "manual" as const,
-    causes,
-    min_score: 50,
-    query: "",
-    status: "active" as const,
-    updated_at: new Date().toISOString(),
-  };
-  const writeResult = existingSearch
-    ? await supabase.from("saved_searches").update(searchPayload).eq("id", existingSearch.id)
-    : await supabase.from("saved_searches").insert({
-        ...searchPayload,
-        label: NOW_PROFILE_PRIORITY_SEARCH_LABEL,
-        profile_id: viewer.authUser.id,
+    if (searchWriteResult.error) {
+      console.error("[profile-priorities] Failed to synchronize the Now priority search", {
+        message: searchWriteResult.error.message,
+        profileId: viewer.authUser.id,
       });
-
-  if (writeResult.error) {
-    console.error("[profile-priorities] Failed to save the Now priority search", {
-      message: writeResult.error.message,
-      profileId: viewer.authUser.id,
-    });
-    redirectWithMessage(returnTo, "error", "We could not save your priorities.");
+    }
   }
 
-  revalidatePath("/profile/priorities");
-  revalidatePath("/moral-trade-live.html");
-  redirectWithMessage(successTo, "message", "Priorities saved. Now is personalized.");
+  for (const path of [
+    "/profile/priorities",
+    "/profile",
+    "/dashboard",
+    "/feed",
+    "/moral-trade-live.html",
+  ]) {
+    revalidatePath(path);
+  }
+
+  redirectWithMessage(
+    successTo,
+    "message",
+    "Priorities saved. Your feed now uses the new 100-spark allocation.",
+  );
 }
