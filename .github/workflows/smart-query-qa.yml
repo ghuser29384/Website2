@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "src/lib/smart-query*"
+      - "src/lib/smart-discovery-ranking.ts"
+      - "src/lib/site-search-smart.ts"
       - "src/app/api/query/**"
       - "src/app/offers/**"
       - "src/app/people/**"
@@ -28,7 +30,7 @@ permissions:
 jobs:
   smart-query-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Check out repository
@@ -50,15 +52,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint smart query code
+      - name: Lint smart query code and integrated surfaces
         run: |
           set -o pipefail
           npx eslint \
             src/lib/smart-query.ts \
             src/lib/smart-query-clarification.ts \
+            src/lib/smart-query-facets.ts \
             src/lib/smart-query-llm.ts \
+            src/lib/smart-query-records.ts \
+            src/lib/smart-query-scoring.ts \
             src/lib/smart-query.test.ts \
+            src/lib/smart-discovery-ranking.ts \
+            src/lib/site-search-smart.ts \
             src/app/api/query/interpret/route.ts \
+            src/app/offers/page.tsx \
+            src/components/layout/site-topbar.tsx \
             src/components/search/smart-query-form.tsx \
             tests/discover-query-audit.spec.ts 2>&1 | tee test-results/smart-query-lint.txt
 
@@ -66,6 +75,11 @@ jobs:
         run: |
           set -o pipefail
           node --import tsx --test src/lib/smart-query.test.ts 2>&1 | tee test-results/smart-query-test.txt
+
+      - name: Build production application
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee test-results/smart-query-build.txt
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -84,5 +98,6 @@ jobs:
             test-results/query-surface-audit.txt
             test-results/smart-query-lint.txt
             test-results/smart-query-test.txt
+            test-results/smart-query-build.txt
           if-no-files-found: warn
           retention-days: 7
