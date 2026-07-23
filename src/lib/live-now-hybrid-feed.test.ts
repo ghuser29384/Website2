@@ -98,6 +98,7 @@ test("semantic retrieval can find an indirect public-text match without sending 
   assert.equal(provider.seen.every((input) => input.kind === "canonical" || input.kind === "opportunity"), true);
 });
 
+
 test("unmapped private priorities do not trigger an external embedding request", async () => {
   const provider = fakeProvider(() => [1, 0, 0]);
   const result = await buildHybridLiveNowFeed({
@@ -221,6 +222,8 @@ test("diagnostics expose the whole funnel and all calibrated feed classes", asyn
   );
 });
 
+
+
 test("known complete-profile constraints downgrade an otherwise direct match", async () => {
   const provider = fakeProvider(() => [1, 0, 0]);
   const result = await buildHybridLiveNowFeed({
@@ -242,6 +245,7 @@ test("known complete-profile constraints downgrade an otherwise direct match", a
   assert.equal(adjusted.diagnostics.knownConstraintBlockers.time_budget, 1);
   assert.match(adjusted.recommendations[0]?.reason ?? "", /known profile constraints/);
 });
+
 
 test("saved opportunities remain in the bounded semantic retrieval pool", async () => {
   const previous = process.env.LIVE_FEED_RETRIEVAL_POOL_SIZE;
@@ -277,6 +281,29 @@ test("saved opportunities remain in the bounded semantic retrieval pool", async 
     if (previous === undefined) delete process.env.LIVE_FEED_RETRIEVAL_POOL_SIZE;
     else process.env.LIVE_FEED_RETRIEVAL_POOL_SIZE = previous;
   }
+});
+
+test("discovery records never exceed the configured exploration share", async () => {
+  const provider = fakeProvider((input) =>
+    input.kind === "canonical" ? [1, 0, 0] : [0, 1, 0],
+  );
+  const candidates = Array.from({ length: 20 }, (_, index) =>
+    candidate(`discovery-${index}`, "Community gardening", "Volunteer shift", {
+      trustLevel: 2,
+    }),
+  );
+
+  const result = await buildHybridLiveNowFeed({
+    candidates,
+    profile: { ...profile, explorationPercent: 12 },
+    now,
+    embeddingProvider: provider,
+  });
+
+  assert.equal(result.recommendations.length, 1);
+  assert.equal(result.recommendations[0]?.matchClass, "discovery");
+  assert.equal(result.diagnostics.discoveryCount, 20);
+  assert.equal(result.diagnostics.selectedCount, 1);
 });
 
 test("the embedding input builder accepts no private profile fields", () => {
