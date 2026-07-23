@@ -5708,6 +5708,9 @@ test("core Moral Trade email outbox copy stays generic and dashboard-directed", 
   const actionsSource = readRepoFile("src/app/actions.ts");
   const emailCopySource = readRepoFile("src/lib/moral-trade/email-copy.ts");
   const emailJobRoute = readRepoFile("src/app/api/jobs/email/route.ts");
+  const invitationMigration = readRepoFile(
+    "supabase/migrations/20260722223000_harden_trade_invitations.sql",
+  );
   const paymentReminderRoute = readRepoFile("src/app/api/jobs/payment-reminders/route.ts");
   const stripeWebhookRoute = readRepoFile("src/app/api/stripe/webhook/route.ts");
 
@@ -5724,8 +5727,9 @@ test("core Moral Trade email outbox copy stays generic and dashboard-directed", 
   assert.match(emailCopySource, /contact_email_in_body/);
   assert.match(emailCopySource, /payment_amount_in_body/);
   assert.match(emailJobRoute, /evaluateMoralTradeEmailOutboxSafety/);
-  assert.match(emailJobRoute, /status: "suppressed"/);
-  assert.match(emailJobRoute, /resend_safety_gate/);
+  assert.match(emailJobRoute, /suppress_email_outbox_v2/);
+  assert.match(invitationMigration, /status = 'suppressed'/);
+  assert.match(invitationMigration, /provider = 'resend_safety_gate'/);
   assert.equal(actionsSource.includes("responded to ${offer.offered_cause}"), false);
   assert.equal(actionsSource.includes("An agreement was created for ${offer.offered_cause}"), false);
   assert.equal(paymentReminderRoute.includes("A negotiated payment of ${amount}"), false);

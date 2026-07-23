@@ -20,6 +20,7 @@ interface AgreementVersionSummary {
   evidenceDueDate: string;
   evidenceRule: string;
   exitConditions: string;
+  id: string;
   maximumBurden: string;
   noTradeBaseline: string;
   privacyScope: string;
@@ -342,6 +343,11 @@ function SplitConfirmation(props: TradeAgreementStageProps) {
           {props.canConfirm ? (
             <form action={props.confirmAction} className={styles.confirmActions}>
               <input name="agreement_id" type="hidden" value={props.agreementId} />
+              <input
+                name="agreement_version_id"
+                type="hidden"
+                value={props.version.id}
+              />
               <label className={styles.reviewCheck}>
                 <input name="terms_reviewed" required type="checkbox" />
                 <span>

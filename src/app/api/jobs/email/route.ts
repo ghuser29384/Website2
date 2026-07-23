@@ -1,14 +1,22 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { isCronRequestAuthorized } from "@/lib/cron";
 import { hasEmailEnv, sendEmail } from "@/lib/email";
 import { evaluateMoralTradeEmailOutboxSafety } from "@/lib/moral-trade/email-copy";
-import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-type EmailOutboxRow = Database["public"]["Tables"]["email_outbox"]["Row"];
+interface ClaimedEmail {
+  id: string;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  provider: string;
+  attempt_count: number;
+  idempotency_key: string | null;
+}
 
 async function processEmailOutbox(request: Request) {
   if (!isCronRequestAuthorized(request)) {
@@ -22,14 +30,12 @@ async function processEmailOutbox(request: Request) {
     );
   }
 
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("email_outbox")
-    .select("*")
-    .eq("status", "queued")
-    .neq("recipient_email", "")
-    .order("created_at", { ascending: true })
-    .limit(25);
+  const supabase = createServiceClient() as any;
+  const workerToken = randomUUID();
+  const { data, error } = await supabase.rpc("claim_email_outbox_v2", {
+    p_limit: 25,
+    p_worker_token: workerToken,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -37,9 +43,10 @@ async function processEmailOutbox(request: Request) {
 
   let sent = 0;
   let failed = 0;
+  let retrying = 0;
   let suppressed = 0;
 
-  for (const email of (data ?? []) as EmailOutboxRow[]) {
+  for (const email of (data ?? []) as ClaimedEmail[]) {
     const safety = evaluateMoralTradeEmailOutboxSafety({
       body: email.body,
       provider: email.provider,
@@ -47,67 +54,60 @@ async function processEmailOutbox(request: Request) {
     });
 
     if (safety.status === "suppress") {
-      const { error: updateError } = await supabase
-        .from("email_outbox")
-        .update({
-          status: "suppressed",
-          provider: "resend_safety_gate",
-          attempt_count: email.attempt_count + 1,
-          last_error: safety.blockers.join("; ").slice(0, 500),
-        })
-        .eq("id", email.id);
-
-      if (updateError) {
-        failed += 1;
-      } else {
-        suppressed += 1;
-      }
-
+      const { data: didSuppress, error: suppressError } = await supabase.rpc(
+        "suppress_email_outbox_v2",
+        {
+          p_email_id: email.id,
+          p_reason: safety.blockers.join("; "),
+          p_worker_token: workerToken,
+        },
+      );
+      if (suppressError || !didSuppress) failed += 1;
+      else suppressed += 1;
       continue;
     }
 
     try {
-      await sendEmail({
+      const providerResult = await sendEmail({
+        idempotencyKey: email.idempotency_key ?? `email-outbox:${email.id}`,
         to: email.recipient_email,
         subject: email.subject,
         text: email.body,
       });
 
-      const { error: updateError } = await supabase
-        .from("email_outbox")
-        .update({
-          status: "sent",
-          provider: "resend",
-          sent_at: new Date().toISOString(),
-          last_error: "",
-        })
-        .eq("id", email.id);
-
-      if (updateError) {
-        throw new Error(updateError.message);
+      const { data: didComplete, error: completeError } = await supabase.rpc(
+        "complete_email_outbox_v2",
+        {
+          p_email_id: email.id,
+          p_provider_message_id: providerResult.id ?? "",
+          p_worker_token: workerToken,
+        },
+      );
+      if (completeError || !didComplete) {
+        throw new Error(completeError?.message ?? "Email lease was no longer current.");
       }
-
       sent += 1;
-    } catch (error) {
-      failed += 1;
-      const message = error instanceof Error ? error.message : "Unknown email error.";
-
-      await supabase
-        .from("email_outbox")
-        .update({
-          status: "failed",
-          provider: "resend",
-          attempt_count: email.attempt_count + 1,
-          last_error: message.slice(0, 500),
-        })
-        .eq("id", email.id);
+    } catch (deliveryError) {
+      const message =
+        deliveryError instanceof Error ? deliveryError.message : "Unknown email error.";
+      const { data: nextStatus, error: retryError } = await supabase.rpc(
+        "retry_email_outbox_v2",
+        {
+          p_email_id: email.id,
+          p_error: message,
+          p_worker_token: workerToken,
+        },
+      );
+      if (retryError || !nextStatus || nextStatus === "failed") failed += 1;
+      else retrying += 1;
     }
   }
 
   return NextResponse.json({
-    processed: sent + failed + suppressed,
-    sent,
+    claimed: (data ?? []).length,
     failed,
+    retrying,
+    sent,
     suppressed,
   });
 }
