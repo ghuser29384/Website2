@@ -5,13 +5,16 @@ import {
   SMART_QUERY_CONFIDENCE_THRESHOLD,
   buildSmartQueryTarget,
   extractMoneyAmountsCents,
-  getSmartPersonalFit,
   matchesSmartAmountConstraint,
   matchesSmartDeadlineConstraint,
   parseSerializedSmartQueryFacets,
   parseSmartQuery,
-  semanticTextScore,
 } from "./smart-query";
+import { parseSmartQueryWithClarification } from "./smart-query-clarification";
+import {
+  smartInterpretationScore,
+  smartPersonalPriorityScore,
+} from "./smart-query-scoring";
 
 test("parses the verified civic budget and deadline example without clarification", () => {
   const interpretation = parseSmartQuery(
@@ -55,6 +58,20 @@ test("asks one material clarification for a standalone amount while preserving o
   assert.ok(interpretation.confidence < SMART_QUERY_CONFIDENCE_THRESHOLD);
 });
 
+test("applies a clarification answer while preserving parsed constraints", () => {
+  const { refinedQuery, interpretation } = parseSmartQueryWithClarification(
+    "Verified animal welfare work for $50",
+    { field: "amount", answer: "Maximum" },
+    { surface: "offers" },
+  );
+
+  assert.match(refinedQuery, /at most \$50/i);
+  assert.deepEqual(interpretation.facets.causes, ["factory-farming"]);
+  assert.equal(interpretation.facets.verified, true);
+  assert.equal(interpretation.facets.maxAmountCents, 5_000);
+  assert.equal(interpretation.needsClarification, false);
+});
+
 test("routes global queries to the relevant directory", () => {
   assert.equal(parseSmartQuery("people working on voting", { surface: "global" }).intent, "people");
   assert.equal(parseSmartQuery("accepted evidence receipts", { surface: "global" }).intent, "evidence");
@@ -67,7 +84,7 @@ test("resolves common aliases and close typos semantically", () => {
   });
   assert.deepEqual(interpretation.facets.causes, ["civic-infrastructure"]);
 
-  const score = semanticTextScore(interpretation, [
+  const score = smartInterpretationScore(interpretation, [
     { value: "Open civic infrastructure documentation for transparent local governance", weight: 1 },
   ]);
   assert.ok(score > 0.45);
@@ -124,8 +141,8 @@ test("enforces deadline boundaries", () => {
 });
 
 test("uses personal priorities as a bounded fit signal", () => {
-  assert.ok(getSmartPersonalFit(["civic-infrastructure"], ["Open governance"]) > 0.8);
-  assert.equal(getSmartPersonalFit(["civic-infrastructure"], []), 0.5);
+  assert.ok(smartPersonalPriorityScore(["civic-infrastructure"], ["Open governance"]) > 0.8);
+  assert.equal(smartPersonalPriorityScore(["civic-infrastructure"], []), 0.5);
 });
 
 test("detects contradictory amount limits", () => {
