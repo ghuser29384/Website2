@@ -5,6 +5,7 @@ on:
     paths:
       - "public/moral-trade-input-assist.js"
       - "public/moral-trade-input-standards.json"
+      - "public/moral-trade-live-offer-structure.js"
       - "public/moral-trade-live-token-autocomplete.js"
       - "public/moral-trade-live.html"
       - "src/app/api/nonprofits/search/**"
@@ -19,6 +20,7 @@ on:
     paths:
       - "public/moral-trade-input-assist.js"
       - "public/moral-trade-input-standards.json"
+      - "public/moral-trade-live-offer-structure.js"
       - "public/moral-trade-live-token-autocomplete.js"
       - "public/moral-trade-live.html"
       - "src/app/api/nonprofits/search/**"
@@ -52,6 +54,7 @@ jobs:
       - name: Lint changed implementation and tests
         run: |
           npx eslint \
+            public/moral-trade-live-offer-structure.js \
             public/moral-trade-live-token-autocomplete.js \
             src/app/api/nonprofits/search/route.ts \
             src/lib/exact-live-autocomplete.test.ts \
