@@ -1,4 +1,4 @@
-name: Synchronize launch branch from pull request target
+name: Trusted core launch gates (registered target)
 
 on:
   pull_request_target:
@@ -8,63 +8,229 @@ on:
       - synchronize
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
-  group: sync-launch-with-main
-  cancel-in-progress: false
+  group: trusted-core-launch-registered-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: true
 
 jobs:
-  sync:
-    if: github.event.pull_request.number == 174 && github.actor != 'github-actions[bot]'
+  start:
+    if: github.event.pull_request.number == 174
+    name: Announce trusted launch gates
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - name: Check out the launch branch with full history
-        uses: actions/checkout@v4
-        with:
-          ref: launch/verify-and-harden-20260723
-          fetch-depth: 0
-
-      - name: Prepare the reviewed synchronization script
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          workflow = Path('.github/workflows/sync-launch-with-main.yml').read_text().splitlines()
-          marker = '        run: |'
-          start = workflow.index(marker) + 1
-          script_lines = []
-          for line in workflow[start:]:
-              script_lines.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/sync-launch.sh').write_text('\n'.join(script_lines) + '\n')
-          PY
-
-      - name: Execute synchronization and retain diagnostics
-        id: synchronize
-        shell: bash
-        run: |
-          set +e
-          bash /tmp/sync-launch.sh 2>&1 | tee /tmp/sync-launch.log
-          status=${PIPESTATUS[0]}
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Report synchronization result on the launch pull request
-        if: always()
+      - name: Post run identity
         env:
           GH_TOKEN: ${{ github.token }}
-          SYNC_STATUS: ${{ steps.synchronize.outputs.status }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "Trusted registered launch gates started for exact head \`$HEAD_SHA\` in workflow run \`$RUN_ID\`."
+
+  source:
+    if: github.event.pull_request.number == 174
+    name: Preserve exact release source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Package release source and migrations
+        run: |
+          tar -czf trusted-launch-source.tar.gz \
+            .github/workflows/core-launch-gates.yml \
+            package.json package-lock.json playwright.config.ts vercel.json \
+            scripts/core-test-quarantine.json scripts/run-core-tests.mjs scripts/run-quarantined-tests.mjs \
+            src/app/api/health src/app/core-trade-actions.ts src/app/core-trade-actions-hardened.ts \
+            src/app/trade-agreements src/app/trades/new \
+            src/components/core-trade/trade-draft-workbench-hardened.tsx \
+            src/lib/core-health.ts src/lib/supabase/auth-errors.ts src/lib/supabase/server.ts \
+            supabase/migrations/20260723090000_core_launch_security_performance_health.sql \
+            supabase/migrations/20260723090100_core_launch_atomic_discussion_and_terms.sql \
+            supabase/migrations/20260723090200_core_launch_atomic_evidence.sql \
+            supabase/migrations/20260723090300_core_launch_atomic_completion_exit.sql \
+            supabase/migrations/20260723090400_core_launch_guard_fixes.sql \
+            supabase/migrations/20260723090500_core_launch_final_grant_cutover.sql \
+            supabase/tests/core_launch_workflow.sql \
+            tests/core-launch-release.spec.ts
+      - name: Upload exact release source
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-launch-source-${{ github.event.pull_request.head.sha }}
+          path: trusted-launch-source.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  tests:
+    if: github.event.pull_request.number == 174
+    name: Trusted repository tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run repository tests
+        run: npm test > test.log 2>&1
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-tests-${{ github.event.pull_request.head.sha }}
+          path: test.log
+          if-no-files-found: error
+          retention-days: 14
+
+  lint:
+    if: github.event.pull_request.number == 174
+    name: Trusted repository lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run repository lint
+        run: npm run lint -- --quiet > lint.log 2>&1
+      - name: Upload lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-repository-lint-${{ github.event.pull_request.head.sha }}
+          path: lint.log
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    if: github.event.pull_request.number == 174
+    name: Trusted production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > build.log 2>&1
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-production-build-${{ github.event.pull_request.head.sha }}
+          path: build.log
+          if-no-files-found: error
+          retention-days: 14
+
+  playwright:
+    if: github.event.pull_request.number == 174
+    name: Trusted core Playwright suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact launch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+        run: npm run test:e2e > playwright.log 2>&1
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trusted-core-playwright-${{ github.event.pull_request.head.sha }}
+          path: |
+            playwright.log
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 14
+
+  report:
+    if: always() && github.event.pull_request.number == 174
+    name: Report trusted launch gates
+    needs:
+      - source
+      - tests
+      - lint
+      - build
+      - playwright
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Post exact-head gate results
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RESULT: ${{ needs.source.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PLAYWRIGHT_RESULT: ${{ needs.playwright.result }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
         shell: bash
         run: |
-          status_label="failed"
-          if [[ "$SYNC_STATUS" == "0" ]]; then status_label="succeeded"; fi
-          diagnostics="$(tail -c 6000 /tmp/sync-launch.log 2>/dev/null || true)"
-          body=$(printf 'Automated main-branch synchronization **%s**.\n\n```text\n%s\n```' "$status_label" "$diagnostics")
-          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "$body"
+          body=$(cat <<EOF
+          ### Trusted registered launch gate run
 
-      - name: Fail the workflow when synchronization failed
-        if: steps.synchronize.outputs.status != '0'
-        run: exit 1
+          Exact head: \`$HEAD_SHA\`  
+          Workflow run: \`$RUN_ID\`
+
+          | Gate | Result |
+          |---|---|
+          | Exact source artifact | $SOURCE_RESULT |
+          | Repository tests | $TEST_RESULT |
+          | Repository lint | $LINT_RESULT |
+          | Production build | $BUILD_RESULT |
+          | Core Playwright suite | $PLAYWRIGHT_RESULT |
+
+          Artifacts are retained for 14 days on this workflow run.
+          EOF
+          )
+          gh pr comment 174 --repo "$GITHUB_REPOSITORY" --body "$body"
