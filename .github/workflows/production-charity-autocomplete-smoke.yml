@@ -1,0 +1,166 @@
+name: Production charity autocomplete smoke
+
+on:
+  push:
+    branches:
+      - qa/production-charity-autocomplete-20260723
+
+permissions:
+  contents: read
+
+jobs:
+  production-charity-autocomplete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create production smoke test
+        run: |
+          mkdir -p production-smoke
+          cat > production-smoke/playwright.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: ".",
+            testMatch: "production-charity-autocomplete.spec.ts",
+            timeout: 60_000,
+            retries: 0,
+            workers: 1,
+            reporter: "line",
+            outputDir: "../production-smoke-results",
+            use: {
+              headless: true,
+              viewport: { width: 1440, height: 900 },
+              trace: "retain-on-failure",
+              screenshot: "only-on-failure",
+            },
+          });
+          TS
+
+          cat > production-smoke/production-charity-autocomplete.spec.ts <<'TS'
+          import { expect, test } from "@playwright/test";
+
+          test("production trade recipient searches causes and organizations", async ({ context, page }, testInfo) => {
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: ".moraltrade.org",
+                path: "/",
+                httpOnly: false,
+                secure: true,
+                sameSite: "Lax",
+              },
+            ]);
+
+            const relevantErrors: string[] = [];
+            const relevantPattern = /autocomplete|nonprofit|input assist|input-assist|token assist/i;
+            page.on("console", (message) => {
+              if ((message.type() === "error" || message.type() === "warning") && relevantPattern.test(message.text())) {
+                relevantErrors.push(message.text());
+              }
+            });
+            page.on("pageerror", (error) => {
+              if (relevantPattern.test(error.message)) relevantErrors.push(error.message);
+            });
+
+            const adapterResponse = page.waitForResponse((response) =>
+              response.url().includes("/moral-trade-live-token-autocomplete.js"),
+            );
+            const catalogResponse = page.waitForResponse((response) =>
+              response.url().includes("/moral-trade-input-standards.json"),
+            );
+
+            const navigation = await page.goto("https://www.moraltrade.org/#trade", {
+              waitUntil: "domcontentloaded",
+            });
+            expect(navigation?.ok()).toBeTruthy();
+            expect((await adapterResponse).status()).toBe(200);
+            expect((await catalogResponse).status()).toBe(200);
+
+            await expect(
+              page.getByRole("heading", { name: "Build a trade that works for both sides." }),
+            ).toBeVisible({ timeout: 30_000 });
+
+            const recipient = page
+              .locator('.token[data-mt-autocomplete-context="recipients"]')
+              .first();
+            await expect(recipient).toHaveAttribute("data-mt-autocomplete-ready", "true");
+
+            const nonprofitResponse = page.waitForResponse(
+              (response) =>
+                response.url().includes("/api/nonprofits/search") &&
+                response.url().includes("Red%20Cross") &&
+                response.status() === 200,
+            );
+            await recipient.fill("Red Cross");
+            const nonprofitPayload = await (await nonprofitResponse).json();
+            expect(
+              nonprofitPayload.results.some(
+                (result: { label?: string }) => result.label === "American National Red Cross",
+              ),
+            ).toBeTruthy();
+
+            const panel = page.locator('[data-mt-live-token-panel="true"]');
+            await expect(panel).toBeVisible();
+            const redCrossOption = panel
+              .locator('.mt-input-assist-option[data-mt-suggestion-kind="organization"]')
+              .filter({ hasText: "American National Red Cross" })
+              .first();
+            await expect(redCrossOption).toBeVisible();
+            await expect(redCrossOption).toContainText("501(c)(3) charity");
+
+            await page.screenshot({
+              path: testInfo.outputPath("production-charity-autocomplete-visible.png"),
+              fullPage: false,
+            });
+
+            await redCrossOption.click();
+            await expect(recipient).toHaveText("American National Red Cross");
+            await expect(recipient).toHaveAttribute("data-mt-selected-kind", "organization");
+            await expect(recipient).toHaveAttribute("data-mt-selected-ein", "53-0196605");
+            await expect(recipient).toHaveAttribute(
+              "data-mt-selected-source",
+              "ProPublica Nonprofit Explorer / IRS",
+            );
+
+            await recipient.fill("Animal");
+            await expect(panel).toBeVisible();
+            await expect(
+              panel.locator('.mt-input-assist-option[data-mt-suggestion-kind="cause"] strong').filter({
+                hasText: "Animal welfare",
+              }),
+            ).toBeVisible();
+            await expect(
+              panel.locator('.mt-input-assist-option[data-mt-suggestion-kind="organization"]'),
+            ).not.toHaveCount(0);
+
+            expect(relevantErrors).toEqual([]);
+          });
+          TS
+
+      - name: Run production autocomplete smoke test
+        run: npx playwright test --config=production-smoke/playwright.config.ts
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-charity-autocomplete-evidence
+          path: production-smoke-results
+          if-no-files-found: ignore
+          retention-days: 1
