@@ -71,9 +71,16 @@ export default async function MpgfNewPoolPage({ searchParams }: MpgfNewPoolPageP
   const viewer = await getViewer();
 
   if (templateApplied && !viewer) {
-    return (
-      <TradeDraftSignInGate returnTo="/mpgf/pools/new?template=threshold-coalition" />
-    );
+    const returnParams = new URLSearchParams({ template: "threshold-coalition" });
+    if (commandTitle) returnParams.set("title", commandTitle);
+    if (commandCause) returnParams.set("cause", commandCause);
+    if (commandTermsAreSafe) {
+      returnParams.set("participants", String(commandParticipants));
+      returnParams.set("contribution", String(commandContribution));
+      returnParams.set("threshold", String(commandThreshold));
+    }
+    if (single(resolved.source) === "command") returnParams.set("source", "command");
+    return <TradeDraftSignInGate returnTo={`/mpgf/pools/new?${returnParams.toString()}`} />;
   }
 
   const participantState = await loadMpgfParticipantState({
