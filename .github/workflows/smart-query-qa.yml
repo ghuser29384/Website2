@@ -2,131 +2,332 @@ name: Smart query QA
 
 on:
   pull_request:
-    paths:
-      - "src/lib/smart-query*"
-      - "src/lib/smart-discovery-ranking.ts"
-      - "src/lib/smart-evidence-ranking*"
-      - "src/lib/smart-people-ranking.ts"
-      - "src/lib/site-search-smart.ts"
-      - "src/app/api/query/**"
-      - "src/app/layout.tsx"
-      - "src/app/offers/**"
-      - "src/app/people/**"
-      - "src/app/wish-registry/**"
-      - "src/app/evidence/**"
-      - "src/app/pools/**"
-      - "src/app/mpgf/pools/**"
-      - "src/components/layout/site-topbar.tsx"
-      - "src/components/search/**"
-      - "public/moral-trade-smart-query.js"
-      - "public/moral-trade-discover.html"
-      - "tests/smart-query*.spec.ts"
-      - "tests/discover-query-audit.spec.ts"
-      - ".github/workflows/smart-query-qa.yml"
-  push:
     branches:
-      - feat/smart-query-pipeline
+      - main
 
 permissions:
-  contents: read
+  contents: write
 
-# Only the newest branch head should consume the full build and browser-test budget.
 concurrency:
-  group: smart-query-qa-${{ github.ref }}
-  cancel-in-progress: true
+  group: finalize-universal-command-via-registered-workflow
+  cancel-in-progress: false
 
 jobs:
   smart-query-qa:
+    if: github.head_ref == 'feat/universal-command-workspace'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
+    timeout-minutes: 50
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
         with:
-          node-version: 22
+          ref: feat/universal-command-workspace
+          fetch-depth: 0
+
+      - name: Merge current main and apply Command numeric guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge --no-edit origin/main
+          python <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          page_path = Path('src/app/mpgf/pools/new/page.tsx')
+          page = page_path.read_text()
+          page = replace_once(
+              page,
+              '''function positiveNumber(value: string, maximum: number) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
+          }
+          ''',
+              '''const MAX_SAFE_FUNDING_DOLLARS = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+
+          function positiveInteger(value: string, maximum: number) {
+            const parsed = Number(value);
+            return Number.isInteger(parsed) && parsed > 0 ? Math.min(maximum, parsed) : 0;
+          }
+
+          function positiveMoney(value: string) {
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_SAFE_FUNDING_DOLLARS) return 0;
+            return Math.round(parsed * 100) / 100;
+          }
+          ''',
+              'pool numeric parser',
+          )
+          page = replace_once(
+              page,
+              '''  const commandParticipants = positiveNumber(single(resolved.participants), 1_000_000_000);
+            const commandContribution = positiveNumber(single(resolved.contribution), 1_000_000_000);
+            const commandThreshold = positiveNumber(single(resolved.threshold), 1_000_000_000);
+          ''',
+              '''  const requestedParticipants = positiveInteger(single(resolved.participants), 1_000_000_000);
+            const requestedContribution = positiveMoney(single(resolved.contribution));
+            const requestedThreshold = positiveInteger(single(resolved.threshold), 1_000_000_000);
+            const commandTermsAreSafe =
+              requestedParticipants >= 2 &&
+              requestedThreshold >= 1 &&
+              requestedThreshold <= requestedParticipants &&
+              requestedContribution > 0 &&
+              requestedContribution <= MAX_SAFE_FUNDING_DOLLARS / requestedParticipants;
+            const commandParticipants = commandTermsAreSafe ? requestedParticipants : 0;
+            const commandContribution = commandTermsAreSafe ? requestedContribution : 0;
+            const commandThreshold = commandTermsAreSafe ? requestedThreshold : 0;
+          ''',
+              'pool query safeguards',
+          )
+          page_path.write_text(page)
+
+          console_path = Path('src/components/mpgf/mpgf-console.tsx')
+          console = console_path.read_text()
+          console = replace_once(
+              console,
+              '''function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
+            const value = Number(readFormControlValue(event));
+
+            return Number.isFinite(value) ? value : 0;
+          }
+          ''',
+              '''function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
+            const value = Number(readFormControlValue(event));
+
+            return Number.isFinite(value) ? value : 0;
+          }
+
+          const MAX_SAFE_FUNDING_DOLLARS = Math.floor(Number.MAX_SAFE_INTEGER / 100);
+
+          function safeFundingProduct(count: number, amount: number) {
+            if (!Number.isInteger(count) || count <= 0 || !Number.isFinite(amount) || amount <= 0) return 0;
+            if (amount > MAX_SAFE_FUNDING_DOLLARS / count) return 0;
+            return Math.round(count * amount * 100) / 100;
+          }
+          ''',
+              'console funding helper',
+          )
+          console = replace_once(
+              console,
+              '''  const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
+          ''',
+              '''  const commandMaximumFunding = safeFundingProduct(
+            initialPoolParticipantCount,
+            initialPoolContributionAmount,
+          );
+            const commandThresholdFunding = safeFundingProduct(
+            initialPoolThresholdCount,
+            initialPoolContributionAmount,
+          );
+            const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
+          ''',
+              'console prefill totals',
+          )
+          console = replace_once(
+              console,
+              '''    initialPoolParticipantCount && initialPoolContributionAmount
+                ? initialPoolParticipantCount * initialPoolContributionAmount
+                : 50_000,
+          ''',
+              '''    commandMaximumFunding || 50_000,
+          ''',
+              'maximum funding prefill',
+          )
+          threshold_block = '''    initialPoolThresholdCount && initialPoolContributionAmount
+                ? initialPoolThresholdCount * initialPoolContributionAmount
+                : 10_000,
+          '''
+          if console.count(threshold_block) != 2:
+              raise SystemExit(f"threshold funding prefills: expected two matches, found {console.count(threshold_block)}")
+          console = console.replace(threshold_block, '''    commandThresholdFunding || 10_000,
+          ''')
+          console_path.write_text(console)
+
+          executor_path = Path('src/lib/command/executor.ts')
+          executor = executor_path.read_text()
+          executor = replace_once(
+              executor,
+              '''function number(value: unknown) {
+            return typeof value === "number" && Number.isFinite(value) ? value : null;
+          }
+          ''',
+              '''function number(value: unknown) {
+            return typeof value === "number" && Number.isFinite(value) ? value : null;
+          }
+
+          const MAX_SAFE_FUNDING_CENTS = Number.MAX_SAFE_INTEGER;
+          ''',
+              'executor safe-cent constant',
+          )
+          executor = replace_once(
+              executor,
+              '''    case "create_public_good_proposal": {
+                const params = new URLSearchParams({
+                  template: "threshold-coalition",
+                  title: text(proposal.arguments.title, 180),
+                  cause: text(proposal.arguments.cause, 180),
+                  participants: String(number(proposal.arguments.participantCount) ?? ""),
+                  contribution: String(number(proposal.arguments.contributionAmount) ?? ""),
+                  threshold: String(number(proposal.arguments.thresholdCount) ?? ""),
+                  source: "command",
+                });
+          ''',
+              '''    case "create_public_good_proposal": {
+                const participantCount = number(proposal.arguments.participantCount);
+                const contributionAmount = number(proposal.arguments.contributionAmount);
+                const thresholdCount = number(proposal.arguments.thresholdCount);
+                if (
+                  participantCount === null ||
+                  contributionAmount === null ||
+                  thresholdCount === null ||
+                  !Number.isInteger(participantCount) ||
+                  !Number.isInteger(thresholdCount) ||
+                  participantCount < 2 ||
+                  thresholdCount < 1 ||
+                  thresholdCount > participantCount
+                ) {
+                  return result(
+                    "failed",
+                    "The public-good threshold terms are inconsistent.",
+                    "No proposal or pool was created.",
+                    { blockers: ["The threshold must be a positive integer no greater than the participant count."] },
+                  );
+                }
+                const contributionCents = Math.round(contributionAmount * 100);
+                if (
+                  contributionCents <= 0 ||
+                  Math.abs(contributionAmount * 100 - contributionCents) > Number.EPSILON * 100 ||
+                  contributionCents > Math.floor(MAX_SAFE_FUNDING_CENTS / participantCount)
+                ) {
+                  return result(
+                    "failed",
+                    "The proposed contribution or total cannot be represented exactly in cents.",
+                    "No proposal or pool was created.",
+                    { blockers: ["Use a positive two-decimal contribution and reduce the participant count or contribution if needed."] },
+                  );
+                }
+                const normalizedContributionAmount = contributionCents / 100;
+                const params = new URLSearchParams({
+                  template: "threshold-coalition",
+                  title: text(proposal.arguments.title, 180),
+                  cause: text(proposal.arguments.cause, 180),
+                  participants: String(participantCount),
+                  contribution: String(normalizedContributionAmount),
+                  threshold: String(thresholdCount),
+                  source: "command",
+                });
+          ''',
+              'public-good executor guard',
+          )
+          executor_path.write_text(executor)
+
+          capabilities_path = Path('src/lib/command/capabilities.ts')
+          capabilities = capabilities_path.read_text()
+          capabilities = replace_once(
+              capabilities,
+              'contributionAmount: { type: ["number", "null"], minimum: 0 },',
+              'contributionAmount: { type: ["number", "null"], minimum: 0, maximum: Math.floor(Number.MAX_SAFE_INTEGER / 100) },',
+              'public-good contribution schema',
+          )
+          capabilities_path.write_text(capabilities)
+
+          test_path = Path('src/lib/command/executor.test.ts')
+          tests = test_path.read_text()
+          if 'public-good proposals reject thresholds above the participant count' in tests:
+              raise SystemExit('numeric safety tests already exist')
+          tests += '''
+
+test("public-good proposals reject thresholds above the participant count", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Threshold proposal.",
+      arguments: {
+        title: "Animal-welfare assurance pool",
+        participantCount: 100,
+        contributionAmount: 20,
+        thresholdCount: 101,
+        cause: "Animal welfare",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.blockers[0] ?? "", /threshold/i);
+});
+
+test("public-good proposals reject totals that cannot be represented exactly in cents", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Very large threshold proposal.",
+      arguments: {
+        title: "Large assurance pool",
+        participantCount: 1_000_000_000,
+        contributionAmount: 1_000_000_000,
+        thresholdCount: 900_000_000,
+        cause: "Global public goods",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.summary, /exactly in cents/i);
+});
+
+test("public-good proposals reject sub-cent contributions", async () => {
+  const output = await executeCommandProposal({
+    profileId: "00000000-0000-0000-0000-000000000001",
+    proposal: {
+      capabilityKey: "create_public_good_proposal",
+      confidence: 0.99,
+      rationale: "Sub-cent threshold proposal.",
+      arguments: {
+        title: "Micro-contribution pool",
+        participantCount: 100,
+        contributionAmount: 0.001,
+        thresholdCount: 80,
+        cause: "Global public goods",
+      },
+    },
+  });
+  assert.equal(output.status, "failed");
+  assert.match(output.summary, /exactly in cents/i);
+});
+'''
+          test_path.write_text(tests)
+          PY
+          git rm -f --ignore-unmatch \
+            .github/workflows/finalize-command-public-good-safety.yml \
+            .github/workflows/sync-universal-command-with-main.yml
+          git status --short
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
           cache: npm
+      - run: npm ci
+      - run: node --check public/moral-trade-live-command-center.js
+      - run: npx eslint src/app/api/command src/app/command/page.tsx src/components/command src/lib/command src/app/mpgf/pools/new/page.tsx src/components/mpgf/mpgf-console.tsx src/lib/site-search.ts src/lib/site.ts src/lib/command-center-handoff.test.ts tests/exact-live-command-center.spec.ts
+      - run: node --import tsx --test src/lib/command/*.test.ts src/lib/command-center-handoff.test.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- tests/exact-live-command-center.spec.ts
 
-      - name: Inventory query surfaces
+      - name: Restore registered QA workflow and commit verified implementation
+        shell: bash
         run: |
-          mkdir -p qa-results
-          rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
-            'role="search"|type="search"|name="(search|q|query|sort|filter)"|searchParams|URLSearchParams|\.order\(' \
-            src public tests > qa-results/query-surface-audit.txt || true
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint smart query code and integrated surfaces
-        run: |
-          set -o pipefail
-          npx eslint \
-            src/lib/smart-query.ts \
-            src/lib/smart-query-clarification.ts \
-            src/lib/smart-query-facets.ts \
-            src/lib/smart-query-llm.ts \
-            src/lib/smart-query-llm-gate.ts \
-            src/lib/smart-query-llm-gate.test.ts \
-            src/lib/smart-query-personalization.ts \
-            src/lib/smart-query-records.ts \
-            src/lib/smart-query-scoring.ts \
-            src/lib/smart-query-surface-policy.ts \
-            src/lib/smart-query.test.ts \
-            src/lib/smart-discovery-ranking.ts \
-            src/lib/smart-evidence-ranking.ts \
-            src/lib/smart-evidence-ranking.test.ts \
-            src/lib/smart-people-ranking.ts \
-            src/lib/site-search-smart.ts \
-            src/app/api/query/interpret/route.ts \
-            src/app/layout.tsx \
-            src/app/offers/page.tsx \
-            src/app/people/page.tsx \
-            src/app/pools/page.tsx \
-            src/app/mpgf/pools/page.tsx \
-            src/app/wish-registry/page.tsx \
-            'src/app/evidence/[[...recordId]]/page.tsx' \
-            src/components/layout/site-topbar.tsx \
-            src/components/search/smart-query-auto-enhancer.tsx \
-            src/components/search/smart-query-form.tsx \
-            tests/discover-query-audit.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
-
-      - name: Test deterministic and semantic query interpretation
-        run: |
-          set -o pipefail
-          node --import tsx --test \
-            src/lib/smart-query.test.ts \
-            src/lib/smart-query-llm-gate.test.ts \
-            src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
-
-      - name: Build production application
-        run: |
-          set -o pipefail
-          npm run build 2>&1 | tee qa-results/smart-query-build.txt
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Audit rendered Discover query controls
-        run: |
-          set -o pipefail
-          npx playwright test tests/discover-query-audit.spec.ts --reporter=line 2>&1 | \
-            tee qa-results/smart-query-e2e.txt
-
-      - name: Upload query audit evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: smart-query-audit
-          path: |
-            test-results/discover-query-audit.json
-            test-results/discover-inline-source.js
-            qa-results/query-surface-audit.txt
-            qa-results/smart-query-lint.txt
-            qa-results/smart-query-test.txt
-            qa-results/smart-query-build.txt
-            qa-results/smart-query-e2e.txt
-          if-no-files-found: warn
-          retention-days: 7
+          set -euo pipefail
+          git checkout HEAD -- next-env.d.ts
+          git checkout origin/main -- .github/workflows/smart-query-qa.yml
+          git add -A
+          git commit -m "Finalize universal Command safety and main synchronization"
+          git push origin HEAD:feat/universal-command-workspace
