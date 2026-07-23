@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: apply-evidence-smart-query
+  cancel-in-progress: false
+
 jobs:
   apply:
     runs-on: ubuntu-latest
@@ -27,7 +31,7 @@ jobs:
 
       - name: Commit patched page
         run: |
-          if git diff --quiet -- src/app/evidence/[[...recordId]]/page.tsx; then
+          if git diff --quiet -- 'src/app/evidence/[[...recordId]]/page.tsx'; then
             echo "No patch changes were required."
             exit 0
           fi
