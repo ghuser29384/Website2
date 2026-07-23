@@ -11,16 +11,28 @@ import {
   buildParticipantOfferFamilies,
   getMarketplaceFamilyMetrics,
 } from "@/lib/marketplace-offer-families";
+import {
+  getSmartQueryCauseLabel,
+  parseSerializedSmartQueryFacets,
+  parseSmartQuery,
+} from "@/lib/smart-query";
+import {
+  hasSmartQueryConstraints,
+  mergeSmartQueryFacets,
+} from "@/lib/smart-query-facets";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 import {
   buildLiveHref,
+  formatMoneyConstraint,
   listLiveOffers,
   listSavedOfferIds,
+  loadPersonalCausePriorities,
   normalizeSearch,
   parseMode,
   parsePage,
+  parseSort,
   readParam,
 } from "./offers-market-data";
 import { OffersMarketDirectory } from "./offers-market-directory";
@@ -80,24 +92,67 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     return <TradeTemplateLibrary />;
   }
 
-  const page = parsePage(resolvedSearchParams.page);
+  const requestedPage = parsePage(resolvedSearchParams.page);
   const search = normalizeSearch(readParam(resolvedSearchParams, "search"));
   const mode = parseMode(readParam(resolvedSearchParams, "mode"));
-  const [viewer, liveResult] = await Promise.all([
-    getViewer(),
-    listLiveOffers({ mode, search }),
-  ]);
+  const parsedInterpretation = parseSmartQuery(search, { surface: "offers" });
+  const explicitFacets = parseSerializedSmartQueryFacets(resolvedSearchParams);
+  const facets = mergeSmartQueryFacets(parsedInterpretation.facets, explicitFacets);
+  const hasSmartQuery = Boolean(search || hasSmartQueryConstraints(facets));
+  const sort = parseSort(
+    readParam(resolvedSearchParams, "sort") || facets.sort || "",
+    hasSmartQuery,
+  );
+  const smartSearch = hasSmartQuery || sort !== "newest";
+  const viewer = await getViewer();
+  const personalPriorities = await loadPersonalCausePriorities(
+    viewer?.authUser.id ?? null,
+  );
+  const liveResult = await listLiveOffers({
+    facets,
+    interpretation: parsedInterpretation,
+    mode,
+    personalPriorities,
+    smartSearch,
+    sort,
+  });
   const isAuthenticated = Boolean(viewer);
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
-  const hasFilters = Boolean(search || mode !== "all");
-  const families = buildParticipantOfferFamilies(liveResult.items);
+  const activeConstraintLabels = [
+    ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
+    facets.verified === true
+      ? "Verified only"
+      : facets.verified === false
+        ? "Unverified only"
+        : null,
+    formatMoneyConstraint(facets),
+    facets.deadlineBefore
+      ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}`
+      : null,
+    facets.minCredit !== null ? `Credit ≥ ${facets.minCredit}` : null,
+  ].filter((label): label is string => Boolean(label));
+  const hasFilters = Boolean(
+    search || mode !== "all" || activeConstraintLabels.length || sort !== "newest",
+  );
+  const families = buildParticipantOfferFamilies(liveResult.items, {
+    preserveInputOrder: true,
+  });
   const metrics = getMarketplaceFamilyMetrics(families);
   const pageCount = Math.max(1, Math.ceil(families.length / OFFERS_PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
+  const safePage = Math.min(requestedPage, pageCount);
   const pageOffset = (safePage - 1) * OFFERS_PAGE_SIZE;
-  const pageFamilies = families.slice(pageOffset, pageOffset + OFFERS_PAGE_SIZE);
-  const returnTo = buildLiveHref({ mode, page: safePage, search });
+  const pageFamilies = families.slice(
+    pageOffset,
+    pageOffset + OFFERS_PAGE_SIZE,
+  );
+  const returnTo = buildLiveHref({
+    facets,
+    mode,
+    page: safePage,
+    search,
+    sort,
+  });
   const savedOfferIds = await listSavedOfferIds(viewer?.authUser.id);
 
   return (
@@ -126,7 +181,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           metrics={metrics}
         />
         <OffersMarketDirectory
+          activeConstraintLabels={activeConstraintLabels}
+          candidateLimitReached={liveResult.candidateLimitReached}
           createHref={createHref}
+          facets={facets}
           hasFilters={hasFilters}
           isAuthenticated={isAuthenticated}
           metrics={metrics}
@@ -137,6 +195,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           safePage={safePage}
           savedOfferIds={savedOfferIds}
           search={search}
+          sort={sort}
           viewerId={viewer?.authUser.id}
         />
         <OffersMarketSecondarySections />
