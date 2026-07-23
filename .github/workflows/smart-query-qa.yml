@@ -1,0 +1,46 @@
+name: Smart query QA
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/smart-query*"
+      - "src/app/api/query/**"
+      - "src/app/offers/**"
+      - "src/app/people/**"
+      - "src/app/wish-registry/**"
+      - "src/app/evidence/**"
+      - "src/components/layout/site-topbar.tsx"
+      - "public/moral-trade-smart-query.js"
+      - "public/moral-trade-discover.html"
+      - "tests/smart-query*.spec.ts"
+      - ".github/workflows/smart-query-qa.yml"
+  push:
+    branches:
+      - feat/smart-query-pipeline
+
+permissions:
+  contents: read
+
+jobs:
+  smart-query-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit rendered Discover query controls
+        run: npx playwright test tests/discover-query-audit.spec.ts --reporter=line
