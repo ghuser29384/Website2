@@ -22,8 +22,6 @@ import {
   PEOPLE_KIND_FILTER_OPTIONS,
   PEOPLE_PARTICIPATION_FILTER_OPTIONS,
   PEOPLE_PAYMENT_FILTER_OPTIONS,
-  profileMatchesFilters,
-  rankProfiles,
   type CreditFilter,
   type PeopleDiscoveryFilters,
   type PeopleDiscoverySort,
@@ -31,6 +29,14 @@ import {
   type PeopleParticipationFilter,
   type PeoplePaymentFilter,
 } from "@/lib/discovery-ranking";
+import { filterAndRankSmartProfiles } from "@/lib/smart-people-ranking";
+import {
+  getSmartQueryCauseLabel,
+  parseSerializedSmartQueryFacets,
+  parseSmartQuery,
+} from "@/lib/smart-query";
+import { hasSmartQueryConstraints, mergeSmartQueryFacets } from "@/lib/smart-query-facets";
+import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
 import { getPublicProfileMetaSummary } from "@/lib/public-profile-trust";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
@@ -153,18 +159,18 @@ function optionLabel<T extends string>(
 
 function rankingDescription(sort: PeopleDiscoverySort, hasSearch: boolean) {
   if (sort === "credit") {
-    return "Highest credit prioritizes the confidence-adjusted conservative score, then public activity, relevance, and recency.";
+    return "Highest credit is an explicit alternate order. Unknown and low-confidence records remain conservative rather than receiving inferred scores.";
   }
   if (sort === "offers") {
-    return "Most open offers remains activity-led; confidence-adjusted credit contributes 12% so reliability can break close results.";
+    return "Most open offers is activity-led; semantic fit and reviewed evidence break close results before the bounded credit signal.";
   }
   if (sort === "newest") {
-    return "Newest remains primarily chronological; credit contributes 10% and cannot overwhelm a large recency difference.";
+    return "Newest is chronological; semantic fit and reviewed evidence break ties, with credit remaining a modest signal.";
   }
   if (hasSearch) {
-    return "Best match is 68% text relevance and 15% confidence-adjusted credit, with smaller activity and recency signals.";
+    return "Hard constraints run first. Remaining members are ranked by semantic relevance (46%), reviewed evidence (20%), saved cause fit (16%), and a modest transaction-credit signal (8%). Member records have no deadline signal.";
   }
-  return "Without a query, Best match emphasizes reviewed activity and recency; confidence-adjusted credit contributes 20%.";
+  return "Without a query, Best match preserves the established reviewed-activity and recency browse order; transaction credit remains bounded.";
 }
 
 function formatBadgeType(value: string) {
@@ -179,7 +185,13 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
   const page = parsePage(resolvedSearchParams.page);
-  const search = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
+  const search = readParam(resolvedSearchParams, "search").trim().slice(0, 500);
+  const parsedInterpretation = parseSmartQuery(search, { surface: "people" });
+  const smartFacets = mergeSmartQueryFacets(
+    parsedInterpretation.facets,
+    parseSerializedSmartQueryFacets(resolvedSearchParams),
+  );
+  const interpretation = { ...parsedInterpretation, facets: smartFacets };
   const filters: PeopleFilterState = {
     cause: readParam(resolvedSearchParams, "cause").trim().slice(0, 120),
     payment: normalizeOption(
@@ -237,20 +249,21 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     payment: filters.payment,
     search,
   };
-  const filteredProfiles = candidates.filter((profile) =>
-    profileMatchesFilters(profile, credibilityByProfile.get(profile.id), discoveryFilters),
-  );
-  const rankedProfiles = rankProfiles(
-    filteredProfiles,
+  const personalPriorities = await loadSmartQueryCausePriorities(viewer?.authUser.id);
+  const rankedProfiles = filterAndRankSmartProfiles({
     credibilityByProfile,
-    search,
-    filters.sort,
-  );
+    explicitFilters: discoveryFilters,
+    interpretation,
+    personalPriorities,
+    profiles: candidates,
+    sort: filters.sort,
+  });
   const profilesPage = paginate(rankedProfiles, page, PEOPLE_PAGE_SIZE);
   const profiles = profilesPage.items;
   const causeOptions = collectPeopleCauseOptions(candidates);
   const activeFilterLabels = [
     filters.cause ? `Cause: ${filters.cause}` : null,
+    ...smartFacets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
     filters.payment !== "any"
       ? optionLabel(filters.payment, PEOPLE_PAYMENT_FILTER_OPTIONS)
       : null,
@@ -259,8 +272,12 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       : null,
     filters.kind !== "any" ? optionLabel(filters.kind, PEOPLE_KIND_FILTER_OPTIONS) : null,
     filters.credit !== "any" ? optionLabel(filters.credit, CREDIT_FILTER_OPTIONS) : null,
-  ].filter((label): label is string => Boolean(label));
-  const hasFilters = Boolean(search || activeFilterLabels.length);
+    smartFacets.verified === true ? "Reviewed evidence required" : null,
+    smartFacets.verified === false ? "No reviewed evidence" : null,
+    smartFacets.location ? `Location: ${smartFacets.location}` : null,
+    smartFacets.minCredit !== null ? `Credit ≥ ${smartFacets.minCredit}` : null,
+  ].filter((label, index, labels): label is string => Boolean(label) && labels.indexOf(label) === index);
+  const hasFilters = Boolean(search || activeFilterLabels.length || hasSmartQueryConstraints(smartFacets));
   const currentHref = buildPeopleHref({ filters, page, search });
   const peopleStructuredData = {
     "@context": "https://schema.org",
@@ -305,9 +322,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <p className="eyebrow">People directory</p>
             <h1>Search public members and compare their transaction credit scores.</h1>
             <p className="hero-text">
-              A Moral Trade credit score is the public contextual credibility estimate for completing
-              commitments. It modestly affects discovery, but does not rank moral views, popularity,
-              wealth, or perceived virtue. Sparse evidence remains visibly Unproven.
+              Describe the member, cause, location, evidence state, or openness you need in ordinary
+              language. Hard constraints are applied before semantic fit, reviewed evidence, saved cause
+              priorities, and a modest transaction-credit signal. Sparse evidence remains visibly Unproven.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">
@@ -322,8 +339,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Relevance first</strong>
-                  <p>Best match gives text relevance most of the weight and uses credit as a bounded signal.</p>
+                  <strong>Constraints first</strong>
+                  <p>Explicit cause, location, participation, evidence, and credit requirements are enforced before ranking.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -397,7 +414,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                   className={filterStyles.control}
                   defaultValue={search}
                   name="search"
-                  placeholder="Name, location, bio, collective, or cause"
+                  placeholder="e.g. verified civic participants in Chicago open to pledges"
                   type="search"
                 />
               </label>

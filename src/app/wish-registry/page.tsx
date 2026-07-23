@@ -7,6 +7,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { formatLocation, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { loadSmartQueryCausePriorities } from "@/lib/smart-query-personalization";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
   countRegistrySearchSpecificity,
@@ -105,7 +106,8 @@ function getResultLocation(result: WishRegistrySearchResult) {
 export default async function WishRegistryPage({ searchParams }: WishRegistryPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
-  const query = readParam(resolvedSearchParams, "q");
+  const personalPriorities = await loadSmartQueryCausePriorities(viewer?.authUser.id);
+  const query = readParam(resolvedSearchParams, "q").trim().slice(0, 500);
   const cause = readParam(resolvedSearchParams, "cause");
   const opennessToPayment = readFlag(resolvedSearchParams, "payment");
   const opennessToPledges = readFlag(resolvedSearchParams, "pledges");
@@ -178,6 +180,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
           limit: 24,
           opennessToPayment,
           opennessToPledges,
+          personalPriorities,
           query,
         });
       }
@@ -309,8 +312,9 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <p className="eyebrow">Search</p>
             <h2>Browse broad previews without exposing private wishes</h2>
             <p>
-              Start with a keyword or cause area. Trade-mode filters are optional and stay broad.
-              This page does not show contact information, exact asks, or approval claims.
+              Describe a broad cause, location, participant type, or payment and pledge openness in
+              ordinary language. Search operates only on opt-in public previews; exact asks, contact
+              details, private text, and approval claims remain outside the query pipeline.
             </p>
           </div>
 
@@ -332,7 +336,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                 <input
                   defaultValue={query}
                   name="q"
-                  placeholder="vegetarian trial, digital minds, public health"
+                  placeholder="e.g. civic collectives in Chicago open to pledges"
                   type="text"
                 />
               </label>
