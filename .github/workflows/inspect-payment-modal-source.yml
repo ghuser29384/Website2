@@ -1,0 +1,27 @@
+name: Inspect payment modal source
+
+on:
+  push:
+    branches:
+      - fix/payment-method-entry-20260723
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package current source
+        run: |
+          mkdir -p diagnostics
+          grep -RniE "Offer to boost a donation|Authorize cap|Bank / ACH|Maximum authorization|Acceptance window" . \
+            --exclude-dir=.git --exclude-dir=node_modules > diagnostics/payment-modal-matches.txt || true
+          tar --exclude=.git --exclude=diagnostics -czf diagnostics/repository-source.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: payment-modal-source
+          path: diagnostics
+          if-no-files-found: error
+          retention-days: 1
