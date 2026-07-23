@@ -205,11 +205,11 @@ begin
   end if;
 
   response := public.confirm_agreement_version_v2(actor_a, agreement_one, version_two);
-  if coalesce((response->>'activated')::boolean, false) then
+  if coalesce((response->>'active')::boolean, false) then
     raise exception 'One participant activated the agreement alone: %', response;
   end if;
   response := public.confirm_agreement_version_v2(actor_b, agreement_one, version_two);
-  if coalesce((response->>'activated')::boolean, false) is not true then
+  if coalesce((response->>'active')::boolean, false) is not true then
     raise exception 'Bilateral confirmation did not activate the exact current version: %', response;
   end if;
 
@@ -399,7 +399,7 @@ begin
   end if;
   perform public.confirm_agreement_version_v2(actor_a, agreement_two, version_three);
   response := public.confirm_agreement_version_v2(actor_b, agreement_two, version_three);
-  if coalesce((response->>'activated')::boolean, false) is not true then
+  if coalesce((response->>'active')::boolean, false) is not true then
     raise exception 'Second agreement did not activate.';
   end if;
 
