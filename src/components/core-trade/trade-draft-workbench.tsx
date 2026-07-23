@@ -324,6 +324,9 @@ export function TradeDraftWorkbench({
                         placeholder="For example: global poverty reduction"
                         value={values.offeredCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Suggestions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Priority you want advanced</span>
@@ -336,6 +339,9 @@ export function TradeDraftWorkbench({
                         placeholder="For example: animal welfare"
                         value={values.requestedCause}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Try “Animal” to see related priorities.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -360,6 +366,9 @@ export function TradeDraftWorkbench({
                         placeholder="A concrete action, amount, service, or behavior you are willing to undertake"
                         value={values.proposedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       Avoid open-ended promises. State quantity, scope, or frequency where possible.
@@ -387,6 +396,9 @@ export function TradeDraftWorkbench({
                         placeholder="A concrete reciprocal action"
                         value={values.requestedAction}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized commitments appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <span className={styles.helper}>
                       The other participant will review this exact text before confirming anything.
@@ -414,6 +426,9 @@ export function TradeDraftWorkbench({
                         placeholder="What each side would actually do if no agreement forms"
                         value={values.noTradeBaseline}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized no-trade baselines appear as you type.
+                      </span>
                     </label>
                   </div>
                 </>
@@ -438,6 +453,9 @@ export function TradeDraftWorkbench({
                           placeholder="For example: 12 months"
                           value={values.duration}
                         />
+                        <span className={styles.autocompleteHint}>
+                          Suggested durations appear as you type.
+                        </span>
                       </label>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>Start date</span>
@@ -532,6 +550,9 @@ export function TradeDraftWorkbench({
                         placeholder="Receipt, external record, log, or participant attestation that will count"
                         value={values.evidenceRule}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized evidence types appear as you type. Website mentions become links below.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Public evidence and safety scope</span>
@@ -569,6 +590,9 @@ export function TradeDraftWorkbench({
                         placeholder="How either side can end future obligations"
                         value={values.exitConditions}
                       />
+                      <span className={styles.autocompleteHint}>
+                        Standardized exit conditions appear as you type.
+                      </span>
                     </label>
                     <label className={styles.field}>
                       <span className={styles.fieldLabel}>Context or constraints (optional)</span>

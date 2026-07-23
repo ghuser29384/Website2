@@ -142,6 +142,9 @@ test("recognized sites expose only curated donation routes after a 500 ms hover"
 
 test("autocomplete and date assistance load across Next and legacy shells", () => {
   const layout = readRepoFile("src/app/layout.tsx");
+  const templateLibrary = readRepoFile(
+    "src/components/trade-templates/trade-template-library.tsx",
+  );
 
   assert.match(layout, /moral-trade-input-assist\.css/);
   assert.match(layout, /moral-trade-input-assist\.js/);
@@ -155,6 +158,9 @@ test("autocomplete and date assistance load across Next and legacy shells", () =
     assert.match(source, /moral-trade-input-assist\.js/, path);
   }
   assert.match(assistSource, /new MutationObserver/);
+  assert.match(assistSource, /document\.activeElement === control/);
+  assert.match(assistSource, /data-mt-autocomplete-ready/);
+  assert.match(templateLibrary, /data-mt-autocomplete="off"/);
 });
 
 test("the composer uses standardized autocomplete contexts and terminology", () => {
@@ -173,6 +179,8 @@ test("the composer uses standardized autocomplete contexts and terminology", () 
   }
   assert.match(workbenchSource, />Commitment limit</);
   assert.match(workbenchSource, />Evidence</);
+  assert.match(workbenchSource, /Suggestions appear as you type/);
+  assert.match(workbenchSource, /Try “Animal” to see related priorities/);
   assert.doesNotMatch(workbenchSource, />Maximum burden</i);
   assert.doesNotMatch(workbenchSource, />Evidence rule</i);
 });
