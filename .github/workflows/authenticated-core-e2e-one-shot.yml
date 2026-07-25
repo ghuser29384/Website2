@@ -96,46 +96,73 @@ jobs:
 
       - name: Run mandatory authenticated end-to-end gate
         id: auth_gate
-        run: node .github/scripts/authenticated-core-e2e.mjs
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$AUTH_E2E_OUTPUT_DIR"
+          node .github/scripts/authenticated-core-e2e.mjs 2>&1 | tee "$AUTH_E2E_OUTPUT_DIR/auth-e2e.log"
 
-      - name: Upload browser, state, and audit evidence
+      - name: Failsafe cleanup of synthetic production records
+        id: cleanup
+        if: always() && steps.auth_gate.outcome != 'skipped' && env.PROD_SUPABASE_DB_URL != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          EMAIL_PATTERN: caijun054+mt-core-${{ github.run_id }}-%@gmail.com
+        run: |
+          set -o pipefail
+          mkdir -p "$AUTH_E2E_OUTPUT_DIR"
+          {
+            psql "$PROD_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$EMAIL_PATTERN" <<'SQL'
+            begin;
+            create temporary table _mt_auth_e2e_users on commit drop as
+              select id, email
+              from auth.users
+              where lower(email) like lower(:'email_pattern');
+
+            delete from public.email_outbox
+            where lower(recipient_email) like lower(:'email_pattern')
+               or profile_id in (select id from _mt_auth_e2e_users);
+            delete from public.email_nurture_subscriptions
+            where lower(email) like lower(:'email_pattern')
+               or profile_id in (select id from _mt_auth_e2e_users);
+            delete from public.funnel_events
+            where profile_id in (select id from _mt_auth_e2e_users);
+            delete from public.offers
+            where owner_id in (select id from _mt_auth_e2e_users);
+            delete from public.profiles
+            where id in (select id from _mt_auth_e2e_users);
+            delete from auth.identities
+            where user_id in (select id from _mt_auth_e2e_users);
+            delete from auth.users
+            where id in (select id from _mt_auth_e2e_users);
+            commit;
+          SQL
+          } 2>&1 | tee "$AUTH_E2E_OUTPUT_DIR/cleanup.log"
+
+      - name: Upload browser, state, audit, and diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: authenticated-core-e2e-${{ env.AUTH_E2E_HEAD_SHA }}-${{ github.run_id }}
           path: auth-e2e-evidence
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14
 
-      - name: Failsafe cleanup of synthetic production records
-        if: always() && steps.auth_gate.outcome != 'skipped' && env.PROD_SUPABASE_DB_URL != ''
+      - name: Enforce authenticated gate and cleanup outcomes
+        if: always()
         shell: bash
         env:
-          EMAIL_PATTERN: caijun054+mt-core-${{ github.run_id }}-%@gmail.com
+          AUTH_GATE_OUTCOME: ${{ steps.auth_gate.outcome }}
+          CLEANUP_OUTCOME: ${{ steps.cleanup.outcome }}
         run: |
           set -euo pipefail
-          psql "$PROD_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$EMAIL_PATTERN" <<'SQL'
-          begin;
-          create temporary table _mt_auth_e2e_users on commit drop as
-            select id, email
-            from auth.users
-            where lower(email) like lower(:'email_pattern');
-
-          delete from public.email_outbox
-          where lower(recipient_email) like lower(:'email_pattern')
-             or profile_id in (select id from _mt_auth_e2e_users);
-          delete from public.email_nurture_subscriptions
-          where lower(email) like lower(:'email_pattern')
-             or profile_id in (select id from _mt_auth_e2e_users);
-          delete from public.funnel_events
-          where profile_id in (select id from _mt_auth_e2e_users);
-          delete from public.offers
-          where owner_id in (select id from _mt_auth_e2e_users);
-          delete from public.profiles
-          where id in (select id from _mt_auth_e2e_users);
-          delete from auth.identities
-          where user_id in (select id from _mt_auth_e2e_users);
-          delete from auth.users
-          where id in (select id from _mt_auth_e2e_users);
-          commit;
-          SQL
+          if [[ "$AUTH_GATE_OUTCOME" != "success" ]]; then
+            echo "Authenticated browser gate outcome: $AUTH_GATE_OUTCOME" >&2
+            exit 1
+          fi
+          if [[ "$CLEANUP_OUTCOME" != "success" ]]; then
+            echo "Synthetic-record cleanup outcome: $CLEANUP_OUTCOME" >&2
+            exit 1
+          fi
