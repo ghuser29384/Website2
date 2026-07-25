@@ -6,11 +6,11 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "predev": "node scripts/materialize-pareto-feed.mjs && node scripts/ensure-next-swc.mjs",
+    "predev": "node scripts/ensure-next-swc.mjs",
     "dev": "bash scripts/dev.sh",
-    "prebuild": "node scripts/materialize-pareto-feed.mjs && npm run verify:pareto && node scripts/ensure-next-swc.mjs",
+    "prebuild": "npm run verify:pareto && node scripts/ensure-next-swc.mjs",
     "build": "next build --webpack",
-    "prestart": "node scripts/materialize-pareto-feed.mjs && node scripts/ensure-next-swc.mjs",
+    "prestart": "node scripts/ensure-next-swc.mjs",
     "start": "next start",
     "lint": "eslint .",
     "measure:routes": "node scripts/check-public-route-baseline.mjs",

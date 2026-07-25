@@ -115,6 +115,8 @@ export default function RootLayout({
         <link href="/moral-trade-input-assist.css" rel="stylesheet" />
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link href="/moral-trade-live-feed-diagnostics.css" rel="stylesheet" />
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link href="/moral-trade-live-learning-diagnostics.css" rel="stylesheet" />
       </head>
       <body>
         <script
@@ -139,6 +141,7 @@ export default function RootLayout({
         </Suspense>
         <Script src="/moral-trade-input-assist.js" strategy="afterInteractive" />
         <Script src="/moral-trade-live-feed-diagnostics.js" strategy="afterInteractive" />
+        <Script src="/moral-trade-live-learning-diagnostics.js" strategy="afterInteractive" />
         {children}
       </body>
     </html>
