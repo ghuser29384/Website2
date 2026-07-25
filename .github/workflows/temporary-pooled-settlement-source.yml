@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: diagnose-pooled-settlement-release
@@ -25,11 +25,11 @@ jobs:
           ref: feat/cross-user-pooled-settlement
           fetch-depth: 0
 
-      - name: Diagnose and commit payload report
+      - name: Diagnose payload
         shell: bash
         run: |
           set -u
-          report=.github/pooled-settlement-diagnostic.txt
+          report=/tmp/pooled-settlement-diagnostic.txt
           : > "$report"
           mapfile -t chunks < <(find .github/pooled-settlement-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
           echo "chunk_count=${#chunks[@]}" >> "$report"
@@ -61,9 +61,12 @@ jobs:
           echo "tar_status=$tar_status" >> "$report"
           sed 's/^/tar_stderr=/' /tmp/tar.err >> "$report"
           echo "tar_first_entries:" >> "$report"
-          head -20 /tmp/tar.list >> "$report"
-          git add "$report"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Record pooled settlement payload diagnostics"
-          git push origin HEAD:feat/cross-user-pooled-settlement
+          head -20 /tmp/tar.list >> "$report" || true
+          exit 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-diagnostic
+          path: /tmp/pooled-settlement-diagnostic.txt
+          if-no-files-found: error
+          retention-days: 1
