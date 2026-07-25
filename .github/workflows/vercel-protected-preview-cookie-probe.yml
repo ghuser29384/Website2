@@ -1,0 +1,38 @@
+name: Vercel protected preview cookie probe
+
+on:
+  push:
+    branches:
+      - ops/authenticated-core-e2e-20260725
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      AUTH_E2E_BASE_URL: https://moraltrade-site-q2hwdhv35-ellen-s.vercel.app
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Validate Vercel token
+        run: test -n "$VERCEL_TOKEN"
+
+      - name: Probe exact protected preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest curl / \
+            --deployment "$AUTH_E2E_BASE_URL" \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
+            -H "x-vercel-set-bypass-cookie: true" \
+            --location \
+            --show-error \
+            --cookie-jar /tmp/vercel-bypass-cookies.txt \
+            --output /tmp/vercel-preview-preflight.html
+          test -s /tmp/vercel-bypass-cookies.txt
+          test -s /tmp/vercel-preview-preflight.html
