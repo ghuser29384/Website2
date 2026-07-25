@@ -33,8 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .a1-production-smoke/part-* | base64 --decode > /tmp/a1-production-smoke.mjs
-          sha256sum /tmp/a1-production-smoke.mjs
+          base64 --decode .a1-production-smoke/final.gz.b64 | gzip -d > /tmp/a1-production-smoke.mjs
+          echo "f82baf39e9af65aac1204416a3e0589f74f8013f30c11ec2eda7b7341d8a2a7f  /tmp/a1-production-smoke.mjs" | sha256sum -c -
           node --check /tmp/a1-production-smoke.mjs
 
   verify-production-loop:
@@ -142,8 +142,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat ../ops/.a1-production-smoke/part-* | base64 --decode > .a1-production-smoke.mjs
-          sha256sum .a1-production-smoke.mjs
+          base64 --decode ../ops/.a1-production-smoke/final.gz.b64 | gzip -d > .a1-production-smoke.mjs
+          echo "f82baf39e9af65aac1204416a3e0589f74f8013f30c11ec2eda7b7341d8a2a7f  .a1-production-smoke.mjs" | sha256sum -c -
           node --check .a1-production-smoke.mjs
           node .a1-production-smoke.mjs
 
