@@ -31,6 +31,8 @@ jobs:
     steps:
       - name: Check out one-shot gate branch
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Verify the tested application commit is an ancestor
         shell: bash
@@ -76,6 +78,7 @@ jobs:
           sudo apt-get install --yes postgresql-client
 
       - name: Run mandatory authenticated end-to-end gate
+        id: auth_gate
         run: node .github/scripts/authenticated-core-e2e.mjs
 
       - name: Upload browser, state, and audit evidence
@@ -88,7 +91,7 @@ jobs:
           retention-days: 14
 
       - name: Failsafe cleanup of synthetic production records
-        if: always() && env.PROD_SUPABASE_DB_URL != ''
+        if: always() && steps.auth_gate.outcome != 'skipped' && env.PROD_SUPABASE_DB_URL != ''
         shell: bash
         env:
           EMAIL_PATTERN: caijun054+mt-core-${{ github.run_id }}-%@gmail.com
