@@ -85,10 +85,11 @@ jobs:
         run: |
           set -euo pipefail
           rm -f "$VERCEL_BYPASS_COOKIE_FILE" /tmp/vercel-preview-preflight.html /tmp/vercel-curl.log
-          if ! npx --yes vercel@latest curl / \
-            --deployment "$AUTH_E2E_BASE_URL" \
+          if ! npx --yes vercel@latest \
             --token "$VERCEL_TOKEN" \
             --scope "$VERCEL_ORG_ID" \
+            curl / \
+            --deployment "$AUTH_E2E_BASE_URL" \
             -H "x-vercel-set-bypass-cookie: true" \
             --location \
             --silent \
