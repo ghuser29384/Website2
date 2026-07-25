@@ -6,6 +6,12 @@ on:
       - main
     paths:
       - .github/workflows/a1-production-authenticated-smoke-run.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .a1-production-smoke/**
+      - .github/workflows/a1-production-authenticated-smoke.yml
 
 permissions:
   contents: read
