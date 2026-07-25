@@ -1,12 +1,25 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = process.cwd();
 const completeMarker = join(root, "src/lib/recommendation-training.ts");
 const partDirectory = join(root, ".a1b");
+const partNames = [
+  "part-00",
+  "part-01",
+  "part-02",
+  "part-03",
+  "part-04a",
+  "part-04b",
+  "part-05",
+  "part-06",
+  "part-07",
+  "part-08",
+  "part-09",
+];
 const EXPECTED_ENCODED_SHA256 = "a926df2d227162e6ad3dff9b3c06ae48ce6ee6b5008f8f178050bd7498241c37";
 const EXPECTED_ARCHIVE_SHA256 = "602344116470e2959c92388d761bc78ba521d0758a45e6cbbbd0552cb4525e9d";
 
@@ -45,12 +58,12 @@ function alreadyMaterialized() {
 }
 
 if (!alreadyMaterialized()) {
-  const parts = readdirSync(partDirectory)
-    .filter((name) => /^part-\d+$/.test(name))
-    .sort();
-  if (!parts.length) throw new Error("A1 source bundle parts are missing");
+  const missing = partNames.filter((name) => !existsSync(join(partDirectory, name)));
+  if (missing.length) {
+    throw new Error(`A1 source bundle parts are missing: ${missing.join(", ")}`);
+  }
 
-  const encoded = parts.map((name) => readFileSync(join(partDirectory, name), "utf8")).join("");
+  const encoded = partNames.map((name) => readFileSync(join(partDirectory, name), "utf8")).join("");
   if (sha256(encoded) !== EXPECTED_ENCODED_SHA256) {
     throw new Error("A1 source bundle failed encoded integrity verification");
   }
