@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const wrapper = readFileSync("src/app/api/live-now-a1/route.ts", "utf8");
+const runtime = readFileSync("src/lib/pareto-feed-runtime.ts", "utf8");
+const training = readFileSync("src/lib/recommendation-training.ts", "utf8");
+const model = readFileSync("src/lib/pareto-recommendation-model.ts", "utf8");
+const migration = readFileSync(
+  "supabase/migrations/20260725120500_pareto_causal_recommendation_learning.sql",
+  "utf8",
+);
+const config = readFileSync("next.config.ts", "utf8");
+const vercel = readFileSync("vercel.json", "utf8");
+const stage = readFileSync("src/components/core-trade/trade-agreement-stage.tsx", "utf8");
+const loader = readFileSync("public/moral-trade-live.html", "utf8");
+
+
+test("the production live endpoint is wrapped by the Pareto-safe learning layer", () => {
+  assert.match(config, /source:\s*["']\/api\/live-now["']/);
+  assert.match(config, /destination:\s*["']\/api\/live-now-a1["']/);
+  assert.match(wrapper, /getReciprocalLiveNow/);
+  assert.match(wrapper, /applyParetoLearningToLiveNowPayload/);
+  assert.match(runtime, /directMatchesRandomized:\s*false/);
+  assert.match(runtime, /pareto_safe_additionality/);
+});
+
+
+test("the learning core implements factors, calibration, Pareto gates, and causal propensities", () => {
+  assert.match(model, /fitImplicitFactors/);
+  assert.match(model, /fitLogisticHead/);
+  assert.match(model, /expectedCalibrationError/);
+  assert.match(model, /clearsParetoDirectGate/);
+  assert.match(model, /assignNonDirectHoldout/);
+  assert.match(model, /inversePropensityDifference/);
+  assert.match(training, /recommendation_counterparty_priors/);
+  assert.match(training, /tuneParetoSuccessThreshold/);
+  assert.match(training, /safety_guardrail_stopped/);
+});
+
+
+test("the migration separates participant-visible receipts from service-only model artifacts", () => {
+  assert.match(migration, /recommendation_exposures/);
+  assert.match(migration, /recommendation_outcome_feedback/);
+  assert.match(migration, /recommendation_model_versions/);
+  assert.match(migration, /recommendation_user_factors/);
+  assert.match(migration, /recommendation_opportunity_factors/);
+  assert.match(migration, /recommendation_guardrail_snapshots/);
+  assert.match(migration, /Never store raw private profile prose/i);
+  assert.match(migration, /revoke all[\s\S]*from anon, authenticated/);
+  assert.match(migration, /recommendation_exposures_select_own/);
+});
+
+
+test("completed agreements collect private own-lights and additionality feedback", () => {
+  assert.match(stage, /TradeOutcomeFeedback/);
+  assert.match(stage, /lifecycleStatus === "completed"/);
+  assert.match(vercel, /\/api\/jobs\/recommendation-training/);
+});
+
+
+test("learning status is disclosed on the static Feed shell", () => {
+  assert.match(loader, /moral-trade-live-learning-diagnostics\.css/);
+  assert.match(loader, /moral-trade-live-learning-diagnostics\.js/);
+});
