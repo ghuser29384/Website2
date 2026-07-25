@@ -28,6 +28,7 @@ jobs:
       - name: Diagnose payload
         shell: bash
         run: |
+          set +e
           set -u
           report=/tmp/pooled-settlement-diagnostic.txt
           : > "$report"
