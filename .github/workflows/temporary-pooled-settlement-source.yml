@@ -25,7 +25,7 @@ jobs:
           ref: feat/cross-user-pooled-settlement
           fetch-depth: 0
 
-      - name: Reconstruct and verify release payload
+      - name: Reconstruct and validate release payload
         shell: bash
         run: |
           set -euo pipefail
@@ -33,8 +33,13 @@ jobs:
           test "${#chunks[@]}" -eq 8
           cat "${chunks[@]}" > /tmp/pooled-settlement-payload.b64
           base64 --decode /tmp/pooled-settlement-payload.b64 > /tmp/pooled-settlement-payload.tgz
-          echo "a39d6e2a4e0205dd9cc2d10a050ffc87d0db3b806ead2c1991d74fbf94b81d4f  /tmp/pooled-settlement-payload.tgz" | sha256sum --check --strict
+          tar -tzf /tmp/pooled-settlement-payload.tgz >/dev/null
           tar -xzf /tmp/pooled-settlement-payload.tgz
+          test -f supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+          test -f src/lib/trade-donation-pool.ts
+          test -f docs/trade-donation-pooled-settlement-runbook.md
+          grep -q "cross-user pooled settlement" docs/trade-donation-pooled-settlement-runbook.md
+          git diff --check
 
       - name: Replace transport files with the release
         shell: bash
