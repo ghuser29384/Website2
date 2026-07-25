@@ -1,4 +1,4 @@
-name: Diagnose repaired pooled-settlement payload
+name: Apply pooled-settlement release payload
 
 on:
   push:
@@ -9,14 +9,14 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: diagnose-repaired-pooled-settlement-release
+  group: apply-pooled-settlement-release
   cancel-in-progress: true
 
 jobs:
-  diagnose:
+  apply:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -25,51 +25,37 @@ jobs:
           ref: feat/cross-user-pooled-settlement
           fetch-depth: 0
 
-      - name: Diagnose repaired payload
+      - name: Repair, reconstruct, and verify release payload
         shell: bash
         run: |
-          set +e
-          report=/tmp/pooled-settlement-diagnostic.txt
-          : > "$report"
-          for file in .github/pooled-settlement-payload-fixes/chunk-02/part-* .github/pooled-settlement-payload-fixes/chunk-05/part-*; do
-            printf '%s bytes=' "$file" >> "$report"
-            wc -c < "$file" | tr -d '\n' >> "$report"
-            printf ' sha256=' >> "$report"
-            sha256sum "$file" | awk '{print $1}' >> "$report"
-          done
-          cat .github/pooled-settlement-payload-fixes/chunk-02/part-* > /tmp/chunk-02
-          cat .github/pooled-settlement-payload-fixes/chunk-05/part-* > /tmp/chunk-05
-          printf 'repaired_chunk_02_bytes=' >> "$report"
-          wc -c < /tmp/chunk-02 | tr -d '\n' >> "$report"
-          printf ' sha256=' >> "$report"
-          sha256sum /tmp/chunk-02 | awk '{print $1}' >> "$report"
-          printf 'repaired_chunk_05_bytes=' >> "$report"
-          wc -c < /tmp/chunk-05 | tr -d '\n' >> "$report"
-          printf ' sha256=' >> "$report"
-          sha256sum /tmp/chunk-05 | awk '{print $1}' >> "$report"
-          cp /tmp/chunk-02 .github/pooled-settlement-payload/chunk-02
-          cp /tmp/chunk-05 .github/pooled-settlement-payload/chunk-05
+          set -euo pipefail
+          cat .github/pooled-settlement-payload-fixes/chunk-02/part-* > .github/pooled-settlement-payload/chunk-02
+          cat .github/pooled-settlement-payload-fixes/chunk-05/part-* > .github/pooled-settlement-payload/chunk-05
+          echo "d5d4a6ef7f8cce78ec7f3ce3148436f494edc55d01dfc1805db916bb52bb4783  .github/pooled-settlement-payload/chunk-02" | sha256sum --check --strict
+          echo "99e87a7fb46096e65ebaa5b7f39155aca8a26e8cf7912df1a59a711b5251e0c8  .github/pooled-settlement-payload/chunk-05" | sha256sum --check --strict
           mapfile -t chunks < <(find .github/pooled-settlement-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
-          cat "${chunks[@]}" > /tmp/payload.b64
-          base64 --decode /tmp/payload.b64 > /tmp/payload.tgz 2>/tmp/base64.err
-          echo "base64_status=$?" >> "$report"
-          sed 's/^/base64_stderr=/' /tmp/base64.err >> "$report"
-          printf 'tgz_bytes=' >> "$report"
-          wc -c < /tmp/payload.tgz | tr -d '\n' >> "$report"
-          printf ' sha256=' >> "$report"
-          sha256sum /tmp/payload.tgz | awk '{print $1}' >> "$report"
-          gzip -t /tmp/payload.tgz 2>/tmp/gzip.err
-          echo "gzip_status=$?" >> "$report"
-          sed 's/^/gzip_stderr=/' /tmp/gzip.err >> "$report"
-          tar -tzf /tmp/payload.tgz >/tmp/tar.list 2>/tmp/tar.err
-          echo "tar_status=$?" >> "$report"
-          sed 's/^/tar_stderr=/' /tmp/tar.err >> "$report"
-          head -20 /tmp/tar.list >> "$report" || true
-          exit 0
+          test "${#chunks[@]}" -eq 8
+          cat "${chunks[@]}" > /tmp/pooled-settlement-payload.b64
+          base64 --decode /tmp/pooled-settlement-payload.b64 > /tmp/pooled-settlement-payload.tgz
+          echo "a39d6e2a4e0205dd9cc2d10a050ffc87d0db3b806ead2c1991d74fbf94b81d4f  /tmp/pooled-settlement-payload.tgz" | sha256sum --check --strict
+          tar -tzf /tmp/pooled-settlement-payload.tgz >/dev/null
+          tar -xzf /tmp/pooled-settlement-payload.tgz
+          test -f supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+          test -f src/lib/trade-donation-pool.ts
+          test -f docs/trade-donation-pooled-settlement-runbook.md
+          grep -q "cross-user pooled settlement" docs/trade-donation-pooled-settlement-runbook.md
+          git diff --check
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: repaired-pooled-settlement-diagnostic
-          path: /tmp/pooled-settlement-diagnostic.txt
-          if-no-files-found: error
-          retention-days: 1
+      - name: Replace transport files with the engineering release
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/pooled-settlement-payload
+          rm -rf .github/pooled-settlement-payload-fixes
+          rm .github/workflows/temporary-pooled-settlement-source.yml
+          git diff --check
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add cross-user pooled settlement"
+          git push origin HEAD:feat/cross-user-pooled-settlement
