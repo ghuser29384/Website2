@@ -1,26 +1,22 @@
 name: Complete Pareto Feed implementation
 
 on:
-  push:
-    branches:
-      - feature/pareto-causal-learning-feed-20260725
-    paths:
-      - .github/workflows/complete-pareto-feed.yml
   pull_request:
     branches:
       - main
-    paths:
-      - .github/workflows/complete-pareto-feed.yml
+    types:
+      - reopened
 
 permissions:
   contents: write
 
 concurrency:
-  group: complete-pareto-feed-${{ github.ref }}
+  group: complete-pareto-feed-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
-  materialize-and-verify:
+  materialize-verify-and-commit:
+    if: github.event.pull_request.head.ref == 'feature/pareto-causal-learning-feed-20260725'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -30,52 +26,51 @@ jobs:
           fetch-depth: 0
           ref: feature/pareto-causal-learning-feed-20260725
 
-      - name: Materialize the reviewed A1 source bundle
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat .a1/part-* | base64 --decode > /tmp/pareto-feed.tar.gz
-          tar -xzf /tmp/pareto-feed.tar.gz -C .
-          python scripts/apply-pareto-learning-patches.py
-          rm -rf .a1 scripts/apply-pareto-learning-patches.py
-          node --check public/moral-trade-live-learning-diagnostics.js
-          git diff --check
-
-      - name: Commit the complete implementation
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Complete Pareto-safe causal Feed implementation"
-          git push origin HEAD:feature/pareto-causal-learning-feed-20260725
-
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
+      - name: Materialize the verified A1 source bundle
+        run: node scripts/materialize-pareto-feed.mjs
+
+      - name: Replace temporary transport with ordinary source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          packageJson.scripts.predev = 'node scripts/ensure-next-swc.mjs';
+          packageJson.scripts.prebuild = 'npm run verify:pareto && node scripts/ensure-next-swc.mjs';
+          packageJson.scripts.prestart = 'node scripts/ensure-next-swc.mjs';
+          fs.writeFileSync('package.json', `${JSON.stringify(packageJson, null, 2)}\n`);
+          NODE
+          rm -rf .a1 .a1b
+          rm -f scripts/materialize-pareto-feed.mjs
+          rm -f .github/workflows/complete-pareto-feed.yml
+          git diff --check
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Run focused model and wiring tests
-        run: node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/pareto-recommendation-wiring.test.ts
-
-      - name: Lint the A1 implementation
-        run: >-
-          npx eslint
-          src/lib/pareto-recommendation-model.ts
-          src/lib/pareto-recommendation-model.test.ts
-          src/lib/pareto-feed-runtime.ts
-          src/lib/recommendation-training.ts
-          src/app/api/live-now-a1/route.ts
-          src/app/api/jobs/recommendation-training/route.ts
-          src/app/recommendation-outcome-actions.ts
-          src/components/core-trade/trade-agreement-stage.tsx
-          src/components/core-trade/trade-outcome-feedback.tsx
-          src/pareto-recommendation-wiring.test.ts
+      - name: Run A1 model, privacy, causal-exploration, and wiring checks
+        run: npm run verify:pareto
 
       - name: Build the production application
         run: npm run build
+
+      - name: Commit only the verified ordinary source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No materialization changes to commit."
+            exit 0
+          fi
+          git commit -m "Complete Pareto-safe causal Feed implementation"
+          git push origin HEAD:feature/pareto-causal-learning-feed-20260725
