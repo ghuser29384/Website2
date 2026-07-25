@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
       source: ROR_SEARCH_SOURCE,
       url: buildRorSearchUrl(query),
       map: (payload) => mapRorOrganizations(payload, query, MAXIMUM_PROVIDER_RESULTS),
-      headers: rorClientId ? { "X-ROR-API-Client-ID": rorClientId } : undefined,
+      headers: rorClientId ? { "Client-Id": rorClientId } : undefined,
     },
   ];
 
