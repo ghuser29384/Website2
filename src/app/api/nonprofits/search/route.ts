@@ -18,6 +18,11 @@ import {
   WIKIDATA_SEARCH_SOURCE,
   type NonprofitSuggestion,
 } from "@/lib/nonprofit-search";
+import {
+  buildRorSearchUrl,
+  mapRorOrganizations,
+  ROR_SEARCH_SOURCE,
+} from "@/lib/nonprofit-search-ror";
 
 export const runtime = "nodejs";
 
@@ -34,6 +39,7 @@ interface SearchProvider {
   source: string;
   url: string;
   map: (payload: unknown) => NonprofitSuggestion[];
+  headers?: Record<string, string>;
 }
 
 function json(body: unknown, cacheControl: string) {
@@ -44,12 +50,19 @@ function json(body: unknown, cacheControl: string) {
   });
 }
 
+function addQueryParameter(urlValue: string, name: string, value: string) {
+  const url = new URL(urlValue);
+  url.searchParams.set(name, value);
+  return url.toString();
+}
+
 async function searchProvider(provider: SearchProvider) {
   const response = await fetch(provider.url, {
     headers: {
       Accept: "application/json",
       "Api-User-Agent": USER_AGENT,
       "User-Agent": USER_AGENT,
+      ...provider.headers,
     },
     next: { revalidate: 86_400 },
     signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
@@ -64,6 +77,11 @@ async function searchProvider(provider: SearchProvider) {
 
 export async function GET(request: NextRequest) {
   const query = normalizeNonprofitSearchQuery(request.nextUrl.searchParams.get("q"));
+  const openAlexApiKey = (process.env.OPENALEX_API_KEY ?? "").trim();
+  const rorClientId = (process.env.ROR_API_CLIENT_ID ?? "").trim();
+  const disabledSources = openAlexApiKey
+    ? []
+    : [OPENALEX_INSTITUTION_SOURCE, OPENALEX_FUNDER_SOURCE];
 
   if (query.length < MINIMUM_QUERY_LENGTH) {
     return json(
@@ -73,6 +91,7 @@ export async function GET(request: NextRequest) {
         source: NONPROFIT_SEARCH_SOURCE,
         sources: [],
         unavailableSources: [],
+        disabledSources,
       },
       SUCCESS_CACHE_CONTROL,
     );
@@ -91,16 +110,35 @@ export async function GET(request: NextRequest) {
       map: (payload) => mapWikidataOrganizations(payload, query, MAXIMUM_PROVIDER_RESULTS),
     },
     {
-      source: OPENALEX_INSTITUTION_SOURCE,
-      url: buildOpenAlexInstitutionSearchUrl(query, MAXIMUM_PROVIDER_RESULTS),
-      map: (payload) => mapOpenAlexInstitutions(payload, query, MAXIMUM_PROVIDER_RESULTS),
-    },
-    {
-      source: OPENALEX_FUNDER_SOURCE,
-      url: buildOpenAlexFunderSearchUrl(query, MAXIMUM_PROVIDER_RESULTS),
-      map: (payload) => mapOpenAlexFunders(payload, query, MAXIMUM_PROVIDER_RESULTS),
+      source: ROR_SEARCH_SOURCE,
+      url: buildRorSearchUrl(query),
+      map: (payload) => mapRorOrganizations(payload, query, MAXIMUM_PROVIDER_RESULTS),
+      headers: rorClientId ? { "X-ROR-API-Client-ID": rorClientId } : undefined,
     },
   ];
+
+  if (openAlexApiKey) {
+    providers.push(
+      {
+        source: OPENALEX_INSTITUTION_SOURCE,
+        url: addQueryParameter(
+          buildOpenAlexInstitutionSearchUrl(query, MAXIMUM_PROVIDER_RESULTS),
+          "api_key",
+          openAlexApiKey,
+        ),
+        map: (payload) => mapOpenAlexInstitutions(payload, query, MAXIMUM_PROVIDER_RESULTS),
+      },
+      {
+        source: OPENALEX_FUNDER_SOURCE,
+        url: addQueryParameter(
+          buildOpenAlexFunderSearchUrl(query, MAXIMUM_PROVIDER_RESULTS),
+          "api_key",
+          openAlexApiKey,
+        ),
+        map: (payload) => mapOpenAlexFunders(payload, query, MAXIMUM_PROVIDER_RESULTS),
+      },
+    );
+  }
 
   const settled = await Promise.allSettled(providers.map((provider) => searchProvider(provider)));
   const resultGroups: NonprofitSuggestion[][] = [];
@@ -129,6 +167,7 @@ export async function GET(request: NextRequest) {
       source: NONPROFIT_SEARCH_SOURCE,
       sources,
       unavailableSources,
+      disabledSources,
       sourceUnavailable,
     },
     sourceUnavailable ? FALLBACK_CACHE_CONTROL : SUCCESS_CACHE_CONTROL,
