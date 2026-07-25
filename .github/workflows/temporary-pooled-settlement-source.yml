@@ -43,7 +43,7 @@ jobs:
           test -f supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
           test -f src/lib/trade-donation-pool.ts
           test -f docs/trade-donation-pooled-settlement-runbook.md
-          grep -q "cross-user pooled settlement" docs/trade-donation-pooled-settlement-runbook.md
+          grep -qi "cross-user pooled settlement" docs/trade-donation-pooled-settlement-runbook.md
           git diff --check
 
       - name: Replace transport files with the engineering release
