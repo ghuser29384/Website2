@@ -66,7 +66,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Validate and mask protected inputs
+      - name: Validate, normalize, and mask protected inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -76,9 +76,25 @@ jobs:
               exit 1
             fi
           done
+
+          NORMALIZED_DB_URL="$({
+            node <<'NODE'
+          const raw = process.env.PROD_SUPABASE_DB_URL;
+          const url = new URL(raw);
+          if (url.hostname.endsWith('.pooler.supabase.com')) {
+            url.username = 'postgres.jnpoxvalyjtdghnperyu';
+            url.port = url.port || '5432';
+            url.pathname = '/postgres';
+          }
+          process.stdout.write(url.toString());
+          NODE
+          })"
+
           echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$NORMALIZED_DB_URL"
           echo "::add-mask::$QA_TEST_PASSWORD"
           echo "::add-mask::$VERCEL_TOKEN"
+          echo "PROD_SUPABASE_DB_URL=$NORMALIZED_DB_URL" >> "$GITHUB_ENV"
           test "$(git -C app rev-parse HEAD)" = "$A1_PRODUCTION_SOURCE_SHA"
 
       - name: Install PostgreSQL client
