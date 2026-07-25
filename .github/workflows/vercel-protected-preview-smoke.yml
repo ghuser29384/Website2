@@ -1,13 +1,9 @@
 name: Configure Vercel protection bypass and smoke preview
 
 on:
-  pull_request:
+  push:
     branches:
       - feat/universal-command-workspace
-    types:
-      - opened
-      - reopened
-      - synchronize
 
 permissions:
   contents: read
@@ -18,7 +14,7 @@ concurrency:
 
 jobs:
   configure-and-smoke:
-    if: github.head_ref == 'trigger/finalize-universal-command'
+    if: github.ref_name == 'feat/universal-command-workspace'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
