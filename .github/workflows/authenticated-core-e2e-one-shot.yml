@@ -27,7 +27,8 @@ jobs:
       AUTH_E2E_OUTPUT_DIR: auth-e2e-evidence
       PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
       QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      VERCEL_BYPASS_COOKIE_FILE: /tmp/vercel-bypass-cookies.txt
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Check out one-shot gate branch
         uses: actions/checkout@v4
@@ -47,7 +48,7 @@ jobs:
           required=(
             PROD_SUPABASE_DB_URL
             QA_TEST_PASSWORD
-            VERCEL_AUTOMATION_BYPASS_SECRET
+            VERCEL_TOKEN
           )
           for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -76,6 +77,160 @@ jobs:
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
+
+      - name: Create a protected-preview browser cookie with Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$VERCEL_BYPASS_COOKIE_FILE" /tmp/vercel-preview-preflight.html
+          npx --yes vercel@latest curl "$AUTH_E2E_BASE_URL/" \
+            --token "$VERCEL_TOKEN" \
+            --scope ellen-s \
+            -H "x-vercel-set-bypass-cookie: true" \
+            --location \
+            --silent \
+            --show-error \
+            --cookie-jar "$VERCEL_BYPASS_COOKIE_FILE" \
+            --output /tmp/vercel-preview-preflight.html
+          test -s "$VERCEL_BYPASS_COOKIE_FILE"
+          grep -Eqi '_vercel|vercel' "$VERCEL_BYPASS_COOKIE_FILE"
+          grep -qi 'Moral Trade' /tmp/vercel-preview-preflight.html
+
+      - name: Prepare the cookie-authenticated Playwright runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/authenticated-core-e2e.mjs')
+          source = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one source block, found {count}')
+              source = source.replace(old, new, 1)
+
+          replace_once(
+              "import { mkdir, writeFile } from 'node:fs/promises';",
+              "import { mkdir, readFile, writeFile } from 'node:fs/promises';",
+              'filesystem import',
+          )
+          replace_once(
+              "const BYPASS = required('VERCEL_AUTOMATION_BYPASS_SECRET');",
+              "const BYPASS = String(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? '').trim();\n"
+              "const COOKIE_FILE = String(process.env.VERCEL_BYPASS_COOKIE_FILE ?? '').trim();\n"
+              "if (!BYPASS && !COOKIE_FILE) throw new Error('Vercel preview access configuration is missing.');",
+              'preview access configuration',
+          )
+
+          cleanup_block = """function cleanupSyntheticData() {
+            const pattern = `${EMAIL_BASE}+${RUN_TAG}-%@gmail.com`;
+            sql(`
+              begin;
+              create temporary table _mt_auth_e2e_users on commit drop as
+                select id, email
+                from auth.users
+                where lower(email) like lower(${quote(pattern)});
+
+              delete from public.email_outbox
+              where lower(recipient_email) like lower(${quote(pattern)})
+                 or profile_id in (select id from _mt_auth_e2e_users);
+              delete from public.email_nurture_subscriptions
+              where lower(email) like lower(${quote(pattern)})
+                 or profile_id in (select id from _mt_auth_e2e_users);
+              delete from public.funnel_events
+              where profile_id in (select id from _mt_auth_e2e_users);
+              delete from public.offers
+              where owner_id in (select id from _mt_auth_e2e_users);
+              delete from public.profiles
+              where id in (select id from _mt_auth_e2e_users);
+              delete from auth.identities
+              where user_id in (select id from _mt_auth_e2e_users);
+              delete from auth.users
+              where id in (select id from _mt_auth_e2e_users);
+              commit;
+            `);
+          }
+          """.replace('          ', '')
+
+          cookie_parser = cleanup_block + """
+          async function loadProtectionState() {
+            if (!COOKIE_FILE) return { cookies: [], origins: [] };
+            const source = await readFile(COOKIE_FILE, 'utf8');
+            const cookies = source
+              .split(/\\r?\\n/)
+              .filter((line) => line && (!line.startsWith('#') || line.startsWith('#HttpOnly_')))
+              .map((line) => {
+                const httpOnly = line.startsWith('#HttpOnly_');
+                const normalized = httpOnly ? line.slice('#HttpOnly_'.length) : line;
+                const fields = normalized.split('\\t');
+                if (fields.length < 7) return null;
+                const [domain, , cookiePath, secure, expires, name, value] = fields;
+                if (!name || !value) return null;
+                return {
+                  domain,
+                  expires: Number(expires) || -1,
+                  httpOnly,
+                  name,
+                  path: cookiePath || '/',
+                  sameSite: 'Lax',
+                  secure: secure === 'TRUE',
+                  value,
+                };
+              })
+              .filter(Boolean);
+            assert.ok(cookies.length > 0, 'Vercel preview access cookie was not generated.');
+            return { cookies, origins: [] };
+          }
+          """.replace('          ', '')
+          replace_once(cleanup_block, cookie_parser, 'cookie parser insertion')
+
+          replace_once(
+              """const api = await playwrightRequest.newContext({
+            extraHTTPHeaders: {
+              'x-vercel-protection-bypass': BYPASS,
+              'x-vercel-set-bypass-cookie': 'true',
+            },
+          });
+          """.replace('          ', ''),
+              """const protectionHeaders = BYPASS
+            ? {
+                'x-vercel-protection-bypass': BYPASS,
+                'x-vercel-set-bypass-cookie': 'true',
+              }
+            : {};
+          const protectionState = await loadProtectionState();
+          const api = await playwrightRequest.newContext({
+            extraHTTPHeaders: protectionHeaders,
+            storageState: protectionState,
+          });
+          """.replace('          ', ''),
+              'API preview access',
+          )
+          replace_once(
+              """    const context = await browser.newContext({
+                viewport: { width: label === 'C' ? 390 : 1440, height: label === 'C' ? 844 : 960 },
+                extraHTTPHeaders: {
+                  'x-vercel-protection-bypass': BYPASS,
+                  'x-vercel-set-bypass-cookie': 'true',
+                },
+              });
+          """.replace('              ', ''),
+              """    const context = await browser.newContext({
+                viewport: { width: label === 'C' ? 390 : 1440, height: label === 'C' ? 844 : 960 },
+                extraHTTPHeaders: protectionHeaders,
+                storageState: protectionState,
+              });
+          """.replace('              ', ''),
+              'browser preview access',
+          )
+
+          path.write_text(source)
+          PY
+          node --check .github/scripts/authenticated-core-e2e.mjs
 
       - name: Run mandatory authenticated end-to-end gate
         id: auth_gate
