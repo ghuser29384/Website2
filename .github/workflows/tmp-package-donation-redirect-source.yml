@@ -18,7 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Package repository source
         run: |
-          tar --exclude=.git --exclude=node_modules --exclude=.next -czf repository-source.tgz .
+          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/repository-source.tgz .
+          cp /tmp/repository-source.tgz repository-source.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: donation-redirect-source
