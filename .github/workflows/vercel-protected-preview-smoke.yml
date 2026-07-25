@@ -7,14 +7,14 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: vercel-protection-bypass-smoke
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   configure-and-smoke:
-    if: github.ref_name == 'feat/universal-command-workspace'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -22,14 +22,33 @@ jobs:
       WEBSITE2_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
       MORALTRADE_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
       COMMAND_BRANCH: feat/universal-command-workspace
+      STATUS_CONTEXT: Command protected-preview smoke
     steps:
-      - name: Check out the exact Command feature head
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "$(jq -nc \
+              --arg state pending \
+              --arg context "$STATUS_CONTEXT" \
+              --arg description 'Configuring bypass and testing protected previews' \
+              --arg target_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              '{state:$state,context:$context,description:$description,target_url:$target_url}')" >/dev/null
+
+      - name: Check out exact feature head
         uses: actions/checkout@v4
         with:
           ref: feat/universal-command-workspace
           fetch-depth: 1
 
-      - name: Select the configured Vercel access token
+      - name: Select configured Vercel access token
         env:
           TOKEN_PRIMARY: ${{ secrets.VERCEL_TOKEN }}
           TOKEN_ACCESS: ${{ secrets.VERCEL_ACCESS_TOKEN }}
@@ -40,13 +59,13 @@ jobs:
           set -euo pipefail
           token="${TOKEN_PRIMARY:-${TOKEN_ACCESS:-${TOKEN_API:-${TOKEN_CLI:-}}}}"
           if [[ -z "$token" ]]; then
-            echo "::error title=Vercel token required::No VERCEL_TOKEN, VERCEL_ACCESS_TOKEN, VERCEL_API_TOKEN, or VERCEL_CLI_TOKEN repository/organization secret is available."
+            echo "::error title=Vercel token required::No supported Vercel token secret is available."
             exit 1
           fi
           echo "::add-mask::$token"
           echo "VERCEL_AUTH_TOKEN=$token" >> "$GITHUB_ENV"
 
-      - name: Generate and configure project-specific automation bypass secrets
+      - name: Configure project-specific automation bypass secrets
         shell: bash
         run: |
           set -euo pipefail
@@ -60,49 +79,48 @@ jobs:
           configure_bypass() {
             local project_id="$1"
             local secret="$2"
-            local note="$3"
             local response_file
             response_file="$(mktemp)"
 
-            local status
-            status="$(curl --silent --show-error --retry 4 --retry-all-errors \
-              --output "$response_file" --write-out '%{http_code}' \
-              --request PATCH \
-              "https://api.vercel.com/v1/projects/${project_id}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
-              --header "Authorization: Bearer ${VERCEL_AUTH_TOKEN}" \
-              --header 'Content-Type: application/json' \
-              --data "$(jq -nc --arg secret "$secret" --arg note "$note" '{generate:{secret:$secret,note:$note}}')")"
+            call_api() {
+              local payload="$1"
+              curl --silent --show-error --retry 4 --retry-all-errors \
+                --output "$response_file" --write-out '%{http_code}' \
+                --request PATCH \
+                "https://api.vercel.com/v1/projects/${project_id}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+                --header "Authorization: Bearer ${VERCEL_AUTH_TOKEN}" \
+                --header 'Content-Type: application/json' \
+                --data "$payload"
+            }
+
+            status="$(call_api "$(jq -nc --arg secret "$secret" '{generate:{secret:$secret,note:"Universal Command direct preview smoke"}}')")"
             if [[ "$status" != "200" ]]; then
               echo "::error title=Vercel bypass generation failed::Project ${project_id} returned HTTP ${status}."
               jq -r '.error.message // .message // "No API error message returned."' "$response_file" || true
-              rm -f "$response_file"
               exit 1
             fi
 
-            status="$(curl --silent --show-error --retry 4 --retry-all-errors \
-              --output "$response_file" --write-out '%{http_code}' \
-              --request PATCH \
-              "https://api.vercel.com/v1/projects/${project_id}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
-              --header "Authorization: Bearer ${VERCEL_AUTH_TOKEN}" \
-              --header 'Content-Type: application/json' \
-              --data "$(jq -nc --arg secret "$secret" --arg note "$note" '{update:{secret:$secret,isEnvVar:true,note:$note}}')")"
+            status="$(call_api "$(jq -nc --arg secret "$secret" '{update:{secret:$secret,isEnvVar:true,note:"Universal Command direct preview smoke"}}')")"
             if [[ "$status" != "200" ]]; then
-              echo "::error title=Vercel bypass environment binding failed::Project ${project_id} returned HTTP ${status}."
+              echo "::error title=Vercel bypass binding failed::Project ${project_id} returned HTTP ${status}."
               jq -r '.error.message // .message // "No API error message returned."' "$response_file" || true
-              rm -f "$response_file"
               exit 1
             fi
             rm -f "$response_file"
           }
 
-          configure_bypass "$WEBSITE2_PROJECT_ID" "$website_secret" "Universal Command direct preview smoke"
-          configure_bypass "$MORALTRADE_PROJECT_ID" "$moraltrade_secret" "Universal Command direct preview smoke"
+          configure_bypass "$WEBSITE2_PROJECT_ID" "$website_secret"
+          configure_bypass "$MORALTRADE_PROJECT_ID" "$moraltrade_secret"
 
-      - name: Resolve READY previews for the exact feature head
+      - name: Resolve READY previews for exact feature head
         shell: bash
         run: |
           set -euo pipefail
           expected_sha="$(git rev-parse HEAD)"
+          if [[ "$expected_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error title=Feature head moved::Checked out ${expected_sha}, event identifies ${GITHUB_SHA}."
+            exit 1
+          fi
           echo "EXPECTED_FEATURE_SHA=$expected_sha" >> "$GITHUB_ENV"
 
           wait_for_preview() {
@@ -110,7 +128,7 @@ jobs:
             local output_name="$2"
             local response_file
             response_file="$(mktemp)"
-            for attempt in $(seq 1 72); do
+            for attempt in $(seq 1 90); do
               curl --silent --show-error --retry 3 --retry-all-errors \
                 --output "$response_file" \
                 "https://api.vercel.com/v7/deployments?projectId=${project_id}&teamId=${VERCEL_TEAM_ID}&branch=${COMMAND_BRANCH}&sha=${expected_sha}&state=READY&limit=1" \
@@ -123,35 +141,29 @@ jobs:
               fi
               sleep 10
             done
-            echo "::error title=Preview did not become READY::No READY deployment for ${project_id} at ${expected_sha}."
-            rm -f "$response_file"
+            echo "::error title=Preview did not become READY::No exact READY deployment for ${project_id} at ${expected_sha}."
             exit 1
           }
 
           wait_for_preview "$WEBSITE2_PROJECT_ID" WEBSITE2_PREVIEW_URL
           wait_for_preview "$MORALTRADE_PROJECT_ID" MORALTRADE_PREVIEW_URL
 
-      - name: Install test dependencies
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      - name: Create the direct preview smoke suite
+      - name: Create direct preview smoke suite
         shell: bash
         run: |
-          set -euo pipefail
           mkdir -p .preview-smoke
           cat > .preview-smoke/playwright.config.ts <<'TS'
           import { defineConfig } from '@playwright/test';
-
           const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
           const baseURL = process.env.SMOKE_BASE_URL;
           if (!secret || !baseURL) throw new Error('Smoke URL and bypass secret are required.');
-
           export default defineConfig({
             testDir: '.',
             testMatch: /preview\.spec\.ts/,
@@ -173,30 +185,27 @@ jobs:
 
           cat > .preview-smoke/preview.spec.ts <<'TS'
           import { expect, test } from '@playwright/test';
-
           const command = '$5 donation to animal welfare if you eat 1 vegetarian meal';
           const pendingKey = 'moral-trade.command.pending.v1';
 
-          test('Command health and signed-out API boundary are authoritative', async ({ request }) => {
+          test('health and signed-out API boundary', async ({ request }) => {
             const health = await request.get('/api/command/health');
             expect(health.status()).toBe(200);
-            const payload = await health.json();
-            expect(payload.ok).toBe(true);
-            expect(payload.persistenceConfigured).toBe(true);
-            expect(payload.directModelStateChanges).toBe(false);
-            expect(payload.capabilityCount).toBeGreaterThan(10);
-
+            expect(await health.json()).toMatchObject({
+              ok: true,
+              persistenceConfigured: true,
+              directModelStateChanges: false,
+              confirmationPolicy: 'typed-capability-registry',
+            });
             const sessions = await request.get('/api/command/sessions');
             expect(sessions.status()).toBe(401);
             expect(await sessions.json()).toMatchObject({ ok: false, error: 'Authentication required.' });
           });
 
-          test('the deployed Command workspace reaches the Moral Trade sign-in gate', async ({ page, baseURL }) => {
-            if (baseURL) {
-              await page.context().addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: baseURL }]);
-            }
+          test('Command sign-in gate has no server errors', async ({ page, baseURL }) => {
+            if (baseURL) await page.context().addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: baseURL }]);
             const serverErrors: string[] = [];
-            page.on('response', (response) => {
+            page.on('response', response => {
               if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.url()}`);
             });
             await page.goto('/command', { waitUntil: 'domcontentloaded' });
@@ -205,10 +214,8 @@ jobs:
             expect(serverErrors).toEqual([]);
           });
 
-          test('a live drawer request survives navigation into the deployed Command workspace', async ({ page, baseURL }) => {
-            if (baseURL) {
-              await page.context().addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: baseURL }]);
-            }
+          test('drawer request survives navigation', async ({ page, baseURL }) => {
+            if (baseURL) await page.context().addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: baseURL }]);
             await page.goto('/moral-trade-live.html', { waitUntil: 'domcontentloaded' });
             await page.getByRole('button', { name: /Command$/ }).click();
             const input = page.getByLabel('Ask Moral Trade Command');
@@ -218,60 +225,46 @@ jobs:
             await expect(page).toHaveURL(/\/command\?source=drawer$/);
             await expect(page.getByRole('heading', { name: 'Sign in to use Command.' })).toBeVisible();
             await expect(page.getByText('Draft created with editable exact terms.')).toHaveCount(0);
-            expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBe(command);
+            expect(await page.evaluate(key => sessionStorage.getItem(key), pendingKey)).toBe(command);
           });
 
-          test('trade and public-good terms survive their deployed sign-in return paths', async ({ page }) => {
+          test('trade and public-good sign-in returns preserve terms', async ({ page }) => {
             const tradeReturnTo = '/trades/new?handoff=command-center';
             await page.goto(tradeReturnTo, { waitUntil: 'domcontentloaded' });
             await expect(page.getByRole('heading', { name: 'Sign in to build a trade.' })).toBeVisible();
             await expect(page.getByRole('link', { name: 'Create account' })).toHaveAttribute(
-              'href',
-              `/signup?returnTo=${encodeURIComponent(tradeReturnTo)}`,
+              'href', `/signup?returnTo=${encodeURIComponent(tradeReturnTo)}`,
             );
 
             const params = new URLSearchParams({
-              template: 'threshold-coalition',
-              title: 'Animal welfare pool',
-              cause: 'Animal welfare',
-              participants: '100',
-              contribution: '20',
-              threshold: '80',
-              source: 'command',
+              template: 'threshold-coalition', title: 'Animal welfare pool', cause: 'Animal welfare',
+              participants: '100', contribution: '20', threshold: '80', source: 'command',
             });
             const poolReturnTo = `/mpgf/pools/new?${params.toString()}`;
             await page.goto(poolReturnTo, { waitUntil: 'domcontentloaded' });
             await expect(page.getByRole('heading', { name: 'Sign in to build a trade.' })).toBeVisible();
             await expect(page.getByRole('link', { name: 'Create account' })).toHaveAttribute(
-              'href',
-              `/signup?returnTo=${encodeURIComponent(poolReturnTo)}`,
+              'href', `/signup?returnTo=${encodeURIComponent(poolReturnTo)}`,
             );
             await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
-              'href',
-              `/login?returnTo=${encodeURIComponent(poolReturnTo)}`,
+              'href', `/login?returnTo=${encodeURIComponent(poolReturnTo)}`,
             );
           });
           TS
 
-      - name: Run one direct smoke suite against both protected previews
+      - name: Run direct suite against both protected previews
         shell: bash
         run: |
           set -euo pipefail
           run_smoke() {
-            local label="$1"
-            local base_url="$2"
-            local secret="$3"
-            echo "Running direct protected-preview smoke for ${label} at ${base_url}"
-            SMOKE_BASE_URL="$base_url" \
-            VERCEL_AUTOMATION_BYPASS_SECRET="$secret" \
-              npx playwright test .preview-smoke/preview.spec.ts \
-                --config .preview-smoke/playwright.config.ts
+            echo "Testing $1 at $2"
+            SMOKE_BASE_URL="$2" VERCEL_AUTOMATION_BYPASS_SECRET="$3" \
+              npx playwright test .preview-smoke/preview.spec.ts --config .preview-smoke/playwright.config.ts
           }
-
           run_smoke website2 "$WEBSITE2_PREVIEW_URL" "$WEBSITE2_BYPASS_SECRET"
           run_smoke moraltrade-site "$MORALTRADE_PREVIEW_URL" "$MORALTRADE_BYPASS_SECRET"
 
-      - name: Record public-safe verification evidence
+      - name: Record public-safe evidence
         shell: bash
         run: |
           cat > vercel-preview-smoke-summary.json <<JSON
@@ -299,3 +292,30 @@ jobs:
           path: vercel-preview-smoke-summary.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish final status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            state=success
+            description='Protected previews passed direct smoke verification'
+          else
+            state=failure
+            description='Protected-preview configuration or smoke verification failed'
+          fi
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data "$(jq -nc \
+              --arg state "$state" \
+              --arg context "$STATUS_CONTEXT" \
+              --arg description "$description" \
+              --arg target_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              '{state:$state,context:$context,description:$description,target_url:$target_url}')" >/dev/null
