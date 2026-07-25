@@ -28,10 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@latest \
-            --token "$VERCEL_TOKEN" \
-            --scope "$VERCEL_ORG_ID" \
-            curl / \
+          npx --yes vercel@latest curl / \
             --deployment "$AUTH_E2E_BASE_URL" \
             -H "x-vercel-set-bypass-cookie: true" \
             --location \
