@@ -1,0 +1,141 @@
+name: Authenticated core launch gate (one shot)
+
+on:
+  push:
+    branches:
+      - ops/authenticated-core-e2e-20260725
+  pull_request:
+    branches:
+      - launch/verify-and-harden-20260723
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authenticated-core-e2e-20260725-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  authenticated-core-e2e:
+    name: Fresh-account authenticated browser workflow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      AUTH_E2E_BASE_URL: https://moraltrade-site-q2hwdhv35-ellen-s.vercel.app
+      AUTH_E2E_HEAD_SHA: 7f699a84215bcf9a598ed455094218ef8933f418
+      AUTH_E2E_OUTPUT_DIR: auth-e2e-evidence
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_BYPASS_COOKIE_FILE: /tmp/vercel-bypass-cookies.txt
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out one-shot gate branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the tested application commit is an ancestor
+        run: git merge-base --is-ancestor "$AUTH_E2E_HEAD_SHA" HEAD
+
+      - name: Validate protected configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PROD_SUPABASE_DB_URL QA_TEST_PASSWORD VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+          if (( ${#QA_TEST_PASSWORD} < 14 )); then
+            echo "QA_TEST_PASSWORD must contain at least 14 characters." >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and browser tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Acquire protected-preview browser cookie
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$VERCEL_BYPASS_COOKIE_FILE" /tmp/vercel-preview-preflight.html
+          npx --yes vercel@latest curl / \
+            --deployment "$AUTH_E2E_BASE_URL" \
+            -H "x-vercel-set-bypass-cookie: true" \
+            --location \
+            --silent \
+            --show-error \
+            --cookie-jar "$VERCEL_BYPASS_COOKIE_FILE" \
+            --output /tmp/vercel-preview-preflight.html
+          test -s "$VERCEL_BYPASS_COOKIE_FILE"
+          test -s /tmp/vercel-preview-preflight.html
+          grep -qi 'Moral Trade' /tmp/vercel-preview-preflight.html
+
+      - name: Prepare cookie-authenticated runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/scripts/prepare-authenticated-core-e2e-cookie.mjs
+          node --check .github/scripts/authenticated-core-e2e.mjs
+
+      - name: Run mandatory authenticated end-to-end gate
+        id: auth_gate
+        run: node .github/scripts/authenticated-core-e2e.mjs
+
+      - name: Upload browser, state, and audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-core-e2e-${{ env.AUTH_E2E_HEAD_SHA }}-${{ github.run_id }}
+          path: auth-e2e-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Failsafe cleanup of synthetic production records
+        if: always() && steps.auth_gate.outcome != 'skipped' && env.PROD_SUPABASE_DB_URL != ''
+        shell: bash
+        env:
+          EMAIL_PATTERN: caijun054+mt-core-${{ github.run_id }}-%@gmail.com
+        run: |
+          set -euo pipefail
+          psql "$PROD_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$EMAIL_PATTERN" <<'SQL'
+          begin;
+          create temporary table _mt_auth_e2e_users on commit drop as
+            select id, email
+            from auth.users
+            where lower(email) like lower(:'email_pattern');
+
+          delete from public.email_outbox
+          where lower(recipient_email) like lower(:'email_pattern')
+             or profile_id in (select id from _mt_auth_e2e_users);
+          delete from public.email_nurture_subscriptions
+          where lower(email) like lower(:'email_pattern')
+             or profile_id in (select id from _mt_auth_e2e_users);
+          delete from public.funnel_events
+          where profile_id in (select id from _mt_auth_e2e_users);
+          delete from public.offers
+          where owner_id in (select id from _mt_auth_e2e_users);
+          delete from public.profiles
+          where id in (select id from _mt_auth_e2e_users);
+          delete from auth.identities
+          where user_id in (select id from _mt_auth_e2e_users);
+          delete from auth.users
+          where id in (select id from _mt_auth_e2e_users);
+          commit;
+          SQL
