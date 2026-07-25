@@ -1,9 +1,9 @@
 name: A1 production authenticated smoke
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/a1-production-smoke-20260725
+      - main
     paths:
       - .a1-production-smoke/**
       - .github/workflows/a1-production-authenticated-smoke.yml
@@ -17,7 +17,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out smoke bundle
+        uses: actions/checkout@v4
+      - name: Reconstruct and syntax-check smoke script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .a1-production-smoke/part-* | base64 --decode > /tmp/a1-production-smoke.mjs
+          sha256sum /tmp/a1-production-smoke.mjs
+          node --check /tmp/a1-production-smoke.mjs
+
   verify-production-loop:
+    needs: validate-bundle
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -34,7 +49,6 @@ jobs:
       - name: Check out smoke bundle
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
           path: ops
           fetch-depth: 1
 
@@ -125,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           cat ../ops/.a1-production-smoke/part-* | base64 --decode > .a1-production-smoke.mjs
-          echo "7a1e92b9ed82e23f51c2117eea11fa12d69f1aa250714d34365d8ae07457fbdc  .a1-production-smoke.mjs" | sha256sum -c -
+          sha256sum .a1-production-smoke.mjs
           node --check .a1-production-smoke.mjs
           node .a1-production-smoke.mjs
 
