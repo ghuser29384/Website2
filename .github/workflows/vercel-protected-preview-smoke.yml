@@ -69,6 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p preview-diagnostics
           website_secret="$(openssl rand -hex 16)"
           moraltrade_secret="$(openssl rand -hex 16)"
           echo "::add-mask::$website_secret"
@@ -77,10 +78,10 @@ jobs:
           echo "MORALTRADE_BYPASS_SECRET=$moraltrade_secret" >> "$GITHUB_ENV"
 
           configure_bypass() {
-            local project_id="$1"
-            local secret="$2"
-            local response_file
-            response_file="$(mktemp)"
+            local label="$1"
+            local project_id="$2"
+            local secret="$3"
+            local response_file="preview-diagnostics/${label}-bypass-response.json"
 
             call_api() {
               local payload="$1"
@@ -106,11 +107,14 @@ jobs:
               jq -r '.error.message // .message // "No API error message returned."' "$response_file" || true
               exit 1
             fi
+
+            jq '{protectionBypassCount:(.protectionBypass | length), scopes:[.protectionBypass[]?.scope], envBindings:[.protectionBypass[]?.isEnvVar]}' \
+              "$response_file" > "preview-diagnostics/${label}-bypass-summary.json"
             rm -f "$response_file"
           }
 
-          configure_bypass "$WEBSITE2_PROJECT_ID" "$website_secret"
-          configure_bypass "$MORALTRADE_PROJECT_ID" "$moraltrade_secret"
+          configure_bypass website2 "$WEBSITE2_PROJECT_ID" "$website_secret"
+          configure_bypass moraltrade "$MORALTRADE_PROJECT_ID" "$moraltrade_secret"
 
       - name: Resolve READY previews for exact feature head
         shell: bash
@@ -126,8 +130,7 @@ jobs:
           wait_for_preview() {
             local project_id="$1"
             local output_name="$2"
-            local response_file
-            response_file="$(mktemp)"
+            local response_file="$(mktemp)"
             for attempt in $(seq 1 90); do
               curl --silent --show-error --retry 3 --retry-all-errors \
                 --output "$response_file" \
@@ -147,6 +150,28 @@ jobs:
 
           wait_for_preview "$WEBSITE2_PROJECT_ID" WEBSITE2_PREVIEW_URL
           wait_for_preview "$MORALTRADE_PROJECT_ID" MORALTRADE_PREVIEW_URL
+
+      - name: Probe bypassed health endpoints
+        id: probes
+        shell: bash
+        run: |
+          set -u
+          probe() {
+            local label="$1"
+            local base_url="$2"
+            local secret="$3"
+            local code
+            code="$(curl --silent --show-error --location-trusted --max-redirs 0 \
+              --dump-header "preview-diagnostics/${label}-health-headers.txt" \
+              --output "preview-diagnostics/${label}-health-body.txt" \
+              --write-out '%{http_code}' \
+              --header "x-vercel-protection-bypass: ${secret}" \
+              --header 'x-vercel-set-bypass-cookie: true' \
+              "${base_url}/api/command/health" || true)"
+            echo "${label}_code=${code:-000}" >> "$GITHUB_OUTPUT"
+          }
+          probe website2 "$WEBSITE2_PREVIEW_URL" "$WEBSITE2_BYPASS_SECRET"
+          probe moraltrade "$MORALTRADE_PREVIEW_URL" "$MORALTRADE_BYPASS_SECRET"
 
       - uses: actions/setup-node@v4
         with:
@@ -235,7 +260,6 @@ jobs:
             await expect(page.getByRole('link', { name: 'Create account' })).toHaveAttribute(
               'href', `/signup?returnTo=${encodeURIComponent(tradeReturnTo)}`,
             );
-
             const params = new URLSearchParams({
               template: 'threshold-coalition', title: 'Animal welfare pool', cause: 'Animal welfare',
               participants: '100', contribution: '20', threshold: '80', source: 'command',
@@ -252,46 +276,67 @@ jobs:
           });
           TS
 
-      - name: Run direct suite against both protected previews
+      - name: Smoke website2 protected preview
+        id: smoke_website2
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          run_smoke() {
-            echo "Testing $1 at $2"
-            SMOKE_BASE_URL="$2" VERCEL_AUTOMATION_BYPASS_SECRET="$3" \
-              npx playwright test .preview-smoke/preview.spec.ts --config .preview-smoke/playwright.config.ts
-          }
-          run_smoke website2 "$WEBSITE2_PREVIEW_URL" "$WEBSITE2_BYPASS_SECRET"
-          run_smoke moraltrade-site "$MORALTRADE_PREVIEW_URL" "$MORALTRADE_BYPASS_SECRET"
+          set -o pipefail
+          SMOKE_BASE_URL="$WEBSITE2_PREVIEW_URL" VERCEL_AUTOMATION_BYPASS_SECRET="$WEBSITE2_BYPASS_SECRET" \
+            npx playwright test .preview-smoke/preview.spec.ts --config .preview-smoke/playwright.config.ts \
+            2>&1 | tee preview-diagnostics/website2-playwright.log
+
+      - name: Smoke moraltrade-site protected preview
+        id: smoke_moraltrade
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          SMOKE_BASE_URL="$MORALTRADE_PREVIEW_URL" VERCEL_AUTOMATION_BYPASS_SECRET="$MORALTRADE_BYPASS_SECRET" \
+            npx playwright test .preview-smoke/preview.spec.ts --config .preview-smoke/playwright.config.ts \
+            2>&1 | tee preview-diagnostics/moraltrade-playwright.log
 
       - name: Record public-safe evidence
+        if: always()
+        env:
+          WEBSITE_PROBE: ${{ steps.probes.outputs.website2_code }}
+          MORALTRADE_PROBE: ${{ steps.probes.outputs.moraltrade_code }}
+          WEBSITE_SMOKE: ${{ steps.smoke_website2.outcome }}
+          MORALTRADE_SMOKE: ${{ steps.smoke_moraltrade.outcome }}
         shell: bash
         run: |
-          cat > vercel-preview-smoke-summary.json <<JSON
-          {
-            "featureSha": "${EXPECTED_FEATURE_SHA}",
-            "website2Preview": "${WEBSITE2_PREVIEW_URL}",
-            "moraltradePreview": "${MORALTRADE_PREVIEW_URL}",
-            "protectionBypassConfigured": true,
-            "directPreviewSmokePassed": true,
-            "checks": [
-              "command health",
-              "signed-out sessions API",
-              "Command sign-in gate",
-              "drawer handoff",
-              "trade sign-in return",
-              "public-good sign-in return",
-              "no observed 5xx responses"
-            ]
-          }
-          JSON
+          jq -nc \
+            --arg featureSha "${EXPECTED_FEATURE_SHA:-$GITHUB_SHA}" \
+            --arg website2Preview "${WEBSITE2_PREVIEW_URL:-}" \
+            --arg moraltradePreview "${MORALTRADE_PREVIEW_URL:-}" \
+            --arg website2Probe "$WEBSITE_PROBE" \
+            --arg moraltradeProbe "$MORALTRADE_PROBE" \
+            --arg website2Smoke "$WEBSITE_SMOKE" \
+            --arg moraltradeSmoke "$MORALTRADE_SMOKE" \
+            '{featureSha:$featureSha,website2Preview:$website2Preview,moraltradePreview:$moraltradePreview,protectionBypassConfigured:true,website2Probe:$website2Probe,moraltradeProbe:$moraltradeProbe,website2Smoke:$website2Smoke,moraltradeSmoke:$moraltradeSmoke}' \
+            > preview-diagnostics/summary.json
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload public-safe diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: vercel-protected-preview-smoke-evidence
-          path: vercel-preview-smoke-summary.json
+          path: preview-diagnostics
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce direct preview smoke result
+        env:
+          WEBSITE_PROBE: ${{ steps.probes.outputs.website2_code }}
+          MORALTRADE_PROBE: ${{ steps.probes.outputs.moraltrade_code }}
+          WEBSITE_SMOKE: ${{ steps.smoke_website2.outcome }}
+          MORALTRADE_SMOKE: ${{ steps.smoke_moraltrade.outcome }}
+        shell: bash
+        run: |
+          test "$WEBSITE_PROBE" = 200
+          test "$MORALTRADE_PROBE" = 200
+          test "$WEBSITE_SMOKE" = success
+          test "$MORALTRADE_SMOKE" = success
 
       - name: Publish final status
         if: always()
