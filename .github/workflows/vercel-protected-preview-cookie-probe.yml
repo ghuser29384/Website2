@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/authenticated-core-e2e-20260725
+  pull_request:
+    branches:
+      - launch/verify-and-harden-20260723
 
 permissions:
   contents: read
