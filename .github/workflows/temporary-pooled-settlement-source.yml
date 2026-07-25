@@ -1,4 +1,4 @@
-name: Apply pooled-settlement release payload
+name: Diagnose pooled-settlement release payload
 
 on:
   push:
@@ -12,12 +12,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: apply-pooled-settlement-release
+  group: diagnose-pooled-settlement-release
   cancel-in-progress: true
 
 jobs:
-  apply:
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,31 +25,45 @@ jobs:
           ref: feat/cross-user-pooled-settlement
           fetch-depth: 0
 
-      - name: Reconstruct and validate release payload
+      - name: Diagnose and commit payload report
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
+          report=.github/pooled-settlement-diagnostic.txt
+          : > "$report"
           mapfile -t chunks < <(find .github/pooled-settlement-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
-          test "${#chunks[@]}" -eq 8
+          echo "chunk_count=${#chunks[@]}" >> "$report"
+          for chunk in "${chunks[@]}"; do
+            printf '%s bytes=' "$chunk" >> "$report"
+            wc -c < "$chunk" | tr -d '\n' >> "$report"
+            printf ' sha256=' >> "$report"
+            sha256sum "$chunk" | awk '{print $1}' >> "$report"
+          done
           cat "${chunks[@]}" > /tmp/pooled-settlement-payload.b64
-          base64 --decode /tmp/pooled-settlement-payload.b64 > /tmp/pooled-settlement-payload.tgz
-          tar -tzf /tmp/pooled-settlement-payload.tgz >/dev/null
-          tar -xzf /tmp/pooled-settlement-payload.tgz
-          test -f supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
-          test -f src/lib/trade-donation-pool.ts
-          test -f docs/trade-donation-pooled-settlement-runbook.md
-          grep -q "cross-user pooled settlement" docs/trade-donation-pooled-settlement-runbook.md
-          git diff --check
-
-      - name: Replace transport files with the release
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf .github/pooled-settlement-payload
-          rm .github/workflows/temporary-pooled-settlement-source.yml
-          git diff --check
-          git add -A
+          printf 'combined_b64_bytes=' >> "$report"
+          wc -c < /tmp/pooled-settlement-payload.b64 | tr -d '\n' >> "$report"
+          printf ' combined_b64_sha256=' >> "$report"
+          sha256sum /tmp/pooled-settlement-payload.b64 | awk '{print $1}' >> "$report"
+          base64 --decode /tmp/pooled-settlement-payload.b64 > /tmp/pooled-settlement-payload.tgz 2>/tmp/base64.err
+          base64_status=$?
+          echo "base64_status=$base64_status" >> "$report"
+          sed 's/^/base64_stderr=/' /tmp/base64.err >> "$report"
+          printf 'tgz_bytes=' >> "$report"
+          wc -c < /tmp/pooled-settlement-payload.tgz | tr -d '\n' >> "$report"
+          printf ' tgz_sha256=' >> "$report"
+          sha256sum /tmp/pooled-settlement-payload.tgz | awk '{print $1}' >> "$report"
+          gzip -t /tmp/pooled-settlement-payload.tgz 2>/tmp/gzip.err
+          gzip_status=$?
+          echo "gzip_status=$gzip_status" >> "$report"
+          sed 's/^/gzip_stderr=/' /tmp/gzip.err >> "$report"
+          tar -tzf /tmp/pooled-settlement-payload.tgz >/tmp/tar.list 2>/tmp/tar.err
+          tar_status=$?
+          echo "tar_status=$tar_status" >> "$report"
+          sed 's/^/tar_stderr=/' /tmp/tar.err >> "$report"
+          echo "tar_first_entries:" >> "$report"
+          head -20 /tmp/tar.list >> "$report"
+          git add "$report"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Add cross-user pooled settlement"
+          git commit -m "Record pooled settlement payload diagnostics"
           git push origin HEAD:feat/cross-user-pooled-settlement
