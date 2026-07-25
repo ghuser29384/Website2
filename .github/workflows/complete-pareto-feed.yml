@@ -6,6 +6,11 @@ on:
       - feature/pareto-causal-learning-feed-20260725
     paths:
       - .github/workflows/complete-pareto-feed.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/complete-pareto-feed.yml
 
 permissions:
   contents: write
