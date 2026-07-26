@@ -25,11 +25,18 @@ jobs:
           ref: qa/failure-bonus-authenticated-browser-20260726
           fetch-depth: 0
 
-      - name: Verify exact source and patch applicability
+      - name: Verify exact source blob
         shell: bash
         run: |
           set -euxo pipefail
-          test "$(git hash-object .github/scripts/failure-bonus-authenticated-browser-qa.mjs)" = "00b0cd1e21efddabaffc2b8d23f786674637c36e"
+          actual="$(git hash-object .github/scripts/failure-bonus-authenticated-browser-qa.mjs)"
+          echo "source_blob=$actual"
+          test "$actual" = "00b0cd1e21efddabaffc2b8d23f786674637c36e"
+
+      - name: Verify patch applicability
+        shell: bash
+        run: |
+          set -euxo pipefail
           git apply --check --verbose .github/failure-bonus-browser-role-selectors.patch
 
       - name: Apply exact role selectors
@@ -37,7 +44,9 @@ jobs:
         run: |
           set -euxo pipefail
           git apply --verbose .github/failure-bonus-browser-role-selectors.patch
-          test "$(git hash-object .github/scripts/failure-bonus-authenticated-browser-qa.mjs)" = "8fe9ee2dc0a8031bc26c3c136cc6137cf3934e7c"
+          actual="$(git hash-object .github/scripts/failure-bonus-authenticated-browser-qa.mjs)"
+          echo "result_blob=$actual"
+          test "$actual" = "8fe9ee2dc0a8031bc26c3c136cc6137cf3934e7c"
           node --check .github/scripts/failure-bonus-authenticated-browser-qa.mjs
 
       - name: Remove temporary machinery and commit
