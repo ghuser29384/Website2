@@ -91,14 +91,34 @@ jobs:
 
           mkdir -p app/.vercel app/a1-production-smoke-evidence
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > app/.vercel/project.json
+
+          set +e
           (
             cd app
             npx --yes vercel@56.5.0 env pull .vercel-production.env \
-              --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+              --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" \
+              > a1-production-smoke-evidence/vercel-env-pull.log 2>&1
           )
+          pull_code=$?
+          set -e
+          if [ "$pull_code" -ne 0 ]; then
+            cat app/a1-production-smoke-evidence/vercel-env-pull.log
+            exit "$pull_code"
+          fi
 
           node --env-file=app/.vercel-production.env <<'NODE'
           const fs = require('node:fs');
+
+          const names = fs
+            .readFileSync('app/.vercel-production.env', 'utf8')
+            .split(/\r?\n/)
+            .map((line) => line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/)?.[1])
+            .filter(Boolean)
+            .sort();
+          fs.writeFileSync(
+            'app/a1-production-smoke-evidence/vercel-env-names.txt',
+            `${names.join('\n')}\n`,
+          );
 
           const candidates = [
             ['PROD_SUPABASE_DB_URL', process.env.PROD_SUPABASE_DB_URL],
