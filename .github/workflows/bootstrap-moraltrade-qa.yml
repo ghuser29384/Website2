@@ -27,12 +27,6 @@ concurrency:
 
 jobs:
   bootstrap:
-    if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.repository == 'ghuser29384/Website2' &&
-       github.ref == 'refs/heads/agent/dynamic-marketplace-clearing-rounds' &&
-       inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -47,6 +41,25 @@ jobs:
       MORALTRADE_QA_GIT_BRANCH: agent/dynamic-marketplace-clearing-rounds
       QA_BASELINE_ARTIFACT_DIR: ${{ runner.temp }}/moraltrade-qa-baseline
     steps:
+      - name: Validate exact execution target
+        shell: bash
+        env:
+          CONFIRM_TARGET: ${{ inputs.confirm_target }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository: $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/agent/dynamic-marketplace-clearing-rounds" ]]; then
+            echo "Refusing unexpected branch ref: $GITHUB_REF" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != "push" && "$CONFIRM_TARGET" != "hvmxfjjbdcgjjudmthdz" ]]; then
+            echo "The isolated QA target was not confirmed." >&2
+            exit 1
+          fi
+
       - name: Check out the tested branch
         uses: actions/checkout@v4
 
