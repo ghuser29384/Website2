@@ -52,6 +52,51 @@ jobs:
 
           path = Path("src/lib/public-route-smoke.test.ts")
           source = path.read_text(encoding="utf-8")
+
+          create_start = source.index(
+              'test("create trade route family has stable signed-out entry points", () => {'
+          )
+          create_end = source.index(
+              'test("marketplace pilot copy separates live offers from worked examples", () => {',
+              create_start,
+          )
+          create_replacement = '''test("create route chooser keeps signed-out drafts gated and source context explicit", () => {
+            const createRoute = readRepoFile("src/app/create/page.tsx");
+            const chooser = readRepoFile("src/components/create/create-route-chooser.tsx");
+            const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
+            const newTradePage = readRepoFile("src/app/trades/new/page.tsx");
+            const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
+
+            assert.match(createRoute, /CreateRouteChooser/);
+            assert.match(createRoute, /readCreateMode/);
+            assert.match(createRoute, /BackCreateRoute/);
+            assert.equal(createRoute.includes("redirect("), false);
+            assert.match(chooser, /CREATE_ROUTE_DEFINITIONS/);
+            assert.match(chooser, /buildCreateTargetHref/);
+            assert.match(chooser, /Nothing happens until you confirm/);
+            assert.match(chooser, /Sign up to draft/);
+            assert.match(chooser, /aria-label="Creation routes"/);
+            assert.match(newOfferPage, /redirect\(\s*`\/trades\/new/);
+            assert.match(newOfferPage, /\/mpgf\/pools\/new\?template=threshold-coalition/);
+            assert.match(newOfferPage, /TradeDraftSignInGate/);
+            assert.match(newOfferPage, /source_offer/);
+            assert.match(newOfferPage, /sourceCounterofferTemplate/);
+            assert.match(newOfferPage, /baselineAmountUsd: ""/);
+            assert.match(newOfferPage, /requestedMatchingAmountUsd: ""/);
+            assert.match(newOfferPage, /no amount is inferred from the original proposal/);
+            assert.match(newTradePage, /TradeDraftSignInGate/);
+            assert.match(newTradePage, /sourceOffer\.requested_cause/);
+            assert.match(newTradePage, /sourceOffer\.offered_cause/);
+            assert.match(newTradePage, /sourceOffer\.request_action/);
+            assert.match(newTradePage, /sourceOffer\.offer_action/);
+            assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
+            assert.match(marketplaceBoundary, /CRECM v1\.125/);
+            assert.match(marketplaceBoundary, /marketplaceLaneLabel: "Public Goods Fund"/);
+          });
+
+          '''
+          source = source[:create_start] + create_replacement + source[create_end:]
+
           block_start = source.index(
               'test("marketplace pilot copy separates live offers from worked examples", () => {'
           )
@@ -112,17 +157,6 @@ jobs:
           if source.count(old_fixture) != 1 or source.count(old_assertion) != 1:
               raise SystemExit("Worked-example canonical-link assertion did not match exactly once.")
           source = source.replace(old_fixture, new_fixture, 1).replace(old_assertion, new_assertion, 1)
-
-          old_create_assertions = '''  assert.match(createRoute, /Create trade/);
-            assert.match(createRoute, /NewOfferPage/);
-          '''
-          new_create_assertions = '''  assert.match(createRoute, /CreateRouteChooser/);
-            assert.match(createRoute, /readCreateMode/);
-            assert.match(createRoute, /BackCreateRoute/);
-          '''
-          if source.count(old_create_assertions) != 1:
-              raise SystemExit("Stale create-route assertions did not match exactly once.")
-          source = source.replace(old_create_assertions, new_create_assertions, 1)
 
           path.write_text(source, encoding="utf-8")
           PY
