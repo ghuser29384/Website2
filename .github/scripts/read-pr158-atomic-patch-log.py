@@ -4,7 +4,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89807548401
+JOB_ID = 89808041264
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -19,7 +19,7 @@ def download(repo: str, token: str) -> str:
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "moraltrade-pr158-focused-patch-log-reader",
+            "User-Agent": "moraltrade-pr158-push-failure-reader",
         },
     )
     opener = urllib.request.build_opener(NoRedirect)
@@ -33,7 +33,7 @@ def download(repo: str, token: str) -> str:
         if not location:
             raise RuntimeError("GitHub log redirect omitted Location") from error
         with urllib.request.urlopen(
-            urllib.request.Request(location, headers={"User-Agent": "moraltrade-pr158-focused-patch-log-reader"}),
+            urllib.request.Request(location, headers={"User-Agent": "moraltrade-pr158-push-failure-reader"}),
             timeout=30,
         ) as redirected:
             content = redirected.read()
@@ -60,25 +60,14 @@ def main() -> int:
         (
             index
             for index, line in enumerate(lines)
-            if "Run focused repair gates and production build" in line
+            if "Commit and push only the tested repair" in line
         ),
-        max(0, len(lines) - 360),
+        max(0, len(lines) - 260),
     )
     candidate = lines[marker:]
-    error_indexes = [
-        index
-        for index, line in enumerate(candidate)
-        if re.search(
-            r"(?i)(##\[error\]|error TS\d+|AssertionError|TypeError|SyntaxError|ReferenceError|Process completed with exit code)",
-            line,
-        )
-    ]
-    first_error = error_indexes[0] if error_indexes else max(0, len(candidate) - 300)
-    lo = max(0, first_error - 220)
-    hi = min(len(candidate), first_error + 420)
-    print("SANITIZED_FOCUSED_PATCH_FAILURE_BEGIN")
-    print("\n".join(candidate[lo:hi]))
-    print("SANITIZED_FOCUSED_PATCH_FAILURE_END")
+    print("SANITIZED_PUSH_FAILURE_BEGIN")
+    print("\n".join(candidate[:360]))
+    print("SANITIZED_PUSH_FAILURE_END")
     return 0
 
 
