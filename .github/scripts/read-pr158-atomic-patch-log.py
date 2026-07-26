@@ -30,7 +30,7 @@ def github_json(repo: str, token: str, path: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def latest_failed_job(repo: str, token: str) -> int:
+def latest_failed_job(repo: str, token: str) -> tuple[int, int]:
     query = urllib.parse.urlencode({"branch": BRANCH, "status": "failure", "per_page": 50})
     payload = github_json(repo, token, f"/actions/runs?{query}")
     runs = [
@@ -45,8 +45,7 @@ def latest_failed_job(repo: str, token: str) -> int:
     jobs = [job for job in jobs_payload.get("jobs", []) if job.get("name") == "patch"]
     if len(jobs) != 1:
         raise RuntimeError(f"Expected one patch job for run {run['id']}; found {len(jobs)}.")
-    print(f"Inspecting failed patch run {run['id']} job {jobs[0]['id']}.")
-    return int(jobs[0]["id"])
+    return int(run["id"]), int(jobs[0]["id"])
 
 
 def download(repo: str, token: str, job_id: int) -> str:
@@ -90,12 +89,28 @@ def sanitize(text: str) -> str:
     return text
 
 
-def main() -> int:
-    repo = os.environ["GITHUB_REPOSITORY"]
-    token = os.environ["GH_TOKEN"]
-    job_id = latest_failed_job(repo, token)
-    raw = sanitize(download(repo, token, job_id))
-    lines = raw.splitlines()
+def concise_failure_summary(lines: list[str]) -> list[str]:
+    summary: list[str] = []
+    test_markers = [i for i, line in enumerate(lines) if "✖ " in line]
+    for ordinal, marker in enumerate(test_markers, start=1):
+        upper = test_markers[ordinal] if ordinal < len(test_markers) else min(len(lines), marker + 250)
+        block = lines[marker:upper]
+        summary.append(f"--- FAILURE {ordinal} ---")
+        summary.append(lines[marker])
+        for line in block:
+            if (
+                "AssertionError" in line
+                or "TypeError" in line
+                or "SyntaxError" in line
+                or "ReferenceError" in line
+                or " at TestContext" in line
+                or " expected:" in line
+                or " operator:" in line
+            ):
+                summary.append(line)
+    if summary:
+        return summary
+
     failure_indexes = [
         i
         for i, line in enumerate(lines)
@@ -105,10 +120,18 @@ def main() -> int:
         )
     ]
     index = failure_indexes[-1] if failure_indexes else max(0, len(lines) - 120)
-    lo = max(0, index - 160)
-    hi = min(len(lines), index + 160)
+    return lines[max(0, index - 160) : min(len(lines), index + 160)]
+
+
+def main() -> int:
+    repo = os.environ["GITHUB_REPOSITORY"]
+    token = os.environ["GH_TOKEN"]
+    run_id, job_id = latest_failed_job(repo, token)
+    raw = sanitize(download(repo, token, job_id))
+    lines = raw.splitlines()
+    print(f"Inspecting failed patch run {run_id} job {job_id}.")
     print("SANITIZED_PATCH_FAILURE_BEGIN")
-    print("\n".join(lines[lo:hi]))
+    print("\n".join(concise_failure_summary(lines)))
     print("SANITIZED_PATCH_FAILURE_END")
     return 0
 
