@@ -1,1 +1,1 @@
-Capture the exact computed layout chain for the hidden A1 outcome-feedback form before applying the product layout fix.
+Verify the live completed-agreement feedback fix end to end: authenticated Feed exposure, stable assignment, bilateral private feedback, scheduled training, cold-start or shadow model record, and complete synthetic-data cleanup.
