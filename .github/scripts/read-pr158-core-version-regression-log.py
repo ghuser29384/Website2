@@ -4,7 +4,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89817165518
+JOB_ID = 89817493894
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -61,11 +61,11 @@ def main() -> int:
     lines = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"])).splitlines()
     noteworthy = []
     pattern = re.compile(
-        r"(?i)(Run focused source|not ok|AssertionError|SyntaxError|TypeError|ReferenceError|error TS\d+|npm ERR|ESLint|Parsing error|Process completed with exit code|failed)"
+        r"(?i)(Run live rollback|PASS:|ERROR:|DETAIL:|HINT:|CONTEXT:|psql:|exception|failed|Process completed with exit code|ROLLBACK|COMMIT|CREATE TRIGGER|DROP TRIGGER)"
     )
     for index, line in enumerate(lines):
         if pattern.search(line):
-            noteworthy.extend(lines[max(0, index - 10) : min(len(lines), index + 25)])
+            noteworthy.extend(lines[max(0, index - 5) : min(len(lines), index + 18)])
     deduped = []
     seen = set()
     for line in noteworthy:
@@ -75,9 +75,9 @@ def main() -> int:
 
     print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_BEGIN")
     print("--- NOTEWORTHY LINES ---")
-    print("\n".join(deduped[-600:]))
+    print("\n".join(deduped[-700:]))
     print("--- TERMINAL LOG TAIL ---")
-    print("\n".join(lines[-320:]))
+    print("\n".join(lines[-420:]))
     print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_END")
     return 0
 
