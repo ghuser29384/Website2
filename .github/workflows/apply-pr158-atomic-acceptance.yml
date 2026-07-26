@@ -53,6 +53,40 @@ jobs:
           path = Path("src/lib/public-route-smoke.test.ts")
           source = path.read_text(encoding="utf-8")
 
+          old_offset_assertion = '  assert.match(donationOffsetsPage, /Draft an offset/);\n'
+          new_offset_assertions = (
+              '  assert.match(donationOffsetsPage, /Start an offset draft/);\n'
+              '  assert.match(donationOffsetsPage, /\\/offers\\/new\\?entry=draft&template=pure-opposed-cause&mode=offset/);\n'
+          )
+          if source.count(old_offset_assertion) != 1:
+              raise SystemExit("Stale donation-offset CTA assertion did not match exactly once.")
+          source = source.replace(old_offset_assertion, new_offset_assertions, 1)
+
+          order_start = source.index(
+              'test("offers page keeps content before the footer in source order", () => {'
+          )
+          order_end = source.index(
+              'test("create trade route family has stable signed-out entry points", () => {',
+              order_start,
+          )
+          order_replacement = '''test("offers page keeps marketplace sections before the footer in source order", () => {
+            const offersPage = readRepoFile("src/app/offers/page.tsx");
+            const mainIndex = offersPage.indexOf("<main");
+            const introIndex = offersPage.indexOf("<OffersMarketIntro");
+            const directoryIndex = offersPage.indexOf("<OffersMarketDirectory");
+            const secondaryIndex = offersPage.indexOf("<OffersMarketSecondarySections");
+            const footerIndex = offersPage.indexOf("<SiteFooter />");
+
+            assert.ok(mainIndex > -1);
+            assert.ok(introIndex > mainIndex);
+            assert.ok(directoryIndex > introIndex);
+            assert.ok(secondaryIndex > directoryIndex);
+            assert.ok(footerIndex > secondaryIndex);
+          });
+
+          '''
+          source = source[:order_start] + order_replacement + source[order_end:]
+
           create_start = source.index(
               'test("create trade route family has stable signed-out entry points", () => {'
           )
@@ -89,9 +123,9 @@ jobs:
             assert.match(newTradePage, /sourceOffer\.offered_cause/);
             assert.match(newTradePage, /sourceOffer\.request_action/);
             assert.match(newTradePage, /sourceOffer\.offer_action/);
-            assert.match(marketplaceBoundary, /moralpublicgoods131\.md/);
-            assert.match(marketplaceBoundary, /CRECM v1\.125/);
-            assert.match(marketplaceBoundary, /marketplaceLaneLabel: "Public Goods Fund"/);
+            assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
+            assert.match(marketplaceBoundary, /CRECM v1\.96/);
+            assert.match(marketplaceBoundary, /marketplaceLaneLabel: "External CRECM module"/);
           });
 
           '''
