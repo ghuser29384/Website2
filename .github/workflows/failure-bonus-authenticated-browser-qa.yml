@@ -1,0 +1,172 @@
+name: Failure bonus authenticated browser QA
+
+on:
+  pull_request:
+    branches:
+      - feature/mpgf-failure-bonus-success-premium-20260726
+    paths:
+      - ".github/scripts/failure-bonus-authenticated-browser-qa.mjs"
+      - ".github/workflows/failure-bonus-authenticated-browser-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: failure-bonus-authenticated-browser-qa
+  cancel-in-progress: false
+
+jobs:
+  authenticated-browser-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/failure-bonus-authenticated-browser-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_PRODUCT_HEAD: 97ce3db47e35effb64b9f46b3091d132abc1330b
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/failure-bonus-browser-qa-artifacts
+
+    steps:
+      - name: Validate exact target and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository: $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_HEAD_REF" != "qa/failure-bonus-authenticated-browser-20260726" ]]; then
+            echo "Refusing unexpected head branch: $GITHUB_HEAD_REF" >&2
+            exit 1
+          fi
+          if [[ "$QA_SUPABASE_URL" != "https://hvmxfjjbdcgjjudmthdz.supabase.co" ]]; then
+            echo "Refusing unexpected Supabase target: $QA_SUPABASE_URL" >&2
+            exit 1
+          fi
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out temporary QA branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the product commit under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_PRODUCT_HEAD" HEAD
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/failure-bonus-authenticated-browser-qa.mjs' \
+            '.github/workflows/failure-bonus-authenticated-browser-qa.yml' | sort)"
+          if [[ "$changed" != "$expected" ]]; then
+            echo "Temporary QA branch contains unexpected changes:" >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Run focused failure-bonus and settlement regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$BROWSER_QA_ARTIFACT_DIR"
+          node --import tsx --test \
+            src/lib/mpgf/failure-bonus-success-premium.test.ts \
+            src/lib/mpgf/failure-bonus-success-premium-integration.test.ts \
+            src/lib/mpgf/public-goods-refund-bonus-non-mvp.test.ts \
+            src/lib/mpgf/moral-public-goods-labs-ui.test.ts \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/focused-tests.log"
+
+      - name: Build exact release candidate against isolated QA configuration
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/build.log"
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact release candidate locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
+            > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            cat "$BROWSER_QA_ARTIFACT_DIR/server.log" >&2
+            exit 1
+          fi
+
+      - name: Run authenticated desktop and mobile failure-bonus workflow
+        run: node .github/scripts/failure-bonus-authenticated-browser-qa.mjs
+
+      - name: Verify audit, cleanup, and server trust boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.cleanup.remainingSyntheticProposalCount == 0' "$audit" >/dev/null
+          jq -e '.database.reserve.status == "simulation_only"' "$audit" >/dev/null
+          jq -e '.database.reserve.posted_entry_count | tonumber == 0' "$audit" >/dev/null
+
+          if grep -E \
+            'Missing SUPABASE_SERVICE_ROLE_KEY|permission denied for table|Could not save MPGF pool proposal|Reserve status .* does not permit posted accounting entries' \
+            "$BROWSER_QA_ARTIFACT_DIR/server.log"; then
+            echo "Detected a prohibited runtime failure in the exact browser sequence." >&2
+            exit 1
+          fi
+
+      - name: Upload authenticated QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-bonus-authenticated-browser-qa-${{ github.run_id }}
+          path: failure-bonus-browser-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local application
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APP_PID:-}" ]]; then
+            kill "$APP_PID" 2>/dev/null || true
+          fi
