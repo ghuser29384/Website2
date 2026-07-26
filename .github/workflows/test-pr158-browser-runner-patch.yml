@@ -1,0 +1,38 @@
+name: Test PR 158 browser runner patch
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/test-pr158-browser-runner-patch.yml"
+      - ".github/scripts/patch-pr158-browser-runner.py"
+
+permissions:
+  contents: read
+
+jobs:
+  test-patch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out patch helper
+        uses: actions/checkout@v4
+      - name: Restore reviewed runner and apply patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/pull/219/head:refs/remotes/origin/pr219-head
+          test "$(git rev-parse refs/remotes/origin/pr219-head)" = "6c01bf1dba452b002a6dd79a21dc62362ec04858"
+          mkdir -p .github/scripts
+          git show refs/remotes/origin/pr219-head:.github/scripts/pr158-two-account-browser-qa.mjs \
+            > .github/scripts/pr158-two-account-browser-qa.mjs
+          test "$(git hash-object .github/scripts/pr158-two-account-browser-qa.mjs)" = "20ef6ac29ffce2c93a29aeb59dd471132e601a37"
+          python3 .github/scripts/patch-pr158-browser-runner.py
+          node --check .github/scripts/pr158-two-account-browser-qa.mjs
+          grep -Fq 'const counterfactual = page.getByLabel("Counterfactual declaration")' \
+            .github/scripts/pr158-two-account-browser-qa.mjs
+          grep -Fq 'const pendingLabel =' .github/scripts/pr158-two-account-browser-qa.mjs
