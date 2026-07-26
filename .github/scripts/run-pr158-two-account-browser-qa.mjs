@@ -53,6 +53,27 @@ source = replaceExactly(
 
 source = replaceExactly(
   source,
+  '    const button = page.getByRole("button", { name: "Post public question" });',
+  '    const button = page.locator(\'form.comment-compose-form button[type="submit"]\');',
+  "stable question submit locator",
+);
+
+source = replaceExactly(
+  source,
+  '    const save = card.getByRole("button", { name: "Save" });',
+  '    const save = card.locator(\'form button[type="submit"]\');',
+  "stable save submit locator",
+);
+
+source = replaceExactly(
+  source,
+  '    const remove = reloadedCard.getByRole("button", { name: "Remove saved" });',
+  '    const remove = reloadedCard.locator(\'form button[type="submit"]\');',
+  "stable remove-saved submit locator",
+);
+
+source = replaceExactly(
+  source,
   "  const allDiagnostics = report.diagnostics;",
   [
     "  await owner.close();",
