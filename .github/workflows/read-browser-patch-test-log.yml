@@ -1,0 +1,34 @@
+name: Read browser patch test failure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/read-browser-patch-test-log.yml"
+      - ".github/scripts/read-browser-patch-test-log.py"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture sanitized tail
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/read-browser-patch-test-log.py > browser-patch-test-tail.txt
+      - name: Upload sanitized tail
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-patch-test-tail-${{ github.run_id }}
+          path: browser-patch-test-tail.txt
+          if-no-files-found: error
+          retention-days: 1
