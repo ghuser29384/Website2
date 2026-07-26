@@ -1,6 +1,10 @@
 name: Apply MPGF visibility release repair
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/apply-mpgf-visibility-repair.yml"
+      - "tmp/mpgf-visibility-release-repair.patch.gz.b64"
   push:
     branches:
       - qa/mpgf-visibility-source-snapshot-20260726
