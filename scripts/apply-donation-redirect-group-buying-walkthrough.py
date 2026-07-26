@@ -978,6 +978,24 @@ e2e = replace_regex(
     "replace redirect browser test",
 )
 e2e = replace_once(e2e, "  const mobileDemocratsMarker = page.locator(\".stream-a .stream-label\");\n  await expect(mobileDemocratsMarker).toBeVisible();\n  await expectFullyInViewport(page, mobileDemocratsMarker);", "  const mobileRedirectMarker = page.locator(\".stream-a .stream-label\");\n  await expect(mobileRedirectMarker).toBeVisible();\n  await expect(mobileRedirectMarker).toContainText(\"$10\");\n  await expectFullyInViewport(page, mobileRedirectMarker);", "update mobile redirect marker")
+e2e = replace_once(
+    e2e,
+    '  await page.getByRole("button", { name: "$10", exact: true }).click();',
+    '  await page.getByRole("button", { name: "$10" }).click();',
+    "make Crowd ten-dollar selector tolerate decorative input-assist glyph",
+)
+e2e = replace_once(
+    e2e,
+    '  await page.getByRole("button", { name: "$5", exact: true }).click();',
+    '  await page.getByRole("button", { name: "$5" }).click();',
+    "make Crowd five-dollar selector tolerate decorative input-assist glyph",
+)
+e2e = replace_once(
+    e2e,
+    '  await page.getByRole("button", { name: "$25", exact: true }).click();',
+    '  await page.getByRole("button", { name: "$25" }).click();',
+    "make Crowd twenty-five-dollar selector tolerate decorative input-assist glyph",
+)
 write(e2e_path, e2e)
 
 source_test = '''import assert from "node:assert/strict";
