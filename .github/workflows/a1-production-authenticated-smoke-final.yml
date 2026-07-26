@@ -108,12 +108,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          configured_user="$(
+            node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.PROD_SUPABASE_DB_URL).username))'
+          )"
+          test "$configured_user" = "postgres.jnpoxvalyjtdghnperyu"
+
           actual_user="$(
             psql "$PROD_SUPABASE_DB_URL" \
               -v ON_ERROR_STOP=1 \
               -Atqc 'select current_user'
           )"
-          test "$actual_user" = "postgres.jnpoxvalyjtdghnperyu"
+          case "$actual_user" in
+            postgres|postgres.jnpoxvalyjtdghnperyu) ;;
+            *)
+              echo "::error::Unexpected production database role: $actual_user"
+              exit 1
+              ;;
+          esac
 
       - name: Rotate production CRON_SECRET and redeploy exact source
         shell: bash
