@@ -20,10 +20,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check out diagnostic script
-        uses: actions/checkout@v4
-
       - name: Download and print sanitized browser-QA failure
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/read-pr158-browser-qa-log-89800162151.py
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/ghuser29384/Website2/884dc1628240a834debdedf49d39d63a5ed8d067/.github/scripts/read-pr158-browser-qa-log-89800162151.py \
+            --output "$RUNNER_TEMP/read-browser-qa-log.py"
+          python3 "$RUNNER_TEMP/read-browser-qa-log.py"
