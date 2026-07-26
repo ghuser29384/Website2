@@ -30,11 +30,11 @@ jobs:
             --exclude=.next \
             --exclude=test-results \
             --exclude=playwright-report \
-            -czf mpgf-visibility-source.tar.gz .
+            -czf /tmp/mpgf-visibility-source.tar.gz .
 
       - name: Upload source archive
         uses: actions/upload-artifact@v4
         with:
           name: mpgf-visibility-source-${{ github.run_id }}
-          path: mpgf-visibility-source.tar.gz
+          path: /tmp/mpgf-visibility-source.tar.gz
           retention-days: 2
