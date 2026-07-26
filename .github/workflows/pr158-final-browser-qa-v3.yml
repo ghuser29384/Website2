@@ -1,0 +1,432 @@
+name: PR 158 final browser QA v3
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-final-browser-qa-v3.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr158-final-browser-qa-v3
+  cancel-in-progress: false
+
+jobs:
+  browser-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      WEBSITE2_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      MORALTRADE_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      ORIGINAL_REPAIR_SHA: 17aa121e7db269510f483edc6371964dd4dc5bf7
+      ORIGINAL_WEBSITE2_DEPLOYMENT_ID: dpl_DJy9VayFAAhbYDAKfUKZN4TncjzP
+      ORIGINAL_MORALTRADE_DEPLOYMENT_ID: dpl_E9M54dDdwHrnYxNTy6BBLjqTLBZn
+      EXPECTED_HEAD_SHA: 4ca0bb452179684476a69af5dd320d91dda0879e
+      WEBSITE2_DEPLOYMENT_ID: dpl_3BRYfF5rw5EnqfkgChaBkMdinVDR
+      MORALTRADE_DEPLOYMENT_ID: dpl_GtYSrEtQ1rrSuonyLjUDyUyy43D3
+      WEBSITE2_PREVIEW_URL: https://website2-mc8oapzx3-ellen-s.vercel.app
+      MORALTRADE_PREVIEW_URL: https://moraltrade-site-niyxve0hw-ellen-s.vercel.app
+
+    steps:
+      - name: Validate repository, exact QA target, and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "ops/inspect-pr158-agreement-contract-20260726"
+          for name in QA_TEST_PASSWORD QA_SUPABASE_DB_URL VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required secret: $name" >&2
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if "hvmxfjjbdcgjjudmthdz" not in (parsed.username or ""):
+              raise SystemExit("Refusing database URL outside MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected QA database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected QA database connection parameters.")
+          PY
+
+      - name: Wait for and verify original and final exact-head Preview deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          wait_for_deployment() {
+            local deployment_id="$1"
+            local expected_sha="$2"
+            local label="$3"
+            local body="$RUNNER_TEMP/${deployment_id}.json"
+            local attempt state sha
+
+            for attempt in $(seq 1 100); do
+              curl --fail-with-body --silent --show-error \
+                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
+                --output "$body"
+              state="$(jq -r '.readyState // .state // empty' "$body")"
+              sha="$(jq -r '.meta.githubCommitSha // empty' "$body")"
+
+              if [[ "$sha" != "$expected_sha" ]]; then
+                echo "$label has unexpected SHA $sha; expected $expected_sha" >&2
+                exit 1
+              fi
+              if [[ "$state" = "READY" ]]; then
+                echo "$label: READY at $sha"
+                return 0
+              fi
+              if [[ "$state" = "ERROR" || "$state" = "CANCELED" ]]; then
+                echo "$label reached terminal state $state" >&2
+                exit 1
+              fi
+              echo "$label: state=$state; waiting (attempt $attempt/100)"
+              sleep 15
+            done
+
+            echo "$label did not become READY within 25 minutes." >&2
+            exit 1
+          }
+
+          wait_for_deployment "$ORIGINAL_WEBSITE2_DEPLOYMENT_ID" "$ORIGINAL_REPAIR_SHA" "website2 original repair"
+          wait_for_deployment "$ORIGINAL_MORALTRADE_DEPLOYMENT_ID" "$ORIGINAL_REPAIR_SHA" "moraltrade original repair"
+          wait_for_deployment "$WEBSITE2_DEPLOYMENT_ID" "$EXPECTED_HEAD_SHA" "website2 final head"
+          wait_for_deployment "$MORALTRADE_DEPLOYMENT_ID" "$EXPECTED_HEAD_SHA" "moraltrade final head"
+
+      - name: Check out exact repaired PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Restore and patch the previously reviewed Playwright runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/pull/219/head:refs/remotes/origin/pr219-head
+          test "$(git rev-parse refs/remotes/origin/pr219-head)" = "6c01bf1dba452b002a6dd79a21dc62362ec04858"
+          mkdir -p .github/scripts
+          git show refs/remotes/origin/pr219-head:.github/scripts/pr158-two-account-browser-qa.mjs \
+            > .github/scripts/pr158-two-account-browser-qa.mjs
+          git show refs/remotes/origin/pr219-head:.github/scripts/run-pr158-two-account-browser-qa.mjs \
+            > .github/scripts/run-pr158-two-account-browser-qa.mjs
+          test "$(git hash-object .github/scripts/pr158-two-account-browser-qa.mjs)" = "20ef6ac29ffce2c93a29aeb59dd471132e601a37"
+          test "$(git hash-object .github/scripts/run-pr158-two-account-browser-qa.mjs)" = "9768b4953032128fcbed22bd3a5d9f92404b52ae"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/pr158-two-account-browser-qa.mjs')
+          source = path.read_text(encoding='utf-8')
+          old_setup = '''  await recordCheck("dealroom term diff and persisted revision", async () => {
+            const page = owner.page;
+            const structuredTerms = page.getByLabel("Structured terms");
+          '''
+          new_setup = '''  await recordCheck("dealroom term diff and persisted revision", async () => {
+            const page = owner.page;
+            const counterfactual = page.getByLabel("Counterfactual declaration");
+            let expectedChangeCount = 1;
+            if (!(await counterfactual.inputValue()).trim()) {
+              await counterfactual.fill(
+                "Without this synthetic QA agreement, neither participant has a recorded commitment to perform the reciprocal action.",
+              );
+              expectedChangeCount += 1;
+            }
+            const structuredTerms = page.getByLabel("Structured terms");
+          '''
+          old_expectation = '''    await expect(page.getByText("1 unpublished change")).toBeVisible();
+          '''
+          new_expectation = '''    const pendingLabel =
+              expectedChangeCount === 1
+                ? "1 unpublished change"
+                : `${expectedChangeCount} unpublished changes`;
+            await expect(page.getByText(pendingLabel)).toBeVisible();
+          '''
+          if source.count(old_setup) != 1:
+              raise SystemExit(f'Expected one dealroom revision setup block; found {source.count(old_setup)}.')
+          if source.count(old_expectation) != 1:
+              raise SystemExit(f'Expected one unpublished-change assertion; found {source.count(old_expectation)}.')
+          source = source.replace(old_setup, new_setup, 1).replace(old_expectation, new_expectation, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/pr158-two-account-browser-qa.mjs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies, Chromium, and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Create guarded synthetic reset script and establish clean precondition
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/reset-pr158-fixture.sql" <<'SQL'
+          begin;
+
+          do $guard$
+          declare
+            fixture_count integer;
+            qa_profile_count integer;
+          begin
+            select count(*) into fixture_count
+            from public.offers o
+            join public.profiles p on p.id=o.owner_id
+            where o.id='10000000-0000-4000-8000-000000000158'::uuid
+              and o.fingerprint='qa-pr-158-marketplace-fixture-v1'
+              and p.email='qa-market-owner@example.com';
+
+            select count(*) into qa_profile_count
+            from public.profiles
+            where email in ('qa-market-owner@example.com','qa-market-responder@example.com');
+
+            if fixture_count <> 1 or qa_profile_count <> 2 then
+              raise exception 'Refusing reset outside the exact MoralTrade QA fixture.';
+            end if;
+          end;
+          $guard$;
+
+          delete from public.offer_comments where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_counterproposals where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_review_events where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_invitations where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.offer_carts where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.offer_recommendations
+          where source_offer_id='10000000-0000-4000-8000-000000000158'::uuid
+             or recommended_offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.performance_bonds where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.donation_offset_matches where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.fallback_livestream_evidence_routes where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.financial_commitment_reservations where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.email_outbox
+          where profile_id in (
+              select id from public.profiles
+              where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+            )
+             or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com');
+
+          update public.offers
+          set status='open', workflow_status='published', closed_at=null, deleted_at=null, updated_at=now()
+          where id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          commit;
+          SQL
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+
+      - name: Create temporary Vercel automation bypasses
+        id: protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          bypass_secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$bypass_secret"
+          echo "TEMP_VERCEL_BYPASS_SECRET=$bypass_secret" >> "$GITHUB_ENV"
+
+          payload="$RUNNER_TEMP/protection-generate.json"
+          jq -n \
+            --arg secret "$bypass_secret" \
+            --arg note "Temporary final PR #158 desktop/mobile browser QA" \
+            '{generate: {secret: $secret, note: $note}}' > "$payload"
+
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null
+          done
+
+      - name: Run complete 1440 by 900 desktop two-account suite
+        id: desktop
+        continue-on-error: true
+        shell: bash
+        env:
+          BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/browser-qa-artifacts/desktop-1440x900
+          GITHUB_RUN_ID: ${{ github.run_id }}-desktop
+        run: node .github/scripts/run-pr158-two-account-browser-qa.mjs
+
+      - name: Reset exact fixture between viewport suites
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+
+      - name: Transform reviewed runner into complete 390 by 844 suite
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/pr158-two-account-browser-qa.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = 'viewport: { width: 1440, height: 900 }'
+          if source.count(old) < 4:
+              raise SystemExit(f'Expected at least four desktop viewport declarations; found {source.count(old)}.')
+          source = source.replace(old, 'viewport: { width: 390, height: 844 }')
+          replacements = {
+              'website2-desktop-public': 'website2-mobile-full-public',
+              'moraltrade-desktop-public': 'moraltrade-mobile-full-public',
+              'moraltrade-desktop-responder': 'moraltrade-mobile-full-responder',
+              'moraltrade-desktop-owner': 'moraltrade-mobile-full-owner',
+              'desktop public marketplace, search, constraints, selectors, and single-page bounds':
+                'mobile full public marketplace, search, constraints, selectors, and single-page bounds',
+              'desktop dealroom': 'mobile full dealroom',
+          }
+          for before, after in replacements.items():
+              source = source.replace(before, after)
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/pr158-two-account-browser-qa.mjs
+
+      - name: Run complete 390 by 844 mobile two-account suite
+        id: mobile
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/browser-qa-artifacts/mobile-390x844
+          GITHUB_RUN_ID: ${{ github.run_id }}-mobile
+        run: node .github/scripts/run-pr158-two-account-browser-qa.mjs
+
+      - name: Upload desktop and mobile browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-final-browser-qa-v3-${{ github.run_id }}
+          path: browser-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Reset only the exact synthetic transaction state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/reset-pr158-fixture.sql" ]]; then
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+          fi
+
+      - name: Verify clean final QA state
+        id: clean
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/final-state.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and status='open' and workflow_status='published'
+                and closed_at is null and deleted_at is null
+            ) then 'FAIL:offer'
+            when exists (select 1 from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:interests'
+            when exists (select 1 from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:guest_interests'
+            when exists (select 1 from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:agreements'
+            when exists (select 1 from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:threads'
+            when exists (select 1 from public.trade_counterproposals where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:counterproposals'
+            when exists (select 1 from public.offer_comments where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:comments'
+            when exists (
+              select 1 from public.email_outbox
+              where profile_id in (
+                select id from public.profiles
+                where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+              )
+                 or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+            ) then 'FAIL:outbox'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+          {
+            echo "tested_head=${EXPECTED_HEAD_SHA}"
+            echo "desktop_outcome=${{ steps.desktop.outcome }}"
+            echo "mobile_outcome=${{ steps.mobile.outcome }}"
+            echo "final_synthetic_state=clean"
+          } > browser-qa-final-state.txt
+
+      - name: Upload final clean-state proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-final-clean-state-v3-${{ github.run_id }}
+          path: browser-qa-final-state.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Revoke temporary Vercel automation bypasses
+        id: revoke
+        if: always() && steps.protection.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TEMP_VERCEL_BYPASS_SECRET:-}"
+          payload="$RUNNER_TEMP/protection-revoke.json"
+          jq -n \
+            --arg secret "$TEMP_VERCEL_BYPASS_SECRET" \
+            '{revoke: {secret: $secret, regenerate: false}}' > "$payload"
+          cleanup_failed=0
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            if ! curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null; then
+              cleanup_failed=1
+            fi
+          done
+          test "$cleanup_failed" = "0"
+
+      - name: Enforce desktop, mobile, reset, and bypass-cleanup outcomes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "desktop=${{ steps.desktop.outcome }}"
+          echo "mobile=${{ steps.mobile.outcome }}"
+          echo "clean=${{ steps.clean.outcome }}"
+          echo "revoke=${{ steps.revoke.outcome }}"
+          test "${{ steps.desktop.outcome }}" = "success"
+          test "${{ steps.mobile.outcome }}" = "success"
+          test "${{ steps.clean.outcome }}" = "success"
+          test "${{ steps.revoke.outcome }}" = "success"
