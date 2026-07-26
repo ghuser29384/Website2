@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-# Diagnostic refresh: inspect the latest completed failed post-merge patch run.
-import json
 import os
 import re
 import urllib.error
-import urllib.parse
 import urllib.request
 
-WORKFLOW_NAME = "Apply PR 158 atomic acceptance repair"
-BRANCH = "ops/apply-pr158-atomic-acceptance-20260726"
+JOB_ID = 89806923335
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -16,51 +12,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def github_json(repo: str, token: str, path: str) -> dict:
+def download(repo: str, token: str) -> str:
     request = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}{path}",
+        f"https://api.github.com/repos/{repo}/actions/jobs/{JOB_ID}/logs",
         headers={
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "moraltrade-pr158-patch-log-reader",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def latest_failed_job(repo: str, token: str) -> tuple[int, int]:
-    query = urllib.parse.urlencode({"branch": BRANCH, "status": "failure", "per_page": 50})
-    payload = github_json(repo, token, f"/actions/runs?{query}")
-    runs = [
-        run
-        for run in payload.get("workflow_runs", [])
-        if run.get("name") == WORKFLOW_NAME and run.get("conclusion") == "failure"
-    ]
-    if not runs:
-        raise RuntimeError("No completed failed atomic patch workflow run was found.")
-    run = max(runs, key=lambda item: int(item.get("run_number", 0)))
-    jobs_payload = github_json(repo, token, f"/actions/runs/{run['id']}/jobs?per_page=100")
-    jobs = [job for job in jobs_payload.get("jobs", []) if job.get("name") == "patch"]
-    if len(jobs) != 1:
-        raise RuntimeError(f"Expected one patch job for run {run['id']}; found {len(jobs)}.")
-    return int(run["id"]), int(jobs[0]["id"])
-
-
-def download(repo: str, token: str, job_id: int) -> str:
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/actions/jobs/{job_id}/logs",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "moraltrade-pr158-patch-log-reader",
+            "User-Agent": "moraltrade-pr158-focused-patch-log-reader",
         },
     )
     opener = urllib.request.build_opener(NoRedirect)
     try:
-        response = opener.open(req, timeout=30)
+        response = opener.open(request, timeout=30)
         content = response.read()
     except urllib.error.HTTPError as error:
         if error.code not in {301, 302, 303, 307, 308}:
@@ -69,7 +33,7 @@ def download(repo: str, token: str, job_id: int) -> str:
         if not location:
             raise RuntimeError("GitHub log redirect omitted Location") from error
         with urllib.request.urlopen(
-            urllib.request.Request(location, headers={"User-Agent": "moraltrade-pr158-patch-log-reader"}),
+            urllib.request.Request(location, headers={"User-Agent": "moraltrade-pr158-focused-patch-log-reader"}),
             timeout=30,
         ) as redirected:
             content = redirected.read()
@@ -89,50 +53,32 @@ def sanitize(text: str) -> str:
     return text
 
 
-def concise_failure_summary(lines: list[str]) -> list[str]:
-    summary: list[str] = []
-    test_markers = [i for i, line in enumerate(lines) if "✖ " in line]
-    for ordinal, marker in enumerate(test_markers, start=1):
-        upper = test_markers[ordinal] if ordinal < len(test_markers) else min(len(lines), marker + 250)
-        block = lines[marker:upper]
-        summary.append(f"--- FAILURE {ordinal} ---")
-        summary.append(lines[marker])
-        for line in block:
-            if (
-                "AssertionError" in line
-                or "TypeError" in line
-                or "SyntaxError" in line
-                or "ReferenceError" in line
-                or " at TestContext" in line
-                or " expected:" in line
-                or " operator:" in line
-            ):
-                summary.append(line)
-    if summary:
-        return summary
-
-    failure_indexes = [
-        i
-        for i, line in enumerate(lines)
+def main() -> int:
+    raw = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"]))
+    lines = raw.splitlines()
+    marker = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if "Run focused repair gates and production build" in line
+        ),
+        max(0, len(lines) - 320),
+    )
+    candidate = lines[marker:]
+    error_indexes = [
+        index
+        for index, line in enumerate(candidate)
         if re.search(
-            r"(?i)(##\[error\]|npm ERR|error:|failed|failure|AssertionError|TypeError|SyntaxError)",
+            r"(?i)(##\[error\]|error TS\d+|AssertionError|TypeError|SyntaxError|ReferenceError|Process completed with exit code)",
             line,
         )
     ]
-    index = failure_indexes[-1] if failure_indexes else max(0, len(lines) - 120)
-    return lines[max(0, index - 160) : min(len(lines), index + 160)]
-
-
-def main() -> int:
-    repo = os.environ["GITHUB_REPOSITORY"]
-    token = os.environ["GH_TOKEN"]
-    run_id, job_id = latest_failed_job(repo, token)
-    raw = sanitize(download(repo, token, job_id))
-    lines = raw.splitlines()
-    print(f"Inspecting failed patch run {run_id} job {job_id}.")
-    print("SANITIZED_PATCH_FAILURE_BEGIN")
-    print("\n".join(concise_failure_summary(lines)))
-    print("SANITIZED_PATCH_FAILURE_END")
+    first_error = error_indexes[0] if error_indexes else max(0, len(candidate) - 260)
+    lo = max(0, first_error - 180)
+    hi = min(len(candidate), first_error + 360)
+    print("SANITIZED_FOCUSED_PATCH_FAILURE_BEGIN")
+    print("\n".join(candidate[lo:hi]))
+    print("SANITIZED_FOCUSED_PATCH_FAILURE_END")
     return 0
 
 
