@@ -1,0 +1,415 @@
+name: Fix PR 158 core-version linking
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/fix-pr158-core-version-linking.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-migrate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-pr158-core-version-linking-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_PR158_HEAD: 09207ac3a589b2fdc0ef0b97bb09c5c71b710c5e
+      MIGRATION_VERSION: "20260726163500"
+      MIGRATION_NAME: fix_atomic_acceptance_core_version_linking
+
+    steps:
+      - name: Check out temporary repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out and guard exact PR 158 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git checkout -B agent/dynamic-marketplace-clearing-rounds origin/agent/dynamic-marketplace-clearing-rounds
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_PR158_HEAD" ]]; then
+            echo "Refusing moved PR #158 head. Expected $EXPECTED_PR158_HEAD, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Add transaction-local core-version linking and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old_migration_path = Path(
+              "supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql"
+          )
+          new_migration_path = Path(
+              "supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql"
+          )
+          old_migration = old_migration_path.read_text(encoding="utf-8")
+          start = old_migration.index(
+              "create or replace function public.accept_marketplace_interest_v1"
+          )
+          end = old_migration.index("notify pgrst, 'reload schema';", start)
+          rpc_block = old_migration[start:end]
+          agreement_insert = "  insert into public.agreements (\n"
+          if rpc_block.count(agreement_insert) != 2:
+              raise SystemExit(
+                  f"Expected two marketplace agreement inserts; found {rpc_block.count(agreement_insert)}."
+              )
+          rpc_block = rpc_block.replace(
+              agreement_insert,
+              "  perform set_config('app.core_trade_linking_agreement', '1', true);\n\n"
+              + agreement_insert,
+          )
+          new_migration = (
+              "-- The legacy agreement bridge creates the initial frozen core-trade version in an\n"
+              "-- AFTER INSERT trigger. The version guard deliberately requires the transaction-local\n"
+              "-- linking flag for system-created versions whose proposed_by participant may differ\n"
+              "-- from the authenticated actor accepting the response. Keep the entire acceptance,\n"
+              "-- agreement insert, version bridge, competing-response updates, and offer close in one\n"
+              "-- transaction.\n\n"
+              + rpc_block
+              + "notify pgrst, 'reload schema';\n"
+          )
+          if new_migration.count(
+              "set_config('app.core_trade_linking_agreement', '1', true)"
+          ) != 2:
+              raise SystemExit("The linking flag must appear once in each acceptance RPC.")
+          new_migration_path.write_text(new_migration, encoding="utf-8")
+
+          sql_path = Path("supabase/tests/marketplace_interest_acceptance_atomicity.sql")
+          sql_source = sql_path.read_text(encoding="utf-8")
+          old_tail = """select 'PASS: failed agreement creation leaves the selected response pending and the offer open' as result;
+
+          rollback;
+          """
+          new_tail = """select 'PASS: failed agreement creation leaves the selected response pending and the offer open' as result;
+
+          drop trigger qa_force_marketplace_agreement_insert_failure_trigger on public.agreements;
+
+          DO $success_exercise$
+          declare
+            acceptance_result jsonb;
+          begin
+            acceptance_result := public.accept_marketplace_interest_v1(
+              '10000000-0000-4000-8000-000000000159'::uuid,
+              '10000000-0000-4000-8000-000000000158'::uuid,
+              'qa-atomicity-success',
+              '',
+              ''
+            );
+
+            if coalesce((acceptance_result->>'created')::boolean, false) is not true then
+              raise exception 'Success regression: acceptance RPC did not report a newly created agreement: %.', acceptance_result;
+            end if;
+          end;
+          $success_exercise$;
+
+          DO $success_assertions$
+          declare
+            response_status text;
+            offer_status text;
+            agreement_row public.agreements%rowtype;
+            agreement_count integer;
+            version_count integer;
+            linked_thread_count integer;
+          begin
+            select status::text into response_status
+            from public.interests
+            where id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+            select status::text into offer_status
+            from public.offers
+            where id = '10000000-0000-4000-8000-000000000158'::uuid;
+
+            select count(*) into agreement_count
+            from public.agreements
+            where interest_id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+            select * into agreement_row
+            from public.agreements
+            where interest_id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+            select count(*) into version_count
+            from public.trade_agreement_versions
+            where agreement_id = agreement_row.id
+              and id = agreement_row.current_version_id
+              and version = 1;
+
+            select count(*) into linked_thread_count
+            from public.trade_threads
+            where offer_id = '10000000-0000-4000-8000-000000000158'::uuid
+              and agreement_id = agreement_row.id
+              and status = 'active';
+
+            if response_status <> 'accepted' then
+              raise exception 'Success regression: response status is %, expected accepted.', response_status;
+            end if;
+            if offer_status <> 'matched' then
+              raise exception 'Success regression: offer status is %, expected matched.', offer_status;
+            end if;
+            if agreement_count <> 1 or agreement_row.id is null then
+              raise exception 'Success regression: expected one agreement, found %.', agreement_count;
+            end if;
+            if agreement_row.status::text <> 'proposed'
+               or agreement_row.lifecycle_status <> 'proposed'
+               or agreement_row.current_version_id is null then
+              raise exception 'Success regression: agreement was not bridged to one frozen proposed version: %.', to_jsonb(agreement_row);
+            end if;
+            if version_count <> 1 then
+              raise exception 'Success regression: expected one current frozen version, found %.', version_count;
+            end if;
+            if linked_thread_count <> 1 then
+              raise exception 'Success regression: expected one linked private thread, found %.', linked_thread_count;
+            end if;
+          end;
+          $success_assertions$;
+
+          select 'PASS: successful acceptance creates one proposed agreement, frozen version, and linked private thread' as result;
+
+          rollback;
+          """
+          if sql_source.count(old_tail) != 1:
+              raise SystemExit("Expected one rollback-regression tail.")
+          sql_path.write_text(sql_source.replace(old_tail, new_tail, 1), encoding="utf-8")
+
+          source_test_path = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
+          source_test = source_test_path.read_text(encoding="utf-8")
+          linking_declaration = """const linkingMigration = readFileSync(
+            path.join(
+              repoRoot,
+              "supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql",
+            ),
+            "utf8",
+          );
+          """
+          marker = "const sqlRegression = readFileSync(\n"
+          if source_test.count(marker) != 1:
+              raise SystemExit("Expected one SQL regression declaration marker.")
+          source_test = source_test.replace(marker, linking_declaration + marker, 1)
+
+          review_assertion = (
+              "  assert.match(migration, /create table if not exists public\\.agreement_review_cases/);\n"
+          )
+          linking_assertions = """  assert.equal(
+            (
+              linkingMigration.match(
+                /set_config\('app\.core_trade_linking_agreement', '1', true\)/g,
+              ) ?? []
+            ).length,
+            2,
+          );
+          assert.match(
+            linkingMigration,
+            /create or replace function public\.accept_marketplace_interest_v1/,
+          );
+          assert.match(
+            linkingMigration,
+            /create or replace function public\.accept_marketplace_guest_interest_v1/,
+          );
+          """
+          if source_test.count(review_assertion) != 1:
+              raise SystemExit("Expected one review-table assertion.")
+          source_test = source_test.replace(
+              review_assertion,
+              review_assertion + linking_assertions,
+              1,
+          )
+
+          old_regression_test = """test("SQL regression forces an agreement failure and asserts rollback", () => {
+            assert.match(sqlRegression, /qa_forced_agreement_insert_failure/);
+            assert.match(sqlRegression, /response_status <> 'pending'/);
+            assert.match(sqlRegression, /offer_status <> 'open'/);
+            assert.match(sqlRegression, /agreement_count <> 0/);
+            assert.match(sqlRegression, /rollback;/);
+          });
+          """
+          new_regression_test = """test("SQL regression proves rollback and successful frozen-version creation", () => {
+            assert.match(sqlRegression, /qa_forced_agreement_insert_failure/);
+            assert.match(sqlRegression, /response_status <> 'pending'/);
+            assert.match(sqlRegression, /offer_status <> 'open'/);
+            assert.match(sqlRegression, /agreement_count <> 0/);
+            assert.match(sqlRegression, /acceptance_result->>'created'/);
+            assert.match(sqlRegression, /agreement_row\.current_version_id is null/);
+            assert.match(sqlRegression, /linked_thread_count <> 1/);
+            assert.match(
+              sqlRegression,
+              /successful acceptance creates one proposed agreement, frozen version, and linked private thread/,
+            );
+            assert.match(sqlRegression, /rollback;/);
+          });
+          """
+          if source_test.count(old_regression_test) != 1:
+              raise SystemExit("Expected one source-level SQL regression test.")
+          source_test_path.write_text(
+              source_test.replace(old_regression_test, new_regression_test, 1),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run focused source checks and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test src/app/offers/marketplace-interest-acceptance.test.ts
+          npx eslint src/app/actions.ts src/app/offers/marketplace-interest-acceptance.test.ts
+          npm run build
+          git diff --check
+
+      - name: Validate exact QA target and install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${QA_SUPABASE_DB_URL:-}" ]]; then
+            echo "Missing QA_SUPABASE_DB_URL." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing an unexpected database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Apply exact incremental migration to QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
+          migration_sha="$(sha256sum "$migration" | cut -d' ' -f1)"
+          echo "MIGRATION_SHA=$migration_sha" >> "$GITHUB_ENV"
+
+          preflight="$RUNNER_TEMP/preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
+          select case
+            when not exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260726143000'
+            ) then 'FAIL:base_migration'
+            when exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='${MIGRATION_VERSION}'
+            ) then 'FAIL:already_recorded'
+            when to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then 'FAIL:member_rpc'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
+
+          apply_file="$RUNNER_TEMP/apply-migration.sql"
+          cat "$migration" > "$apply_file"
+          cat >> "$apply_file" <<SQL
+
+          insert into supabase_migrations.schema_migrations (
+            version, statements, name, created_by, idempotency_key
+          ) values (
+            '${MIGRATION_VERSION}',
+            array['Applied from PR #158 repair workflow; sha256 ${migration_sha}'],
+            '${MIGRATION_NAME}',
+            'github-actions-pr158-core-version-linking',
+            'pr158-${MIGRATION_VERSION}-${migration_sha}'
+          );
+          SQL
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --single-transaction --file "$apply_file"
+
+      - name: Run live rollback and success regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_interest_acceptance_atomicity.sql \
+            | tee "$RUNNER_TEMP/regression.txt"
+          grep -Fq "PASS: failed agreement creation leaves the selected response pending and the offer open" \
+            "$RUNNER_TEMP/regression.txt"
+          grep -Fq "PASS: successful acceptance creates one proposed agreement, frozen version, and linked private thread" \
+            "$RUNNER_TEMP/regression.txt"
+
+      - name: Verify regression rollback left the fixture clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/postflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$result"
+          select case
+            when not exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='${MIGRATION_VERSION}' and name='${MIGRATION_NAME}'
+            ) then 'FAIL:migration_history'
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and status='open' and workflow_status='published'
+            ) then 'FAIL:offer'
+            when exists (
+              select 1 from public.interests
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:interests'
+            when exists (
+              select 1 from public.agreements
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:agreements'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+      - name: Commit and push the tested repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql \
+            supabase/tests/marketplace_interest_acceptance_atomicity.sql
+          git commit -m "Fix atomic acceptance core-version linking"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
+          echo "FINAL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Record sanitized result
+        shell: bash
+        run: |
+          {
+            echo "pr158_head=${FINAL_SHA}"
+            echo "qa_project=${EXPECTED_QA_REF}"
+            echo "migration_version=${MIGRATION_VERSION}"
+            echo "migration_sha256=${MIGRATION_SHA}"
+            echo "rollback_regression=PASS"
+            echo "success_bridge_regression=PASS"
+            echo "production_build=PASS"
+          } > pr158-core-version-linking-result.txt
+
+      - name: Upload sanitized result
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-core-version-linking-${{ github.run_id }}
+          path: pr158-core-version-linking-result.txt
+          if-no-files-found: error
+          retention-days: 14
