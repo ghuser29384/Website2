@@ -32,6 +32,27 @@ source = replaceExactly(
 
 source = replaceExactly(
   source,
+  '    if (!delayed && route.request().method() === "POST") {',
+  [
+    "    const request = route.request();",
+    "    if (",
+    "      !delayed &&",
+    '      request.method() === "POST" &&',
+    '      Boolean(request.headers()["next-action"])',
+    "    ) {",
+  ].join("\n"),
+  "server-action pending-state interception",
+);
+
+source = replaceExactly(
+  source,
+  "      await sleep(900);",
+  "      await sleep(1200);",
+  "server-action pending-state delay",
+);
+
+source = replaceExactly(
+  source,
   "  const allDiagnostics = report.diagnostics;",
   [
     "  await owner.close();",
