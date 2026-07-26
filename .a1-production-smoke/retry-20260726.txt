@@ -1,1 +1,1 @@
-Run safe Vercel project and production-environment API diagnostics before the next authenticated A1 production smoke attempt.
+Run safe credential-presence and Vercel authorization diagnostics to select a valid production verification path.
