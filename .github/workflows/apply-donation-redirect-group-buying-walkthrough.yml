@@ -49,16 +49,14 @@ jobs:
           changed = False
           for old, new in replacements.items():
               old_count = text.count(old)
-              new_count = text.count(new)
-              if old_count == 1:
-                  text = text.replace(old, new, 1)
+              if old_count:
+                  text = text.replace(old, new)
                   changed = True
-              elif old_count == 0 and new_count >= 1:
-                  continue
+                  print(f"Replaced {old_count} occurrence(s) of {old!r}.")
+              elif new in text:
+                  print(f"Selector was already updated: {new!r}.")
               else:
-                  raise RuntimeError(
-                      f"Unexpected selector state for {old!r}: old={old_count}, new={new_count}"
-                  )
+                  raise RuntimeError(f"Could not find old or updated selector for {old!r}")
 
           if changed:
               path.write_text(text, encoding="utf-8")
