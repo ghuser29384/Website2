@@ -1,5 +1,6 @@
 name: Failure bonus authenticated browser QA
 
+# Trigger the exact post-locator-fix candidate from a trusted repository write.
 on:
   pull_request:
     branches:
