@@ -22,6 +22,13 @@ import {
   MPGF_COPY,
 } from "@/lib/mpgf/data";
 import {
+  FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+  PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY,
+  buildProvisionalFailureBonusSuccessPremiumAssumptions,
+  calculateExperienceRatedSuccessPremiumBps,
+  calculateSuccessPremiumCents,
+} from "@/lib/mpgf/failure-bonus-success-premium";
+import {
   allocateMpgfAssuranceRound,
   buildDemoBallotFromWeights,
   buildDemoLedgerTransactions,
@@ -75,6 +82,15 @@ function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
   const value = Number(readFormControlValue(event));
 
   return Number.isFinite(value) ? value : 0;
+}
+
+function percentToBasisPoints(value: number) {
+  return Math.max(0, Math.round(value * 100));
+}
+
+function formatBasisPointsPercent(basisPoints: number) {
+  const percent = basisPoints / 100;
+  return Number.isInteger(percent) ? `${percent}%` : `${percent.toFixed(2)}%`;
 }
 
 function createClientMutationKey(prefix: string) {
@@ -208,6 +224,8 @@ export function MpgfConsole({
   const [proposalDestinationRef, setProposalDestinationRef] = useState("");
   const [proposalThresholdAmount, setProposalThresholdAmount] = useState(10_000);
   const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(25);
+  const [proposalFailureBonusEnabled, setProposalFailureBonusEnabled] = useState(poolTemplateApplied);
+  const [proposalFailureBonusRatePercent, setProposalFailureBonusRatePercent] = useState(10);
   const [proposalDeadlineAt, setProposalDeadlineAt] = useState(initialPoolProposalDeadline);
   const [proposalVerificationMethod, setProposalVerificationMethod] = useState("");
   const [proposalBaselineRule, setProposalBaselineRule] = useState("");
@@ -292,6 +310,37 @@ export function MpgfConsole({
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+  const proposalSuccessPremiumQuote = useMemo(() => {
+    if (!proposalFailureBonusEnabled) return null;
+
+    const thresholdCents = Math.round(proposalThresholdAmount * 100);
+    const assumptions = buildProvisionalFailureBonusSuccessPremiumAssumptions(
+      percentToBasisPoints(proposalFailureBonusRatePercent),
+    );
+
+    if (!Number.isSafeInteger(thresholdCents) || thresholdCents <= 0) return null;
+
+    try {
+      const pricing = calculateExperienceRatedSuccessPremiumBps(assumptions);
+      const successPremiumCents = calculateSuccessPremiumCents(
+        thresholdCents,
+        pricing.recommendedRateBps,
+      );
+
+      return {
+        assumptions,
+        ...pricing,
+        maximumFailureBonusExposureCents: calculateSuccessPremiumCents(
+          thresholdCents,
+          assumptions.failureBonusRateBps,
+        ),
+        successPremiumCents,
+        grossSuccessRequirementCents: thresholdCents + successPremiumCents,
+      };
+    } catch {
+      return null;
+    }
+  }, [proposalFailureBonusEnabled, proposalFailureBonusRatePercent, proposalThresholdAmount]);
   const poolReasoningComplete = [
     proposalTitle,
     proposalSummary,
@@ -316,6 +365,7 @@ export function MpgfConsole({
     proposalThresholdAmount > 0 &&
     proposalThresholdAmount <= proposalRequestedMaximumFunding &&
     proposalThresholdSupporters > 0 &&
+    (!proposalFailureBonusEnabled || Boolean(proposalSuccessPremiumQuote)) &&
     Number.isFinite(Date.parse(`${proposalDeadlineAt}T00:00:00.000Z`)) &&
     proposalBaseMatchRatio >= 0 &&
     proposalQfCapMultiple >= 0 &&
@@ -350,6 +400,23 @@ export function MpgfConsole({
       publicGoodsDestinationRef: proposalDestinationRef,
       publicGoodsThresholdAmountDollars: proposalThresholdAmount,
       publicGoodsThresholdSupporters: proposalThresholdSupporters,
+      publicGoodsFailureBonusEnabled: proposalFailureBonusEnabled,
+      publicGoodsFailureBonusRateBps: proposalSuccessPremiumQuote?.assumptions.failureBonusRateBps,
+      publicGoodsSuccessPremiumRateBps: proposalSuccessPremiumQuote?.recommendedRateBps,
+      publicGoodsSuccessPremiumCents: proposalSuccessPremiumQuote?.successPremiumCents,
+      publicGoodsSuccessPremiumPayer: proposalFailureBonusEnabled
+        ? "pool_creator_or_sponsor" as const
+        : undefined,
+      publicGoodsSuccessPremiumPolicyVersion: proposalFailureBonusEnabled
+        ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+        : undefined,
+      publicGoodsSuccessPremiumIncludedInNetThreshold: proposalFailureBonusEnabled
+        ? false as const
+        : undefined,
+      publicGoodsSuccessPremiumProvisional: proposalFailureBonusEnabled ? true as const : undefined,
+      publicGoodsGrossSuccessRequirementCents:
+        proposalSuccessPremiumQuote?.grossSuccessRequirementCents,
+      publicGoodsSuccessPremiumPricingAssumptions: proposalSuccessPremiumQuote?.assumptions,
       publicGoodsDeadlineAt: proposalDeadlineAt
         ? new Date(`${proposalDeadlineAt}T23:59:59.000Z`).toISOString()
         : undefined,
@@ -1448,7 +1515,7 @@ export function MpgfConsole({
                 />
               </label>
               <label>
-                Amount threshold
+                Net recipient amount threshold
                 <span className="mpgf-money-input">
                   <span>$</span>
                   <input
@@ -1470,6 +1537,33 @@ export function MpgfConsole({
                   onChange={(event) => setProposalThresholdSupporters(readNumericFormControlValue(event))}
                 />
               </label>
+              <label className="checkbox-label">
+                <input
+                  checked={proposalFailureBonusEnabled}
+                  type="checkbox"
+                  onChange={(event) => setProposalFailureBonusEnabled(event.currentTarget.checked)}
+                />
+                <span>Offer a backed failure bonus and price a success premium for the common reserve</span>
+              </label>
+              {proposalFailureBonusEnabled ? (
+                <>
+                  <label>
+                    Failure bonus rate
+                    <span className="mpgf-money-input">
+                      <input
+                        aria-label="Failure bonus rate percent"
+                        max="100"
+                        min="0.01"
+                        step="0.01"
+                        type="number"
+                        value={proposalFailureBonusRatePercent}
+                        onChange={(event) => setProposalFailureBonusRatePercent(readNumericFormControlValue(event))}
+                      />
+                      <span>%</span>
+                    </span>
+                  </label>
+                </>
+              ) : null}
               <label>
                 Assurance deadline
                 <input
@@ -1536,6 +1630,34 @@ export function MpgfConsole({
                 <span>Allow capped QF bonus after threshold and review gates</span>
               </label>
             </div>
+            {proposalFailureBonusEnabled ? (
+              <div className="mpgf-confirmation" role="status">
+                {proposalSuccessPremiumQuote ? (
+                  <>
+                    <strong>
+                      Provisional success premium: {formatBasisPointsPercent(proposalSuccessPremiumQuote.recommendedRateBps)} — {formatUsd(proposalSuccessPremiumQuote.successPremiumCents)}
+                    </strong>
+                    <p>
+                      Net recipient threshold: {formatUsd(Math.round(proposalThresholdAmount * 100))}. Gross success requirement: {formatUsd(proposalSuccessPremiumQuote.grossSuccessRequirementCents)} before separately disclosed payment fees.
+                    </p>
+                    <p>
+                      Maximum percentage-bonus exposure at this threshold: {formatUsd(proposalSuccessPremiumQuote.maximumFailureBonusExposureCents)}. That exposure must already be backed before the pool opens.
+                    </p>
+                    <p>
+                      The premium is due only if this threshold clears, is paid separately by the pool creator or named sponsor, and is credited to the common Failure Bonus Reserve. It is not deducted from the recipient threshold. Future success premiums never count as collateral for current bonus promises.
+                    </p>
+                    <p>
+                      The pool creator sets the failure-bonus rate; Moral Trade controls the provisional underwriting assumptions. This policy currently uses a {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.successProbabilityBps)} success estimate, {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expectedEligibleFailureFillBps)} eligible failure fill, {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expenseLoadBps)} claims and administration load, and {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.reserveRiskMarginBps)} reserve margin.
+                    </p>
+                    <p>
+                      Pricing is provisional. An operator must approve the final quote before any live-money launch; the creator cannot lower the platform assumptions or self-approve the quote.
+                    </p>
+                  </>
+                ) : (
+                  "Enter valid failure-bonus pricing assumptions before saving this pool."
+                )}
+              </div>
+            ) : null}
             <div className="mpgf-inline-actions">
               <button
                 className="button button-secondary"
@@ -1579,6 +1701,11 @@ export function MpgfConsole({
                       <p>
                         Assurance threshold: {formatUsd(proposal.publicGoodsThresholdAmountCents)} with{" "}
                         {proposal.publicGoodsThresholdSupporters ?? "-"} verified supporters.
+                      </p>
+                    ) : null}
+                    {proposal.publicGoodsFailureBonusEnabled && proposal.publicGoodsSuccessPremiumCents != null ? (
+                      <p>
+                        Failure bonus: {formatBasisPointsPercent(proposal.publicGoodsFailureBonusRateBps ?? 0)}. Success premium: {formatBasisPointsPercent(proposal.publicGoodsSuccessPremiumRateBps ?? 0)} ({formatUsd(proposal.publicGoodsSuccessPremiumCents)}), outside the net threshold; gross success requirement {formatUsd(proposal.publicGoodsGrossSuccessRequirementCents ?? 0)}.
                       </p>
                     ) : null}
                     {proposal.publicGoodsDestinationRef ? (
