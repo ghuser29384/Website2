@@ -1,0 +1,254 @@
+name: Run PR 158 QA rollback regression and reset
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/run-pr158-qa-regression-and-reset.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  regression-and-reset:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_PR158_SHA: 09207ac3a589b2fdc0ef0b97bb09c5c71b710c5e
+      OFFER_ID: 10000000-0000-4000-8000-000000000158
+
+    steps:
+      - name: Validate exact QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${QA_SUPABASE_DB_URL:-}" ]]; then
+            echo "Missing QA_SUPABASE_DB_URL." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing database URL without the exact QA project ref.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+
+      - name: Check out exact fixed PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_PR158_SHA }}
+          fetch-depth: 1
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify repaired schema and deterministic fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260726143000'
+                and name='restore_agreement_completion_contract_and_atomic_acceptance'
+            ) then 'FAIL:migration'
+            when to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then 'FAIL:member_rpc'
+            when to_regprocedure('public.accept_marketplace_guest_interest_v1(uuid,uuid,text)') is null then 'FAIL:guest_rpc'
+            when not exists (
+              select 1
+              from public.offers o
+              join public.profiles p on p.id=o.owner_id
+              where o.id='10000000-0000-4000-8000-000000000158'::uuid
+                and o.fingerprint='qa-pr-158-marketplace-fixture-v1'
+                and p.email='qa-market-owner@example.com'
+            ) then 'FAIL:fixture'
+            when not exists (
+              select 1 from public.profiles
+              where email='qa-market-responder@example.com'
+            ) then 'FAIL:responder'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+      - name: Run live rollback regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_interest_acceptance_atomicity.sql \
+            | tee "$RUNNER_TEMP/atomicity-regression.txt"
+          grep -Fq "PASS: failed agreement creation leaves the selected response pending and the offer open" \
+            "$RUNNER_TEMP/atomicity-regression.txt"
+
+      - name: Reset only deterministic synthetic transaction state
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL'
+          begin;
+
+          do $guard$
+          declare
+            fixture_count integer;
+            qa_profile_count integer;
+          begin
+            select count(*) into fixture_count
+            from public.offers o
+            join public.profiles p on p.id=o.owner_id
+            where o.id='10000000-0000-4000-8000-000000000158'::uuid
+              and o.fingerprint='qa-pr-158-marketplace-fixture-v1'
+              and p.email='qa-market-owner@example.com';
+
+            select count(*) into qa_profile_count
+            from public.profiles
+            where email in (
+              'qa-market-owner@example.com',
+              'qa-market-responder@example.com'
+            );
+
+            if fixture_count <> 1 or qa_profile_count <> 2 then
+              raise exception 'Refusing synthetic reset outside the exact MoralTrade QA fixture.';
+            end if;
+          end;
+          $guard$;
+
+          delete from public.offer_comments
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.trade_counterproposals
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.trade_threads
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.trade_review_events
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.trade_invitations
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.performance_bonds
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.donation_offset_matches
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.fallback_livestream_evidence_routes
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.financial_commitment_reservations
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.agreements
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.interests
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.guest_interests
+          where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          delete from public.email_outbox
+          where profile_id in (
+              select id from public.profiles
+              where email in (
+                'qa-market-owner@example.com',
+                'qa-market-responder@example.com'
+              )
+            )
+             or recipient_email in (
+               'qa-market-owner@example.com',
+               'qa-market-responder@example.com'
+             );
+
+          update public.offers
+          set status='open',
+              workflow_status='published',
+              closed_at=null,
+              deleted_at=null,
+              updated_at=now()
+          where id='10000000-0000-4000-8000-000000000158'::uuid;
+
+          commit;
+          SQL
+
+      - name: Verify clean deterministic offer state
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/clean-state.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and status='open'
+                and workflow_status='published'
+                and closed_at is null
+                and deleted_at is null
+            ) then 'FAIL:offer_not_open'
+            when exists (
+              select 1 from public.interests
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:interests'
+            when exists (
+              select 1 from public.guest_interests
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:guest_interests'
+            when exists (
+              select 1 from public.agreements
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:agreements'
+            when exists (
+              select 1 from public.trade_threads
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:trade_threads'
+            when exists (
+              select 1 from public.trade_counterproposals
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:counterproposals'
+            when exists (
+              select 1 from public.offer_comments
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:offer_comments'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+          {
+            echo "target=${EXPECTED_QA_REF}"
+            echo "tested_commit=${EXPECTED_PR158_SHA}"
+            echo "rollback_regression=PASS"
+            echo "synthetic_reset=PASS"
+            echo "deterministic_offer_open=PASS"
+            echo "responses=0"
+            echo "agreements=0"
+          } > pr158-qa-regression-and-reset.txt
+
+      - name: Upload sanitized result
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-qa-regression-and-reset-${{ github.run_id }}
+          path: pr158-qa-regression-and-reset.txt
+          if-no-files-found: error
+          retention-days: 14
