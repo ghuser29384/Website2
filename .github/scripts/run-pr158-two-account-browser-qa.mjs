@@ -110,6 +110,20 @@ source = replaceExactly(
 
 source = replaceExactly(
   source,
+  '    await expect(page.getByLabel("Your commitment")).toHaveValue(RESPONDER_ACTION);',
+  '    await expect(page.getByRole("combobox", { name: /Your commitment/ })).toHaveValue(RESPONDER_ACTION);',
+  "responder commitment input",
+);
+
+source = replaceExactly(
+  source,
+  '    await expect(page.getByLabel("Counterparty commitment")).toHaveValue(OWNER_ACTION);',
+  '    await expect(page.getByRole("combobox", { name: /Counterparty commitment/ })).toHaveValue(OWNER_ACTION);',
+  "counterparty commitment input",
+);
+
+source = replaceExactly(
+  source,
   "  const allDiagnostics = report.diagnostics;",
   [
     "  await owner.close();",
