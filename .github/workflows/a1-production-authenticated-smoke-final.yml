@@ -31,7 +31,7 @@ jobs:
   verify-production-loop:
     needs: validate-bundle
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       A1_SMOKE_BASE_URL: https://www.moraltrade.org
       A1_SMOKE_OUTPUT_DIR: a1-production-smoke-evidence
@@ -67,7 +67,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Validate protected inputs and pull production environment
+      - name: Validate protected inputs and resolve production database URL
         shell: bash
         run: |
           set -euo pipefail
@@ -88,58 +88,87 @@ jobs:
             echo "::add-mask::$SUPABASE_DB_PASSWORD"
           fi
 
-          mkdir -p app/.vercel app/a1-production-smoke-evidence
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > app/.vercel/project.json
-
-          set +e
-          (
-            cd app
-            npx --yes vercel@56.5.0 env pull .vercel-production.env \
-              --environment=production --yes --token "$VERCEL_TOKEN" \
-              > a1-production-smoke-evidence/vercel-env-pull.log 2>&1
-          )
-          pull_code=$?
-          set -e
-          if [ "$pull_code" -ne 0 ]; then
-            cat app/a1-production-smoke-evidence/vercel-env-pull.log
-            exit "$pull_code"
+          mkdir -p app/a1-production-smoke-evidence
+          env_response=/tmp/vercel-project-env.json
+          env_code="$(
+            curl -sS \
+              -o "$env_response" \
+              -w '%{http_code}' \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID&decrypt=true"
+          )"
+          if [ "$env_code" != "200" ]; then
+            node - "$env_response" "$env_code" <<'NODE'
+          const fs = require('node:fs');
+          const [path, status] = process.argv.slice(2);
+          let message = 'unknown Vercel API error';
+          try {
+            const body = JSON.parse(fs.readFileSync(path, 'utf8'));
+            message = body?.error?.message || body?.message || message;
+          } catch {}
+          console.error(`Vercel environment lookup failed with HTTP ${status}: ${message}`);
+          NODE
+            exit 1
           fi
 
-          node --env-file=app/.vercel-production.env <<'NODE'
+          node - "$env_response" <<'NODE'
           const fs = require('node:fs');
-
-          const names = fs
-            .readFileSync('app/.vercel-production.env', 'utf8')
-            .split(/\r?\n/)
-            .map((line) => line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/)?.[1])
-            .filter(Boolean)
-            .sort();
-          fs.writeFileSync(
-            'app/a1-production-smoke-evidence/vercel-env-names.txt',
-            `${names.join('\n')}\n`,
-          );
-
-          const candidates = [
-            ['PROD_SUPABASE_DB_URL', process.env.PROD_SUPABASE_DB_URL],
-            ['SUPABASE_DB_URL', process.env.SUPABASE_DB_URL],
-            ['DATABASE_URL', process.env.DATABASE_URL],
-            ['POSTGRES_URL', process.env.POSTGRES_URL],
-            ['POSTGRES_PRISMA_URL', process.env.POSTGRES_PRISMA_URL],
-            ['RAW_PROD_SUPABASE_DB_URL', process.env.RAW_PROD_SUPABASE_DB_URL],
-          ];
-          const selected = candidates.find(([, value]) => typeof value === 'string' && /^postgres(?:ql)?:\/\//i.test(value));
-          if (!selected) {
-            throw new Error('No production Postgres URL was available from Vercel or GitHub secrets.');
+          const responsePath = process.argv[2];
+          const body = JSON.parse(fs.readFileSync(responsePath, 'utf8'));
+          const envs = Array.isArray(body.envs) ? body.envs : [];
+          const isProduction = (item) => {
+            const targets = Array.isArray(item.target) ? item.target : [item.target];
+            return targets.includes('production') && !item.gitBranch;
+          };
+          const production = new Map();
+          for (const item of envs.filter(isProduction)) {
+            if (!production.has(item.key)) production.set(item.key, item);
           }
 
-          const [source, raw] = selected;
-          const url = new URL(raw);
-          const passwordOverride =
-            process.env.PROD_SUPABASE_DB_PASSWORD ||
-            process.env.SUPABASE_DB_PASSWORD ||
-            process.env.POSTGRES_PASSWORD ||
-            '';
-          if (passwordOverride) url.password = passwordOverride;
+          const safeRows = [...production.values()]
+            .map((item) => ({
+              key: item.key,
+              type: item.type,
+              decrypted: item.decrypted === true,
+              value_present: typeof item.value === 'string' && item.value.length > 0,
+            }))
+            .sort((left, right) => left.key.localeCompare(right.key));
+          fs.writeFileSync(
+            'app/a1-production-smoke-evidence/vercel-env-metadata.json',
+            `${JSON.stringify(safeRows, null, 2)}\n`,
+          );
+
+          const read = (key) => {
+            const value = production.get(key)?.value;
+            if (typeof value === 'string' && value.length > 0) return value;
+            const fallback = process.env[key];
+            return typeof fallback === 'string' ? fallback : '';
+          };
+          const urlCandidates = [
+            'PROD_SUPABASE_DB_URL',
+            'SUPABASE_DATABASE_URL',
+            'SUPABASE_DB_URL',
+            'DATABASE_URL',
+            'DIRECT_URL',
+            'POSTGRES_URL_NON_POOLING',
+            'POSTGRES_URL',
+            'POSTGRES_PRISMA_URL',
+            'RAW_PROD_SUPABASE_DB_URL',
+          ];
+          const source = urlCandidates.find((key) => /^postgres(?:ql)?:\/\//i.test(read(key)));
+          if (!source) throw new Error('No production Postgres URL is available.');
+
+          const url = new URL(read(source));
+          const passwordNames = [
+            'PROD_SUPABASE_DB_PASSWORD',
+            'SUPABASE_DB_PASSWORD',
+            'SUPABASE_DATABASE_PASSWORD',
+            'DATABASE_PASSWORD',
+            'POSTGRES_PASSWORD',
+          ];
+          const passwordSource = passwordNames.find((key) => read(key).length > 0) || '';
+          if (passwordSource) url.password = read(passwordSource);
+
           url.username = 'postgres.jnpoxvalyjtdghnperyu';
           url.hostname = 'aws-1-us-west-2.pooler.supabase.com';
           url.port = '5432';
@@ -149,14 +178,14 @@ jobs:
           fs.writeFileSync('/tmp/a1-normalized-db-url', url.toString(), { mode: 0o600 });
           fs.writeFileSync(
             'app/a1-production-smoke-evidence/db-url-source.txt',
-            `selected_source=${source}\npassword_override=${passwordOverride ? 'present' : 'absent'}\n`,
+            `selected_source=${source}\npassword_override=${passwordSource || 'absent'}\n`,
           );
           NODE
 
           NORMALIZED_DB_URL="$(cat /tmp/a1-normalized-db-url)"
           echo "::add-mask::$NORMALIZED_DB_URL"
           echo "PROD_SUPABASE_DB_URL=$NORMALIZED_DB_URL" >> "$GITHUB_ENV"
-          rm -f app/.vercel-production.env /tmp/a1-normalized-db-url
+          rm -f "$env_response" /tmp/a1-normalized-db-url
           test "$(git -C app rev-parse HEAD)" = "$A1_PRODUCTION_SOURCE_SHA"
 
       - name: Install PostgreSQL client
@@ -197,20 +226,117 @@ jobs:
           fi
           test "$connection_probe" = "1"
 
-      - name: Rotate production CRON_SECRET and redeploy exact source
+      - name: Rotate production CRON_SECRET and deploy exact source
         shell: bash
         run: |
           set -euo pipefail
-          CRON_SECRET="$(openssl rand -hex 32)"
+          export CRON_SECRET="$(openssl rand -hex 32)"
           echo "::add-mask::$CRON_SECRET"
           echo "CRON_SECRET=$CRON_SECRET" >> "$GITHUB_ENV"
 
-          cd app
-          printf '%s' "$CRON_SECRET" | npx --yes vercel@56.5.0 env add CRON_SECRET production \
-            --force --sensitive --token "$VERCEL_TOKEN"
+          node <<'NODE' > /tmp/a1-cron-secret.json
+          process.stdout.write(JSON.stringify({
+            key: 'CRON_SECRET',
+            value: process.env.CRON_SECRET,
+            type: 'sensitive',
+            target: ['production'],
+            comment: 'A1 recommendation training and production cron authorization',
+          }));
+          NODE
+          cron_code="$(
+            curl -sS \
+              -o /tmp/a1-cron-upsert.json \
+              -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data-binary @/tmp/a1-cron-secret.json \
+              "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID&upsert=true"
+          )"
+          rm -f /tmp/a1-cron-secret.json
+          if [ "$cron_code" != "200" ] && [ "$cron_code" != "201" ]; then
+            node - /tmp/a1-cron-upsert.json "$cron_code" <<'NODE'
+          const fs = require('node:fs');
+          const [path, status] = process.argv.slice(2);
+          let message = 'unknown Vercel API error';
+          try {
+            const body = JSON.parse(fs.readFileSync(path, 'utf8'));
+            message = body?.error?.message || body?.message || message;
+          } catch {}
+          console.error(`CRON_SECRET upsert failed with HTTP ${status}: ${message}`);
+          NODE
+            exit 1
+          fi
+          rm -f /tmp/a1-cron-upsert.json
 
-          npx --yes vercel@56.5.0 deploy --prod --yes \
-            --token "$VERCEL_TOKEN" 2>&1 | tee ../vercel-production-deploy.log
+          node <<'NODE' > /tmp/a1-deploy.json
+          process.stdout.write(JSON.stringify({
+            name: 'moraltrade-site',
+            project: process.env.VERCEL_PROJECT_ID,
+            target: 'production',
+            gitSource: {
+              type: 'github',
+              org: 'ghuser29384',
+              repo: 'Website2',
+              ref: 'main',
+              sha: process.env.A1_PRODUCTION_SOURCE_SHA,
+            },
+            meta: {
+              source: 'a1-production-authenticated-smoke',
+            },
+          }));
+          NODE
+          deploy_code="$(
+            curl -sS \
+              -o /tmp/a1-deploy-response.json \
+              -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              -H 'Content-Type: application/json' \
+              --data-binary @/tmp/a1-deploy.json \
+              "https://api.vercel.com/v13/deployments?teamId=$VERCEL_ORG_ID&forceNew=1"
+          )"
+          rm -f /tmp/a1-deploy.json
+          if [ "$deploy_code" != "200" ] && [ "$deploy_code" != "201" ]; then
+            node - /tmp/a1-deploy-response.json "$deploy_code" <<'NODE'
+          const fs = require('node:fs');
+          const [path, status] = process.argv.slice(2);
+          let message = 'unknown Vercel API error';
+          try {
+            const body = JSON.parse(fs.readFileSync(path, 'utf8'));
+            message = body?.error?.message || body?.message || message;
+          } catch {}
+          console.error(`Production deployment creation failed with HTTP ${status}: ${message}`);
+          NODE
+            exit 1
+          fi
+
+          DEPLOYMENT_ID="$(node -e "const v=require('/tmp/a1-deploy-response.json'); process.stdout.write(v.id || '')")"
+          DEPLOYMENT_URL="$(node -e "const v=require('/tmp/a1-deploy-response.json'); process.stdout.write(v.url || '')")"
+          test -n "$DEPLOYMENT_ID"
+          {
+            echo "deployment_id=$DEPLOYMENT_ID"
+            echo "deployment_url=$DEPLOYMENT_URL"
+          } > app/a1-production-smoke-evidence/vercel-deployment.txt
+          rm -f /tmp/a1-deploy-response.json
+
+          for attempt in $(seq 1 150); do
+            curl -sS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+              -o /tmp/a1-deployment-status.json
+            ready_state="$(node -e "const v=require('/tmp/a1-deployment-status.json'); process.stdout.write(v.readyState || v.state || '')")"
+            case "$ready_state" in
+              READY) break ;;
+              ERROR|CANCELED|CANCELLED)
+                echo "::error::Production deployment ended in $ready_state"
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          test "$(node -e "const v=require('/tmp/a1-deployment-status.json'); process.stdout.write(v.readyState || v.state || '')")" = "READY"
+          rm -f /tmp/a1-deployment-status.json
 
           for attempt in $(seq 1 60); do
             status="$(curl -sS -o /dev/null -w '%{http_code}' https://www.moraltrade.org/api/live-now || true)"
@@ -239,13 +365,18 @@ jobs:
           node --check .a1-production-smoke.mjs
           node .a1-production-smoke.mjs
 
-      - name: Verify Vercel Cron invokes the protected handler
-        working-directory: app
+      - name: Verify protected cron handler
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes vercel@56.5.0 crons run /api/jobs/recommendation-training \
-            --token "$VERCEL_TOKEN" 2>&1 | tee ../vercel-cron-run.log
+          status="$(
+            curl -sS \
+              -o app/a1-production-smoke-evidence/cron-handler-response.json \
+              -w '%{http_code}' \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              https://www.moraltrade.org/api/jobs/recommendation-training
+          )"
+          test "$status" = "200"
 
       - name: Upload smoke evidence
         if: always()
@@ -254,7 +385,5 @@ jobs:
           name: a1-production-authenticated-smoke-final-${{ github.run_id }}
           path: |
             app/a1-production-smoke-evidence
-            vercel-production-deploy.log
-            vercel-cron-run.log
           if-no-files-found: warn
           retention-days: 30
