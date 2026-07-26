@@ -16,13 +16,16 @@ jobs:
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'ops/fix-pr158-core-version-linking-20260726'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       EXPECTED_PR158_HEAD: 09207ac3a589b2fdc0ef0b97bb09c5c71b710c5e
-      MIGRATION_VERSION: "20260726163500"
-      MIGRATION_NAME: fix_atomic_acceptance_core_version_linking
+      LINKING_MIGRATION_VERSION: "20260726163500"
+      LINKING_MIGRATION_NAME: fix_atomic_acceptance_core_version_linking
+      LINKING_MIGRATION_SHA256: 5b18274904b4acf413cdfbca310aace5d46ef5ba4be77bfa235287f8ffcd0165
+      INTERNAL_MIGRATION_VERSION: "20260726164500"
+      INTERNAL_MIGRATION_NAME: fix_atomic_acceptance_core_internal_write
 
     steps:
       - name: Check out temporary repair branch
@@ -44,50 +47,105 @@ jobs:
             exit 1
           fi
 
-      - name: Add transaction-local core-version linking and regressions
+      - name: Generate exact applied linking migration, internal-write repair, and regressions
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
           from pathlib import Path
 
-          old_migration_path = Path(
+          base_migration_path = Path(
               "supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql"
           )
-          new_migration_path = Path(
+          linking_migration_path = Path(
               "supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql"
           )
-          old_migration = old_migration_path.read_text(encoding="utf-8")
-          start = old_migration.index(
+          internal_migration_path = Path(
+              "supabase/migrations/20260726164500_fix_atomic_acceptance_core_internal_write.sql"
+          )
+
+          base_migration = base_migration_path.read_text(encoding="utf-8")
+          start = base_migration.index(
               "create or replace function public.accept_marketplace_interest_v1"
           )
-          end = old_migration.index("notify pgrst, 'reload schema';", start)
-          rpc_block = old_migration[start:end]
+          end = base_migration.index("notify pgrst, 'reload schema';", start)
+          rpc_block = base_migration[start:end]
           agreement_insert = "  insert into public.agreements (\n"
           if rpc_block.count(agreement_insert) != 2:
               raise SystemExit(
                   f"Expected two marketplace agreement inserts; found {rpc_block.count(agreement_insert)}."
               )
-          rpc_block = rpc_block.replace(
+
+          linking_rpc_block = rpc_block.replace(
               agreement_insert,
               "  perform set_config('app.core_trade_linking_agreement', '1', true);\n\n"
               + agreement_insert,
           )
-          new_migration = (
+          linking_migration = (
               "-- The legacy agreement bridge creates the initial frozen core-trade version in an\n"
-              "-- AFTER INSERT trigger. The version guard deliberately requires the transaction-local\n"
-              "-- linking flag for system-created versions whose proposed_by participant may differ\n"
-              "-- from the authenticated actor accepting the response. Keep the entire acceptance,\n"
-              "-- agreement insert, version bridge, competing-response updates, and offer close in one\n"
-              "-- transaction.\n\n"
-              + rpc_block
+              "-- AFTER INSERT trigger. The version and thread-link guards require the transaction-local\n"
+              "-- linking flag for these system-created records.\n\n"
+              + linking_rpc_block
               + "notify pgrst, 'reload schema';\n"
           )
-          if new_migration.count(
+          linking_sha = hashlib.sha256(linking_migration.encode("utf-8")).hexdigest()
+          expected_linking_sha = "5b18274904b4acf413cdfbca310aace5d46ef5ba4be77bfa235287f8ffcd0165"
+          if linking_sha != expected_linking_sha:
+              raise SystemExit(
+                  f"Generated linking migration changed: expected {expected_linking_sha}, found {linking_sha}."
+              )
+          linking_migration_path.write_text(linking_migration, encoding="utf-8")
+
+          linking_marker = (
+              "  perform set_config('app.core_trade_linking_agreement', '1', true);\n\n"
+              + agreement_insert
+          )
+          internal_marker = (
+              "  perform set_config('app.core_trade_linking_agreement', '1', true);\n"
+              "  perform set_config('app.core_trade_internal', '1', true);\n\n"
+              + agreement_insert
+          )
+          if linking_rpc_block.count(linking_marker) != 2:
+              raise SystemExit("Expected one linking marker in each acceptance RPC.")
+          internal_rpc_block = linking_rpc_block.replace(linking_marker, internal_marker)
+
+          returning_marker = "  returning id into agreement_id_value;"
+          returning_with_reset = (
+              "  returning id into agreement_id_value;\n\n"
+              "  perform set_config('app.core_trade_linking_agreement', '', true);\n"
+              "  perform set_config('app.core_trade_internal', '', true);"
+          )
+          if internal_rpc_block.count(returning_marker) != 2:
+              raise SystemExit("Expected two agreement insert return markers.")
+          internal_rpc_block = internal_rpc_block.replace(
+              returning_marker,
+              returning_with_reset,
+          )
+
+          internal_migration = (
+              "-- The legacy agreement bridge also updates agreements.current_version_id after creating\n"
+              "-- the initial frozen version. That update is an internal system transition, not a participant\n"
+              "-- selecting a version. Set both transaction-local bridge guards only around the agreement\n"
+              "-- insert and its synchronous triggers, then clear them before the remaining acceptance writes.\n\n"
+              + internal_rpc_block
+              + "notify pgrst, 'reload schema';\n"
+          )
+          if internal_migration.count(
               "set_config('app.core_trade_linking_agreement', '1', true)"
           ) != 2:
-              raise SystemExit("The linking flag must appear once in each acceptance RPC.")
-          new_migration_path.write_text(new_migration, encoding="utf-8")
+              raise SystemExit("The linking flag must be set once in each acceptance RPC.")
+          if internal_migration.count("set_config('app.core_trade_internal', '1', true)") != 2:
+              raise SystemExit("The internal-write flag must be set once in each acceptance RPC.")
+          if internal_migration.count(
+              "set_config('app.core_trade_linking_agreement', '', true)"
+          ) != 2:
+              raise SystemExit("The linking flag must be cleared once in each acceptance RPC.")
+          if internal_migration.count("set_config('app.core_trade_internal', '', true)") != 2:
+              raise SystemExit("The internal-write flag must be cleared once in each acceptance RPC.")
+          internal_migration_path.write_text(internal_migration, encoding="utf-8")
 
           sql_path = Path("supabase/tests/marketplace_interest_acceptance_atomicity.sql")
           sql_source = sql_path.read_text(encoding="utf-8")
@@ -97,6 +155,8 @@ jobs:
           """
           new_tail = """select 'PASS: failed agreement creation leaves the selected response pending and the offer open' as result;
 
+          select set_config('app.core_trade_linking_agreement', '', true);
+          select set_config('app.core_trade_internal', '', true);
           drop trigger qa_force_marketplace_agreement_insert_failure_trigger on public.agreements;
 
           DO $success_exercise$
@@ -186,63 +246,120 @@ jobs:
           sql_path.write_text(sql_source.replace(old_tail, new_tail, 1), encoding="utf-8")
 
           source_test_path = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
-          source_test = source_test_path.read_text(encoding="utf-8")
-          linking_declaration = """const linkingMigration = readFileSync(
+          source_test_path.write_text(
+              '''import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          import path from "node:path";
+          import test from "node:test";
+
+          const repoRoot = process.cwd();
+          const actions = readFileSync(path.join(repoRoot, "src/app/actions.ts"), "utf8");
+          const completionMigration = readFileSync(
+            path.join(
+              repoRoot,
+              "supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql",
+            ),
+            "utf8",
+          );
+          const linkingMigration = readFileSync(
             path.join(
               repoRoot,
               "supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql",
             ),
             "utf8",
           );
-          """
-          marker = "const sqlRegression = readFileSync(\n"
-          if source_test.count(marker) != 1:
-              raise SystemExit("Expected one SQL regression declaration marker.")
-          source_test = source_test.replace(marker, linking_declaration + marker, 1)
+          const internalMigration = readFileSync(
+            path.join(
+              repoRoot,
+              "supabase/migrations/20260726164500_fix_atomic_acceptance_core_internal_write.sql",
+            ),
+            "utf8",
+          );
+          const sqlRegression = readFileSync(
+            path.join(repoRoot, "supabase/tests/marketplace_interest_acceptance_atomicity.sql"),
+            "utf8",
+          );
 
-          review_assertion = (
-              "  assert.match(migration, /create table if not exists public\\.agreement_review_cases/);\n"
-          )
-          linking_assertions = """  assert.equal(
-            (
-              linkingMigration.match(
-                /set_config\('app\.core_trade_linking_agreement', '1', true\)/g,
-              ) ?? []
-            ).length,
-            2,
-          );
-          assert.match(
-            linkingMigration,
-            /create or replace function public\.accept_marketplace_interest_v1/,
-          );
-          assert.match(
-            linkingMigration,
-            /create or replace function public\.accept_marketplace_guest_interest_v1/,
-          );
-          """
-          if source_test.count(review_assertion) != 1:
-              raise SystemExit("Expected one review-table assertion.")
-          source_test = source_test.replace(
-              review_assertion,
-              review_assertion + linking_assertions,
-              1,
-          )
+          function between(source: string, start: string, end: string) {
+            const startIndex = source.indexOf(start);
+            assert.notEqual(startIndex, -1, `Missing start marker: ${start}`);
+            const endIndex = source.indexOf(end, startIndex + start.length);
+            assert.notEqual(endIndex, -1, `Missing end marker: ${end}`);
+            return source.slice(startIndex, endIndex);
+          }
 
-          old_regression_test = """test("SQL regression forces an agreement failure and asserts rollback", () => {
-            assert.match(sqlRegression, /qa_forced_agreement_insert_failure/);
-            assert.match(sqlRegression, /response_status <> 'pending'/);
-            assert.match(sqlRegression, /offer_status <> 'open'/);
-            assert.match(sqlRegression, /agreement_count <> 0/);
-            assert.match(sqlRegression, /rollback;/);
+          test("member and guest acceptance use database transaction boundaries", () => {
+            const member = between(
+              actions,
+              "export async function acceptInterestAction",
+              "export async function acceptGuestInterestAction",
+            );
+            const guest = between(
+              actions,
+              "export async function acceptGuestInterestAction",
+              "export async function rateAgreementAction",
+            );
+
+            assert.match(member, /accept_marketplace_interest_v1/);
+            assert.doesNotMatch(
+              member,
+              /\\.from\\("interests"\\)[\\s\\S]{0,160}\\.update\\(\\{[\\s\\S]{0,80}status:\\s*"accepted"/,
+            );
+            assert.match(guest, /accept_marketplace_guest_interest_v1/);
+            assert.doesNotMatch(
+              guest,
+              /\\.from\\("guest_interests"\\)[\\s\\S]{0,160}\\.update\\(\\{[\\s\\S]{0,80}status:\\s*"accepted"/,
+            );
           });
-          """
-          new_regression_test = """test("SQL regression proves rollback and successful frozen-version creation", () => {
+
+          test("completion review remains separate from the bilateral lifecycle", () => {
+            assert.match(
+              completionMigration,
+              /add column if not exists completion_state text not null default 'pending_evidence'/,
+            );
+            assert.match(completionMigration, /comment on column public\\.agreements\\.lifecycle_status/);
+            assert.match(completionMigration, /create table if not exists public\\.agreement_evidence_items/);
+            assert.match(completionMigration, /create table if not exists public\\.agreement_review_cases/);
+          });
+
+          test("atomic acceptance authorizes only the synchronous legacy bridge", () => {
+            assert.equal(
+              (linkingMigration.match(/set_config\\('app\\.core_trade_linking_agreement', '1', true\\)/g) ?? []).length,
+              2,
+            );
+            assert.equal(
+              (internalMigration.match(/set_config\\('app\\.core_trade_linking_agreement', '1', true\\)/g) ?? []).length,
+              2,
+            );
+            assert.equal(
+              (internalMigration.match(/set_config\\('app\\.core_trade_internal', '1', true\\)/g) ?? []).length,
+              2,
+            );
+            assert.equal(
+              (internalMigration.match(/set_config\\('app\\.core_trade_linking_agreement', '', true\\)/g) ?? []).length,
+              2,
+            );
+            assert.equal(
+              (internalMigration.match(/set_config\\('app\\.core_trade_internal', '', true\\)/g) ?? []).length,
+              2,
+            );
+            assert.match(
+              internalMigration,
+              /create or replace function public\\.accept_marketplace_interest_v1/,
+            );
+            assert.match(
+              internalMigration,
+              /create or replace function public\\.accept_marketplace_guest_interest_v1/,
+            );
+          });
+
+          test("SQL regression proves rollback and successful frozen-version creation", () => {
             assert.match(sqlRegression, /qa_forced_agreement_insert_failure/);
             assert.match(sqlRegression, /response_status <> 'pending'/);
             assert.match(sqlRegression, /offer_status <> 'open'/);
             assert.match(sqlRegression, /agreement_count <> 0/);
             assert.match(sqlRegression, /acceptance_result->>'created'/);
-            assert.match(sqlRegression, /agreement_row\.current_version_id is null/);
+            assert.match(sqlRegression, /agreement_row\\.current_version_id is null/);
             assert.match(sqlRegression, /linked_thread_count <> 1/);
             assert.match(
               sqlRegression,
@@ -250,11 +367,7 @@ jobs:
             );
             assert.match(sqlRegression, /rollback;/);
           });
-          """
-          if source_test.count(old_regression_test) != 1:
-              raise SystemExit("Expected one source-level SQL regression test.")
-          source_test_path.write_text(
-              source_test.replace(old_regression_test, new_regression_test, 1),
+          ''',
               encoding="utf-8",
           )
           PY
@@ -298,49 +411,53 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
-      - name: Apply exact incremental migration to QA
+      - name: Verify applied linking migration and apply exact internal-write migration
         shell: bash
         run: |
           set -euo pipefail
-          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
-          migration_sha="$(sha256sum "$migration" | cut -d' ' -f1)"
-          echo "MIGRATION_SHA=$migration_sha" >> "$GITHUB_ENV"
+          linking_migration="supabase/migrations/${LINKING_MIGRATION_VERSION}_${LINKING_MIGRATION_NAME}.sql"
+          echo "${LINKING_MIGRATION_SHA256}  ${linking_migration}" | sha256sum --check --strict
+
+          internal_migration="supabase/migrations/${INTERNAL_MIGRATION_VERSION}_${INTERNAL_MIGRATION_NAME}.sql"
+          internal_sha="$(sha256sum "$internal_migration" | cut -d' ' -f1)"
+          echo "INTERNAL_MIGRATION_SHA=$internal_sha" >> "$GITHUB_ENV"
 
           preflight="$RUNNER_TEMP/preflight.txt"
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
           select case
             when not exists (
               select 1 from supabase_migrations.schema_migrations
-              where version='20260726143000'
-            ) then 'FAIL:base_migration'
+              where version='${LINKING_MIGRATION_VERSION}'
+                and name='${LINKING_MIGRATION_NAME}'
+            ) then 'FAIL:linking_migration'
             when exists (
               select 1 from supabase_migrations.schema_migrations
-              where version='${MIGRATION_VERSION}'
-            ) then 'FAIL:already_recorded'
+              where version='${INTERNAL_MIGRATION_VERSION}'
+            ) then 'FAIL:internal_migration_already_recorded'
             when to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then 'FAIL:member_rpc'
             else 'PASS'
           end;
           SQL
           test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
 
-          apply_file="$RUNNER_TEMP/apply-migration.sql"
-          cat "$migration" > "$apply_file"
+          apply_file="$RUNNER_TEMP/apply-internal-migration.sql"
+          cat "$internal_migration" > "$apply_file"
           cat >> "$apply_file" <<SQL
 
           insert into supabase_migrations.schema_migrations (
             version, statements, name, created_by, idempotency_key
           ) values (
-            '${MIGRATION_VERSION}',
-            array['Applied from PR #158 repair workflow; sha256 ${migration_sha}'],
-            '${MIGRATION_NAME}',
-            'github-actions-pr158-core-version-linking',
-            'pr158-${MIGRATION_VERSION}-${migration_sha}'
+            '${INTERNAL_MIGRATION_VERSION}',
+            array['Applied from PR #158 repair workflow; sha256 ${internal_sha}'],
+            '${INTERNAL_MIGRATION_NAME}',
+            'github-actions-pr158-core-internal-write',
+            'pr158-${INTERNAL_MIGRATION_VERSION}-${internal_sha}'
           );
           SQL
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
             --single-transaction --file "$apply_file"
 
-      - name: Run live rollback and success regressions
+      - name: Run live rollback and successful bridge regressions
         shell: bash
         run: |
           set -euo pipefail
@@ -352,7 +469,7 @@ jobs:
           grep -Fq "PASS: successful acceptance creates one proposed agreement, frozen version, and linked private thread" \
             "$RUNNER_TEMP/regression.txt"
 
-      - name: Verify regression rollback left the fixture clean
+      - name: Verify regression rollback left the deterministic fixture clean
         shell: bash
         run: |
           set -euo pipefail
@@ -361,7 +478,7 @@ jobs:
           select case
             when not exists (
               select 1 from supabase_migrations.schema_migrations
-              where version='${MIGRATION_VERSION}' and name='${MIGRATION_NAME}'
+              where version='${INTERNAL_MIGRATION_VERSION}' and name='${INTERNAL_MIGRATION_NAME}'
             ) then 'FAIL:migration_history'
             when not exists (
               select 1 from public.offers
@@ -376,6 +493,10 @@ jobs:
               select 1 from public.agreements
               where offer_id='10000000-0000-4000-8000-000000000158'::uuid
             ) then 'FAIL:agreements'
+            when exists (
+              select 1 from public.trade_threads
+              where offer_id='10000000-0000-4000-8000-000000000158'::uuid
+            ) then 'FAIL:threads'
             else 'PASS'
           end;
           SQL
@@ -388,8 +509,9 @@ jobs:
           git add \
             src/app/offers/marketplace-interest-acceptance.test.ts \
             supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql \
+            supabase/migrations/20260726164500_fix_atomic_acceptance_core_internal_write.sql \
             supabase/tests/marketplace_interest_acceptance_atomicity.sql
-          git commit -m "Fix atomic acceptance core-version linking"
+          git commit -m "Fix atomic acceptance bridge authorization"
           git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
           echo "FINAL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
@@ -399,8 +521,9 @@ jobs:
           {
             echo "pr158_head=${FINAL_SHA}"
             echo "qa_project=${EXPECTED_QA_REF}"
-            echo "migration_version=${MIGRATION_VERSION}"
-            echo "migration_sha256=${MIGRATION_SHA}"
+            echo "linking_migration_version=${LINKING_MIGRATION_VERSION}"
+            echo "internal_migration_version=${INTERNAL_MIGRATION_VERSION}"
+            echo "internal_migration_sha256=${INTERNAL_MIGRATION_SHA}"
             echo "rollback_regression=PASS"
             echo "success_bridge_regression=PASS"
             echo "production_build=PASS"
