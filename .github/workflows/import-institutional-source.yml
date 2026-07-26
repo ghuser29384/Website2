@@ -1,0 +1,46 @@
+name: Import institutional source
+
+on:
+  push:
+    branches:
+      - feat/institutional-trade-system
+    paths:
+      - .github/institutional-import-payload.b64
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-institutional-source
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import exact local implementation payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload=.github/institutional-import-payload.b64
+          if [[ ! -f "$payload" ]]; then
+            echo "Payload already consumed; nothing to import."
+            exit 0
+          fi
+          base64 --decode "$payload" | tar -xzf -
+          rm -f "$payload" .github/workflows/export-institutional-source.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No implementation changes found."
+            exit 0
+          fi
+          git commit -m "Implement institutional trade system integrity and QA"
+          git push origin HEAD:feat/institutional-trade-system
