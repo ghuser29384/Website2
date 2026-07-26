@@ -1,0 +1,190 @@
+name: Collective commitments database QA
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/collective-commitments-db-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collective-commitments-db-qa-20260726
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-regress:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-commitments-db-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_PRODUCT_HEAD: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      MIGRATION_VERSION: "20260726171000"
+      MIGRATION_NAME: collective_identity_threshold_commitments
+      MIGRATION_SHA256: 593a624606104cccf69c3ad7f1b6e9fbd7cf11b1e5ec1309c2f429f68492351e
+      TEST_SHA256: fd98292913b82153ddce3f50285d532282b51539849da42dc5ce6daadf6b7c15
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-db-qa-artifacts
+
+    steps:
+      - name: Validate exact target and required secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "qa/collective-commitments-db-20260726"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+
+      - name: Check out exact QA branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact product commit and QA-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD)"
+          test "$changed" = ".github/workflows/collective-commitments-db-qa.yml"
+          mkdir -p "$ARTIFACT_DIR"
+
+      - name: Validate exact QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply exact migration atomically to MoralTrade QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
+          echo "${MIGRATION_SHA256}  ${migration}" | sha256sum --check --strict
+
+          preflight="$ARTIFACT_DIR/preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
+          select case
+            when current_database() <> 'postgres' then 'FAIL:database'
+            when exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='${MIGRATION_VERSION}'
+            ) then 'FAIL:migration_already_recorded'
+            when to_regclass('public.collective_commitments') is not null then 'FAIL:table_already_exists'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
+
+          apply_file="$RUNNER_TEMP/collective-migration-atomic.sql"
+          python3 - "$migration" "$apply_file" <<'PY'
+          from pathlib import Path
+          import sys
+
+          source_path = Path(sys.argv[1])
+          output_path = Path(sys.argv[2])
+          lines = source_path.read_text().splitlines()
+          begin_lines = [index for index, line in enumerate(lines) if line.strip().lower() == "begin;"]
+          commit_lines = [index for index, line in enumerate(lines) if line.strip().lower() == "commit;"]
+          if begin_lines != [4] or commit_lines != [len(lines) - 1]:
+              raise SystemExit(
+                  f"Unexpected migration transaction boundaries: begin={begin_lines}, commit={commit_lines}"
+              )
+          body = [
+              line
+              for index, line in enumerate(lines)
+              if index not in {begin_lines[0], commit_lines[0]}
+          ]
+          output_path.write_text("\n".join(body) + "\n")
+          PY
+
+          cat >> "$apply_file" <<SQL
+          insert into supabase_migrations.schema_migrations (
+            version, statements, name, created_by, idempotency_key
+          ) values (
+            '${MIGRATION_VERSION}',
+            array['Guarded MoralTrade QA apply; sha256 ${MIGRATION_SHA256}'],
+            '${MIGRATION_NAME}',
+            'github-actions-collective-db-qa',
+            'collective-${MIGRATION_VERSION}-${MIGRATION_SHA256}'
+          );
+          SQL
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --single-transaction --file "$apply_file" \
+            2>&1 | tee "$ARTIFACT_DIR/migration-apply.log"
+
+      - name: Run transactional database regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test_file="supabase/tests/collective_identity_threshold_commitments.sql"
+          echo "${TEST_SHA256}  ${test_file}" | sha256sum --check --strict
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$test_file" 2>&1 | tee "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: duplicate-human and duplicate-account signatures are rejected" "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: withdrawal and re-signing preserve exact private counts" "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: incomplete or altered reveal manifests publish zero identities" "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: exact manifest activation publishes all names atomically and only opted-in affiliations" "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: activation and expiry erase private ciphertext and per-commitment keys" "$ARTIFACT_DIR/regression.log"
+          grep -Fq "PASS: frozen terms and direct sensitive-table access are denied" "$ARTIFACT_DIR/regression.log"
+
+      - name: Verify installed QA schema and privilege inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory="$ARTIFACT_DIR/inventory.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$inventory"
+          select case
+            when to_regclass('public.collective_identity_credentials') is null then 'FAIL:credentials'
+            when to_regclass('public.collective_commitments') is null then 'FAIL:commitments'
+            when to_regclass('public.collective_commitment_keys') is null then 'FAIL:keys'
+            when to_regclass('public.collective_commitment_private_signatures') is null then 'FAIL:private_signatures'
+            when to_regclass('public.collective_commitment_public_signers') is null then 'FAIL:public_signers'
+            when to_regclass('public.collective_commitment_receipts') is null then 'FAIL:receipts'
+            when to_regprocedure('public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)') is null then 'FAIL:activation_rpc'
+            when has_table_privilege('authenticated', 'public.collective_identity_credentials', 'select') then 'FAIL:credential_select'
+            when has_table_privilege('authenticated', 'public.collective_commitment_private_signatures', 'select') then 'FAIL:private_select'
+            when has_table_privilege('authenticated', 'public.collective_commitment_keys', 'select') then 'FAIL:key_select'
+            when not has_table_privilege('anon', 'public.collective_commitment_public_signers', 'select') then 'FAIL:public_signer_select'
+            when not has_table_privilege('authenticated', 'public.collective_commitment_receipts', 'select') then 'FAIL:receipt_select'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$inventory")" = "PASS"
+          printf '%s\n' \
+            "product_head=${EXPECTED_PRODUCT_HEAD}" \
+            "qa_project=${EXPECTED_QA_REF}" \
+            "migration_version=${MIGRATION_VERSION}" \
+            "migration_sha256=${MIGRATION_SHA256}" \
+            "database_regression=PASS" \
+            "production_changed=NO" > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload database QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-commitments-db-qa-${{ github.run_id }}
+          path: collective-db-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
