@@ -31,11 +31,11 @@ jobs:
           output="$RUNNER_TEMP/agreement-contract-inspection.txt"
           {
             echo '=== completion_state references ==='
-            rg -n -C 16 'completion_state' src supabase/migrations || true
+            grep -R -n -C 16 --include='*.ts' --include='*.tsx' --include='*.sql' 'completion_state' src supabase/migrations || true
 
             echo '=== acceptance actions ==='
             for symbol in acceptInterestAction acceptGuestInterestAction; do
-              line="$(rg -n "^export async function ${symbol}" src/app/actions.ts | head -n1 | cut -d: -f1 || true)"
+              line="$(grep -n "^export async function ${symbol}" src/app/actions.ts | head -n1 | cut -d: -f1 || true)"
               echo "--- ${symbol} line ${line:-not-found} ---"
               if [[ -n "$line" ]]; then
                 start=$(( line > 35 ? line - 35 : 1 ))
@@ -45,7 +45,7 @@ jobs:
             done
 
             echo '=== agreement type excerpt ==='
-            line="$(rg -n '^      agreements: \{' src/lib/supabase/database.types.ts | head -n1 | cut -d: -f1 || true)"
+            line="$(grep -n '^      agreements: {' src/lib/supabase/database.types.ts | head -n1 | cut -d: -f1 || true)"
             if [[ -n "$line" ]]; then
               start=$(( line > 5 ? line - 5 : 1 ))
               end=$(( line + 190 ))
@@ -53,9 +53,9 @@ jobs:
             fi
 
             echo '=== migrations touching agreements ==='
-            rg -l 'agreements' supabase/migrations | sort || true
+            grep -R -l --include='*.sql' 'agreements' supabase/migrations | sort || true
             echo '=== migrations mentioning completion_state ==='
-            rg -l 'completion_state' supabase/migrations || true
+            grep -R -l --include='*.sql' 'completion_state' supabase/migrations || true
 
             echo '=== history introducing completion_state ==='
             git log --all --oneline -S'completion_state' -- src supabase/migrations | head -n 30 || true
