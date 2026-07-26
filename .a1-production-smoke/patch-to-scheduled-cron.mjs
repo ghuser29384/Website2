@@ -12,6 +12,22 @@ const replacement = "async function waitForScheduledTraining() {\n  const unauth
 source = source.slice(0, start) + replacement + source.slice(end);
 source = source.replace("  await runTraining();\n", "  await waitForScheduledTraining();\n");
 source = source.replace("    update public.offers set status='matched',updated_at=now() where id=${quote(ids.offer)}::uuid;\n\n", "");
+
+const oldFeedbackPrelude = "  await page.goto(`${BASE_URL}/trade-agreements/${ids.agreement}`, { waitUntil: 'domcontentloaded' });\n  await page.getByRole('heading', { name: /Did this completed trade improve matters by your lights/i }).waitFor();\n  const form = page.locator('form').filter({ has: page.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }) });\n";
+const newFeedbackPrelude = "  const response = await page.goto(`${BASE_URL}/trade-agreements/${ids.agreement}`, { waitUntil: 'networkidle' });\n  assert.ok(response && response.status() === 200, `Agreement feedback page returned ${response?.status()}.`);\n  const feedbackLabel = values.note.startsWith('Viewer') ? 'viewer' : 'owner';\n  const diagnosticFilename = `feedback-page-${feedbackLabel}.png`;\n  await page.screenshot({ path: path.join(OUTPUT_DIR, diagnosticFilename), fullPage: true, animations: 'disabled' });\n  result.screenshots.push(diagnosticFilename);\n  const form = page.locator('form').filter({ has: page.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }) });\n  const diagnostics = {\n    label: feedbackLabel,\n    url: page.url(),\n    title: await page.title(),\n    outcomeSectionCount: await page.locator('#outcome-feedback').count(),\n    feedbackFormCount: await form.count(),\n    bodyPreview: (await page.locator('body').innerText()).slice(0, 5000),\n  };\n  result.feedbackPageDiagnostics = [...(result.feedbackPageDiagnostics ?? []), diagnostics];\n  await form.waitFor({ state: 'visible' });\n";
+if (!source.includes(oldFeedbackPrelude)) throw new Error("Unable to locate feedback-page prelude.");
+source = source.replace(oldFeedbackPrelude, newFeedbackPrelude);
+
+const cleanupStart = "  sql(`\n    begin;\n\n    delete from public.recommendation_outcomes";
+const cleanupStartReplacement = "  sql(`\n    begin;\n    set local app.core_trade_internal='1';\n    set local app.core_trade_linking_agreement='1';\n\n    delete from public.recommendation_outcomes";
+if (!source.includes(cleanupStart)) throw new Error("Unable to locate cleanup transaction start.");
+source = source.replace(cleanupStart, cleanupStartReplacement);
+
+const unsafeAgreementCleanup = "    update public.agreements set current_version_id=null where id=${quote(ids.agreement)}::uuid;\n    delete from public.trade_agreement_versions where agreement_id=${quote(ids.agreement)}::uuid;\n    delete from public.agreements where id=${quote(ids.agreement)}::uuid;";
+const safeAgreementCleanup = "    delete from public.agreements where id=${quote(ids.agreement)}::uuid;";
+if (!source.includes(unsafeAgreementCleanup)) throw new Error("Unable to locate unsafe completed-agreement cleanup.");
+source = source.replace(unsafeAgreementCleanup, safeAgreementCleanup);
+
 if (source.includes("CRON_SECRET") || source.includes("await runTraining()")) {
   throw new Error("The scheduled-cron transformation was incomplete.");
 }
