@@ -1,1 +1,1 @@
-Rerun after separating RAW_PROD_SUPABASE_DB_URL from PROD_SUPABASE_DB_URL, normalizing the Supabase pooler endpoint, and validating both the configured pooler username and mapped PostgreSQL role.
+Rerun after separating RAW_PROD_SUPABASE_DB_URL from PROD_SUPABASE_DB_URL, normalizing the Supabase pooler endpoint, validating the configured pooler username, and verifying the database connection with a role-agnostic query.
