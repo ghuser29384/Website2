@@ -1,0 +1,74 @@
+.mt-learning-diagnostics {
+  border: 1px solid rgba(17, 17, 17, 0.18);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(300px, 1.4fr);
+  gap: 18px;
+  margin: 14px 0 18px;
+}
+
+.mt-learning-diagnostics > div > span {
+  display: block;
+  color: #1557ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.mt-learning-diagnostics strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.mt-learning-diagnostics p,
+.mt-learning-diagnostics dd {
+  color: #57534e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mt-learning-diagnostics dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.mt-learning-diagnostics dl > div {
+  border-left: 2px solid rgba(21, 87, 255, 0.32);
+  padding-left: 10px;
+}
+
+.mt-learning-diagnostics dt {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mt-learning-diagnostics dd {
+  margin: 3px 0 0;
+}
+
+.mt-pareto-note {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(17, 17, 17, 0.12);
+  margin: 10px 0 0;
+  padding-top: 10px;
+  color: #57534e;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .mt-learning-diagnostics {
+    grid-template-columns: 1fr;
+  }
+  .mt-learning-diagnostics dl {
+    grid-template-columns: 1fr;
+  }
+}

@@ -63,6 +63,10 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
+          source: "/api/live-now",
+          destination: "/api/live-now-a1",
+        },
+        {
           source: "/feed",
           destination: "/moral-trade-live.html",
         },

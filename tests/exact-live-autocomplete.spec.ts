@@ -26,9 +26,38 @@ async function installLiveFixtures(page: import("@playwright/test").Page) {
       }),
     }),
   );
+  await page.route("**/api/nonprofits/search**", (route) => {
+    const query = new URL(route.request().url()).searchParams.get("q") ?? "";
+    const results = /red cross/i.test(query)
+      ? [
+          {
+            label: "American National Red Cross",
+            description: "501(c)(3) charity · Washington, DC · EIN 53-0196605",
+            aliases: ["American Red Cross"],
+            kind: "organization",
+            source: "ProPublica Nonprofit Explorer / IRS",
+            ein: "53-0196605",
+            profileUrl: "https://projects.propublica.org/nonprofits/organizations/530196605",
+            subsection: 3,
+            score: 120,
+          },
+        ]
+      : [];
+
+    return route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        query,
+        results,
+        source: "ProPublica Nonprofit Explorer / IRS",
+      }),
+    });
+  });
 }
 
-test("the exact live trade clauses autocomplete their contenteditable terms", async ({ page }, testInfo) => {
+test("the exact live trade clauses autocomplete causes, charities, and organizations", async ({
+  page,
+}, testInfo) => {
   await installLiveFixtures(page);
   await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
 
@@ -36,11 +65,11 @@ test("the exact live trade clauses autocomplete their contenteditable terms", as
     has: page.locator(".clause-label", { hasText: "I offer" }),
   });
   const amountToken = offerClause.locator('.token[contenteditable="true"]').first();
-  const causeToken = offerClause.locator('.token[contenteditable="true"]').nth(1);
+  const recipientToken = offerClause.locator('.token[contenteditable="true"]').nth(1);
 
   await expect(amountToken).not.toHaveAttribute("data-mt-autocomplete-ready", "true");
-  await expect(causeToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
-  await expect(causeToken).toHaveAttribute("data-mt-autocomplete-context", "priorities");
+  await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
+  await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-context", "recipients");
 
   const activationToken = page
     .locator(".clause")
@@ -48,22 +77,32 @@ test("the exact live trade clauses autocomplete their contenteditable terms", as
     .locator('.token[contenteditable="true"]');
   await expect(activationToken).not.toHaveAttribute("data-mt-autocomplete-ready", "true");
 
-  await causeToken.fill("Animal");
-
   const panel = page.locator('[data-mt-live-token-panel="true"]');
+  await recipientToken.fill("Animal");
   await expect(panel).toBeVisible();
-  await expect(panel.locator(".mt-input-assist-option strong")).toHaveText([
-    "Animal welfare",
-    "Wild animal suffering",
-    "Factory farming",
-  ]);
+  await expect(panel.getByText("Animal welfare", { exact: true })).toBeVisible();
+  await expect(panel.getByText("ACE Recommended Charity Fund", { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-mt-suggestion-kind="cause"]')).not.toHaveCount(0);
+  await expect(panel.locator('[data-mt-suggestion-kind="organization"]')).not.toHaveCount(0);
+
+  await recipientToken.fill("Longterm Futures Fund");
+  await expect(panel.getByText("EA Long-Term Future Fund", { exact: true })).toBeVisible();
+
+  await recipientToken.fill("Red Cross");
+  await expect(panel.getByText("American National Red Cross", { exact: true })).toBeVisible();
+  await expect(panel.locator('[data-mt-suggestion-kind="cause"]')).toHaveCount(0);
+  await expect(
+    panel.getByText(/Organization · 501\(c\)\(3\) charity · Washington, DC/),
+  ).toBeVisible();
   await page.screenshot({
-    path: testInfo.outputPath("autocomplete-visible.png"),
+    path: testInfo.outputPath("organization-autocomplete-visible.png"),
     fullPage: false,
   });
 
-  await panel.locator(".mt-input-assist-option").first().click();
-  await expect(causeToken).toHaveText("Animal welfare");
+  await panel.getByText("American National Red Cross", { exact: true }).click();
+  await expect(recipientToken).toHaveText("American National Red Cross");
+  await expect(recipientToken).toHaveAttribute("data-mt-selected-kind", "organization");
+  await expect(recipientToken).toHaveAttribute("data-mt-selected-ein", "53-0196605");
   await expect(panel).toBeHidden();
 
   const proofToken = page
@@ -159,7 +198,7 @@ test("the exact live offer palette uses three offer types and collects shared at
     moneyClause.locator('[data-mt-autocomplete-disabled="true"]'),
   ).toHaveCount(1);
   await expect(
-    moneyClause.locator('[data-mt-autocomplete-context="priorities"]'),
+    moneyClause.locator('[data-mt-autocomplete-context="recipients"]'),
   ).toHaveCount(1);
 
   await page.screenshot({

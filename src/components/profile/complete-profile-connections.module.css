@@ -1,0 +1,617 @@
+.launcher,
+.backdrop,
+.dialog {
+  --paper: #f7f3eb;
+  --paper-2: #fffdf8;
+  --ink: #070707;
+  --muted: #67625b;
+  --rule: rgba(7, 7, 7, 0.22);
+  --blue: #1648ff;
+  --violet: #7b42c3;
+  --green: #198448;
+  --serif: var(--font-heading, "Source Serif 4", Georgia, serif);
+  --mono: var(--font-mono, "IBM Plex Mono", "SFMono-Regular", Consolas, monospace);
+  box-sizing: border-box;
+}
+
+.launcher *,
+.backdrop *,
+.backdrop *::before,
+.backdrop *::after {
+  box-sizing: border-box;
+}
+
+.launcher {
+  height: 44px;
+  position: fixed;
+  z-index: 190;
+  top: 19px;
+  right: 169px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper-2);
+  color: var(--ink);
+  cursor: pointer;
+  font: 11px/1 var(--mono);
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.launcher:hover,
+.launcher[aria-expanded="true"] {
+  background: var(--ink);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.launcher small {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 8px;
+}
+
+.launcher:focus-visible,
+.backdrop button:focus-visible,
+.backdrop a:focus-visible,
+.backdrop input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.backdrop {
+  position: fixed;
+  z-index: 320;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(7, 7, 7, 0.74);
+  backdrop-filter: blur(5px);
+  color: var(--ink);
+  font-family: var(--mono);
+  animation: sources-backdrop-in 0.18s ease both;
+}
+
+.dialog {
+  width: min(860px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  box-shadow: 16px 16px 0 rgba(0, 0, 0, 0.24);
+  animation: sources-dialog-in 0.22s cubic-bezier(0.22, 0.9, 0.32, 1) both;
+}
+
+@keyframes sources-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sources-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+.dialogHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 24px;
+  padding: 28px 30px 25px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--paper-2);
+}
+
+.dialogHeader > div > span {
+  color: var(--violet);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.dialogHeader h2 {
+  max-width: 680px;
+  margin: 10px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(34px, 5vw, 49px);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.dialogHeader p {
+  max-width: 72ch;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.closeButton {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.closeButton svg,
+.boundaryBar svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.closeButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.boundaryBar {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: start;
+  gap: 11px;
+  padding: 13px 30px;
+  border-bottom: 1px solid var(--rule);
+  background: #ece6db;
+  color: #4e4942;
+}
+
+.boundaryBar svg {
+  width: 16px;
+  height: 16px;
+  color: var(--green);
+}
+
+.boundaryBar p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.feedback {
+  margin: 16px 30px 0;
+  padding: 11px 13px;
+  border: 1px solid rgba(25, 132, 72, 0.5);
+  background: #f1f8f2;
+  color: #126d3b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.feedback[data-tone="error"] {
+  border-color: rgba(178, 47, 47, 0.45);
+  background: #fff2f0;
+  color: #9b2929;
+}
+
+.sourceList {
+  padding: 0 30px;
+}
+
+.sourceRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 16px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sourceRow:last-child {
+  border-bottom: 0;
+}
+
+.sourceMark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.sourceMark[data-tone="moral-trade"] {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.sourceMark[data-tone="ea"] {
+  border-color: #d96135;
+  color: #b84b25;
+}
+
+.sourceMark[data-tone="substack"] {
+  border-color: #ff6719;
+  color: #d24a04;
+}
+
+.sourceMark[data-tone="x"] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.sourceCopy {
+  min-width: 0;
+}
+
+.sourceHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sourceHeading h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.sourceCopy > p {
+  max-width: 72ch;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.status {
+  min-height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.status[data-tone="included"],
+.status[data-tone="connected"] {
+  border-color: rgba(25, 132, 72, 0.45);
+  background: #f1f8f2;
+  color: var(--green);
+}
+
+.status[data-tone="ready"] {
+  border-color: rgba(22, 72, 255, 0.42);
+  background: #f0f3ff;
+  color: var(--blue);
+}
+
+.xRow {
+  padding-bottom: 26px;
+}
+
+.connectionPanel,
+.connectPanel,
+.accountGate,
+.unavailableNote {
+  margin-top: 15px;
+  padding: 14px;
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+}
+
+.connectionFacts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border: 1px solid var(--rule);
+  background: var(--rule);
+}
+
+.connectionFacts > div {
+  min-width: 0;
+  padding: 10px 11px;
+  background: var(--paper);
+}
+
+.connectionFacts span,
+.connectionFacts strong {
+  display: block;
+}
+
+.connectionFacts span {
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.connectionFacts strong {
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.connectionPanel > p,
+.accountGate > p,
+.unavailableNote > p {
+  margin: 11px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.connectionPanel form {
+  margin-top: 12px;
+}
+
+.connectPanel {
+  display: grid;
+  gap: 13px;
+}
+
+.consentLine {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: start;
+  gap: 10px;
+  color: #4d4942;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.consentLine input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--blue);
+}
+
+.primaryAction,
+.secondaryAction,
+.doneButton,
+.primaryLink,
+.secondaryLink {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  cursor: pointer;
+  font: 11px/1 var(--mono);
+  text-decoration: none;
+}
+
+.primaryAction,
+.primaryLink,
+.doneButton {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
+}
+
+.primaryAction {
+  justify-self: start;
+}
+
+.primaryAction:hover:not(:disabled),
+.primaryLink:hover,
+.doneButton:hover {
+  background: #0839ef;
+}
+
+.primaryAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.secondaryAction,
+.secondaryLink {
+  background: transparent;
+  color: var(--ink);
+}
+
+.secondaryAction:hover,
+.secondaryLink:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.accountGate > div {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.unavailableNote {
+  border-color: var(--rule);
+  background: #eee9e0;
+}
+
+.unavailableNote > strong {
+  font-family: var(--serif);
+  font-size: 15px;
+}
+
+.dialogFooter {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 15px 20px 15px 30px;
+  border-top: 1px solid var(--ink);
+  background: rgba(255, 253, 248, 0.97);
+  backdrop-filter: blur(10px);
+}
+
+.dialogFooter strong,
+.dialogFooter p {
+  display: block;
+}
+
+.dialogFooter strong {
+  font-family: var(--serif);
+  font-size: 15px;
+}
+
+.dialogFooter p {
+  max-width: 620px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.doneButton {
+  min-width: 84px;
+  flex: none;
+}
+
+@media (max-width: 680px) {
+  .launcher {
+    height: 38px;
+    top: 15px;
+    right: 113px;
+    gap: 7px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .launcher small {
+    width: 17px;
+    height: 17px;
+    font-size: 9px;
+  }
+
+  .backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: 94dvh;
+    border-width: 1px 0 0;
+    box-shadow: none;
+  }
+
+  .dialogHeader {
+    gap: 14px;
+    padding: 23px 18px 20px;
+  }
+
+  .dialogHeader h2 {
+    font-size: 34px;
+  }
+
+  .boundaryBar {
+    padding: 12px 18px;
+  }
+
+  .feedback {
+    margin: 14px 18px 0;
+  }
+
+  .sourceList {
+    padding: 0 18px;
+  }
+
+  .sourceRow {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 12px;
+    padding: 18px 0;
+  }
+
+  .sourceMark {
+    width: 40px;
+    height: 40px;
+    font-size: 10px;
+  }
+
+  .sourceHeading {
+    display: block;
+  }
+
+  .sourceHeading h3 {
+    font-size: 21px;
+  }
+
+  .status {
+    margin-top: 8px;
+  }
+
+  .connectionFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .dialogFooter {
+    padding: 13px 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .launcher {
+    top: auto;
+    right: 14px;
+    bottom: 14px;
+    height: 42px;
+    box-shadow: 4px 4px 0 rgba(7, 7, 7, 0.2);
+  }
+
+  .dialogHeader h2 {
+    font-size: 31px;
+  }
+
+  .dialogFooter {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .doneButton {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher,
+  .backdrop,
+  .dialog {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

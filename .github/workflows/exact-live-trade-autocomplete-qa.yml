@@ -1,0 +1,90 @@
+name: Exact live trade autocomplete QA
+
+on:
+  pull_request:
+    paths:
+      - "public/moral-trade-input-assist.js"
+      - "public/moral-trade-input-standards.json"
+      - "public/moral-trade-live-offer-structure.js"
+      - "public/moral-trade-live-token-autocomplete.js"
+      - "public/moral-trade-live.html"
+      - "src/app/api/nonprofits/search/**"
+      - "src/lib/exact-live-autocomplete.test.ts"
+      - "src/lib/nonprofit-search*"
+      - "src/lib/trade-input-assist.test.ts"
+      - "tests/exact-live-autocomplete.spec.ts"
+      - ".github/workflows/exact-live-trade-autocomplete-qa.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "public/moral-trade-input-assist.js"
+      - "public/moral-trade-input-standards.json"
+      - "public/moral-trade-live-offer-structure.js"
+      - "public/moral-trade-live-token-autocomplete.js"
+      - "public/moral-trade-live.html"
+      - "src/app/api/nonprofits/search/**"
+      - "src/lib/exact-live-autocomplete.test.ts"
+      - "src/lib/nonprofit-search*"
+      - "src/lib/trade-input-assist.test.ts"
+      - "tests/exact-live-autocomplete.spec.ts"
+      - ".github/workflows/exact-live-trade-autocomplete-qa.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  exact-live-autocomplete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint changed implementation and tests
+        run: |
+          npx eslint \
+            public/moral-trade-live-offer-structure.js \
+            public/moral-trade-live-token-autocomplete.js \
+            src/app/api/nonprofits/search/route.ts \
+            src/lib/exact-live-autocomplete.test.ts \
+            src/lib/nonprofit-search-ror.test.ts \
+            src/lib/nonprofit-search-ror.ts \
+            src/lib/nonprofit-search.test.ts \
+            src/lib/nonprofit-search.ts \
+            tests/exact-live-autocomplete.spec.ts
+
+      - name: Run source and nonprofit-search regressions
+        run: |
+          node --import tsx --test \
+            src/lib/exact-live-autocomplete.test.ts \
+            src/lib/nonprofit-search-ror.test.ts \
+            src/lib/nonprofit-search.test.ts \
+            src/lib/trade-input-assist.test.ts
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered exact-live autocomplete regression
+        run: npm run test:e2e -- tests/exact-live-autocomplete.spec.ts
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-live-trade-autocomplete-evidence
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

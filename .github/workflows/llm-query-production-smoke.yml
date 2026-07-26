@@ -1,0 +1,84 @@
+name: LLM query production smoke
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/lib/smart-query-llm.ts"
+      - "src/lib/smart-query-llm-gate.ts"
+      - "src/app/api/query/interpret/route.ts"
+      - ".github/workflows/llm-query-production-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: llm-query-production-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Wait for production and verify the ambiguity resolver
+        env:
+          ENDPOINT: https://www.moraltrade.org/api/query/interpret
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS_URL: ${{ github.api_url }}/repos/${{ github.repository }}/statuses/${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          post_status() {
+            local state="$1"
+            local description="$2"
+            jq -n \
+              --arg state "$state" \
+              --arg context "LLM query production smoke" \
+              --arg description "$description" \
+              --arg target_url "$RUN_URL" \
+              '{state: $state, context: $context, description: $description, target_url: $target_url}' \
+              > status.json
+            curl --silent --show-error --fail-with-body \
+              --request POST "$STATUS_URL" \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data @status.json \
+              >/dev/null
+          }
+
+          post_status pending "Waiting for the production ambiguity resolver"
+
+          # A fresh main deployment is required after production-secret changes.
+          payload='{"query":"Verified animal welfare work for $50","surface":"offers","now":"2026-07-23T13:46:00Z"}'
+          : > response.json
+
+          for attempt in $(seq 1 18); do
+            response="$(
+              curl --silent --show-error --max-time 20 \
+                --request POST "$ENDPOINT" \
+                --header 'content-type: application/json' \
+                --data "$payload" || true
+            )"
+            printf '%s' "$response" > response.json
+
+            if jq -e '.usedLlm == true and .interpretation.stage == "llm"' response.json >/dev/null 2>&1; then
+              jq '{usedLlm, stage: .interpretation.stage, needsClarification: .interpretation.needsClarification, reasonCodes: .interpretation.reasonCodes}' response.json
+              post_status success "Production ambiguity resolver returned an LLM interpretation"
+              exit 0
+            fi
+
+            echo "Production LLM fallback not ready on attempt ${attempt}; retrying in 20 seconds."
+            sleep 20
+          done
+
+          echo "Production did not report a successful LLM interpretation."
+          cat response.json
+          post_status failure "Production ambiguity resolver did not return an LLM interpretation"
+          exit 1

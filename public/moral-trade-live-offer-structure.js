@@ -126,7 +126,7 @@
   function moneyTemplate() {
     return `<div class="mt-offer-primary">I will provide ${editable("$80.00", "", {
       autocomplete: false,
-    })} to ${editable("a person, project, or cause", "priorities")}.</div>${attributeGrid([
+    })} to ${editable("a person, project, or cause", "recipients")}.</div>${attributeGrid([
       attribute("Estimated time", "5 minutes", "commitments"),
       attribute("Relevant skills", "None required", "commitments"),
       attribute("Deliverable or completion condition", "Payment or donation confirmed", "commitments"),
