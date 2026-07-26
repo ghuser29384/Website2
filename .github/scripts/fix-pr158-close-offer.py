@@ -13,6 +13,16 @@ SQL_REGRESSION = Path("supabase/tests/marketplace_interest_acceptance_atomicity.
 SOURCE_TEST = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
 
 
+def replace_once_after(source: str, marker: str, old: str, new: str, label: str) -> str:
+    marker_index = source.index(marker)
+    prefix = source[:marker_index]
+    suffix = source[marker_index:]
+    count = suffix.count(old)
+    if count != 1:
+        raise RuntimeError(f"Expected one {label} after {marker!r}; found {count}.")
+    return prefix + suffix.replace(old, new, 1)
+
+
 def build_offer_migration() -> str:
     source = INTERNAL_MIGRATION.read_text(encoding="utf-8")
     start = source.index("create or replace function public.accept_marketplace_interest_v1")
@@ -51,6 +61,8 @@ def build_offer_migration() -> str:
 
 def extend_sql_regression() -> None:
     source = SQL_REGRESSION.read_text(encoding="utf-8")
+    success_marker = "DO $success_assertions$\n"
+
     declarations_old = """  response_status text;
   offer_status text;
   agreement_row public.agreements%rowtype;
@@ -61,9 +73,13 @@ def extend_sql_regression() -> None:
   offer_closed_at timestamptz;
   agreement_row public.agreements%rowtype;
 """
-    if source.count(declarations_old) != 1:
-        raise RuntimeError("Expected one success-assertion declaration block.")
-    source = source.replace(declarations_old, declarations_new, 1)
+    source = replace_once_after(
+        source,
+        success_marker,
+        declarations_old,
+        declarations_new,
+        "success-assertion declaration block",
+    )
 
     offer_query_old = """  select status::text into offer_status
   from public.offers
@@ -74,9 +90,13 @@ def extend_sql_regression() -> None:
   from public.offers
   where id = '10000000-0000-4000-8000-000000000158'::uuid;
 """
-    if source.count(offer_query_old) != 1:
-        raise RuntimeError("Expected one success-assertion offer query.")
-    source = source.replace(offer_query_old, offer_query_new, 1)
+    source = replace_once_after(
+        source,
+        success_marker,
+        offer_query_old,
+        offer_query_new,
+        "success-assertion offer query",
+    )
 
     assertion_old = """  if offer_status <> 'matched' then
     raise exception 'Success regression: offer status is %, expected matched.', offer_status;
@@ -91,9 +111,14 @@ def extend_sql_regression() -> None:
       offer_closed_at;
   end if;
 """
-    if source.count(assertion_old) != 1:
-        raise RuntimeError("Expected one matched-offer success assertion.")
-    SQL_REGRESSION.write_text(source.replace(assertion_old, assertion_new, 1), encoding="utf-8")
+    source = replace_once_after(
+        source,
+        success_marker,
+        assertion_old,
+        assertion_new,
+        "matched-offer success assertion",
+    )
+    SQL_REGRESSION.write_text(source, encoding="utf-8")
 
 
 def extend_source_test() -> None:
@@ -115,12 +140,12 @@ def extend_source_test() -> None:
         raise RuntimeError("Expected one SQL regression declaration.")
     source = source.replace(declaration_marker, offer_declaration + declaration_marker, 1)
 
-    assertion_marker = """  assert.equal(
+    assertion_marker = r"""  assert.equal(
     (internalMigration.match(/set_config\('app\.core_trade_internal', '', true\)/g) ?? []).length,
     2,
   );
 """
-    offer_assertions = """  assert.equal((offerMigration.match(/workflow_status = 'closed'/g) ?? []).length, 2);
+    offer_assertions = r"""  assert.equal((offerMigration.match(/workflow_status = 'closed'/g) ?? []).length, 2);
   assert.equal((offerMigration.match(/closed_at = now\(\)/g) ?? []).length, 2);
 """
     if source.count(assertion_marker) != 1:
