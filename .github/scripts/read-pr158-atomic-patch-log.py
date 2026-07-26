@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Diagnostic refresh: inspect the latest completed failed patch run.
 import json
 import os
 import re
