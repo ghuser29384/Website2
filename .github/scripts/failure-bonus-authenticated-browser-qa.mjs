@@ -276,7 +276,12 @@ try {
 
     await login(page, "/mpgf/pools/new?template=threshold-coalition");
     await expect(page.getByRole("heading", { name: "Propose a moral public good." })).toBeVisible();
-    await expect(page.getByText("Template applied.")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Template applied. Every term remains editable; opening this form creates no pledge, authorization, allocation, or payout.",
+        { exact: true },
+      ),
+    ).toBeVisible();
 
     await fillProposal(page);
 
