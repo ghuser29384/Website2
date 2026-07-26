@@ -5,7 +5,7 @@ on:
     branches:
       - feat/institutional-trade-system
     paths:
-      - .github/institutional-import-payload.part-*
+      - .github/institutional-patch.part-*
   workflow_dispatch:
 
 permissions:
@@ -24,21 +24,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Import exact local implementation payload
+      - name: Import exact local implementation patch
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          parts=(.github/institutional-import-payload.part-*)
+          parts=(.github/institutional-patch.part-*)
           if (( ${#parts[@]} == 0 )); then
-            echo "Payload already consumed; nothing to import."
+            echo "Patch already consumed; nothing to import."
             exit 0
           fi
-          if (( ${#parts[@]} != 5 )); then
-            echo "Expected exactly five payload parts; found ${#parts[@]}. Waiting for the complete payload."
+          if (( ${#parts[@]} != 17 )); then
+            echo "Expected exactly 17 patch parts; found ${#parts[@]}. Waiting for the complete patch."
             exit 0
           fi
-          cat "${parts[@]}" | base64 --decode | tar -xzf -
+          cat "${parts[@]}" | base64 --decode | xz --decompress --stdout | git apply --binary --index -
           rm -f "${parts[@]}" .github/workflows/export-institutional-source.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
