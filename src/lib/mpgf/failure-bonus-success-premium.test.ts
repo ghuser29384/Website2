@@ -6,6 +6,7 @@ import {
   buildProvisionalFailureBonusSuccessPremiumAssumptions,
   calculateExperienceRatedSuccessPremiumBps,
   calculateSuccessPremiumCents,
+  getHighestClearedThresholdIndex,
   getSuccessPremiumDueForClearedThreshold,
   quoteFailureBonusSuccessPremiumSchedule,
   usesCurrentProvisionalFailureBonusPricingPolicy,
@@ -119,6 +120,49 @@ test("only cleared threshold tranches owe a success premium", () => {
     netRecipientThresholdCents: 1_000_000,
     successPremiumCents: 20_000,
     grossSuccessRequirementCents: 1_020_000,
+  });
+});
+
+
+test("highest cleared threshold is derived from net recipient funding without double-charging earlier tranches", () => {
+  const schedule = quoteFailureBonusSuccessPremiumSchedule({
+    premiumPayer: "pool_creator_or_sponsor",
+    defaultPricing: {
+      mode: "operator_override",
+      premiumRateBps: 200,
+      provisional: false,
+      rationale: "Approved test schedule.",
+    },
+    thresholds: [
+      {
+        thresholdId: "threshold-1",
+        thresholdIndex: 1,
+        cumulativeNetRecipientThresholdCents: 1_500,
+      },
+      {
+        thresholdId: "threshold-2",
+        thresholdIndex: 2,
+        cumulativeNetRecipientThresholdCents: 1_900,
+        pricing: {
+          mode: "operator_override",
+          premiumRateBps: 500,
+          provisional: false,
+          rationale: "Approved higher-risk tranche.",
+        },
+      },
+    ],
+  });
+
+  assert.equal(getHighestClearedThresholdIndex(schedule, 1_499), 0);
+  assert.equal(getHighestClearedThresholdIndex(schedule, 1_500), 1);
+  assert.equal(getHighestClearedThresholdIndex(schedule, 1_899), 1);
+  assert.equal(getHighestClearedThresholdIndex(schedule, 1_900), 2);
+  assert.equal(getHighestClearedThresholdIndex(schedule, 2_100), 2);
+  assert.deepEqual(getSuccessPremiumDueForClearedThreshold(schedule, 2), {
+    clearedThresholdIndex: 2,
+    netRecipientThresholdCents: 1_900,
+    successPremiumCents: 50,
+    grossSuccessRequirementCents: 1_950,
   });
 });
 

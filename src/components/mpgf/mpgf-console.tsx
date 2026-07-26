@@ -24,10 +24,19 @@ import {
 import {
   FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
   PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY,
-  buildProvisionalFailureBonusSuccessPremiumAssumptions,
-  calculateExperienceRatedSuccessPremiumBps,
-  calculateSuccessPremiumCents,
 } from "@/lib/mpgf/failure-bonus-success-premium";
+import {
+  FAILURE_BONUS_THRESHOLD_EDITOR_COPY,
+  FAILURE_BONUS_THRESHOLD_EDITOR_MAX_THRESHOLDS,
+  addFailureBonusThresholdDraft,
+  buildFailureBonusThresholdEditorQuote,
+  createFailureBonusThresholdDraft,
+  moveFailureBonusThresholdDraft,
+  parseUsdInputToCents,
+  removeFailureBonusThresholdDraft,
+  type FailureBonusThresholdDraft,
+  type FailureBonusThresholdEditorResult,
+} from "@/lib/mpgf/failure-bonus-threshold-editor";
 import {
   allocateMpgfAssuranceRound,
   buildDemoBallotFromWeights,
@@ -84,13 +93,305 @@ function readNumericFormControlValue(event: { currentTarget: EventTarget }) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function percentToBasisPoints(value: number) {
-  return Math.max(0, Math.round(value * 100));
-}
 
 function formatBasisPointsPercent(basisPoints: number) {
   const percent = basisPoints / 100;
   return Number.isInteger(percent) ? `${percent}%` : `${percent.toFixed(2)}%`;
+}
+
+
+interface FailureBonusThresholdEditorProps {
+  drafts: FailureBonusThresholdDraft[];
+  failureBonusRatePercent: string;
+  maxParticipants: string;
+  maxBonusPerParticipantDollars: string;
+  result: FailureBonusThresholdEditorResult | null;
+  onFailureBonusRateChange: (value: string) => void;
+  onMaxParticipantsChange: (value: string) => void;
+  onMaxBonusPerParticipantChange: (value: string) => void;
+  onThresholdChange: (
+    thresholdId: string,
+    patch: Partial<Omit<FailureBonusThresholdDraft, "thresholdId">>,
+  ) => void;
+  onAddThreshold: () => void;
+  onRemoveThreshold: (thresholdId: string) => void;
+  onMoveThreshold: (thresholdId: string, direction: "up" | "down") => void;
+}
+
+function FailureBonusThresholdEditor({
+  drafts,
+  failureBonusRatePercent,
+  maxParticipants,
+  maxBonusPerParticipantDollars,
+  result,
+  onFailureBonusRateChange,
+  onMaxParticipantsChange,
+  onMaxBonusPerParticipantChange,
+  onThresholdChange,
+  onAddThreshold,
+  onRemoveThreshold,
+  onMoveThreshold,
+}: FailureBonusThresholdEditorProps) {
+  const schedule = result?.ok ? result.quote.schedule : null;
+  const finalThreshold = schedule?.thresholds.at(-1);
+
+  return (
+    <section className="mpgf-threshold-editor" aria-labelledby="failure-bonus-threshold-editor-heading">
+      <div className="mpgf-threshold-editor-header">
+        <div>
+          <p className="eyebrow">Failure-bonus contract</p>
+          <h3 id="failure-bonus-threshold-editor-heading">Price one to ten cumulative thresholds</h3>
+        </div>
+        <span className="mpgf-small">
+          {drafts.length}/{FAILURE_BONUS_THRESHOLD_EDITOR_MAX_THRESHOLDS} thresholds
+        </span>
+      </div>
+
+      <div className="mpgf-threshold-policy-note">
+        <strong>One promise across the pool</strong>
+        <p>{FAILURE_BONUS_THRESHOLD_EDITOR_COPY.poolWidePolicy}</p>
+        <p>{FAILURE_BONUS_THRESHOLD_EDITOR_COPY.underwritingBounds}</p>
+        <p>
+          The participant and per-person caps apply once across the whole pool, not once per threshold.
+          Each incremental funding tranche is priced once. After the first accepted pledge, the formula,
+          eligibility policy, caps, and threshold schedule cannot change.
+        </p>
+      </div>
+
+      <div className="mpgf-threshold-policy-grid">
+        <label>
+          Pool-wide failure bonus rate
+          <span className="mpgf-money-input mpgf-percent-input">
+            <input
+              aria-label="Failure bonus rate percent"
+              inputMode="decimal"
+              type="text"
+              value={failureBonusRatePercent}
+              onChange={(event) => onFailureBonusRateChange(readFormControlValue(event))}
+            />
+            <span>%</span>
+          </span>
+        </label>
+        <label>
+          Maximum eligible participants
+          <input
+            inputMode="numeric"
+            min="1"
+            step="1"
+            type="number"
+            value={maxParticipants}
+            onChange={(event) => onMaxParticipantsChange(readFormControlValue(event))}
+          />
+        </label>
+        <label>
+          Maximum failure bonus per participant
+          <span className="mpgf-money-input">
+            <span>$</span>
+            <input
+              aria-label="Maximum failure bonus per participant dollars"
+              inputMode="decimal"
+              type="text"
+              value={maxBonusPerParticipantDollars}
+              onChange={(event) => onMaxBonusPerParticipantChange(readFormControlValue(event))}
+            />
+          </span>
+        </label>
+      </div>
+
+      <div className="mpgf-threshold-card-list">
+        {drafts.map((draft, index) => {
+          const thresholdNumber = index + 1;
+          const quote = schedule?.thresholds[index];
+          return (
+            <article key={draft.thresholdId} className="mpgf-threshold-card">
+              <header className="mpgf-threshold-card-header">
+                <div>
+                  <strong>Threshold {thresholdNumber}</strong>
+                  <span className="mpgf-small">Stable ID: {draft.thresholdId}</span>
+                </div>
+                <div className="mpgf-threshold-card-actions" aria-label={`Threshold ${thresholdNumber} order controls`}>
+                  <button
+                    aria-label={`Move threshold ${thresholdNumber} up`}
+                    className="button button-secondary"
+                    disabled={index === 0}
+                    type="button"
+                    onClick={() => onMoveThreshold(draft.thresholdId, "up")}
+                  >
+                    Up
+                  </button>
+                  <button
+                    aria-label={`Move threshold ${thresholdNumber} down`}
+                    className="button button-secondary"
+                    disabled={index === drafts.length - 1}
+                    type="button"
+                    onClick={() => onMoveThreshold(draft.thresholdId, "down")}
+                  >
+                    Down
+                  </button>
+                  <button
+                    aria-label={`Remove threshold ${thresholdNumber}`}
+                    className="button button-secondary"
+                    disabled={drafts.length === 1}
+                    type="button"
+                    onClick={() => onRemoveThreshold(draft.thresholdId)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </header>
+
+              <div className="mpgf-threshold-input-grid">
+                <label>
+                  Threshold {thresholdNumber} cumulative net recipient amount
+                  <span className="mpgf-money-input">
+                    <span>$</span>
+                    <input
+                      inputMode="decimal"
+                      type="text"
+                      value={draft.cumulativeNetRecipientDollars}
+                      onChange={(event) =>
+                        onThresholdChange(draft.thresholdId, {
+                          cumulativeNetRecipientDollars: readFormControlValue(event),
+                        })
+                      }
+                    />
+                  </span>
+                </label>
+                <label>
+                  Threshold {thresholdNumber} estimated success probability
+                  <span className="mpgf-money-input mpgf-percent-input">
+                    <input
+                      inputMode="decimal"
+                      type="text"
+                      value={draft.successProbabilityPercent}
+                      onChange={(event) =>
+                        onThresholdChange(draft.thresholdId, {
+                          successProbabilityPercent: readFormControlValue(event),
+                        })
+                      }
+                    />
+                    <span>%</span>
+                  </span>
+                </label>
+                <label>
+                  Threshold {thresholdNumber} expected eligible balance at failure
+                  <span className="mpgf-money-input mpgf-percent-input">
+                    <input
+                      inputMode="decimal"
+                      type="text"
+                      value={draft.expectedEligibleFailureFillPercent}
+                      onChange={(event) =>
+                        onThresholdChange(draft.thresholdId, {
+                          expectedEligibleFailureFillPercent: readFormControlValue(event),
+                        })
+                      }
+                    />
+                    <span>%</span>
+                  </span>
+                </label>
+              </div>
+
+              {quote ? (
+                <dl className="mpgf-threshold-metrics">
+                  <div>
+                    <dt>Incremental net tranche</dt>
+                    <dd>{formatUsd(quote.incrementalNetRecipientCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Premium rate</dt>
+                    <dd>{formatBasisPointsPercent(quote.premiumRateBps)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tranche premium</dt>
+                    <dd>{formatUsd(quote.successPremiumCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cumulative premium</dt>
+                    <dd>{formatUsd(quote.cumulativeSuccessPremiumCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Gross success requirement</dt>
+                    <dd>{formatUsd(quote.grossSuccessRequirementCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cumulative maximum bonus exposure</dt>
+                    <dd>{formatUsd(quote.maximumFailureBonusExposureCents ?? 0)}</dd>
+                  </div>
+                </dl>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      <button
+        className="button button-secondary mpgf-add-threshold-button"
+        disabled={drafts.length >= FAILURE_BONUS_THRESHOLD_EDITOR_MAX_THRESHOLDS}
+        type="button"
+        onClick={onAddThreshold}
+      >
+        Add cumulative threshold
+      </button>
+
+      {result?.ok === false ? (
+        <div className="mpgf-threshold-errors" role="alert">
+          <strong>Complete the threshold contract before saving.</strong>
+          <ul>
+            {result.errors.map((error) => <li key={error}>{error}</li>)}
+          </ul>
+        </div>
+      ) : null}
+
+      {schedule && finalThreshold ? (
+        <div className="mpgf-threshold-schedule-summary" role="status">
+          <strong>
+            Provisional schedule: {schedule.thresholds.length} threshold{schedule.thresholds.length === 1 ? "" : "s"}, final gross requirement {formatUsd(finalThreshold.grossSuccessRequirementCents)}
+          </strong>
+          <p>
+            Final cumulative net recipient amount: {formatUsd(finalThreshold.cumulativeNetRecipientThresholdCents)}.
+            Cumulative success premium: {formatUsd(finalThreshold.cumulativeSuccessPremiumCents)}.
+            Cumulative maximum failure-bonus exposure: {formatUsd(finalThreshold.maximumFailureBonusExposureCents ?? 0)}.
+          </p>
+          <p>
+            The success premium is paid separately by the pool creator or named sponsor into the common Failure Bonus Reserve only for cleared tranches. It is not deducted from the recipient threshold. Future success premiums never count as collateral for current bonus promises.
+          </p>
+          <p>
+            Every quote remains provisional until an authorized operator approves the complete schedule atomically. A creator cannot approve only selected tranches, lower the platform expense load or reserve margin, or make underwriting assumptions more optimistic than the provisional policy.
+          </p>
+          <div className="mpgf-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Threshold</th>
+                  <th scope="col">Cumulative net</th>
+                  <th scope="col">Incremental net</th>
+                  <th scope="col">Rate</th>
+                  <th scope="col">Tranche premium</th>
+                  <th scope="col">Cumulative premium</th>
+                  <th scope="col">Gross requirement</th>
+                  <th scope="col">Cumulative exposure</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedule.thresholds.map((threshold) => (
+                  <tr key={threshold.thresholdId}>
+                    <th scope="row">{threshold.thresholdIndex}</th>
+                    <td>{formatUsd(threshold.cumulativeNetRecipientThresholdCents)}</td>
+                    <td>{formatUsd(threshold.incrementalNetRecipientCents)}</td>
+                    <td>{formatBasisPointsPercent(threshold.premiumRateBps)}</td>
+                    <td>{formatUsd(threshold.successPremiumCents)}</td>
+                    <td>{formatUsd(threshold.cumulativeSuccessPremiumCents)}</td>
+                    <td>{formatUsd(threshold.grossSuccessRequirementCents)}</td>
+                    <td>{formatUsd(threshold.maximumFailureBonusExposureCents ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function createClientMutationKey(prefix: string) {
@@ -222,10 +523,18 @@ export function MpgfConsole({
   const [proposalDestinationType, setProposalDestinationType] =
     useState<MpgfPublicGoodsDestinationType>("external_charity");
   const [proposalDestinationRef, setProposalDestinationRef] = useState("");
-  const [proposalThresholdAmount, setProposalThresholdAmount] = useState(10_000);
+  const [proposalThresholdDrafts, setProposalThresholdDrafts] = useState<FailureBonusThresholdDraft[]>(() => [
+    createFailureBonusThresholdDraft({
+      thresholdId: "threshold-1",
+      cumulativeNetRecipientDollars: "10000.00",
+    }),
+  ]);
   const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(25);
   const [proposalFailureBonusEnabled, setProposalFailureBonusEnabled] = useState(poolTemplateApplied);
-  const [proposalFailureBonusRatePercent, setProposalFailureBonusRatePercent] = useState(10);
+  const [proposalFailureBonusRatePercent, setProposalFailureBonusRatePercent] = useState("10.00");
+  const [proposalFailureBonusMaxParticipants, setProposalFailureBonusMaxParticipants] = useState("");
+  const [proposalFailureBonusMaxPerParticipantDollars, setProposalFailureBonusMaxPerParticipantDollars] =
+    useState("");
   const [proposalDeadlineAt, setProposalDeadlineAt] = useState(initialPoolProposalDeadline);
   const [proposalVerificationMethod, setProposalVerificationMethod] = useState("");
   const [proposalBaselineRule, setProposalBaselineRule] = useState("");
@@ -287,6 +596,59 @@ export function MpgfConsole({
     }));
   }
 
+  function updateProposalThresholdDraft(
+    thresholdId: string,
+    patch: Partial<Omit<FailureBonusThresholdDraft, "thresholdId">>,
+  ) {
+    setProposalThresholdDrafts((current) =>
+      current.map((threshold) =>
+        threshold.thresholdId === thresholdId ? { ...threshold, ...patch } : threshold,
+      ),
+    );
+  }
+
+  function addProposalThresholdDraft() {
+    try {
+      setProposalThresholdDrafts(
+        addFailureBonusThresholdDraft(
+          proposalThresholdDrafts,
+          createClientMutationKey("mpgf.threshold"),
+        ),
+      );
+    } catch (error) {
+      setProposalConfirmation(
+        error instanceof Error ? error.message : "A cumulative threshold could not be added.",
+      );
+    }
+  }
+
+  function removeProposalThresholdDraft(thresholdId: string) {
+    try {
+      setProposalThresholdDrafts(
+        removeFailureBonusThresholdDraft(proposalThresholdDrafts, thresholdId),
+      );
+    } catch (error) {
+      setProposalConfirmation(
+        error instanceof Error ? error.message : "The cumulative threshold could not be removed.",
+      );
+    }
+  }
+
+  function moveProposalThresholdDraft(
+    thresholdId: string,
+    direction: "up" | "down",
+  ) {
+    try {
+      setProposalThresholdDrafts(
+        moveFailureBonusThresholdDraft(proposalThresholdDrafts, thresholdId, direction),
+      );
+    } catch (error) {
+      setProposalConfirmation(
+        error instanceof Error ? error.message : "The cumulative threshold could not be reordered.",
+      );
+    }
+  }
+
   const participantPledgeCount = persistedState?.pledges.length ?? 0;
   const participantCommitmentCount = persistedState?.recurringCommitments.length ?? 0;
   const participantPublicGoodsPledgeCount = persistedState?.publicGoodsPledges.length ?? 0;
@@ -310,37 +672,37 @@ export function MpgfConsole({
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
-  const proposalSuccessPremiumQuote = useMemo(() => {
-    if (!proposalFailureBonusEnabled) return null;
-
-    const thresholdCents = Math.round(proposalThresholdAmount * 100);
-    const assumptions = buildProvisionalFailureBonusSuccessPremiumAssumptions(
-      percentToBasisPoints(proposalFailureBonusRatePercent),
-    );
-
-    if (!Number.isSafeInteger(thresholdCents) || thresholdCents <= 0) return null;
-
+  const proposalFirstThresholdCents = useMemo(() => {
     try {
-      const pricing = calculateExperienceRatedSuccessPremiumBps(assumptions);
-      const successPremiumCents = calculateSuccessPremiumCents(
-        thresholdCents,
-        pricing.recommendedRateBps,
+      return parseUsdInputToCents(
+        proposalThresholdDrafts[0]?.cumulativeNetRecipientDollars ?? "",
+        "Net recipient threshold",
       );
-
-      return {
-        assumptions,
-        ...pricing,
-        maximumFailureBonusExposureCents: calculateSuccessPremiumCents(
-          thresholdCents,
-          assumptions.failureBonusRateBps,
-        ),
-        successPremiumCents,
-        grossSuccessRequirementCents: thresholdCents + successPremiumCents,
-      };
     } catch {
-      return null;
+      return 0;
     }
-  }, [proposalFailureBonusEnabled, proposalFailureBonusRatePercent, proposalThresholdAmount]);
+  }, [proposalThresholdDrafts]);
+  const proposalThresholdEditorResult = useMemo(() => {
+    if (!proposalFailureBonusEnabled) return null;
+    return buildFailureBonusThresholdEditorQuote({
+      drafts: proposalThresholdDrafts,
+      failureBonusRatePercent: proposalFailureBonusRatePercent,
+      maxParticipants: proposalFailureBonusMaxParticipants,
+      maxBonusPerParticipantDollars: proposalFailureBonusMaxPerParticipantDollars,
+      requestedMaximumFundingDollars: String(proposalRequestedMaximumFunding),
+      verifiedSupporterMinimum: proposalThresholdSupporters,
+    });
+  }, [
+    proposalFailureBonusEnabled,
+    proposalFailureBonusMaxParticipants,
+    proposalFailureBonusMaxPerParticipantDollars,
+    proposalFailureBonusRatePercent,
+    proposalRequestedMaximumFunding,
+    proposalThresholdDrafts,
+    proposalThresholdSupporters,
+  ]);
+  const proposalSuccessPremiumSchedule =
+    proposalThresholdEditorResult?.ok === true ? proposalThresholdEditorResult.quote : null;
   const poolReasoningComplete = [
     proposalTitle,
     proposalSummary,
@@ -362,10 +724,10 @@ export function MpgfConsole({
     proposalRequestedMaximumFunding > 0 &&
     proposalMinimumViableFunding >= 0 &&
     proposalMinimumViableFunding <= proposalRequestedMaximumFunding &&
-    proposalThresholdAmount > 0 &&
-    proposalThresholdAmount <= proposalRequestedMaximumFunding &&
+    proposalFirstThresholdCents > 0 &&
+    proposalFirstThresholdCents <= Math.round(proposalRequestedMaximumFunding * 100) &&
     proposalThresholdSupporters > 0 &&
-    (!proposalFailureBonusEnabled || Boolean(proposalSuccessPremiumQuote)) &&
+    (!proposalFailureBonusEnabled || Boolean(proposalSuccessPremiumSchedule)) &&
     Number.isFinite(Date.parse(`${proposalDeadlineAt}T00:00:00.000Z`)) &&
     proposalBaseMatchRatio >= 0 &&
     proposalQfCapMultiple >= 0 &&
@@ -398,12 +760,21 @@ export function MpgfConsole({
       implementingTeam: proposalImplementingTeam,
       publicGoodsDestinationType: proposalDestinationType,
       publicGoodsDestinationRef: proposalDestinationRef,
-      publicGoodsThresholdAmountDollars: proposalThresholdAmount,
+      publicGoodsThresholdAmountDollars: proposalFirstThresholdCents / 100,
       publicGoodsThresholdSupporters: proposalThresholdSupporters,
       publicGoodsFailureBonusEnabled: proposalFailureBonusEnabled,
-      publicGoodsFailureBonusRateBps: proposalSuccessPremiumQuote?.assumptions.failureBonusRateBps,
-      publicGoodsSuccessPremiumRateBps: proposalSuccessPremiumQuote?.recommendedRateBps,
-      publicGoodsSuccessPremiumCents: proposalSuccessPremiumQuote?.successPremiumCents,
+      publicGoodsFailureBonusRateBps: proposalSuccessPremiumSchedule?.failureBonusRateBps,
+      publicGoodsFailureBonusEligibilityPolicy:
+        proposalSuccessPremiumSchedule?.eligibilityPolicy,
+      publicGoodsFailureBonusMaxParticipants:
+        proposalSuccessPremiumSchedule?.eligibilityPolicy.maxParticipants,
+      publicGoodsFailureBonusMaxPerParticipantCents:
+        proposalSuccessPremiumSchedule?.eligibilityPolicy.maxBonusPerParticipantCents,
+      publicGoodsThresholdSchedule: proposalSuccessPremiumSchedule?.schedule,
+      publicGoodsSuccessPremiumRateBps:
+        proposalSuccessPremiumSchedule?.firstPremiumRateBps,
+      publicGoodsSuccessPremiumCents:
+        proposalSuccessPremiumSchedule?.firstSuccessPremiumCents,
       publicGoodsSuccessPremiumPayer: proposalFailureBonusEnabled
         ? "pool_creator_or_sponsor" as const
         : undefined,
@@ -415,8 +786,9 @@ export function MpgfConsole({
         : undefined,
       publicGoodsSuccessPremiumProvisional: proposalFailureBonusEnabled ? true as const : undefined,
       publicGoodsGrossSuccessRequirementCents:
-        proposalSuccessPremiumQuote?.grossSuccessRequirementCents,
-      publicGoodsSuccessPremiumPricingAssumptions: proposalSuccessPremiumQuote?.assumptions,
+        proposalSuccessPremiumSchedule?.firstGrossSuccessRequirementCents,
+      publicGoodsSuccessPremiumPricingAssumptions:
+        proposalSuccessPremiumSchedule?.schedule.thresholds[0]?.assumptions,
       publicGoodsDeadlineAt: proposalDeadlineAt
         ? new Date(`${proposalDeadlineAt}T23:59:59.000Z`).toISOString()
         : undefined,
@@ -1514,19 +1886,25 @@ export function MpgfConsole({
                   onChange={(event) => setProposalDestinationRef(readFormControlValue(event))}
                 />
               </label>
-              <label>
-                Net recipient amount threshold
-                <span className="mpgf-money-input">
-                  <span>$</span>
-                  <input
-                    min="1"
-                    step="100"
-                    type="number"
-                    value={proposalThresholdAmount}
-                    onChange={(event) => setProposalThresholdAmount(readNumericFormControlValue(event))}
-                  />
-                </span>
-              </label>
+              {!proposalFailureBonusEnabled ? (
+                <label>
+                  Net recipient amount threshold
+                  <span className="mpgf-money-input">
+                    <span>$</span>
+                    <input
+                      inputMode="decimal"
+                      type="text"
+                      value={proposalThresholdDrafts[0]?.cumulativeNetRecipientDollars ?? ""}
+                      onChange={(event) =>
+                        updateProposalThresholdDraft(
+                          proposalThresholdDrafts[0]?.thresholdId ?? "threshold-1",
+                          { cumulativeNetRecipientDollars: readFormControlValue(event) },
+                        )
+                      }
+                    />
+                  </span>
+                </label>
+              ) : null}
               <label>
                 Verified supporter minimum
                 <input
@@ -1543,26 +1921,23 @@ export function MpgfConsole({
                   type="checkbox"
                   onChange={(event) => setProposalFailureBonusEnabled(event.currentTarget.checked)}
                 />
-                <span>Offer a backed failure bonus and price a success premium for the common reserve</span>
+                <span>Offer a backed failure bonus and price success premiums for the common reserve</span>
               </label>
               {proposalFailureBonusEnabled ? (
-                <>
-                  <label>
-                    Failure bonus rate
-                    <span className="mpgf-money-input">
-                      <input
-                        aria-label="Failure bonus rate percent"
-                        max="100"
-                        min="0.01"
-                        step="0.01"
-                        type="number"
-                        value={proposalFailureBonusRatePercent}
-                        onChange={(event) => setProposalFailureBonusRatePercent(readNumericFormControlValue(event))}
-                      />
-                      <span>%</span>
-                    </span>
-                  </label>
-                </>
+                <FailureBonusThresholdEditor
+                  drafts={proposalThresholdDrafts}
+                  failureBonusRatePercent={proposalFailureBonusRatePercent}
+                  maxParticipants={proposalFailureBonusMaxParticipants}
+                  maxBonusPerParticipantDollars={proposalFailureBonusMaxPerParticipantDollars}
+                  result={proposalThresholdEditorResult}
+                  onFailureBonusRateChange={setProposalFailureBonusRatePercent}
+                  onMaxParticipantsChange={setProposalFailureBonusMaxParticipants}
+                  onMaxBonusPerParticipantChange={setProposalFailureBonusMaxPerParticipantDollars}
+                  onThresholdChange={updateProposalThresholdDraft}
+                  onAddThreshold={addProposalThresholdDraft}
+                  onRemoveThreshold={removeProposalThresholdDraft}
+                  onMoveThreshold={moveProposalThresholdDraft}
+                />
               ) : null}
               <label>
                 Assurance deadline
@@ -1630,34 +2005,6 @@ export function MpgfConsole({
                 <span>Allow capped QF bonus after threshold and review gates</span>
               </label>
             </div>
-            {proposalFailureBonusEnabled ? (
-              <div className="mpgf-confirmation" role="status">
-                {proposalSuccessPremiumQuote ? (
-                  <>
-                    <strong>
-                      Provisional success premium: {formatBasisPointsPercent(proposalSuccessPremiumQuote.recommendedRateBps)} — {formatUsd(proposalSuccessPremiumQuote.successPremiumCents)}
-                    </strong>
-                    <p>
-                      Net recipient threshold: {formatUsd(Math.round(proposalThresholdAmount * 100))}. Gross success requirement: {formatUsd(proposalSuccessPremiumQuote.grossSuccessRequirementCents)} before separately disclosed payment fees.
-                    </p>
-                    <p>
-                      Maximum percentage-bonus exposure at this threshold: {formatUsd(proposalSuccessPremiumQuote.maximumFailureBonusExposureCents)}. That exposure must already be backed before the pool opens.
-                    </p>
-                    <p>
-                      The premium is due only if this threshold clears, is paid separately by the pool creator or named sponsor, and is credited to the common Failure Bonus Reserve. It is not deducted from the recipient threshold. Future success premiums never count as collateral for current bonus promises.
-                    </p>
-                    <p>
-                      The pool creator sets the failure-bonus rate; Moral Trade controls the provisional underwriting assumptions. This policy currently uses a {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.successProbabilityBps)} success estimate, {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expectedEligibleFailureFillBps)} eligible failure fill, {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expenseLoadBps)} claims and administration load, and {formatBasisPointsPercent(PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.reserveRiskMarginBps)} reserve margin.
-                    </p>
-                    <p>
-                      Pricing is provisional. An operator must approve the final quote before any live-money launch; the creator cannot lower the platform assumptions or self-approve the quote.
-                    </p>
-                  </>
-                ) : (
-                  "Enter valid failure-bonus pricing assumptions before saving this pool."
-                )}
-              </div>
-            ) : null}
             <div className="mpgf-inline-actions">
               <button
                 className="button button-secondary"
@@ -1697,15 +2044,29 @@ export function MpgfConsole({
                     {proposal.requestedMaximumFundingCents ? (
                       <p>Requested maximum: {formatUsd(proposal.requestedMaximumFundingCents)}</p>
                     ) : null}
-                    {proposal.publicGoodsThresholdAmountCents ? (
+                    {proposal.publicGoodsThresholdSchedule ? (
+                      <div>
+                        <p>
+                          {proposal.publicGoodsThresholdSchedule.thresholds.length} cumulative assurance threshold{proposal.publicGoodsThresholdSchedule.thresholds.length === 1 ? "" : "s"} with {proposal.publicGoodsThresholdSupporters ?? "-"} verified supporters required.
+                        </p>
+                        <p>
+                          Pool-wide failure bonus: {formatBasisPointsPercent(proposal.publicGoodsFailureBonusRateBps ?? 0)}; maximum {proposal.publicGoodsFailureBonusMaxParticipants ?? "-"} eligible participants and {formatUsd(proposal.publicGoodsFailureBonusMaxPerParticipantCents ?? 0)} per participant.
+                        </p>
+                        <ol className="mpgf-persisted-threshold-list">
+                          {proposal.publicGoodsThresholdSchedule.thresholds.map((threshold) => (
+                            <li key={threshold.thresholdId}>
+                              Threshold {threshold.thresholdIndex}: {formatUsd(threshold.cumulativeNetRecipientThresholdCents)} net; {formatBasisPointsPercent(threshold.premiumRateBps)} tranche rate; {formatUsd(threshold.cumulativeSuccessPremiumCents)} cumulative premium; {formatUsd(threshold.grossSuccessRequirementCents)} gross.
+                            </li>
+                          ))}
+                        </ol>
+                        <p>
+                          Schedule status: {proposal.publicGoodsFailureBonusScheduleStatus === "approved" ? "approved" : "provisional—operator approval required"}.
+                        </p>
+                      </div>
+                    ) : proposal.publicGoodsThresholdAmountCents ? (
                       <p>
                         Assurance threshold: {formatUsd(proposal.publicGoodsThresholdAmountCents)} with{" "}
                         {proposal.publicGoodsThresholdSupporters ?? "-"} verified supporters.
-                      </p>
-                    ) : null}
-                    {proposal.publicGoodsFailureBonusEnabled && proposal.publicGoodsSuccessPremiumCents != null ? (
-                      <p>
-                        Failure bonus: {formatBasisPointsPercent(proposal.publicGoodsFailureBonusRateBps ?? 0)}. Success premium: {formatBasisPointsPercent(proposal.publicGoodsSuccessPremiumRateBps ?? 0)} ({formatUsd(proposal.publicGoodsSuccessPremiumCents)}), outside the net threshold; gross success requirement {formatUsd(proposal.publicGoodsGrossSuccessRequirementCents ?? 0)}.
                       </p>
                     ) : null}
                     {proposal.publicGoodsDestinationRef ? (

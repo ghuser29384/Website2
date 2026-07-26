@@ -58,6 +58,11 @@ insert into public.mpgf_pool_proposals (
   public_goods_threshold_supporters,
   public_goods_failure_bonus_enabled,
   public_goods_failure_bonus_rate_bps,
+  public_goods_failure_bonus_eligibility_json,
+  public_goods_failure_bonus_max_participants,
+  public_goods_failure_bonus_max_per_participant_cents,
+  public_goods_threshold_schedule_json,
+  public_goods_failure_bonus_schedule_status,
   public_goods_success_premium_rate_bps,
   public_goods_success_premium_cents,
   public_goods_success_premium_payer,
@@ -83,11 +88,63 @@ insert into public.mpgf_pool_proposals (
   '[]'::jsonb,
   '[]'::jsonb,
   'None; transaction rolls back',
-  'draft',
+  'submitted',
   1000000,
   25,
   true,
   1000,
+  '{
+    "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",
+    "contributorIdentityRule":"verified_unique_person",
+    "contributionTimingRule":"captured_before_deadline",
+    "relatedPartyRule":"exclude_creator_and_related_parties",
+    "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",
+    "bonusBasis":"eligible_contribution",
+    "maxParticipants":100,
+    "maxBonusPerParticipantCents":2500
+  }'::jsonb,
+  100,
+  2500,
+  '{
+    "policyVersion":"mpgf_failure_bonus_success_premium_v0_1",
+    "premiumPayer":"pool_creator_or_sponsor",
+    "premiumIncludedInNetRecipientThreshold":false,
+    "eligibilityPolicy":{
+      "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",
+      "contributorIdentityRule":"verified_unique_person",
+      "contributionTimingRule":"captured_before_deadline",
+      "relatedPartyRule":"exclude_creator_and_related_parties",
+      "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",
+      "bonusBasis":"eligible_contribution",
+      "maxParticipants":100,
+      "maxBonusPerParticipantCents":2500
+    },
+    "thresholds":[{
+      "thresholdId":"failure-bonus-qa-threshold-1",
+      "thresholdIndex":1,
+      "cumulativeNetRecipientThresholdCents":1000000,
+      "incrementalNetRecipientCents":1000000,
+      "premiumRateBps":201,
+      "successPremiumCents":20100,
+      "cumulativeSuccessPremiumCents":20100,
+      "grossSuccessRequirementCents":1020100,
+      "premiumPayer":"pool_creator_or_sponsor",
+      "premiumIncludedInNetRecipientThreshold":false,
+      "pricingMode":"experience_rated",
+      "provisional":true,
+      "rationale":"Provisional threshold 1 experience-rated quote; operator approval remains required.",
+      "assumptions":{
+        "successProbabilityBps":7500,
+        "failureBonusRateBps":1000,
+        "expectedEligibleFailureFillBps":4000,
+        "expenseLoadBps":25,
+        "reserveRiskMarginBps":42
+      },
+      "incrementalFailureBonusExposureCents":100000,
+      "maximumFailureBonusExposureCents":100000
+    }]
+  }'::jsonb,
+  'pending_review',
   201,
   20100,
   'pool_creator_or_sponsor',
@@ -318,14 +375,37 @@ begin
 end;
 $test$;
 
-update public.mpgf_failure_bonus_premium_quotes
-set
-  status = 'approved',
-  provisional = false,
-  approved_by = 'fb111111-1111-4111-8111-111111111111',
-  approved_at = timezone('utc', now())
-where pool_proposal_id = 'fb222222-2222-4222-8222-222222222222'
-  and status = 'pending_review';
+do $test$
+declare
+  partial_approval_blocked boolean := false;
+begin
+  begin
+    update public.mpgf_failure_bonus_premium_quotes
+    set
+      status = 'approved',
+      provisional = false,
+      approved_by = 'fb111111-1111-4111-8111-111111111111',
+      approved_at = timezone('utc', now())
+    where pool_proposal_id = 'fb222222-2222-4222-8222-222222222222'
+      and threshold_index = 1
+      and status = 'pending_review';
+  exception
+    when insufficient_privilege then
+      partial_approval_blocked := true;
+  end;
+
+  if not partial_approval_blocked then
+    raise exception 'A threshold quote was approved outside the atomic schedule function.';
+  end if;
+end;
+$test$;
+
+select *
+from public.mpgf_approve_failure_bonus_premium_schedule(
+  'fb222222-2222-4222-8222-222222222222',
+  'fb111111-1111-4111-8111-111111111111',
+  'Synthetic QA operator approval of the complete schedule.'
+);
 
 do $test$
 declare

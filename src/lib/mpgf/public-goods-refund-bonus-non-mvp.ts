@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+  getHighestClearedThresholdIndex,
   getSuccessPremiumDueForClearedThreshold,
   type FailureBonusSuccessPremiumPayer,
   type FailureBonusSuccessPremiumScheduleQuote,
@@ -2506,7 +2507,7 @@ export function planRefundBonusSettlement({
   bonusReservePaused = false,
   payoutRailPaused = false,
   successPremiumSchedule,
-  clearedThresholdIndex = outcome.status === "cleared" ? 1 : 0,
+  clearedThresholdIndex,
   successPremiumFundingConfirmed = false,
 }: {
   round: RefundBonusRound;
@@ -2566,14 +2567,36 @@ export function planRefundBonusSettlement({
       }
 
       try {
+        const firstQuotedThreshold = successPremiumSchedule.thresholds[0];
+        if (
+          !firstQuotedThreshold ||
+          firstQuotedThreshold.cumulativeNetRecipientThresholdCents !== pool.thresholdNetRecipientCents
+        ) {
+          blockedReasonCodes.push("success_premium_threshold_mismatch");
+        }
+
+        const highestClearedThresholdIndex = getHighestClearedThresholdIndex(
+          successPremiumSchedule,
+          outcome.netRecipientCents,
+        );
+        if (highestClearedThresholdIndex === 0) {
+          blockedReasonCodes.push("success_premium_no_threshold_cleared");
+        }
+        if (
+          clearedThresholdIndex != null &&
+          clearedThresholdIndex !== highestClearedThresholdIndex
+        ) {
+          blockedReasonCodes.push("success_premium_cleared_threshold_mismatch");
+        }
+
         successPremiumDue = getSuccessPremiumDueForClearedThreshold(
           successPremiumSchedule,
-          clearedThresholdIndex,
+          highestClearedThresholdIndex,
         );
         successPremiumThresholdId =
-          successPremiumSchedule.thresholds[clearedThresholdIndex - 1]?.thresholdId;
-        if (successPremiumDue.netRecipientThresholdCents !== pool.thresholdNetRecipientCents) {
-          blockedReasonCodes.push("success_premium_threshold_mismatch");
+          successPremiumSchedule.thresholds[highestClearedThresholdIndex - 1]?.thresholdId;
+        if (successPremiumDue.netRecipientThresholdCents > outcome.netRecipientCents) {
+          blockedReasonCodes.push("success_premium_threshold_not_funded");
         }
       } catch {
         blockedReasonCodes.push("success_premium_cleared_threshold_invalid");

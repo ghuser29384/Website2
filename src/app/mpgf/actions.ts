@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { getViewer } from "@/lib/app-data";
-import type { FailureBonusSuccessPremiumPricingAssumptions } from "@/lib/mpgf/failure-bonus-success-premium";
+import type {
+  FailureBonusEligibilityPolicy,
+  FailureBonusSuccessPremiumPricingAssumptions,
+  FailureBonusSuccessPremiumScheduleQuote,
+} from "@/lib/mpgf/failure-bonus-success-premium";
 import type { MpgfParticipantActionResult } from "@/lib/mpgf/participant-types";
 import {
   loadMpgfParticipantState,
@@ -399,6 +403,10 @@ export async function saveMpgfPoolProposalAction(input: {
   publicGoodsThresholdSupporters?: number;
   publicGoodsFailureBonusEnabled?: boolean;
   publicGoodsFailureBonusRateBps?: number;
+  publicGoodsFailureBonusEligibilityPolicy?: FailureBonusEligibilityPolicy;
+  publicGoodsFailureBonusMaxParticipants?: number;
+  publicGoodsFailureBonusMaxPerParticipantCents?: number;
+  publicGoodsThresholdSchedule?: FailureBonusSuccessPremiumScheduleQuote;
   publicGoodsSuccessPremiumRateBps?: number;
   publicGoodsSuccessPremiumCents?: number;
   publicGoodsSuccessPremiumPayer?: "pool_creator_or_sponsor";
@@ -460,6 +468,11 @@ export async function saveMpgfPoolProposalAction(input: {
       publicGoodsThresholdSupporters: input.publicGoodsThresholdSupporters,
       publicGoodsFailureBonusEnabled: input.publicGoodsFailureBonusEnabled,
       publicGoodsFailureBonusRateBps: input.publicGoodsFailureBonusRateBps,
+      publicGoodsFailureBonusEligibilityPolicy: input.publicGoodsFailureBonusEligibilityPolicy,
+      publicGoodsFailureBonusMaxParticipants: input.publicGoodsFailureBonusMaxParticipants,
+      publicGoodsFailureBonusMaxPerParticipantCents:
+        input.publicGoodsFailureBonusMaxPerParticipantCents,
+      publicGoodsThresholdSchedule: input.publicGoodsThresholdSchedule,
       publicGoodsSuccessPremiumRateBps: input.publicGoodsSuccessPremiumRateBps,
       publicGoodsSuccessPremiumCents: input.publicGoodsSuccessPremiumCents,
       publicGoodsSuccessPremiumPayer: input.publicGoodsSuccessPremiumPayer,

@@ -12,39 +12,45 @@ const migrationPath =
 const databaseTestPath = "supabase/tests/mpgf_failure_bonus_success_premium_reserve.sql";
 const docsPath = "docs/failure-bonus-success-premium.md";
 
-test("proposal UI computes and discloses the success premium outside the recipient threshold", () => {
+test("proposal UI computes and discloses the complete cumulative premium schedule outside recipient thresholds", () => {
   const source = readFileSync(consolePath, "utf8");
 
-  assert.match(source, /buildProvisionalFailureBonusSuccessPremiumAssumptions/);
-  assert.match(source, /PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY/);
-  assert.match(source, /calculateExperienceRatedSuccessPremiumBps/);
-  assert.match(source, /calculateSuccessPremiumCents/);
-  assert.match(source, /Net recipient amount threshold/);
+  assert.match(source, /buildFailureBonusThresholdEditorQuote/);
+  assert.match(source, /FAILURE_BONUS_THRESHOLD_EDITOR_MAX_THRESHOLDS/);
+  assert.match(source, /Price one to ten cumulative thresholds/);
+  assert.match(source, /One promise across the pool/);
+  assert.match(source, /Each incremental funding tranche is priced once/);
+  assert.match(source, /participant and per-person caps apply once across the whole pool/i);
   assert.match(source, /common Failure Bonus Reserve/i);
   assert.match(source, /It is not deducted from the recipient threshold/);
   assert.match(source, /Future success premiums never count as collateral/);
-  assert.match(source, /Maximum percentage-bonus exposure at this threshold/);
-  assert.match(source, /must already be backed before the pool opens/);
+  assert.match(source, /operator approves the complete schedule atomically/i);
   assert.match(source, /pool_creator_or_sponsor/);
   assert.doesNotMatch(source, /contributors_pro_rata/);
+  assert.match(source, /publicGoodsThresholdSchedule:/);
+  assert.match(source, /publicGoodsFailureBonusEligibilityPolicy:/);
   assert.match(source, /publicGoodsSuccessPremiumIncludedInNetThreshold:[\s\S]*false as const/);
 });
 
-test("server persistence recomputes quotes and rejects client-side premium tampering", () => {
+test("server persistence re-quotes the full schedule and rejects client-side premium or policy tampering", () => {
   const persistence = readFileSync(persistencePath, "utf8");
   const action = readFileSync(actionPath, "utf8");
 
-  assert.match(persistence, /buildProvisionalFailureBonusSuccessPremiumAssumptions/);
-  assert.match(persistence, /cannot modify the platform-controlled underwriting assumptions/);
-  assert.match(persistence, /cannot mark a success-premium quote as final or approved/);
-  assert.match(persistence, /calculateExperienceRatedSuccessPremiumBps/);
-  assert.match(persistence, /calculateSuccessPremiumCents/);
-  assert.match(persistence, /submitted success-premium rate does not match/);
-  assert.match(persistence, /submitted success-premium amount does not match/);
-  assert.match(persistence, /gross success requirement must equal the net threshold plus the success premium/i);
-  assert.match(persistence, /requires the pool creator or a named sponsor to pay the success premium/);
-  assert.match(persistence, /public_goods_success_premium_pricing_json/);
-  assert.match(action, /publicGoodsSuccessPremiumPricingAssumptions/);
+  assert.match(persistence, /validateSubmittedFailureBonusSchedule/);
+  assert.match(persistence, /requires a complete threshold schedule and eligibility policy/);
+  assert.match(persistence, /Submitted failure-bonus caps do not match the immutable eligibility policy/);
+  assert.match(persistence, /legacy threshold field must mirror threshold 1 of the cumulative schedule/);
+  assert.match(persistence, /submitted threshold-1 premium rate does not match server pricing/);
+  assert.match(persistence, /submitted threshold-1 premium amount does not match server pricing/);
+  assert.match(persistence, /threshold-1 gross requirement does not match server pricing/);
+  assert.match(persistence, /requires the pool creator or a named sponsor to pay the premium/);
+  assert.match(persistence, /Success premiums must remain outside net recipient thresholds/);
+  assert.match(persistence, /Pool creators cannot mark a success-premium schedule final or approved/);
+  assert.match(persistence, /public_goods_threshold_schedule_json/);
+  assert.match(persistence, /public_goods_failure_bonus_eligibility_json/);
+  assert.match(persistence, /public_goods_failure_bonus_schedule_status/);
+  assert.match(action, /publicGoodsThresholdSchedule/);
+  assert.match(action, /publicGoodsFailureBonusEligibilityPolicy/);
   assert.match(action, /publicGoodsSuccessPremiumIncludedInNetThreshold\?: false/);
 });
 
