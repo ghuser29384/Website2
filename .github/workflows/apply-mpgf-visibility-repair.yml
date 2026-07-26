@@ -4,13 +4,13 @@ on:
   pull_request:
     paths:
       - ".github/workflows/apply-mpgf-visibility-repair.yml"
-      - "tmp/mpgf-visibility-release-repair.patch.gz.b64"
+      - "tmp/mpgf-repair-part-*.b64"
   push:
     branches:
       - qa/mpgf-visibility-source-snapshot-20260726
     paths:
       - ".github/workflows/apply-mpgf-visibility-repair.yml"
-      - "tmp/mpgf-visibility-release-repair.patch.gz.b64"
+      - "tmp/mpgf-repair-part-*.b64"
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,10 @@ jobs:
       TARGET_BRANCH: feature/mpgf-pool-visibility-controls-20260726
       EXPECTED_TARGET_SHA: c0db35296084c4f6f45202f87da87f2274a4704f
       STAGING_BRANCH: qa/mpgf-visibility-source-snapshot-20260726
-      PATCH_PATH: tmp/mpgf-visibility-release-repair.patch.gz.b64
+      EXPECTED_BASE64_BYTES: "46180"
+      EXPECTED_BASE64_SHA256: 8d11e1977a71bc9b44fd0295956ba7e1334f693b6bcf62c4107346d42abe22e4
+      EXPECTED_GZIP_SHA256: b60346f23fdf05f94b1cec3417caf4f0ad03c9676549a5a3a56131986b84d048
+      EXPECTED_PATCH_SHA256: ad6b4036eb7913b22d9ada4587d053d9a162cf954124ca10d71227bc1e9c7748
     steps:
       - name: Check out exact release-candidate branch
         uses: actions/checkout@v4
@@ -47,14 +50,28 @@ jobs:
             exit 1
           fi
 
-      - name: Retrieve and decode staged patch
+      - name: Retrieve and verify staged patch
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin "$STAGING_BRANCH"
-          git show "FETCH_HEAD:$PATCH_PATH" > /tmp/mpgf-repair.patch.gz.b64
+          : > /tmp/mpgf-repair.patch.gz.b64
+          for part in 00 01 02 03 04 05; do
+            git show "FETCH_HEAD:tmp/mpgf-repair-part-${part}.b64" >> /tmp/mpgf-repair.patch.gz.b64
+          done
+
+          actual_bytes="$(wc -c < /tmp/mpgf-repair.patch.gz.b64 | tr -d ' ')"
+          if [[ "$actual_bytes" != "$EXPECTED_BASE64_BYTES" ]]; then
+            echo "Expected $EXPECTED_BASE64_BYTES base64 bytes but assembled $actual_bytes" >&2
+            exit 1
+          fi
+          echo "$EXPECTED_BASE64_SHA256  /tmp/mpgf-repair.patch.gz.b64" | sha256sum --check --strict
+
           base64 --decode /tmp/mpgf-repair.patch.gz.b64 > /tmp/mpgf-repair.patch.gz
+          echo "$EXPECTED_GZIP_SHA256  /tmp/mpgf-repair.patch.gz" | sha256sum --check --strict
+
           gzip --decompress --stdout /tmp/mpgf-repair.patch.gz > /tmp/mpgf-repair.patch
+          echo "$EXPECTED_PATCH_SHA256  /tmp/mpgf-repair.patch" | sha256sum --check --strict
           test -s /tmp/mpgf-repair.patch
 
       - name: Apply and verify repair
