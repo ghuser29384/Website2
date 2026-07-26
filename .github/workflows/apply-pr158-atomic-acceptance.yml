@@ -112,6 +112,18 @@ jobs:
           if source.count(old_fixture) != 1 or source.count(old_assertion) != 1:
               raise SystemExit("Worked-example canonical-link assertion did not match exactly once.")
           source = source.replace(old_fixture, new_fixture, 1).replace(old_assertion, new_assertion, 1)
+
+          old_create_assertions = '''  assert.match(createRoute, /Create trade/);
+            assert.match(createRoute, /NewOfferPage/);
+          '''
+          new_create_assertions = '''  assert.match(createRoute, /CreateRouteChooser/);
+            assert.match(createRoute, /readCreateMode/);
+            assert.match(createRoute, /BackCreateRoute/);
+          '''
+          if source.count(old_create_assertions) != 1:
+              raise SystemExit("Stale create-route assertions did not match exactly once.")
+          source = source.replace(old_create_assertions, new_create_assertions, 1)
+
           path.write_text(source, encoding="utf-8")
           PY
 
