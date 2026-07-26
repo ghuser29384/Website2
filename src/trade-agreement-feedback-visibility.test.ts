@@ -14,9 +14,7 @@ const visibilityCss = readFileSync(
 test("completed agreement details and private outcome feedback remain visible in the app shell", () => {
   assert.match(stageSource, /className=\{pageStyles\.scope\}/);
   assert.match(stageSource, /id="outcome-feedback"/);
-  assert.match(
-    visibilityCss,
-    /:global\(\.marketplace-app-shell #main-content \.section\)/,
-  );
+  assert.match(visibilityCss, /\.scope\s+:global\(\.section\)/);
+  assert.match(visibilityCss, /\.scope\s+~\s+:global\(\.section\)/);
   assert.match(visibilityCss, /display:\s*block\s*!important/);
 });
