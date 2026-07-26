@@ -27,7 +27,16 @@ concurrency:
 
 jobs:
   bootstrap:
-    if: ${{ github.repository == 'ghuser29384/Website2' && github.ref_name == 'agent/dynamic-marketplace-clearing-rounds' && (github.event_name == 'push' || inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz') }}
+    if: >-
+      ${{
+        (github.event_name == 'push' &&
+         github.event.repository.full_name == 'ghuser29384/Website2' &&
+         github.event.ref == 'refs/heads/agent/dynamic-marketplace-clearing-rounds') ||
+        (github.event_name == 'workflow_dispatch' &&
+         github.repository == 'ghuser29384/Website2' &&
+         github.ref == 'refs/heads/agent/dynamic-marketplace-clearing-rounds' &&
+         inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz')
+      }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
