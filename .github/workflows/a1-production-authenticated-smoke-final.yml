@@ -36,7 +36,7 @@ jobs:
       A1_SMOKE_BASE_URL: https://www.moraltrade.org
       A1_SMOKE_OUTPUT_DIR: a1-production-smoke-evidence
       A1_PRODUCTION_SOURCE_SHA: 818f9ad67cfe5746cb01f3b774a475b2d5fb57b2
-      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      RAW_PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
       QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in PROD_SUPABASE_DB_URL QA_TEST_PASSWORD VERCEL_TOKEN; do
+          for name in RAW_PROD_SUPABASE_DB_URL QA_TEST_PASSWORD VERCEL_TOKEN; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Missing required secret: $name"
               exit 1
@@ -79,18 +79,18 @@ jobs:
 
           NORMALIZED_DB_URL="$({
             node <<'NODE'
-          const raw = process.env.PROD_SUPABASE_DB_URL;
+          const raw = process.env.RAW_PROD_SUPABASE_DB_URL;
           const url = new URL(raw);
-          if (url.hostname.endsWith('.pooler.supabase.com')) {
-            url.username = 'postgres.jnpoxvalyjtdghnperyu';
-            url.port = url.port || '5432';
-            url.pathname = '/postgres';
-          }
+          url.username = "postgres.jnpoxvalyjtdghnperyu";
+          url.hostname = "aws-1-us-west-2.pooler.supabase.com";
+          url.port = "5432";
+          url.pathname = "/postgres";
+          url.searchParams.set("sslmode", "require");
           process.stdout.write(url.toString());
           NODE
           })"
 
-          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$RAW_PROD_SUPABASE_DB_URL"
           echo "::add-mask::$NORMALIZED_DB_URL"
           echo "::add-mask::$QA_TEST_PASSWORD"
           echo "::add-mask::$VERCEL_TOKEN"
@@ -103,6 +103,17 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y postgresql-client
+
+      - name: Preflight production database connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_user="$(
+            psql "$PROD_SUPABASE_DB_URL" \
+              -v ON_ERROR_STOP=1 \
+              -Atqc 'select current_user'
+          )"
+          test "$actual_user" = "postgres.jnpoxvalyjtdghnperyu"
 
       - name: Rotate production CRON_SECRET and redeploy exact source
         shell: bash
