@@ -1,6 +1,7 @@
 import { getViewer } from "@/lib/app-data";
 import { loadTradeDonationAgreementContext } from "@/lib/trade-donation";
 
+import pageStyles from "./trade-agreement-page-visibility.module.css";
 import { TradeAgreementStage as BaseTradeAgreementStage } from "./trade-agreement-stage-base";
 import { TradeDonationAgreementStage } from "./trade-donation-agreement-stage";
 import { TradeOutcomeFeedback } from "./trade-outcome-feedback";
@@ -27,7 +28,7 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
   );
 
   return (
-    <>
+    <div className={pageStyles.scope}>
       {stage}
       {props.lifecycleStatus === "completed" && viewer ? (
         <section
@@ -51,6 +52,6 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
           />
         </section>
       ) : null}
-    </>
+    </div>
   );
 }
