@@ -45,7 +45,6 @@ export function proxy(request: NextRequest) {
     if (shouldRecordVisit) {
       const walkthroughUrl = request.nextUrl.clone();
       walkthroughUrl.pathname = "/walkthrough";
-      walkthroughUrl.searchParams.set("first_visit", "1");
 
       return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
     }
