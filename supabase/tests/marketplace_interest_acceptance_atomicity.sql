@@ -9,27 +9,29 @@ set local lock_timeout = '5s';
 
 DO $guard$
 declare
-  owner_id uuid;
-  responder_id uuid;
-  offer_owner_id uuid;
+  owner_profile_id uuid;
+  responder_profile_id uuid;
+  offer_owner_profile_id uuid;
 begin
-  select id into owner_id
+  select profiles.id into owner_profile_id
   from public.profiles
-  where email = 'qa-market-owner@example.com';
+  where profiles.email = 'qa-market-owner@example.com';
 
-  select id into responder_id
+  select profiles.id into responder_profile_id
   from public.profiles
-  where email = 'qa-market-responder@example.com';
+  where profiles.email = 'qa-market-responder@example.com';
 
-  select owner_id into offer_owner_id
+  select offers.owner_id into offer_owner_profile_id
   from public.offers
-  where id = '10000000-0000-4000-8000-000000000158'::uuid;
+  where offers.id = '10000000-0000-4000-8000-000000000158'::uuid;
 
-  if owner_id is null or responder_id is null or offer_owner_id is null then
+  if owner_profile_id is null
+     or responder_profile_id is null
+     or offer_owner_profile_id is null then
     raise exception 'Refusing atomicity test outside the deterministic MoralTrade QA fixture.';
   end if;
 
-  if offer_owner_id <> owner_id then
+  if offer_owner_profile_id <> owner_profile_id then
     raise exception 'Deterministic QA offer owner does not match the synthetic owner.';
   end if;
 end;
