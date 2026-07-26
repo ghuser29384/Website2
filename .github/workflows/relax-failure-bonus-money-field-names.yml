@@ -1,0 +1,55 @@
+name: Relax failure bonus money-field names
+
+on:
+  pull_request:
+    branches:
+      - feature/mpgf-failure-bonus-success-premium-20260726
+    paths:
+      - ".github/workflows/relax-failure-bonus-money-field-names.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair-money-field-selectors:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'qa/failure-bonus-authenticated-browser-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa/failure-bonus-authenticated-browser-20260726
+          fetch-depth: 0
+
+      - name: Match monetary spinbuttons despite their visible currency prefix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/failure-bonus-authenticated-browser-qa.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = 'return page.getByRole("spinbutton", { name, exact: true });'
+          new = 'return page.getByRole("spinbutton", { name });'
+          if source.count(old) != 1:
+              raise SystemExit(f'Expected exactly one strict spinbutton helper, found {source.count(old)}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          test "$(git hash-object .github/scripts/failure-bonus-authenticated-browser-qa.mjs)" = "10470f259f335b5a03cbe2a593ed7f251bf23342"
+          node --check .github/scripts/failure-bonus-authenticated-browser-qa.mjs
+
+      - name: Remove temporary workflow and publish repair
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rm -f .github/workflows/relax-failure-bonus-money-field-names.yml
+          git add -A
+          git diff --cached --check
+          git config user.name "Moral Trade QA automation"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Match currency-prefixed number fields in failure-bonus QA"
+          git push origin HEAD:qa/failure-bonus-authenticated-browser-20260726
