@@ -66,27 +66,9 @@ def main() -> int:
     if not token or not repo:
         print("Missing diagnostic configuration.", file=sys.stderr)
         return 1
-    raw = sanitize(download(repo, token))
-    lines = raw.splitlines()
-    start = next(
-        (
-            i
-            for i, line in enumerate(lines)
-            if "Run desktop and mobile two-account browser QA" in line
-            or "run-pr158-two-account-browser-qa.mjs" in line
-        ),
-        max(0, len(lines) - 180),
-    )
-    candidate = lines[start:]
-    error_re = re.compile(r"(?i)(error|fail|exception|syntax|reference|typeerror|process completed)")
-    error_at = next(
-        (i for i, line in enumerate(candidate) if error_re.search(line)),
-        max(0, len(candidate) - 140),
-    )
-    lo = max(0, error_at - 50)
-    hi = min(len(candidate), error_at + 180)
+    lines = sanitize(download(repo, token)).splitlines()
     print("SANITIZED_BROWSER_QA_FAILURE_BEGIN")
-    print("\n".join(candidate[lo:hi]))
+    print("\n".join(lines[-100:]))
     print("SANITIZED_BROWSER_QA_FAILURE_END")
     return 0
 
