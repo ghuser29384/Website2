@@ -55,6 +55,22 @@ jobs:
       - name: Apply migration, atomic RPC, actions, and tests
         run: python3 "$RUNNER_TEMP/apply-pr158-atomic-acceptance.py"
 
+      - name: Use the workflow checkout as the source-test root
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
+          source = path.read_text(encoding="utf-8")
+          old = 'const repoRoot = path.resolve(import.meta.dirname, "../../..");'
+          new = 'const repoRoot = process.cwd();'
+          if source.count(old) != 1:
+              raise SystemExit("Expected one import.meta.dirname repository-root expression.")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Install dependencies
         uses: actions/setup-node@v4
         with:
