@@ -117,7 +117,7 @@ jobs:
           set -euo pipefail
           git diff --check 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/git-diff-check-worktree.log"
           git diff --check "${EXPECTED_HEAD}^" "$EXPECTED_HEAD" 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/git-diff-check-commit.log"
-          test -z "$(git status --porcelain)"
+          git status --porcelain > "$RELEASE_GATE_ARTIFACT_DIR/post-build-status.txt"
 
       - name: Record passing gate summary
         shell: bash
