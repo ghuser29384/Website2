@@ -1,1 +1,1 @@
-Rerun after separating RAW_PROD_SUPABASE_DB_URL from PROD_SUPABASE_DB_URL, pulling the live production environment, selecting the active database credentials, normalizing the Supabase session-pooler endpoint, and enforcing a connection preflight.
+Rerun after separating RAW_PROD_SUPABASE_DB_URL from PROD_SUPABASE_DB_URL, pulling the live production environment from the linked Vercel project, selecting the active database credentials, normalizing the Supabase session-pooler endpoint, and enforcing a connection preflight.
