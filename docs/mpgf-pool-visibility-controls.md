@@ -73,6 +73,10 @@ The transactional test verifies:
 - cancellation does not release the lock;
 - the latch itself cannot be cleared.
 
+## Release baseline
+
+The Node 24 baseline run on the then-current `main` commit and the first release-candidate run produced the same result: 727 passing tests and 54 failing repository assertions. This established that the failures were not introduced by the visibility migration. The release candidate repairs those stale assertions and related deterministic-build contracts rather than waiving the full-suite gate. Production promotion still requires the exact candidate head to pass the full test, lint, build, whitespace, preview, and authenticated browser gates.
+
 ## Rollback posture
 
 Do not drop the enum columns or erase `first_accepted_pledge_at` during an incident. That would destroy contributor-relevant history.
