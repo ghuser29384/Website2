@@ -1,0 +1,27 @@
+name: Read bootstrap failure excerpt 89793799942
+
+on:
+  push:
+    branches:
+      - ops/read-bootstrap-log-30197487993
+    paths:
+      - .github/workflows/read-bootstrap-log-89793799942.yml
+      - .github/scripts/read-bootstrap-log-89793799942.py
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download and print sanitized failing-step excerpt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/ghuser29384/Website2/02dff2ddde4dade52243773ad3e1d6c99cd5c469/.github/scripts/read-bootstrap-log-89793799942.py \
+            --output "$RUNNER_TEMP/read-bootstrap-log.py"
+          python3 "$RUNNER_TEMP/read-bootstrap-log.py"
