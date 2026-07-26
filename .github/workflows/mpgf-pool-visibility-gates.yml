@@ -48,18 +48,48 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run focused visibility tests
+        run: node --import tsx --test src/lib/mpgf/pool-visibility.test.ts
+
       - name: Run repository tests
-        run: npm test
+        shell: bash
+        run: |
+          if ! npm test > repository-tests.log 2>&1; then
+            echo "Repository tests failed. Last 240 log lines:"
+            tail -n 240 repository-tests.log
+            exit 1
+          fi
+          tail -n 40 repository-tests.log
 
       - name: Run repository lint
-        run: npm run lint -- --quiet
+        shell: bash
+        run: |
+          if ! npm run lint -- --quiet > repository-lint.log 2>&1; then
+            echo "Repository lint failed. Last 240 log lines:"
+            tail -n 240 repository-lint.log
+            exit 1
+          fi
+          tail -n 40 repository-lint.log
 
       - name: Build the production application
+        shell: bash
         env:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
           VERCEL: "1"
           VERCEL_ENV: preview
-        run: npm run build
+        run: |
+          if ! npm run build > production-build.log 2>&1; then
+            echo "Production build failed. Last 240 log lines:"
+            tail -n 240 production-build.log
+            exit 1
+          fi
+          tail -n 40 production-build.log
 
       - name: Check whitespace errors
-        run: git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.sha }}"
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}}"
+          git diff --check "$base_sha" "${GITHUB_SHA}"
