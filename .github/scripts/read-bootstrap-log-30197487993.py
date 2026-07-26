@@ -6,7 +6,6 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 SOURCE_JOB_ID = "89781500840"
 SOURCE_RUN_ID = "30197487993"
@@ -145,11 +144,20 @@ def main() -> int:
     try:
         raw = download_job_log(repo, token)
         excerpt = extract_and_redact(raw)
-        post_comment(repo, token, excerpt)
     except Exception as error:
-        print(f"Diagnostic failed safely: {error}", file=sys.stderr)
+        print(f"Diagnostic failed safely before extraction: {error}", file=sys.stderr)
         return 1
-    print("Posted the sanitized failing-step excerpt to PR #158.")
+
+    print("SANITIZED_EXCERPT_BEGIN")
+    for line in excerpt:
+        print(line)
+    print("SANITIZED_EXCERPT_END")
+
+    try:
+        post_comment(repo, token, excerpt)
+        print("Posted the sanitized failing-step excerpt to PR #158.")
+    except Exception as error:
+        print(f"PR comment was not posted: {error}", file=sys.stderr)
     return 0
 
 
