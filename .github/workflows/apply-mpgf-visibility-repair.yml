@@ -1,0 +1,91 @@
+name: Apply MPGF visibility release repair
+
+on:
+  push:
+    branches:
+      - qa/mpgf-visibility-source-snapshot-20260726
+    paths:
+      - ".github/workflows/apply-mpgf-visibility-repair.yml"
+      - "tmp/mpgf-visibility-release-repair.patch.gz.b64"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-mpgf-visibility-release-repair
+  cancel-in-progress: false
+
+jobs:
+  apply-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: feature/mpgf-pool-visibility-controls-20260726
+      EXPECTED_TARGET_SHA: c0db35296084c4f6f45202f87da87f2274a4704f
+      STAGING_BRANCH: qa/mpgf-visibility-source-snapshot-20260726
+      PATCH_PATH: tmp/mpgf-visibility-release-repair.patch.gz.b64
+    steps:
+      - name: Check out exact release-candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact target head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$EXPECTED_TARGET_SHA" ]]; then
+            echo "Expected $EXPECTED_TARGET_SHA but target branch is $actual_sha" >&2
+            exit 1
+          fi
+
+      - name: Retrieve and decode staged patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$STAGING_BRANCH"
+          git show "FETCH_HEAD:$PATCH_PATH" > /tmp/mpgf-repair.patch.gz.b64
+          base64 --decode /tmp/mpgf-repair.patch.gz.b64 > /tmp/mpgf-repair.patch.gz
+          gzip --decompress --stdout /tmp/mpgf-repair.patch.gz > /tmp/mpgf-repair.patch
+          test -s /tmp/mpgf-repair.patch
+
+      - name: Apply and verify repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/mpgf-repair.patch
+          git apply /tmp/mpgf-repair.patch
+          git diff --check
+          git status --short
+
+      - name: Commit repaired release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Moral Trade QA"
+          git config user.email "qa@moraltrade.org"
+          git add \
+            src/app/people/page.tsx \
+            'src/app/redirects/[receiptId]/page.tsx' \
+            src/lib/action-first-positioning.test.ts \
+            src/lib/auth-provider-settings.test.ts \
+            src/lib/background-plain-language-term-map.test.ts \
+            src/lib/background-public-page-simplification.test.ts \
+            src/lib/crawlability.test.ts \
+            src/lib/measurement-plan.ts \
+            src/lib/moral-trade/marketplace-boundary.ts \
+            src/lib/mpgf.test.ts \
+            src/lib/offer-create-similar.test.ts \
+            src/lib/offer-follows.test.ts \
+            src/lib/pledge-swaps.test.ts \
+            src/lib/public-evidence-policy.test.ts \
+            src/lib/public-offers.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/seo.ts \
+            src/lib/supabase/config.ts
+          git commit -m "Repair repository release gates for MPGF visibility"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
