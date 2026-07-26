@@ -17,7 +17,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'ops/apply-pr158-atomic-acceptance-20260726'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Check out temporary patch branch
         uses: actions/checkout@v4
@@ -27,173 +27,33 @@ jobs:
       - name: Capture patch script outside the worktree
         run: cp .github/scripts/apply-pr158-atomic-acceptance.py "$RUNNER_TEMP/apply-pr158-atomic-acceptance.py"
 
-      - name: Check out and guard exact PR 158 head
+      - name: Check out exact PR 158 head and merge exact current main
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin main agent/dynamic-marketplace-clearing-rounds
           git checkout -B agent/dynamic-marketplace-clearing-rounds origin/agent/dynamic-marketplace-clearing-rounds
-          actual="$(git rev-parse HEAD)"
-          expected="01993080cbc734e9da4932fc1be2d5319392fe18"
-          if [[ "$actual" != "$expected" ]]; then
-            echo "Refusing moved PR #158 head. Expected $expected, found $actual." >&2
+
+          actual_head="$(git rev-parse HEAD)"
+          expected_head="01993080cbc734e9da4932fc1be2d5319392fe18"
+          if [[ "$actual_head" != "$expected_head" ]]; then
+            echo "Refusing moved PR #158 head. Expected $expected_head, found $actual_head." >&2
             exit 1
           fi
 
+          actual_main="$(git rev-parse origin/main)"
+          expected_main="bb32b5c5a58442f97bef642be58ed01a57f0d91b"
+          if [[ "$actual_main" != "$expected_main" ]]; then
+            echo "Refusing moved main branch. Expected $expected_main, found $actual_main." >&2
+            exit 1
+          fi
+
+          git merge --no-ff --no-edit origin/main
+
       - name: Apply migration, atomic RPC, actions, and tests
         run: python3 "$RUNNER_TEMP/apply-pr158-atomic-acceptance.py"
-
-      - name: Refresh marketplace public-route smoke contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/lib/public-route-smoke.test.ts")
-          source = path.read_text(encoding="utf-8")
-
-          old_offset_assertion = '  assert.match(donationOffsetsPage, /Draft an offset/);\n'
-          new_offset_assertions = (
-              '  assert.match(donationOffsetsPage, /Start an offset draft/);\n'
-              '  assert.match(donationOffsetsPage, /\\/offers\\/new\\?entry=draft&template=pure-opposed-cause&mode=offset/);\n'
-          )
-          if source.count(old_offset_assertion) != 1:
-              raise SystemExit("Stale donation-offset CTA assertion did not match exactly once.")
-          source = source.replace(old_offset_assertion, new_offset_assertions, 1)
-
-          order_start = source.index(
-              'test("offers page keeps content before the footer in source order", () => {'
-          )
-          order_end = source.index(
-              'test("create trade route family has stable signed-out entry points", () => {',
-              order_start,
-          )
-          order_replacement = '''test("offers page keeps marketplace sections before the footer in source order", () => {
-            const offersPage = readRepoFile("src/app/offers/page.tsx");
-            const mainIndex = offersPage.indexOf("<main");
-            const introIndex = offersPage.indexOf("<OffersMarketIntro");
-            const directoryIndex = offersPage.indexOf("<OffersMarketDirectory");
-            const secondaryIndex = offersPage.indexOf("<OffersMarketSecondarySections");
-            const footerIndex = offersPage.indexOf("<SiteFooter />");
-
-            assert.ok(mainIndex > -1);
-            assert.ok(introIndex > mainIndex);
-            assert.ok(directoryIndex > introIndex);
-            assert.ok(secondaryIndex > directoryIndex);
-            assert.ok(footerIndex > secondaryIndex);
-          });
-
-          '''
-          source = source[:order_start] + order_replacement + source[order_end:]
-
-          create_start = source.index(
-              'test("create trade route family has stable signed-out entry points", () => {'
-          )
-          create_end = source.index(
-              'test("marketplace pilot copy separates live offers from worked examples", () => {',
-              create_start,
-          )
-          create_replacement = '''test("create route chooser keeps signed-out drafts gated and source context explicit", () => {
-            const createRoute = readRepoFile("src/app/create/page.tsx");
-            const chooser = readRepoFile("src/components/create/create-route-chooser.tsx");
-            const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
-            const newTradePage = readRepoFile("src/app/trades/new/page.tsx");
-            const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
-
-            assert.match(createRoute, /CreateRouteChooser/);
-            assert.match(createRoute, /readCreateMode/);
-            assert.match(createRoute, /BackCreateRoute/);
-            assert.equal(createRoute.includes("redirect("), false);
-            assert.match(chooser, /CREATE_ROUTE_DEFINITIONS/);
-            assert.match(chooser, /buildCreateTargetHref/);
-            assert.match(chooser, /Nothing happens until you confirm/);
-            assert.match(chooser, /Sign up to draft/);
-            assert.match(chooser, /aria-label="Creation routes"/);
-            assert.match(newOfferPage, /redirect\(\s*`\/trades\/new/);
-            assert.match(newOfferPage, /\/mpgf\/pools\/new\?template=threshold-coalition/);
-            assert.match(newOfferPage, /TradeDraftSignInGate/);
-            assert.match(newOfferPage, /source_offer/);
-            assert.match(newOfferPage, /sourceCounterofferTemplate/);
-            assert.match(newOfferPage, /baselineAmountUsd: ""/);
-            assert.match(newOfferPage, /requestedMatchingAmountUsd: ""/);
-            assert.match(newOfferPage, /no amount is inferred from the original proposal/);
-            assert.match(newTradePage, /TradeDraftSignInGate/);
-            assert.match(newTradePage, /sourceOffer\.requested_cause/);
-            assert.match(newTradePage, /sourceOffer\.offered_cause/);
-            assert.match(newTradePage, /sourceOffer\.request_action/);
-            assert.match(newTradePage, /sourceOffer\.offer_action/);
-            assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
-            assert.match(marketplaceBoundary, /CRECM v1\.96/);
-            assert.match(marketplaceBoundary, /marketplaceLaneLabel: "External CRECM module"/);
-          });
-
-          '''
-          source = source[:create_start] + create_replacement + source[create_end:]
-
-          block_start = source.index(
-              'test("marketplace pilot copy separates live offers from worked examples", () => {'
-          )
-          block_end = source.index(
-              'test("worked examples have canonical detail pages and sitemap coverage", () => {',
-              block_start,
-          )
-          replacement = '''test("marketplace participant menus separate live liquidity from examples", () => {
-            const offersPage = readRepoFile("src/app/offers/page.tsx");
-            const intro = readRepoFile("src/app/offers/offers-market-intro.tsx");
-            const directory = readRepoFile("src/app/offers/offers-market-directory.tsx");
-            const secondary = readRepoFile("src/app/offers/offers-market-secondary.tsx");
-            const participantMenu = readRepoFile(
-              "src/components/marketplace/participant-offer-menu.tsx",
-            );
-            const workedExamplesPage = readRepoFile("src/app/worked-examples/page.tsx");
-
-            assert.match(offersPage, /OffersMarketIntro/);
-            assert.match(offersPage, /OffersMarketDirectory/);
-            assert.match(offersPage, /OffersMarketSecondarySections/);
-            assert.match(offersPage, /buildParticipantOfferFamilies/);
-            assert.match(offersPage, /getMarketplaceFamilyMetrics/);
-            assert.match(intro, /Live marketplace/);
-            assert.match(intro, /Construct a concrete trade from live participant menus/);
-            assert.match(intro, /A match is never guaranteed/);
-            assert.match(intro, /distinct participants/);
-            assert.match(intro, /distinct offer families/);
-            assert.match(intro, /available combinations/);
-            assert.match(directory, /Participant menus/);
-            assert.match(directory, /SmartQueryForm/);
-            assert.match(directory, /Hard constraints are applied before semantic relevance/);
-            assert.match(directory, /Pagination applies to participants rather than generated pairings/);
-            assert.match(directory, /No participant menus satisfy every hard constraint/);
-            assert.match(participantMenu, /Propose match/);
-            assert.match(participantMenu, /Counteroffer/);
-            assert.match(participantMenu, /Remove saved/);
-            assert.match(participantMenu, /Ask a question/);
-            assert.match(secondary, /No published completions/);
-            assert.match(secondary, /Worked example · not live · not completed/);
-            assert.match(secondary, /No example is counted as/);
-            assert.match(workedExamplesPage, /They are\s+not live marketplace demand/);
-            assert.equal(directory.includes("WORKED_EXAMPLE"), false);
-            assert.equal(directory.includes("Victoria"), false);
-            assert.equal(intro.includes("guaranteed match"), false);
-          });
-
-          '''
-          source = source[:block_start] + replacement + source[block_end:]
-
-          old_fixture = '''test("worked examples have canonical detail pages and sitemap coverage", () => {
-            const offersPage = readRepoFile("src/app/offers/page.tsx");
-          '''
-          new_fixture = '''test("worked examples have canonical detail pages and sitemap coverage", () => {
-            const workedExamplesPage = readRepoFile("src/app/worked-examples/page.tsx");
-          '''
-          old_assertion = '  assert.match(offersPage, /\\/offers\\/examples\\/\\$\\{offer\\.id\\}/);\n'
-          new_assertion = '  assert.match(workedExamplesPage, /\\/offers\\/examples\\/\\$\\{offer\\.id\\}/);\n'
-          if source.count(old_fixture) != 1 or source.count(old_assertion) != 1:
-              raise SystemExit("Worked-example canonical-link assertion did not match exactly once.")
-          source = source.replace(old_fixture, new_fixture, 1).replace(old_assertion, new_assertion, 1)
-
-          path.write_text(source, encoding="utf-8")
-          PY
 
       - name: Install dependencies
         uses: actions/setup-node@v4
@@ -215,13 +75,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "ghuser29384"
-          git config user.email "262476329+ghuser29384@users.noreply.github.com"
           git add \
             .github/workflows/dynamic-marketplace-qa.yml \
             src/app/actions.ts \
             src/app/offers/marketplace-interest-acceptance.test.ts \
-            src/lib/public-route-smoke.test.ts \
             supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql \
             supabase/tests/marketplace_interest_acceptance_atomicity.sql
           git commit -m "Make marketplace agreement acceptance atomic"
