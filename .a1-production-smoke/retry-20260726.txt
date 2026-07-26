@@ -1,1 +1,1 @@
-Trigger the one-shot security cleanup for the credential-diagnostic artifact and workflow run.
+Decode and syntax-check the verified compressed A1 production smoke bundle for the scheduled-cron adaptation.
