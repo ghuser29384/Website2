@@ -1,1 +1,1 @@
-Decode and syntax-check the verified compressed A1 production smoke bundle for the scheduled-cron adaptation.
+Run the authenticated production sequence against the every-minute Vercel recommendation-training cron, using the validated scheduled-cron smoke bundle.
