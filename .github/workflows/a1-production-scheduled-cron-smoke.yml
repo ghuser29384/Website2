@@ -17,7 +17,7 @@ jobs:
     env:
       A1_SMOKE_BASE_URL: https://www.moraltrade.org
       A1_SMOKE_OUTPUT_DIR: a1-production-smoke-evidence
-      A1_PRODUCTION_SOURCE_SHA: 818f9ad67cfe5746cb01f3b774a475b2d5fb57b2
+      A1_PRODUCTION_SOURCE_SHA: 85b24324d64591e231c44cddd7ab082d212c1607
       RAW_PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
