@@ -37,6 +37,8 @@ jobs:
       A1_SMOKE_OUTPUT_DIR: a1-production-smoke-evidence
       A1_PRODUCTION_SOURCE_SHA: 818f9ad67cfe5746cb01f3b774a475b2d5fb57b2
       RAW_PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PROD_SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
@@ -66,7 +68,7 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
 
-      - name: Validate, normalize, and mask protected inputs
+      - name: Validate protected inputs and pull production environment
         shell: bash
         run: |
           set -euo pipefail
@@ -77,24 +79,62 @@ jobs:
             fi
           done
 
-          NORMALIZED_DB_URL="$({
-            node <<'NODE'
-          const raw = process.env.RAW_PROD_SUPABASE_DB_URL;
-          const url = new URL(raw);
-          url.username = "postgres.jnpoxvalyjtdghnperyu";
-          url.hostname = "aws-1-us-west-2.pooler.supabase.com";
-          url.port = "5432";
-          url.pathname = "/postgres";
-          url.searchParams.set("sslmode", "require");
-          process.stdout.write(url.toString());
-          NODE
-          })"
-
           echo "::add-mask::$RAW_PROD_SUPABASE_DB_URL"
-          echo "::add-mask::$NORMALIZED_DB_URL"
           echo "::add-mask::$QA_TEST_PASSWORD"
           echo "::add-mask::$VERCEL_TOKEN"
+          if [ -n "${PROD_SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::add-mask::$PROD_SUPABASE_DB_PASSWORD"
+          fi
+          if [ -n "${SUPABASE_DB_PASSWORD:-}" ]; then
+            echo "::add-mask::$SUPABASE_DB_PASSWORD"
+          fi
+
+          mkdir -p app/.vercel app/a1-production-smoke-evidence
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > app/.vercel/project.json
+          npx --yes vercel@56.5.0 env pull app/.vercel-production.env \
+            --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+
+          node --env-file=app/.vercel-production.env <<'NODE'
+          const fs = require('node:fs');
+
+          const candidates = [
+            ['PROD_SUPABASE_DB_URL', process.env.PROD_SUPABASE_DB_URL],
+            ['SUPABASE_DB_URL', process.env.SUPABASE_DB_URL],
+            ['DATABASE_URL', process.env.DATABASE_URL],
+            ['POSTGRES_URL', process.env.POSTGRES_URL],
+            ['POSTGRES_PRISMA_URL', process.env.POSTGRES_PRISMA_URL],
+            ['RAW_PROD_SUPABASE_DB_URL', process.env.RAW_PROD_SUPABASE_DB_URL],
+          ];
+          const selected = candidates.find(([, value]) => typeof value === 'string' && /^postgres(?:ql)?:\/\//i.test(value));
+          if (!selected) {
+            throw new Error('No production Postgres URL was available from Vercel or GitHub secrets.');
+          }
+
+          const [source, raw] = selected;
+          const url = new URL(raw);
+          const passwordOverride =
+            process.env.PROD_SUPABASE_DB_PASSWORD ||
+            process.env.SUPABASE_DB_PASSWORD ||
+            process.env.POSTGRES_PASSWORD ||
+            '';
+          if (passwordOverride) url.password = passwordOverride;
+          url.username = 'postgres.jnpoxvalyjtdghnperyu';
+          url.hostname = 'aws-1-us-west-2.pooler.supabase.com';
+          url.port = '5432';
+          url.pathname = '/postgres';
+          url.searchParams.set('sslmode', 'require');
+
+          fs.writeFileSync('/tmp/a1-normalized-db-url', url.toString(), { mode: 0o600 });
+          fs.writeFileSync(
+            'app/a1-production-smoke-evidence/db-url-source.txt',
+            `selected_source=${source}\npassword_override=${passwordOverride ? 'present' : 'absent'}\n`,
+          );
+          NODE
+
+          NORMALIZED_DB_URL="$(cat /tmp/a1-normalized-db-url)"
+          echo "::add-mask::$NORMALIZED_DB_URL"
           echo "PROD_SUPABASE_DB_URL=$NORMALIZED_DB_URL" >> "$GITHUB_ENV"
+          rm -f app/.vercel-production.env /tmp/a1-normalized-db-url
           test "$(git -C app rev-parse HEAD)" = "$A1_PRODUCTION_SOURCE_SHA"
 
       - name: Install PostgreSQL client
@@ -109,13 +149,10 @@ jobs:
         run: |
           set -euo pipefail
           diagnostics="app/a1-production-smoke-evidence/preflight-diagnostics.txt"
-          mkdir -p "$(dirname "$diagnostics")"
 
-          raw_host="$(node -e 'process.stdout.write(new URL(process.env.RAW_PROD_SUPABASE_DB_URL).hostname)')"
           configured_host="$(node -e 'process.stdout.write(new URL(process.env.PROD_SUPABASE_DB_URL).hostname)')"
           configured_user="$(node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.PROD_SUPABASE_DB_URL).username))')"
           {
-            echo "raw_host=$raw_host"
             echo "configured_host=$configured_host"
             echo "configured_user=$configured_user"
           } > "$diagnostics"
@@ -145,9 +182,6 @@ jobs:
           CRON_SECRET="$(openssl rand -hex 32)"
           echo "::add-mask::$CRON_SECRET"
           echo "CRON_SECRET=$CRON_SECRET" >> "$GITHUB_ENV"
-
-          mkdir -p app/.vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > app/.vercel/project.json
 
           cd app
           printf '%s' "$CRON_SECRET" | npx --yes vercel@56.5.0 env add CRON_SECRET production \
