@@ -1,0 +1,57 @@
+name: Inspect PR 158 agreement contract
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/inspect-pr158-agreement-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: agent/dynamic-marketplace-clearing-rounds
+          fetch-depth: 0
+
+      - name: Print agreement acceptance and migration contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== completion_state references ==='
+          rg -n -C 16 'completion_state' src supabase/migrations || true
+
+          echo '=== acceptance actions ==='
+          for symbol in acceptInterestAction acceptGuestInterestAction; do
+            line="$(rg -n "^export async function ${symbol}" src/app/actions.ts | head -n1 | cut -d: -f1 || true)"
+            echo "--- ${symbol} line ${line:-not-found} ---"
+            if [[ -n "$line" ]]; then
+              start=$(( line > 35 ? line - 35 : 1 ))
+              end=$(( line + 430 ))
+              sed -n "${start},${end}p" src/app/actions.ts
+            fi
+          done
+
+          echo '=== agreement type excerpt ==='
+          line="$(rg -n '^      agreements: \{' src/lib/supabase/database.types.ts | head -n1 | cut -d: -f1 || true)"
+          if [[ -n "$line" ]]; then
+            sed -n "$((line-5)),$((line+170))p" src/lib/supabase/database.types.ts
+          fi
+
+          echo '=== migrations touching agreements ==='
+          rg -l 'agreements' supabase/migrations | sort
+          echo '=== migrations mentioning completion_state ==='
+          rg -l 'completion_state' supabase/migrations || true
+
+          echo '=== history introducing completion_state ==='
+          git log --all --oneline -S'completion_state' -- src supabase/migrations | head -n 30
