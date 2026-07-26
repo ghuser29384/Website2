@@ -1,0 +1,204 @@
+name: Apply PR 158 agreement repair to QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-pr158-qa-agreement-migration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-and-test:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_REPAIR_SHA: 17aa121e7db269510f483edc6371964dd4dc5bf7
+      MIGRATION_VERSION: "20260726143000"
+      MIGRATION_NAME: restore_agreement_completion_contract_and_atomic_acceptance
+      MIGRATION_SHA256: d67d610ae0b37ed9cbc7fb106bef75b3408c591d7befed7aaa575a3dfd6c66d7
+
+    steps:
+      - name: Validate exact target and secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository." >&2
+            exit 1
+          fi
+          if [[ -z "${QA_SUPABASE_DB_URL:-}" ]]; then
+            echo "Missing QA_SUPABASE_DB_URL." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected_ref = os.environ["EXPECTED_QA_REF"]
+          if expected_ref not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL whose user does not contain the QA project ref.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing an unexpected QA pooler host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected QA database connection parameters.")
+          PY
+
+      - name: Check out exact repaired PR 158 commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_REPAIR_SHA }}
+          fetch-depth: 1
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Verify migration checksum and QA preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
+          echo "${MIGRATION_SHA256}  ${migration}" | sha256sum --check --strict
+
+          preflight="$RUNNER_TEMP/preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$preflight"
+          with badge_duplicates as (
+            select profile_id, badge_type, count(*) as row_count
+            from public.profile_verification_badges
+            group by profile_id, badge_type
+            having count(*) > 1
+          ), invalid_agreement_events as (
+            select event_type, count(*) as row_count
+            from public.agreement_events
+            where event_type not in (
+              'note','counterproposal','verification_submitted','cancellation_requested',
+              'dispute_opened','status_change','payment_update','terms_updated',
+              'evidence_submitted','review_status_changed','challenge_opened',
+              'appeal_requested','verification_badge_updated'
+            )
+            group by event_type
+          )
+          select case
+            when to_regprocedure('public.set_updated_at()') is null then 'FAIL:set_updated_at'
+            when to_regclass('public.agreements') is null then 'FAIL:agreements'
+            when to_regclass('public.agreement_events') is null then 'FAIL:agreement_events'
+            when to_regclass('public.interests') is null then 'FAIL:interests'
+            when to_regclass('public.guest_interests') is null then 'FAIL:guest_interests'
+            when to_regclass('public.donation_offset_offers') is null then 'FAIL:donation_offset_offers'
+            when to_regclass('public.performance_bonds') is null then 'FAIL:performance_bonds'
+            when (select count(*) from badge_duplicates) <> 0 then 'FAIL:duplicate_badges'
+            when (select count(*) from invalid_agreement_events) <> 0 then 'FAIL:invalid_event_types'
+            when exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260726143000'
+            ) then 'FAIL:migration_already_recorded'
+            when exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='agreements' and column_name='completion_state'
+            ) then 'FAIL:completion_state_already_exists'
+            when (select count(*) from public.agreements) <> 0 then 'FAIL:agreements_not_empty'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
+
+      - name: Apply exact migration and record it atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="supabase/migrations/${MIGRATION_VERSION}_${MIGRATION_NAME}.sql"
+          apply_file="$RUNNER_TEMP/apply-migration.sql"
+          cat "$migration" > "$apply_file"
+          cat >> "$apply_file" <<SQL
+
+          insert into supabase_migrations.schema_migrations (
+            version,
+            statements,
+            name,
+            created_by,
+            idempotency_key
+          ) values (
+            '${MIGRATION_VERSION}',
+            array['Applied from ghuser29384/Website2 commit ${EXPECTED_REPAIR_SHA}; sha256 ${MIGRATION_SHA256}'],
+            '${MIGRATION_NAME}',
+            'github-actions-pr158-qa',
+            'pr158-${MIGRATION_VERSION}-${MIGRATION_SHA256}'
+          );
+          SQL
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --single-transaction \
+            --file "$apply_file"
+
+      - name: Verify repaired contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/postflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='agreements' and column_name='completion_state'
+            ) then 'FAIL:completion_state'
+            when not exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='agreements' and column_name='lifecycle_status'
+            ) then 'FAIL:lifecycle_status'
+            when to_regclass('public.agreement_evidence_items') is null then 'FAIL:evidence_table'
+            when to_regclass('public.agreement_review_cases') is null then 'FAIL:review_table'
+            when to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then 'FAIL:member_rpc'
+            when to_regprocedure('public.accept_marketplace_guest_interest_v1(uuid,uuid,text)') is null then 'FAIL:guest_rpc'
+            when not exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='20260726143000'
+                and name='restore_agreement_completion_contract_and_atomic_acceptance'
+            ) then 'FAIL:migration_history'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+      - name: Run rollback regression against QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_interest_acceptance_atomicity.sql \
+            | tee "$RUNNER_TEMP/atomicity-regression.txt"
+          grep -Fq "PASS: failed agreement creation leaves the selected response pending and the offer open" \
+            "$RUNNER_TEMP/atomicity-regression.txt"
+
+      - name: Record sanitized result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "target=${EXPECTED_QA_REF}"
+            echo "repair_commit=${EXPECTED_REPAIR_SHA}"
+            echo "migration_version=${MIGRATION_VERSION}"
+            echo "migration_sha256=${MIGRATION_SHA256}"
+            echo "job_status=${{ job.status }}"
+          } > pr158-qa-agreement-migration-result.txt
+
+      - name: Upload sanitized result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-qa-agreement-migration-${{ github.run_id }}
+          path: pr158-qa-agreement-migration-result.txt
+          if-no-files-found: error
+          retention-days: 14
