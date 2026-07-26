@@ -29,6 +29,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           curl --fail --silent --show-error --location \
-            https://raw.githubusercontent.com/ghuser29384/Website2/ops/read-bootstrap-log-30197487993/.github/scripts/read-bootstrap-log-30197487993.py \
+            https://raw.githubusercontent.com/ghuser29384/Website2/29ea5890d7d54d43e4930c9aac6b0d059244b077/.github/scripts/read-bootstrap-log-30197487993.py \
             --output "$RUNNER_TEMP/read-bootstrap-log.py"
           python3 "$RUNNER_TEMP/read-bootstrap-log.py"
