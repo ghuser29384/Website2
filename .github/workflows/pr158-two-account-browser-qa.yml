@@ -1,0 +1,138 @@
+name: PR 158 two-account browser QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-two-account-browser-qa.yml"
+      - ".github/scripts/pr158-two-account-browser-qa.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr158-two-account-browser-qa
+  cancel-in-progress: false
+
+jobs:
+  browser-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-browser-qa-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      WEBSITE2_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      MORALTRADE_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      WEBSITE2_PREVIEW_URL: https://website2-9hnac2yzs-ellen-s.vercel.app
+      MORALTRADE_PREVIEW_URL: https://moraltrade-site-r7v9wwsl8-ellen-s.vercel.app
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/browser-qa-artifacts
+
+    steps:
+      - name: Validate exact execution target and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository: $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_HEAD_REF" != "ops/pr158-browser-qa-20260726" ]]; then
+            echo "Refusing unexpected head branch: $GITHUB_HEAD_REF" >&2
+            exit 1
+          fi
+          for name in QA_TEST_PASSWORD VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out temporary QA runner
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Create temporary Vercel automation bypasses
+        id: protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          bypass_secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$bypass_secret"
+          echo "TEMP_VERCEL_BYPASS_SECRET=$bypass_secret" >> "$GITHUB_ENV"
+
+          payload="$RUNNER_TEMP/protection-generate.json"
+          jq -n \
+            --arg secret "$bypass_secret" \
+            --arg note "Temporary PR #158 two-account browser QA" \
+            '{generate: {secret: $secret, note: $note}}' > "$payload"
+
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null
+          done
+
+      - name: Run desktop and mobile two-account browser QA
+        run: node .github/scripts/pr158-two-account-browser-qa.mjs
+
+      - name: Upload browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-two-account-browser-qa-${{ github.run_id }}
+          path: browser-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Revoke temporary Vercel automation bypasses
+        if: always() && steps.protection.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TEMP_VERCEL_BYPASS_SECRET:-}" ]]; then
+            echo "Temporary bypass secret is unavailable for cleanup." >&2
+            exit 1
+          fi
+
+          payload="$RUNNER_TEMP/protection-revoke.json"
+          jq -n \
+            --arg secret "$TEMP_VERCEL_BYPASS_SECRET" \
+            '{revoke: {secret: $secret, regenerate: false}}' > "$payload"
+
+          cleanup_failed=0
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            if ! curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null; then
+              cleanup_failed=1
+            fi
+          done
+
+          if [[ "$cleanup_failed" != "0" ]]; then
+            echo "One or more temporary Vercel automation bypasses could not be revoked." >&2
+            exit 1
+          fi
