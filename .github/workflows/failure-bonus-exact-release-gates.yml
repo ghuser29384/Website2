@@ -23,19 +23,10 @@ jobs:
     timeout-minutes: 75
     env:
       EXPECTED_HEAD: 97ce3db47e35effb64b9f46b3091d132abc1330b
-      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
-      SITE_URL: http://127.0.0.1:3000
-      VERCEL_ENV: preview
-      NEXT_PUBLIC_VERCEL_ENV: preview
-      TRADE_DONATION_POOL_ENABLED: "false"
-      TRADE_DONATION_POOL_MODE: disabled
       RELEASE_GATE_ARTIFACT_DIR: ${{ github.workspace }}/failure-bonus-exact-release-gates
 
     steps:
-      - name: Validate exact target and required QA configuration
+      - name: Validate exact execution target
         shell: bash
         run: |
           set -euo pipefail
@@ -47,12 +38,6 @@ jobs:
             echo "Refusing unexpected head branch: $GITHUB_HEAD_REF" >&2
             exit 1
           fi
-          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "Missing required GitHub Actions secret: $name" >&2
-              exit 1
-            fi
-          done
 
       - name: Check out the exact product commit
         uses: actions/checkout@v4
@@ -86,6 +71,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          # The complete unit/source-contract suite must run without a connected
+          # Supabase environment so tests cannot accidentally depend on mutable QA rows.
           npm test 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-test.log"
 
       - name: Run complete lint gate
@@ -94,8 +81,32 @@ jobs:
           set -o pipefail
           npm run lint 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-lint.log"
 
+      - name: Validate isolated-QA build configuration
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret for build: $name" >&2
+              exit 1
+            fi
+          done
+
       - name: Run production build
         shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          SITE_URL: http://127.0.0.1:3000
+          VERCEL_ENV: preview
+          NEXT_PUBLIC_VERCEL_ENV: preview
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
         run: |
           set -o pipefail
           npm run build 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-build.log"
