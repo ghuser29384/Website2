@@ -101,23 +101,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
 
       - name: Preflight production database connection
         shell: bash
         run: |
           set -euo pipefail
-          configured_user="$(
-            node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.PROD_SUPABASE_DB_URL).username))'
-          )"
+          diagnostics="app/a1-production-smoke-evidence/preflight-diagnostics.txt"
+          mkdir -p "$(dirname "$diagnostics")"
+
+          raw_host="$(node -e 'process.stdout.write(new URL(process.env.RAW_PROD_SUPABASE_DB_URL).hostname)')"
+          configured_host="$(node -e 'process.stdout.write(new URL(process.env.PROD_SUPABASE_DB_URL).hostname)')"
+          configured_user="$(node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.PROD_SUPABASE_DB_URL).username))')"
+          {
+            echo "raw_host=$raw_host"
+            echo "configured_host=$configured_host"
+            echo "configured_user=$configured_user"
+          } > "$diagnostics"
+
           test "$configured_user" = "postgres.jnpoxvalyjtdghnperyu"
 
+          set +e
           connection_probe="$(
-            psql "$PROD_SUPABASE_DB_URL" \
+            PGCONNECT_TIMEOUT=10 psql "$PROD_SUPABASE_DB_URL" \
               -v ON_ERROR_STOP=1 \
-              -Atqc 'select 1'
+              -Atqc 'select 1' \
+              2>> "$diagnostics"
           )"
+          connection_code=$?
+          set -e
+
+          if [ "$connection_code" -ne 0 ]; then
+            cat "$diagnostics"
+            exit "$connection_code"
+          fi
           test "$connection_probe" = "1"
 
       - name: Rotate production CRON_SECRET and redeploy exact source
