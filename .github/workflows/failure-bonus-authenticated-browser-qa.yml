@@ -1,6 +1,6 @@
 name: Failure bonus authenticated browser QA
 
-# Trigger the exact role-selector candidate from a trusted repository write.
+# Trigger the exact currency-prefix-safe candidate from a trusted repository write.
 on:
   pull_request:
     branches:
