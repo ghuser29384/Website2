@@ -59,13 +59,23 @@ def extract_and_redact(raw: str) -> list[str]:
         None,
     )
     if start is None:
-        step_lines = lines[-160:]
+        step_lines = lines[-220:]
     else:
-        end = next(
-            (i for i in range(start + 1, len(lines)) if "##[endgroup]" in lines[i]),
-            len(lines) - 1,
+        stop_markers = (
+            "##[group]Post Set up Supabase CLI",
+            "##[group]Post Set up Node.js",
+            "##[group]Post Check out the tested branch",
+            "##[group]Complete job",
         )
-        step_lines = lines[start : end + 1]
+        end = next(
+            (
+                i
+                for i in range(start + 1, len(lines))
+                if any(marker in lines[i] for marker in stop_markers)
+            ),
+            len(lines),
+        )
+        step_lines = lines[start:end]
 
     specific_error = re.compile(
         r"(?i)(pg_dump:\s*error|psql:\s*error|fatal:|error:|failed to|"
