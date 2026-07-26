@@ -1,11 +1,6 @@
 name: Bootstrap MoralTrade QA
 
 on:
-  push:
-    branches:
-      - agent/dynamic-marketplace-clearing-rounds
-    paths:
-      - ".github/workflows/bootstrap-moraltrade-qa.yml"
   workflow_dispatch:
     inputs:
       confirm_target:
@@ -27,10 +22,7 @@ concurrency:
 
 jobs:
   bootstrap:
-    if: >-
-      github.repository == 'ghuser29384/Website2' &&
-      github.ref == 'refs/heads/agent/dynamic-marketplace-clearing-rounds' &&
-      (github.event_name == 'push' || inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz')
+    if: inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -78,7 +70,7 @@ jobs:
             QA_SUPABASE_SERVICE_ROLE_KEY
             QA_TEST_PASSWORD
           )
-          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.configure_vercel }}" == "true" ]]; then
+          if [[ "${{ inputs.configure_vercel }}" == "true" ]]; then
             required+=(VERCEL_TOKEN)
           fi
           for name in "${required[@]}"; do
@@ -102,7 +94,7 @@ jobs:
           retention-days: 14
 
       - name: Configure branch-scoped Vercel Preview variables
-        if: github.event_name == 'push' || inputs.configure_vercel
+        if: inputs.configure_vercel
         run: bash scripts/configure-moraltrade-qa-vercel.sh
 
       - name: Record next gate
