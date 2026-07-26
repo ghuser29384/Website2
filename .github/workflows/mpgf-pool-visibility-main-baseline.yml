@@ -1,6 +1,9 @@
 name: MPGF pool visibility main baseline
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/mpgf-pool-visibility-main-baseline.yml"
   push:
     branches:
       - qa/mpgf-pool-visibility-main-baseline-20260726
@@ -59,9 +62,10 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
-          base_sha="${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}"
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}}"
           git diff --check "$base_sha" "${GITHUB_SHA}" > diff-check.log 2>&1
 
       - name: Upload baseline diagnostics
