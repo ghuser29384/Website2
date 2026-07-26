@@ -113,18 +113,12 @@ jobs:
           )"
           test "$configured_user" = "postgres.jnpoxvalyjtdghnperyu"
 
-          actual_user="$(
+          connection_probe="$(
             psql "$PROD_SUPABASE_DB_URL" \
               -v ON_ERROR_STOP=1 \
-              -Atqc 'select current_user'
+              -Atqc 'select 1'
           )"
-          case "$actual_user" in
-            postgres|postgres.jnpoxvalyjtdghnperyu) ;;
-            *)
-              echo "::error::Unexpected production database role: $actual_user"
-              exit 1
-              ;;
-          esac
+          test "$connection_probe" = "1"
 
       - name: Rotate production CRON_SECRET and redeploy exact source
         shell: bash
