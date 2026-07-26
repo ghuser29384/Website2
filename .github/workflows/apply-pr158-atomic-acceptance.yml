@@ -90,6 +90,11 @@ jobs:
           )
           PY
 
+          # The patch script adds the new source test to an existing QA workflow,
+          # but this GitHub token cannot update workflow files. The repair itself is
+          # independently gated below, so keep the existing workflow file unchanged.
+          git checkout -- .github/workflows/dynamic-marketplace-qa.yml
+
       - name: Install dependencies
         uses: actions/setup-node@v4
         with:
@@ -117,7 +122,6 @@ jobs:
         run: |
           set -euo pipefail
           git add \
-            .github/workflows/dynamic-marketplace-qa.yml \
             src/app/actions.ts \
             src/app/offers/marketplace-interest-acceptance.test.ts \
             supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql \
