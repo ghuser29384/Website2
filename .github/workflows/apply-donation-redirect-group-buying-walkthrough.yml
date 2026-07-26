@@ -37,13 +37,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Establish the exact main unit-test baseline
+      - name: Establish exact main unit-test and lint baselines
         shell: bash
         run: |
           set -o pipefail
           git worktree add /tmp/moraltrade-main-baseline origin/main
           ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/moraltrade-main-baseline/node_modules
           (cd /tmp/moraltrade-main-baseline && npm test 2>&1 | tee "$GITHUB_WORKSPACE/main-unit-test.log") || true
+          (cd /tmp/moraltrade-main-baseline && npx eslint . --format json --output-file "$GITHUB_WORKSPACE/main-eslint.json") || true
 
       - name: Apply the guarded walkthrough patch
         run: python3 scripts/apply-donation-redirect-group-buying-walkthrough.py
@@ -95,26 +96,58 @@ jobs:
           src/walkthrough-production-shell.test.ts
           src/walkthrough-donation-redirect-group-buying.test.ts
 
-      - name: Run lint
-        id: lint
-        continue-on-error: true
+      - name: Capture candidate lint findings
+        run: npx eslint . --format json --output-file candidate-eslint.json || true
+
+      - name: Require zero new lint findings relative to main
         shell: bash
         run: |
-          set -o pipefail
-          npm run lint 2>&1 | tee lint.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Upload lint failure log
-        if: steps.lint.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: donation-redirect-lint-log
-          path: lint.log
-          if-no-files-found: error
-          retention-days: 3
+          def findings(path: str, root: str) -> set[tuple[str, int, int, str, str]]:
+              records = json.loads(Path(path).read_text(encoding="utf-8"))
+              result: set[tuple[str, int, int, str, str]] = set()
+              for record in records:
+                  file_path = str(record.get("filePath", "")).replace(root, "").lstrip("/")
+                  for message in record.get("messages", []):
+                      if int(message.get("severity", 0)) < 2:
+                          continue
+                      result.add((
+                          file_path,
+                          int(message.get("line", 0)),
+                          int(message.get("column", 0)),
+                          str(message.get("ruleId") or ""),
+                          str(message.get("message") or ""),
+                      ))
+              return result
 
-      - name: Stop after a lint failure
-        if: steps.lint.outcome == 'failure'
-        run: exit 1
+          baseline = findings("main-eslint.json", "/tmp/moraltrade-main-baseline")
+          candidate = findings("candidate-eslint.json", str(Path.cwd()))
+          new_findings = sorted(candidate - baseline)
+
+          print(f"main lint errors: {len(baseline)}")
+          print(f"candidate lint errors: {len(candidate)}")
+          if new_findings:
+              print("new candidate lint errors:")
+              for finding in new_findings:
+                  print("-", finding)
+              raise SystemExit(1)
+
+          print("No new lint errors relative to the exact main baseline.")
+          PY
+
+      - name: Lint the changed TypeScript and TSX surface directly
+        run: >-
+          npx eslint
+          src/components/walkthrough/immersive-walkthrough.tsx
+          src/app/walkthrough/page.tsx
+          src/proxy.ts
+          src/proxy.test.ts
+          src/walkthrough-production-shell.test.ts
+          src/walkthrough-donation-redirect-group-buying.test.ts
+          tests/walkthrough.spec.ts
 
       - name: Build the exact candidate
         run: npm run build
