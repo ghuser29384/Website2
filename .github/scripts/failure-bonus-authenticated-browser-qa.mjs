@@ -221,7 +221,7 @@ function textbox(page, name) {
 }
 
 function spinbutton(page, name) {
-  return page.getByRole("spinbutton", { name, exact: true });
+  return page.getByRole("spinbutton", { name });
 }
 
 function combobox(page, name) {
