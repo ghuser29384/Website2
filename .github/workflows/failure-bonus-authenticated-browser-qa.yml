@@ -1,6 +1,6 @@
 name: Failure bonus authenticated browser QA
 
-# Trigger the exact currency-prefix-safe candidate from a trusted repository write.
+# Trigger after installing the canonical MPGF participant-mutation controls in QA.
 on:
   pull_request:
     branches:
