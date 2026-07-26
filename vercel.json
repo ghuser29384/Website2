@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/jobs/recommendation-training",
-      "schedule": "* * * * *"
+      "schedule": "30 12 * * *"
     }
   ]
 }
