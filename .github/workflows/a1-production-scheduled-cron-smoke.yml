@@ -129,12 +129,14 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Decode and run authenticated scheduled-cron sequence
+      - name: Transform and run authenticated scheduled-cron sequence
         working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          base64 --decode ../ops/.a1-production-smoke/scheduled-cron-smoke.gz.b64 | gzip -d > .a1-production-scheduled-cron-smoke.mjs
+          base64 --decode ../ops/.a1-production-smoke/final.gz.b64 | gzip -d > .a1-production-scheduled-cron-smoke.mjs
+          echo "f82baf39e9af65aac1204416a3e0589f74f8013f30c11ec2eda7b7341d8a2a7f  .a1-production-scheduled-cron-smoke.mjs" | sha256sum -c -
+          node ../ops/.a1-production-smoke/patch-to-scheduled-cron.mjs .a1-production-scheduled-cron-smoke.mjs
           echo "795a2fdfd079ebdc509f7c518aa4323c273627851a3ba9ed45f8f3a45d25f874  .a1-production-scheduled-cron-smoke.mjs" | sha256sum -c -
           node --check .a1-production-scheduled-cron-smoke.mjs
           node .a1-production-scheduled-cron-smoke.mjs
