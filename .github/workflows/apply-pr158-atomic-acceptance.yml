@@ -55,26 +55,39 @@ jobs:
       - name: Apply migration, atomic RPC, actions, and tests
         run: python3 "$RUNNER_TEMP/apply-pr158-atomic-acceptance.py"
 
-      - name: Align generated source test with the repository contract
+      - name: Align generated repair files with the repository contract
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
-          source = path.read_text(encoding="utf-8")
-          replacements = {
+          test_path = Path("src/app/offers/marketplace-interest-acceptance.test.ts")
+          test_source = test_path.read_text(encoding="utf-8")
+          test_replacements = {
               'const repoRoot = path.resolve(import.meta.dirname, "../../..");':
                   'const repoRoot = process.cwd();',
               "assert.match(migration, /add column if not exists lifecycle_status text not null default 'proposed'/);":
                   "assert.match(migration, /comment on column public\\.agreements\\.lifecycle_status/);",
           }
-          for old, new in replacements.items():
-              if source.count(old) != 1:
+          for old, new in test_replacements.items():
+              if test_source.count(old) != 1:
                   raise SystemExit(f"Expected one source-test contract expression: {old}")
-              source = source.replace(old, new, 1)
-          path.write_text(source, encoding="utf-8")
+              test_source = test_source.replace(old, new, 1)
+          test_path.write_text(test_source, encoding="utf-8")
+
+          actions_path = Path("src/app/actions.ts")
+          actions_source = actions_path.read_text(encoding="utf-8")
+          old_baseline = (
+              'offererPerformanceBond?.no_trade_baseline ?? offer.no_trade_baseline ?? ""'
+          )
+          new_baseline = 'offererPerformanceBond?.no_trade_baseline ?? ""'
+          if actions_source.count(old_baseline) != 1:
+              raise SystemExit("Expected one client-side offer baseline fallback expression.")
+          actions_path.write_text(
+              actions_source.replace(old_baseline, new_baseline, 1),
+              encoding="utf-8",
+          )
           PY
 
       - name: Install dependencies
