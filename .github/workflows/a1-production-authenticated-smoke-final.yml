@@ -91,8 +91,11 @@ jobs:
 
           mkdir -p app/.vercel app/a1-production-smoke-evidence
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > app/.vercel/project.json
-          npx --yes vercel@56.5.0 env pull app/.vercel-production.env \
-            --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+          (
+            cd app
+            npx --yes vercel@56.5.0 env pull .vercel-production.env \
+              --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+          )
 
           node --env-file=app/.vercel-production.env <<'NODE'
           const fs = require('node:fs');
