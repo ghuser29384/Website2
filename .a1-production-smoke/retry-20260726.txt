@@ -1,1 +1,1 @@
-Run safe credential-presence and Vercel authorization diagnostics to select a valid production verification path.
+Trigger the one-shot security cleanup for the credential-diagnostic artifact and workflow run.
