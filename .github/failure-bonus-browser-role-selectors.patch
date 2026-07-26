@@ -1,0 +1,96 @@
+diff --git a/.github/scripts/failure-bonus-authenticated-browser-qa.mjs b/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
+index 00b0cd1..8fe9ee2 100644
+--- a/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
++++ b/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
+@@ -216,44 +216,57 @@ async function assertNoHorizontalOverflow(page, label) {
+   ).toBeLessThanOrEqual(dimensions.viewportWidth + 3);
+ }
+ 
++function textbox(page, name) {
++  return page.getByRole("textbox", { name, exact: true });
++}
++
++function spinbutton(page, name) {
++  return page.getByRole("spinbutton", { name, exact: true });
++}
++
++function combobox(page, name) {
++  return page.getByRole("combobox", { name, exact: true });
++}
++
+ async function fillProposal(page) {
+-  await page.getByLabel("Proposal title").fill(proposalTitle);
+-  await page.getByLabel("Cause area").fill("QA animal welfare coordination");
+-  await page.getByLabel("Requested maximum funding").fill("20000");
+-  await page.getByLabel("Minimum viable funding").fill("5000");
+-  await page.getByLabel("Summary").fill("Synthetic authenticated QA proposal for failure-bonus reserve pricing.");
+-  await page.getByLabel("Problem statement").fill("Contributors may wait for others unless the conditional funding terms are credible.");
+-  await page.getByLabel("Proposed intervention").fill("Run a bounded synthetic threshold pool with no live payment or beneficiary.");
+-  await page.getByLabel("Moral public-good rationale").fill("The test verifies voluntary coordination infrastructure without moving money.");
+-  await page.getByLabel("Output unit label").fill("verified QA outcome");
+-  await page.getByLabel("Reference alternative").fill("No synthetic pool");
+-  await page.getByLabel("Output unit definition").fill("One exact proposal and premium quote persisted under the reviewed policy.");
+-  await page.getByLabel("Measurement method").fill("Database fields, generated quote, browser receipt, and rollback-safe cleanup.");
+-  await page.getByLabel("Uncertainty description").fill("No causal impact claim; this is isolated systems QA.");
+-  await page.getByLabel("Expected effect vs funding").fill("No real funding; verifies exact-cent accounting and disclosures.");
+-  await page.getByLabel("Timeline").fill("Create, verify, and remove the synthetic proposal during this QA run.");
+-  await page.getByLabel("Milestones").fill("Proposal saved\nQuote generated\nSynthetic data removed");
+-  await page.getByLabel("Risks").fill("Accidental persistence outside the isolated QA project");
+-  await page.getByLabel("Misuse pathways").fill("None; the script refuses non-QA database and non-local application targets.");
+-  await page.getByLabel("Proposed recipient").fill("Synthetic QA recipient");
+-  await page.getByLabel("Implementing team").fill("MoralTrade QA automation");
+-  await page.getByLabel("Destination type").selectOption("external_charity");
+-  await page.getByLabel("Destination reference").fill(`qa://failure-bonus/${runTag}`);
+-  await page.getByLabel("Net recipient amount threshold").fill("10000");
+-  await page.getByLabel("Verified supporter minimum").fill("25");
+-
+-  const failureBonusToggle = page.getByLabel(
+-    "Offer a backed failure bonus and price a success premium for the common reserve",
+-  );
++  await textbox(page, "Proposal title").fill(proposalTitle);
++  await textbox(page, "Cause area").fill("QA animal welfare coordination");
++  await spinbutton(page, "Requested maximum funding").fill("20000");
++  await spinbutton(page, "Minimum viable funding").fill("5000");
++  await textbox(page, "Summary").fill("Synthetic authenticated QA proposal for failure-bonus reserve pricing.");
++  await textbox(page, "Problem statement").fill("Contributors may wait for others unless the conditional funding terms are credible.");
++  await textbox(page, "Proposed intervention").fill("Run a bounded synthetic threshold pool with no live payment or beneficiary.");
++  await textbox(page, "Moral public-good rationale").fill("The test verifies voluntary coordination infrastructure without moving money.");
++  await textbox(page, "Output unit label").fill("verified QA outcome");
++  await textbox(page, "Reference alternative").fill("No synthetic pool");
++  await textbox(page, "Output unit definition").fill("One exact proposal and premium quote persisted under the reviewed policy.");
++  await textbox(page, "Measurement method").fill("Database fields, generated quote, browser receipt, and rollback-safe cleanup.");
++  await textbox(page, "Uncertainty description").fill("No causal impact claim; this is isolated systems QA.");
++  await textbox(page, "Expected effect vs funding").fill("No real funding; verifies exact-cent accounting and disclosures.");
++  await textbox(page, "Timeline").fill("Create, verify, and remove the synthetic proposal during this QA run.");
++  await textbox(page, "Milestones").fill("Proposal saved\nQuote generated\nSynthetic data removed");
++  await textbox(page, "Risks").fill("Accidental persistence outside the isolated QA project");
++  await textbox(page, "Misuse pathways").fill("None; the script refuses non-QA database and non-local application targets.");
++  await textbox(page, "Proposed recipient").fill("Synthetic QA recipient");
++  await textbox(page, "Implementing team").fill("MoralTrade QA automation");
++  await combobox(page, "Destination type").selectOption("external_charity");
++  await textbox(page, "Destination reference").fill(`qa://failure-bonus/${runTag}`);
++  await spinbutton(page, "Net recipient amount threshold").fill("10000");
++  await spinbutton(page, "Verified supporter minimum").fill("25");
++
++  const failureBonusToggle = page.getByRole("checkbox", {
++    name: "Offer a backed failure bonus and price a success premium for the common reserve",
++    exact: true,
++  });
+   if (!(await failureBonusToggle.isChecked())) await failureBonusToggle.check();
+-  await page.getByLabel("Failure bonus rate percent").fill("10");
+-
+-  await page.getByLabel("Verification method").fill("Exact database and browser evidence from isolated QA.");
+-  await page.getByLabel("Anti-threat baseline rule").fill("No contributor receives value for creating or threatening the underlying problem.");
+-  await page.getByLabel("Exit rule").fill("The draft may be removed before review; no live obligation exists.");
+-  await page.getByLabel("Base match ratio").fill("1");
+-  await page.getByLabel("QF cap multiple").fill("1.5");
+-  await page.getByLabel("Payout method").selectOption("external_handoff");
++  await spinbutton(page, "Failure bonus rate percent").fill("10");
++
++  await textbox(page, "Verification method").fill("Exact database and browser evidence from isolated QA.");
++  await textbox(page, "Anti-threat baseline rule").fill("No contributor receives value for creating or threatening the underlying problem.");
++  await textbox(page, "Exit rule").fill("The draft may be removed before review; no live obligation exists.");
++  await spinbutton(page, "Base match ratio").fill("1");
++  await spinbutton(page, "QF cap multiple").fill("1.5");
++  await combobox(page, "Payout method").selectOption("external_handoff");
+ }
