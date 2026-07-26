@@ -33,15 +33,22 @@ jobs:
 
           path = Path('.github/workflows/apply-collective-commitments.yml')
           source = path.read_text()
-          old = 'pattern = re.compile(r"^not ok \\d+ - (.+)$", re.MULTILINE)'
-          new = 'pattern = re.compile(r"^✖ (.+) \\((?:\\d+(?:\\.\\d+)?|\\d+e[+-]?\\d+)ms\\)$", re.MULTILINE)'
-          count = source.count(old)
-          if count == 0 and new in source:
+          lines = source.splitlines()
+          targets = [
+              index
+              for index, line in enumerate(lines)
+              if 'pattern = re.compile(r"^not ok ' in line and 're.MULTILINE)' in line
+          ]
+          new_fragment = 'pattern = re.compile(r"^✖ (.+) \\((?:\\d+(?:\\.\\d+)?|\\d+e[+-]?\\d+)ms\\)$", re.MULTILINE)'
+          if not targets and new_fragment in source:
               print('Parser already repaired; no write required.')
               raise SystemExit(0)
-          if count != 1:
-              raise SystemExit(f'Expected one parser target; found {count}.')
-          path.write_text(source.replace(old, new))
+          if len(targets) != 1:
+              raise SystemExit(f'Expected one parser target; found {len(targets)}.')
+          index = targets[0]
+          indent = lines[index][: len(lines[index]) - len(lines[index].lstrip())]
+          lines[index] = indent + new_fragment
+          path.write_text('\n'.join(lines) + '\n')
           PY
 
       - name: Commit and push only the parser repair
