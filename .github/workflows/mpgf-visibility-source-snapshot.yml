@@ -17,12 +17,21 @@ permissions:
 jobs:
   export-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Create source archive
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create source and dependency archives
         run: |
           tar \
             --exclude=.git \
@@ -31,10 +40,18 @@ jobs:
             --exclude=test-results \
             --exclude=playwright-report \
             -czf /tmp/mpgf-visibility-source.tar.gz .
+          tar -czf /tmp/mpgf-visibility-node-modules.tar.gz node_modules
 
       - name: Upload source archive
         uses: actions/upload-artifact@v4
         with:
           name: mpgf-visibility-source-${{ github.run_id }}
           path: /tmp/mpgf-visibility-source.tar.gz
+          retention-days: 2
+
+      - name: Upload dependency archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-visibility-node-modules-${{ github.run_id }}
+          path: /tmp/mpgf-visibility-node-modules.tar.gz
           retention-days: 2
