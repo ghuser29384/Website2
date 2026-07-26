@@ -16,9 +16,6 @@
   <script>
     (async function loadMoralTrade() {
       try {
-        const firstVisit =
-          window.location.pathname === "/walkthrough" &&
-          new URLSearchParams(window.location.search).get("first_visit") === "1";
         const accountPromise = fetch("/api/live-account", {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
@@ -58,18 +55,6 @@
           .replace(/&/g, "\\u0026")
           .replace(/\u2028/g, "\\u2028")
           .replace(/\u2029/g, "\\u2029");
-        const firstVisitStyles = firstVisit
-          ? `<style>
-              .mtw-first-visit-skip-form{position:fixed;top:19px;right:72px;z-index:200;margin:0}
-              .mtw-first-visit-skip-button{min-width:64px;min-height:42px;padding:0 16px;border:1px solid rgba(244,240,232,.34);border-radius:999px;background:rgba(17,18,15,.88);color:#f4f0e8;box-shadow:0 10px 28px rgba(0,0,0,.18);backdrop-filter:blur(14px);font:650 14px/1 system-ui,sans-serif;cursor:pointer}
-              .mtw-first-visit-skip-button:hover{border-color:rgba(244,240,232,.72);background:rgba(39,40,35,.96)}
-              .mtw-first-visit-skip-button:focus-visible{outline:3px solid #9db0ff;outline-offset:4px}
-              @media(max-width:740px){.mtw-first-visit-skip-form{top:13px;right:61px}.mtw-first-visit-skip-button{min-width:58px;padding:0 12px;font-size:13px}}
-            </style>`
-          : "";
-        const firstVisitControl = firstVisit
-          ? '<form action="/" class="mtw-first-visit-skip-form" method="get"><button aria-label="Skip walkthrough" class="mtw-first-visit-skip-button" type="submit">Skip</button></form>'
-          : "";
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
           '<script src="/moral-trade-account-identity.js"><\/script>',
@@ -78,9 +63,8 @@
 
         html = html.replace(
           "</head>",
-          `${firstVisitStyles}<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"><link rel="stylesheet" href="/moral-trade-input-assist.css">${accountScripts}</head>`
+          `<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"><link rel="stylesheet" href="/moral-trade-input-assist.css">${accountScripts}</head>`
         );
-        html = html.replace("<body>", `<body>${firstVisitControl}`);
         html = html.replace(
           "</body>",
           '<script src="/walkthrough-profile-enhancement.js"><\/script><script src="/moral-trade-brand.js"><\/script><script src="/moral-trade-input-assist.js"><\/script></body>'
