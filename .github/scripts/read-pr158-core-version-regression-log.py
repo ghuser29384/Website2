@@ -4,7 +4,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89817493894
+JOB_ID = 89818140904
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -19,7 +19,7 @@ def download(repo: str, token: str) -> str:
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "moraltrade-pr158-core-version-regression-reader",
+            "User-Agent": "moraltrade-pr158-offer-close-generator-reader",
         },
     )
     opener = urllib.request.build_opener(NoRedirect)
@@ -35,7 +35,7 @@ def download(repo: str, token: str) -> str:
         with urllib.request.urlopen(
             urllib.request.Request(
                 location,
-                headers={"User-Agent": "moraltrade-pr158-core-version-regression-reader"},
+                headers={"User-Agent": "moraltrade-pr158-offer-close-generator-reader"},
             ),
             timeout=30,
         ) as redirected:
@@ -61,11 +61,11 @@ def main() -> int:
     lines = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"])).splitlines()
     noteworthy = []
     pattern = re.compile(
-        r"(?i)(Run live rollback|PASS:|ERROR:|DETAIL:|HINT:|CONTEXT:|psql:|exception|failed|Process completed with exit code|ROLLBACK|COMMIT|CREATE TRIGGER|DROP TRIGGER)"
+        r"(?i)(Generate exact migrations|Traceback|RuntimeError|ValueError|Expected|found|generated|Process completed with exit code|failed)"
     )
     for index, line in enumerate(lines):
         if pattern.search(line):
-            noteworthy.extend(lines[max(0, index - 5) : min(len(lines), index + 18)])
+            noteworthy.extend(lines[max(0, index - 15) : min(len(lines), index + 35)])
     deduped = []
     seen = set()
     for line in noteworthy:
@@ -73,12 +73,12 @@ def main() -> int:
             seen.add(line)
             deduped.append(line)
 
-    print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_BEGIN")
+    print("SANITIZED_OFFER_CLOSE_GENERATOR_FAILURE_BEGIN")
     print("--- NOTEWORTHY LINES ---")
     print("\n".join(deduped[-700:]))
     print("--- TERMINAL LOG TAIL ---")
-    print("\n".join(lines[-420:]))
-    print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_END")
+    print("\n".join(lines[-260:]))
+    print("SANITIZED_OFFER_CLOSE_GENERATOR_FAILURE_END")
     return 0
 
 
