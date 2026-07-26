@@ -996,6 +996,18 @@ e2e = replace_once(
     '  await page.getByRole("button", { name: "$25" }).click();',
     "make Crowd twenty-five-dollar selector tolerate decorative input-assist glyph",
 )
+e2e = replace_once(
+    e2e,
+    '    "https://moraltrade.org/create?mode=back",',
+    '    "/create?source=walkthrough&mode=back",',
+    "make career-backing route assertion match production shell rewrite",
+)
+e2e = replace_once(
+    e2e,
+    '    "https://moraltrade.org/pools",',
+    '    "/discover?source=walkthrough&domain=pools&view=threshold",',
+    "make conditional-pools route assertion match production shell rewrite",
+)
 write(e2e_path, e2e)
 
 source_test = '''import assert from "node:assert/strict";
