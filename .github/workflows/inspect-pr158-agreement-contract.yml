@@ -44,6 +44,19 @@ jobs:
               fi
             done
 
+            echo '=== agreement read paths ==='
+            for symbol in listAgreementsForUser getAgreementForUser; do
+              line="$(grep -n "^export async function ${symbol}" src/lib/app-data.ts | head -n1 | cut -d: -f1 || true)"
+              echo "--- ${symbol} line ${line:-not-found} ---"
+              if [[ -n "$line" ]]; then
+                start=$(( line > 25 ? line - 25 : 1 ))
+                end=$(( line + 250 ))
+                sed -n "${start},${end}p" src/lib/app-data.ts
+              fi
+            done
+            echo '=== evidence table references in app-data ==='
+            grep -n -C 8 -E 'agreement_evidence_items|agreement_review_cases|trade_evidence_items|trade_review_events' src/lib/app-data.ts || true
+
             echo '=== agreement type excerpt ==='
             line="$(grep -n '^      agreements: {' src/lib/supabase/database.types.ts | head -n1 | cut -d: -f1 || true)"
             if [[ -n "$line" ]]; then
