@@ -1,0 +1,141 @@
+name: Failure bonus combined integration gates
+
+on:
+  pull_request:
+    branches:
+      - feature/mpgf-pool-visibility-controls-20260726
+    paths:
+      - ".github/workflows/failure-bonus-combined-integration-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: failure-bonus-combined-integration-gates
+  cancel-in-progress: false
+
+jobs:
+  combined-integration-gates:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'qa/failure-bonus-combined-integration-gates-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_HEAD: 227bfed97372979d5860f37342e84bdc6041ccd9
+      RELEASE_GATE_ARTIFACT_DIR: ${{ github.workspace }}/failure-bonus-combined-integration-gates
+
+    steps:
+      - name: Validate exact execution target
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository: $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_HEAD_REF" != "qa/failure-bonus-combined-integration-gates-20260726" ]]; then
+            echo "Refusing unexpected head branch: $GITHUB_HEAD_REF" >&2
+            exit 1
+          fi
+
+      - name: Check out the exact combined integration head
+        uses: actions/checkout@v4
+        with:
+          ref: 227bfed97372979d5860f37342e84bdc6041ccd9
+          fetch-depth: 0
+
+      - name: Prove exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git status --porcelain | wc -l | tr -d ' ')" = "0"
+          mkdir -p "$RELEASE_GATE_ARTIFACT_DIR"
+          {
+            echo "expected_head=$EXPECTED_HEAD"
+            echo "actual_head=$(git rev-parse HEAD)"
+            echo "parent_1=$(git rev-parse HEAD^1)"
+            echo "parent_2=$(git rev-parse HEAD^2)"
+          } | tee "$RELEASE_GATE_ARTIFACT_DIR/source-identity.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-test.log"
+
+      - name: Run complete lint gate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-lint.log"
+
+      - name: Validate isolated-QA build configuration
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret for build: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Run production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          SITE_URL: http://127.0.0.1:3000
+          VERCEL_ENV: preview
+          NEXT_PUBLIC_VERCEL_ENV: preview
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/npm-build.log"
+
+      - name: Run whitespace gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/git-diff-check-worktree.log"
+          git diff --check "${EXPECTED_HEAD}^1" "$EXPECTED_HEAD" 2>&1 | tee "$RELEASE_GATE_ARTIFACT_DIR/git-diff-check-merge.log"
+          git status --porcelain > "$RELEASE_GATE_ARTIFACT_DIR/post-build-status.txt"
+
+      - name: Record passing gate summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RELEASE_GATE_ARTIFACT_DIR/summary.txt" <<SUMMARY
+          exact_head=$EXPECTED_HEAD
+          npm_test=passed
+          npm_lint=passed
+          npm_build=passed
+          git_diff_check_worktree=passed
+          git_diff_check_merge=passed
+          SUMMARY
+
+      - name: Upload combined integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-bonus-combined-integration-gates-${{ github.run_id }}
+          path: failure-bonus-combined-integration-gates
+          if-no-files-found: warn
+          retention-days: 14
