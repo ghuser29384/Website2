@@ -32,12 +32,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          archive="$RUNNER_TEMP/collective-commitments-source.tar.gz"
           tar \
             --exclude=.git \
             --exclude=node_modules \
             --exclude=.next \
             --exclude=output \
-            -czf collective-commitments-source.tar.gz .
+            -czf "$archive" .
+          cp "$archive" collective-commitments-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: collective-commitments-source-${{ github.run_id }}
