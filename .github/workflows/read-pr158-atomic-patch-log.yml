@@ -22,7 +22,14 @@ jobs:
     steps:
       - name: Check out diagnostic script
         uses: actions/checkout@v4
-      - name: Print sanitized failure excerpt
+      - name: Capture sanitized failure excerpt
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/read-pr158-atomic-patch-log.py
+        run: python3 .github/scripts/read-pr158-atomic-patch-log.py > patch-failure.txt
+      - name: Upload sanitized failure excerpt
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-atomic-patch-failure-${{ github.run_id }}
+          path: patch-failure.txt
+          if-no-files-found: error
+          retention-days: 1
