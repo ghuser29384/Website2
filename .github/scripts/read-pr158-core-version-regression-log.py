@@ -59,17 +59,25 @@ def sanitize(text: str) -> str:
 
 def main() -> int:
     lines = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"])).splitlines()
-    marker = next(
-        (i for i, line in enumerate(lines) if "Run live rollback and success regressions" in line),
-        max(0, len(lines) - 400),
+    noteworthy = []
+    pattern = re.compile(
+        r"(?i)(Run live rollback|PASS:|ERROR:|DETAIL:|HINT:|CONTEXT:|psql:|exception|failed|Process completed with exit code|ROLLBACK|COMMIT|CREATE TRIGGER|DROP TRIGGER)"
     )
-    candidate = lines[marker:]
-    end = next(
-        (i for i, line in enumerate(candidate[1:], start=1) if "##[group]Run" in line),
-        min(len(candidate), 500),
-    )
+    for index, line in enumerate(lines):
+        if pattern.search(line):
+            noteworthy.extend(lines[max(0, index - 3) : min(len(lines), index + 8)])
+    deduped = []
+    seen = set()
+    for line in noteworthy:
+        if line not in seen:
+            seen.add(line)
+            deduped.append(line)
+
     print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_BEGIN")
-    print("\n".join(candidate[:end]))
+    print("--- NOTEWORTHY LINES ---")
+    print("\n".join(deduped[-500:]))
+    print("--- TERMINAL LOG TAIL ---")
+    print("\n".join(lines[-420:]))
     print("SANITIZED_CORE_VERSION_REGRESSION_FAILURE_END")
     return 0
 
