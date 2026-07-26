@@ -1,0 +1,45 @@
+name: Export PR 158 agreement files
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/export-pr158-agreement-files.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/inspect-pr158-agreement-contract-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact repaired PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: 17aa121e7db269510f483edc6371964dd4dc5bf7
+
+      - name: Package agreement contract files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pr158-agreement-files/supabase/migrations pr158-agreement-files/src/app
+          cp supabase/migrations/20260524_agreement_evidence_verification_loop.sql pr158-agreement-files/supabase/migrations/
+          cp supabase/migrations/20260716080505_core_trade_loop.sql pr158-agreement-files/supabase/migrations/
+          cp supabase/migrations/20260716084012_core_trade_legacy_bridge_and_guards.sql pr158-agreement-files/supabase/migrations/
+          cp supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql pr158-agreement-files/supabase/migrations/
+          cp supabase/tests/marketplace_interest_acceptance_atomicity.sql pr158-agreement-files/supabase/
+          cp src/app/actions.ts pr158-agreement-files/src/app/
+          sha256sum $(find pr158-agreement-files -type f | sort) > pr158-agreement-files/SHA256SUMS
+
+      - name: Upload agreement contract files
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-agreement-contract-files-${{ github.run_id }}
+          path: pr158-agreement-files
+          if-no-files-found: error
+          retention-days: 2
