@@ -1,1 +1,1 @@
-Run the authenticated production sequence with the synthetic published offer kept open, then wait for the actual every-minute Vercel recommendation-training cron.
+Rerun the authenticated production sequence with robust feedback-page diagnostics, cascade-safe cleanup, and the actual every-minute Vercel recommendation-training cron.
