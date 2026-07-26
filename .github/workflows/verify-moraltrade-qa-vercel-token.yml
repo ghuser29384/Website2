@@ -1,4 +1,4 @@
-name: Verify MoralTrade QA Vercel token scope
+name: Configure MoralTrade QA Vercel Preview variables
 
 on:
   pull_request:
@@ -11,15 +11,20 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  configure:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 20
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       EXPECTED_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       EXPECTED_TEAM_SLUG: ellen-s
+      VERCEL_SCOPE: ellen-s
+      MORALTRADE_QA_GIT_BRANCH: agent/dynamic-marketplace-clearing-rounds
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
     steps:
-      - name: Validate same-repository PR branch
+      - name: Validate same-repository PR branch and required secrets
         shell: bash
         run: |
           set -euo pipefail
@@ -31,35 +36,49 @@ jobs:
             echo "Refusing unexpected head branch." >&2
             exit 1
           fi
-          if [[ -z "$VERCEL_TOKEN" ]]; then
-            echo "VERCEL_TOKEN is not configured." >&2
-            exit 1
-          fi
+          for name in VERCEL_TOKEN QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
 
-      - name: Inspect token-visible Vercel account, teams, and projects
+      - name: Verify token-visible Vercel team and projects
         shell: bash
         run: |
           set -euo pipefail
           auth_header="Authorization: Bearer $VERCEL_TOKEN"
 
-          echo "Token identity:"
-          curl --fail --silent --show-error \
-            --header "$auth_header" \
-            https://api.vercel.com/v2/user \
-            | jq '{id: .user.id, username: .user.username, name: .user.name}'
-
-          echo "Token-visible teams:"
-          curl --fail --silent --show-error \
-            --header "$auth_header" \
-            'https://api.vercel.com/v2/teams?limit=100' \
-            | jq '[.teams[] | {id, slug, name}]'
-
-          echo "Expected team project access:"
-          for project in website2 moraltrade-site; do
+          team_count="$(
             curl --fail --silent --show-error \
               --header "$auth_header" \
-              "https://api.vercel.com/v9/projects/$project?teamId=$EXPECTED_TEAM_ID" \
-              | jq --arg project "$project" '{requested: $project, id, name, accountId}'
+              'https://api.vercel.com/v2/teams?limit=100' \
+              | jq --arg id "$EXPECTED_TEAM_ID" --arg slug "$EXPECTED_TEAM_SLUG" \
+                  '[.teams[] | select(.id == $id and .slug == $slug)] | length'
+          )"
+          if [[ "$team_count" != "1" ]]; then
+            echo "The Vercel token cannot see the expected team scope." >&2
+            exit 1
+          fi
+
+          for project in website2 moraltrade-site; do
+            account_id="$(
+              curl --fail --silent --show-error \
+                --header "$auth_header" \
+                "https://api.vercel.com/v9/projects/$project?teamId=$EXPECTED_TEAM_ID" \
+                | jq -r '.accountId'
+            )"
+            if [[ "$account_id" != "$EXPECTED_TEAM_ID" ]]; then
+              echo "Unexpected Vercel account for project $project." >&2
+              exit 1
+            fi
           done
 
-          echo "Vercel token can access both projects through $EXPECTED_TEAM_SLUG / $EXPECTED_TEAM_ID."
+          echo "Vercel token can access both expected projects through $EXPECTED_TEAM_SLUG."
+
+      - name: Check out the tested branch
+        uses: actions/checkout@v4
+
+      - name: Configure branch-scoped Preview variables
+        shell: bash
+        run: bash scripts/configure-moraltrade-qa-vercel.sh
