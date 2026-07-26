@@ -1,1 +1,1 @@
-Rerun after separating RAW_PROD_SUPABASE_DB_URL from PROD_SUPABASE_DB_URL, resolving production credentials through the Vercel REST API, normalizing the Supabase session-pooler endpoint, enforcing a database preflight, rotating CRON_SECRET by API, deploying the exact A1 source by API, and retaining safe evidence.
+Run safe Vercel project and production-environment API diagnostics before the next authenticated A1 production smoke attempt.
