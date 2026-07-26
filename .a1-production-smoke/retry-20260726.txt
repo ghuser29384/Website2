@@ -1,1 +1,1 @@
-Run the authenticated production sequence by transforming the verified final smoke bundle and waiting for the actual every-minute Vercel recommendation-training cron.
+Run the authenticated production sequence with the synthetic published offer kept open, then wait for the actual every-minute Vercel recommendation-training cron.
