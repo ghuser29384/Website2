@@ -1,0 +1,65 @@
+name: Verify MoralTrade QA Vercel token scope
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/verify-moraltrade-qa-vercel-token.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      EXPECTED_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      EXPECTED_TEAM_SLUG: ellen-s
+    steps:
+      - name: Validate same-repository PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "ghuser29384/Website2" ]]; then
+            echo "Refusing a forked pull request." >&2
+            exit 1
+          fi
+          if [[ "${{ github.head_ref }}" != "agent/dynamic-marketplace-clearing-rounds" ]]; then
+            echo "Refusing unexpected head branch." >&2
+            exit 1
+          fi
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "VERCEL_TOKEN is not configured." >&2
+            exit 1
+          fi
+
+      - name: Inspect token-visible Vercel account, teams, and projects
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_header="Authorization: Bearer $VERCEL_TOKEN"
+
+          echo "Token identity:"
+          curl --fail --silent --show-error \
+            --header "$auth_header" \
+            https://api.vercel.com/v2/user \
+            | jq '{id: .user.id, username: .user.username, name: .user.name}'
+
+          echo "Token-visible teams:"
+          curl --fail --silent --show-error \
+            --header "$auth_header" \
+            'https://api.vercel.com/v2/teams?limit=100' \
+            | jq '[.teams[] | {id, slug, name}]'
+
+          echo "Expected team project access:"
+          for project in website2 moraltrade-site; do
+            curl --fail --silent --show-error \
+              --header "$auth_header" \
+              "https://api.vercel.com/v9/projects/$project?teamId=$EXPECTED_TEAM_ID" \
+              | jq --arg project "$project" '{requested: $project, id, name, accountId}'
+          done
+
+          echo "Vercel token can access both projects through $EXPECTED_TEAM_SLUG / $EXPECTED_TEAM_ID."
