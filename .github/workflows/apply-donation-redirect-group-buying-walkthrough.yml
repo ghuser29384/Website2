@@ -1,4 +1,4 @@
-name: Apply Donation Redirect group-buying walkthrough
+name: Diagnose Donation Redirect candidate lint
 
 on:
   pull_request:
@@ -10,22 +10,21 @@ on:
       - synchronize
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: donation-redirect-group-buying-walkthrough-20260726
   cancel-in-progress: true
 
 jobs:
-  implement-and-verify:
+  diagnose-lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     steps:
       - name: Check out the exact branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: feature/donation-redirect-group-buying-walkthrough-20260726
 
       - name: Set up Node.js
@@ -37,137 +36,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Establish exact main unit-test and lint baselines
-        shell: bash
-        run: |
-          set -o pipefail
-          git worktree add /tmp/moraltrade-main-baseline origin/main
-          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/moraltrade-main-baseline/node_modules
-          (cd /tmp/moraltrade-main-baseline && npm test 2>&1 | tee "$GITHUB_WORKSPACE/main-unit-test.log") || true
-          (cd /tmp/moraltrade-main-baseline && npx eslint . --format json --output-file "$GITHUB_WORKSPACE/main-eslint.json") || true
-
       - name: Apply the guarded walkthrough patch
         run: python3 scripts/apply-donation-redirect-group-buying-walkthrough.py
-
-      - name: Run the complete candidate unit and source-contract suite
-        shell: bash
-        run: |
-          set -o pipefail
-          npm test 2>&1 | tee candidate-unit-test.log || true
-
-      - name: Require zero new full-suite failures relative to main
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-
-          pattern = re.compile(r"^✖ (.+?) \([0-9.]+ms\)$")
-
-          def failures(path: str) -> set[str]:
-              names: set[str] = set()
-              for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
-                  if line == "✖ failing tests:":
-                      break
-                  match = pattern.match(line)
-                  if match:
-                      names.add(match.group(1))
-              return names
-
-          baseline = failures("main-unit-test.log")
-          candidate = failures("candidate-unit-test.log")
-          new_failures = sorted(candidate - baseline)
-
-          print(f"main failures: {len(baseline)}")
-          print(f"candidate failures: {len(candidate)}")
-          if new_failures:
-              print("new candidate failures:")
-              for name in new_failures:
-                  print(f"- {name}")
-              raise SystemExit(1)
-
-          print("No new full-suite failures relative to the exact main baseline.")
-          PY
-
-      - name: Run focused mandatory-walkthrough and Donation Redirect regressions
-        run: >-
-          node --import tsx --test
-          src/proxy.test.ts
-          src/walkthrough-production-shell.test.ts
-          src/walkthrough-donation-redirect-group-buying.test.ts
 
       - name: Capture candidate lint findings
         run: npx eslint . --format json --output-file candidate-eslint.json || true
 
-      - name: Require zero new lint findings relative to main
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
+      - name: Upload candidate lint findings
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-redirect-candidate-eslint
+          path: candidate-eslint.json
+          if-no-files-found: error
+          retention-days: 3
 
-          def findings(path: str, root: str) -> set[tuple[str, int, int, str, str]]:
-              records = json.loads(Path(path).read_text(encoding="utf-8"))
-              result: set[tuple[str, int, int, str, str]] = set()
-              for record in records:
-                  file_path = str(record.get("filePath", "")).replace(root, "").lstrip("/")
-                  for message in record.get("messages", []):
-                      if int(message.get("severity", 0)) < 2:
-                          continue
-                      result.add((
-                          file_path,
-                          int(message.get("line", 0)),
-                          int(message.get("column", 0)),
-                          str(message.get("ruleId") or ""),
-                          str(message.get("message") or ""),
-                      ))
-              return result
-
-          baseline = findings("main-eslint.json", "/tmp/moraltrade-main-baseline")
-          candidate = findings("candidate-eslint.json", str(Path.cwd()))
-          new_findings = sorted(candidate - baseline)
-
-          print(f"main lint errors: {len(baseline)}")
-          print(f"candidate lint errors: {len(candidate)}")
-          if new_findings:
-              print("new candidate lint errors:")
-              for finding in new_findings:
-                  print("-", finding)
-              raise SystemExit(1)
-
-          print("No new lint errors relative to the exact main baseline.")
-          PY
-
-      - name: Lint the changed TypeScript and TSX surface directly
-        run: >-
-          npx eslint
-          src/components/walkthrough/immersive-walkthrough.tsx
-          src/app/walkthrough/page.tsx
-          src/proxy.ts
-          src/proxy.test.ts
-          src/walkthrough-production-shell.test.ts
-          src/walkthrough-donation-redirect-group-buying.test.ts
-          tests/walkthrough.spec.ts
-
-      - name: Build the exact candidate
-        run: npm run build
-
-      - name: Install Chromium for the complete walkthrough suite
-        run: npx playwright install --with-deps chromium
-
-      - name: Run the complete walkthrough browser suite
-        run: npx playwright test tests/walkthrough.spec.ts --reporter=line
-
-      - name: Check patch whitespace
-        run: git diff --check
-
-      - name: Remove temporary updater files and commit the verified product change
-        run: |
-          rm scripts/apply-donation-redirect-group-buying-walkthrough.py
-          rm .github/workflows/apply-donation-redirect-group-buying-walkthrough.yml
-          git add -A
-          git diff --cached --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Expand Donation Redirect walkthrough with coalition group-buying"
-          git push origin HEAD
+      - name: Mark diagnostic run incomplete by design
+        run: exit 1
