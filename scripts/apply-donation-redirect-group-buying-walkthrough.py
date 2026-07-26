@@ -743,7 +743,7 @@ css_path = "src/app/walkthrough/walkthrough.css"
 css = read(css_path)
 if "Donation Redirect: rescue opposed donations" in css:
     raise RuntimeError("React redirect CSS marker already exists")
-write(css_path, css.rstrip() + react_css + "\n")
+write(css_path, (css.rstrip() + react_css).rstrip() + "\n")
 
 # Standalone walkthrough served by the production shell.
 html_path = "public/moral-trade-interactive-walkthroughs.html"
