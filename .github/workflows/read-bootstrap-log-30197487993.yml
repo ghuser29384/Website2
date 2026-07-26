@@ -1,0 +1,123 @@
+name: Read bootstrap failure excerpt
+
+on:
+  push:
+    branches:
+      - ops/read-bootstrap-log-30197487993
+    paths:
+      - .github/workflows/read-bootstrap-log-30197487993.yml
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Download, sanitize, and post the failing step excerpt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_JOB_ID: "89781500840"
+          SOURCE_RUN_ID: "30197487993"
+        run: |
+          set -euo pipefail
+
+          log_file="$RUNNER_TEMP/source-job.log"
+          comment_json="$RUNNER_TEMP/comment.json"
+
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$SOURCE_JOB_ID/logs" \
+            --output "$log_file"
+
+          LOG_FILE="$log_file" COMMENT_JSON="$comment_json" python3 <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          log_path = Path(os.environ["LOG_FILE"])
+          raw = log_path.read_text(encoding="utf-8", errors="replace")
+          raw = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", raw)
+          lines = raw.splitlines()
+
+          start_markers = (
+              "##[group]Run bash scripts/bootstrap-moraltrade-qa-schema.sh",
+              "Run bash scripts/bootstrap-moraltrade-qa-schema.sh",
+          )
+          start = next(
+              (index for index, line in enumerate(lines) if any(marker in line for marker in start_markers)),
+              None,
+          )
+
+          if start is None:
+              step_lines = lines[-160:]
+          else:
+              end = next(
+                  (index for index in range(start + 1, len(lines)) if "##[endgroup]" in lines[index]),
+                  len(lines) - 1,
+              )
+              step_lines = lines[start : end + 1]
+
+          specific_error = re.compile(
+              r"(?i)(pg_dump:\s*error|psql:\s*error|fatal:|error:|failed to|"
+              r"permission denied|could not|refusing|unexpectedly|invalid|not found)"
+          )
+          generic_exit = re.compile(r"(?i)process completed with exit code")
+
+          first_error = next(
+              (
+                  index
+                  for index, line in enumerate(step_lines)
+                  if specific_error.search(line) and not generic_exit.search(line)
+              ),
+              None,
+          )
+          if first_error is None:
+              first_error = max(0, len(step_lines) - 30)
+
+          excerpt = step_lines[first_error : first_error + 30]
+          if len(excerpt) < 30 and first_error > 0:
+              excerpt = step_lines[max(0, len(step_lines) - 30) :]
+
+          redactions = (
+              (re.compile(r"(?i)\b(?:postgres|postgresql)://\S+"), "[REDACTED_DATABASE_URL]"),
+              (re.compile(r"\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+"), "[REDACTED_SUPABASE_KEY]"),
+              (re.compile(r"\bvcp_[A-Za-z0-9_-]+"), "[REDACTED_VERCEL_TOKEN]"),
+              (
+                  re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+                  "[REDACTED_JWT]",
+              ),
+              (re.compile(r"(?i)(password\s*[=:]\s*)\S+"), r"\1[REDACTED]"),
+          )
+
+          sanitized = []
+          for line in excerpt:
+              for pattern, replacement in redactions:
+                  line = pattern.sub(replacement, line)
+              sanitized.append(line)
+
+          body = (
+              "Automated sanitized extraction from workflow run `30197487993`, "
+              "job `89781500840`, failing step **Clone schema only, verify isolation, "
+              "and seed synthetic fixtures**. GitHub secret masking and additional "
+              "explicit redaction were applied.\n\n"
+              "```text\n"
+              + "\n".join(sanitized)
+              + "\n```"
+          )
+          Path(os.environ["COMMENT_JSON"]).write_text(
+              json.dumps({"body": body}), encoding="utf-8"
+          )
+          PY
+
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/issues/158/comments" \
+            --input "$comment_json" \
+            >/dev/null
