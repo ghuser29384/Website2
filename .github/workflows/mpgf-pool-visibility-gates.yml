@@ -52,44 +52,74 @@ jobs:
         run: node --import tsx --test src/lib/mpgf/pool-visibility.test.ts
 
       - name: Run repository tests
-        shell: bash
-        run: |
-          if ! npm test > repository-tests.log 2>&1; then
-            echo "Repository tests failed. Last 240 log lines:"
-            tail -n 240 repository-tests.log
-            exit 1
-          fi
-          tail -n 40 repository-tests.log
+        id: repository_tests
+        continue-on-error: true
+        run: npm test > repository-tests.log 2>&1
 
       - name: Run repository lint
-        shell: bash
-        run: |
-          if ! npm run lint -- --quiet > repository-lint.log 2>&1; then
-            echo "Repository lint failed. Last 240 log lines:"
-            tail -n 240 repository-lint.log
-            exit 1
-          fi
-          tail -n 40 repository-lint.log
+        id: repository_lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > repository-lint.log 2>&1
 
       - name: Build the production application
-        shell: bash
+        id: production_build
+        continue-on-error: true
         env:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
           VERCEL: "1"
           VERCEL_ENV: preview
-        run: |
-          if ! npm run build > production-build.log 2>&1; then
-            echo "Production build failed. Last 240 log lines:"
-            tail -n 240 production-build.log
-            exit 1
-          fi
-          tail -n 40 production-build.log
+        run: npm run build > production-build.log 2>&1
 
       - name: Check whitespace errors
+        id: whitespace_check
+        continue-on-error: true
         shell: bash
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: |
           base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}}"
-          git diff --check "$base_sha" "${GITHUB_SHA}"
+          git diff --check "$base_sha" "${GITHUB_SHA}" > diff-check.log 2>&1
+
+      - name: Upload gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-pool-visibility-gates-${{ github.run_id }}
+          path: |
+            repository-tests.log
+            repository-lint.log
+            production-build.log
+            diff-check.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report failed gates
+        if: always()
+        shell: bash
+        env:
+          TEST_OUTCOME: ${{ steps.repository_tests.outcome }}
+          LINT_OUTCOME: ${{ steps.repository_lint.outcome }}
+          BUILD_OUTCOME: ${{ steps.production_build.outcome }}
+          DIFF_OUTCOME: ${{ steps.whitespace_check.outcome }}
+        run: |
+          failed=0
+          report_failure() {
+            local label="$1"
+            local outcome="$2"
+            local logfile="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 120 log lines follow"
+              tail -n 120 "$logfile" || true
+            fi
+          }
+
+          report_failure "Repository tests" "$TEST_OUTCOME" repository-tests.log
+          report_failure "Repository lint" "$LINT_OUTCOME" repository-lint.log
+          report_failure "Production build" "$BUILD_OUTCOME" production-build.log
+          report_failure "Whitespace check" "$DIFF_OUTCOME" diff-check.log
+
+          if [[ "$failed" -ne 0 ]]; then
+            exit 1
+          fi
