@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getViewer } from "@/lib/app-data";
+import type { FailureBonusSuccessPremiumPricingAssumptions } from "@/lib/mpgf/failure-bonus-success-premium";
 import type { MpgfParticipantActionResult } from "@/lib/mpgf/participant-types";
 import {
   loadMpgfParticipantState,
@@ -396,6 +397,16 @@ export async function saveMpgfPoolProposalAction(input: {
   publicGoodsDestinationRef?: string;
   publicGoodsThresholdAmountDollars?: number;
   publicGoodsThresholdSupporters?: number;
+  publicGoodsFailureBonusEnabled?: boolean;
+  publicGoodsFailureBonusRateBps?: number;
+  publicGoodsSuccessPremiumRateBps?: number;
+  publicGoodsSuccessPremiumCents?: number;
+  publicGoodsSuccessPremiumPayer?: "pool_creator_or_sponsor";
+  publicGoodsSuccessPremiumPolicyVersion?: string;
+  publicGoodsSuccessPremiumIncludedInNetThreshold?: false;
+  publicGoodsSuccessPremiumProvisional?: true;
+  publicGoodsGrossSuccessRequirementCents?: number;
+  publicGoodsSuccessPremiumPricingAssumptions?: FailureBonusSuccessPremiumPricingAssumptions;
   publicGoodsDeadlineAt?: string;
   publicGoodsVerificationMethod?: string;
   publicGoodsBaselineRule?: string;
@@ -447,6 +458,18 @@ export async function saveMpgfPoolProposalAction(input: {
           ? undefined
           : Math.max(0, centsFromDollars(input.publicGoodsThresholdAmountDollars)),
       publicGoodsThresholdSupporters: input.publicGoodsThresholdSupporters,
+      publicGoodsFailureBonusEnabled: input.publicGoodsFailureBonusEnabled,
+      publicGoodsFailureBonusRateBps: input.publicGoodsFailureBonusRateBps,
+      publicGoodsSuccessPremiumRateBps: input.publicGoodsSuccessPremiumRateBps,
+      publicGoodsSuccessPremiumCents: input.publicGoodsSuccessPremiumCents,
+      publicGoodsSuccessPremiumPayer: input.publicGoodsSuccessPremiumPayer,
+      publicGoodsSuccessPremiumPolicyVersion: input.publicGoodsSuccessPremiumPolicyVersion,
+      publicGoodsSuccessPremiumIncludedInNetThreshold:
+        input.publicGoodsSuccessPremiumIncludedInNetThreshold,
+      publicGoodsSuccessPremiumProvisional: input.publicGoodsSuccessPremiumProvisional,
+      publicGoodsGrossSuccessRequirementCents: input.publicGoodsGrossSuccessRequirementCents,
+      publicGoodsSuccessPremiumPricingAssumptions:
+        input.publicGoodsSuccessPremiumPricingAssumptions,
       publicGoodsDeadlineAt: input.publicGoodsDeadlineAt,
       publicGoodsVerificationMethod: input.publicGoodsVerificationMethod,
       publicGoodsBaselineRule: input.publicGoodsBaselineRule,

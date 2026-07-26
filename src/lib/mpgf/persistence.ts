@@ -10,6 +10,14 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
+import {
+  FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+  buildProvisionalFailureBonusSuccessPremiumAssumptions,
+  calculateExperienceRatedSuccessPremiumBps,
+  calculateSuccessPremiumCents,
+  type FailureBonusSuccessPremiumPayer,
+  type FailureBonusSuccessPremiumPricingAssumptions,
+} from "./failure-bonus-success-premium";
 import { assertMpgfPublicGoodsCohortAccess, createMpgfPublicGoodsPledge } from "./mechanism";
 import type { MpgfParticipantState, MpgfPoolProposalRecord } from "./participant-types";
 import {
@@ -77,6 +85,16 @@ export interface SavePoolProposalInput extends Required<MpgfParticipantIdentity>
   publicGoodsDestinationRef?: string;
   publicGoodsThresholdAmountCents?: number;
   publicGoodsThresholdSupporters?: number;
+  publicGoodsFailureBonusEnabled?: boolean;
+  publicGoodsFailureBonusRateBps?: number;
+  publicGoodsSuccessPremiumRateBps?: number;
+  publicGoodsSuccessPremiumCents?: number;
+  publicGoodsSuccessPremiumPayer?: "pool_creator_or_sponsor";
+  publicGoodsSuccessPremiumPolicyVersion?: string;
+  publicGoodsSuccessPremiumIncludedInNetThreshold?: false;
+  publicGoodsSuccessPremiumProvisional?: true;
+  publicGoodsGrossSuccessRequirementCents?: number;
+  publicGoodsSuccessPremiumPricingAssumptions?: FailureBonusSuccessPremiumPricingAssumptions;
   publicGoodsDeadlineAt?: string;
   publicGoodsVerificationMethod?: string;
   publicGoodsBaselineRule?: string;
@@ -371,6 +389,26 @@ function implementingTeamFromJson(value: unknown) {
   return toStringOrUndefined(record?.summary);
 }
 
+function coerceSuccessPremiumPayer(value: unknown): FailureBonusSuccessPremiumPayer | undefined {
+  return value === "pool_creator_or_sponsor" || value === "contributors_pro_rata" ? value : undefined;
+}
+
+function successPremiumAssumptionsFromJson(
+  value: unknown,
+): FailureBonusSuccessPremiumPricingAssumptions | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const assumptions = {
+    successProbabilityBps: toNumber(record.successProbabilityBps, Number.NaN),
+    failureBonusRateBps: toNumber(record.failureBonusRateBps, Number.NaN),
+    expectedEligibleFailureFillBps: toNumber(record.expectedEligibleFailureFillBps, Number.NaN),
+    expenseLoadBps: toNumber(record.expenseLoadBps, Number.NaN),
+    reserveRiskMarginBps: toNumber(record.reserveRiskMarginBps, Number.NaN),
+  };
+
+  return Object.values(assumptions).every(Number.isSafeInteger) ? assumptions : undefined;
+}
+
 function coercePledgeStatus(value: unknown): MpgfPledge["status"] {
   if (
     value === "pledged" ||
@@ -580,6 +618,29 @@ function mapPoolProposalRow(row: Record<string, unknown>): MpgfPoolProposalRecor
       row.public_goods_threshold_amount_cents == null ? undefined : toNumber(row.public_goods_threshold_amount_cents),
     publicGoodsThresholdSupporters:
       row.public_goods_threshold_supporters == null ? undefined : toNumber(row.public_goods_threshold_supporters),
+    publicGoodsFailureBonusEnabled:
+      row.public_goods_failure_bonus_enabled == null ? undefined : Boolean(row.public_goods_failure_bonus_enabled),
+    publicGoodsFailureBonusRateBps:
+      row.public_goods_failure_bonus_rate_bps == null ? undefined : toNumber(row.public_goods_failure_bonus_rate_bps),
+    publicGoodsSuccessPremiumRateBps:
+      row.public_goods_success_premium_rate_bps == null ? undefined : toNumber(row.public_goods_success_premium_rate_bps),
+    publicGoodsSuccessPremiumCents:
+      row.public_goods_success_premium_cents == null ? undefined : toNumber(row.public_goods_success_premium_cents),
+    publicGoodsSuccessPremiumPayer: coerceSuccessPremiumPayer(row.public_goods_success_premium_payer),
+    publicGoodsSuccessPremiumPolicyVersion: toStringOrUndefined(row.public_goods_success_premium_policy_version),
+    publicGoodsSuccessPremiumIncludedInNetThreshold:
+      row.public_goods_success_premium_included_in_net_threshold === false ? false : undefined,
+    publicGoodsSuccessPremiumProvisional:
+      row.public_goods_success_premium_provisional == null
+        ? undefined
+        : Boolean(row.public_goods_success_premium_provisional),
+    publicGoodsGrossSuccessRequirementCents:
+      row.public_goods_gross_success_requirement_cents == null
+        ? undefined
+        : toNumber(row.public_goods_gross_success_requirement_cents),
+    publicGoodsSuccessPremiumPricingAssumptions: successPremiumAssumptionsFromJson(
+      row.public_goods_success_premium_pricing_json,
+    ),
     publicGoodsDeadlineAt: toStringOrUndefined(row.public_goods_deadline_at),
     publicGoodsVerificationMethod: toStringOrUndefined(row.public_goods_verification_method),
     publicGoodsBaselineRule: toStringOrUndefined(row.public_goods_baseline_rule),
@@ -1457,6 +1518,86 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
     input.publicGoodsThresholdSupporters == null || input.publicGoodsThresholdSupporters === 0
       ? undefined
       : toPositiveInteger(input.publicGoodsThresholdSupporters, "Public-goods verified supporter threshold");
+  const publicGoodsFailureBonusEnabled = input.publicGoodsFailureBonusEnabled === true;
+  const publicGoodsFailureBonusRateBps = publicGoodsFailureBonusEnabled
+    ? toPositiveInteger(input.publicGoodsFailureBonusRateBps ?? 0, "Failure-bonus rate")
+    : undefined;
+  if (publicGoodsFailureBonusRateBps != null && publicGoodsFailureBonusRateBps > 10_000) {
+    throw new Error("The automatic percentage failure-bonus quote cannot exceed 100% of contribution.");
+  }
+  const publicGoodsSuccessPremiumPayer = publicGoodsFailureBonusEnabled
+    ? input.publicGoodsSuccessPremiumPayer
+    : undefined;
+  const publicGoodsSuccessPremiumPricingAssumptions = publicGoodsFailureBonusEnabled
+    ? input.publicGoodsSuccessPremiumPricingAssumptions
+    : undefined;
+  let publicGoodsSuccessPremiumRateBps: number | undefined;
+  let publicGoodsSuccessPremiumCents: number | undefined;
+  let publicGoodsGrossSuccessRequirementCents: number | undefined;
+
+  if (publicGoodsFailureBonusEnabled) {
+    if (!publicGoodsThresholdAmountCents) {
+      throw new Error("A failure-bonus pool requires a net recipient threshold.");
+    }
+    if (!publicGoodsSuccessPremiumPricingAssumptions) {
+      throw new Error("A failure-bonus pool requires success-premium pricing assumptions.");
+    }
+    if (publicGoodsSuccessPremiumPricingAssumptions.failureBonusRateBps !== publicGoodsFailureBonusRateBps) {
+      throw new Error("Success-premium assumptions must use the proposed failure-bonus rate.");
+    }
+    const platformPricingAssumptions =
+      buildProvisionalFailureBonusSuccessPremiumAssumptions(publicGoodsFailureBonusRateBps);
+    if (
+      Object.entries(platformPricingAssumptions).some(
+        ([key, value]) =>
+          publicGoodsSuccessPremiumPricingAssumptions[
+            key as keyof FailureBonusSuccessPremiumPricingAssumptions
+          ] !== value,
+      )
+    ) {
+      throw new Error("The pool creator cannot modify the platform-controlled underwriting assumptions.");
+    }
+    if (publicGoodsSuccessPremiumPayer !== "pool_creator_or_sponsor") {
+      throw new Error(
+        "The v0.1 automatic quote requires the pool creator or a named sponsor to pay the success premium.",
+      );
+    }
+    if (input.publicGoodsSuccessPremiumPolicyVersion !== FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION) {
+      throw new Error("The success-premium policy version is missing or stale.");
+    }
+    if (input.publicGoodsSuccessPremiumIncludedInNetThreshold !== false) {
+      throw new Error("The success premium must remain outside the net recipient threshold.");
+    }
+    if (input.publicGoodsSuccessPremiumProvisional !== true) {
+      throw new Error("Pool creators cannot mark a success-premium quote as final or approved.");
+    }
+
+    const calculatedPricing = calculateExperienceRatedSuccessPremiumBps(
+      publicGoodsSuccessPremiumPricingAssumptions,
+    );
+    publicGoodsSuccessPremiumRateBps = calculatedPricing.recommendedRateBps;
+    if (input.publicGoodsSuccessPremiumRateBps !== publicGoodsSuccessPremiumRateBps) {
+      throw new Error("The submitted success-premium rate does not match the frozen pricing assumptions.");
+    }
+    if (publicGoodsSuccessPremiumRateBps <= 0) {
+      throw new Error("A failure-bonus pool requires a positive success-premium rate.");
+    }
+    publicGoodsSuccessPremiumCents = calculateSuccessPremiumCents(
+      publicGoodsThresholdAmountCents,
+      publicGoodsSuccessPremiumRateBps,
+    );
+    if (publicGoodsSuccessPremiumCents <= 0) {
+      throw new Error("A failure-bonus pool requires a positive success-premium amount.");
+    }
+    publicGoodsGrossSuccessRequirementCents =
+      publicGoodsThresholdAmountCents + publicGoodsSuccessPremiumCents;
+    if (input.publicGoodsSuccessPremiumCents !== publicGoodsSuccessPremiumCents) {
+      throw new Error("The submitted success-premium amount does not match the net threshold and rate.");
+    }
+    if (input.publicGoodsGrossSuccessRequirementCents !== publicGoodsGrossSuccessRequirementCents) {
+      throw new Error("The gross success requirement must equal the net threshold plus the success premium.");
+    }
+  }
   const publicGoodsDeadlineAt = input.publicGoodsDeadlineAt?.trim();
   const publicGoodsVerificationMethod = input.publicGoodsVerificationMethod?.trim();
   const publicGoodsBaselineRule = input.publicGoodsBaselineRule?.trim();
@@ -1520,6 +1661,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
     publicGoodsDestinationRef: publicGoodsDestinationRef || null,
     publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
     publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+    publicGoodsFailureBonusEnabled,
+    publicGoodsFailureBonusRateBps: publicGoodsFailureBonusRateBps ?? null,
+    publicGoodsSuccessPremiumRateBps: publicGoodsSuccessPremiumRateBps ?? null,
+    publicGoodsSuccessPremiumCents: publicGoodsSuccessPremiumCents ?? null,
+    publicGoodsSuccessPremiumPayer: publicGoodsSuccessPremiumPayer ?? null,
+    publicGoodsSuccessPremiumPolicyVersion: publicGoodsFailureBonusEnabled
+      ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+      : null,
+    publicGoodsSuccessPremiumIncludedInNetThreshold: false,
+    publicGoodsSuccessPremiumProvisional: publicGoodsFailureBonusEnabled ? true : null,
+    publicGoodsGrossSuccessRequirementCents: publicGoodsGrossSuccessRequirementCents ?? null,
+    publicGoodsSuccessPremiumPricingAssumptions: publicGoodsSuccessPremiumPricingAssumptions ?? null,
     publicGoodsDeadlineAt: publicGoodsDeadlineAt || null,
     publicGoodsVerificationMethod: publicGoodsVerificationMethod || null,
     publicGoodsBaselineRule: publicGoodsBaselineRule || null,
@@ -1567,6 +1720,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
         public_goods_destination_ref: publicGoodsDestinationRef || null,
         public_goods_threshold_amount_cents: publicGoodsThresholdAmountCents ?? null,
         public_goods_threshold_supporters: publicGoodsThresholdSupporters ?? null,
+        public_goods_failure_bonus_enabled: publicGoodsFailureBonusEnabled,
+        public_goods_failure_bonus_rate_bps: publicGoodsFailureBonusRateBps ?? null,
+        public_goods_success_premium_rate_bps: publicGoodsSuccessPremiumRateBps ?? null,
+        public_goods_success_premium_cents: publicGoodsSuccessPremiumCents ?? null,
+        public_goods_success_premium_payer: publicGoodsSuccessPremiumPayer ?? null,
+        public_goods_success_premium_policy_version: publicGoodsFailureBonusEnabled
+          ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+          : null,
+        public_goods_success_premium_included_in_net_threshold: false,
+        public_goods_success_premium_provisional: publicGoodsFailureBonusEnabled ? true : null,
+        public_goods_gross_success_requirement_cents: publicGoodsGrossSuccessRequirementCents ?? null,
+        public_goods_success_premium_pricing_json: publicGoodsSuccessPremiumPricingAssumptions ?? null,
         public_goods_deadline_at: publicGoodsDeadlineAt || null,
         public_goods_verification_method: publicGoodsVerificationMethod || null,
         public_goods_baseline_rule: publicGoodsBaselineRule || null,
@@ -1600,6 +1765,10 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
           publicGoodsDestinationType,
           publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
           publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+          publicGoodsFailureBonusEnabled,
+          publicGoodsSuccessPremiumRateBps: publicGoodsSuccessPremiumRateBps ?? null,
+          publicGoodsSuccessPremiumCents: publicGoodsSuccessPremiumCents ?? null,
+          publicGoodsGrossSuccessRequirementCents: publicGoodsGrossSuccessRequirementCents ?? null,
         },
       });
       await completeIdempotency(supabase, reservation, proposal);
@@ -1630,6 +1799,9 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
           publicGoodsDestinationRef ? `Destination: ${publicGoodsDestinationType} ${publicGoodsDestinationRef}` : null,
           publicGoodsThresholdAmountCents ? `Threshold: ${publicGoodsThresholdAmountCents} cents` : null,
           publicGoodsThresholdSupporters ? `Verified supporters: ${publicGoodsThresholdSupporters}` : null,
+          publicGoodsFailureBonusEnabled
+            ? `Failure bonus: ${publicGoodsFailureBonusRateBps} bps; success premium: ${publicGoodsSuccessPremiumRateBps} bps paid by ${publicGoodsSuccessPremiumPayer}; net threshold excludes premium; gross success requirement: ${publicGoodsGrossSuccessRequirementCents} cents`
+            : null,
         ].filter(Boolean).join("\n"),
         moral_public_good_rationale: [
           moralPublicGoodRationale,
@@ -1667,6 +1839,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
       publicGoodsDestinationRef: publicGoodsDestinationRef || undefined,
       publicGoodsThresholdAmountCents,
       publicGoodsThresholdSupporters,
+      publicGoodsFailureBonusEnabled,
+      publicGoodsFailureBonusRateBps,
+      publicGoodsSuccessPremiumRateBps,
+      publicGoodsSuccessPremiumCents,
+      publicGoodsSuccessPremiumPayer,
+      publicGoodsSuccessPremiumPolicyVersion: publicGoodsFailureBonusEnabled
+        ? FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION
+        : undefined,
+      publicGoodsSuccessPremiumIncludedInNetThreshold: false as const,
+      publicGoodsSuccessPremiumProvisional: publicGoodsFailureBonusEnabled ? true : undefined,
+      publicGoodsGrossSuccessRequirementCents,
+      publicGoodsSuccessPremiumPricingAssumptions,
       publicGoodsDeadlineAt: publicGoodsDeadlineAt || undefined,
       publicGoodsVerificationMethod: publicGoodsVerificationMethod || undefined,
       publicGoodsBaselineRule: publicGoodsBaselineRule || undefined,
@@ -1694,6 +1878,10 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
         publicGoodsDestinationType,
         publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
         publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+        publicGoodsFailureBonusEnabled,
+        publicGoodsSuccessPremiumRateBps: publicGoodsSuccessPremiumRateBps ?? null,
+        publicGoodsSuccessPremiumCents: publicGoodsSuccessPremiumCents ?? null,
+        publicGoodsGrossSuccessRequirementCents: publicGoodsGrossSuccessRequirementCents ?? null,
       },
     });
     await completeIdempotency(supabase, reservation, proposal);
