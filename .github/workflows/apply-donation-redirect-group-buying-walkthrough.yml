@@ -1,9 +1,6 @@
 name: Apply Donation Redirect group-buying walkthrough
 
 on:
-  push:
-    branches:
-      - feature/donation-redirect-group-buying-walkthrough-20260726
   pull_request:
     branches:
       - main
@@ -17,7 +14,7 @@ permissions:
 
 concurrency:
   group: donation-redirect-group-buying-walkthrough-20260726
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   implement-and-verify:
@@ -44,7 +41,25 @@ jobs:
         run: npm ci
 
       - name: Run the complete unit and source-contract suite
-        run: npm test
+        id: unit_tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee unit-test.log
+
+      - name: Upload unit-test failure log
+        if: steps.unit_tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-redirect-unit-test-log
+          path: unit-test.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Stop after a unit-test failure
+        if: steps.unit_tests.outcome == 'failure'
+        run: exit 1
 
       - name: Run lint
         run: npm run lint
