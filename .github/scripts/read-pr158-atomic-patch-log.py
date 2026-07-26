@@ -4,7 +4,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89806923335
+JOB_ID = 89807330937
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -62,7 +62,7 @@ def main() -> int:
             for index, line in enumerate(lines)
             if "Run focused repair gates and production build" in line
         ),
-        max(0, len(lines) - 320),
+        max(0, len(lines) - 360),
     )
     candidate = lines[marker:]
     error_indexes = [
@@ -73,9 +73,9 @@ def main() -> int:
             line,
         )
     ]
-    first_error = error_indexes[0] if error_indexes else max(0, len(candidate) - 260)
-    lo = max(0, first_error - 180)
-    hi = min(len(candidate), first_error + 360)
+    first_error = error_indexes[0] if error_indexes else max(0, len(candidate) - 300)
+    lo = max(0, first_error - 220)
+    hi = min(len(candidate), first_error + 420)
     print("SANITIZED_FOCUSED_PATCH_FAILURE_BEGIN")
     print("\n".join(candidate[lo:hi]))
     print("SANITIZED_FOCUSED_PATCH_FAILURE_END")
