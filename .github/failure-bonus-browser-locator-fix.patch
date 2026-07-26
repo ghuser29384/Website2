@@ -1,7 +1,7 @@
 diff --git a/.github/scripts/failure-bonus-authenticated-browser-qa.mjs b/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
 --- a/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
 +++ b/.github/scripts/failure-bonus-authenticated-browser-qa.mjs
-@@ -277,7 +277,12 @@ try {
+@@ -276,7 +276,12 @@ try {
  
      await login(page, "/mpgf/pools/new?template=threshold-coalition");
      await expect(page.getByRole("heading", { name: "Propose a moral public good." })).toBeVisible();
@@ -14,3 +14,4 @@ diff --git a/.github/scripts/failure-bonus-authenticated-browser-qa.mjs b/.githu
 +    ).toBeVisible();
  
      await fillProposal(page);
+ 
