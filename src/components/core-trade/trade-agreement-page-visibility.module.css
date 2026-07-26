@@ -1,0 +1,17 @@
+.scope {
+  display: contents;
+}
+
+/*
+ * The marketplace app shell suppresses legacy `.section` blocks. Agreement
+ * records intentionally retain those blocks for the frozen terms, evidence,
+ * completion controls, and private outcome feedback. Restore them only on the
+ * agreement route, where this route-scoped CSS module is loaded.
+ */
+:global(.marketplace-app-shell #main-content .section) {
+  display: block !important;
+}
+
+:global(.marketplace-app-shell #main-content .section[id]) {
+  scroll-margin-top: 5rem;
+}
