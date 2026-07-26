@@ -137,7 +137,7 @@ jobs:
           base64 --decode ../ops/.a1-production-smoke/final.gz.b64 | gzip -d > .a1-production-scheduled-cron-smoke.mjs
           echo "f82baf39e9af65aac1204416a3e0589f74f8013f30c11ec2eda7b7341d8a2a7f  .a1-production-scheduled-cron-smoke.mjs" | sha256sum -c -
           node ../ops/.a1-production-smoke/patch-to-scheduled-cron.mjs .a1-production-scheduled-cron-smoke.mjs
-          echo "96cbae3c52d502f4846bd54d2edc8504a04ee00e5d51bdb44c4b8840cd32caa0  .a1-production-scheduled-cron-smoke.mjs" | sha256sum -c -
+          echo "5241fafc5aa0ddeedf984b8f1d92dae37d7417d6e984d009ee52c79ad36d8b86  .a1-production-scheduled-cron-smoke.mjs" | sha256sum -c -
           node --check .a1-production-scheduled-cron-smoke.mjs
           node .a1-production-scheduled-cron-smoke.mjs
 
