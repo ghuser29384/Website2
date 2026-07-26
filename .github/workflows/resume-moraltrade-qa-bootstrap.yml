@@ -1,0 +1,124 @@
+name: Resume MoralTrade QA bootstrap
+
+on:
+  push:
+    branches:
+      - agent/dynamic-marketplace-clearing-rounds
+    paths:
+      - ".github/workflows/resume-moraltrade-qa-bootstrap.yml"
+      - "scripts/resume-moraltrade-qa-bootstrap.sh"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: "Enter hvmxfjjbdcgjjudmthdz to confirm the isolated QA target"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resume-moraltrade-qa-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: ellen-s
+      MORALTRADE_QA_GIT_BRANCH: agent/dynamic-marketplace-clearing-rounds
+    steps:
+      - name: Validate exact execution target
+        shell: bash
+        env:
+          CONFIRM_TARGET: ${{ inputs.confirm_target }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != "ghuser29384/Website2" ]]; then
+            echo "Refusing unexpected repository: $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/agent/dynamic-marketplace-clearing-rounds" ]]; then
+            echo "Refusing unexpected branch ref: $GITHUB_REF" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" != "push" && "$CONFIRM_TARGET" != "hvmxfjjbdcgjjudmthdz" ]]; then
+            echo "The isolated QA target was not confirmed." >&2
+            exit 1
+          fi
+
+      - name: Check out the tested branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Validate required secrets are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            PROD_SUPABASE_DB_URL
+            QA_SUPABASE_DB_URL
+            QA_SUPABASE_PUBLISHABLE_KEY
+            QA_SUPABASE_SERVICE_ROLE_KEY
+            QA_TEST_PASSWORD
+            VERCEL_TOKEN
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Verify restored schema, seed synthetic fixtures, and build baseline
+        env:
+          QA_BASELINE_ARTIFACT_DIR: ${{ runner.temp }}/moraltrade-qa-baseline
+        run: bash scripts/resume-moraltrade-qa-bootstrap.sh
+
+      - name: Upload reviewable baseline snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-qa-production-baseline-${{ github.sha }}
+          path: ${{ runner.temp }}/moraltrade-qa-baseline
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Configure branch-scoped Vercel Preview variables
+        run: bash scripts/configure-moraltrade-qa-vercel.sh
+
+      - name: Record next gate
+        run: |
+          {
+            echo "## Next gate"
+            echo
+            echo "Trigger fresh Preview deployments for both Vercel projects."
+            echo "Then run the two-account desktop and mobile browser QA in docs/moraltrade-qa-environment.md."
+            echo "Do not merge PR #158 until runtime logs and the dealroom flow pass."
+          } >> "$GITHUB_STEP_SUMMARY"
