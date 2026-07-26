@@ -1,0 +1,66 @@
+name: A1 Vercel API diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .a1-production-smoke/**
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+    steps:
+      - name: Probe Vercel project and environment APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          echo "::add-mask::$VERCEL_TOKEN"
+
+          for request in project env; do
+            if [ "$request" = project ]; then
+              url="https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID"
+            else
+              url="https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID&decrypt=true"
+            fi
+            body="/tmp/$request.json"
+            status="$(curl -sS -o "$body" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "$url")"
+            node - "$body" "$status" "$request" <<'NODE' >> diagnostics/vercel-api.txt
+          const fs = require('node:fs');
+          const [path, status, request] = process.argv.slice(2);
+          let body = {};
+          try { body = JSON.parse(fs.readFileSync(path, 'utf8')); } catch {}
+          const envs = Array.isArray(body.envs) ? body.envs : [];
+          const names = envs
+            .filter((item) => {
+              const targets = Array.isArray(item.target) ? item.target : [item.target];
+              return targets.includes('production') && !item.gitBranch;
+            })
+            .map((item) => `${item.key}:${item.type}:decrypted=${item.decrypted === true}:value_present=${typeof item.value === 'string' && item.value.length > 0}`)
+            .sort();
+          const message = body?.error?.message || body?.message || '';
+          console.log(`request=${request}`);
+          console.log(`status=${status}`);
+          console.log(`message=${message}`);
+          if (names.length) console.log(`production_envs=${names.join(',')}`);
+          NODE
+            rm -f "$body"
+          done
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a1-vercel-api-diagnostics-${{ github.run_id }}
+          path: diagnostics
+          if-no-files-found: error
+          retention-days: 7
