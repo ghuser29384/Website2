@@ -16,7 +16,7 @@
     "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "auth:configure-oauth": "node scripts/configure-supabase-oauth.mjs",
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
-    "verify:pareto": "node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/pareto-recommendation-wiring.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/pareto-recommendation-wiring.test.ts && node --check public/moral-trade-live-learning-diagnostics.js",
+    "verify:pareto": "node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --check public/moral-trade-live-learning-diagnostics.js",
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test"
   },
