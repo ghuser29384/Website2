@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Diagnostic refresh: inspect the latest completed failed patch run.
+# Diagnostic refresh: inspect the latest completed failed post-merge patch run.
 import json
 import os
 import re
