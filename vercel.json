@@ -28,6 +28,10 @@
     {
       "path": "/api/jobs/recommendation-training",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/jobs/collective-commitments-expire",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

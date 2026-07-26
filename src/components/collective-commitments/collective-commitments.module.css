@@ -1,0 +1,592 @@
+.shell {
+  min-height: 100vh;
+  background: #f6f5f1;
+  color: #191919;
+}
+
+.header {
+  background: #fff;
+  border-bottom: 1px solid rgba(25, 25, 25, 0.12);
+}
+
+.subnav {
+  display: flex;
+  gap: 1.25rem;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0.8rem 1.5rem 1rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.subnav a {
+  color: #4d4d4d;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.subnav a:hover,
+.subnav a:focus-visible {
+  color: #111;
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+}
+
+.main {
+  width: min(1180px, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 4rem 0 5rem;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.7fr);
+  gap: 3rem;
+  align-items: start;
+  padding-bottom: 3rem;
+  border-bottom: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.heroCompact {
+  padding-bottom: 2.5rem;
+}
+
+.heroCopy h1,
+.detailHeader h1 {
+  max-width: 860px;
+  margin: 0;
+  font-size: clamp(2.25rem, 5vw, 4.9rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.heroCopy p,
+.detailHeader > p {
+  max-width: 760px;
+  margin: 1.3rem 0 0;
+  color: #55524d;
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  line-height: 1.6;
+}
+
+.heroActions,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.7rem;
+}
+
+.mechanismNote {
+  padding: 1.35rem 1.45rem;
+  background: #111;
+  color: #fff;
+}
+
+.mechanismNote strong {
+  display: block;
+  margin-bottom: 0.6rem;
+  font-size: 1rem;
+}
+
+.mechanismNote p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.55;
+}
+
+.section {
+  padding: 3rem 0;
+}
+
+.section + .section {
+  border-top: 1px solid rgba(25, 25, 25, 0.12);
+}
+
+.sectionHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: end;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  letter-spacing: -0.03em;
+}
+
+.sectionHeading p {
+  max-width: 600px;
+  margin: 0;
+  color: #67635e;
+  line-height: 1.55;
+}
+
+.commitmentList {
+  display: grid;
+  gap: 1px;
+  background: rgba(25, 25, 25, 0.13);
+  border: 1px solid rgba(25, 25, 25, 0.13);
+}
+
+.commitmentCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.55fr);
+  gap: 2rem;
+  padding: 1.5rem;
+  background: #fff;
+}
+
+.commitmentCard h3 {
+  margin: 0.4rem 0 0.65rem;
+  font-size: 1.35rem;
+}
+
+.commitmentCard p {
+  margin: 0;
+  color: #5b5853;
+  line-height: 1.55;
+}
+
+.cardMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.cardMeta div,
+.identityPreview div,
+.termGrid div,
+.receiptGrid div {
+  min-width: 0;
+}
+
+.cardMeta dt,
+.identityPreview dt,
+.termGrid dt,
+.receiptGrid dt {
+  margin-bottom: 0.25rem;
+  color: #77716a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cardMeta dd,
+.identityPreview dd,
+.termGrid dd,
+.receiptGrid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid currentColor;
+  color: #4c4b47;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.statusActive {
+  color: #17623f;
+}
+
+.statusExpired {
+  color: #7b3d34;
+}
+
+.statusActivating {
+  color: #825f13;
+}
+
+.emptyState,
+.disabledState {
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid rgba(25, 25, 25, 0.13);
+}
+
+.emptyState h2,
+.disabledState h1 {
+  margin-top: 0;
+}
+
+.emptyState p,
+.disabledState p {
+  max-width: 700px;
+  color: #5b5853;
+  line-height: 1.6;
+}
+
+.form {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 2.2rem;
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.field > span,
+.fieldset legend {
+  font-size: 0.88rem;
+  font-weight: 720;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.78rem 0.85rem;
+  border: 1px solid #bbb6ae;
+  border-radius: 0;
+  background: #fff;
+  color: #171717;
+  font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 3px solid rgba(229, 91, 57, 0.25);
+  outline-offset: 1px;
+  border-color: #111;
+}
+
+.field small {
+  color: #716d67;
+  line-height: 1.45;
+}
+
+.fieldset {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #d1cdc6;
+}
+
+.checkGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.checkGrid label,
+.checkboxRow {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.checkGrid input,
+.checkboxRow input {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.highRisk,
+.standardRisk {
+  padding: 1.1rem 1.2rem;
+  border-left: 4px solid #9b402f;
+  background: #f8eae6;
+}
+
+.standardRisk {
+  border-left-color: #516657;
+  background: #ebf0ec;
+}
+
+.highRisk p,
+.standardRisk p {
+  margin: 0.45rem 0 0;
+  line-height: 1.55;
+}
+
+.errorMessage,
+.successMessage {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #a83c2e;
+  background: #fff0ed;
+  color: #78291f;
+  line-height: 1.5;
+}
+
+.successMessage {
+  border-color: #357552;
+  background: #eef8f1;
+  color: #1f593b;
+}
+
+.detailHeader {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.detailKicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.progressPanel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.2rem 0;
+}
+
+.progressPanel strong {
+  font-size: 1.25rem;
+}
+
+.progressTrack {
+  height: 0.65rem;
+  overflow: hidden;
+  background: #ddd9d2;
+}
+
+.progressTrack span {
+  display: block;
+  height: 100%;
+  background: #171717;
+}
+
+.termGrid,
+.receiptGrid,
+.identityPreview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.35rem 2rem;
+  margin: 0;
+}
+
+.termBlock {
+  padding: 1.4rem 0;
+  border-top: 1px solid rgba(25, 25, 25, 0.1);
+}
+
+.termBlock:first-child {
+  border-top: 0;
+}
+
+.termBlock h2,
+.controlPanel h2,
+.signerSection h2,
+.receiptSection h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+}
+
+.termBlock p,
+.controlPanel p,
+.signerSection p,
+.receiptSection p {
+  margin: 0;
+  color: #55524d;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+  gap: 2.5rem;
+  align-items: start;
+  padding: 2.5rem 0;
+}
+
+.controlPanel {
+  position: sticky;
+  top: 1.25rem;
+  padding: 1.4rem;
+  background: #fff;
+  border: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.signForm {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.15rem;
+}
+
+.identityPreview {
+  grid-template-columns: 1fr;
+  margin: 1rem 0 0;
+  padding: 1rem 0;
+  border-top: 1px solid rgba(25, 25, 25, 0.1);
+  border-bottom: 1px solid rgba(25, 25, 25, 0.1);
+}
+
+.signerSection,
+.receiptSection {
+  padding: 2.5rem 0;
+  border-top: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.signerList {
+  display: grid;
+  gap: 1px;
+  margin-top: 1.25rem;
+  padding: 0;
+  background: rgba(25, 25, 25, 0.13);
+  border: 1px solid rgba(25, 25, 25, 0.13);
+  list-style: none;
+}
+
+.signerList li {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  background: #fff;
+}
+
+.signerOrdinal {
+  color: #77716a;
+  font-variant-numeric: tabular-nums;
+}
+
+.signerName {
+  font-weight: 750;
+}
+
+.signerAffiliation {
+  color: #66615b;
+}
+
+.hash {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.identitySteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 2rem;
+  background: rgba(25, 25, 25, 0.13);
+  border: 1px solid rgba(25, 25, 25, 0.13);
+}
+
+.identitySteps article {
+  padding: 1.4rem;
+  background: #fff;
+}
+
+.identitySteps h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.15rem;
+}
+
+.identitySteps p {
+  margin: 0;
+  color: #5b5853;
+  line-height: 1.55;
+}
+
+.credentialPanel {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #fff;
+  border: 1px solid rgba(25, 25, 25, 0.14);
+}
+
+.credentialPanel h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 820px) {
+  .main {
+    width: min(100% - 2rem, 1180px);
+    padding: 2.5rem 0 4rem;
+  }
+
+  .subnav {
+    padding-inline: 1rem;
+  }
+
+  .hero,
+  .commitmentCard,
+  .detailGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .fieldGrid,
+  .termGrid,
+  .receiptGrid,
+  .identitySteps {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeading {
+    display: grid;
+    align-items: start;
+  }
+
+  .form {
+    padding: 1.25rem;
+  }
+
+  .controlPanel {
+    position: static;
+  }
+
+  .progressPanel {
+    grid-template-columns: 1fr auto;
+  }
+
+  .progressTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .signerList li {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .signerAffiliation {
+    grid-column: 2;
+  }
+}
