@@ -25,10 +25,8 @@ def main() -> None:
         for i in range(start_index + 1, min(len(lines), start_index + 80))
         if PAGE_MARKER in lines[i]
     ]
-    if len(page_indexes) != 1:
-        raise RuntimeError(
-            f"Expected one owner-page marker inside the revision block; found {len(page_indexes)}."
-        )
+    if not page_indexes:
+        raise RuntimeError("No owner-page marker was found after the revision-block marker.")
     page_index = page_indexes[0]
     page_indent = lines[page_index][: len(lines[page_index]) - len(lines[page_index].lstrip())]
 
@@ -49,9 +47,9 @@ def main() -> None:
         for i in range(page_index + 1, min(len(lines), page_index + 100))
         if CHANGE_MARKER in lines[i]
     ]
-    if len(change_indexes) != 1:
+    if not change_indexes:
         raise RuntimeError(
-            f"Expected one unpublished-change assertion inside the revision block; found {len(change_indexes)}."
+            "No unpublished-change assertion was found after the revision-block page marker."
         )
     change_index = change_indexes[0]
     change_indent = lines[change_index][
