@@ -1,0 +1,40 @@
+name: MPGF visibility source snapshot
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mpgf-visibility-source-snapshot.yml"
+  push:
+    branches:
+      - qa/mpgf-visibility-source-snapshot-20260726
+    paths:
+      - ".github/workflows/mpgf-visibility-source-snapshot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create source archive
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            -czf mpgf-visibility-source.tar.gz .
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-visibility-source-${{ github.run_id }}
+          path: mpgf-visibility-source.tar.gz
+          retention-days: 2
