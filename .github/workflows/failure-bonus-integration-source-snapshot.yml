@@ -1,9 +1,7 @@
 name: Failure bonus integration source snapshot
 
 on:
-  push:
-    branches:
-      - ops/export-failure-bonus-integration-source-20260726
+  pull_request:
     paths:
       - ".github/workflows/failure-bonus-integration-source-snapshot.yml"
 
