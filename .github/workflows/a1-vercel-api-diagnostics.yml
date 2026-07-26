@@ -1,4 +1,4 @@
-name: A1 Vercel API diagnostics
+name: A1 production credential diagnostics
 
 on:
   pull_request:
@@ -16,15 +16,61 @@ jobs:
     timeout-minutes: 10
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ACCESS_TOKEN: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+      MORALTRADE_VERCEL_TOKEN: ${{ secrets.MORALTRADE_VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PROD_SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROD_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROD_SUPABASE_ACCESS_TOKEN: ${{ secrets.PROD_SUPABASE_ACCESS_TOKEN }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
     steps:
-      - name: Probe Vercel project and environment APIs
+      - name: Record configured credential names
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p diagnostics
-          echo "::add-mask::$VERCEL_TOKEN"
+          names=(
+            VERCEL_TOKEN
+            VERCEL_ACCESS_TOKEN
+            MORALTRADE_VERCEL_TOKEN
+            PROD_SUPABASE_DB_URL
+            PROD_SUPABASE_DB_PASSWORD
+            SUPABASE_DB_PASSWORD
+            PROD_SUPABASE_SERVICE_ROLE_KEY
+            SUPABASE_SERVICE_ROLE_KEY
+            SUPABASE_ACCESS_TOKEN
+            PROD_SUPABASE_ACCESS_TOKEN
+            QA_SUPABASE_DB_URL
+            QA_SUPABASE_SERVICE_ROLE_KEY
+            QA_TEST_PASSWORD
+          )
+          for name in "${names[@]}"; do
+            if [ -n "${!name:-}" ]; then
+              echo "$name=present"
+              echo "::add-mask::${!name}"
+            else
+              echo "$name=absent"
+            fi
+          done > diagnostics/credential-presence.txt
+
+      - name: Probe Vercel project and environment APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="${VERCEL_ACCESS_TOKEN:-${MORALTRADE_VERCEL_TOKEN:-${VERCEL_TOKEN:-}}}"
+          if [ -z "$token" ]; then
+            echo "request=project" > diagnostics/vercel-api.txt
+            echo "status=missing_token" >> diagnostics/vercel-api.txt
+            exit 0
+          fi
+          echo "::add-mask::$token"
 
           for request in project env; do
             if [ "$request" = project ]; then
@@ -33,7 +79,7 @@ jobs:
               url="https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID&decrypt=true"
             fi
             body="/tmp/$request.json"
-            status="$(curl -sS -o "$body" -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "$url")"
+            status="$(curl -sS -o "$body" -w '%{http_code}' -H "Authorization: Bearer $token" "$url")"
             node - "$body" "$status" "$request" <<'NODE' >> diagnostics/vercel-api.txt
           const fs = require('node:fs');
           const [path, status, request] = process.argv.slice(2);
@@ -60,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: a1-vercel-api-diagnostics-${{ github.run_id }}
+          name: a1-production-credential-diagnostics-${{ github.run_id }}
           path: diagnostics
           if-no-files-found: error
           retention-days: 7
