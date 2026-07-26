@@ -24,10 +24,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check out diagnostic script
-        uses: actions/checkout@v4
-
       - name: Download, sanitize, and post the failing step excerpt
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/read-bootstrap-log-30197487993.py
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/ghuser29384/Website2/ops/read-bootstrap-log-30197487993/.github/scripts/read-bootstrap-log-30197487993.py \
+            --output "$RUNNER_TEMP/read-bootstrap-log.py"
+          python3 "$RUNNER_TEMP/read-bootstrap-log.py"
