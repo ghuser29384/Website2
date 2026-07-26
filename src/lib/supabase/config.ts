@@ -12,6 +12,10 @@ function resolvePublicSupabaseEnv() {
 }
 
 export function hasSupabaseEnv() {
+  if (process.env.MORAL_TRADE_DISABLE_SUPABASE === "true") {
+    return false;
+  }
+
   const { url, publishableKey } = resolvePublicSupabaseEnv();
   return Boolean(url && publishableKey);
 }
@@ -43,6 +47,10 @@ export function getSiteUrl() {
 }
 
 export function getSupabaseEnv() {
+  if (process.env.MORAL_TRADE_DISABLE_SUPABASE === "true") {
+    throw new Error("Supabase is explicitly disabled for this process.");
+  }
+
   const { url, publishableKey } = resolvePublicSupabaseEnv();
 
   if (!url || !publishableKey) {

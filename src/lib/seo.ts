@@ -148,7 +148,7 @@ export function createPublicMetadataClient() {
 }
 
 export async function getPublicSitemapEntries() {
-  if (!hasSupabaseEnv()) {
+  if (process.env.MORAL_TRADE_STATIC_SITEMAP_ONLY === "true" || !hasSupabaseEnv()) {
     return {
       offers: [] as Array<{ id: string; updated_at: string; created_at: string }>,
       profiles: [] as Array<{ id: string; created_at: string }>,

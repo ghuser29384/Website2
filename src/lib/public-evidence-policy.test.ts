@@ -9,7 +9,7 @@ function source(path: string) {
 
 test("the Card Stack requires public-evidence certification before submission", () => {
   const workbench = source("src/components/core-trade/trade-draft-workbench.tsx");
-  const action = source("src/app/core-trade-actions.ts");
+  const action = source("src/app/core-trade-actions-base.ts");
 
   assert.match(workbench, /publicEvidenceCertification: boolean/);
   assert.match(workbench, /name="public_evidence_certification"/);
@@ -19,7 +19,7 @@ test("the Card Stack requires public-evidence certification before submission", 
 });
 
 test("evidence submission requires a certified public-safe copy", () => {
-  const action = source("src/app/core-trade-actions.ts");
+  const action = source("src/app/core-trade-actions-base.ts");
   const agreement = source("src/app/trade-agreements/[agreementId]/page.tsx");
 
   assert.match(action, /readCheckbox\(formData, "public_safe_copy"\)/);
@@ -144,7 +144,7 @@ test("the public evidence read contract projects only approved fields and gates 
 });
 
 test("participant evidence decisions stay scoped, confirmed, and inside the review window", () => {
-  const action = source("src/app/core-trade-actions.ts");
+  const action = source("src/app/core-trade-actions-base.ts");
   const stage = source("src/components/evidence/evidence-stage.tsx");
 
   assert.match(action, /safeInternalPath\(\s*read\(formData, "return_to"\)/);

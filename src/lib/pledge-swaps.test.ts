@@ -162,13 +162,16 @@ test("pledge-swap summary records lock, amendment, and double-counting safeguard
   assert.match(summary, /Atomic settlement at lock boundary: yes/);
 });
 
-test("pledge-swap UI and server action are wired to the manual-review contract", () => {
+test("pledge-swap public UI and server action preserve the manual-review contract", () => {
   const pageSource = readFileSync("src/app/pledge-swaps/page.tsx", "utf8");
   const formSource = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
   const actionSource = readFileSync("src/app/actions.ts", "utf8");
 
-  assert.match(pageSource, /createDemoPledgeSwapManualReviewPreview/);
-  assert.match(pageSource, /Manual-review preview/);
+  assert.match(pageSource, /A suggested match is not a deal/);
+  assert.match(pageSource, /Nothing becomes reliance-bearing/);
+  assert.match(pageSource, /Review before trust/);
+  assert.doesNotMatch(pageSource, /createDemoPledgeSwapManualReviewPreview/);
+  assert.doesNotMatch(pageSource, /Manual-review preview/);
   assert.match(formSource, /pledge_swap_max_obligation_days/);
   assert.match(formSource, /pledgeSwapManualReviewPreview/);
   assert.match(formSource, /Least-intrusive evidence plan/);
