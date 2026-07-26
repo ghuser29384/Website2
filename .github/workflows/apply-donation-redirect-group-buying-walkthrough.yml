@@ -1,4 +1,4 @@
-name: Diagnose Donation Redirect walkthrough browser suite
+name: Patch Donation Redirect walkthrough selectors
 
 on:
   pull_request:
@@ -10,53 +10,73 @@ on:
       - synchronize
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: donation-redirect-group-buying-walkthrough-20260726
   cancel-in-progress: true
 
 jobs:
-  diagnose-browser:
+  patch-selectors:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
 
     steps:
       - name: Check out the exact branch
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: feature/donation-redirect-group-buying-walkthrough-20260726
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Apply the guarded walkthrough patch
-        run: python3 scripts/apply-donation-redirect-group-buying-walkthrough.py
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run and capture the complete walkthrough browser suite
+      - name: Make amount-button selectors tolerate decorative assist glyphs
         shell: bash
         run: |
-          set -o pipefail
-          npx playwright test tests/walkthrough.spec.ts --reporter=line 2>&1 | tee playwright.log || true
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Upload browser diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: donation-redirect-playwright-diagnostics
-          path: |
-            playwright.log
-            test-results
-          if-no-files-found: warn
-          retention-days: 3
+          path = Path("scripts/apply-donation-redirect-group-buying-walkthrough.py")
+          text = path.read_text(encoding="utf-8")
 
-      - name: Mark diagnostic run incomplete by design
-        run: exit 1
+          replacements = {
+              '  await page.getByRole("button", { name: "$10", exact: true }).click();':
+                  '  await page.getByRole("button", { name: "$10" }).click();',
+              '  await page.getByRole("button", { name: "$5", exact: true }).click();':
+                  '  await page.getByRole("button", { name: "$5" }).click();',
+              '  await page.getByRole("button", { name: "$25", exact: true }).click();':
+                  '  await page.getByRole("button", { name: "$25" }).click();',
+          }
+
+          changed = False
+          for old, new in replacements.items():
+              old_count = text.count(old)
+              new_count = text.count(new)
+              if old_count == 1:
+                  text = text.replace(old, new, 1)
+                  changed = True
+              elif old_count == 0 and new_count >= 1:
+                  continue
+              else:
+                  raise RuntimeError(
+                      f"Unexpected selector state for {old!r}: old={old_count}, new={new_count}"
+                  )
+
+          if changed:
+              path.write_text(text, encoding="utf-8")
+              print("Updated generated Playwright selectors.")
+          else:
+              print("Generated Playwright selectors were already updated.")
+          PY
+
+      - name: Commit the updater correction when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/apply-donation-redirect-group-buying-walkthrough.py; then
+            echo "No updater change to commit."
+            exit 0
+          fi
+          git add scripts/apply-donation-redirect-group-buying-walkthrough.py
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Make walkthrough amount selectors resilient to assist glyphs"
+          git push origin HEAD
