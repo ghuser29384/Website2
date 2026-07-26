@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
           ref: feature/donation-redirect-group-buying-walkthrough-20260726
 
-      - name: Make amount-button selectors tolerate decorative assist glyphs
+      - name: Add amount-button selector repairs to the guarded updater
         shell: bash
         run: |
           python3 - <<'PY'
@@ -36,33 +36,40 @@ jobs:
 
           path = Path("scripts/apply-donation-redirect-group-buying-walkthrough.py")
           text = path.read_text(encoding="utf-8")
+          sentinel = "make Crowd ten-dollar selector tolerate decorative input-assist glyph"
 
-          replacements = {
-              '  await page.getByRole("button", { name: "$10", exact: true }).click();':
-                  '  await page.getByRole("button", { name: "$10" }).click();',
-              '  await page.getByRole("button", { name: "$5", exact: true }).click();':
-                  '  await page.getByRole("button", { name: "$5" }).click();',
-              '  await page.getByRole("button", { name: "$25", exact: true }).click();':
-                  '  await page.getByRole("button", { name: "$25" }).click();',
-          }
-
-          changed = False
-          for old, new in replacements.items():
-              old_count = text.count(old)
-              if old_count:
-                  text = text.replace(old, new)
-                  changed = True
-                  print(f"Replaced {old_count} occurrence(s) of {old!r}.")
-              elif new in text:
-                  print(f"Selector was already updated: {new!r}.")
-              else:
-                  raise RuntimeError(f"Could not find old or updated selector for {old!r}")
-
-          if changed:
-              path.write_text(text, encoding="utf-8")
-              print("Updated generated Playwright selectors.")
+          if sentinel in text:
+              print("Selector repairs were already present in the updater.")
           else:
-              print("Generated Playwright selectors were already updated.")
+              marker = "write(e2e_path, e2e)"
+              if text.count(marker) != 1:
+                  raise RuntimeError(
+                      f"Expected one e2e write marker, found {text.count(marker)}"
+                  )
+
+              repair_block = '''e2e = replace_once(
+              e2e,
+              '  await page.getByRole("button", { name: "$10", exact: true }).click();',
+              '  await page.getByRole("button", { name: "$10" }).click();',
+              "make Crowd ten-dollar selector tolerate decorative input-assist glyph",
+          )
+          e2e = replace_once(
+              e2e,
+              '  await page.getByRole("button", { name: "$5", exact: true }).click();',
+              '  await page.getByRole("button", { name: "$5" }).click();',
+              "make Crowd five-dollar selector tolerate decorative input-assist glyph",
+          )
+          e2e = replace_once(
+              e2e,
+              '  await page.getByRole("button", { name: "$25", exact: true }).click();',
+              '  await page.getByRole("button", { name: "$25" }).click();',
+              "make Crowd twenty-five-dollar selector tolerate decorative input-assist glyph",
+          )
+          write(e2e_path, e2e)'''
+
+              text = text.replace(marker, repair_block, 1)
+              path.write_text(text, encoding="utf-8")
+              print("Added resilient amount-button selector repairs to the updater.")
           PY
 
       - name: Commit the updater correction when needed
