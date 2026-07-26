@@ -1,5 +1,6 @@
 name: Bootstrap MoralTrade QA
 
+# One-time retry after verified cleanup of the isolated QA target.
 on:
   push:
     branches:
