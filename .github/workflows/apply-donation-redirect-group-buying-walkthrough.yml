@@ -1,0 +1,65 @@
+name: Apply Donation Redirect group-buying walkthrough
+
+on:
+  push:
+    branches:
+      - feature/donation-redirect-group-buying-walkthrough-20260726
+
+permissions:
+  contents: write
+
+concurrency:
+  group: donation-redirect-group-buying-walkthrough-20260726
+  cancel-in-progress: false
+
+jobs:
+  implement-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply the guarded walkthrough patch
+        run: python3 scripts/apply-donation-redirect-group-buying-walkthrough.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the complete unit and source-contract suite
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build the exact candidate
+        run: npm run build
+
+      - name: Install Chromium for the focused walkthrough suite
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete walkthrough browser suite
+        run: npx playwright test tests/walkthrough.spec.ts --reporter=line
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - name: Remove temporary updater files and commit the verified product change
+        run: |
+          rm scripts/apply-donation-redirect-group-buying-walkthrough.py
+          rm .github/workflows/apply-donation-redirect-group-buying-walkthrough.yml
+          git add -A
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Expand Donation Redirect walkthrough with coalition group-buying"
+          git push origin HEAD
