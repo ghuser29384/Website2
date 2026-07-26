@@ -43,7 +43,6 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-      VERCEL_SCOPE: ellen-s
     steps:
       - name: Check out verified smoke bundle
         uses: actions/checkout@v4
@@ -96,7 +95,7 @@ jobs:
           (
             cd app
             npx --yes vercel@56.5.0 env pull .vercel-production.env \
-              --environment=production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" \
+              --environment=production --yes --token "$VERCEL_TOKEN" \
               > a1-production-smoke-evidence/vercel-env-pull.log 2>&1
           )
           pull_code=$?
@@ -208,10 +207,10 @@ jobs:
 
           cd app
           printf '%s' "$CRON_SECRET" | npx --yes vercel@56.5.0 env add CRON_SECRET production \
-            --force --sensitive --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+            --force --sensitive --token "$VERCEL_TOKEN"
 
           npx --yes vercel@56.5.0 deploy --prod --yes \
-            --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" 2>&1 | tee ../vercel-production-deploy.log
+            --token "$VERCEL_TOKEN" 2>&1 | tee ../vercel-production-deploy.log
 
           for attempt in $(seq 1 60); do
             status="$(curl -sS -o /dev/null -w '%{http_code}' https://www.moraltrade.org/api/live-now || true)"
@@ -246,7 +245,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes vercel@56.5.0 crons run /api/jobs/recommendation-training \
-            --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" 2>&1 | tee ../vercel-cron-run.log
+            --token "$VERCEL_TOKEN" 2>&1 | tee ../vercel-cron-run.log
 
       - name: Upload smoke evidence
         if: always()
