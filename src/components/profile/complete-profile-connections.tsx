@@ -108,7 +108,10 @@ export function CompleteProfileConnections({
   const descriptionId = useId();
 
   useEffect(() => {
-    if (initialOpen) setOpen(true);
+    if (!initialOpen) return;
+
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
   }, [initialOpen]);
 
   useEffect(() => {
