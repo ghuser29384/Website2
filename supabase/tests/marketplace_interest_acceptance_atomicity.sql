@@ -152,4 +152,96 @@ $assertions$;
 
 select 'PASS: failed agreement creation leaves the selected response pending and the offer open' as result;
 
+select set_config('app.core_trade_linking_agreement', '', true);
+select set_config('app.core_trade_internal', '', true);
+drop trigger qa_force_marketplace_agreement_insert_failure_trigger on public.agreements;
+
+DO $success_exercise$
+declare
+  acceptance_result jsonb;
+begin
+  acceptance_result := public.accept_marketplace_interest_v1(
+    '10000000-0000-4000-8000-000000000159'::uuid,
+    '10000000-0000-4000-8000-000000000158'::uuid,
+    'qa-atomicity-success',
+    '',
+    ''
+  );
+
+  if coalesce((acceptance_result->>'created')::boolean, false) is not true then
+    raise exception 'Success regression: acceptance RPC did not report a newly created agreement: %.', acceptance_result;
+  end if;
+end;
+$success_exercise$;
+
+DO $success_assertions$
+declare
+  response_status text;
+  offer_status text;
+  offer_workflow_status text;
+  offer_closed_at timestamptz;
+  agreement_row public.agreements%rowtype;
+  agreement_count integer;
+  version_count integer;
+  linked_thread_count integer;
+begin
+  select status::text into response_status
+  from public.interests
+  where id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+  select status::text, workflow_status, closed_at
+  into offer_status, offer_workflow_status, offer_closed_at
+  from public.offers
+  where id = '10000000-0000-4000-8000-000000000158'::uuid;
+
+  select count(*) into agreement_count
+  from public.agreements
+  where interest_id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+  select * into agreement_row
+  from public.agreements
+  where interest_id = '10000000-0000-4000-8000-000000000159'::uuid;
+
+  select count(*) into version_count
+  from public.trade_agreement_versions
+  where agreement_id = agreement_row.id
+    and id = agreement_row.current_version_id
+    and version = 1;
+
+  select count(*) into linked_thread_count
+  from public.trade_threads
+  where offer_id = '10000000-0000-4000-8000-000000000158'::uuid
+    and agreement_id = agreement_row.id
+    and status = 'active';
+
+  if response_status <> 'accepted' then
+    raise exception 'Success regression: response status is %, expected accepted.', response_status;
+  end if;
+  if offer_status <> 'matched'
+     or offer_workflow_status <> 'closed'
+     or offer_closed_at is null then
+    raise exception 'Success regression: offer state is status %, workflow %, closed_at %; expected matched, closed, timestamped.',
+      offer_status,
+      offer_workflow_status,
+      offer_closed_at;
+  end if;
+  if agreement_count <> 1 or agreement_row.id is null then
+    raise exception 'Success regression: expected one agreement, found %.', agreement_count;
+  end if;
+  if agreement_row.status::text <> 'proposed'
+     or agreement_row.lifecycle_status <> 'proposed'
+     or agreement_row.current_version_id is null then
+    raise exception 'Success regression: agreement was not bridged to one frozen proposed version: %.', to_jsonb(agreement_row);
+  end if;
+  if version_count <> 1 then
+    raise exception 'Success regression: expected one current frozen version, found %.', version_count;
+  end if;
+  if linked_thread_count <> 1 then
+    raise exception 'Success regression: expected one linked private thread, found %.', linked_thread_count;
+  end if;
+end;
+$success_assertions$;
+
+select 'PASS: successful acceptance creates one proposed agreement, frozen version, and linked private thread' as result;
+
 rollback;
