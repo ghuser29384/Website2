@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/pr158-two-account-browser-qa.yml"
       - ".github/scripts/pr158-two-account-browser-qa.mjs"
+      - ".github/scripts/run-pr158-two-account-browser-qa.mjs"
 
 permissions:
   contents: read
@@ -93,7 +94,7 @@ jobs:
           done
 
       - name: Run desktop and mobile two-account browser QA
-        run: node .github/scripts/pr158-two-account-browser-qa.mjs
+        run: node .github/scripts/run-pr158-two-account-browser-qa.mjs
 
       - name: Upload browser QA evidence
         if: always()
