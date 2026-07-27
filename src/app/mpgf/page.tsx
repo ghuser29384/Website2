@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MpgfAssuranceFundingReceipt } from "@/components/mpgf/mpgf-assurance-funding-receipt";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
+import { COMMON_GROUND_POOL_ROUTE } from "@/lib/mpgf/common-ground-pool";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
 import { loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -11,7 +12,7 @@ import { getAbsoluteUrl } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Common Ground Budget | Public Goods Fund",
   description:
-    "Coordinate support for moral public goods through bounded budgets, explicit project stances, threshold rules, evidence review, and non-custodial settlement paths.",
+    "Coordinate support for moral public goods through shared pool proposals, bounded budgets, explicit project stances, threshold rules, evidence review, and non-custodial settlement paths.",
   alternates: {
     canonical: "/mpgf",
   },
@@ -54,6 +55,13 @@ const workflow = [
 ] as const;
 
 const serviceRoutes = [
+  {
+    title: "Common Ground Pool",
+    detail:
+      "Test a shared project and cost split across participants with different priority budgets, explicit no-pool defaults, and private value estimates.",
+    href: COMMON_GROUND_POOL_ROUTE,
+    action: "Build a pool proposal",
+  },
   {
     title: "Current round",
     detail:
@@ -116,24 +124,25 @@ export default async function MpgfPage() {
     <MpgfPageFrame
       actions={
         <>
-          <Link className="button button-primary" href={`${roundHref}#common-ground-budget-preview`}>
+          <Link className="button button-primary" href={COMMON_GROUND_POOL_ROUTE}>
+            Build a Common Ground Pool
+          </Link>
+          <Link className="button button-secondary" href={`${roundHref}#common-ground-budget-preview`}>
             Build a Common Ground Budget
           </Link>
           <Link className="button button-secondary" href={roundHref}>
             View current round
           </Link>
-          <Link className="button button-secondary" href="/mpgf/about">
-            Read the mechanism
-          </Link>
         </>
       }
-      description="Coordinate around goods that many people value for different reasons. Contributions count only after the relevant identity, threshold, review, challenge, authorization, evidence, and settlement rules pass."
+      description="Coordinate around goods that many people value for different reasons. Start with a shared pool proposal or an individual bounded budget; contributions count only after the relevant identity, threshold, review, challenge, authorization, evidence, and settlement rules pass."
       eyebrow="Public Goods Fund"
       title="Common Ground Budget"
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
       <nav className="hub-tabs" aria-label="Public Goods Fund sections">
+        <Link href={COMMON_GROUND_POOL_ROUTE}>Common Ground Pool</Link>
         <a href="#how-it-works">How it works</a>
         <a href="#assurance-funding">Assurance funding estimate</a>
         <a href="#routes">Service routes</a>
@@ -215,8 +224,8 @@ export default async function MpgfPage() {
           </ul>
         </div>
         <div className="hero-actions">
-          <Link className="button button-primary" href={roundHref}>
-            Open current round
+          <Link className="button button-primary" href={COMMON_GROUND_POOL_ROUTE}>
+            Open Common Ground Pool
           </Link>
           <Link className="button button-secondary" href="/mpgf/real-money-terms">
             Review funding terms
