@@ -1,0 +1,456 @@
+name: Verify next natural A1 training run
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-next-a1-natural-cron.yml
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: verify-next-a1-natural-cron-20260727
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      SCHEDULED_AT: "2026-07-27T12:30:00Z"
+      VERIFY_NOT_BEFORE: "2026-07-27T12:30:45Z"
+      VERIFY_WINDOW_END: "2026-07-27T12:40:00Z"
+      EXPECTED_ALGORITHM: pareto-causal-v1
+      EXPECTED_OBJECTIVE: pareto_safe_additionality
+      PROD_PROJECT_REF: jnpoxvalyjtdghnperyu
+      PROD_POOLER_HOST: aws-1-us-west-2.pooler.supabase.com
+      PROD_POOLER_USER: postgres.jnpoxvalyjtdghnperyu
+
+    steps:
+      - name: Preflight production state without writing
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p verification-evidence
+
+          if [ -z "${PROD_SUPABASE_DB_URL:-}" ]; then
+            echo "::error::PROD_SUPABASE_DB_URL is not configured."
+            exit 1
+          fi
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+
+          URL_TO_CHECK="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.URL_TO_CHECK);
+          const valid =
+            ["postgres:", "postgresql:"].includes(url.protocol) &&
+            decodeURIComponent(url.username) === process.env.PROD_POOLER_USER &&
+            url.hostname === process.env.PROD_POOLER_HOST &&
+            url.port === "5432" &&
+            url.pathname === "/postgres" &&
+            url.searchParams.get("sslmode") === "require" &&
+            Boolean(url.password);
+          if (!valid) {
+            console.error("PROD_SUPABASE_DB_URL is not the production-only session-pooler URL.");
+            process.exit(1);
+          }
+          NODE
+
+          curl -fsSL \
+            https://raw.githubusercontent.com/ghuser29384/Website2/main/vercel.json \
+            -o verification-evidence/vercel.json
+          jq -e '
+            any(.crons[]?;
+              .path == "/api/jobs/recommendation-training" and
+              .schedule == "30 12 * * *"
+            )
+          ' verification-evidence/vercel.json >/dev/null
+
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+
+          export PGCONNECT_TIMEOUT=10
+          export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000"
+
+          psql "$PROD_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atq \
+            > verification-evidence/baseline.json <<'SQL'
+          with synthetic_auth_users as (
+            select id
+            from auth.users
+            where coalesce(email, '') ilike '%a1-prod-smoke%'
+               or coalesce(email, '') ilike '%synthetic%'
+          ), synthetic_profiles as (
+            select id
+            from public.profiles
+            where id in (select id from synthetic_auth_users)
+               or coalesce(display_name, '') ilike '%a1 smoke%'
+               or coalesce(display_name, '') ilike '%synthetic%'
+               or coalesce(email, '') ilike '%a1-prod-smoke%'
+               or coalesce(bio, '') ilike '%a1-prod-smoke%'
+          ), synthetic_offers as (
+            select id
+            from public.offers
+            where concat_ws(
+              ' ', owner_alias, offered_cause, requested_cause, offer_action,
+              request_action, compromise_cause, verification, notes,
+              no_trade_baseline, exit_conditions, maximum_burden,
+              privacy_scope, submission_key
+            ) ilike '%a1-prod-smoke%'
+               or concat_ws(
+              ' ', owner_alias, offered_cause, requested_cause, offer_action,
+              request_action, compromise_cause, verification, notes,
+              no_trade_baseline, exit_conditions, maximum_burden,
+              privacy_scope, submission_key
+            ) ilike '%synthetic%'
+          )
+          select jsonb_build_object(
+            'checked_at', now(),
+            'current_user', current_user,
+            'database', current_database(),
+            'training_run_count', (select count(*) from public.recommendation_training_runs),
+            'model_count', (select count(*) from public.recommendation_model_versions),
+            'guardrail_count', (select count(*) from public.recommendation_guardrail_snapshots),
+            'latest_training_run', (
+              select to_jsonb(t)
+              from (
+                select id::text, status, stage, started_at, completed_at,
+                       model_version_id::text
+                from public.recommendation_training_runs
+                order by started_at desc
+                limit 1
+              ) t
+            ),
+            'real_state', jsonb_build_object(
+              'exposures', (select count(*) from public.recommendation_exposures),
+              'outcomes', (select count(*) from public.recommendation_outcomes),
+              'feedback', (select count(*) from public.recommendation_outcome_feedback),
+              'assignments', (select count(*) from public.recommendation_experiment_assignments)
+            ),
+            'synthetic_residue', jsonb_build_object(
+              'auth_users', (select count(*) from synthetic_auth_users),
+              'profiles', (select count(*) from synthetic_profiles),
+              'offers', (select count(*) from synthetic_offers),
+              'agreements', (
+                select count(*)
+                from public.agreements
+                where proposer_id in (select id from synthetic_profiles)
+                   or responder_id in (select id from synthetic_profiles)
+                   or offer_id in (select id from synthetic_offers)
+              ),
+              'feedback', (
+                select count(*)
+                from public.recommendation_outcome_feedback
+                where profile_id in (select id from synthetic_profiles)
+              ),
+              'exposures', (
+                select count(*)
+                from public.recommendation_exposures
+                where profile_id in (select id from synthetic_profiles)
+                   or opportunity_id::text in (select id::text from synthetic_offers)
+              )
+            )
+          )::text;
+          SQL
+
+          jq -e '.database == "postgres"' verification-evidence/baseline.json >/dev/null
+          jq -e '.synthetic_residue | [.[]] | all(. == 0)' \
+            verification-evidence/baseline.json >/dev/null
+
+      - name: Wait for the natural 12:30 UTC Vercel cron
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_epoch="$(date -u -d "$VERIFY_NOT_BEFORE" +%s)"
+          window_end_epoch="$(date -u -d "$VERIFY_WINDOW_END" +%s)"
+          now_epoch="$(date -u +%s)"
+
+          if [ "$now_epoch" -ge "$window_end_epoch" ]; then
+            echo "::error::The verification workflow began after its observation window."
+            exit 1
+          fi
+
+          if [ "$now_epoch" -lt "$target_epoch" ]; then
+            sleep_seconds=$((target_epoch - now_epoch))
+            echo "Waiting ${sleep_seconds}s without invoking the training endpoint."
+            sleep "$sleep_seconds"
+          fi
+
+      - name: Verify the naturally scheduled production run
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGCONNECT_TIMEOUT=10
+          export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30000"
+
+          query_state() {
+            psql "$PROD_SUPABASE_DB_URL" \
+              -v ON_ERROR_STOP=1 \
+              -v scheduled="$SCHEDULED_AT" \
+              -v window_end="$VERIFY_WINDOW_END" \
+              -Atq > verification-evidence/current.json <<'SQL'
+          with window_runs as (
+            select *
+            from public.recommendation_training_runs
+            where started_at >= :'scheduled'::timestamptz
+              and started_at < :'window_end'::timestamptz
+          ), candidate as (
+            select *
+            from window_runs
+            order by started_at asc
+            limit 1
+          ), candidate_model as (
+            select m.*
+            from public.recommendation_model_versions m
+            join candidate r on r.model_version_id = m.id
+          ), candidate_guardrail as (
+            select g.*
+            from public.recommendation_guardrail_snapshots g
+            join candidate_model m on g.measured_at = m.trained_at
+            limit 1
+          ), synthetic_auth_users as (
+            select id
+            from auth.users
+            where coalesce(email, '') ilike '%a1-prod-smoke%'
+               or coalesce(email, '') ilike '%synthetic%'
+          ), synthetic_profiles as (
+            select id
+            from public.profiles
+            where id in (select id from synthetic_auth_users)
+               or coalesce(display_name, '') ilike '%a1 smoke%'
+               or coalesce(display_name, '') ilike '%synthetic%'
+               or coalesce(email, '') ilike '%a1-prod-smoke%'
+               or coalesce(bio, '') ilike '%a1-prod-smoke%'
+          ), synthetic_offers as (
+            select id
+            from public.offers
+            where concat_ws(
+              ' ', owner_alias, offered_cause, requested_cause, offer_action,
+              request_action, compromise_cause, verification, notes,
+              no_trade_baseline, exit_conditions, maximum_burden,
+              privacy_scope, submission_key
+            ) ilike '%a1-prod-smoke%'
+               or concat_ws(
+              ' ', owner_alias, offered_cause, requested_cause, offer_action,
+              request_action, compromise_cause, verification, notes,
+              no_trade_baseline, exit_conditions, maximum_burden,
+              privacy_scope, submission_key
+            ) ilike '%synthetic%'
+          )
+          select jsonb_build_object(
+            'checked_at', now(),
+            'window_run_count', (select count(*) from window_runs),
+            'succeeded_count', (select count(*) from window_runs where status = 'succeeded' and stage = 'complete'),
+            'failed_count', (select count(*) from window_runs where status = 'failed' or stage = 'failed'),
+            'unfinished_count', (select count(*) from window_runs where completed_at is null or status = 'running'),
+            'run', (
+              select to_jsonb(r)
+              from (
+                select id::text, status, stage, objective, model_version_id::text,
+                       counts, metrics, error_code, error_detail, started_at, completed_at,
+                       extract(epoch from started_at) as started_at_epoch,
+                       extract(epoch from completed_at) as completed_at_epoch
+                from candidate
+              ) r
+            ),
+            'model', (
+              select to_jsonb(m)
+              from (
+                select id::text, model_key, status, objective, algorithm_version,
+                       trained_at, training_window_start, training_window_end,
+                       sample_count, profile_count, opportunity_count,
+                       proposal_count, acceptance_count, completion_count,
+                       outcome_feedback_count, activation_reason
+                from candidate_model
+              ) m
+            ),
+            'guardrail', (
+              select to_jsonb(g)
+              from (
+                select id::text, measured_at, window_days, exposure_count,
+                       report_rate, cancellation_rate, average_satisfaction,
+                       stop_experiment, reasons, experiment_key
+                from candidate_guardrail
+              ) g
+            ),
+            'real_state', jsonb_build_object(
+              'exposures', (select count(*) from public.recommendation_exposures),
+              'outcomes', (select count(*) from public.recommendation_outcomes),
+              'feedback', (select count(*) from public.recommendation_outcome_feedback),
+              'assignments', (select count(*) from public.recommendation_experiment_assignments)
+            ),
+            'synthetic_residue', jsonb_build_object(
+              'auth_users', (select count(*) from synthetic_auth_users),
+              'profiles', (select count(*) from synthetic_profiles),
+              'offers', (select count(*) from synthetic_offers),
+              'agreements', (
+                select count(*)
+                from public.agreements
+                where proposer_id in (select id from synthetic_profiles)
+                   or responder_id in (select id from synthetic_profiles)
+                   or offer_id in (select id from synthetic_offers)
+              ),
+              'feedback', (
+                select count(*)
+                from public.recommendation_outcome_feedback
+                where profile_id in (select id from synthetic_profiles)
+              ),
+              'exposures', (
+                select count(*)
+                from public.recommendation_exposures
+                where profile_id in (select id from synthetic_profiles)
+                   or opportunity_id::text in (select id::text from synthetic_offers)
+              )
+            )
+          )::text;
+          SQL
+          }
+
+          complete=false
+          while [ "$(date -u +%s)" -lt "$(date -u -d "$VERIFY_WINDOW_END" +%s)" ]; do
+            query_state
+
+            if [ "$(jq -r '.window_run_count' verification-evidence/current.json)" -gt 1 ]; then
+              echo "::error::More than one recommendation-training run began in the natural cron window."
+              break
+            fi
+
+            if jq -e '
+              .window_run_count == 1 and
+              .succeeded_count == 1 and
+              .failed_count == 0 and
+              .unfinished_count == 0 and
+              .run.status == "succeeded" and
+              .run.stage == "complete" and
+              .run.completed_at != null and
+              .run.error_code == null and
+              .run.error_detail == null and
+              .model.id == .run.model_version_id and
+              (.model.status == "cold_start" or .model.status == "shadow" or .model.status == "active") and
+              .guardrail.id != null
+            ' verification-evidence/current.json >/dev/null; then
+              complete=true
+              break
+            fi
+
+            sleep 10
+          done
+
+          cp verification-evidence/current.json verification-evidence/final.json
+
+          if [ "$complete" != "true" ]; then
+            jq . verification-evidence/final.json
+            echo "::error::No single successful natural A1 training run completed inside the observation window."
+            exit 1
+          fi
+
+          jq -e --arg scheduled "$SCHEDULED_AT" \
+                --arg window_end "$VERIFY_WINDOW_END" \
+                --arg algorithm "$EXPECTED_ALGORITHM" \
+                --arg objective "$EXPECTED_OBJECTIVE" '
+            .window_run_count == 1 and
+            .succeeded_count == 1 and
+            .failed_count == 0 and
+            .unfinished_count == 0 and
+            .run.status == "succeeded" and
+            .run.stage == "complete" and
+            .run.objective == $objective and
+            .run.error_code == null and
+            .run.error_detail == null and
+            .run.started_at_epoch >= ($scheduled | fromdateiso8601) and
+            .run.started_at_epoch < ($window_end | fromdateiso8601) and
+            .run.completed_at_epoch >= .run.started_at_epoch and
+            .model.id == .run.model_version_id and
+            .model.algorithm_version == $algorithm and
+            .model.objective == $objective and
+            (.model.status == "cold_start" or .model.status == "shadow" or .model.status == "active") and
+            .model.sample_count == .run.counts.exposures and
+            .model.profile_count == .run.counts.profiles and
+            .model.opportunity_count == .run.counts.opportunities and
+            .model.outcome_feedback_count == .run.counts.feedback and
+            .model.trained_at == .guardrail.measured_at and
+            .guardrail.window_days == 365 and
+            (.synthetic_residue | [.[]] | all(. == 0))
+          ' verification-evidence/final.json >/dev/null
+
+          jq -n \
+            --slurpfile baseline verification-evidence/baseline.json \
+            --slurpfile final verification-evidence/final.json \
+            --arg scheduled "$SCHEDULED_AT" \
+            --arg verification_method "read-only database observation; the training endpoint was never invoked" \
+            --arg credential_policy "only the production-only PROD_SUPABASE_DB_URL was used for database observation" \
+            '{
+              scheduled_at: $scheduled,
+              verification_method: $verification_method,
+              credential_policy: $credential_policy,
+              verification_connection_read_only: true,
+              synthetic_fixtures_created: false,
+              baseline: $baseline[0],
+              final: $final[0]
+            }' > verification-evidence/result.json
+
+          cat > verification-evidence/result.md <<EOF
+          # Natural A1 cron verification passed
+
+          - Scheduled time: $SCHEDULED_AT
+          - Run ID: $(jq -r '.run.id' verification-evidence/final.json)
+          - Run status/stage: $(jq -r '.run.status + "/" + .run.stage' verification-evidence/final.json)
+          - Model ID: $(jq -r '.model.id' verification-evidence/final.json)
+          - Model status: $(jq -r '.model.status' verification-evidence/final.json)
+          - Real exposures used: $(jq -r '.run.counts.exposures' verification-evidence/final.json)
+          - Real outcome-feedback labels used: $(jq -r '.run.counts.feedback' verification-evidence/final.json)
+          - Synthetic residue after run: 0
+          - Verification connection: read-only
+          - Training endpoint invoked by verifier: no
+          EOF
+
+          cat verification-evidence/result.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a1-natural-cron-verification-${{ github.run_id }}
+          path: verification-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record result on the operational pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$VERIFY_OUTCOME" = "success" ] && [ -f verification-evidence/result.md ]; then
+            {
+              cat verification-evidence/result.md
+              echo
+              echo "Evidence: ${run_url}"
+            } > /tmp/pr-comment.md
+          else
+            {
+              echo "# Natural A1 cron verification failed"
+              echo
+              echo "The verifier did not create synthetic fixtures and did not invoke the training endpoint."
+              echo "Inspect the read-only evidence and workflow logs: ${run_url}"
+            } > /tmp/pr-comment.md
+          fi
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/pr-comment.md
+
+      - name: Close the operational pull request after success
+        if: steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: gh pr close "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --comment "Verification completed successfully; closing without merge."
