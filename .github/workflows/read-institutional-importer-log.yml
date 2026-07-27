@@ -17,24 +17,36 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      IMPORT_RUN_ID: "30236319107"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Save failed importer log excerpt
+      - name: Save latest importer log excerpt
         shell: bash
         run: |
           set -euo pipefail
-          gh run view "$IMPORT_RUN_ID" --repo "$GITHUB_REPOSITORY" --log > /tmp/importer.log
+          import_run_id="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow import-institutional-source.yml \
+            --branch feat/institutional-trade-system \
+            --limit 10 \
+            --json databaseId,createdAt,status,conclusion \
+            --jq 'sort_by(.createdAt) | reverse | .[0].databaseId')"
+          if [[ -z "$import_run_id" || "$import_run_id" == "null" ]]; then
+            echo "No importer workflow run found." >&2
+            exit 1
+          fi
+
+          gh run view "$import_run_id" --repo "$GITHUB_REPOSITORY" --log > /tmp/importer.log
           {
-            echo "Importer run: $IMPORT_RUN_ID"
+            echo "Importer run: $import_run_id"
             echo
-            tail -n 240 /tmp/importer.log
+            tail -n 300 /tmp/importer.log
           } > .github/importer-diagnostic.txt
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/importer-diagnostic.txt
-          git commit -m "Record temporary importer diagnostic"
+          git commit -m "Record latest institutional importer diagnostic"
           git push origin HEAD:feat/institutional-trade-system
