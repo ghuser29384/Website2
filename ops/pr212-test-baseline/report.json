@@ -1,0 +1,271 @@
+{
+  "pr_base_sha": "bb32b5c5a58442f97bef642be58ed01a57f0d91b",
+  "feature_run_id": 30270105060,
+  "feature_head_sha": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
+  "base_test_exit_status": 1,
+  "base_summary": {
+    "tests": 781,
+    "pass": 721,
+    "fail": 60,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "feature_summary": {
+    "tests": 790,
+    "pass": 730,
+    "fail": 60,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "base_failure_count": 60,
+  "feature_failure_count": 60,
+  "common_failure_count": 60,
+  "feature_only_failure_count": 0,
+  "base_only_failure_count": 0,
+  "common_failures": [
+    "MPGF CG-VQAF publishes common-ground and capital-constrained allocation without moral ranking",
+    "MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, and consent terms",
+    "MPGF Every.org fast route creates Donate Links and imports partner webhooks without custody",
+    "MPGF Stripe saved commitments use SetupIntent-first before conditional PaymentIntent creation",
+    "MPGF completion control plane exposes truthful production blockers",
+    "MPGF contribution intents verify identity before conditional payment authorization",
+    "MPGF direct-working smoke test passes without real-money mode",
+    "MPGF direct-working validators pass with the exact-pilot formal source lock",
+    "MPGF procedural badges expose record facts without moral karma",
+    "MPGF production completion gate fails while production evidence is only pending",
+    "MPGF production runners distinguish completed public evidence from remaining auth evidence",
+    "MPGF public copy leads with manual evidence instead of raw gate/debug wording",
+    "MPGF public-goods allocation finalization builds persistable no-payout-leak rows",
+    "MPGF public-goods governance publication covers roles, rules, disputes, and no-ranking boundaries",
+    "MPGF public-goods public API surfaces aggregate rounds, campaigns, matching, and ledger",
+    "Server Components do not format visitor-facing dates in the server time zone",
+    "Supabase OAuth provider settings fail closed without Supabase env",
+    "background networking and reasoning routes are distinct resilient public routes",
+    "background source connector permissions stay field-limited and raw-ingestion disabled",
+    "bg84 visible dashboard and explainer use the plain-language entry points",
+    "bg85 background explainer defaults to the five-step model and hides technical inventory",
+    "bg85 trust pages lead with concise background summaries and technical detail links",
+    "cohort page exposes founding progress, referral, and one-counterparty invite loop",
+    "create trade route family has stable signed-out entry points",
+    "create-similar API route returns safe fallback when storage is unavailable",
+    "entity-resolution storage is internal and not a requester-visible identity graph",
+    "evidence submission requires a certified public-safe copy",
+    "global search and offers search expose real marketplace discovery",
+    "growth activation surfaces persist attribution, onboarding, webinars, and cloning",
+    "marketplace pilot copy separates live offers from worked examples",
+    "offer follow API route returns safe fallback when storage is unavailable",
+    "offers page keeps content before the footer in source order",
+    "participant evidence decisions stay scoped, confirmed, and inside the review window",
+    "people directory hides empty social proof and sorts by reviewable records",
+    "pledge-swap UI and server action are wired to the manual-review contract",
+    "pooled donation offset creation has visible path and server-side guardrails",
+    "primary acquisition routes lead with real actions instead of pilot language",
+    "primer, anti-threat, and research pages frame the public pilot",
+    "privacy and terms publish processor retention and data-request transparency",
+    "public SEO metadata includes FAQ and breadcrumb structured data",
+    "public guidance describes verification pipelines without custody overclaims",
+    "public measurement plan stays aligned with privacy-safe analytics",
+    "public navigation exposes professional marketplace routes",
+    "public offer and registry pages include seeded examples instead of empty-only states",
+    "public offer detail API route returns 404 blockers for non-public slugs",
+    "public offer facets API route preserves moral public goods entry for public-goods intent",
+    "public offer facets API route returns validator-backed facets JSON",
+    "public offers API route returns moral public goods entry for moral-public-goods search",
+    "public offers API route returns validator-backed collection JSON",
+    "public offers collection separates template, moral public goods, and demo lanes from offer listings",
+    "returning home page exposes the screenshot navigation contract",
+    "returning home page matches the recommended-trade decision screen",
+    "src/lib/crawlability.test.ts",
+    "subject identity route and migration enforce auth, admin authority, stale transitions, and privacy-safe storage",
+    "the Card Stack requires public-evidence certification before submission",
+    "the financial action has a real external payment handoff and explicit boundaries",
+    "trade format landing pages explain formats without payment or custody overclaims",
+    "validation rulebook exposes reviewer roles, SLAs, conflicts, and quality metrics",
+    "visitor router exposes four intent paths before deeper marketplace mechanics",
+    "worked examples have canonical detail pages and sitemap coverage"
+  ],
+  "feature_only_failures": [],
+  "base_only_failures": [],
+  "source_locations": {
+    "MPGF CG-VQAF publishes common-ground and capital-constrained allocation without moral ranking": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF CRECM v1.125 rulebook publishes custody, batch, accounting, sponsor, and consent terms": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF Every.org fast route creates Donate Links and imports partner webhooks without custody": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF Stripe saved commitments use SetupIntent-first before conditional PaymentIntent creation": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF completion control plane exposes truthful production blockers": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF contribution intents verify identity before conditional payment authorization": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF direct-working smoke test passes without real-money mode": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF direct-working validators pass with the exact-pilot formal source lock": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF procedural badges expose record facts without moral karma": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF production completion gate fails while production evidence is only pending": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF production runners distinguish completed public evidence from remaining auth evidence": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF public copy leads with manual evidence instead of raw gate/debug wording": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "MPGF public-goods allocation finalization builds persistable no-payout-leak rows": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF public-goods governance publication covers roles, rules, disputes, and no-ranking boundaries": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "MPGF public-goods public API surfaces aggregate rounds, campaigns, matching, and ledger": [
+      "src/lib/mpgf.test.ts"
+    ],
+    "Server Components do not format visitor-facing dates in the server time zone": [
+      "src/lib/local-date-time-coverage.test.ts"
+    ],
+    "Supabase OAuth provider settings fail closed without Supabase env": [
+      "src/lib/auth-provider-settings.test.ts"
+    ],
+    "background networking and reasoning routes are distinct resilient public routes": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "background source connector permissions stay field-limited and raw-ingestion disabled": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "bg84 visible dashboard and explainer use the plain-language entry points": [
+      "src/lib/background-plain-language-term-map.test.ts"
+    ],
+    "bg85 background explainer defaults to the five-step model and hides technical inventory": [
+      "src/lib/background-public-page-simplification.test.ts"
+    ],
+    "bg85 trust pages lead with concise background summaries and technical detail links": [
+      "src/lib/background-public-page-simplification.test.ts"
+    ],
+    "cohort page exposes founding progress, referral, and one-counterparty invite loop": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "create trade route family has stable signed-out entry points": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "create-similar API route returns safe fallback when storage is unavailable": [
+      "src/lib/offer-create-similar.test.ts"
+    ],
+    "entity-resolution storage is internal and not a requester-visible identity graph": [
+      "src/lib/background-entity-resolution.test.ts"
+    ],
+    "evidence submission requires a certified public-safe copy": [
+      "src/lib/public-evidence-policy.test.ts"
+    ],
+    "global search and offers search expose real marketplace discovery": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "growth activation surfaces persist attribution, onboarding, webinars, and cloning": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "marketplace pilot copy separates live offers from worked examples": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "offer follow API route returns safe fallback when storage is unavailable": [
+      "src/lib/offer-follows.test.ts"
+    ],
+    "offers page keeps content before the footer in source order": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "participant evidence decisions stay scoped, confirmed, and inside the review window": [
+      "src/lib/public-evidence-policy.test.ts"
+    ],
+    "people directory hides empty social proof and sorts by reviewable records": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "pledge-swap UI and server action are wired to the manual-review contract": [
+      "src/lib/pledge-swaps.test.ts"
+    ],
+    "pooled donation offset creation has visible path and server-side guardrails": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "primary acquisition routes lead with real actions instead of pilot language": [
+      "src/lib/action-first-positioning.test.ts"
+    ],
+    "primer, anti-threat, and research pages frame the public pilot": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "privacy and terms publish processor retention and data-request transparency": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public SEO metadata includes FAQ and breadcrumb structured data": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public guidance describes verification pipelines without custody overclaims": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public measurement plan stays aligned with privacy-safe analytics": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public navigation exposes professional marketplace routes": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public offer and registry pages include seeded examples instead of empty-only states": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "public offer detail API route returns 404 blockers for non-public slugs": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "public offer facets API route preserves moral public goods entry for public-goods intent": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "public offer facets API route returns validator-backed facets JSON": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "public offers API route returns moral public goods entry for moral-public-goods search": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "public offers API route returns validator-backed collection JSON": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "public offers collection separates template, moral public goods, and demo lanes from offer listings": [
+      "src/lib/public-offers.test.ts"
+    ],
+    "returning home page exposes the screenshot navigation contract": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "returning home page matches the recommended-trade decision screen": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "src/lib/crawlability.test.ts": [],
+    "subject identity route and migration enforce auth, admin authority, stale transitions, and privacy-safe storage": [
+      "src/lib/background-subject-identity-and-automation.test.ts"
+    ],
+    "the Card Stack requires public-evidence certification before submission": [
+      "src/lib/public-evidence-policy.test.ts"
+    ],
+    "the financial action has a real external payment handoff and explicit boundaries": [
+      "src/lib/action-first-positioning.test.ts"
+    ],
+    "trade format landing pages explain formats without payment or custody overclaims": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "validation rulebook exposes reviewer roles, SLAs, conflicts, and quality metrics": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "visitor router exposes four intent paths before deeper marketplace mechanics": [
+      "src/lib/public-route-smoke.test.ts"
+    ],
+    "worked examples have canonical detail pages and sitemap coverage": [
+      "src/lib/public-route-smoke.test.ts"
+    ]
+  }
+}
