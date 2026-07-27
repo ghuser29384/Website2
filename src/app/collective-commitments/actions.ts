@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getViewer } from "@/lib/app-data";
 import {
@@ -42,6 +43,8 @@ export async function createCollectiveCommitmentAction(
   _previousState: CollectiveCommitmentActionState,
   formData: FormData,
 ): Promise<CollectiveCommitmentActionState> {
+  let commitmentId = "";
+
   try {
     const viewer = await requireViewer();
     const propositionType = textField(formData, "proposition_type");
@@ -87,19 +90,16 @@ export async function createCollectiveCommitmentAction(
       riskClass: risk.riskClass,
       riskDimensions: risk.riskDimensions,
     });
-
-    revalidatePath("/collective-commitments");
-    return {
-      ok: true,
-      message: "Collective commitment created with frozen terms.",
-      commitmentId: result.id,
-    };
+    commitmentId = result.id;
   } catch (error) {
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Could not create the collective commitment.",
     };
   }
+
+  revalidatePath("/collective-commitments");
+  redirect(`/collective-commitments/${commitmentId}`);
 }
 
 export async function signCollectiveCommitmentAction(
