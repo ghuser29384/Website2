@@ -1,0 +1,694 @@
+name: Seed collective commitments feature-review fixtures
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/seed-collective-preview-review-fixtures.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: seed-collective-preview-review-fixtures-20260727
+  cancel-in-progress: false
+
+jobs:
+  seed-and-deploy:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/enable-collective-preview-review-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_PRODUCT_BRANCH: feature/collective-identity-threshold-commitments-20260726
+      EXPECTED_PRODUCT_HEAD: 3228deff118e5b6d049a859a12261c76b501b871
+      REVIEW_BRANCH: feature/collective-identity-threshold-commitments-20260726
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      VERCEL_PROJECT_NAME: website2
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-preview-review-fixtures
+
+    steps:
+      - name: Validate exact boundary and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "ops/enable-collective-preview-review-20260727"
+          for name in VERCEL_TOKEN NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out temporary operations branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact product head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$EXPECTED_PRODUCT_BRANCH"
+          actual="$(git rev-parse "origin/$EXPECTED_PRODUCT_BRANCH")"
+          if [[ "$actual" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_HEAD, found $actual." >&2
+            exit 1
+          fi
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          mkdir -p "$ARTIFACT_DIR"
+
+      - name: Generate isolated Preview key and seed review fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          master_key="$(openssl rand -base64 32 | tr -d '\n')"
+          echo "::add-mask::$master_key"
+          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+
+          node --input-type=module <<'NODE'
+          import {
+            createCipheriv,
+            createHash,
+            createHmac,
+            hkdfSync,
+            randomBytes,
+            randomUUID,
+          } from "node:crypto";
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          const qaUrl = process.env.QA_SUPABASE_URL;
+          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const masterKey = Buffer.from(process.env.COLLECTIVE_COMMITMENT_MASTER_KEY, "base64");
+          const artifactDir = process.env.ARTIFACT_DIR;
+          const userPrefix = "qa-collective-feature-review-3228deff-";
+          const titlePrefix = "[FEATURE REVIEW 3228deff]";
+          const expiresAt = new Date(Date.now() + 48 * 60 * 60_000).toISOString();
+          const deadline = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString();
+          const now = new Date().toISOString();
+
+          if (masterKey.length !== 32) throw new Error("Preview master key must decode to 32 bytes.");
+
+          const headers = {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            "Content-Type": "application/json",
+          };
+
+          async function request(relativePath, { method = "GET", body, prefer } = {}) {
+            const response = await fetch(`${qaUrl}${relativePath}`, {
+              method,
+              headers: { ...headers, ...(prefer ? { Prefer: prefer } : {}) },
+              body: body === undefined ? undefined : JSON.stringify(body),
+            });
+            const text = await response.text();
+            if (!response.ok) {
+              throw new Error(`${method} ${relativePath} failed (${response.status}): ${text.slice(0, 800)}`);
+            }
+            return text ? JSON.parse(text) : null;
+          }
+
+          async function listUsers() {
+            const users = [];
+            for (let page = 1; page <= 20; page += 1) {
+              const data = await request(`/auth/v1/admin/users?page=${page}&per_page=100`);
+              const batch = data.users ?? [];
+              users.push(...batch);
+              if (batch.length < 100) break;
+            }
+            return users;
+          }
+
+          async function deletePriorReviewUsers() {
+            const users = (await listUsers()).filter((user) =>
+              String(user.email ?? "").toLowerCase().startsWith(userPrefix),
+            );
+            for (const user of users) {
+              const commitments = await request(
+                `/rest/v1/collective_commitments?creator_id=eq.${encodeURIComponent(user.id)}&select=id,title`,
+              );
+              const unsafe = (commitments ?? []).filter((row) => !String(row.title).startsWith(titlePrefix));
+              if (unsafe.length) throw new Error(`Refusing to delete review user ${user.id} with non-review commitments.`);
+              if ((commitments ?? []).length) {
+                await request(
+                  `/rest/v1/collective_commitments?creator_id=eq.${encodeURIComponent(user.id)}`,
+                  { method: "DELETE", prefer: "return=minimal" },
+                );
+              }
+              await request(
+                `/rest/v1/collective_identity_credentials?profile_id=eq.${encodeURIComponent(user.id)}`,
+                { method: "DELETE", prefer: "return=minimal" },
+              );
+              await request(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+                method: "DELETE",
+                prefer: "return=minimal",
+              });
+              await request(`/auth/v1/admin/users/${user.id}`, { method: "DELETE" });
+            }
+            return users.length;
+          }
+
+          async function createUser(role, displayName, password) {
+            const email = `${userPrefix}${role}@example.com`;
+            const data = await request("/auth/v1/admin/users", {
+              method: "POST",
+              body: {
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { display_name: displayName },
+              },
+            });
+            const user = data.user ?? data;
+            if (!user?.id) throw new Error(`Could not create ${role}.`);
+            await request("/rest/v1/profiles?on_conflict=id", {
+              method: "POST",
+              prefer: "resolution=merge-duplicates,return=representation",
+              body: {
+                id: user.id,
+                email,
+                display_name: displayName,
+                public_location_granularity: "hidden",
+              },
+            });
+            return { id: user.id, email, displayName, password };
+          }
+
+          async function createCredential(user, realName, affiliation, humanLabel) {
+            const verifiedAt = new Date().toISOString();
+            const rows = await request("/rest/v1/collective_identity_credentials", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                profile_id: user.id,
+                credential_version: 1,
+                status: "verified",
+                verified_real_name: realName,
+                verified_affiliation: affiliation,
+                human_uniqueness_ref_hash: sha256(`feature-review-human:${humanLabel}`),
+                provider: "MoralTrade synthetic feature review",
+                verification_method: "isolated QA operator fixture",
+                assurance_tier: "enhanced-review",
+                duplicate_check_result: "clear",
+                manual_review_status: "approved",
+                verified_at: verifiedAt,
+                expires_at: expiresAt,
+              },
+            });
+            return rows[0];
+          }
+
+          function sha256(value) {
+            return createHash("sha256").update(value).digest("hex");
+          }
+
+          function encryptBytes(key, plaintext, aad) {
+            const iv = randomBytes(12);
+            const cipher = createCipheriv("aes-256-gcm", key, iv);
+            cipher.setAAD(aad);
+            const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+            return {
+              ciphertextBase64: ciphertext.toString("base64"),
+              ivBase64: iv.toString("base64"),
+              tagBase64: cipher.getAuthTag().toString("base64"),
+            };
+          }
+
+          function deriveKey(dataKey, purpose) {
+            return Buffer.from(
+              hkdfSync(
+                "sha256",
+                dataKey,
+                Buffer.from("moral-trade-collective-commitments-v1", "utf8"),
+                Buffer.from(purpose, "utf8"),
+                32,
+              ),
+            );
+          }
+
+          function hmacHex(key, value) {
+            return createHmac("sha256", key).update(value, "utf8").digest("hex");
+          }
+
+          function wrapKey(commitmentId, dataKey) {
+            return encryptBytes(
+              masterKey,
+              dataKey,
+              Buffer.from(`collective-commitment-key:${commitmentId}`, "utf8"),
+            );
+          }
+
+          function canonicalTerms(terms) {
+            return JSON.stringify({
+              deadlineAt: new Date(terms.deadlineAt).toISOString(),
+              eligibilityRule: terms.eligibilityRule.trim(),
+              propositionText: terms.propositionText.trim(),
+              propositionType: terms.propositionType,
+              requirementsText: terms.requirementsText.trim(),
+              riskClass: terms.riskClass,
+              riskDimensions: [...terms.riskDimensions].sort(),
+              thresholdCount: terms.thresholdCount,
+              title: terms.title.trim(),
+            });
+          }
+
+          const typeMeta = {
+            public_letter: { label: "Open or closed letter", high: true, risks: ["reputational", "political"] },
+            workplace_organizing: { label: "Workplace organizing or unionization intention", high: true, risks: ["employment", "legal", "reputational"] },
+            whistleblowing: { label: "Coordinated whistleblowing", high: true, risks: ["employment", "legal", "reputational"] },
+            political_dissent: { label: "Political-party dissent or defection", high: true, risks: ["political", "reputational", "legal"] },
+            funding_pledge: { label: "High-net-worth or institutional funding pledge", high: true, risks: ["financial", "reputational"] },
+            other_collective_action: { label: "Other identity-threshold commitment", high: false, risks: [] },
+          };
+
+          async function rpc(name, body) {
+            return request(`/rest/v1/rpc/${name}`, {
+              method: "POST",
+              prefer: "return=representation",
+              body,
+            });
+          }
+
+          async function createOpenCommitment({ creatorId, propositionType, slug, threshold }) {
+            const meta = typeMeta[propositionType];
+            const id = randomUUID();
+            const dataKey = randomBytes(32);
+            const wrapped = wrapKey(id, dataKey);
+            const terms = {
+              title: `${titlePrefix} ${slug}`,
+              propositionType,
+              propositionText: `Synthetic ${meta.label.toLowerCase()} proposition for feature review. No real person, employer, party, institution, disclosure, or financial pledge is involved.`,
+              requirementsText: "Only isolated synthetic feature-review identities qualify. This fixture must not be treated as a real-world commitment.",
+              eligibilityRule: "Current operator-approved synthetic QA credential for this exact feature-review cohort.",
+              thresholdCount: threshold,
+              deadlineAt: deadline,
+              riskClass: meta.high ? "high" : "standard",
+              riskDimensions: meta.risks,
+            };
+            const termsHash = sha256(canonicalTerms(terms));
+            await rpc("create_collective_commitment_v1", {
+              p_id: id,
+              p_creator_id: creatorId,
+              p_title: terms.title,
+              p_proposition_type: propositionType,
+              p_proposition_text: terms.propositionText,
+              p_requirements_text: terms.requirementsText,
+              p_eligibility_rule: terms.eligibilityRule,
+              p_threshold_count: threshold,
+              p_deadline_at: deadline,
+              p_risk_class: terms.riskClass,
+              p_risk_dimensions: terms.riskDimensions,
+              p_terms_hash: termsHash,
+              p_wrapped_key_ciphertext: wrapped.ciphertextBase64,
+              p_wrapped_key_iv: wrapped.ivBase64,
+              p_wrapped_key_tag: wrapped.tagBase64,
+            });
+            return { id, dataKey, terms, termsHash };
+          }
+
+          async function addPrivateSignature(commitment, user, credential, publishAffiliation) {
+            const revealNonce = randomBytes(24).toString("hex");
+            const verifiedAffiliation = publishAffiliation && credential.verified_affiliation
+              ? credential.verified_affiliation
+              : null;
+            const canonical = [credential.verified_real_name.trim(), verifiedAffiliation?.trim() ?? "", revealNonce].join("\n");
+            const identityCommitment = hmacHex(deriveKey(commitment.dataKey, "reveal-manifest-mac"), canonical);
+            const signedAt = new Date().toISOString();
+            const payload = {
+              profileId: user.id,
+              credentialId: credential.id,
+              credentialVersion: credential.credential_version,
+              verifiedRealName: credential.verified_real_name,
+              verifiedAffiliation,
+              credentialVerifiedAt: credential.verified_at,
+              credentialExpiresAt: credential.expires_at,
+              revealNonce,
+              identityCommitment,
+            };
+            const encrypted = encryptBytes(
+              deriveKey(commitment.dataKey, "signature-encryption"),
+              Buffer.from(JSON.stringify(payload), "utf8"),
+              Buffer.from(`collective-signature:${commitment.id}`, "utf8"),
+            );
+            const result = await rpc("add_collective_commitment_signature_v1", {
+              p_commitment_id: commitment.id,
+              p_account_token: hmacHex(deriveKey(commitment.dataKey, "account-token"), user.id),
+              p_human_token: hmacHex(deriveKey(commitment.dataKey, "human-token"), credential.human_uniqueness_ref_hash),
+              p_identity_commitment: identityCommitment,
+              p_reveal_nonce: revealNonce,
+              p_encrypted_identity_payload: encrypted.ciphertextBase64,
+              p_payload_iv: encrypted.ivBase64,
+              p_payload_tag: encrypted.tagBase64,
+              p_signed_at: signedAt,
+            });
+            return result;
+          }
+
+          async function insertActiveFixture(creatorId) {
+            const id = randomUUID();
+            const activatedAt = new Date().toISOString();
+            const terms = {
+              title: `${titlePrefix} ACTIVE — complete signer set revealed together`,
+              propositionType: "other_collective_action",
+              propositionText: "Synthetic activated proposition demonstrating simultaneous publication of the complete verified signer set.",
+              requirementsText: "Only synthetic identities Alice and Bob qualified for this feature-review fixture.",
+              eligibilityRule: "Exact isolated review cohort; no real-world eligibility or endorsement is implied.",
+              thresholdCount: 2,
+              deadlineAt: deadline,
+              riskClass: "standard",
+              riskDimensions: [],
+            };
+            const termsHash = sha256(canonicalTerms(terms));
+            await request("/rest/v1/collective_commitments", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                id,
+                creator_id: creatorId,
+                title: terms.title,
+                proposition_type: terms.propositionType,
+                proposition_text: terms.propositionText,
+                requirements_text: terms.requirementsText,
+                eligibility_rule: terms.eligibilityRule,
+                threshold_count: 2,
+                deadline_at: deadline,
+                risk_class: "standard",
+                risk_dimensions: [],
+                status: "active",
+                terms_hash: termsHash,
+                activated_at: activatedAt,
+              },
+            });
+            const aliceCommitment = sha256(`${id}:alice`);
+            const bobCommitment = sha256(`${id}:bob`);
+            await request("/rest/v1/collective_commitment_public_signers", {
+              method: "POST",
+              prefer: "return=representation",
+              body: [
+                {
+                  commitment_id: id,
+                  ordinal: 1,
+                  verified_real_name: "Alice Verified Review",
+                  verified_affiliation: "Example Institute",
+                  signed_at: new Date(Date.now() - 120_000).toISOString(),
+                  revealed_at: activatedAt,
+                  identity_commitment: aliceCommitment,
+                },
+                {
+                  commitment_id: id,
+                  ordinal: 2,
+                  verified_real_name: "Bob Verified Review",
+                  verified_affiliation: null,
+                  signed_at: new Date(Date.now() - 60_000).toISOString(),
+                  revealed_at: activatedAt,
+                  identity_commitment: bobCommitment,
+                },
+              ],
+            });
+            const manifestHash = sha256(JSON.stringify([aliceCommitment, bobCommitment]));
+            await request("/rest/v1/collective_commitment_receipts", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                commitment_id: id,
+                outcome: "active",
+                terms_hash: termsHash,
+                signer_manifest_hash: manifestHash,
+                signer_count: 2,
+                receipt_hash: sha256(`${id}:active:${activatedAt}`),
+                created_at: activatedAt,
+              },
+            });
+            await request("/rest/v1/collective_commitment_events", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                commitment_id: id,
+                event_type: "activated",
+                actor_profile_id: creatorId,
+                public_payload: { signerCount: 2, featureReview: true },
+                created_at: activatedAt,
+              },
+            });
+            return id;
+          }
+
+          async function insertExpiredFixture(creatorId) {
+            const id = randomUUID();
+            const expiredAt = new Date().toISOString();
+            const pastDeadline = new Date(Date.now() - 60 * 60_000).toISOString();
+            const terms = {
+              title: `${titlePrefix} EXPIRED — threshold missed; no names published`,
+              propositionType: "funding_pledge",
+              propositionText: "Synthetic funding-pledge fixture demonstrating expiry without identity publication.",
+              requirementsText: "Only isolated synthetic verified funders qualified; no real funds or institution are involved.",
+              eligibilityRule: "Exact isolated feature-review cohort.",
+              thresholdCount: 3,
+              deadlineAt: pastDeadline,
+              riskClass: "high",
+              riskDimensions: ["financial", "reputational"],
+            };
+            const termsHash = sha256(canonicalTerms(terms));
+            await request("/rest/v1/collective_commitments", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                id,
+                creator_id: creatorId,
+                title: terms.title,
+                proposition_type: terms.propositionType,
+                proposition_text: terms.propositionText,
+                requirements_text: terms.requirementsText,
+                eligibility_rule: terms.eligibilityRule,
+                threshold_count: 3,
+                deadline_at: pastDeadline,
+                risk_class: "high",
+                risk_dimensions: terms.riskDimensions,
+                status: "expired",
+                terms_hash: termsHash,
+                expired_at: expiredAt,
+              },
+            });
+            await request("/rest/v1/collective_commitment_receipts", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                commitment_id: id,
+                outcome: "expired",
+                terms_hash: termsHash,
+                signer_manifest_hash: null,
+                signer_count: 0,
+                receipt_hash: sha256(`${id}:expired:${expiredAt}`),
+                created_at: expiredAt,
+              },
+            });
+            await request("/rest/v1/collective_commitment_events", {
+              method: "POST",
+              prefer: "return=representation",
+              body: {
+                commitment_id: id,
+                event_type: "expired",
+                actor_profile_id: creatorId,
+                public_payload: { signerCount: 0, identitiesPublished: false, featureReview: true },
+                created_at: expiredAt,
+              },
+            });
+            return id;
+          }
+
+          await mkdir(artifactDir, { recursive: true });
+          const deletedPriorUsers = await deletePriorReviewUsers();
+
+          const reviewerPassword = `Review-${randomBytes(18).toString("base64url")}!`;
+          const creator = await createUser("creator", "Feature Review Creator", `Creator-${randomBytes(18).toString("base64url")}!`);
+          const reviewer = await createUser("reviewer", "Feature Review Participant", reviewerPassword);
+          const alice = await createUser("alice", "Alice Fixture Account", `Alice-${randomBytes(18).toString("base64url")}!`);
+          const bob = await createUser("bob", "Bob Fixture Account", `Bob-${randomBytes(18).toString("base64url")}!`);
+
+          const reviewerCredential = await createCredential(
+            reviewer,
+            "Feature Review Participant",
+            "Moral Trade Review",
+            "reviewer",
+          );
+          const aliceCredential = await createCredential(alice, "Alice Verified Review", "Example Institute", "alice");
+          await createCredential(bob, "Bob Verified Review", "", "bob");
+
+          const activationDemo = await createOpenCommitment({
+            creatorId: creator.id,
+            propositionType: "public_letter",
+            slug: "OPEN — sign once to trigger exact-threshold publication",
+            threshold: 2,
+          });
+          await addPrivateSignature(activationDemo, alice, aliceCredential, true);
+
+          const workplace = await createOpenCommitment({
+            creatorId: creator.id,
+            propositionType: "workplace_organizing",
+            slug: "WORKPLACE — high-risk warning and acknowledgment",
+            threshold: 4,
+          });
+          const whistleblowing = await createOpenCommitment({
+            creatorId: creator.id,
+            propositionType: "whistleblowing",
+            slug: "WHISTLEBLOWING — bounded synthetic disclosure",
+            threshold: 4,
+          });
+          const political = await createOpenCommitment({
+            creatorId: creator.id,
+            propositionType: "political_dissent",
+            slug: "POLITICAL DISSENT — synthetic declaration",
+            threshold: 4,
+          });
+          const withdrawalDemo = await createOpenCommitment({
+            creatorId: creator.id,
+            propositionType: "other_collective_action",
+            slug: "OPEN — sign, withdraw, and re-sign without publication",
+            threshold: 3,
+          });
+          await addPrivateSignature(withdrawalDemo, alice, aliceCredential, false);
+
+          const activeId = await insertActiveFixture(creator.id);
+          const expiredId = await insertExpiredFixture(creator.id);
+
+          const fixtures = {
+            exactProductHead: process.env.EXPECTED_PRODUCT_HEAD,
+            qaProject: "hvmxfjjbdcgjjudmthdz",
+            titlePrefix,
+            expiresAt,
+            deletedPriorUsers,
+            reviewer: {
+              id: reviewer.id,
+              email: reviewer.email,
+              verifiedRealName: reviewerCredential.verified_real_name,
+              verifiedAffiliation: reviewerCredential.verified_affiliation,
+            },
+            commitments: {
+              activationDemo: activationDemo.id,
+              workplace: workplace.id,
+              whistleblowing: whistleblowing.id,
+              politicalDissent: political.id,
+              withdrawalDemo: withdrawalDemo.id,
+              active: activeId,
+              expired: expiredId,
+            },
+            syntheticUserIds: [creator.id, reviewer.id, alice.id, bob.id],
+          };
+
+          await writeFile(
+            path.join(artifactDir, "review-credentials.txt"),
+            `Email: ${reviewer.email}\nPassword: ${reviewerPassword}\nExpires: ${expiresAt}\n`,
+            { mode: 0o600 },
+          );
+          await writeFile(
+            path.join(artifactDir, "fixtures.json"),
+            `${JSON.stringify(fixtures, null, 2)}\n`,
+          );
+          console.log(`Seeded ${Object.keys(fixtures.commitments).length} exact synthetic review commitments.`);
+          NODE
+
+      - name: Configure exact branch-scoped Preview variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          upsert_env() {
+            local key="$1" value="$2" type="$3"
+            jq -n \
+              --arg key "$key" --arg value "$value" --arg type "$type" --arg branch "$REVIEW_BRANCH" \
+              '{key:$key,value:$value,type:$type,target:["preview"],gitBranch:$branch,comment:"Temporary populated Collective Commitments feature review; production unaffected."}' \
+              > "$RUNNER_TEMP/env.json"
+            curl --silent --show-error --fail-with-body \
+              --request POST \
+              --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_TEAM_ID}&upsert=true" \
+              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data-binary @"$RUNNER_TEMP/env.json" \
+              > "$RUNNER_TEMP/env-response.json"
+            jq -e '((.failed // []) | length) == 0 and (.created // .) != null' "$RUNNER_TEMP/env-response.json" >/dev/null
+          }
+          upsert_env COLLECTIVE_COMMITMENTS_ENABLED true plain
+          upsert_env COLLECTIVE_COMMITMENT_MASTER_KEY "$COLLECTIVE_COMMITMENT_MASTER_KEY" sensitive
+          upsert_env COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES 60 plain
+          upsert_env NEXT_PUBLIC_SUPABASE_URL "$QA_SUPABASE_URL" plain
+          upsert_env NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" encrypted
+          upsert_env SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY" sensitive
+          rm -f "$RUNNER_TEMP/env.json" "$RUNNER_TEMP/env-response.json"
+
+      - name: Deploy exact reviewed product head with populated Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg ref "$REVIEW_BRANCH" \
+            --arg sha "$EXPECTED_PRODUCT_HEAD" \
+            '{name:$name,project:$project,gitSource:{type:"github",org:"ghuser29384",repo:"Website2",ref:$ref,sha:$sha},meta:{purpose:"collective-commitments-populated-feature-review",exactProductHead:$sha}}' \
+            > "$RUNNER_TEMP/deploy.json"
+          curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}&forceNew=1" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @"$RUNNER_TEMP/deploy.json" \
+            > "$RUNNER_TEMP/deploy-response.json"
+          id="$(jq -r '.id // empty' "$RUNNER_TEMP/deploy-response.json")"
+          url="$(jq -r '.url // empty' "$RUNNER_TEMP/deploy-response.json")"
+          test -n "$id" && test -n "$url"
+          echo "DEPLOYMENT_ID=$id" >> "$GITHUB_ENV"
+          echo "DEPLOYMENT_URL=https://$url" >> "$GITHUB_ENV"
+
+          state=""
+          for _ in $(seq 1 180); do
+            curl --silent --show-error --fail-with-body \
+              --url "https://api.vercel.com/v13/deployments/${id}?teamId=${VERCEL_TEAM_ID}" \
+              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+              > "$RUNNER_TEMP/poll.json"
+            state="$(jq -r '.readyState // .status // .state // empty' "$RUNNER_TEMP/poll.json")"
+            [[ "$state" == "READY" ]] && break
+            if [[ "$state" == "ERROR" || "$state" == "CANCELED" ]]; then
+              cat "$RUNNER_TEMP/poll.json" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          test "$state" = "READY"
+          jq '{id,url,readyState,state,target,meta}' "$RUNNER_TEMP/poll.json" \
+            > "$ARTIFACT_DIR/deployment-status.json"
+          printf '%s\n' \
+            "exact_product_head=${EXPECTED_PRODUCT_HEAD}" \
+            "deployment_id=${id}" \
+            "deployment_url=https://${url}" \
+            "fixtures=7" \
+            "temporary_reviewer=created" \
+            "production_changed=NO" \
+            > "$ARTIFACT_DIR/result.txt"
+
+      - name: Comment populated review deployment on PR 233
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr comment 233 --repo "$EXPECTED_REPOSITORY" --body "A populated, isolated feature-review Preview is READY for exact product head \`${EXPECTED_PRODUCT_HEAD}\`: \`${DEPLOYMENT_URL}/collective-commitments\`. It contains seven synthetic review fixtures covering all six proposition classes plus open, active, expired, sign/withdraw/re-sign, and threshold-activation states. Temporary reviewer credentials are in workflow artifact \`collective-preview-review-fixtures-${GITHUB_RUN_ID}\`. Production was not changed."
+
+      - name: Upload credentials and exact cleanup manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-preview-review-fixtures-${{ github.run_id }}
+          path: collective-preview-review-fixtures
+          if-no-files-found: error
+          retention-days: 2
