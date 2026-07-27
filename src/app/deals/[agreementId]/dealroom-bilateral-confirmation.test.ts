@@ -15,7 +15,7 @@ const coreActions = readFileSync(
 const migration = readFileSync(
   path.join(
     repoRoot,
-    "supabase/migrations/20260727042000_allow_closed_marketplace_offer_bilateral_confirmation.sql",
+    "supabase/migrations/20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql",
   ),
   "utf8",
 );
