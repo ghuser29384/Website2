@@ -1,3 +1,3 @@
 candidate=qa/live-trade-authenticated-feed-20260727
-candidate_sha=71480c03739f063a9725a4eb5c15e507b2cd0617
-requested_at=2026-07-27T13:31:00Z
+candidate_sha=378bfc688e4815decebd14948ec7de5c211522ea
+requested_at=2026-07-27T13:48:00Z
