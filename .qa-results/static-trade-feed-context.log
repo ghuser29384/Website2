@@ -1,0 +1,484 @@
+decoded_bytes=83287
+now_functions:
+  nowPage @ 29984
+  nowFocus @ 30330
+  nowPlan @ 35168
+  nowRules @ 42679
+
+===== POTENTIAL MATCHES =====
+not found
+
+===== Potential matches =====
+match_1_index=49513
+ompose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepte
+
+
+===== Alex R. =====
+match_1_index=49602
+ass="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepted by both.']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</ta
+
+match_2_index=50325
+lause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepted by both.']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table><div class="h" style="justify-content:center;padding:12px"><button class="btn primary" data-action="make-offer">Offer exchange</button><button class="btn">Adjust terms</button><button class="btn" data-action="save">Save for later</button></div></section><section class="panel pad" style="margin-top:10px"><div class="eyebrow">Incoming requests</div><div class="h"><span class="chip">Alex requests $15 funding · Review</span><span class="chip">Priya requests 2h review · Review</span></div></section></main>
+ <section class="piece-col"><div class="eyebrow orange">Value others can offer me</div><h2>I need impact to achieve.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="c
+
+
+===== Sam G. =====
+match_1_index=49958
+>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepted by both.']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table><div class="h" style="justify-content:center;padding:12px"><button class="btn primary" data-action="make-offer">Offer exchange</button><button class="btn">Adjust terms</button><button class="btn" data-action="save">Save for later</button></div></section><section class="panel pad" style="margin-top:10px"><div class="eyebrow">Incoming requests</div><d
+
+
+===== Riley P. =====
+match_1_index=49967
+escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepted by both.']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table><div class="h" style="justify-content:center;padding:12px"><button class="btn primary" data-action="make-offer">Offer exchange</button><button class="btn">Adjust terms</button><button class="btn" data-action="save">Save for later</button></div></section><section class="panel pad" style="margin-top:10px"><div class="eyebrow">Incoming requests</div><div class="h
+
+
+===== Replaced 10 car trips =====
+match_1_index=50069
+t autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+function exchangeBuilder(){
+ const left=[['$','$50 funding','Unrestricted'],['◷','4 hours of review','Research or writing'],['▣','8 transit trips','Seattle, WA'],['○','Intro to researcher','AI safety']];
+ const right=[['⚗','AI-safety research','Mina · AI Safety'],['▥','Mina funds $20','Civic infrastructure'],['⌕','Factory-farming evidence review','Good Food Institute'],['◎','Salary-gap pool','Women in Tech']];
+ return `<div class="exchange-grid"><section class="piece-col"><div class="eyebrow green">Value I can offer</div><h2>I have impact to offer.</h2><div class="h"><select class="control"><option>All causes</option></select><select class="control"><option>This month</option></select></div><div style="margin-top:11px">${left.map((x,i)=>piece(x,i===2)).join('')}</div><section class="panel pad"><div class="between"><div class="eyebrow">Saved pieces (3)</div><a class="blue">View all</a></div><p style="font-size:10px">$100 funding · next month<br>2h legal review · this month<br>Data labeling · ~500 rows</p></section><button class="btn" style="width:100%;margin-top:10px">＋ Create new value piece</button></section>
+ <main><div style="text-align:center"><h2 class="serif" style="font-size:35px;font-weight:400;margin:0">Two-sided exchange.<br>Stronger impact.</h2><p class="mono muted" style="font-size:10px">Perfect matches create more impact than either side alone.</p></div><section class="ex-table"><div class="ex-head"><span>Your exchange table</span><span>1 match formed ✓</span></div><div class="pair"><div><div class="eyebrow green">You offer</div>${piece(['▣','8 transit trips','Seattle, WA'],true)}</div><div style="display:grid;place-items:center"><i class="swap">⇄</i></div><div><div class="eyebrow orange">They offer</div>${piece(['▥','Mina funds $20','Civic infrastructure'],true)}</div></div><table class="details">${[['Mutual gain',`${tag('High','ok')} Strong alignment on cause, timing, and trust.`],['Conditions','Transit within Seattle city limits. Funds used for pre-approved projects.'],['Ranges','8 trips ↔ $20.00'],['Trust basis','You: 12 completed exchanges · Mina: 28.'],['Deadline','Jul 31, 2026 (15 days left)'],['Proof','Transit app receipt ↔ project receipt or link.'],['Conditional money','▣ $20 held in escrow; released when proof is accepted by both.']].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table><div class="h" style="justify-content:center;padding:12px"><button class="btn primary" data-action="make-offer">Offer exchange</button><button class="btn">Adjust terms</button><button class="btn" data-action="save">Save for later</button></div></section><section class="panel pad" style="margin-top:10px"><div class="eyebrow">Incoming requests</div><div class="h"><span class="chip">Alex requests $15 funding · Review</span><span class="chip">Priya requests 2h review · Review<
+
+
+===== Counteroffer from Mina =====
+match_1_index=30485
+00',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+};
+const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+
+function render(){
+ if(!['now','trade','activity'].includes(state.page))state.page='now';
+ $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+ $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+ bindDnD();
+}
+function nowPage(){
+ return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+ ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+ ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+}
+function nowFocus(){
+ return `<div class="focus-layout"><main>
+ <section class="panel black urgent">
+  <div><div class="eyebrow orange">Due today</div><h2>Counteroffer from Mina.</h2><p class="muted">Mina responded to your transit trade. Due by 6:00 PM today.</p></div>
+  <div class="terms"><div><span class="eyebrow">Your offer</span><strong>8 transit trips</strong></div><div><span class="eyebrow">Mina’s counter</span><strong>6 transit trips + $20</strong></div></div>
+  <div class="stack"><button class="btn primary" data-action="dealroom">Review terms →</button><button class="btn ghost">View conversation →</button></div>
+ </section>
+ <section class="panel attention" style="background:linear-gradient(90deg,rgba(184,217,44,.12),rgba(251,250,246,.9))">
+  <div class="iconbox limebg">↗</div><div class="lead"><div class="eyebrow lime">Threshold opportunity</div><h3>Your $10 could activate $9,990.</h3></div>
+  <div><div class="between"><b class="serif" style="font-size:22px">$${state.threshold.toLocaleString()} of $9,990</b><b class="blue">${(state.threshold/9990*100).toFixed(1)}%</b></div>${progress(state.threshold/9990*100)}<small class="muted">Only charged if the match activates.</small></div>
+  <button class="btn" data-action="add-pledge">Add $10 →</button>
+ </section>
+ <section class="panel attention">
+  <div class="iconbox orangebg">✓</div><div class="lead"><div class="eyebrow orange">Requires your action</div><h3>${state.verified?'Transit commitment verified.':'Verify your completed transit commitment.'}</h3></div>
+  <div><b>You marked ${state.verified?'8':'4'} of 8 trips complete.</b><p class="muted" style="font-size:11px">Verification unlocks your counterparty’s funds.</p></div>
+  <button class="btn" data-action="verify">${state.verified?'Verified':'Verify trips →'}</button>
+ </section>
+ <section class="panel brief">
+  ${story('Lead story · Counteroffer','Support AI-safety research under $100.','Mina is a verified researcher. She countered your offer with updated terms and a four-week deliverable.',
+   [['Work','Frontier bio-risk evaluations'],['Deliverable','Red-team evals + publish results'],['Your funding','$95, one-time'],['Proof','Public harness + review']],'Review counteroffer','dealroom')}
+  ${story('Near-threshold pool','Close the gap. Choose the more impactful biosecurity job.','Verified salary gap to reach the role. Funds return automatically if the employment condition is not met.',
+   [['Gap','$580'],['Remaining','$45'],['Contributors','7'],['Start','Aug 17, 2026']],'Pledge $45','select-bio')}
+  ${story('Completed trade','You funded open-source eval tooling. Impact delivered.','The researcher delivered as promised. Proof and downstream use were verified.',
+   [['Trade','#7842'],['Funding','$75'],['Completed','Jul 12, 2026'],['Impact','Tooling used in 3 projects']],'Repeat pattern','repeat')}
+ </section>
+ <div class="metric-grid stats"><div><strong>$45</strong><small>reserved across 3 commitments</small></div><div><strong>$0</strong><small>charged today</small></div><div><strong>3</strong><small>active commitments</small></div><div><strong>4</strong><small>new saved-field opportunities</small></div></div>
+ </main><aside class="stack">
+ ${sideCard('Today’s changes',[
+  'Near-threshold salary-gap pools · 12 new','AI-safety research under $100 · 5 new','Civic infrastructure helpers · 3 new'
+ ],'<button clas
+
+
+===== function nowFocus(){ =====
+match_1_index=30330
+rastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+};
+const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+
+function render(){
+ if(!['now','trade','activity'].includes(state.page))state.page='now';
+ $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+ $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+ bindDnD();
+}
+function nowPage(){
+ return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+ ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+ ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+}
+function nowFocus(){
+ return `<div class="focus-layout"><main>
+ <section class="panel black urgent">
+  <div><div class="eyebrow orange">Due today</div><h2>Counteroffer from Mina.</h2><p class="muted">Mina responded to your transit trade. Due by 6:00 PM today.</p></div>
+  <div class="terms"><div><span class="eyebrow">Your offer</span><strong>8 transit trips</strong></div><div><span class="eyebrow">Mina’s counter</span><strong>6 transit trips + $20</strong></div></div>
+  <div class="stack"><button class="btn primary" data-action="dealroom">Review terms →</button><button class="btn ghost">View conversation →</button></div>
+ </section>
+ <section class="panel attention" style="background:linear-gradient(90deg,rgba(184,217,44,.12),rgba(251,250,246,.9))">
+  <div class="iconbox limebg">↗</div><div class="lead"><div class="eyebrow lime">Threshold opportunity</div><h3>Your $10 could activate $9,990.</h3></div>
+  <div><div class="between"><b class="serif" style="font-size:22px">$${state.threshold.toLocaleString()} of $9,990</b><b class="blue">${(state.threshold/9990*100).toFixed(1)}%</b></div>${progress(state.threshold/9990*100)}<small class="muted">Only charged if the match activates.</small></div>
+  <button class="btn" data-action="add-pledge">Add $10 →</button>
+ </section>
+ <section class="panel attention">
+  <div class="iconbox orangebg">✓</div><div class="lead"><div class="eyebrow orange">Requires your action</div><h3>${state.verified?'Transit commitment verified.':'Verify your completed transit commitment.'}</h3></div>
+  <div><b>You marked ${state.verified?'8':'4'} of 8 trips complete.</b><p class="muted" style="font-size:11px">Verification unlocks your counterparty’s funds.</p></div>
+  <button class="btn" data-action="verify">${state.verified?'Verified':'Verify trips →'}</button>
+ </section>
+ <section class="panel brief">
+  ${story('Lead story · Counteroffer','Support AI-safety research under $100.','Mina is a verified researcher. She countered your offer with updated terms and a four-week deliverable.',
+   [['Work','Frontier bio-risk evaluations'],['Deliverable','Red-team evals + publish results'],['Your funding','$95, one-time'],['Proof','Public harness + review']],'Review counteroffer','dealroom')}
+  ${story('Near-threshold pool','Close the gap. Choose the more impactful biosecurity job.','Verified salary gap to reach the role. Funds return automatically if the employment condition is not met.',
+   [['Gap','$580'],['Remaining','$45'],['Contributors','7'],['Start','Aug 17, 2026']],'Pledge $45','select-bio')}
+  ${story('Completed trade','You funded open-source eval tooling. Impact delivered.','The researcher delivered as promised. Proof and downstream use were verified.',
+   [['Trade','#7842'],['Funding','$75'],['Completed','Jul 12, 2026'],['Impact','Tooling used in 3 projects']],'Repeat pattern','repeat')}
+ </section>
+ <div class="metric-grid stats"><div><strong>$45</strong><small>reserved across 3 commitments</small></div><div><strong>$0</strong><small>charged today</small></div><div><strong>3</strong><small>active commitments</small></div><div><strong>4</strong><small>new saved-field opportunities</small></div></div>
+ </main><aside class="stack">
+ ${sideCard('To
+
+
+===== function nowTrade(){ =====
+not found
+
+===== #trade =====
+not found
+
+===== trade: =====
+match_1_index=26062
+ne)}
+ .resultbody{height:auto;min-height:560px}.market-row{grid-template-columns:1fr}.market-row>div{border-right:0}.compose-grid>.stack{display:block}.ingredients{display:flex;overflow:auto;gap:6px}.ingredient{min-width:115px}.sentence{font-size:22px}.clause{grid-template-columns:38px 1fr}.clause-tool{display:none}
+ .exchange-grid{display:block}.match-hero{grid-template-columns:1fr}.offer-body{grid-template-columns:1fr}.why{grid-template-columns:1fr 1fr}.rooms{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--line)}.room{min-width:170px}.dealbottom{grid-template-columns:1fr}
+ .port-summary{grid-template-columns:1fr 1fr}.allocrow{grid-template-columns:56px 1.3fr .8fr .8fr}.allocrow>div:nth-child(5),.allocrow>div:nth-child(6){display:none}
+ .ledger-summary{grid-template-columns:1fr 1fr}.outcome{grid-template-columns:1fr}.outmeta{border-right:0;border-bottom:1px solid var(--line)}.outdetail{grid-template-columns:1fr 1fr}.commandrow{grid-template-columns:1fr}
+}
+
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#now"><span class="mark"><i></i></span><span>Moral Trade</span></a>
+  <nav>
+    <button data-page="now">Now</button>
+    <button data-page="trade">Trade</button>
+    <button data-page="activity">Commitments</button>
+  </nav>
+  <div class="top-actions">
+    <button class="text-btn" data-action="command">⌕ Command</button>
+    <button class="avatar" data-action="profile">AJ</button>
+  </div>
+</header>
+<main id="app"></main>
+<div id="toast" class="toast"></div>
+<div id="overlay" class="overlay"><aside id="drawer" class="drawer"></aside></div>
+<script>
+
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const state={
+ page:(location.hash||'#now').slice(1), now:'focus', discover:'list', trade:'build', build:'clauses',
+ activity:'portfolio', selected:'civic', pledge:10, threshold:8640, test:true, locked:false, verified:false,
+ zoom:1, calendar:'week',
+ alloc:{bio:{m:70,h:2,t:3},wild:{m:80,h:2,t:4},civic:{m:50,h:1,t:2},factory:{m:30,h:0,t:1}},
+ clauses:[
+  ['I offer','I will give <span class="token" contenteditable="true">$80.00</span> to <span class="token" contenteditable="true">AI-safety research</span>.'],
+  ['Only if they','Only if they <span class="token" contenteditable="true">replace 12 car trips</span> or <span class="token" contenteditable="true">deliver a factory-farming evidence review</span>.'],
+  ['Activation condition','Both sides lock in by <span class="token" contenteditable="true">July 23, 2026</span>.'],
+  ['Proof','Proof via <span class="token" contenteditable="true">receipts</span> or <span class="token" contenteditable="true">independent reviewer</span>.'],
+  ['If it fails','If proof is not provided, <span class="token fail" contenteditable="true">no funds are released</span>.']
+ ]
+};
+const O={
+ civic:{kind:'Trade opportunity',title:'Replace 8 car trips ↔ Mina funds $20 of civic infrastructure',cause:'Civic infrastructure',mechanism:'Direct reciprocity',amount:'$20',effort:'~40 minutes',trust:'High',a:'6–12 trips',b:'$16–$25',deadline:'Jul 31, 2026',proof:'Miles logged via connected app; receipts and project reports',status:'Verified',counterparty:'Mina Park'},
+ bio:{kind:'Near-threshold pool',title:'Close a verified biosecurity salary gap',cause:'Biosecurity',mechanism:'Threshold pool',amount:'$45 pledge',effort:'One-time',trust:'High',a:'$10–$100',b:'$4,800 remaining',deadline:'Jul 20, 2026',proof:'Employer letter and salary-gap audit',status:'Near activation',counterparty:'Praesidium Biosecurity'},
+ factory:{kind:'Mutual redirect',title:'Redirect factory-farming donation spend',cause:'Animal welfare',mechanism:'Donation redirect',amount:'$20 / month',effort:'5 minutes',trust:'Medium',a:'$10–$100',b:'Matched 1:1',deadline:'Jul 25, 2026',proof:'Donation receipts',status:'On track',counterparty:'Taylor Reed'},
+ wild:{kind:'Threshold pool',title:'Fund wild-animal-suffering research threshold',cause:'Wild animal suffering',mechanism:'Conditional pledge',amount:'$35',effort:'No time',trust:'High',a:'$10–$250',b:'21 contributors',deadline:'Jul 30, 2026',proof:'Verified grant report',status:'On track',counterparty:'Wild Animal Initiative'},
+ docs:{kind:'Reciprocal trade',title:'Open-civic-infrastructure documentation sprint',cause:'Civic infrastructure',mechanism:'Conditional payment',amount:'$1,360',effort:'4 modules',trust:'High',a:'$800–$1,500',b:'Open documentation',deadline:'Aug 5, 2026',proof:'Repository release and reviewer acceptance',status:'On track',counterparty:'Mina Park'}
+};
+const date=()=>`<div class="date"><b>Today</b>Thursday, July 16, 2026<br><span class="muted">Good afternoon, Alex.</span></div>`;
+const actions=(label='Create offer')=>`<div class="h">${date()}<button class="btn primary" data-action="create">＋ ${label}</button></div>`;
+const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</
+
+
+===== live html bootstrap/script context =====
+--- /api/live-now @ 3584 ---
+nd < 0) throw new Error('live Plan source markers');
+          const loadingPlan = `function nowPlan(){
+ return '<div class="plan-grid" data-mt-live-route-planner="loading"><aside class="panel plan-control"><div class="eyebrow orange">Private route profile</div><p class="muted">Loading your limits…</p></aside><main><section class="panel route"><div class="eyebrow orange">Checking live routes</div><h2>Loading private limits and current opportunities.</h2><p class="muted">No fixed or fallback route is shown.</p></section></main><aside class="stack"><section class="panel"><div class="eyebrow">Route tools</div><p class="muted">Loading only when useful…</p></section></aside></div>';
+}`;
+          return `${withoutFocus.slice(0, planStart)}${loadingPlan}${withoutFocus.slice(planEnd)}`;
+        };
+        const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+        const unavailableLiveNow = (payload = {}) => ({
+          ...payload,
+          authenticated: payload.authenticated === true,
+          recommendations: Array.isArray(payload.recommendations) ? payload.recommendations : [],
+          status: payload.status || 'unavailable',
+          routePlanner: {
+            status: 'unavailable',
+            checkedAt: new Date().toISOString(),
+            profile: {},
+            needsMoreInput: [],
+            routes: [],
+            comparison: null,
+            candidateCount: 0,
+          },
+        });
+        const accountPromise = fetch('/api/live-account', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then((response) => (response.ok ? response.json() : { authenticated: false }))
+          .catch(() => ({ authenticated: false }));
+        const liveNowPromise = fetch('/api/live-now', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        })
+          .then(async (response) => {
+            if (!response.ok) return unavailableLiveNow();
+            const payload = await response.json();
+            return payload && typeof payload === 'object' && payload.routePlanner
+              ? payload
+              : unavailableLiveNow(payload);
+          })
+          .catch(() => unavailableLiveNow());
+        const [chunks, liveAccount, liveNow] = await Promise.all([
+          Promise.all(
+            names.map((name) =>
+              fetch(`/mt-live-0d0e0f03-${name}.txt`).then((response) => {
+                if (!response.ok) throw new Error(`chunk ${name}`);
+                return response.text();
+              }),
+            ),
+          ),
+          accountPromise,
+          liveNowPromise,
+        ]);
+        const compressed = Uint8Array.from(atob(chunks.join('')), (character) => character.charCodeAt(0));
+        const raw = await new Response(
+          new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')),
+        ).arrayBuffer();
+        const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', raw))]
+          .map((value) => value.toString(16).padStart(2, '0'))
+          .join('');
+
+        if (digest !== '0d0e0f030dfca8329e3f72ba42b5811c72d338166f96a5231445b9fc4956124e') {
+          throw new Error('integrity');
+        }
+
+        const source = stripLegacyNowFocus(new TextDecoder().decode(raw));
+        const accountJson = JSON.stringify(liveAccount)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
+        const liveNowJson = JSON.stringify(liveNow)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
+        const enhancementStyles = [
+          '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
+          '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
+          '<link id="mt-custom-route-styles" rel="stylesheet" href="/moral-trade-live-custom-route.css">',
+          '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
+          '<link id="mt-reciprocal-feed-diagnostics-styles" rel="stylesheet" href="/moral-trade-live-feed-diagnostics.css">',
+          '<link id="mt-pareto-feed-learning-styles" rel="stylesheet" href="/moral-trade-live-learning-diagnostics.css">',
+          '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
+          '<link id="mt-live-route-recommendations-styles" rel="stylesheet" href="/moral-trade-live-route-recommendations.css">',
+          '<link id="mt-input-assist-styles" rel="stylesheet" href="/moral-trade-input-assist.css">',
+          '<link id="mt-live-offer-structure-styles" rel="stylesheet" href="/moral-trade-live-offer-structure.css">',
+
+--- moral-trade-live-now.js @ 8116 ---
+ing-diagnostics.css">',
+          '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
+          '<link id="mt-live-route-recommendations-styles" rel="stylesheet" href="/moral-trade-live-route-recommendations.css">',
+          '<link id="mt-input-assist-styles" rel="stylesheet" href="/moral-trade-input-assist.css">',
+          '<link id="mt-live-offer-structure-styles" rel="stylesheet" href="/moral-trade-live-offer-structure.css">',
+        ].join('');
+        const accountScripts = [
+          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
+          `<script>window.__MT_LIVE_NOW_BOOTSTRAP__=${liveNowJson};<\/script>`,
+          '<script src="/moral-trade-account-identity.js"><\/script>',
+          '<script src="/moral-trade-live-account.js"><\/script>',
+        ].join('');
+        const headEnhancements = `${enhancementStyles}${accountScripts}`;
+        const accountAwareSource = source.includes('</head>')
+          ? source.replace('</head>', `${headEnhancements}</head>`)
+          : `${headEnhancements}${source}`;
+        const enhancementScripts = [
+          '<script src="/moral-trade-live-navigation.js"><\/script>',
+          '<script src="/moral-trade-live-local-time.js"><\/script>',
+          '<script src="/moral-trade-live-route-resources.js"><\/script>',
+          '<script src="/moral-trade-live-plan-reset.js"><\/script>',
+          '<script src="/moral-trade-live-custom-route.js"><\/script>',
+          '<script src="/moral-trade-live-itinerary-editor.js"><\/script>',
+          '<script src="/moral-trade-brand.js"><\/script>',
+          '<script src="/moral-trade-live-verification.js"><\/script>',
+          '<script src="/moral-trade-live-templates.js"><\/script>',
+          '<script src="/moral-trade-live-now.js"><\/script>',
+          '<script src="/moral-trade-live-feed-diagnostics.js"><\/script>',
+          '<script src="/moral-trade-live-learning-diagnostics.js"><\/script>',
+          '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
+          '<script src="/moral-trade-live-priority-route.js"><\/script>',
+          '<script src="/moral-trade-requester-identity.js"><\/script>',
+          '<script src="/moral-trade-live-command-center.js"><\/script>',
+          '<script src="/moral-trade-input-assist.js"><\/script>',
+          '<script src="/moral-trade-live-token-autocomplete.js"><\/script>',
+          '<script src="/moral-trade-live-offer-structure.js"><\/script>',
+        ].join('');
+        const enhancedSource = accountAwareSource.includes('</body>')
+          ? accountAwareSource.replace('</body>', `${enhancementScripts}</body>`)
+          : `${accountAwareSource}${enhancementScripts}`;
+
+        document.open();
+        document.write(enhancedSource);
+        document.close();
+      } catch (error) {
+        document.getElementById('loading').textContent = 'Unable to load the interface. Please refresh.';
+        console.error(error);
+      }
+    })();
+  </script>
+  <noscript><main><p>JavaScript is required to use Moral Trade.</p></main></noscript>
+</body>
+</html>
+
+--- __MT_LIVE_NOW_BOOTSTRAP__ @ 6960 ---
+ringify(liveAccount)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
+        const liveNowJson = JSON.stringify(liveNow)
+          .replace(/</g, '\\u003c')
+          .replace(/>/g, '\\u003e')
+          .replace(/&/g, '\\u0026')
+          .replace(/\u2028/g, '\\u2028')
+          .replace(/\u2029/g, '\\u2029');
+        const enhancementStyles = [
+          '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
+          '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
+          '<link id="mt-custom-route-styles" rel="stylesheet" href="/moral-trade-live-custom-route.css">',
+          '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
+          '<link id="mt-reciprocal-feed-diagnostics-styles" rel="stylesheet" href="/moral-trade-live-feed-diagnostics.css">',
+          '<link id="mt-pareto-feed-learning-styles" rel="stylesheet" href="/moral-trade-live-learning-diagnostics.css">',
+          '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
+          '<link id="mt-live-route-recommendations-styles" rel="stylesheet" href="/moral-trade-live-route-recommendations.css">',
+          '<link id="mt-input-assist-styles" rel="stylesheet" href="/moral-trade-input-assist.css">',
+          '<link id="mt-live-offer-structure-styles" rel="stylesheet" href="/moral-trade-live-offer-structure.css">',
+        ].join('');
+        const accountScripts = [
+          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
+          `<script>window.__MT_LIVE_NOW_BOOTSTRAP__=${liveNowJson};<\/script>`,
+          '<script src="/moral-trade-account-identity.js"><\/script>',
+          '<script src="/moral-trade-live-account.js"><\/script>',
+        ].join('');
+        const headEnhancements = `${enhancementStyles}${accountScripts}`;
+        const accountAwareSource = source.includes('</head>')
+          ? source.replace('</head>', `${headEnhancements}</head>`)
+          : `${headEnhancements}${source}`;
+        const enhancementScripts = [
+          '<script src="/moral-trade-live-navigation.js"><\/script>',
+          '<script src="/moral-trade-live-local-time.js"><\/script>',
+          '<script src="/moral-trade-live-route-resources.js"><\/script>',
+          '<script src="/moral-trade-live-plan-reset.js"><\/script>',
+          '<script src="/moral-trade-live-custom-route.js"><\/script>',
+          '<script src="/moral-trade-live-itinerary-editor.js"><\/script>',
+          '<script src="/moral-trade-brand.js"><\/script>',
+          '<script src="/moral-trade-live-verification.js"><\/script>',
+          '<script src="/moral-trade-live-templates.js"><\/script>',
+          '<script src="/moral-trade-live-now.js"><\/script>',
+          '<script src="/moral-trade-live-feed-diagnostics.js"><\/script>',
+          '<script src="/moral-trade-live-learning-diagnostics.js"><\/script>',
+          '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
+          '<script src="/moral-trade-live-priority-route.js"><\/script>',
+          '<script src="/moral-trade-requester-identity.js"><\/script>',
+          '<script src="/moral-trade-live-command-center.js"><\/script>',
+          '<script src="/moral-trade-input-assist.js"><\/script>',
+          '<script src="/moral-trade-live-token-autocomplete.js"><\/script>',
+          '<script src="/moral-trade-live-offer-structure.js"><\/script>',
+        ].join('');
+        const enhancedSource = accountAwareSource.includes('</body>')
+          ? accountAwareSource.replace('</body>', `${enhancementScripts}</body>`)
+          : `${accountAwareSource}${enhancementScripts}`;
+
+        document.open();
+        document.write(enhancedSource);
+        document.close();
+      } catch (error) {
+        document.getElementById('loading').textContent = 'Unable to load the interface. Please refresh.';
+        console.error(error);
+      }
+    })();
+  </script>
+  <noscript><main><p>JavaScript is required to use Moral Trade.</p></main></noscript>
+</body>
+</html>
+
