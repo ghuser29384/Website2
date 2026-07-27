@@ -6,6 +6,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 import styles from "./collective-commitments.module.css";
+import mobileStyles from "./collective-commitments-mobile.module.css";
 
 export function CollectiveCommitmentShell({
   children,
@@ -15,7 +16,7 @@ export function CollectiveCommitmentShell({
   viewerPresent: boolean;
 }) {
   return (
-    <div className={`page-shell ${styles.shell}`}>
+    <div className={`page-shell ${styles.shell} ${mobileStyles.responsiveShell}`}>
       <header className={styles.header}>
         <SiteTopbar
           brandHref="/"
@@ -24,7 +25,10 @@ export function CollectiveCommitmentShell({
           showSearch={false}
           showLogout={viewerPresent}
         />
-        <nav aria-label="Collective commitments" className={styles.subnav}>
+        <nav
+          aria-label="Collective commitments"
+          className={`${styles.subnav} ${mobileStyles.responsiveSubnav}`}
+        >
           <Link href="/collective-commitments">Collective commitments</Link>
           <Link href="/collective-commitments/new">Create</Link>
           <Link href="/collective-commitments/identity">Identity verification</Link>
