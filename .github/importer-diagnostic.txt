@@ -1,302 +1,302 @@
-Importer run: 30245037302
+Importer run: 30245239603
 
-import	Check out feature branch	2026-07-27T07:08:16.5899562Z  * [new branch]        ops/pr158-bilateral-confirmation-20260727 -> origin/ops/pr158-bilateral-confirmation-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5902370Z  * [new branch]        ops/pr158-bilateral-confirmation-coordinator-20260727 -> origin/ops/pr158-bilateral-confirmation-coordinator-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5905517Z  * [new branch]        ops/pr158-bilateral-confirmation-finalize-20260727 -> origin/ops/pr158-bilateral-confirmation-finalize-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5908359Z  * [new branch]        ops/pr158-bilateral-confirmation-gate-20260727 -> origin/ops/pr158-bilateral-confirmation-gate-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5910591Z  * [new branch]        ops/pr158-browser-qa-20260726 -> origin/ops/pr158-browser-qa-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5912968Z  * [new branch]        ops/pr158-final-isolated-qa-20260726 -> origin/ops/pr158-final-isolated-qa-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5916265Z  * [new branch]        ops/read-bootstrap-log-30197487993 -> origin/ops/read-bootstrap-log-30197487993
-import	Check out feature branch	2026-07-27T07:08:16.5918656Z  * [new branch]        ops/read-pr158-browser-qa-log-89800162151 -> origin/ops/read-pr158-browser-qa-log-89800162151
-import	Check out feature branch	2026-07-27T07:08:16.5920873Z  * [new branch]        ops/redeploy-llm-query-after-key -> origin/ops/redeploy-llm-query-after-key
-import	Check out feature branch	2026-07-27T07:08:16.5923904Z  * [new branch]        ops/rotate-prod-db-credentials-20260726 -> origin/ops/rotate-prod-db-credentials-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5927372Z  * [new branch]        ops/vercel-supabase-repair-20260721 -> origin/ops/vercel-supabase-repair-20260721
-import	Check out feature branch	2026-07-27T07:08:16.5930771Z  * [new branch]        ops/verify-next-a1-natural-cron-20260727 -> origin/ops/verify-next-a1-natural-cron-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5934616Z  * [new branch]        ops/verify-walkthrough-production-20260727 -> origin/ops/verify-walkthrough-production-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5938633Z  * [new branch]        ops/website2-preview-ownership-20260723 -> origin/ops/website2-preview-ownership-20260723
-import	Check out feature branch	2026-07-27T07:08:16.5942939Z  * [new branch]        payments/conditional-offset-settlement -> origin/payments/conditional-offset-settlement
-import	Check out feature branch	2026-07-27T07:08:16.5946168Z  * [new branch]        polish-home-process-section -> origin/polish-home-process-section
-import	Check out feature branch	2026-07-27T07:08:16.5949000Z  * [new branch]        polish/editorial-colorway-20260716 -> origin/polish/editorial-colorway-20260716
-import	Check out feature branch	2026-07-27T07:08:16.5952532Z  * [new branch]        polish/editorial-marketplace-colorway-20260716 -> origin/polish/editorial-marketplace-colorway-20260716
-import	Check out feature branch	2026-07-27T07:08:16.5955741Z  * [new branch]        qa/collective-commitments-adversarial-browser-20260727 -> origin/qa/collective-commitments-adversarial-browser-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5958446Z  * [new branch]        qa/collective-commitments-db-20260726 -> origin/qa/collective-commitments-db-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5961034Z  * [new branch]        qa/collective-identity-adversarial-browser-20260726 -> origin/qa/collective-identity-adversarial-browser-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5965013Z  * [new branch]        qa/collective-identity-adversarial-browser-v2-20260726 -> origin/qa/collective-identity-adversarial-browser-v2-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5968475Z  * [new branch]        qa/collective-identity-adversarial-browser-v3-20260726 -> origin/qa/collective-identity-adversarial-browser-v3-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5971424Z  * [new branch]        qa/export-collective-identity-source-20260726-v5 -> origin/qa/export-collective-identity-source-20260726-v5
-import	Check out feature branch	2026-07-27T07:08:16.5974174Z  * [new branch]        qa/failure-bonus-authenticated-browser-20260726 -> origin/qa/failure-bonus-authenticated-browser-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5977205Z  * [new branch]        qa/failure-bonus-combined-integration-gates-20260726 -> origin/qa/failure-bonus-combined-integration-gates-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5980300Z  * [new branch]        qa/failure-bonus-exact-release-gates-20260726 -> origin/qa/failure-bonus-exact-release-gates-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5983871Z  * [new branch]        qa/fix-multi-threshold-sql-aliases-20260727 -> origin/qa/fix-multi-threshold-sql-aliases-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5988150Z  * [new branch]        qa/fix-multi-threshold-type-narrowing-20260727 -> origin/qa/fix-multi-threshold-type-narrowing-20260727
-import	Check out feature branch	2026-07-27T07:08:16.5992618Z  * [new branch]        qa/mpgf-pool-visibility-main-baseline-20260726 -> origin/qa/mpgf-pool-visibility-main-baseline-20260726
-import	Check out feature branch	2026-07-27T07:08:16.5996735Z  * [new branch]        qa/mpgf-visibility-source-snapshot-20260726 -> origin/qa/mpgf-visibility-source-snapshot-20260726
-import	Check out feature branch	2026-07-27T07:08:16.6001276Z  * [new branch]        qa/multi-threshold-authenticated-browser-20260727 -> origin/qa/multi-threshold-authenticated-browser-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6005610Z  * [new branch]        qa/multi-threshold-browser-runner-20260727 -> origin/qa/multi-threshold-browser-runner-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6009828Z  * [new branch]        qa/multi-threshold-browser-script-source-20260727 -> origin/qa/multi-threshold-browser-script-source-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6013980Z  * [new branch]        qa/multi-threshold-exact-release-gates-20260727 -> origin/qa/multi-threshold-exact-release-gates-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6016849Z  * [new branch]        qa/production-charity-autocomplete-20260723 -> origin/qa/production-charity-autocomplete-20260723
-import	Check out feature branch	2026-07-27T07:08:16.6019713Z  * [new branch]        recovery/previous-codex-20260713-111633 -> origin/recovery/previous-codex-20260713-111633
-import	Check out feature branch	2026-07-27T07:08:16.6022210Z  * [new branch]        redesign/auth-experience-20260716 -> origin/redesign/auth-experience-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6024191Z  * [new branch]        redesign/clear-marketplace-20260716 -> origin/redesign/clear-marketplace-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6026780Z  * [new branch]        redesign/pledge-swaps-intuitive-20260716 -> origin/redesign/pledge-swaps-intuitive-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6028906Z  * [new branch]        release-inline-itinerary-editor -> origin/release-inline-itinerary-editor
-import	Check out feature branch	2026-07-27T07:08:16.6031476Z  * [new branch]        release-inline-itinerary-editor-v2 -> origin/release-inline-itinerary-editor-v2
-import	Check out feature branch	2026-07-27T07:08:16.6034389Z  * [new branch]        release-moral-trade-brand -> origin/release-moral-trade-brand
-import	Check out feature branch	2026-07-27T07:08:16.6037339Z  * [new branch]        release-trade-three-layer-flow -> origin/release-trade-three-layer-flow
-import	Check out feature branch	2026-07-27T07:08:16.6040502Z  * [new branch]        release/live-account-data-20260718 -> origin/release/live-account-data-20260718
-import	Check out feature branch	2026-07-27T07:08:16.6044278Z  * [new branch]        release/live-route-recommendations-20260722 -> origin/release/live-route-recommendations-20260722
-import	Check out feature branch	2026-07-27T07:08:16.6047509Z  * [new branch]        release/marketplace-ui-95 -> origin/release/marketplace-ui-95
-import	Check out feature branch	2026-07-27T07:08:16.6050075Z  * [new branch]        release/offer-challenge-return-plane -> origin/release/offer-challenge-return-plane
-import	Check out feature branch	2026-07-27T07:08:16.6052644Z  * [new branch]        remove-example-fallback -> origin/remove-example-fallback
-import	Check out feature branch	2026-07-27T07:08:16.6054971Z  * [new branch]        remove-example-fallback-v2 -> origin/remove-example-fallback-v2
-import	Check out feature branch	2026-07-27T07:08:16.6057618Z  * [new branch]        remove-how-it-works-20260716 -> origin/remove-how-it-works-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6060272Z  * [new branch]        remove-how-it-works-20260716-v2 -> origin/remove-how-it-works-20260716-v2
-import	Check out feature branch	2026-07-27T07:08:16.6063557Z  * [new branch]        remove-research-section-and-page-20260716 -> origin/remove-research-section-and-page-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6067311Z  * [new branch]        remove-trust-infrastructure-section -> origin/remove-trust-infrastructure-section
-import	Check out feature branch	2026-07-27T07:08:16.6070160Z  * [new branch]        remove-trust-page       -> origin/remove-trust-page
-import	Check out feature branch	2026-07-27T07:08:16.6072465Z  * [new branch]        remove-trust-page-menu-20260716 -> origin/remove-trust-page-menu-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6075110Z  * [new branch]        remove-trust-page-menu-20260716-v2 -> origin/remove-trust-page-menu-20260716-v2
-import	Check out feature branch	2026-07-27T07:08:16.6077334Z  * [new branch]        tmp/export-core-trade-loop-20260716 -> origin/tmp/export-core-trade-loop-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6079386Z  * [new branch]        tmp/export-walkthrough-html-20260727 -> origin/tmp/export-walkthrough-html-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6082536Z  * [new branch]        tmp/render-donation-redirect-walkthrough-20260727 -> origin/tmp/render-donation-redirect-walkthrough-20260727
-import	Check out feature branch	2026-07-27T07:08:16.6085163Z  * [new branch]        trigger/finalize-universal-command -> origin/trigger/finalize-universal-command
-import	Check out feature branch	2026-07-27T07:08:16.6087383Z  * [new branch]        verified/universal-command-final -> origin/verified/universal-command-final
-import	Check out feature branch	2026-07-27T07:08:16.6089505Z  * [new branch]        verify/public-evidence-production-20260718 -> origin/verify/public-evidence-production-20260718
-import	Check out feature branch	2026-07-27T07:08:16.6091935Z  * [new branch]        verify/sitewide-account-production-20260721 -> origin/verify/sitewide-account-production-20260721
-import	Check out feature branch	2026-07-27T07:08:16.6094290Z  * [new branch]        work/transaction-first-payments-20260716 -> origin/work/transaction-first-payments-20260716
-import	Check out feature branch	2026-07-27T07:08:16.6097680Z [command]/usr/bin/git branch --list --remote origin/feat/institutional-trade-system
-import	Check out feature branch	2026-07-27T07:08:16.6098932Z   origin/feat/institutional-trade-system
-import	Check out feature branch	2026-07-27T07:08:16.6100856Z [command]/usr/bin/git rev-parse refs/remotes/origin/feat/institutional-trade-system
-import	Check out feature branch	2026-07-27T07:08:16.6102122Z a50a49dfaf0d968dd48c1d5632cc0e4358ae9b29
-import	Check out feature branch	2026-07-27T07:08:16.6104049Z ##[endgroup]
-import	Check out feature branch	2026-07-27T07:08:16.6104953Z ##[group]Determining the checkout info
-import	Check out feature branch	2026-07-27T07:08:16.6106168Z ##[endgroup]
-import	Check out feature branch	2026-07-27T07:08:16.6106743Z [command]/usr/bin/git sparse-checkout disable
-import	Check out feature branch	2026-07-27T07:08:16.6120349Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-import	Check out feature branch	2026-07-27T07:08:16.6155169Z ##[group]Checking out the ref
-import	Check out feature branch	2026-07-27T07:08:16.6159237Z [command]/usr/bin/git checkout --progress --force -B feat/institutional-trade-system refs/remotes/origin/feat/institutional-trade-system
-import	Check out feature branch	2026-07-27T07:08:16.8855492Z Switched to a new branch 'feat/institutional-trade-system'
-import	Check out feature branch	2026-07-27T07:08:16.8857521Z branch 'feat/institutional-trade-system' set up to track 'origin/feat/institutional-trade-system'.
-import	Check out feature branch	2026-07-27T07:08:16.8890371Z ##[endgroup]
-import	Check out feature branch	2026-07-27T07:08:16.8945914Z [command]/usr/bin/git log -1 --format=%H
-import	Check out feature branch	2026-07-27T07:08:16.8977011Z a50a49dfaf0d968dd48c1d5632cc0e4358ae9b29
-import	Fetch, verify, and import exact implementation blobs	﻿2026-07-27T07:08:16.9270557Z ##[group]Run set -euo pipefail
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9271127Z ^[[36;1mset -euo pipefail^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9271476Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9271754Z ^[[36;1mblob_shas=(^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9272124Z ^[[36;1m  0becdf78bc7eaf03f5fec673599953c6cbde5ddf^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9272597Z ^[[36;1m  fe94fdf1059423a42c469e3ee3cd638c6c476886^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9273045Z ^[[36;1m  05d84116a084a10d3f240acc3a9ffba2fa78837b^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9273476Z ^[[36;1m  3505126caa5cbe6c476c334ce5a66ad035f1045f^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9273905Z ^[[36;1m  9391ec454d2ffa1fda18b5b796137073124c7fc1^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9274326Z ^[[36;1m  9ec44427e2d1c51be9fbf65c6ba09e25a26120c8^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9274798Z ^[[36;1m  51c5082638fbe268f2b68018351d74397f869e5b^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9275365Z ^[[36;1m  9f78d299a9661f0578369b1d29e90191e4d9bc92^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9275792Z ^[[36;1m  5ba0760bfe334a017f262e28a5eb17e2d4406998^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9276209Z ^[[36;1m  7b3c8451b23413435f8aaa0e7b2829c595656453^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9276685Z ^[[36;1m  a11d0fa771d9eae50f79179f878f42dbf61a1513^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9277137Z ^[[36;1m  71abff5c8c9899bf8f052bbf11cf5021d4ba582f^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9277562Z ^[[36;1m  f965335b267b1637dfe01d70fe3aa03f1dd9f2ac^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9277961Z ^[[36;1m  8877c35004e2bf948f46200d194f47b56cbe29ea^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9278382Z ^[[36;1m  f54ead17c522fe8328e258c3509242366ff86425^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9278783Z ^[[36;1m  28742f836484764fe3add44a419d34b01151f4f8^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9279183Z ^[[36;1m  66910b9bb0bcc87ccdc391683d0bc35f5ad5d479^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9279595Z ^[[36;1m  89e913b7e1f002397f46228c87bb5c339dc6aa57^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9280010Z ^[[36;1m  72522648f3ec799baade5ab70cd7eab0d3403c39^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9280411Z ^[[36;1m  7a1ec710adccd0f991ae8284f31a68d6c53285f8^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9280835Z ^[[36;1m  b7035273a14821d7f33c3ebdbd5c2496c8ab1927^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9281267Z ^[[36;1m  6a7bc4b836a7307841a8f710f12974daefbcc792^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9281671Z ^[[36;1m  d8237cf3863364a9c8ab8cddf51b52a22f6157cb^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9282091Z ^[[36;1m  00d5337fa1fda8428d4ced2593270aab672f2313^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9282450Z ^[[36;1m)^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9282717Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9283025Z ^[[36;1mpayload=/tmp/institutional-patch.b64^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9283440Z ^[[36;1mpatch=/tmp/institutional.patch^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9283798Z ^[[36;1m: > "$payload"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9284097Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9284385Z ^[[36;1mfor index in "${!blob_shas[@]}"; do^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9284763Z ^[[36;1m  sha="${blob_shas[$index]}"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9285378Z ^[[36;1m  part="/tmp/institutional-part-$(printf '%02d' "$index")"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9286004Z ^[[36;1m  response="${part}.json"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9286361Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9286702Z ^[[36;1m  curl --fail-with-body --silent --show-error \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9287129Z ^[[36;1m    --retry 3 \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9287460Z ^[[36;1m    --retry-all-errors \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9287886Z ^[[36;1m    --header "Accept: application/vnd.github+json" \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9288811Z ^[[36;1m    --header "Authorization: ***" \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9289276Z ^[[36;1m    --header "X-GitHub-Api-Version: 2022-11-28" \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9289872Z ^[[36;1m    "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9290395Z ^[[36;1m    > "$response"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9290705Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9291107Z ^[[36;1m  jq -er '.content' "$response" | tr -d '\n' | base64 --decode > "$part"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9291628Z ^[[36;1m  actual_sha="$(git hash-object "$part")"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9292256Z ^[[36;1m  if [[ "$actual_sha" != "$sha" ]]; then^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9292830Z ^[[36;1m    echo "Blob verification failed for part $index: expected $sha, got $actual_sha" >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9293382Z ^[[36;1m    exit 1^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9293671Z ^[[36;1m  fi^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9293964Z ^[[36;1m  cat "$part" >> "$payload"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9294477Z ^[[36;1mdone^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9294743Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9295161Z ^[[36;1mecho "${EXPECTED_PAYLOAD_SHA256}  ${payload}" | sha256sum --check --strict^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9296130Z ^[[36;1mbase64 --decode < "$payload" | xz --decompress --stdout > "$patch"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9296761Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9297241Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9297527Z ^[[36;1mtemporary_paths=(^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9297892Z ^[[36;1m  .github/importer-diagnostic.txt^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9298318Z ^[[36;1m  .github/institutional-patch.part-00^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9298770Z ^[[36;1m  .github/institutional-patch.part-01^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9299199Z ^[[36;1m  .github/institutional-patch.part-02^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9299614Z ^[[36;1m  .github/institutional-patch.part-03^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9300039Z ^[[36;1m  .github/institutional-patch.part-04^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9300457Z ^[[36;1m  .github/institutional-patch.part-05^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9300881Z ^[[36;1m  .github/institutional-patch.part-06^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9301295Z ^[[36;1m  .github/institutional-patch.part-07^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9301709Z ^[[36;1m  .github/institutional-patch.part-08^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9302117Z ^[[36;1m  .github/institutional-qa-trigger^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9302583Z ^[[36;1m  .github/workflows/attach-institutional-payload.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9303097Z ^[[36;1m  .github/workflows/dispatch-institutional-qa.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9303604Z ^[[36;1m  .github/workflows/export-institutional-source.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9304124Z ^[[36;1m  .github/workflows/fix-dispatch-institutional-qa.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9304639Z ^[[36;1m  .github/workflows/import-institutional-source.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9305157Z ^[[36;1m  .github/workflows/prepare-institutional-qa-runner.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9305974Z ^[[36;1m  .github/workflows/read-institutional-importer-log.yml^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9306425Z ^[[36;1m)^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9306698Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9306979Z ^[[36;1mapply_excludes=()^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9307349Z ^[[36;1mfor path in "${temporary_paths[@]}"; do^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9307774Z ^[[36;1m  apply_excludes+=("--exclude=$path")^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9308145Z ^[[36;1mdone^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9308422Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9308799Z ^[[36;1mgit apply --check --binary "${apply_excludes[@]}" "$patch"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9309344Z ^[[36;1mgit apply --binary --index "${apply_excludes[@]}" "$patch"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9309783Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9310081Z ^[[36;1mrm -f "${temporary_paths[@]}"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9310439Z ^[[36;1mgit add -A^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9310747Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9311036Z ^[[36;1mactual_tree="$(git write-tree)"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9311460Z ^[[36;1mif [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9312040Z ^[[36;1m  echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9312602Z ^[[36;1m  echo "Staged paths:" >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9312984Z ^[[36;1m  git diff --cached --name-status >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9313392Z ^[[36;1m  echo "Working-tree status:" >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9313778Z ^[[36;1m  git status --short >&2^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9314112Z ^[[36;1m  exit 1^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9314391Z ^[[36;1mfi^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9314652Z ^[[36;1m^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9314971Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9315638Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9316487Z ^[[36;1mgit commit -m "Implement institutional trade system integrity and QA"^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9317065Z ^[[36;1mgit push origin HEAD:feat/institutional-trade-system^[[0m
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9371699Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9372183Z env:
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9372671Z   EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9373644Z   EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9374279Z   EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9377256Z   GH_TOKEN: ***
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:16.9377557Z ##[endgroup]
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:20.8911214Z /tmp/institutional-patch.b64: OK
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:20.9161894Z /tmp/institutional.patch: OK
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1009842Z Imported tree mismatch: expected 839043f9e1399001789fdbbf8ae5361ea27a4d34, got 489b24ccad13622b37f3a066c2c71999595a3018
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1010508Z Staged paths:
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1080804Z M	.env.example
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1081196Z D	.github/importer-diagnostic.txt
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1081654Z D	.github/institutional-patch.part-00
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1082309Z D	.github/institutional-patch.part-01
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1082783Z D	.github/institutional-patch.part-02
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1083234Z D	.github/institutional-patch.part-03
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1083707Z D	.github/institutional-patch.part-04
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1084133Z D	.github/institutional-patch.part-05
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1084693Z D	.github/institutional-patch.part-06
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1085453Z D	.github/institutional-patch.part-07
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1086051Z D	.github/institutional-patch.part-08
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1086705Z D	.github/institutional-qa-trigger
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1087517Z A	.github/scripts/institutional-trade-qa-e2e.mjs
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1088153Z D	.github/workflows/attach-institutional-payload.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1088729Z D	.github/workflows/dispatch-institutional-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1089330Z D	.github/workflows/export-institutional-source.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1090786Z D	.github/workflows/fix-dispatch-institutional-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1091330Z D	.github/workflows/import-institutional-source.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1091669Z A	.github/workflows/institutional-trade-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1092020Z D	.github/workflows/prepare-institutional-qa-runner.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1092408Z D	.github/workflows/read-institutional-importer-log.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1092759Z A	src/app/admin/institutional-deal-desk/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1093074Z M	src/app/admin/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1093392Z A	src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1093774Z A	src/app/institutions/[organizationId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1094069Z A	src/app/institutions/actions.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1094361Z A	src/app/institutions/consents/[consentId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1094715Z A	src/app/institutions/institutions.module.css
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1095030Z A	src/app/institutions/new/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1095535Z A	src/app/institutions/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1095888Z A	src/app/institutions/verifier-assignments/[assignmentId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1096289Z A	src/components/institutions/institutional-ui.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1096620Z A	src/institutional-trade-migration.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1096940Z A	src/institutional-trade-wiring.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1097221Z A	src/lib/institutional-data.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1097483Z A	src/lib/institutional-feature-gates.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1097771Z A	src/lib/institutional-trade.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1098047Z A	src/lib/institutional-trade.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1098311Z A	src/lib/institutional-webhooks.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1098584Z A	src/lib/institutional-webhooks.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1098916Z A	supabase/migrations/20260726123000_institutional_trade_system.sql
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1099266Z Working-tree status:
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1322930Z M  .env.example
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1323381Z D  .github/importer-diagnostic.txt
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1323884Z D  .github/institutional-patch.part-00
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1324394Z D  .github/institutional-patch.part-01
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1324919Z D  .github/institutional-patch.part-02
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1325556Z D  .github/institutional-patch.part-03
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1326398Z D  .github/institutional-patch.part-04
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1326822Z D  .github/institutional-patch.part-05
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1327255Z D  .github/institutional-patch.part-06
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1327692Z D  .github/institutional-patch.part-07
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1328162Z D  .github/institutional-patch.part-08
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1328607Z D  .github/institutional-qa-trigger
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1329483Z A  .github/scripts/institutional-trade-qa-e2e.mjs
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1330090Z D  .github/workflows/attach-institutional-payload.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1330673Z D  .github/workflows/dispatch-institutional-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1331274Z D  .github/workflows/export-institutional-source.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1331868Z D  .github/workflows/fix-dispatch-institutional-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1332451Z D  .github/workflows/import-institutional-source.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1333002Z A  .github/workflows/institutional-trade-qa.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1333595Z D  .github/workflows/prepare-institutional-qa-runner.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1334232Z D  .github/workflows/read-institutional-importer-log.yml
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1334819Z A  src/app/admin/institutional-deal-desk/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1335528Z M  src/app/admin/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1336052Z A  src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1336687Z A  src/app/institutions/[organizationId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1337183Z A  src/app/institutions/actions.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1337659Z A  src/app/institutions/consents/[consentId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1338220Z A  src/app/institutions/institutions.module.css
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1338729Z A  src/app/institutions/new/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1339170Z A  src/app/institutions/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1339726Z A  src/app/institutions/verifier-assignments/[assignmentId]/page.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1340386Z A  src/components/institutions/institutional-ui.tsx
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1340937Z A  src/institutional-trade-migration.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1341458Z A  src/institutional-trade-wiring.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1341924Z A  src/lib/institutional-data.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1342304Z A  src/lib/institutional-feature-gates.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1342597Z A  src/lib/institutional-trade.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1342875Z A  src/lib/institutional-trade.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1343147Z A  src/lib/institutional-webhooks.test.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1343429Z A  src/lib/institutional-webhooks.ts
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1343776Z A  supabase/migrations/20260726123000_institutional_trade_system.sql
-import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:08:21.1356730Z ##[error]Process completed with exit code 1.
-import	Post Check out feature branch	﻿2026-07-27T07:08:21.1491997Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-import	Post Check out feature branch	2026-07-27T07:08:21.1493461Z Post job cleanup.
-import	Post Check out feature branch	2026-07-27T07:08:21.2339190Z [command]/usr/bin/git version
-import	Post Check out feature branch	2026-07-27T07:08:21.2381708Z git version 2.54.0
-import	Post Check out feature branch	2026-07-27T07:08:21.2452129Z Temporarily overriding HOME='/home/runner/work/_temp/522af530-1275-4ded-b14b-40504b4325e5' before making global git config changes
-import	Post Check out feature branch	2026-07-27T07:08:21.2453825Z Adding repository directory to the temporary git global config as a safe directory
-import	Post Check out feature branch	2026-07-27T07:08:21.2457973Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Website2/Website2
-import	Post Check out feature branch	2026-07-27T07:08:21.2498576Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-import	Post Check out feature branch	2026-07-27T07:08:21.2533804Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-import	Post Check out feature branch	2026-07-27T07:08:21.2801518Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-import	Post Check out feature branch	2026-07-27T07:08:21.2830305Z http.https://github.com/.extraheader
-import	Post Check out feature branch	2026-07-27T07:08:21.2841706Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
-import	Post Check out feature branch	2026-07-27T07:08:21.2880496Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-import	Post Check out feature branch	2026-07-27T07:08:21.3143984Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-import	Post Check out feature branch	2026-07-27T07:08:21.3187150Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-import	Complete job	﻿2026-07-27T07:08:21.3618640Z Cleaning up orphan processes
-import	Complete job	2026-07-27T07:08:21.3875814Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+import	Check out feature branch	2026-07-27T07:11:36.4488048Z  * [new branch]        remove-example-fallback -> origin/remove-example-fallback
+import	Check out feature branch	2026-07-27T07:11:36.4490010Z  * [new branch]        remove-example-fallback-v2 -> origin/remove-example-fallback-v2
+import	Check out feature branch	2026-07-27T07:11:36.4492074Z  * [new branch]        remove-how-it-works-20260716 -> origin/remove-how-it-works-20260716
+import	Check out feature branch	2026-07-27T07:11:36.4494343Z  * [new branch]        remove-how-it-works-20260716-v2 -> origin/remove-how-it-works-20260716-v2
+import	Check out feature branch	2026-07-27T07:11:36.4496898Z  * [new branch]        remove-research-section-and-page-20260716 -> origin/remove-research-section-and-page-20260716
+import	Check out feature branch	2026-07-27T07:11:36.4499611Z  * [new branch]        remove-trust-infrastructure-section -> origin/remove-trust-infrastructure-section
+import	Check out feature branch	2026-07-27T07:11:36.4501764Z  * [new branch]        remove-trust-page       -> origin/remove-trust-page
+import	Check out feature branch	2026-07-27T07:11:36.4503943Z  * [new branch]        remove-trust-page-menu-20260716 -> origin/remove-trust-page-menu-20260716
+import	Check out feature branch	2026-07-27T07:11:36.4506492Z  * [new branch]        remove-trust-page-menu-20260716-v2 -> origin/remove-trust-page-menu-20260716-v2
+import	Check out feature branch	2026-07-27T07:11:36.4508947Z  * [new branch]        tmp/export-core-trade-loop-20260716 -> origin/tmp/export-core-trade-loop-20260716
+import	Check out feature branch	2026-07-27T07:11:36.4511450Z  * [new branch]        tmp/export-walkthrough-html-20260727 -> origin/tmp/export-walkthrough-html-20260727
+import	Check out feature branch	2026-07-27T07:11:36.4514547Z  * [new branch]        tmp/render-donation-redirect-walkthrough-20260727 -> origin/tmp/render-donation-redirect-walkthrough-20260727
+import	Check out feature branch	2026-07-27T07:11:36.4517400Z  * [new branch]        trigger/finalize-universal-command -> origin/trigger/finalize-universal-command
+import	Check out feature branch	2026-07-27T07:11:36.4519761Z  * [new branch]        verified/universal-command-final -> origin/verified/universal-command-final
+import	Check out feature branch	2026-07-27T07:11:36.4522373Z  * [new branch]        verify/public-evidence-production-20260718 -> origin/verify/public-evidence-production-20260718
+import	Check out feature branch	2026-07-27T07:11:36.4525358Z  * [new branch]        verify/sitewide-account-production-20260721 -> origin/verify/sitewide-account-production-20260721
+import	Check out feature branch	2026-07-27T07:11:36.4528189Z  * [new branch]        work/transaction-first-payments-20260716 -> origin/work/transaction-first-payments-20260716
+import	Check out feature branch	2026-07-27T07:11:36.4532333Z [command]/usr/bin/git branch --list --remote origin/feat/institutional-trade-system
+import	Check out feature branch	2026-07-27T07:11:36.4534091Z   origin/feat/institutional-trade-system
+import	Check out feature branch	2026-07-27T07:11:36.4536783Z [command]/usr/bin/git rev-parse refs/remotes/origin/feat/institutional-trade-system
+import	Check out feature branch	2026-07-27T07:11:36.4538432Z 823def04467eb4816d6aafc05dae8e79ed7b5a94
+import	Check out feature branch	2026-07-27T07:11:36.4541160Z ##[endgroup]
+import	Check out feature branch	2026-07-27T07:11:36.4542766Z ##[group]Determining the checkout info
+import	Check out feature branch	2026-07-27T07:11:36.4544386Z ##[endgroup]
+import	Check out feature branch	2026-07-27T07:11:36.4545309Z [command]/usr/bin/git sparse-checkout disable
+import	Check out feature branch	2026-07-27T07:11:36.4547930Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+import	Check out feature branch	2026-07-27T07:11:36.4551046Z ##[group]Checking out the ref
+import	Check out feature branch	2026-07-27T07:11:36.4553392Z [command]/usr/bin/git checkout --progress --force -B feat/institutional-trade-system refs/remotes/origin/feat/institutional-trade-system
+import	Check out feature branch	2026-07-27T07:11:36.6780523Z Switched to a new branch 'feat/institutional-trade-system'
+import	Check out feature branch	2026-07-27T07:11:36.6781759Z branch 'feat/institutional-trade-system' set up to track 'origin/feat/institutional-trade-system'.
+import	Check out feature branch	2026-07-27T07:11:36.6816675Z ##[endgroup]
+import	Check out feature branch	2026-07-27T07:11:36.6870927Z [command]/usr/bin/git log -1 --format=%H
+import	Check out feature branch	2026-07-27T07:11:36.6904378Z 823def04467eb4816d6aafc05dae8e79ed7b5a94
+import	Fetch, verify, and import exact implementation blobs	﻿2026-07-27T07:11:36.7121018Z ##[group]Run set -euo pipefail
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7121530Z ^[[36;1mset -euo pipefail^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7121833Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7122076Z ^[[36;1mblob_shas=(^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7122613Z ^[[36;1m  0becdf78bc7eaf03f5fec673599953c6cbde5ddf^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7123039Z ^[[36;1m  fe94fdf1059423a42c469e3ee3cd638c6c476886^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7123433Z ^[[36;1m  05d84116a084a10d3f240acc3a9ffba2fa78837b^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7123812Z ^[[36;1m  3505126caa5cbe6c476c334ce5a66ad035f1045f^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7124211Z ^[[36;1m  9391ec454d2ffa1fda18b5b796137073124c7fc1^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7124587Z ^[[36;1m  9ec44427e2d1c51be9fbf65c6ba09e25a26120c8^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7124984Z ^[[36;1m  51c5082638fbe268f2b68018351d74397f869e5b^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7125328Z ^[[36;1m  9f78d299a9661f0578369b1d29e90191e4d9bc92^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7125679Z ^[[36;1m  5ba0760bfe334a017f262e28a5eb17e2d4406998^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7126047Z ^[[36;1m  7b3c8451b23413435f8aaa0e7b2829c595656453^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7126469Z ^[[36;1m  a11d0fa771d9eae50f79179f878f42dbf61a1513^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7126850Z ^[[36;1m  71abff5c8c9899bf8f052bbf11cf5021d4ba582f^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7127214Z ^[[36;1m  f965335b267b1637dfe01d70fe3aa03f1dd9f2ac^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7127560Z ^[[36;1m  8877c35004e2bf948f46200d194f47b56cbe29ea^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7127909Z ^[[36;1m  f54ead17c522fe8328e258c3509242366ff86425^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7128249Z ^[[36;1m  28742f836484764fe3add44a419d34b01151f4f8^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7128606Z ^[[36;1m  66910b9bb0bcc87ccdc391683d0bc35f5ad5d479^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7128966Z ^[[36;1m  89e913b7e1f002397f46228c87bb5c339dc6aa57^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7129327Z ^[[36;1m  72522648f3ec799baade5ab70cd7eab0d3403c39^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7129685Z ^[[36;1m  7a1ec710adccd0f991ae8284f31a68d6c53285f8^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7130068Z ^[[36;1m  b7035273a14821d7f33c3ebdbd5c2496c8ab1927^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7130460Z ^[[36;1m  6a7bc4b836a7307841a8f710f12974daefbcc792^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7130810Z ^[[36;1m  d8237cf3863364a9c8ab8cddf51b52a22f6157cb^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7131170Z ^[[36;1m  00d5337fa1fda8428d4ced2593270aab672f2313^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7131488Z ^[[36;1m)^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7131728Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7132003Z ^[[36;1mpayload=/tmp/institutional-patch.b64^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7132367Z ^[[36;1mpatch=/tmp/institutional.patch^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7132836Z ^[[36;1m: > "$payload"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7133100Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7133367Z ^[[36;1mfor index in "${!blob_shas[@]}"; do^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7133713Z ^[[36;1m  sha="${blob_shas[$index]}"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7134120Z ^[[36;1m  part="/tmp/institutional-part-$(printf '%02d' "$index")"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7134556Z ^[[36;1m  response="${part}.json"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7134854Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7135151Z ^[[36;1m  curl --fail-with-body --silent --show-error \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7135515Z ^[[36;1m    --retry 3 \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7135808Z ^[[36;1m    --retry-all-errors \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7136178Z ^[[36;1m    --header "Accept: application/vnd.github+json" \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7137032Z ^[[36;1m    --header "Authorization: ***" \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7137450Z ^[[36;1m    --header "X-GitHub-Api-Version: 2022-11-28" \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7137960Z ^[[36;1m    "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7138404Z ^[[36;1m    > "$response"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7138678Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7139035Z ^[[36;1m  jq -er '.content' "$response" | tr -d '\n' | base64 --decode > "$part"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7139763Z ^[[36;1m  actual_sha="$(git hash-object "$part")"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7140132Z ^[[36;1m  if [[ "$actual_sha" != "$sha" ]]; then^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7140635Z ^[[36;1m    echo "Blob verification failed for part $index: expected $sha, got $actual_sha" >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7141121Z ^[[36;1m    exit 1^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7141371Z ^[[36;1m  fi^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7141635Z ^[[36;1m  cat "$part" >> "$payload"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7142130Z ^[[36;1mdone^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7142361Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7142851Z ^[[36;1mecho "${EXPECTED_PAYLOAD_SHA256}  ${payload}" | sha256sum --check --strict^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7143454Z ^[[36;1mbase64 --decode < "$payload" | xz --decompress --stdout > "$patch"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7144000Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7144425Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7144677Z ^[[36;1mtemporary_paths=(^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7145014Z ^[[36;1m  .github/importer-diagnostic.txt^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7145399Z ^[[36;1m  .github/institutional-patch.part-00^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7145797Z ^[[36;1m  .github/institutional-patch.part-01^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7146176Z ^[[36;1m  .github/institutional-patch.part-02^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7146540Z ^[[36;1m  .github/institutional-patch.part-03^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7146909Z ^[[36;1m  .github/institutional-patch.part-04^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7147279Z ^[[36;1m  .github/institutional-patch.part-05^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7147649Z ^[[36;1m  .github/institutional-patch.part-06^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7148014Z ^[[36;1m  .github/institutional-patch.part-07^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7148375Z ^[[36;1m  .github/institutional-patch.part-08^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7148745Z ^[[36;1m  .github/institutional-qa-trigger^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7149169Z ^[[36;1m  .github/workflows/attach-institutional-payload.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7149637Z ^[[36;1m  .github/workflows/dispatch-institutional-qa.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7150100Z ^[[36;1m  .github/workflows/export-institutional-source.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7150565Z ^[[36;1m  .github/workflows/fix-dispatch-institutional-qa.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7151023Z ^[[36;1m  .github/workflows/import-institutional-source.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7151489Z ^[[36;1m  .github/workflows/prepare-institutional-qa-runner.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7151974Z ^[[36;1m  .github/workflows/read-institutional-importer-log.yml^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7152365Z ^[[36;1m)^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7152735Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7152991Z ^[[36;1mapply_excludes=()^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7153319Z ^[[36;1mfor path in "${temporary_paths[@]}"; do^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7153700Z ^[[36;1m  apply_excludes+=("--exclude=$path")^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7154033Z ^[[36;1mdone^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7154282Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7154622Z ^[[36;1mgit apply --check --binary "${apply_excludes[@]}" "$patch"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7155109Z ^[[36;1mgit apply --binary --index "${apply_excludes[@]}" "$patch"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7155501Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7155756Z ^[[36;1mrm -f "${temporary_paths[@]}"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7156080Z ^[[36;1mgit add -A^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7156340Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7156598Z ^[[36;1mactual_tree="$(git write-tree)"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7156915Z ^[[36;1m{^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7157204Z ^[[36;1m  echo "expected_tree=$EXPECTED_TREE_SHA"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7157571Z ^[[36;1m  echo "actual_tree=$actual_tree"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7157941Z ^[[36;1m} > /tmp/institutional-tree-shas.txt^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7158382Z ^[[36;1mgit diff --cached --binary > /tmp/institutional-staged.diff^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7158857Z ^[[36;1mgit ls-files -s > /tmp/institutional-index.txt^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7159485Z ^[[36;1mtar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/institutional-imported-tree.tar.gz .^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7160044Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7160361Z ^[[36;1mif [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7161059Z ^[[36;1m  echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7161562Z ^[[36;1m  echo "Staged paths:" >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7161905Z ^[[36;1m  git diff --cached --name-status >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7162262Z ^[[36;1m  echo "Working-tree status:" >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7162702Z ^[[36;1m  git status --short >&2^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7163009Z ^[[36;1m  exit 1^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7163399Z ^[[36;1mfi^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7163639Z ^[[36;1m^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7163926Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7164430Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7165037Z ^[[36;1mgit commit -m "Implement institutional trade system integrity and QA"^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7165561Z ^[[36;1mgit push origin HEAD:feat/institutional-trade-system^[[0m
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7219953Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7220406Z env:
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7220860Z   EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7221555Z   EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7222119Z   EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7224832Z   GH_TOKEN: ***
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:36.7225104Z ##[endgroup]
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:42.1701464Z /tmp/institutional-patch.b64: OK
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:42.2044100Z /tmp/institutional.patch: OK
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6813906Z Imported tree mismatch: expected 839043f9e1399001789fdbbf8ae5361ea27a4d34, got 489b24ccad13622b37f3a066c2c71999595a3018
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6814978Z Staged paths:
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6909814Z M	.env.example
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6910146Z D	.github/importer-diagnostic.txt
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6910579Z D	.github/institutional-patch.part-00
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6911066Z D	.github/institutional-patch.part-01
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6911489Z D	.github/institutional-patch.part-02
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6911904Z D	.github/institutional-patch.part-03
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6912318Z D	.github/institutional-patch.part-04
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6912950Z D	.github/institutional-patch.part-05
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6913383Z D	.github/institutional-patch.part-06
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6913806Z D	.github/institutional-patch.part-07
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6914264Z D	.github/institutional-patch.part-08
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6914968Z D	.github/institutional-qa-trigger
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6915675Z A	.github/scripts/institutional-trade-qa-e2e.mjs
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6916280Z D	.github/workflows/attach-institutional-payload.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6916850Z D	.github/workflows/dispatch-institutional-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6917404Z D	.github/workflows/export-institutional-source.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6917977Z D	.github/workflows/fix-dispatch-institutional-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6918537Z D	.github/workflows/import-institutional-source.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6919073Z A	.github/workflows/institutional-trade-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6919580Z D	.github/workflows/prepare-institutional-qa-runner.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6920162Z D	.github/workflows/read-institutional-importer-log.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6920724Z A	src/app/admin/institutional-deal-desk/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6921212Z M	src/app/admin/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6921724Z A	src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6922370Z A	src/app/institutions/[organizationId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6923104Z A	src/app/institutions/actions.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6923574Z A	src/app/institutions/consents/[consentId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6924131Z A	src/app/institutions/institutions.module.css
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6924615Z A	src/app/institutions/new/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6925029Z A	src/app/institutions/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6925567Z A	src/app/institutions/verifier-assignments/[assignmentId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6926587Z A	src/components/institutions/institutional-ui.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6927145Z A	src/institutional-trade-migration.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6927662Z A	src/institutional-trade-wiring.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6928128Z A	src/lib/institutional-data.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6928567Z A	src/lib/institutional-feature-gates.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6929046Z A	src/lib/institutional-trade.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6929497Z A	src/lib/institutional-trade.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6929938Z A	src/lib/institutional-webhooks.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6930676Z A	src/lib/institutional-webhooks.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6931285Z A	supabase/migrations/20260726123000_institutional_trade_system.sql
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.6931878Z Working-tree status:
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7163089Z M  .env.example
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7163502Z D  .github/importer-diagnostic.txt
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7163991Z D  .github/institutional-patch.part-00
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7164468Z D  .github/institutional-patch.part-01
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7164935Z D  .github/institutional-patch.part-02
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7165356Z D  .github/institutional-patch.part-03
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7165784Z D  .github/institutional-patch.part-04
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7166216Z D  .github/institutional-patch.part-05
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7166648Z D  .github/institutional-patch.part-06
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7167077Z D  .github/institutional-patch.part-07
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7167516Z D  .github/institutional-patch.part-08
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7167890Z D  .github/institutional-qa-trigger
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7168239Z A  .github/scripts/institutional-trade-qa-e2e.mjs
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7168717Z D  .github/workflows/attach-institutional-payload.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7169346Z D  .github/workflows/dispatch-institutional-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7169905Z D  .github/workflows/export-institutional-source.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7170493Z D  .github/workflows/fix-dispatch-institutional-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7170983Z D  .github/workflows/import-institutional-source.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7171435Z A  .github/workflows/institutional-trade-qa.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7172004Z D  .github/workflows/prepare-institutional-qa-runner.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7172758Z D  .github/workflows/read-institutional-importer-log.yml
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7173328Z A  src/app/admin/institutional-deal-desk/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7173820Z M  src/app/admin/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7174315Z A  src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7174925Z A  src/app/institutions/[organizationId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7175406Z A  src/app/institutions/actions.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7175895Z A  src/app/institutions/consents/[consentId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7176438Z A  src/app/institutions/institutions.module.css
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7176935Z A  src/app/institutions/new/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7177357Z A  src/app/institutions/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7177902Z A  src/app/institutions/verifier-assignments/[assignmentId]/page.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7178561Z A  src/components/institutions/institutional-ui.tsx
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7179084Z A  src/institutional-trade-migration.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7179574Z A  src/institutional-trade-wiring.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7180039Z A  src/lib/institutional-data.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7180470Z A  src/lib/institutional-feature-gates.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7180937Z A  src/lib/institutional-trade.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7181372Z A  src/lib/institutional-trade.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7181791Z A  src/lib/institutional-webhooks.test.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7182243Z A  src/lib/institutional-webhooks.ts
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7183798Z A  supabase/migrations/20260726123000_institutional_trade_system.sql
+import	Fetch, verify, and import exact implementation blobs	2026-07-27T07:11:43.7196143Z ##[error]Process completed with exit code 1.
+import	Upload importer verification artifacts	﻿2026-07-27T07:11:43.7303643Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7305449Z ##[group]Run actions/upload-artifact@v4
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7305728Z with:
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7306029Z   name: institutional-import-verification-30245239603
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7306917Z   path: /tmp/institutional-patch.b64
+import	Upload importer verification artifacts	/tmp/institutional.patch
+import	Upload importer verification artifacts	/tmp/institutional-tree-shas.txt
+import	Upload importer verification artifacts	/tmp/institutional-staged.diff
+import	Upload importer verification artifacts	/tmp/institutional-index.txt
+import	Upload importer verification artifacts	/tmp/institutional-imported-tree.tar.gz
+import	Upload importer verification artifacts	
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7307771Z   if-no-files-found: warn
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7308004Z   retention-days: 2
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7308211Z   compression-level: 6
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7308423Z   overwrite: false
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7308628Z   include-hidden-files: false
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7308863Z env:
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7309282Z   EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7309877Z   EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7310364Z   EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7312998Z   GH_TOKEN: ***
+import	Upload importer verification artifacts	2026-07-27T07:11:43.7313218Z ##[endgroup]
+import	Upload importer verification artifacts	2026-07-27T07:11:43.8991491Z (node:2474) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+import	Upload importer verification artifacts	2026-07-27T07:11:43.8992581Z (Use `node --trace-deprecation ...` to show where the warning was created)
+import	Upload importer verification artifacts	2026-07-27T07:11:43.9072136Z Multiple search paths detected. Calculating the least common ancestor of all paths
+import	Upload importer verification artifacts	2026-07-27T07:11:43.9080148Z The least common ancestor is /tmp. This will be the root directory of the artifact
+import	Upload importer verification artifacts	2026-07-27T07:11:43.9081076Z With the provided path, there will be 6 files uploaded
+import	Upload importer verification artifacts	2026-07-27T07:11:43.9082318Z Artifact name is valid!
+import	Upload importer verification artifacts	2026-07-27T07:11:43.9083475Z Root directory input is valid!
+import	Upload importer verification artifacts	2026-07-27T07:11:44.1277285Z Beginning upload of artifact content to blob storage
+import	Upload importer verification artifacts	2026-07-27T07:11:44.4401072Z (node:2474) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+import	Upload importer verification artifacts	2026-07-27T07:11:44.8999696Z Uploaded bytes 8388608
+import	Upload importer verification artifacts	2026-07-27T07:11:45.1229118Z Uploaded bytes 16777216
+import	Upload importer verification artifacts	2026-07-27T07:11:45.2286054Z Uploaded bytes 20715192
+import	Upload importer verification artifacts	2026-07-27T07:11:45.2663119Z Finished uploading artifact content to blob storage!
+import	Upload importer verification artifacts	2026-07-27T07:11:45.2664230Z SHA256 digest of uploaded artifact zip is d337463f55bb3b6189a3f9446ce38a18e5eb5621791aac30eea0177dc9b5dd67
+import	Upload importer verification artifacts	2026-07-27T07:11:45.2666408Z Finalizing artifact upload
+import	Upload importer verification artifacts	2026-07-27T07:11:45.4437955Z Artifact institutional-import-verification-30245239603.zip successfully finalized. Artifact ID 8644727170
+import	Upload importer verification artifacts	2026-07-27T07:11:45.4439524Z Artifact institutional-import-verification-30245239603 has been successfully uploaded! Final size is 20715192 bytes. Artifact ID is 8644727170
+import	Upload importer verification artifacts	2026-07-27T07:11:45.4444980Z Artifact download URL: https://github.com/ghuser29384/Website2/actions/runs/30245239603/artifacts/8644727170
+import	Post Check out feature branch	﻿2026-07-27T07:11:45.4678740Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+import	Post Check out feature branch	2026-07-27T07:11:45.4679940Z Post job cleanup.
+import	Post Check out feature branch	2026-07-27T07:11:45.5571393Z [command]/usr/bin/git version
+import	Post Check out feature branch	2026-07-27T07:11:45.5615931Z git version 2.54.0
+import	Post Check out feature branch	2026-07-27T07:11:45.5657764Z Temporarily overriding HOME='/home/runner/work/_temp/056527d9-a092-4b35-ac3d-c4fc931adbec' before making global git config changes
+import	Post Check out feature branch	2026-07-27T07:11:45.5659177Z Adding repository directory to the temporary git global config as a safe directory
+import	Post Check out feature branch	2026-07-27T07:11:45.5664253Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Website2/Website2
+import	Post Check out feature branch	2026-07-27T07:11:45.5705524Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+import	Post Check out feature branch	2026-07-27T07:11:45.5745353Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+import	Post Check out feature branch	2026-07-27T07:11:45.6021129Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+import	Post Check out feature branch	2026-07-27T07:11:45.6051924Z http.https://github.com/.extraheader
+import	Post Check out feature branch	2026-07-27T07:11:45.6068521Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+import	Post Check out feature branch	2026-07-27T07:11:45.6110913Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+import	Post Check out feature branch	2026-07-27T07:11:45.6374064Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+import	Post Check out feature branch	2026-07-27T07:11:45.6417819Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+import	Complete job	﻿2026-07-27T07:11:45.6834561Z Cleaning up orphan processes
+import	Complete job	2026-07-27T07:11:45.7086074Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
