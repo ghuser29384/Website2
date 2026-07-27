@@ -114,6 +114,7 @@ jobs:
       - name: Run source-contract integrity tests before database mutation
         run: |
           node --import tsx --test \
+            src/institutional-individual-capacity.test.ts \
             src/institutional-trade-migration.test.ts \
             src/institutional-trade-wiring.test.ts \
             src/lib/institutional-trade.test.ts \
@@ -145,7 +146,7 @@ jobs:
           declare required text;
           begin
             foreach required in array array[
-              'institutional_organizations','institutional_programs','institutional_authority_grants',
+              'institutional_organizations','institutional_individual_profiles','institutional_programs','institutional_authority_grants',
               'institutional_deals','institutional_deal_parties','institutional_proposal_versions',
               'institutional_counterfactual_baselines','institutional_obligations','institutional_obligation_dependencies',
               'institutional_approvals','institutional_individual_consents','institutional_signatures',
