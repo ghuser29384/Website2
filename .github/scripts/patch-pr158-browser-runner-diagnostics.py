@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 PATH = Path(".github/scripts/pr158-two-account-browser-qa.mjs")
+WRAPPER_PATH = Path(".github/scripts/run-pr158-two-account-browser-qa.mjs")
 MOBILE_PUBLIC_START = "  const mobilePublic = await makeSession(browser, {"
 MOBILE_RESPONDER_START = "  const mobileResponder = await makeSession(browser, {"
 DIAGNOSTICS_START = "  const allDiagnostics = report.diagnostics;"
@@ -21,13 +22,19 @@ def replace_block(source: str, start: str, end: str, replacement: str, label: st
     return source[:start_index] + replacement + source[end_index:]
 
 
+def replace_once(source: str, old: str, new: str, label: str) -> str:
+    count = source.count(old)
+    if count != 1:
+        raise RuntimeError(f"Expected one {label}; found {count}.")
+    return source.replace(old, new, 1)
+
+
 def main() -> None:
     source = PATH.read_text(encoding="utf-8")
 
-    # The full 390×844 workflow already exercises the live public marketplace before
+    # The complete 390×844 workflow exercises the live public marketplace before
     # matching the deterministic offer. The legacy embedded mobile-public check runs
-    # after activation, when that offer is correctly no longer public, so it is redundant
-    # and semantically stale.
+    # after activation, when that offer is correctly no longer public, so it is redundant.
     source = replace_block(
         source,
         MOBILE_PUBLIC_START,
@@ -110,8 +117,35 @@ def main() -> None:
         raise RuntimeError("The diagnostics classification markers are missing.")
 
     PATH.write_text(source, encoding="utf-8")
+
+    # The reviewed wrapper applies several still-required stability patches before
+    # importing the runner. Remove only its old aborted-prefetch replacement because
+    # the runner now has the stronger classification block above.
+    wrapper = WRAPPER_PATH.read_text(encoding="utf-8")
+    obsolete_wrapper_patch = '''source = replaceExactly(
+  source,
+  '      ...item.failedRequests.map((error) => `${item.label} request: ${JSON.stringify(error)}`),',
+  [
+    "      ...item.failedRequests",
+    '        .filter((error) => error.failure !== "net::ERR_ABORTED" && error.resourceType !== "ping")',
+    '        .map((error) => `${item.label} request: ${JSON.stringify(error)}`),',
+  ].join("\\n"),
+  "benign aborted-prefetch diagnostic filter",
+);
+
+'''
+    wrapper = replace_once(
+        wrapper,
+        obsolete_wrapper_patch,
+        "",
+        "obsolete wrapper diagnostic replacement",
+    )
+    if "benign aborted-prefetch diagnostic filter" in wrapper:
+        raise RuntimeError("The obsolete wrapper diagnostic replacement remains.")
+    WRAPPER_PATH.write_text(wrapper, encoding="utf-8")
+
     print(
-        "Removed the redundant post-activation mobile-public check and retained raw known diagnostics while failing on unexpected browser errors."
+        "Removed the redundant post-activation mobile-public check, classified known diagnostics, and retained the reviewed wrapper's other stability patches."
     )
 
 
