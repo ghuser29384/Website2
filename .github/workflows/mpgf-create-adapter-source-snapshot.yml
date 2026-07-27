@@ -1,0 +1,38 @@
+name: MPGF create-adapter source snapshot
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mpgf-create-adapter-source-snapshot.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@v4
+
+      - name: Verify integration base
+        run: |
+          test "$(git rev-parse HEAD^)" = "3359135612d8335b98a643bc7d65c8e4616551f8"
+
+      - name: Create source archive
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            -czf /tmp/mpgf-create-adapter-source.tar.gz .
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-create-adapter-source-${{ github.run_id }}
+          path: /tmp/mpgf-create-adapter-source.tar.gz
+          retention-days: 2
