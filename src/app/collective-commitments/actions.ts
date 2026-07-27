@@ -9,22 +9,12 @@ import {
   signCollectiveCommitment,
   withdrawCollectiveCommitmentSignature,
 } from "@/lib/collective-commitments/service";
+import type { CollectiveCommitmentActionState } from "@/lib/collective-commitments/action-state";
 import {
   getCollectiveRiskProfile,
   isCollectivePropositionType,
   type CollectiveRiskDimension,
 } from "@/lib/collective-commitments/types";
-
-export interface CollectiveCommitmentActionState {
-  ok: boolean;
-  message: string;
-  commitmentId?: string;
-}
-
-export const EMPTY_COLLECTIVE_ACTION_STATE: CollectiveCommitmentActionState = {
-  ok: false,
-  message: "",
-};
 
 function textField(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
