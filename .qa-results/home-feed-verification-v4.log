@@ -1,0 +1,937 @@
+Authenticated Home Feed v4 verification failed.
+staging_sha=eac20a5eeaf8b75abd5e5f1dd26c0d3f23c0a971
+recorded_at=2026-07-27T09:38:53Z
+
+===== bundle-integrity.log =====
+Archive:  /tmp/home-feed-v4-bundle.zip
+    testing: moraltrade-home-authenticated-feed-eebf509a/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/returning-home.append.css   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply-home-feed-patch.py   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/returning-homepage.spec.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/package.json   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/pareto-recommendation-wiring.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/home-page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/live-now-a1-response.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/home-feed-contract.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/route.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/README.md   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply.sh   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/verify.sh   OK
+No errors detected in compressed data of /tmp/home-feed-v4-bundle.zip.
+
+===== test-baseline-exact.status =====
+1
+
+===== lint-baseline-exact.status =====
+1
+
+===== apply.log =====
+Applied authenticated Home Feed patch.
+ M package.json
+ M public/moral-trade-live-now.js
+ M src/app/api/live-now-a1/route.ts
+ M src/app/page.tsx
+ M src/components/home/home-page.tsx
+ M src/components/home/returning-home.module.css
+ M src/lib/pareto-feed-runtime.ts
+ M src/pareto-recommendation-wiring.test.ts
+ M tests/returning-homepage.spec.ts
+?? src/home-feed-contract.test.ts
+?? src/lib/home-feed-snapshot.test.ts
+?? src/lib/home-feed-snapshot.ts
+?? src/lib/live-now-a1-response.ts
+
+===== changed-paths.diff =====
+
+===== verify-pareto-exact.log =====
+
+> moral-trade@0.1.0 verify:pareto
+> node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/lib/home-feed-snapshot.test.ts src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/live-now-a1-response.ts src/lib/home-feed-snapshot.ts src/lib/home-feed-snapshot.test.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/app/page.tsx src/components/home/home-page.tsx src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --check public/moral-trade-live-learning-diagnostics.js && node --check public/moral-trade-live-now.js
+
+TAP version 13
+# Subtest: Home and Feed resolve recommendations through the same authenticated A1 builder
+ok 1 - Home and Feed resolve recommendations through the same authenticated A1 builder
+  ---
+  duration_ms: 1.417847
+  ...
+# Subtest: Home limits only its visible exposure surface without changing Feed assignment
+ok 2 - Home limits only its visible exposure surface without changing Feed assignment
+  ---
+  duration_ms: 0.647964
+  ...
+# Subtest: Home and Feed preserve exact item identity and exposure receipt identity
+ok 3 - Home and Feed preserve exact item identity and exposure receipt identity
+  ---
+  duration_ms: 0.404195
+  ...
+# Subtest: the homepage source contains no fabricated match or evidence records
+ok 4 - the homepage source contains no fabricated match or evidence records
+  ---
+  duration_ms: 0.896209
+  ...
+# Subtest: two authenticated users receive different cards with their exact Feed IDs and receipts
+ok 5 - two authenticated users receive different cards with their exact Feed IDs and receipts
+  ---
+  duration_ms: 5.661134
+  ...
+# Subtest: a zero-data authenticated user receives no cards and no demo records
+ok 6 - a zero-data authenticated user receives no cards and no demo records
+  ---
+  duration_ms: 1.121942
+  ...
+# Subtest: incomplete Feed rows fail closed instead of being filled with examples
+ok 7 - incomplete Feed rows fail closed instead of being filled with examples
+  ---
+  duration_ms: 0.250429
+  ...
+# Subtest: five-percent assignment is stable and never selects a Direct candidate
+ok 8 - five-percent assignment is stable and never selects a Direct candidate
+  ---
+  duration_ms: 2.353454
+  ...
+# Subtest: Pareto gate requires every participant and safety dimension to clear
+ok 9 - Pareto gate requires every participant and safety dimension to clear
+  ---
+  duration_ms: 0.297247
+  ...
+# Subtest: implicit factor training produces finite affinities
+ok 10 - implicit factor training produces finite affinities
+  ---
+  duration_ms: 24.834719
+  ...
+# Subtest: logistic heads train and remain calibrated to probabilities
+ok 11 - logistic heads train and remain calibrated to probabilities
+  ---
+  duration_ms: 88.149838
+  ...
+# Subtest: threshold tuning preserves a minimum precision target
+ok 12 - threshold tuning preserves a minimum precision target
+  ---
+  duration_ms: 0.809361
+  ...
+# Subtest: inverse-propensity estimator distinguishes treatment and holdout outcomes
+ok 13 - inverse-propensity estimator distinguishes treatment and holdout outcomes
+  ---
+  duration_ms: 0.358127
+  ...
+# Subtest: the production live endpoint is wrapped by the shared Pareto-safe learning layer
+ok 14 - the production live endpoint is wrapped by the shared Pareto-safe learning layer
+  ---
+  duration_ms: 1.307865
+  ...
+# Subtest: the learning core implements factors, calibration, Pareto gates, and causal propensities
+ok 15 - the learning core implements factors, calibration, Pareto gates, and causal propensities
+  ---
+  duration_ms: 0.272922
+  ...
+# Subtest: the migration separates participant-visible receipts from service-only model artifacts
+ok 16 - the migration separates participant-visible receipts from service-only model artifacts
+  ---
+  duration_ms: 0.395091
+  ...
+# Subtest: completed agreements collect private own-lights and additionality feedback
+ok 17 - completed agreements collect private own-lights and additionality feedback
+  ---
+  duration_ms: 1.0396
+  ...
+# Subtest: learning status is disclosed on the static Feed shell
+ok 18 - learning status is disclosed on the static Feed shell
+  ---
+  duration_ms: 0.196749
+  ...
+# Subtest: completed agreement details and private outcome feedback remain visible in the app shell
+ok 19 - completed agreement details and private outcome feedback remain visible in the app shell
+  ---
+  duration_ms: 1.471997
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 952.704687
+
+===== verify-exact.status =====
+1
+
+===== exact-baseline-comparison.txt =====
+baseline_status=1
+candidate_status=1
+baseline_test_count=781
+candidate_test_count=784
+baseline_fail_count=54
+candidate_fail_count=54
+unexpected_failure_count=0
+resolved_baseline_failure_count=0
+
+===== lint-exact.status =====
+1
+
+===== exact-lint-comparison.txt =====
+baseline_status=1
+candidate_status=1
+baseline_error_count=3
+candidate_error_count=3
+unexpected_error_count=0
+resolved_baseline_error_count=0
+
+===== build-exact.log =====
+
+> moral-trade@0.1.0 prebuild
+> npm run verify:pareto && node scripts/ensure-next-swc.mjs
+
+
+> moral-trade@0.1.0 verify:pareto
+> node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/lib/home-feed-snapshot.test.ts src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/live-now-a1-response.ts src/lib/home-feed-snapshot.ts src/lib/home-feed-snapshot.test.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/app/page.tsx src/components/home/home-page.tsx src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --check public/moral-trade-live-learning-diagnostics.js && node --check public/moral-trade-live-now.js
+
+TAP version 13
+# Subtest: Home and Feed resolve recommendations through the same authenticated A1 builder
+ok 1 - Home and Feed resolve recommendations through the same authenticated A1 builder
+  ---
+  duration_ms: 1.286405
+  ...
+# Subtest: Home limits only its visible exposure surface without changing Feed assignment
+ok 2 - Home limits only its visible exposure surface without changing Feed assignment
+  ---
+  duration_ms: 0.620744
+  ...
+# Subtest: Home and Feed preserve exact item identity and exposure receipt identity
+ok 3 - Home and Feed preserve exact item identity and exposure receipt identity
+  ---
+  duration_ms: 0.425126
+  ...
+# Subtest: the homepage source contains no fabricated match or evidence records
+ok 4 - the homepage source contains no fabricated match or evidence records
+  ---
+  duration_ms: 0.841901
+  ...
+# Subtest: two authenticated users receive different cards with their exact Feed IDs and receipts
+ok 5 - two authenticated users receive different cards with their exact Feed IDs and receipts
+  ---
+  duration_ms: 2.051582
+  ...
+# Subtest: a zero-data authenticated user receives no cards and no demo records
+ok 6 - a zero-data authenticated user receives no cards and no demo records
+  ---
+  duration_ms: 1.007564
+  ...
+# Subtest: incomplete Feed rows fail closed instead of being filled with examples
+ok 7 - incomplete Feed rows fail closed instead of being filled with examples
+  ---
+  duration_ms: 0.227535
+  ...
+# Subtest: five-percent assignment is stable and never selects a Direct candidate
+ok 8 - five-percent assignment is stable and never selects a Direct candidate
+  ---
+  duration_ms: 5.660257
+  ...
+# Subtest: Pareto gate requires every participant and safety dimension to clear
+ok 9 - Pareto gate requires every participant and safety dimension to clear
+  ---
+  duration_ms: 0.355604
+  ...
+# Subtest: implicit factor training produces finite affinities
+ok 10 - implicit factor training produces finite affinities
+  ---
+  duration_ms: 20.539982
+  ...
+# Subtest: logistic heads train and remain calibrated to probabilities
+ok 11 - logistic heads train and remain calibrated to probabilities
+  ---
+  duration_ms: 90.99879
+  ...
+# Subtest: threshold tuning preserves a minimum precision target
+ok 12 - threshold tuning preserves a minimum precision target
+  ---
+  duration_ms: 0.858865
+  ...
+# Subtest: inverse-propensity estimator distinguishes treatment and holdout outcomes
+ok 13 - inverse-propensity estimator distinguishes treatment and holdout outcomes
+  ---
+  duration_ms: 0.359069
+  ...
+# Subtest: the production live endpoint is wrapped by the shared Pareto-safe learning layer
+ok 14 - the production live endpoint is wrapped by the shared Pareto-safe learning layer
+  ---
+  duration_ms: 1.549132
+  ...
+# Subtest: the learning core implements factors, calibration, Pareto gates, and causal propensities
+ok 15 - the learning core implements factors, calibration, Pareto gates, and causal propensities
+  ---
+  duration_ms: 0.339811
+  ...
+# Subtest: the migration separates participant-visible receipts from service-only model artifacts
+ok 16 - the migration separates participant-visible receipts from service-only model artifacts
+  ---
+  duration_ms: 0.497783
+  ...
+# Subtest: completed agreements collect private own-lights and additionality feedback
+ok 17 - completed agreements collect private own-lights and additionality feedback
+  ---
+  duration_ms: 0.220926
+  ...
+# Subtest: learning status is disclosed on the static Feed shell
+ok 18 - learning status is disclosed on the static Feed shell
+  ---
+  duration_ms: 0.235196
+  ...
+# Subtest: completed agreement details and private outcome feedback remain visible in the app shell
+ok 19 - completed agreement details and private outcome feedback remain visible in the app shell
+  ---
+  duration_ms: 1.228459
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 756.970571
+
+> moral-trade@0.1.0 build
+> next build --webpack
+
+⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+▲ Next.js 16.2.4 (webpack)
+- Experiments (use with caution):
+  ✓ webpackBuildWorker
+  ✓ webpackMemoryOptimizations
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 69s
+  Running TypeScript ...
+  Finished TypeScript in 54s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/125) ...
+  Generating static pages using 3 workers (31/125) 
+  Generating static pages using 3 workers (62/125) 
+  Generating static pages using 3 workers (93/125) 
+✓ Generating static pages using 3 workers (125/125) in 2.2s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /about
+├ ƒ /accessibility
+├ ○ /account/labs/at-least-tier-platform-match
+├ ƒ /admin
+├ ƒ /admin/core-loop
+├ ƒ /admin/growth
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match/audit
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match/resolution
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match/reward-schedule
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match/rounds
+├ ○ /admin/moral-public-goods/at-least-tier-platform-match/settlement
+├ ○ /admin/moral-public-goods/recommendations
+├ ƒ /admin/trade-review
+├ ƒ /agreements/[agreementId]
+├ ƒ /ai.txt
+├ ƒ /anti-threat-baseline
+├ ƒ /anti-threat-rules
+├ ƒ /api/background/admin-safety-actions
+├ ƒ /api/background/backup-retention-manifests
+├ ƒ /api/background/candidate-exposure
+├ ƒ /api/background/claim-assurance-records
+├ ƒ /api/background/collectives
+├ ƒ /api/background/data-exports
+├ ƒ /api/background/data-exports/[id]
+├ ƒ /api/background/delegate-authorizations
+├ ƒ /api/background/delegate-authorizations/[id]/revoke
+├ ƒ /api/background/delegate-receipts
+├ ƒ /api/background/delegate-runs
+├ ƒ /api/background/delegate-tool-capabilities
+├ ƒ /api/background/disclosure-grants
+├ ƒ /api/background/emergency-controls
+├ ƒ /api/background/federation-bridge-grants
+├ ƒ /api/background/helper-runs
+├ ƒ /api/background/high-impact-change-approvals
+├ ƒ /api/background/intro-packets
+├ ƒ /api/background/intro-requests
+├ ƒ /api/background/intro-requests/[id]/appeal
+├ ƒ /api/background/intro-requests/[id]/approve-contact
+├ ƒ /api/background/opportunities
+├ ƒ /api/background/opportunities/[id]/feedback
+├ ƒ /api/background/opportunity-briefs
+├ ƒ /api/background/opportunity-briefs/[id]/feedback
+├ ƒ /api/background/opportunity-feedback
+├ ƒ /api/background/pairwise-safety-preferences
+├ ƒ /api/background/participant-correction-requests
+├ ƒ /api/background/pilot-evaluation-reviews
+├ ƒ /api/background/power-asymmetry-reviews
+├ ƒ /api/background/privacy-freeze
+├ ƒ /api/background/private-overlap/check
+├ ƒ /api/background/profile-signals/recompute
+├ ƒ /api/background/profile/interview
+├ ƒ /api/background/profile/recompute
+├ ƒ /api/background/purpose-codes
+├ ƒ /api/background/retention-holds
+├ ƒ /api/background/reviewer-conflict-recusal-records
+├ ƒ /api/background/runtime-safety-tripwires
+├ ƒ /api/background/source-connections
+├ ƒ /api/background/source-connections/[id]
+├ ƒ /api/background/source-connections/[id]/approve
+├ ƒ /api/background/source-connections/[id]/draft-summary
+├ ƒ /api/background/source-connections/[id]/summaries/[summaryId]/approve
+├ ƒ /api/background/source-connections/[id]/summaries/draft
+├ ƒ /api/background/source-connections/[id]/summary-draft
+├ ƒ /api/background/source-summaries
+├ ƒ /api/background/source-summaries/[id]/approve
+├ ƒ /api/background/source-summaries/[id]/confirm-tags
+├ ƒ /api/background/source-summary-drafts/[id]/approve
+├ ƒ /api/background/sources
+├ ƒ /api/background/sources/[id]/draft-summary
+├ ƒ /api/background/sources/[id]/revoke
+├ ƒ /api/background/subject-identity
+├ ƒ /api/background/wish-dialogue/[id]/apply
+├ ƒ /api/background/wish-dialogue/[id]/message
+├ ƒ /api/background/wish-dialogue/[id]/proposal
+├ ƒ /api/background/wish-dialogue/start
+├ ƒ /api/background/wish-interview
+├ ƒ /api/background/wish-interview/sessions
+├ ƒ /api/background/wish-interview/sessions/[id]/answer
+├ ƒ /api/background/wish-interview/sessions/[id]/apply
+├ ƒ /api/background/wish-profile
+├ ƒ /api/connectors/every-org/[secret]
+├ ƒ /api/credibility/model
+├ ƒ /api/credibility/profile/[profileId]
+├ ƒ /api/funding/readiness
+├ ƒ /api/funnel-events
+├ ƒ /api/jobs/background-networking
+├ ƒ /api/jobs/baseline-bonds
+├ ƒ /api/jobs/conditional-redirects
+├ ƒ /api/jobs/delegates
+├ ƒ /api/jobs/email
+├ ƒ /api/jobs/payment-reminders
+├ ƒ /api/jobs/performance-bonds
+├ ƒ /api/jobs/recommendation-training
+├ ƒ /api/jobs/saved-searches
+├ ƒ /api/jobs/trade-reminders
+├ ƒ /api/live-account
+├ ƒ /api/live-now
+├ ƒ /api/live-now-a1
+├ ƒ /api/live-now/feedback
+├ ƒ /api/live-now/route-profile
+├ ƒ /api/moral-trade/account-security/contract
+├ ƒ /api/moral-trade/account-security/enforce
+├ ƒ /api/moral-trade/action-reversibility/contract
+├ ƒ /api/moral-trade/action-reversibility/enforce
+├ ƒ /api/moral-trade/agreement-amendments/contract
+├ ƒ /api/moral-trade/agreement-amendments/enforce
+├ ƒ /api/moral-trade/ai-governance/health
+├ ƒ /api/moral-trade/ai-preference-elicitation/contract
+├ ƒ /api/moral-trade/ai-preference-elicitation/enforce
+├ ƒ /api/moral-trade/ai-shadow/contract
+├ ƒ /api/moral-trade/anti-enumeration/contract
+├ ƒ /api/moral-trade/api-contract
+├ ƒ /api/moral-trade/authority-obligations/contract
+├ ƒ /api/moral-trade/authority-obligations/enforce
+├ ƒ /api/moral-trade/background-capability-gates/contract
+├ ƒ /api/moral-trade/background-rls-audit/contract
+├ ƒ /api/moral-trade/baseline-integrity/contract
+├ ƒ /api/moral-trade/baseline-integrity/enforce
+├ ƒ /api/moral-trade/batch-clearing-objective/contract
+├ ƒ /api/moral-trade/batch-clearing-objective/enforce
+├ ƒ /api/moral-trade/behavioral-micro-pledges/contract
+├ ƒ /api/moral-trade/cause-bucket-taxonomy/contract
+├ ƒ /api/moral-trade/cause-bucket-taxonomy/enforce
+├ ƒ /api/moral-trade/challenge-appeal/contract
+├ ƒ /api/moral-trade/challenge-appeal/enforce
+├ ƒ /api/moral-trade/challenge-appeal/evaluate
+├ ƒ /api/moral-trade/clearing-previews/execute
+├ ƒ /api/moral-trade/commitment-settlement/contract
+├ ƒ /api/moral-trade/commitment-settlement/enforce
+├ ƒ /api/moral-trade/copilot/contract
+├ ƒ /api/moral-trade/copilot/review
+├ ƒ /api/moral-trade/data-model/contract
+├ ƒ /api/moral-trade/direct-pair-clearing/contract
+├ ƒ /api/moral-trade/direct-pair-clearing/enforce
+├ ƒ /api/moral-trade/disclosure/contract
+├ ƒ /api/moral-trade/disclosure/evaluate
+├ ƒ /api/moral-trade/document-coverage/health
+├ ƒ /api/moral-trade/donor-of-record-tax/contract
+├ ƒ /api/moral-trade/donor-of-record-tax/enforce
+├ ƒ /api/moral-trade/evaluation/health
+├ ƒ /api/moral-trade/externality/health
+├ ƒ /api/moral-trade/financial-settlement-controls/contract
+├ ƒ /api/moral-trade/financial-settlement-controls/enforce
+├ ƒ /api/moral-trade/group-buying
+├ ƒ /api/moral-trade/group-buying/contract
+├ ƒ /api/moral-trade/group-buying/enforce
+├ ƒ /api/moral-trade/guest-witness/contract
+├ ƒ /api/moral-trade/guest-witness/invites
+├ ƒ /api/moral-trade/guest-witness/review
+├ ƒ /api/moral-trade/guest-witness/testimonials
+├ ƒ /api/moral-trade/health
+├ ƒ /api/moral-trade/impact-claims/contract
+├ ƒ /api/moral-trade/incident-response/health
+├ ƒ /api/moral-trade/marketplace-intake-triage/contract
+├ ƒ /api/moral-trade/marketplace-state-events/contract
+├ ƒ /api/moral-trade/match-signal/contract
+├ ƒ /api/moral-trade/match-signal/evaluate
+├ ƒ /api/moral-trade/matching-clearing/contract
+├ ƒ /api/moral-trade/matching-clearing/execute
+├ ƒ /api/moral-trade/negative-commitment-scopes/contract
+├ ƒ /api/moral-trade/negative-commitment-scopes/enforce
+├ ƒ /api/moral-trade/net-offset-accounting/contract
+├ ƒ /api/moral-trade/net-offset-accounting/enforce
+├ ƒ /api/moral-trade/non-public-goods-subsidies/contract
+├ ƒ /api/moral-trade/non-public-goods-subsidies/enforce
+├ ƒ /api/moral-trade/non-public-goods-tier/contract
+├ ƒ /api/moral-trade/non-public-goods-tier/enforce
+├ ƒ /api/moral-trade/noncompensable-blockers/contract
+├ ƒ /api/moral-trade/noncompensable-blockers/enforce
+├ ƒ /api/moral-trade/offer-validity/contract
+├ ƒ /api/moral-trade/offer-validity/enforce
+├ ƒ /api/moral-trade/operations/health
+├ ƒ /api/moral-trade/opportunity-meal-evidence/contract
+├ ƒ /api/moral-trade/opportunity-meal-evidence/enforce
+├ ƒ /api/moral-trade/participant-confirmations/contract
+├ ƒ /api/moral-trade/participant-confirmations/enforce
+├ ƒ /api/moral-trade/participant-credibility/contract
+├ ƒ /api/moral-trade/participant-credibility/enforce
+├ ƒ /api/moral-trade/participant-eligibility/contract
+├ ƒ /api/moral-trade/participant-eligibility/enforce
+├ ƒ /api/moral-trade/participant-term-sheet/contract
+├ ƒ /api/moral-trade/participant-term-sheet/enforce
+├ ƒ /api/moral-trade/participant-ui/contract
+├ ƒ /api/moral-trade/payment-authorizations/contract
+├ ƒ /api/moral-trade/payment-events/contract
+├ ƒ /api/moral-trade/performance/health
+├ ƒ /api/moral-trade/pilot-evidence/contract
+├ ƒ /api/moral-trade/pilot-evidence/enforce
+├ ƒ /api/moral-trade/pledge-performance-bonds/contract
+├ ƒ /api/moral-trade/pledge-performance-bonds/enforce
+├ ƒ /api/moral-trade/pledge-swap-performance-schedules/contract
+├ ƒ /api/moral-trade/pledge-swap-performance-schedules/enforce
+├ ƒ /api/moral-trade/policy-bundle/contract
+├ ƒ /api/moral-trade/post-clear-audit/contract
+├ ƒ /api/moral-trade/post-clear-audit/enforce
+├ ƒ /api/moral-trade/preference-integrity/contract
+├ ƒ /api/moral-trade/preference-integrity/enforce
+├ ƒ /api/moral-trade/privacy-governance/contract
+├ ƒ /api/moral-trade/private-exchange-rate/contract
+├ ƒ /api/moral-trade/private-exchange-rate/enforce
+├ ƒ /api/moral-trade/private-overlap/contract
+├ ƒ /api/moral-trade/production-readiness/contract
+├ ƒ /api/moral-trade/production-readiness/enforce
+├ ƒ /api/moral-trade/protective-assessments/contract
+├ ƒ /api/moral-trade/protective-assessments/enforce
+├ ƒ /api/moral-trade/provenance/schema
+├ ƒ /api/moral-trade/provider-source-authentication/contract
+├ ƒ /api/moral-trade/public-page-simplification/contract
+├ ƒ /api/moral-trade/public-receipts/[receiptId]/verify
+├ ƒ /api/moral-trade/public-receipts/contract
+├ ƒ /api/moral-trade/reasoning/packets
+├ ƒ /api/moral-trade/recipient-acceptance/contract
+├ ƒ /api/moral-trade/recipient-acceptance/enforce
+├ ƒ /api/moral-trade/recipient-destinations/contract
+├ ƒ /api/moral-trade/release-gates/contract
+├ ƒ /api/moral-trade/release-gates/enforce
+├ ƒ /api/moral-trade/resource-compatibility/contract
+├ ƒ /api/moral-trade/resource-compatibility/enforce
+├ ƒ /api/moral-trade/review-capacity/contract
+├ ƒ /api/moral-trade/review-capacity/enforce
+├ ƒ /api/moral-trade/review-workflow/contract
+├ ƒ /api/moral-trade/review-workflow/evaluate
+├ ƒ /api/moral-trade/reviewer-console/contract
+├ ƒ /api/moral-trade/reviewer-quality/contract
+├ ƒ /api/moral-trade/reviewer-quality/enforce
+├ ƒ /api/moral-trade/risk-control-matrix/contract
+├ ƒ /api/moral-trade/risk-control-matrix/enforce
+├ ƒ /api/moral-trade/schemas
+├ ƒ /api/moral-trade/security/health
+├ ƒ /api/moral-trade/sensitive-evidence-attestations/contract
+├ ƒ /api/moral-trade/sensitive-evidence-attestations/enforce
+├ ƒ /api/moral-trade/side-agreements/contract
+├ ƒ /api/moral-trade/side-agreements/enforce
+├ ƒ /api/moral-trade/template-conformance/contract
+├ ƒ /api/moral-trade/template-conformance/enforce
+├ ƒ /api/moral-trade/trade-classification/contract
+├ ƒ /api/moral-trade/trade-classification/enforce
+├ ƒ /api/moral-trade/transparency/report
+├ ƒ /api/moral-trade/user-facing-status/contract
+├ ƒ /api/moral-trade/user-safety-content-moderation/contract
+├ ƒ /api/moral-trade/user-safety-content-moderation/enforce
+├ ƒ /api/mpgf/admin/integrity
+├ ƒ /api/mpgf/appeals
+├ ƒ /api/mpgf/audit/ledger
+├ ƒ /api/mpgf/campaigns
+├ ƒ /api/mpgf/campaigns/[campaignId]
+├ ƒ /api/mpgf/campaigns/[campaignId]/proof-path
+├ ƒ /api/mpgf/campaigns/[campaignId]/review
+├ ƒ /api/mpgf/challenges
+├ ƒ /api/mpgf/contributions/checkout-session
+├ ƒ /api/mpgf/contributions/manual-evidence
+├ ƒ /api/mpgf/contributions/subscription-session
+├ ƒ /api/mpgf/every-org/donate-link
+├ ƒ /api/mpgf/every-org/webhook
+├ ƒ /api/mpgf/evidence/[evidenceRef]
+├ ƒ /api/mpgf/evidence/manual
+├ ƒ /api/mpgf/exact-pilot-dry-run
+├ ƒ /api/mpgf/governance
+├ ƒ /api/mpgf/governance/ballots
+├ ƒ /api/mpgf/governance/checkout-handoffs
+├ ƒ /api/mpgf/governance/participant
+├ ƒ /api/mpgf/governance/pledges
+├ ƒ /api/mpgf/governance/results
+├ ƒ /api/mpgf/health
+├ ƒ /api/mpgf/milestones/[milestoneId]/release
+├ ƒ /api/mpgf/pivotality-calculator
+├ ƒ /api/mpgf/pledge-intents/[intentId]/authorize-payment
+├ ƒ /api/mpgf/pledge-intents/[intentId]/verify-identity
+├ ƒ /api/mpgf/procedural-badges
+├ ƒ /api/mpgf/project-recommendations
+├ ƒ /api/mpgf/project-recommendations/moderation
+├ ƒ /api/mpgf/projects/[projectId]/challenge
+├ ƒ /api/mpgf/projects/[projectId]/conflict-review
+├ ƒ /api/mpgf/projects/[projectId]/review-state
+├ ƒ /api/mpgf/provider-events/webhook
+├ ƒ /api/mpgf/providers/stripe/webhook
+├ ƒ /api/mpgf/public-goods/allocate
+├ ƒ /api/mpgf/public-goods/analytics
+├ ƒ /api/mpgf/public-goods/experiments/assign
+├ ƒ /api/mpgf/public-goods/kpis
+├ ƒ /api/mpgf/public-goods/operations
+├ ƒ /api/mpgf/public-goods/reconcile
+├ ƒ /api/mpgf/public-goods/reminders
+├ ƒ /api/mpgf/recipient-registry
+├ ƒ /api/mpgf/rounds
+├ ƒ /api/mpgf/rounds/[roundId]
+├ ƒ /api/mpgf/rounds/[roundId]/allocations
+├ ƒ /api/mpgf/rounds/[roundId]/audit-bundle
+├ ƒ /api/mpgf/rounds/[roundId]/authorization-reconciliation-events
+├ ƒ /api/mpgf/rounds/[roundId]/authorize
+├ ƒ /api/mpgf/rounds/[roundId]/campaigns
+├ ƒ /api/mpgf/rounds/[roundId]/capture
+├ ƒ /api/mpgf/rounds/[roundId]/cg-vqaf
+├ ƒ /api/mpgf/rounds/[roundId]/clear
+├ ƒ /api/mpgf/rounds/[roundId]/close
+├ ƒ /api/mpgf/rounds/[roundId]/coalition-routing
+├ ƒ /api/mpgf/rounds/[roundId]/common-ground-budget
+├ ƒ /api/mpgf/rounds/[roundId]/common-ground-budget-preview
+├ ƒ /api/mpgf/rounds/[roundId]/common-ground-budget/cancel
+├ ƒ /api/mpgf/rounds/[roundId]/common-ground-discovery
+├ ƒ /api/mpgf/rounds/[roundId]/conditional-intent
+├ ƒ /api/mpgf/rounds/[roundId]/coordination-credits
+├ ƒ /api/mpgf/rounds/[roundId]/failure-bonus-claims
+├ ƒ /api/mpgf/rounds/[roundId]/failure-bonus-claims/[claimId]/resolve
+├ ƒ /api/mpgf/rounds/[roundId]/finalize
+├ ƒ /api/mpgf/rounds/[roundId]/finalize-preview
+├ ƒ /api/mpgf/rounds/[roundId]/freeze
+├ ƒ /api/mpgf/rounds/[roundId]/hash
+├ ƒ /api/mpgf/rounds/[roundId]/identity-integrity
+├ ƒ /api/mpgf/rounds/[roundId]/impact-certificates
+├ ƒ /api/mpgf/rounds/[roundId]/lock
+├ ƒ /api/mpgf/rounds/[roundId]/match-preview
+├ ƒ /api/mpgf/rounds/[roundId]/payment-commitment-snapshots
+├ ƒ /api/mpgf/rounds/[roundId]/pledge-intents
+├ ƒ /api/mpgf/rounds/[roundId]/postmortem
+├ ƒ /api/mpgf/rounds/[roundId]/proof
+├ ƒ /api/mpgf/rounds/[roundId]/reconcile-authorizations
+├ ƒ /api/mpgf/rounds/[roundId]/release
+├ ƒ /api/mpgf/rounds/[roundId]/release-failed
+├ ƒ /api/mpgf/rounds/[roundId]/rulebook
+├ ƒ /api/mpgf/rounds/[roundId]/settlement-preview
+├ ƒ /api/mpgf/rounds/[roundId]/sponsor-commitments
+├ ƒ /api/mpgf/rounds/[roundId]/success-reward-claims
+├ ƒ /api/mpgf/rounds/[roundId]/success-reward-claims/[claimId]/resolve
+├ ƒ /api/mpgf/rounds/[roundId]/support-signals
+├ ƒ /api/mpgf/rounds/[roundId]/support-stance
+├ ƒ /api/mpgf/rounds/[roundId]/threshold-calibration
+├ ƒ /api/mpgf/sponsor-pools/[poolId]
+├ ƒ /api/mpgf/sponsor-pools/[poolId]/deposits
+├ ƒ /api/mpgf/stripe/conditional-payment-intents
+├ ƒ /api/mpgf/stripe/setup-intent
+├ ƒ /api/mpgf/trade-surplus/commit
+├ ƒ /api/mpgf/trade-surplus/settle
+├ ƒ /api/nonprofits/search
+├ ƒ /api/offers
+├ ƒ /api/offers/[...slug]
+├ ƒ /api/offers/[offerId]/create-similar
+├ ƒ /api/offers/[offerId]/follow
+├ ƒ /api/offers/facets
+├ ƒ /api/offers/plane
+├ ƒ /api/payments/conditional/mandates/cancel
+├ ƒ /api/payments/conditional/mandates/donation-offset
+├ ƒ /api/payments/conditional/readiness
+├ ƒ /api/payments/conditional/settlements/donation-offset
+├ ƒ /api/profile-sources/x/callback
+├ ƒ /api/profile-sources/x/disconnect
+├ ƒ /api/profile-sources/x/start
+├ ƒ /api/profile/export
+├ ƒ /api/profile/import
+├ ƒ /api/profile/schema
+├ ƒ /api/query/interpret
+├ ƒ /api/saved-searches
+├ ƒ /api/stripe/webhook
+├ ƒ /api/wish-registry/search
+├ ƒ /auth/confirm
+├ ƒ /background-networking
+├ ○ /cart
+├ ƒ /cohort
+├ ƒ /cohort/[partnerSlug]
+├ ƒ /commitments
+├ ƒ /complete-profile
+├ ƒ /connectors
+├ ƒ /contact
+├ ƒ /create
+├ ƒ /credibility
+├ ƒ /dashboard
+├ ƒ /donate
+├ ƒ /donate/confirm
+├ ƒ /donation-offsets
+├ ƒ /donation-offsets/conditional
+├ ƒ /donation-offsets/payments
+├ ƒ /evidence/[[...recordId]]
+├ ƒ /faq
+├ ƒ /friend-testimonials/[inviteToken]
+├ ● /funding-rounds/[roundId]
+│ ├ /funding-rounds/vegetarian-week-micro-assurance-preview
+│ └ /funding-rounds/vegetarian-week-capped-cohort-preview
+├ ƒ /guest-witness/[inviteToken]
+├ ○ /how-it-works
+├ ƒ /invitations/[token]
+├ ƒ /invite
+├ ○ /labs/at-least-tier-platform-match
+├ ƒ /labs/at-least-tier-platform-match/[roundSlug]
+├ ƒ /labs/at-least-tier-platform-match/[roundSlug]/commit
+├ ƒ /labs/moral-public-goods/[poolSlug]
+├ ○ /labs/refund-bonus-pledge-pool
+├ ƒ /labs/refund-bonus-pledge-pool/[roundSlug]
+├ ƒ /labs/refund-bonus-pledge-pool/[roundSlug]/amount
+├ ƒ /labs/refund-bonus-pledge-pool/[roundSlug]/review
+├ ƒ /login
+├ ○ /manifest.webmanifest
+├ ƒ /measurement
+├ ƒ /messages
+├ ƒ /messages/[threadId]
+├ ƒ /methodology
+├ ƒ /moral-goods-group-buying
+├ ƒ /moral-trade
+├ ƒ /moral-trade/technical-spec
+├ ƒ /mpgf
+├ ƒ /mpgf/about
+├ ƒ /mpgf/account/contributions
+├ ƒ /mpgf/admin
+├ ƒ /mpgf/admin/[section]
+├ ƒ /mpgf/ballot/[cycleId]
+├ ƒ /mpgf/campaigns/[campaignId]
+├ ƒ /mpgf/contribute
+├ ƒ /mpgf/contribute/cancel
+├ ƒ /mpgf/contribute/every-org/pending
+├ ƒ /mpgf/contribute/success
+├ ƒ /mpgf/cycles/[cycleId]
+├ ƒ /mpgf/governance
+├ ƒ /mpgf/metrics
+├ ƒ /mpgf/pools
+├ ƒ /mpgf/pools/[poolId]
+├ ƒ /mpgf/pools/new
+├ ƒ /mpgf/real-money-terms
+├ ƒ /mpgf/rounds/[roundId]
+├ ƒ /mpgf/technical-spec
+├ ƒ /offers
+├ ƒ /offers/[offerId]
+├ ƒ /offers/[offerId]/credibility
+├ ƒ /offers/examples/[exampleId]
+├ ƒ /offers/new
+├ ○ /offers/plane
+├ ƒ /offsets
+├ ƒ /onboarding
+├ ƒ /paid-action-offers
+├ ƒ /password-reset
+├ ƒ /password-update
+├ ƒ /people
+├ ƒ /people/[profileId]
+├ ƒ /people/[profileId]/credibility
+├ ○ /pilot
+├ ƒ /pilot-updates
+├ ƒ /pledge-swaps
+├ ƒ /pools
+├ ○ /pools/radar
+├ ƒ /priority-correction-fund
+├ ƒ /privacy
+├ ƒ /profile
+├ ƒ /profile/priorities
+├ ƒ /projects
+├ ƒ /public-goods-fund
+├ ƒ /reasoning-center
+├ ƒ /reasoning-standards
+├ ƒ /redirects/[receiptId]
+├ ƒ /redirects/-/opengraph-image
+├ ƒ /research
+├ ○ /robots.txt
+├ ƒ /safety
+├ ƒ /saved-offers
+├ ƒ /schemas/moral-trade/[schema]
+├ ƒ /signup
+├ ○ /sitemap.xml
+├ ƒ /sources
+├ ƒ /start
+├ ƒ /status
+├ ƒ /support
+├ ƒ /team
+├ ƒ /team-and-governance
+├ ƒ /terms
+├ ƒ /trade-agreements/[agreementId]
+├ ○ /trade-controls
+├ ƒ /trades/[offerId]/invite
+├ ƒ /trades/[offerId]/manage
+├ ƒ /trades/new
+├ ƒ /transparency
+├ ○ /trust
+├ ƒ /updates
+├ ƒ /validation
+├ ○ /walkthrough
+├ ƒ /what-is-moral-trade
+├ ƒ /wish-registry
+└ ƒ /worked-examples
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+
+
+===== playwright-exact.log =====
+
+Running 3 tests using 1 worker
+FTF
+
+  1) tests/returning-homepage.spec.ts:6:7 › Personalized homepage › fails closed while signed out instead of showing demo records 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoHaveText[2m([22m[32mexpected[39m[2m)[22m failed
+
+    Locator: getByRole('navigation', { name: 'Primary' }).getByRole('link')
+    Timeout: 5000ms
+    [32m- Expected  - 8[39m
+    [31m+ Received  + 1[39m
+
+    [32m- Array [[39m
+    [32m-   "Feed",[39m
+    [32m-   "Now",[39m
+    [32m-   "Discover",[39m
+    [32m-   "Activity",[39m
+    [32m-   "Evidence",[39m
+    [32m-   "Account",[39m
+    [32m- ][39m
+    [31m+ Array [][39m
+
+    Call log:
+    [2m  - Expect "toHaveText" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('navigation', { name: 'Primary' }).getByRole('link')[22m
+    [2m    14 × locator resolved to 0 elements[22m
+
+
+       9 |
+      10 |     const primary = page.getByRole("navigation", { name: "Primary" });
+    > 11 |     await expect(primary.getByRole("link")).toHaveText([
+         |                                             ^
+      12 |       "Feed",
+      13 |       "Now",
+      14 |       "Discover",
+        at /home/runner/work/Website2/Website2/tests/returning-homepage.spec.ts:11:45
+
+    Error Context: test-results/returning-homepage-Persona-f3a3a-ead-of-showing-demo-records/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Persona-f3a3a-ead-of-showing-demo-records/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Persona-f3a3a-ead-of-showing-demo-records/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/returning-homepage.spec.ts:44:7 › Personalized homepage › keeps signed-out navigation and the account menu interactive 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('button', { name: 'Open account menu' })[22m
+
+
+      46 |
+      47 |     const account = page.getByRole("button", { name: "Open account menu" });
+    > 48 |     await account.click();
+         |                   ^
+      49 |     await expect(account).toHaveAttribute("aria-expanded", "true");
+      50 |     await expect(page.getByRole("menuitem", { name: "Sign in" })).toHaveAttribute(
+      51 |       "href",
+        at /home/runner/work/Website2/Website2/tests/returning-homepage.spec.ts:48:19
+
+    Error Context: test-results/returning-homepage-Persona-79868-he-account-menu-interactive/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Persona-79868-he-account-menu-interactive/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Persona-79868-he-account-menu-interactive/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/returning-homepage.spec.ts:60:7 › Personalized homepage › keeps the zero-data state within the mobile viewport 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: getByRole('region', { name: 'No personalized feed item' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for getByRole('region', { name: 'No personalized feed item' })[22m
+
+
+      64 |     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+      65 |     await expect(page.getByTestId("home-feed-item")).toHaveCount(0);
+    > 66 |     await expect(page.getByRole("region", { name: "No personalized feed item" })).toBeVisible();
+         |                                                                                   ^
+      67 |     await expect(page.getByTestId("home-offer-trade")).toBeVisible();
+      68 |     expect(
+      69 |       await page.evaluate(
+        at /home/runner/work/Website2/Website2/tests/returning-homepage.spec.ts:66:83
+
+    Error Context: test-results/returning-homepage-Persona-5c24e--within-the-mobile-viewport/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Persona-5c24e--within-the-mobile-viewport/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Persona-5c24e--within-the-mobile-viewport/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/returning-homepage.spec.ts:6:7 › Personalized homepage › fails closed while signed out instead of showing demo records 
+    tests/returning-homepage.spec.ts:44:7 › Personalized homepage › keeps signed-out navigation and the account menu interactive 
+    tests/returning-homepage.spec.ts:60:7 › Personalized homepage › keeps the zero-data state within the mobile viewport 
+
