@@ -42,7 +42,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Apply deterministic patch and remove staging files
+      - name: Apply deterministic standalone-runner patch
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -69,25 +69,20 @@ jobs:
             echo "Application crypto import remains in standalone runner." >&2
             exit 1
           fi
-          grep -Fq 'browser-qa.log' .github/workflows/collective-commitments-adversarial-browser-qa.yml
+          grep -Fq 'const collectiveMasterKey = Buffer.from' .github/scripts/collective-commitments-adversarial-browser-qa.mjs
           grep -Fq 'await writeAudit();' .github/scripts/collective-commitments-adversarial-browser-qa.mjs
           checkpoint content-verified
 
           git config user.name "ghuser29384"
           git config user.email "262476329+ghuser29384@users.noreply.github.com"
-          git rm \
-            .github/scripts/patch-collective-browser-runner.py \
-            .github/workflows/apply-collective-browser-runner-import-fix.yml
-          git add \
-            .github/scripts/collective-commitments-adversarial-browser-qa.mjs \
-            .github/workflows/collective-commitments-adversarial-browser-qa.yml
+          git add .github/scripts/collective-commitments-adversarial-browser-qa.mjs
           git diff --cached --check
           checkpoint staged-diff-verified
           git commit -m "Make collective browser QA runner standalone and auditable"
           checkpoint committed
           git push origin HEAD:"$EXPECTED_BRANCH"
           checkpoint pushed
-          printf 'qa_head=%s\nstandalone_crypto=PASS\nbrowser_log_capture=PASS\ninitial_audit=PASS\nproduction_changed=NO\n' \
+          printf 'qa_head=%s\nstandalone_crypto=PASS\ninitial_audit=PASS\nproduction_changed=NO\n' \
             "$(git rev-parse HEAD)" > "$ARTIFACT_DIR/result.txt"
           checkpoint complete
 
