@@ -35,7 +35,10 @@ def download(repo: str, token: str) -> str:
         if not location:
             raise RuntimeError("GitHub log redirect omitted Location") from error
         with urllib.request.urlopen(
-            urllib.request.Request(location, headers={"User-Agent": "moraltrade-pr158-browser-v3-log-reader"}),
+            urllib.request.Request(
+                location,
+                headers={"User-Agent": "moraltrade-pr158-browser-v3-log-reader"},
+            ),
             timeout=30,
         ) as redirected:
             content = redirected.read()
@@ -55,28 +58,29 @@ def sanitize(text: str) -> str:
     return text
 
 
-def section(lines: list[str], start_text: str, end_text: str | None = None) -> list[str]:
-    starts = [i for i, line in enumerate(lines) if start_text in line]
-    if not starts:
-        return [f"MISSING SECTION: {start_text}"]
-    start = starts[-1]
-    end = len(lines)
-    if end_text:
-        ends = [i for i in range(start + 1, len(lines)) if end_text in lines[i]]
-        if ends:
-            end = ends[0]
-    return lines[start:end]
-
-
 def main() -> int:
-    text = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"]))
-    lines = text.splitlines()
+    lines = sanitize(
+        download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"])
+    ).splitlines()
+    marker = re.compile(
+        r"PASS:|FAIL:|AssertionError|TimeoutError|Error:|Process completed with exit code|"
+        r"desktop=|mobile=|clean=|revoke=|BROWSER_QA_ARTIFACT_DIR|"
+        r"run-pr158-two-account-browser-qa|pr158-two-account-browser-qa"
+    )
+    indexes = [index for index, line in enumerate(lines) if marker.search(line)]
     selected: list[str] = []
-    selected.extend(section(lines, "Run complete 1440 by 900 desktop two-account suite", "Reset exact fixture between viewport suites"))
-    selected.extend(["", "==== MOBILE ====", ""])
-    selected.extend(section(lines, "Run complete 390 by 844 mobile two-account suite", "Upload desktop and mobile browser evidence"))
-    selected.extend(["", "==== ENFORCEMENT ====", ""])
-    selected.extend(section(lines, "Enforce desktop, mobile, cleanup, and bypass outcomes", "Post Set up Node.js"))
+    seen: set[int] = set()
+    for index in indexes:
+        for line_index in range(max(0, index - 8), min(len(lines), index + 16)):
+            if line_index in seen:
+                continue
+            seen.add(line_index)
+            selected.append(f"{line_index + 1}: {lines[line_index]}")
+    if not selected:
+        selected = [
+            f"{index + 1}: {line}"
+            for index, line in enumerate(lines[max(0, len(lines) - 1200):], start=max(0, len(lines) - 1200))
+        ]
     print("\n".join(selected))
     return 0
 
