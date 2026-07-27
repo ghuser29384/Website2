@@ -1,0 +1,194 @@
+Authenticated Home Feed v3 verification failed.
+staging_sha=f40c605be892cac320a2ba6745ae8fd1049cc535
+base_sha=eebf509a970cb69f0586dd990987b486f7db1584
+recorded_at=2026-07-27T09:24:11Z
+
+===== /tmp/bundle-integrity.log =====
+Archive:  /tmp/home-feed-bundle.zip
+    testing: moraltrade-home-authenticated-feed-eebf509a/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/returning-home.append.css   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply-home-feed-patch.py   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/returning-homepage.spec.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/package.json   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/pareto-recommendation-wiring.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/home-page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/live-now-a1-response.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/home-feed-contract.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/route.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/README.md   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply.sh   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/verify.sh   OK
+No errors detected in compressed data of /tmp/home-feed-bundle.zip.
+
+===== /tmp/test-baseline-exact.status =====
+1
+
+===== /tmp/lint-baseline-exact.status =====
+1
+
+===== /tmp/apply.log =====
+Applied authenticated Home Feed patch.
+ M package.json
+ M public/moral-trade-live-now.js
+ M src/app/api/live-now-a1/route.ts
+ M src/app/page.tsx
+ M src/components/home/home-page.tsx
+ M src/components/home/returning-home.module.css
+ M src/lib/pareto-feed-runtime.ts
+ M src/pareto-recommendation-wiring.test.ts
+ M tests/returning-homepage.spec.ts
+?? src/home-feed-contract.test.ts
+?? src/lib/home-feed-snapshot.test.ts
+?? src/lib/home-feed-snapshot.ts
+?? src/lib/live-now-a1-response.ts
+
+===== /tmp/changed-paths.diff =====
+
+===== /tmp/verify-pareto-exact.log =====
+
+> moral-trade@0.1.0 verify:pareto
+> node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/lib/home-feed-snapshot.test.ts src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/live-now-a1-response.ts src/lib/home-feed-snapshot.ts src/lib/home-feed-snapshot.test.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/app/page.tsx src/components/home/home-page.tsx src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --check public/moral-trade-live-learning-diagnostics.js && node --check public/moral-trade-live-now.js
+
+TAP version 13
+# Subtest: Home and Feed resolve recommendations through the same authenticated A1 builder
+ok 1 - Home and Feed resolve recommendations through the same authenticated A1 builder
+  ---
+  duration_ms: 1.538777
+  ...
+# Subtest: Home limits only its visible exposure surface without changing Feed assignment
+ok 2 - Home limits only its visible exposure surface without changing Feed assignment
+  ---
+  duration_ms: 0.680582
+  ...
+# Subtest: Home and Feed preserve exact item identity and exposure receipt identity
+ok 3 - Home and Feed preserve exact item identity and exposure receipt identity
+  ---
+  duration_ms: 0.416318
+  ...
+# Subtest: the homepage source contains no fabricated match or evidence records
+ok 4 - the homepage source contains no fabricated match or evidence records
+  ---
+  duration_ms: 0.973337
+  ...
+# Subtest: two authenticated users receive different cards with their exact Feed IDs and receipts
+ok 5 - two authenticated users receive different cards with their exact Feed IDs and receipts
+  ---
+  duration_ms: 2.29446
+  ...
+# Subtest: a zero-data authenticated user receives no cards and no demo records
+ok 6 - a zero-data authenticated user receives no cards and no demo records
+  ---
+  duration_ms: 0.999265
+  ...
+# Subtest: incomplete Feed rows fail closed instead of being filled with examples
+ok 7 - incomplete Feed rows fail closed instead of being filled with examples
+  ---
+  duration_ms: 0.236953
+  ...
+# Subtest: five-percent assignment is stable and never selects a Direct candidate
+ok 8 - five-percent assignment is stable and never selects a Direct candidate
+  ---
+  duration_ms: 6.073306
+  ...
+# Subtest: Pareto gate requires every participant and safety dimension to clear
+ok 9 - Pareto gate requires every participant and safety dimension to clear
+  ---
+  duration_ms: 1.942577
+  ...
+# Subtest: implicit factor training produces finite affinities
+ok 10 - implicit factor training produces finite affinities
+  ---
+  duration_ms: 18.717247
+  ...
+# Subtest: logistic heads train and remain calibrated to probabilities
+ok 11 - logistic heads train and remain calibrated to probabilities
+  ---
+  duration_ms: 84.079347
+  ...
+# Subtest: threshold tuning preserves a minimum precision target
+ok 12 - threshold tuning preserves a minimum precision target
+  ---
+  duration_ms: 0.815482
+  ...
+# Subtest: inverse-propensity estimator distinguishes treatment and holdout outcomes
+ok 13 - inverse-propensity estimator distinguishes treatment and holdout outcomes
+  ---
+  duration_ms: 0.423569
+  ...
+# Subtest: the production live endpoint is wrapped by the shared Pareto-safe learning layer
+ok 14 - the production live endpoint is wrapped by the shared Pareto-safe learning layer
+  ---
+  duration_ms: 1.41325
+  ...
+# Subtest: the learning core implements factors, calibration, Pareto gates, and causal propensities
+ok 15 - the learning core implements factors, calibration, Pareto gates, and causal propensities
+  ---
+  duration_ms: 0.316491
+  ...
+# Subtest: the migration separates participant-visible receipts from service-only model artifacts
+ok 16 - the migration separates participant-visible receipts from service-only model artifacts
+  ---
+  duration_ms: 2.212107
+  ...
+# Subtest: completed agreements collect private own-lights and additionality feedback
+ok 17 - completed agreements collect private own-lights and additionality feedback
+  ---
+  duration_ms: 0.271223
+  ...
+# Subtest: learning status is disclosed on the static Feed shell
+ok 18 - learning status is disclosed on the static Feed shell
+  ---
+  duration_ms: 0.195701
+  ...
+# Subtest: completed agreement details and private outcome feedback remain visible in the app shell
+ok 19 - completed agreement details and private outcome feedback remain visible in the app shell
+  ---
+  duration_ms: 1.567049
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 936.64316
+
+===== /tmp/verify-exact.status =====
+1
+
+===== /tmp/exact-baseline-comparison.txt =====
+baseline_status=1
+candidate_status=1
+baseline_test_count=781
+candidate_test_count=784
+baseline_fail_count=54
+candidate_fail_count=54
+unexpected_failure_count=0
+resolved_baseline_failure_count=0
+
+===== /tmp/lint-exact.status =====
+1
+
+===== /tmp/exact-lint-comparison.txt =====
+baseline_status=1
+candidate_status=1
+baseline_error_count=0
+candidate_error_count=0
+unexpected_error_count=0
+resolved_baseline_error_count=0
+
