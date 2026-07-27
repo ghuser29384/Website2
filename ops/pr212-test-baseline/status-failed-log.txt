@@ -1,0 +1,37 @@
+compare	Set up Node.js	﻿2026-07-27T13:32:12.4726092Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+compare	Set up Node.js	2026-07-27T13:32:12.4727967Z ##[group]Run actions/setup-node@v4
+compare	Set up Node.js	2026-07-27T13:32:12.4728240Z with:
+compare	Set up Node.js	2026-07-27T13:32:12.4728439Z   node-version: 24
+compare	Set up Node.js	2026-07-27T13:32:12.4728645Z   cache: npm
+compare	Set up Node.js	2026-07-27T13:32:12.4728930Z   cache-dependency-path: /tmp/pr212-base/package-lock.json
+compare	Set up Node.js	2026-07-27T13:32:12.4729271Z   always-auth: false
+compare	Set up Node.js	2026-07-27T13:32:12.4729491Z   check-latest: false
+compare	Set up Node.js	2026-07-27T13:32:12.4731824Z   token: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4732020Z env:
+compare	Set up Node.js	2026-07-27T13:32:12.4734259Z   GH_TOKEN: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4734513Z   PR_BASE_SHA: bb32b5c5a58442f97bef642be58ed01a57f0d91b
+compare	Set up Node.js	2026-07-27T13:32:12.4734830Z   FEATURE_RUN_ID: 30270105060
+compare	Set up Node.js	2026-07-27T13:32:12.4735476Z   QA_SUPABASE_DB_URL: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4735858Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+compare	Set up Node.js	2026-07-27T13:32:12.4736412Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4738005Z   SUPABASE_SERVICE_ROLE_KEY: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4738344Z   QA_TEST_PASSWORD: ***
+compare	Set up Node.js	2026-07-27T13:32:12.4738615Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+compare	Set up Node.js	2026-07-27T13:32:12.4738922Z   SITE_URL: http://127.0.0.1:3000
+compare	Set up Node.js	2026-07-27T13:32:12.4739190Z   INSTITUTIONAL_TRADES_ENABLED: true
+compare	Set up Node.js	2026-07-27T13:32:12.4739467Z   INSTITUTIONAL_POOLS_ENABLED: true
+compare	Set up Node.js	2026-07-27T13:32:12.4739760Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+compare	Set up Node.js	2026-07-27T13:32:12.4740083Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+compare	Set up Node.js	2026-07-27T13:32:12.4740404Z   CRON_SECRET: qa-institutional-cron-not-production
+compare	Set up Node.js	2026-07-27T13:32:12.4740732Z ##[endgroup]
+compare	Set up Node.js	2026-07-27T13:32:12.6152715Z Found in cache @ /opt/hostedtoolcache/node/24.18.0/x64
+compare	Set up Node.js	2026-07-27T13:32:12.6156348Z (node:2291) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+compare	Set up Node.js	2026-07-27T13:32:12.6157226Z (Use `node --trace-deprecation ...` to show where the warning was created)
+compare	Set up Node.js	2026-07-27T13:32:12.6159857Z ##[group]Environment details
+compare	Set up Node.js	2026-07-27T13:32:13.0389302Z node: v24.18.0
+compare	Set up Node.js	2026-07-27T13:32:13.0389856Z npm: 11.16.0
+compare	Set up Node.js	2026-07-27T13:32:13.0390238Z yarn: 1.22.22
+compare	Set up Node.js	2026-07-27T13:32:13.0391583Z ##[endgroup]
+compare	Set up Node.js	2026-07-27T13:32:13.0436910Z [command]/opt/hostedtoolcache/node/24.18.0/x64/bin/npm config get cache
+compare	Set up Node.js	2026-07-27T13:32:13.1632014Z /home/runner/.npm
+compare	Set up Node.js	2026-07-27T13:32:13.1768169Z ##[error]Some specified paths were not resolved, unable to cache dependencies.
