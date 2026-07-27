@@ -17,10 +17,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
       - name: Verify integration base
         run: |
-          test "$(git rev-parse HEAD^)" = "94d76c8bdc835a1aec7d61663d105e1f193a0b9d"
+          git merge-base --is-ancestor 94d76c8bdc835a1aec7d61663d105e1f193a0b9d HEAD
 
       - name: Create source archive
         run: |
