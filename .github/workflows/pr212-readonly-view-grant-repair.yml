@@ -1,0 +1,120 @@
+name: PR 212 read-only institutional view grant repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-readonly-view-grant-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-readonly-view-grant-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR 212 feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Make institutional views explicitly read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_head=4991fa8f01dfd120d845e8bf5debe09a579df2da
+          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          test_file=src/institutional-trade-migration.test.ts
+
+          [[ "$(git rev-parse HEAD)" == "$expected_head" ]] || {
+            echo "PR #212 moved from the reviewed head; refusing to patch." >&2
+            exit 1
+          }
+          [[ "$(git rev-parse "HEAD:${migration}")" == "8a834e210f98c043a84bd2c908c73608c475f28c" ]] || {
+            echo "Unexpected institutional migration blob; refusing to patch." >&2
+            exit 1
+          }
+          [[ "$(git rev-parse "HEAD:${test_file}")" == "aea6d777087a748c5d5e9a9bce458231e8cc3bd2" ]] || {
+            echo "Unexpected migration contract-test blob; refusing to patch." >&2
+            exit 1
+          }
+
+          python - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")
+          migration = migration_path.read_text()
+          old_grant = "grant select on public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;"
+          new_grants = """-- The directory views are simple and therefore automatically updatable. Supabase
+          -- default privileges can otherwise expose INSERT/UPDATE/DELETE through the views,
+          -- bypassing the intended base-table action and policy boundaries. Make every
+          -- institutional view security-invoker and revoke all client privileges before
+          -- restoring SELECT only on the three deliberately public directory views.
+          alter view public.institutional_public_organizations set (security_invoker=true);
+          alter view public.institutional_public_programs set (security_invoker=true);
+          alter view public.institutional_public_opportunities set (security_invoker=true);
+          alter view public.institutional_track_record set (security_invoker=true);
+          revoke all on table public.institutional_public_organizations from public,anon,authenticated;
+          revoke all on table public.institutional_public_programs from public,anon,authenticated;
+          revoke all on table public.institutional_public_opportunities from public,anon,authenticated;
+          revoke all on table public.institutional_track_record from public,anon,authenticated;
+          grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;"""
+          if migration.count(old_grant) != 1:
+              raise SystemExit(f"Expected one directory-view grant, found {migration.count(old_grant)}")
+          migration_path.write_text(migration.replace(old_grant, new_grants))
+
+          test_path = Path("src/institutional-trade-migration.test.ts")
+          test_text = test_path.read_text()
+          grant_marker = """    /grant select,insert,update,delete on table %I\\.%I to authenticated/i,
+          """
+          grant_assertions = """    /grant select,insert,update,delete on table %I\\.%I to authenticated/i,
+              /alter view public\\.institutional_public_organizations set \\(security_invoker=true\\)/i,
+              /alter view public\\.institutional_public_programs set \\(security_invoker=true\\)/i,
+              /alter view public\\.institutional_public_opportunities set \\(security_invoker=true\\)/i,
+              /alter view public\\.institutional_track_record set \\(security_invoker=true\\)/i,
+              /revoke all on table public\\.institutional_public_organizations from public,anon,authenticated/i,
+              /revoke all on table public\\.institutional_public_programs from public,anon,authenticated/i,
+              /revoke all on table public\\.institutional_public_opportunities from public,anon,authenticated/i,
+              /revoke all on table public\\.institutional_track_record from public,anon,authenticated/i,
+              /grant select on table public\\.institutional_public_organizations,public\\.institutional_public_programs,public\\.institutional_public_opportunities to anon,authenticated/i,
+          """
+          if test_text.count(grant_marker) != 1:
+              raise SystemExit(f"Expected one base-table grant marker, found {test_text.count(grant_marker)}")
+          test_text = test_text.replace(grant_marker, grant_assertions)
+
+          test_tail = """  ], "RLS and grants");
+          });
+          """
+          guarded_tail = """  ], "RLS and grants");
+            assert.doesNotMatch(
+              migration,
+              /grant\\s+select\\s+on\\s+table\\s+[^;]*institutional_track_record[^;]*to\\s+(?:anon|authenticated)/i,
+              "institutional_track_record must remain server-side without direct client SELECT grants",
+            );
+          });
+          """
+          if test_text.count(test_tail) != 1:
+              raise SystemExit(f"Expected one RLS test tail, found {test_text.count(test_tail)}")
+          test_path.write_text(test_text.replace(test_tail, guarded_tail))
+          PY
+
+          grep -F "alter view public.institutional_public_organizations set (security_invoker=true);" "$migration"
+          grep -F "revoke all on table public.institutional_track_record from public,anon,authenticated;" "$migration"
+          grep -F "grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;" "$migration"
+          ! grep -E "grant[[:space:]]+select[[:space:]]+on[[:space:]]+table[^;]*institutional_track_record[^;]*to[[:space:]]+(anon|authenticated)" "$migration"
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$migration" "$test_file"
+          git commit -m "Make institutional public views explicitly read-only"
+          git push origin HEAD:feat/institutional-trade-system
