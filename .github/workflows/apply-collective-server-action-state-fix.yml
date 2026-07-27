@@ -1,4 +1,4 @@
-name: Apply collective server-action runtime fix
+name: Export collective server-action runtime repair
 
 on:
   pull_request:
@@ -9,14 +9,14 @@ on:
       - ".github/workflows/apply-collective-server-action-state-fix.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: apply-collective-server-action-runtime-fix-20260727
+  group: export-collective-server-action-runtime-fix-20260727
   cancel-in-progress: false
 
 jobs:
-  patch:
+  export:
     if: >-
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'qa/collective-commitments-adversarial-browser-20260727'
@@ -26,7 +26,7 @@ jobs:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
       EXPECTED_PRODUCT_BASE: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
-      ARTIFACT_DIR: ${{ github.workspace }}/collective-server-action-fix-artifacts
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-server-action-repair-export
 
     steps:
       - name: Validate exact execution boundary
@@ -42,47 +42,40 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Apply and publish deterministic server-action patch
+      - name: Materialize exact repaired files
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$ARTIFACT_DIR"
           test "$(git merge-base "$EXPECTED_PRODUCT_BASE" HEAD)" = "$EXPECTED_PRODUCT_BASE"
-          cp .github/scripts/patch-collective-server-action-state.py \
-            "$RUNNER_TEMP/patch-collective-server-action-state.py"
-          python3 "$RUNNER_TEMP/patch-collective-server-action-state.py" \
-            2>&1 | tee "$ARTIFACT_DIR/patch.log"
+          python3 .github/scripts/patch-collective-server-action-state.py
 
-          git config user.name "ghuser29384"
-          git config user.email "262476329+ghuser29384@users.noreply.github.com"
-          git rm \
-            .github/scripts/patch-collective-server-action-state.py \
-            .github/workflows/apply-collective-server-action-state-fix.yml
-          git add \
-            .github/workflows/collective-commitments-adversarial-browser-qa.yml \
-            src/app/collective-commitments/actions.ts \
-            src/collective-commitments-wiring.test.ts \
-            src/components/collective-commitments/collective-commitment-form.tsx \
-            src/components/collective-commitments/collective-signature-controls.tsx \
-            src/lib/collective-commitments/action-state.ts
-          git status --short | tee "$ARTIFACT_DIR/staged-status.txt"
-          git diff --cached --check 2>&1 | tee "$ARTIFACT_DIR/diff-check.log"
-          git commit -m "Fix collective server-action runtime exports" \
-            2>&1 | tee "$ARTIFACT_DIR/commit.log"
-          git push origin HEAD:"$EXPECTED_BRANCH" \
-            2>&1 | tee "$ARTIFACT_DIR/push.log"
+          mkdir -p \
+            "$ARTIFACT_DIR/.github/workflows" \
+            "$ARTIFACT_DIR/src/app/collective-commitments" \
+            "$ARTIFACT_DIR/src/components/collective-commitments" \
+            "$ARTIFACT_DIR/src/lib/collective-commitments" \
+            "$ARTIFACT_DIR/src"
+          cp .github/workflows/collective-commitments-adversarial-browser-qa.yml \
+            "$ARTIFACT_DIR/.github/workflows/collective-commitments-adversarial-browser-qa.yml"
+          cp src/app/collective-commitments/actions.ts \
+            "$ARTIFACT_DIR/src/app/collective-commitments/actions.ts"
+          cp src/collective-commitments-wiring.test.ts \
+            "$ARTIFACT_DIR/src/collective-commitments-wiring.test.ts"
+          cp src/components/collective-commitments/collective-commitment-form.tsx \
+            "$ARTIFACT_DIR/src/components/collective-commitments/collective-commitment-form.tsx"
+          cp src/components/collective-commitments/collective-signature-controls.tsx \
+            "$ARTIFACT_DIR/src/components/collective-commitments/collective-signature-controls.tsx"
+          cp src/lib/collective-commitments/action-state.ts \
+            "$ARTIFACT_DIR/src/lib/collective-commitments/action-state.ts"
 
-          printf '%s\n' \
-            "qa_head=$(git rev-parse HEAD)" \
-            "server_action_runtime_fix=APPLIED" \
-            "staging_files_removed=PASS" \
-            "production_changed=NO" > "$ARTIFACT_DIR/result.txt"
+          git diff --check
+          find "$ARTIFACT_DIR" -type f -print | sort > "$ARTIFACT_DIR/manifest.txt"
 
-      - name: Upload patch evidence
-        if: always()
+      - name: Upload exact repaired files
         uses: actions/upload-artifact@v4
         with:
-          name: collective-server-action-runtime-fix-${{ github.run_id }}
-          path: collective-server-action-fix-artifacts
-          if-no-files-found: warn
-          retention-days: 14
+          name: collective-server-action-runtime-repair-${{ github.run_id }}
+          path: collective-server-action-repair-export
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 2
