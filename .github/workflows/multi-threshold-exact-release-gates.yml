@@ -1,14 +1,12 @@
-name: Multi-threshold exact release gates
+name: Multi-threshold trusted authenticated browser QA
 
-# Trusted authenticated-browser trigger 2026-07-27T03:46Z.
-# Exact release gates already passed in run 30234552074. This trusted workflow now
-# executes the authenticated desktop/mobile evidence sequence on the same product SHA.
+# QA-only base workflow. Child trigger branches run against the exact product SHA.
 on:
   pull_request:
     branches:
-      - feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+      - qa/multi-threshold-exact-release-gates-20260727
     paths:
-      - ".github/workflows/multi-threshold-exact-release-gates.yml"
+      - ".github/multi-threshold-browser-trigger.txt"
 
 permissions:
   contents: read
@@ -21,7 +19,7 @@ jobs:
   authenticated-browser-qa:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'qa/multi-threshold-exact-release-gates-20260727'
+      github.head_ref == 'qa/multi-threshold-browser-runner-20260727'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
@@ -48,7 +46,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$GITHUB_HEAD_REF" = "qa/multi-threshold-exact-release-gates-20260727"
+          test "$GITHUB_BASE_REF" = "qa/multi-threshold-exact-release-gates-20260727"
+          test "$GITHUB_HEAD_REF" = "qa/multi-threshold-browser-runner-20260727"
           test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
           for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
             test -n "${!name:-}"
