@@ -93,18 +93,45 @@ jobs:
           base64 --decode < "$payload" | xz --decompress --stdout > "$patch"
           echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
 
-          git apply --check --binary "$patch"
-          git apply --binary --index "$patch"
-
-          rm -f \
-            .github/institutional-patch.part-* \
-            .github/workflows/export-institutional-source.yml \
+          temporary_paths=(
+            .github/importer-diagnostic.txt
+            .github/institutional-patch.part-00
+            .github/institutional-patch.part-01
+            .github/institutional-patch.part-02
+            .github/institutional-patch.part-03
+            .github/institutional-patch.part-04
+            .github/institutional-patch.part-05
+            .github/institutional-patch.part-06
+            .github/institutional-patch.part-07
+            .github/institutional-patch.part-08
+            .github/institutional-qa-trigger
+            .github/workflows/attach-institutional-payload.yml
+            .github/workflows/dispatch-institutional-qa.yml
+            .github/workflows/export-institutional-source.yml
+            .github/workflows/fix-dispatch-institutional-qa.yml
             .github/workflows/import-institutional-source.yml
+            .github/workflows/prepare-institutional-qa-runner.yml
+            .github/workflows/read-institutional-importer-log.yml
+          )
 
+          apply_excludes=()
+          for path in "${temporary_paths[@]}"; do
+            apply_excludes+=("--exclude=$path")
+          done
+
+          git apply --check --binary "${apply_excludes[@]}" "$patch"
+          git apply --binary --index "${apply_excludes[@]}" "$patch"
+
+          rm -f "${temporary_paths[@]}"
           git add -A
+
           actual_tree="$(git write-tree)"
           if [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then
             echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2
+            echo "Staged paths:" >&2
+            git diff --cached --name-status >&2
+            echo "Working-tree status:" >&2
+            git status --short >&2
             exit 1
           fi
 
@@ -112,5 +139,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Implement institutional trade system integrity and QA"
           git push origin HEAD:feat/institutional-trade-system
-
-# Retriggered for the exact implementation import on 2026-07-27.
