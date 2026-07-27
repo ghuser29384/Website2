@@ -5,8 +5,8 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
-import mobileStyles from "./collective-commitments-mobile.module.css";
 import styles from "./collective-commitments.module.css";
+import mobileStyles from "./collective-commitments-mobile.module.css";
 
 export function CollectiveCommitmentShell({
   children,
