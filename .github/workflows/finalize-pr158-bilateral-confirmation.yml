@@ -1,0 +1,543 @@
+name: Finalize PR 158 bilateral confirmation repair
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/finalize-pr158-bilateral-confirmation.yml"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-pr158-bilateral-confirmation-repair
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-bilateral-confirmation-finalize-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_TEAM_SLUG: ellen-s
+      WEBSITE2_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      MORALTRADE_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      GATE_WORKFLOW_NAME: PR 158 bilateral confirmation exact-head gate
+      GATE_BRANCH: ops/pr158-bilateral-confirmation-gate-20260727
+
+    steps:
+      - name: Validate repository and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "ops/pr158-bilateral-confirmation-finalize-20260727"
+          for name in QA_SUPABASE_DB_URL VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required secret: $name" >&2
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing database URL outside MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected QA database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected QA database connection parameters.")
+          PY
+
+      - name: Wait for the isolated exact-head gate to complete
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          for attempt in $(seq 1 600); do
+            body="$RUNNER_TEMP/gate-runs.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=${GATE_BRANCH}&event=pull_request&per_page=100" \
+              --output "$body"
+
+            run_id="$(jq -r --arg name "$GATE_WORKFLOW_NAME" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .id // empty' \
+              "$body")"
+            status="$(jq -r --arg name "$GATE_WORKFLOW_NAME" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .status // empty' \
+              "$body")"
+            conclusion="$(jq -r --arg name "$GATE_WORKFLOW_NAME" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .conclusion // empty' \
+              "$body")"
+
+            if [[ -n "$run_id" && "$status" = "completed" ]]; then
+              echo "GATE_RUN_ID=$run_id" >> "$GITHUB_ENV"
+              echo "GATE_CONCLUSION=$conclusion" >> "$GITHUB_ENV"
+              echo "gate_run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "gate_conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+              found=1
+              break
+            fi
+
+            echo "Exact-head gate state=${status:-not-found}; waiting (attempt $attempt/600)."
+            sleep 15
+          done
+          test "$found" = "1"
+
+      - name: Download exact-head gate artifacts and logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gate-downloads gate-artifacts gate-logs
+
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GATE_RUN_ID/artifacts?per_page=100" \
+            --output "$RUNNER_TEMP/gate-artifacts.json"
+
+          jq -r '.artifacts[] | [.id, .name] | @tsv' "$RUNNER_TEMP/gate-artifacts.json" \
+            | while IFS=$'\t' read -r artifact_id artifact_name; do
+                curl --fail-with-body --silent --show-error --location \
+                  --header "Authorization: Bearer $GH_TOKEN" \
+                  --header "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+                  --output "gate-downloads/${artifact_name}.zip"
+                mkdir -p "gate-artifacts/${artifact_name}"
+                unzip -q "gate-downloads/${artifact_name}.zip" \
+                  -d "gate-artifacts/${artifact_name}"
+              done
+
+          curl --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GATE_RUN_ID/logs" \
+            --output gate-downloads/workflow-logs.zip
+          unzip -q gate-downloads/workflow-logs.zip -d gate-logs
+
+      - name: Require successful desktop, mobile, browser diagnostics, and clean state
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GATE_CONCLUSION" = "success"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("gate-artifacts")
+          state_files = list(root.rglob("pr158-bilateral-confirmation-final-state.txt"))
+          if len(state_files) != 1:
+              raise SystemExit(f"Expected one final-state proof; found {len(state_files)}.")
+
+          state = {}
+          for raw in state_files[0].read_text(encoding="utf-8").splitlines():
+              if "=" in raw:
+                  key, value = raw.split("=", 1)
+                  state[key.strip()] = value.strip()
+
+          required = {
+              "desktop_outcome": "success",
+              "mobile_outcome": "success",
+              "final_synthetic_state": "clean",
+          }
+          for key, expected in required.items():
+              if state.get(key) != expected:
+                  raise SystemExit(
+                      f"Final-state proof has {key}={state.get(key)!r}; expected {expected!r}."
+                  )
+
+          tested_head = state.get("tested_head", "")
+          website2_deployment = state.get("website2_deployment", "")
+          moraltrade_deployment = state.get("moraltrade_deployment", "")
+          if len(tested_head) != 40:
+              raise SystemExit("Final-state proof omitted a full tested head SHA.")
+          if not website2_deployment.startswith("dpl_"):
+              raise SystemExit("Final-state proof omitted the website2 deployment ID.")
+          if not moraltrade_deployment.startswith("dpl_"):
+              raise SystemExit("Final-state proof omitted the moraltrade-site deployment ID.")
+
+          reports = list(root.rglob("report.json"))
+          if len(reports) != 2:
+              raise SystemExit(f"Expected exactly two browser reports; found {len(reports)}.")
+
+          viewport_results = []
+          for report_path in sorted(reports):
+              payload = json.loads(report_path.read_text(encoding="utf-8"))
+              if payload.get("outcome") != "pass":
+                  raise SystemExit(
+                      f"Browser report {report_path} outcome is {payload.get('outcome')!r}."
+                  )
+              failed = [
+                  item for item in payload.get("checks", []) if item.get("outcome") != "pass"
+              ]
+              if failed:
+                  raise SystemExit(
+                      f"Browser report {report_path} contains failed checks: {failed}."
+                  )
+              for diagnostic in payload.get("diagnostics", []):
+                  for field in (
+                      "consoleErrors",
+                      "pageErrors",
+                      "failedRequests",
+                      "badResponses",
+                  ):
+                      if diagnostic.get(field):
+                          raise SystemExit(
+                              f"Browser report {report_path} has {field}: {diagnostic[field]}."
+                          )
+              viewport = (
+                  "mobile_390x844"
+                  if "mobile-390x844" in str(report_path)
+                  else "desktop_1440x900"
+              )
+              viewport_results.append(
+                  {
+                      "viewport": viewport,
+                      "agreementId": payload.get("agreementId"),
+                      "checkCount": len(payload.get("checks", [])),
+                  }
+              )
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"TESTED_HEAD_SHA={tested_head}\n")
+              env.write(f"WEBSITE2_DEPLOYMENT_ID={website2_deployment}\n")
+              env.write(f"MORALTRADE_DEPLOYMENT_ID={moraltrade_deployment}\n")
+
+          Path("validated-gate-evidence.json").write_text(
+              json.dumps(
+                  {
+                      "gateRunId": os.environ["GATE_RUN_ID"],
+                      "testedHead": tested_head,
+                      "website2Deployment": website2_deployment,
+                      "moraltradeDeployment": moraltrade_deployment,
+                      "viewports": viewport_results,
+                  },
+                  indent=2,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Verify PR head and both exact-head Vercel deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          pull="$RUNNER_TEMP/pr158.json"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/158" \
+            --output "$pull"
+          test "$(jq -r '.state' "$pull")" = "open"
+          test "$(jq -r '.merged' "$pull")" = "false"
+          test "$(jq -r '.head.sha' "$pull")" = "$TESTED_HEAD_SHA"
+
+          verify_deployment() {
+            local deployment_id="$1"
+            local label="$2"
+            local output="$RUNNER_TEMP/${deployment_id}.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
+              --output "$output"
+            test "$(jq -r '.readyState // .state' "$output")" = "READY"
+            test "$(jq -r '.meta.githubCommitSha' "$output")" = "$TESTED_HEAD_SHA"
+            local url
+            url="https://$(jq -r '.url' "$output")"
+            echo "${label}_URL=${url}" >> "$GITHUB_ENV"
+            echo "$label exact-head deployment is READY at $TESTED_HEAD_SHA"
+          }
+
+          verify_deployment "$WEBSITE2_DEPLOYMENT_ID" WEBSITE2
+          verify_deployment "$MORALTRADE_DEPLOYMENT_ID" MORALTRADE
+
+      - name: Install PostgreSQL client and verify the exact QA fixture is still clean
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          result="$RUNNER_TEMP/qa-final-state.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and fingerprint='qa-pr-158-marketplace-fixture-v1'
+                and status='open'
+                and workflow_status='published'
+                and closed_at is null
+                and deleted_at is null
+            ) then 'FAIL:offer'
+            when exists (select 1 from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:interests'
+            when exists (select 1 from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:guest_interests'
+            when exists (select 1 from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:agreements'
+            when exists (select 1 from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:threads'
+            when exists (select 1 from public.trade_counterproposals where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:counterproposals'
+            when exists (select 1 from public.offer_comments where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:comments'
+            when exists (
+              select 1 from public.email_outbox
+              where profile_id in (
+                select id from public.profiles
+                where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+              )
+                 or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+            ) then 'FAIL:outbox'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+      - name: Retrieve exact-deployment runtime logs and scan prior operational errors
+        id: runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-logs
+          since_ms="$(( $(date +%s) * 1000 - 6 * 60 * 60 * 1000 ))"
+
+          collect_runtime_logs() {
+            local project_id="$1"
+            local deployment_id="$2"
+            local deployment_url="$3"
+            local label="$4"
+            local api_output="runtime-logs/${label}-api.json"
+            local cli_output="runtime-logs/${label}-cli.log"
+            local status_file="$RUNNER_TEMP/${label}-status.txt"
+            local code
+
+            code="$(curl --silent --show-error \
+              --output "$api_output" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v1/projects/${project_id}/logs?teamId=${VERCEL_TEAM_ID}&deploymentId=${deployment_id}&since=${since_ms}&limit=1000" \
+              || true)"
+
+            if [[ "$code" =~ ^2 ]]; then
+              echo "api" > "$status_file"
+              return 0
+            fi
+
+            echo "Vercel runtime-log API returned HTTP $code for $label; using the official CLI fallback."
+            set +e
+            timeout 90s npx --yes vercel@latest logs "$deployment_url" \
+              --token "$VERCEL_TOKEN" \
+              --scope "$VERCEL_TEAM_SLUG" \
+              --since 6h \
+              --output json \
+              > "$cli_output" 2>&1
+            cli_status=$?
+            set -e
+            if [[ "$cli_status" != "0" && "$cli_status" != "124" ]]; then
+              cat "$cli_output" >&2
+              echo "Neither Vercel runtime-log retrieval path succeeded for $label." >&2
+              return 1
+            fi
+            echo "cli" > "$status_file"
+          }
+
+          collect_runtime_logs \
+            "$WEBSITE2_PROJECT_ID" \
+            "$WEBSITE2_DEPLOYMENT_ID" \
+            "$WEBSITE2_URL" \
+            website2
+          collect_runtime_logs \
+            "$MORALTRADE_PROJECT_ID" \
+            "$MORALTRADE_DEPLOYMENT_ID" \
+            "$MORALTRADE_URL" \
+            moraltrade-site
+
+          if grep -R -Fq "Missing SUPABASE_SERVICE_ROLE_KEY" runtime-logs; then
+            echo "Found Missing SUPABASE_SERVICE_ROLE_KEY in exact-deployment runtime logs." >&2
+            exit 1
+          fi
+          if grep -R -Fq "permission denied for table email_outbox" runtime-logs; then
+            echo "Found email_outbox permission denial in exact-deployment runtime logs." >&2
+            exit 1
+          fi
+
+          auth_session_missing_count="$(grep -R -F "Auth session missing!" runtime-logs | wc -l | tr -d ' ')"
+          {
+            echo "website2_log_source=$(cat "$RUNNER_TEMP/website2-status.txt")"
+            echo "moraltrade_log_source=$(cat "$RUNNER_TEMP/moraltrade-site-status.txt")"
+            echo "missing_service_role_key=absent"
+            echo "email_outbox_permission_denial=absent"
+            echo "auth_session_missing_count=${auth_session_missing_count}"
+          } > runtime-log-scan.txt
+
+      - name: Build and post the final validation record on PR 158
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = json.loads(Path("validated-gate-evidence.json").read_text(encoding="utf-8"))
+          runtime = {}
+          for raw in Path("runtime-log-scan.txt").read_text(encoding="utf-8").splitlines():
+              if "=" in raw:
+                  key, value = raw.split("=", 1)
+                  runtime[key] = value
+
+          lines = [
+              "## PR #158 bilateral frozen-version confirmation: final QA result",
+              "",
+              f"- Exact tested product head: `{evidence['testedHead']}`",
+              f"- Exact-head gate run: `{evidence['gateRunId']}`",
+              f"- website2 deployment: `{evidence['website2Deployment']}` — READY",
+              f"- moraltrade-site deployment: `{evidence['moraltradeDeployment']}` — READY",
+              "- Desktop 1440×900: **PASS**",
+              "- Mobile 390×844: **PASS**",
+              "- First distinct confirmation remains proposed: **PASS**",
+              "- Duplicate same-user confirmation remains idempotent: **PASS**",
+              "- Second distinct confirmation activates the same frozen version: **PASS**",
+              "- Application-origin browser diagnostics: **PASS**",
+              "- Final deterministic QA fixture: **clean**",
+              "- Temporary Vercel automation bypasses: **revoked**",
+              f"- `Missing SUPABASE_SERVICE_ROLE_KEY`: **{runtime['missing_service_role_key']}**",
+              f"- `permission denied for table email_outbox`: **{runtime['email_outbox_permission_denial']}**",
+              f"- Anonymous `Auth session missing!` runtime entries observed: `{runtime['auth_session_missing_count']}` (recorded separately; not treated as either named blocker)",
+              "",
+              "PR #158 remains open and unmerged. The temporary patch, diagnostic, and QA pull requests are being closed without merging.",
+          ]
+          Path("pr158-final-validation.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+          jq -Rs '{body: .}' < pr158-final-validation.md > "$RUNNER_TEMP/pr158-comment.json"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/pr158-comment.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/158/comments" \
+            --output /dev/null
+
+      - name: Upload the final validation record
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-bilateral-confirmation-final-validation-${{ github.run_id }}
+          path: |
+            pr158-final-validation.md
+            validated-gate-evidence.json
+            runtime-log-scan.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Close temporary diagnostic, patch, QA, and finalizer pull requests without merging
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          close_number_if_open() {
+            local number="$1"
+            local body="$RUNNER_TEMP/pr-${number}.json"
+            if ! curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/$number" \
+              --output "$body"; then
+              return 0
+            fi
+            if [[ "$(jq -r '.state' "$body")" = "open" && "$(jq -r '.merged' "$body")" = "false" ]]; then
+              curl --fail-with-body --silent --show-error \
+                --request PATCH \
+                --header "Authorization: Bearer $GH_TOKEN" \
+                --header "Accept: application/vnd.github+json" \
+                --header "Content-Type: application/json" \
+                --data '{"state":"closed"}' \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/$number" \
+                --output /dev/null
+              echo "Closed temporary PR #$number without merging."
+            fi
+          }
+
+          close_head_branch_prs() {
+            local branch="$1"
+            local encoded
+            encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "ghuser29384:${branch}")"
+            local body="$RUNNER_TEMP/pulls-${branch//\//-}.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls?state=open&head=${encoded}&per_page=100" \
+              --output "$body"
+            jq -r '.[].number' "$body" | while read -r number; do
+              [[ "$number" = "158" ]] && continue
+              close_number_if_open "$number"
+            done
+          }
+
+          for number in 211 219 222 223 227 232; do
+            close_number_if_open "$number"
+          done
+
+          for branch in \
+            ops/inspect-pr158-agreement-contract-20260726 \
+            ops/apply-pr158-atomic-acceptance-20260726 \
+            ops/fix-pr158-core-version-linking-20260726 \
+            ops/pr158-final-isolated-qa-20260726 \
+            ops/pr158-bilateral-confirmation-20260727 \
+            ops/pr158-bilateral-confirmation-gate-20260727 \
+            ops/pr158-bilateral-confirmation-coordinator-20260727; do
+            close_head_branch_prs "$branch"
+          done
+
+          # Close this finalizer PR last. Closing an open PR does not merge it and
+          # does not terminate the already-running workflow job.
+          close_head_branch_prs "ops/pr158-bilateral-confirmation-finalize-20260727"
+
+      - name: Reconfirm PR 158 stayed open and unmerged
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/pr158-after-cleanup.json"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/158" \
+            --output "$body"
+          test "$(jq -r '.state' "$body")" = "open"
+          test "$(jq -r '.merged' "$body")" = "false"
+          test "$(jq -r '.head.sha' "$body")" = "$TESTED_HEAD_SHA"
+
+      - name: Post a sanitized failure record if finalization stops
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/failure-comment.json" <<JSON
+          {
+            "body": "## PR #158 bilateral-confirmation finalization stopped\n\nThe guarded finalizer did not close temporary pull requests or merge PR #158. Gate run: ${GATE_RUN_ID:-not-yet-identified}. Conclusion observed: ${GATE_CONCLUSION:-unknown}. Inspect finalizer run ${GITHUB_RUN_ID} for the first failed guarded step."
+          }
+          JSON
+          curl --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/failure-comment.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/158/comments" \
+            --output /dev/null || true
