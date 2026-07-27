@@ -1,0 +1,24 @@
+name: Cancel obsolete PR 158 bilateral gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cancel-obsolete-pr158-bilateral-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr158-bilateral-confirmation-exact-head-gate
+  cancel-in-progress: true
+
+jobs:
+  cancel-obsolete-run:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-bilateral-confirmation-gate-20260727'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Obsolete gate cancelled; corrected v2 gate remains authoritative."
