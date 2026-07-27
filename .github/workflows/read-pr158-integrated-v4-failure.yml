@@ -1,0 +1,33 @@
+name: Read PR 158 integrated v4 failure
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/read-pr158-integrated-v4-failure.yml"
+      - ".github/scripts/read-pr158-integrated-v4-failure.py"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-sync-main-release-validation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture sanitized finalization failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/read-pr158-integrated-v4-failure.py > pr158-integrated-v4-failure.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-v4-failure-${{ github.run_id }}
+          path: pr158-integrated-v4-failure.txt
+          if-no-files-found: error
+          retention-days: 1
