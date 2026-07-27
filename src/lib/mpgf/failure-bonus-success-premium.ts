@@ -381,13 +381,14 @@ export function quoteFailureBonusSuccessPremiumSchedule({
       pricing.premiumRateBps,
     );
     cumulativeSuccessPremiumCents += successPremiumCents;
-    const maximumFailureBonusExposureCents = pricing.assumptions
-      ? calculateMaximumFailureBonusExposureCents({
-          netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
-          failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
-          eligibilityPolicy,
-        })
-      : undefined;
+    const maximumFailureBonusExposureCents =
+      pricing.pricingMode === "experience_rated"
+        ? calculateMaximumFailureBonusExposureCents({
+            netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
+            failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
+            eligibilityPolicy,
+          })
+        : undefined;
     const incrementalFailureBonusExposureCents =
       maximumFailureBonusExposureCents == null
         ? undefined
