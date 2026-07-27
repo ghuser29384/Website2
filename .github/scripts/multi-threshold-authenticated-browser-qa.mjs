@@ -75,9 +75,18 @@ if (source.split(oldThresholdFill).length !== 2) {
   throw new Error("Expected one exact threshold-card textbox block in the reviewed QA script.");
 }
 
+const oldValidationAlert =
+  '  await expect(page.getByRole("alert")).toContainText("Net recipient thresholds must increase strictly.");';
+const newValidationAlert =
+  '  await expect(page.locator(".mpgf-threshold-errors")).toContainText("Net recipient thresholds must increase strictly.");';
+if (source.split(oldValidationAlert).length !== 2) {
+  throw new Error("Expected one exact threshold validation alert assertion in the reviewed QA script.");
+}
+
 const repaired = source
   .replace(oldSpinbuttonHelper, newSpinbuttonHelper)
-  .replace(oldThresholdFill, newThresholdFill);
+  .replace(oldThresholdFill, newThresholdFill)
+  .replace(oldValidationAlert, newValidationAlert);
 const wrapperDirectory = path.dirname(fileURLToPath(import.meta.url));
 const target = path.join(wrapperDirectory, ".multi-threshold-authenticated-browser-qa.executed.mjs");
 writeFileSync(target, repaired, "utf8");
