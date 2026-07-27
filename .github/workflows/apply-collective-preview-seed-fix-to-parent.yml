@@ -1,0 +1,72 @@
+name: Apply collective preview seed fix to parent
+
+on:
+  pull_request:
+    branches:
+      - ops/enable-collective-preview-review-20260727
+    paths:
+      - ".github/workflows/apply-collective-preview-seed-fix-to-parent.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-collective-preview-seed-fix-to-parent-20260727
+  cancel-in-progress: false
+
+jobs:
+  patch-parent:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-collective-preview-seed-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PARENT_BRANCH: ops/enable-collective-preview-review-20260727
+      EXPECTED_PARENT_HEAD: affd801e7365118e32c318c7d1ac18c72c2da3f1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Patch parent branch atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$PARENT_BRANCH"
+          actual_parent="$(git rev-parse "origin/$PARENT_BRANCH")"
+          if [[ "$actual_parent" != "$EXPECTED_PARENT_HEAD" ]]; then
+            echo "Refusing moved parent branch. Expected $EXPECTED_PARENT_HEAD, found $actual_parent." >&2
+            exit 1
+          fi
+
+          git checkout --detach "$actual_parent"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/seed-collective-preview-review-fixtures.yml')
+          text = path.read_text()
+          old = '''          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+
+          node --input-type=module <<'NODE'
+'''
+          new = '''          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+          export COLLECTIVE_COMMITMENT_MASTER_KEY="$master_key"
+
+          node --input-type=module <<'NODE'
+'''
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one key-to-node boundary, found {text.count(old)}')
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/seed-collective-preview-review-fixtures.yml
+          git diff --cached --check
+          git commit -m "Export generated key during collective Preview seeding"
+          git push --force-with-lease="refs/heads/${PARENT_BRANCH}:${actual_parent}" origin HEAD:"$PARENT_BRANCH"
