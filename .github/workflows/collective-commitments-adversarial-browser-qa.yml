@@ -11,6 +11,7 @@ on:
       - "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql"
       - "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql"
       - "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql"
+      - "supabase/tests/collective_identity_threshold_commitments.sql"
 
 permissions:
   contents: write
@@ -56,7 +57,7 @@ jobs:
       TYPED_RECORDSET_REPAIR_VERSION: "20260727044500"
       TYPED_RECORDSET_REPAIR_NAME: fix_collective_manifest_typed_recordset
       TYPED_RECORDSET_REPAIR_SHA256: 9b8b9cc4e72cecf8b4342aeb4a05d95ccf52e59aa3ee1b426911a7db6ad32e27
-      REGRESSION_SHA256: fd98292913b82153ddce3f50285d532282b51539849da42dc5ce6daadf6b7c15
+      REGRESSION_SHA256: 19f3045dae12e41c3b5669481aa25ae7d0b9672b70cb3e5539be70dea4eb7039
       ARTIFACT_DIR: ${{ github.workspace }}/collective-commitments-browser-qa-artifacts
       BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/collective-commitments-browser-qa-artifacts
 
@@ -93,7 +94,8 @@ jobs:
             'src/collective-commitments-wiring.test.ts' \
             'supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql' \
             'supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql' \
-            'supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql' | sort)"
+            'supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql' \
+            'supabase/tests/collective_identity_threshold_commitments.sql' | sort)"
           if [[ "$changed" != "$expected" ]]; then
             echo "Unexpected QA-branch diff:" >&2
             printf '%s\n' "$changed" >&2
@@ -107,6 +109,8 @@ jobs:
             "$RUNNER_TEMP/20260727043000_fix_collective_manifest_materialized_rows.sql"
           cp supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql \
             "$RUNNER_TEMP/20260727044500_fix_collective_manifest_typed_recordset.sql"
+          cp supabase/tests/collective_identity_threshold_commitments.sql \
+            "$RUNNER_TEMP/collective_identity_threshold_commitments.sql"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -379,11 +383,14 @@ jobs:
             supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql
           cp "$RUNNER_TEMP/20260727044500_fix_collective_manifest_typed_recordset.sql" \
             supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql
+          cp "$RUNNER_TEMP/collective_identity_threshold_commitments.sql" \
+            supabase/tests/collective_identity_threshold_commitments.sql
           git add \
             src/collective-commitments-wiring.test.ts \
             supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql \
             supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql \
-            supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql
+            supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql \
+            supabase/tests/collective_identity_threshold_commitments.sql
           git diff --cached --check
           git commit -m "Fix collective reveal-manifest validation"
           git push origin HEAD:"$PRODUCT_BRANCH"
