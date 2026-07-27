@@ -22,7 +22,11 @@ jobs:
     env:
       EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
       EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
-      EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
+      # The earlier source-export workflow intentionally excluded output/. The repository,
+      # however, contains one tracked Playwright screenshot there. Independent reconstruction
+      # from the exact base plus that unchanged tracked file yields this actual Git tree.
+      EXPECTED_TREE_SHA: 489b24ccad13622b37f3a066c2c71999595a3018
+      EXPECTED_TRACKED_OUTPUT_SHA256: 381ea0ec4a3af8484ff73e9dee914043df75611e6f46139a6bd09fcac6c1ac70
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out feature branch
@@ -34,6 +38,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          echo "${EXPECTED_TRACKED_OUTPUT_SHA256}  output/playwright/offers-recipient-copy.png" \
+            | sha256sum --check --strict
 
           blob_shas=(
             0becdf78bc7eaf03f5fec673599953c6cbde5ddf
