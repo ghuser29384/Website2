@@ -1,0 +1,85 @@
+[data-mt-live-trade-feed] {
+  align-content: start;
+}
+
+.mt-trade-feed-card,
+.mt-trade-feed-empty {
+  display: grid;
+  gap: 9px;
+}
+
+.mt-trade-feed-card .score {
+  justify-self: end;
+  margin-top: -3px;
+  margin-bottom: -26px;
+}
+
+.mt-trade-feed-card h3,
+.mt-trade-feed-empty h3 {
+  margin: 2px 0 0;
+}
+
+.mt-trade-feed-reason,
+.mt-trade-feed-evidence,
+.mt-trade-feed-timing,
+.mt-trade-feed-empty p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.mt-trade-feed-evidence b,
+.mt-trade-feed-timing b {
+  margin-right: 4px;
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.mt-trade-feed-terms {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+
+.mt-trade-feed-terms > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.mt-trade-feed-terms dt {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.mt-trade-feed-terms dd {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mt-trade-feed-tags {
+  flex-wrap: wrap;
+}
+
+.mt-trade-feed-open {
+  justify-self: start;
+  margin-top: 2px;
+}
+
+@media (max-width: 980px) {
+  [data-mt-live-trade-feed] {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    overflow: visible;
+  }
+}
