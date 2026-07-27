@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import os
+import re
+import urllib.error
+import urllib.request
+
+JOB_ID = 89938176485
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def download(repo: str, token: str) -> str:
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/actions/jobs/{JOB_ID}/logs",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "moraltrade-pr158-integrated-v4-log-reader",
+        },
+    )
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        response = opener.open(request, timeout=30)
+        content = response.read()
+    except urllib.error.HTTPError as error:
+        if error.code not in {301, 302, 303, 307, 308}:
+            raise
+        location = error.headers.get("Location")
+        if not location:
+            raise RuntimeError("GitHub log redirect omitted Location") from error
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                location,
+                headers={"User-Agent": "moraltrade-pr158-integrated-v4-log-reader"},
+            ),
+            timeout=30,
+        ) as redirected:
+            content = redirected.read()
+    return content.decode("utf-8", errors="replace")
+
+
+def sanitize(text: str) -> str:
+    text = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", text)
+    patterns = (
+        (re.compile(r"(?i)\b(?:postgres|postgresql)://\S+"), "[REDACTED_DATABASE_URL]"),
+        (re.compile(r"\bsb_(?:secret|publishable)_[A-Za-z0-9_-]+"), "[REDACTED_SUPABASE_KEY]"),
+        (re.compile(r"\bvcp_[A-Za-z0-9_-]+"), "[REDACTED_VERCEL_TOKEN]"),
+        (re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"), "[REDACTED_JWT]"),
+    )
+    for pattern, replacement in patterns:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def main() -> int:
+    lines = sanitize(download(os.environ["GITHUB_REPOSITORY"], os.environ["GH_TOKEN"])).splitlines()
+    markers = [
+        index
+        for index, line in enumerate(lines)
+        if re.search(
+            r"(?i)(PASS:|FAIL:|ERROR:|SystemExit|Traceback|top-level transaction|Process completed with exit code)",
+            line,
+        )
+    ]
+    index = markers[-1] if markers else max(0, len(lines) - 300)
+    start = max(0, index - 260)
+    end = min(len(lines), index + 320)
+    print("SANITIZED_INTEGRATED_V4_FAILURE_BEGIN")
+    print("\n".join(lines[start:end]))
+    print("SANITIZED_INTEGRATED_V4_FAILURE_END")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
