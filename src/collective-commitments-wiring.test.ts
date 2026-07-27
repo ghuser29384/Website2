@@ -7,6 +7,8 @@ const manifestAliasRepairPath =
   "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql";
 const manifestMaterializedRowsRepairPath =
   "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql";
+const manifestTypedRecordsetRepairPath =
+  "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql";
 
 async function source(path: string) {
   return readFile(path, "utf8");
@@ -44,7 +46,7 @@ test("forward manifest repair keeps JSONB entries scalar through full joins", as
   assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
 });
 
-test("final manifest repair materializes typed JSONB rows and prefilters signatures", async () => {
+test("materialized-row repair prefilters signatures before exactness checks", async () => {
   const repair = await source(manifestMaterializedRowsRepairPath);
   assert.match(repair, /with manifest_rows as materialized/);
   assert.match(repair, /select jsonb_array_elements\(p_manifest\) as manifest_entry/);
@@ -53,6 +55,20 @@ test("final manifest repair materializes typed JSONB rows and prefilters signatu
   assert.match(repair, /full join manifest_rows manifest/);
   assert.match(repair, /manifest\.manifest_entry->>'revealNonce'/);
   assert.doesNotMatch(repair, /full join jsonb_array_elements\(p_manifest\)/);
+  assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
+  assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
+});
+
+test("final manifest repair uses an explicitly typed recordset inside full joins", async () => {
+  const repair = await source(manifestTypedRecordsetRepairPath);
+  assert.match(repair, /jsonb_to_recordset\(p_manifest\) as manifest_record/);
+  assert.match(repair, /"signatureId" text/);
+  assert.match(repair, /manifest\.signature_id::uuid = signature\.id/);
+  assert.match(repair, /manifest\.reveal_nonce is distinct from signature\.reveal_nonce/);
+  assert.doesNotMatch(repair, /manifest(?:\.manifest_entry)?->>/);
+  assert.doesNotMatch(repair, /full join jsonb_array_elements\(p_manifest\)/);
+  assert.match(repair, /with signature_rows as materialized/);
+  assert.match(repair, /where commitment_id = p_commitment_id/);
   assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
   assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
 });
