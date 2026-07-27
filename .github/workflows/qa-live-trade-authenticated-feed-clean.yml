@@ -1,0 +1,259 @@
+name: Verify clean authenticated Trade Feed candidate
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+    paths:
+      - .qa/live-trade-clean-trigger.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qa-live-trade-authenticated-feed-clean
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CANDIDATE_REF: qa/live-trade-authenticated-feed-20260727
+      BASELINE_REF: main
+    steps:
+      - name: Check out QA workbench for the report
+        uses: actions/checkout@v4
+        with:
+          ref: qa/home-authenticated-feed-20260727
+          path: report
+          fetch-depth: 0
+
+      - name: Check out current main baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASELINE_REF }}
+          path: baseline
+          fetch-depth: 0
+
+      - name: Check out the clean candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_REF }}
+          path: candidate
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install exact dependencies and Chromium
+        run: |
+          set -euo pipefail
+          cd candidate
+          npm ci
+          npx playwright install --with-deps chromium
+          ln -s "$GITHUB_WORKSPACE/candidate/node_modules" "$GITHUB_WORKSPACE/baseline/node_modules"
+
+      - name: Run exact-head gates and compare with current main
+        id: gates
+        shell: bash
+        run: |
+          set +e
+          mkdir -p "$GITHUB_WORKSPACE/gate-logs"
+          LOGS="$GITHUB_WORKSPACE/gate-logs"
+          CANDIDATE_SHA="$(git -C candidate rev-parse HEAD)"
+          BASELINE_SHA="$(git -C baseline rev-parse HEAD)"
+          printf '%s\n' "$CANDIDATE_SHA" > "$LOGS/candidate-sha.txt"
+          printf '%s\n' "$BASELINE_SHA" > "$LOGS/baseline-sha.txt"
+
+          node --check candidate/public/moral-trade-live-trade-feed.js >"$LOGS/javascript-syntax.log" 2>&1
+          JS_STATUS=$?
+
+          (
+            cd candidate
+            node --import tsx --test src/live-trade-feed-contract.test.ts
+          ) >"$LOGS/focused-tests.log" 2>&1
+          FOCUSED_STATUS=$?
+
+          (
+            cd candidate
+            npx eslint src/live-trade-feed-contract.test.ts tests/exact-live-trade-feed.spec.ts
+          ) >"$LOGS/focused-lint.log" 2>&1
+          FOCUSED_LINT_STATUS=$?
+
+          (cd baseline && npm test) >"$LOGS/baseline-tests.log" 2>&1
+          BASELINE_TEST_STATUS=$?
+          (cd candidate && npm test) >"$LOGS/candidate-tests.log" 2>&1
+          CANDIDATE_TEST_STATUS=$?
+
+          python3 - "$LOGS/baseline-tests.log" "$LOGS/candidate-tests.log" >"$LOGS/test-comparison.log" 2>&1 <<'PY'
+          import collections
+          import re
+          import sys
+
+          def parse(path):
+              failures = []
+              plan = None
+              with open(path, encoding="utf-8", errors="replace") as handle:
+                  for raw in handle:
+                      line = raw.rstrip("\n")
+                      match = re.match(r"^not ok \d+ - (.*?)(?: #.*)?$", line)
+                      if match:
+                          failures.append(match.group(1).strip())
+                      plan_match = re.match(r"^1\.\.(\d+)$", line)
+                      if plan_match:
+                          plan = int(plan_match.group(1))
+              return collections.Counter(failures), plan
+
+          baseline, baseline_plan = parse(sys.argv[1])
+          candidate, candidate_plan = parse(sys.argv[2])
+          unexpected = candidate - baseline
+          resolved = baseline - candidate
+          print(f"baseline_test_count={baseline_plan}")
+          print(f"candidate_test_count={candidate_plan}")
+          print(f"baseline_fail_count={sum(baseline.values())}")
+          print(f"candidate_fail_count={sum(candidate.values())}")
+          print(f"unexpected_failure_count={sum(unexpected.values())}")
+          print(f"resolved_baseline_failure_count={sum(resolved.values())}")
+          for name, count in sorted(unexpected.items()):
+              print(f"unexpected {count}x {name}")
+          if baseline_plan is None or candidate_plan is None or candidate_plan < baseline_plan:
+              sys.exit(2)
+          sys.exit(1 if unexpected else 0)
+          PY
+          TEST_COMPARISON_STATUS=$?
+
+          (cd baseline && npm run lint) >"$LOGS/baseline-lint.log" 2>&1
+          BASELINE_LINT_STATUS=$?
+          (cd candidate && npm run lint) >"$LOGS/candidate-lint.log" 2>&1
+          CANDIDATE_LINT_STATUS=$?
+
+          python3 - "$LOGS/baseline-lint.log" "$LOGS/candidate-lint.log" "$BASELINE_LINT_STATUS" "$CANDIDATE_LINT_STATUS" >"$LOGS/lint-comparison.log" 2>&1 <<'PY'
+          import re
+          import sys
+
+          def errors(path, status):
+              text = open(path, encoding="utf-8", errors="replace").read()
+              matches = re.findall(r"✖\s+\d+\s+problems?\s+\((\d+)\s+errors?", text)
+              if matches:
+                  return int(matches[-1])
+              return 0 if int(status) == 0 else None
+
+          baseline = errors(sys.argv[1], sys.argv[3])
+          candidate = errors(sys.argv[2], sys.argv[4])
+          print(f"baseline_error_count={baseline}")
+          print(f"candidate_error_count={candidate}")
+          if baseline is None or candidate is None:
+              sys.exit(2)
+          print(f"unexpected_error_count={max(0, candidate - baseline)}")
+          print(f"resolved_baseline_error_count={max(0, baseline - candidate)}")
+          sys.exit(1 if candidate > baseline else 0)
+          PY
+          LINT_COMPARISON_STATUS=$?
+
+          (cd candidate && npm run build) >"$LOGS/build.log" 2>&1
+          BUILD_STATUS=$?
+
+          (cd candidate && npx playwright test tests/exact-live-trade-feed.spec.ts --workers=1) >"$LOGS/playwright.log" 2>&1
+          PLAYWRIGHT_STATUS=$?
+
+          (
+            cd candidate
+            git diff --check origin/main...HEAD
+          ) >"$LOGS/diff-check.log" 2>&1
+          DIFF_STATUS=$?
+
+          {
+            echo "JS_STATUS=$JS_STATUS"
+            echo "FOCUSED_STATUS=$FOCUSED_STATUS"
+            echo "FOCUSED_LINT_STATUS=$FOCUSED_LINT_STATUS"
+            echo "BASELINE_TEST_STATUS=$BASELINE_TEST_STATUS"
+            echo "CANDIDATE_TEST_STATUS=$CANDIDATE_TEST_STATUS"
+            echo "TEST_COMPARISON_STATUS=$TEST_COMPARISON_STATUS"
+            echo "BASELINE_LINT_STATUS=$BASELINE_LINT_STATUS"
+            echo "CANDIDATE_LINT_STATUS=$CANDIDATE_LINT_STATUS"
+            echo "LINT_COMPARISON_STATUS=$LINT_COMPARISON_STATUS"
+            echo "BUILD_STATUS=$BUILD_STATUS"
+            echo "PLAYWRIGHT_STATUS=$PLAYWRIGHT_STATUS"
+            echo "DIFF_STATUS=$DIFF_STATUS"
+          } > "$LOGS/status.env"
+
+          OVERALL=0
+          for status in \
+            "$JS_STATUS" \
+            "$FOCUSED_STATUS" \
+            "$FOCUSED_LINT_STATUS" \
+            "$TEST_COMPARISON_STATUS" \
+            "$LINT_COMPARISON_STATUS" \
+            "$BUILD_STATUS" \
+            "$PLAYWRIGHT_STATUS" \
+            "$DIFF_STATUS"; do
+            if [ "$status" -ne 0 ]; then OVERALL=1; fi
+          done
+          echo "overall=$OVERALL" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish the verification report to the workbench
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOGS="$GITHUB_WORKSPACE/gate-logs"
+          source "$LOGS/status.env"
+          CANDIDATE_SHA="$(cat "$LOGS/candidate-sha.txt")"
+          BASELINE_SHA="$(cat "$LOGS/baseline-sha.txt")"
+          REPORT_DIR="$GITHUB_WORKSPACE/report/.qa-results"
+          REPORT_PATH="$REPORT_DIR/live-trade-clean-verification.md"
+          mkdir -p "$REPORT_DIR"
+          result="PASS"
+          if [ "${{ steps.gates.outputs.overall }}" != "0" ]; then result="FAIL"; fi
+          {
+            echo "# Clean authenticated Trade Feed verification"
+            echo
+            echo "- Result: **$result**"
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Baseline: \`$BASELINE_SHA\`"
+            echo "- Recorded: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
+            echo
+            echo "| Gate | Status |"
+            echo "|---|---:|"
+            echo "| JavaScript syntax | $JS_STATUS |"
+            echo "| Focused contract tests | $FOCUSED_STATUS |"
+            echo "| Focused ESLint | $FOCUSED_LINT_STATUS |"
+            echo "| Full tests versus main baseline | $TEST_COMPARISON_STATUS |"
+            echo "| Full lint versus main baseline | $LINT_COMPARISON_STATUS |"
+            echo "| Production build | $BUILD_STATUS |"
+            echo "| Targeted Playwright on /#trade | $PLAYWRIGHT_STATUS |"
+            echo "| git diff --check | $DIFF_STATUS |"
+            echo
+            echo "## Full-test comparison"
+            echo '```text'
+            cat "$LOGS/test-comparison.log"
+            echo '```'
+            echo
+            echo "## Full-lint comparison"
+            echo '```text'
+            cat "$LOGS/lint-comparison.log"
+            echo '```'
+            for name in javascript-syntax focused-tests focused-lint build playwright diff-check; do
+              echo
+              echo "## $name"
+              echo '```text'
+              tail -n 120 "$LOGS/$name.log"
+              echo '```'
+            done
+          } > "$REPORT_PATH"
+
+          cd "$GITHUB_WORKSPACE/report"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/live-trade-clean-verification.md
+          git commit -m "Record clean Trade Feed verification [$result]" || true
+          git push origin HEAD:qa/home-authenticated-feed-20260727
+
+      - name: Enforce gate result
+        if: steps.gates.outputs.overall != '0'
+        run: exit 1
