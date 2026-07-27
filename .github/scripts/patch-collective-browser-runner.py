@@ -2,7 +2,6 @@
 from pathlib import Path
 
 SCRIPT = Path('.github/scripts/collective-commitments-adversarial-browser-qa.mjs')
-WORKFLOW = Path('.github/workflows/collective-commitments-adversarial-browser-qa.yml')
 
 
 def replace_exact(text: str, old: str, new: str, label: str) -> str:
@@ -171,20 +170,3 @@ if (audit.outcome !== "pass") {''',
     'guarded final audit write',
 )
 SCRIPT.write_text(script)
-
-workflow = WORKFLOW.read_text()
-workflow = replace_exact(
-    workflow,
-    '''      - name: Run authenticated multi-user adversarial browser suite
-        run: node --import tsx .github/scripts/collective-commitments-adversarial-browser-qa.mjs
-''',
-    '''      - name: Run authenticated multi-user adversarial browser suite
-        shell: bash
-        run: |
-          set -o pipefail
-          node .github/scripts/collective-commitments-adversarial-browser-qa.mjs \\
-            2>&1 | tee "$ARTIFACT_DIR/browser-qa.log"
-''',
-    'browser QA execution step',
-)
-WORKFLOW.write_text(workflow)
