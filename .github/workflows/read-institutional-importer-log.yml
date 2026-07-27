@@ -51,4 +51,4 @@ jobs:
           git commit -m "Record latest institutional importer diagnostic"
           git push origin HEAD:feat/institutional-trade-system
 
-# Refresh after importer artifact generation.
+# Refresh after corrected tree verification.
