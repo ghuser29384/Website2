@@ -1,4 +1,4 @@
-name: Import exact institutional implementation
+name: Import individual-capacity correction
 
 on:
   push:
@@ -12,80 +12,62 @@ permissions:
   contents: write
 
 concurrency:
-  group: import-exact-institutional-implementation
+  group: import-individual-capacity-correction
   cancel-in-progress: false
 
 jobs:
   import:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
-      EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
-      EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
       GH_TOKEN: ${{ github.token }}
+      EXPECTED_PAYLOAD_SHA256: ea4fc32a2e3b4a7909d2502820be229a682c51ba5265f4b7332e9e2095397c05
+      EXPECTED_PATCH_SHA256: 1c4a2975b2679a78cad4787cd0279e3d662defc14742d1a75d74e9adb0b8662c
     steps:
       - name: Check out exact feature head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fetch, verify, apply, and publish exact implementation
+      - name: Fetch, verify, apply, and publish correction
         shell: bash
         run: |
           set -euo pipefail
 
           blob_shas=(
-            0becdf78bc7eaf03f5fec673599953c6cbde5ddf
-            fe94fdf1059423a42c469e3ee3cd638c6c476886
-            05d84116a084a10d3f240acc3a9ffba2fa78837b
-            3505126caa5cbe6c476c334ce5a66ad035f1045f
-            9391ec454d2ffa1fda18b5b796137073124c7fc1
-            9ec44427e2d1c51be9fbf65c6ba09e25a26120c8
-            51c5082638fbe268f2b68018351d74397f869e5b
-            9f78d299a9661f0578369b1d29e90191e4d9bc92
-            5ba0760bfe334a017f262e28a5eb17e2d4406998
-            7b3c8451b23413435f8aaa0e7b2829c595656453
-            a11d0fa771d9eae50f79179f878f42dbf61a1513
-            71abff5c8c9899bf8f052bbf11cf5021d4ba582f
-            f965335b267b1637dfe01d70fe3aa03f1dd9f2ac
-            8877c35004e2bf948f46200d194f47b56cbe29ea
-            f54ead17c522fe8328e258c3509242366ff86425
-            28742f836484764fe3add44a419d34b01151f4f8
-            66910b9bb0bcc87ccdc391683d0bc35f5ad5d479
-            89e913b7e1f002397f46228c87bb5c339dc6aa57
-            72522648f3ec799baade5ab70cd7eab0d3403c39
-            7a1ec710adccd0f991ae8284f31a68d6c53285f8
-            b7035273a14821d7f33c3ebdbd5c2496c8ab1927
-            6a7bc4b836a7307841a8f710f12974daefbcc792
-            d8237cf3863364a9c8ab8cddf51b52a22f6157cb
-            00d5337fa1fda8428d4ced2593270aab672f2313
+            6cc2c503806e1e1afb1009e0cf1e92294ca89eae
+            6afb8ffd0083905c42534a057068083a2efce884
+            7f04538add652030b73c796ddd3b7f31d99ba422
+            556c912b7559f712a2b386651ce050db0ec71fa8
+            f8da24f81554a490599de56fc3212cd5a7f707ec
+            e644bbc48d04501c01f9d40cadb1ccde3ac00992
+            3f65194e42f8049b88d2aa337902884c67f216f4
+            2809b7b3be0ae616d7006fb97b861e53f333f7e5
+            b38c2e8055608332e72dcd2beb8a0f596a79ff4c
+            629492676c8ef02744a4293739547f110bd72b2c
           )
 
-          payload=/tmp/institutional-patch.b64
-          patch=/tmp/institutional.patch
+          payload=/tmp/individual-capacity.patch.xz.b64
+          patch=/tmp/individual-capacity.patch
           : > "$payload"
 
           for index in "${!blob_shas[@]}"; do
             sha="${blob_shas[$index]}"
-            part="/tmp/institutional-part-$(printf '%02d' "$index")"
-            response="${part}.json"
-
+            response="/tmp/individual-capacity-part-${index}.json"
+            part="/tmp/individual-capacity-part-${index}"
             curl --fail-with-body --silent --show-error \
-              --retry 3 \
-              --retry-all-errors \
+              --retry 3 --retry-all-errors \
               --header "Accept: application/vnd.github+json" \
               --header "Authorization: Bearer ${GH_TOKEN}" \
               --header "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \
               > "$response"
-
             jq -er '.content' "$response" | tr -d '\n' | base64 --decode > "$part"
             actual_sha="$(git hash-object "$part")"
-            if [[ "$actual_sha" != "$sha" ]]; then
-              echo "Blob verification failed for part $index: expected $sha, got $actual_sha" >&2
+            [[ "$actual_sha" == "$sha" ]] || {
+              echo "Blob $index mismatch: expected $sha, got $actual_sha" >&2
               exit 1
-            fi
+            }
             cat "$part" >> "$payload"
           done
 
@@ -93,30 +75,39 @@ jobs:
           base64 --decode < "$payload" | xz --decompress --stdout > "$patch"
           echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
 
-          git apply --check --binary "$patch"
-          git apply --binary --index "$patch"
+          # GitHub Actions tokens cannot create or update workflow files. Apply every
+          # source/schema/test change here and publish the QA workflow separately.
+          git apply --check --binary --exclude=.github/workflows/institutional-trade-qa.yml "$patch"
+          git apply --binary --index --exclude=.github/workflows/institutional-trade-qa.yml "$patch"
+          git diff --cached --check
 
-          rm -f \
-            .github/institutional-patch.part-* \
-            .github/institutional-qa-trigger \
-            .github/workflows/attach-institutional-payload.yml \
-            .github/workflows/dispatch-institutional-qa.yml \
-            .github/workflows/export-institutional-source.yml \
-            .github/workflows/fix-dispatch-institutional-qa.yml \
-            .github/workflows/import-institutional-source.yml \
-            .github/workflows/prepare-institutional-qa-runner.yml \
-            .github/workflows/read-institutional-importer-log.yml
-
-          git add -A
-          actual_tree="$(git write-tree)"
-          if [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then
-            echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2
-            git status --short
-            git diff --cached --stat
-            exit 1
-          fi
+          while read -r expected path; do
+            actual="$(git rev-parse ":${path}")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "Target blob mismatch for ${path}: expected ${expected}, got ${actual}" >&2
+              exit 1
+            }
+          done <<'TARGETS'
+          594f0c359cfa5e6f167161cbce2bf3234d9bf5d5 .github/scripts/institutional-trade-qa-e2e.mjs
+          664a2b86f7df47ab4494691b9ed28a2c9a325596 src/app/admin/institutional-deal-desk/page.tsx
+          fbe1ae5df3cf5101ca306b647acc86b8c49237ab src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+          210f1e52d85055277b0c084d96c244d0d8947e22 src/app/institutions/[organizationId]/page.tsx
+          8af35926ea8a603347b2e2d40f50a63fe9b9141f src/app/institutions/actions.ts
+          c084c2f2ebad99979e46622ad968178a3b125da5 src/app/institutions/consents/[consentId]/page.tsx
+          25fc335539ec49a0852d6bb438c7a97689154fa0 src/app/institutions/individual/deals/[dealId]/page.tsx
+          1ec7ceb92d34893f785eee0c6cad739d76137e00 src/app/institutions/individual/page.tsx
+          d48c36bb45e9f05fcfe18a852f9a14b98ea3c865 src/app/institutions/page.tsx
+          f3b13b1c47113f20081e5ce755d93f4201402fd1 src/app/institutions/verifier-assignments/[assignmentId]/page.tsx
+          1b05cf18353985f98ea597f996dcacd843e0e106 src/institutional-individual-capacity.test.ts
+          0a7b22fdb2f89d8faef2dfec174b4a192394ca24 src/institutional-trade-migration.test.ts
+          3fe4914536a3444fd9822bb88f8fd745b93b4cea src/institutional-trade-wiring.test.ts
+          82516ec2147bb0aebe991fce65872609d89f94d5 src/lib/institutional-data.ts
+          957ec73409578698ccbb203556cbccccb6d0b4be src/lib/institutional-trade.test.ts
+          4a56142714a38c238a96fa290afaba2791835a75 src/lib/institutional-trade.ts
+          634da1c852c2433c337d5f995def7f02923c23c8 supabase/migrations/20260726123000_institutional_trade_system.sql
+          TARGETS
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Implement institutional trade system integrity and QA"
+          git commit -m "Support individual institutional deal parties"
           git push origin HEAD:feat/institutional-trade-system
