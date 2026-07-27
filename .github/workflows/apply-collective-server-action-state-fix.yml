@@ -66,9 +66,11 @@ jobs:
             src/components/collective-commitments/collective-signature-controls.tsx \
             src/lib/collective-commitments/action-state.ts
           git status --short | tee "$ARTIFACT_DIR/staged-status.txt"
-          git diff --cached --check
-          git commit -m "Fix collective server-action runtime exports"
-          git push origin HEAD:"$EXPECTED_BRANCH"
+          git diff --cached --check 2>&1 | tee "$ARTIFACT_DIR/diff-check.log"
+          git commit -m "Fix collective server-action runtime exports" \
+            2>&1 | tee "$ARTIFACT_DIR/commit.log"
+          git push origin HEAD:"$EXPECTED_BRANCH" \
+            2>&1 | tee "$ARTIFACT_DIR/push.log"
 
           printf '%s\n' \
             "qa_head=$(git rev-parse HEAD)" \
