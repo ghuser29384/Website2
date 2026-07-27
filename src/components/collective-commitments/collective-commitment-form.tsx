@@ -1,12 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, useMemo, useState } from "react";
 
-import {
-  createCollectiveCommitmentAction,
-  EMPTY_COLLECTIVE_ACTION_STATE,
-} from "@/app/collective-commitments/actions";
+import { createCollectiveCommitmentAction } from "@/app/collective-commitments/actions";
+import { EMPTY_COLLECTIVE_ACTION_STATE } from "@/lib/collective-commitments/action-state";
 import {
   COLLECTIVE_PROPOSITION_TYPE_META,
   COLLECTIVE_PROPOSITION_TYPES,
@@ -25,7 +22,6 @@ function defaultDeadline(minimumMinutes: number) {
 }
 
 export function CollectiveCommitmentForm({ minimumDeadlineMinutes }: { minimumDeadlineMinutes: number }) {
-  const router = useRouter();
   const [state, action] = useActionState(
     createCollectiveCommitmentAction,
     EMPTY_COLLECTIVE_ACTION_STATE,
@@ -36,12 +32,6 @@ export function CollectiveCommitmentForm({ minimumDeadlineMinutes }: { minimumDe
     () => getCollectiveRiskProfile(propositionType, selectedDimensions),
     [propositionType, selectedDimensions],
   );
-
-  useEffect(() => {
-    if (state.ok && state.commitmentId) {
-      router.push(`/collective-commitments/${state.commitmentId}`);
-    }
-  }, [router, state.commitmentId, state.ok]);
 
   return (
     <form action={action} className={styles.form}>

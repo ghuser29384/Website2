@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getViewer } from "@/lib/app-data";
 import {
@@ -9,22 +10,12 @@ import {
   signCollectiveCommitment,
   withdrawCollectiveCommitmentSignature,
 } from "@/lib/collective-commitments/service";
+import type { CollectiveCommitmentActionState } from "@/lib/collective-commitments/action-state";
 import {
   getCollectiveRiskProfile,
   isCollectivePropositionType,
   type CollectiveRiskDimension,
 } from "@/lib/collective-commitments/types";
-
-export interface CollectiveCommitmentActionState {
-  ok: boolean;
-  message: string;
-  commitmentId?: string;
-}
-
-export const EMPTY_COLLECTIVE_ACTION_STATE: CollectiveCommitmentActionState = {
-  ok: false,
-  message: "",
-};
 
 function textField(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -52,6 +43,8 @@ export async function createCollectiveCommitmentAction(
   _previousState: CollectiveCommitmentActionState,
   formData: FormData,
 ): Promise<CollectiveCommitmentActionState> {
+  let commitmentId = "";
+
   try {
     const viewer = await requireViewer();
     const propositionType = textField(formData, "proposition_type");
@@ -97,19 +90,16 @@ export async function createCollectiveCommitmentAction(
       riskClass: risk.riskClass,
       riskDimensions: risk.riskDimensions,
     });
-
-    revalidatePath("/collective-commitments");
-    return {
-      ok: true,
-      message: "Collective commitment created with frozen terms.",
-      commitmentId: result.id,
-    };
+    commitmentId = result.id;
   } catch (error) {
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Could not create the collective commitment.",
     };
   }
+
+  revalidatePath("/collective-commitments");
+  redirect(`/collective-commitments/${commitmentId}`);
 }
 
 export async function signCollectiveCommitmentAction(
@@ -133,19 +123,11 @@ export async function signCollectiveCommitmentAction(
       throw new Error("Accept the high-risk participation acknowledgment before signing.");
     }
 
-    const result = await signCollectiveCommitment({
+    await signCollectiveCommitment({
       commitmentId,
       profileId: viewer.profile.id,
       publishAffiliation: checked(formData, "publish_affiliation"),
     });
-
-    revalidatePath("/collective-commitments");
-    revalidatePath(`/collective-commitments/${commitmentId}`);
-    return {
-      ok: true,
-      message: result.message,
-      commitmentId,
-    };
   } catch (error) {
     return {
       ok: false,
@@ -153,6 +135,10 @@ export async function signCollectiveCommitmentAction(
       commitmentId,
     };
   }
+
+  revalidatePath("/collective-commitments");
+  revalidatePath(`/collective-commitments/${commitmentId}`);
+  redirect(`/collective-commitments/${commitmentId}?mutation=signature-recorded`);
 }
 
 export async function withdrawCollectiveCommitmentAction(
@@ -163,13 +149,10 @@ export async function withdrawCollectiveCommitmentAction(
 
   try {
     const viewer = await requireViewer();
-    const message = await withdrawCollectiveCommitmentSignature({
+    await withdrawCollectiveCommitmentSignature({
       commitmentId,
       profileId: viewer.profile.id,
     });
-    revalidatePath("/collective-commitments");
-    revalidatePath(`/collective-commitments/${commitmentId}`);
-    return { ok: true, message, commitmentId };
   } catch (error) {
     return {
       ok: false,
@@ -177,4 +160,8 @@ export async function withdrawCollectiveCommitmentAction(
       commitmentId,
     };
   }
+
+  revalidatePath("/collective-commitments");
+  revalidatePath(`/collective-commitments/${commitmentId}`);
+  redirect(`/collective-commitments/${commitmentId}?mutation=signature-withdrawn`);
 }
