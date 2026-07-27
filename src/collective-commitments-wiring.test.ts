@@ -124,6 +124,22 @@ test("rendered flow requires publication and high-risk acknowledgments", async (
   assert.match(actions, /verified real name will be public/);
 });
 
+test("server-action modules export only async actions at runtime", async () => {
+  const [actions, state, form, controls] = await Promise.all([
+    source("src/app/collective-commitments/actions.ts"),
+    source("src/lib/collective-commitments/action-state.ts"),
+    source("src/components/collective-commitments/collective-commitment-form.tsx"),
+    source("src/components/collective-commitments/collective-signature-controls.tsx"),
+  ]);
+  assert.match(actions, /^"use server";/);
+  assert.match(actions, /import type \{ CollectiveCommitmentActionState \}/);
+  assert.doesNotMatch(actions, /export\s+(?:const|let|var|class)\s+/);
+  assert.doesNotMatch(actions, /EMPTY_COLLECTIVE_ACTION_STATE/);
+  assert.match(state, /export const EMPTY_COLLECTIVE_ACTION_STATE/);
+  assert.match(form, /collective-commitments\/action-state/);
+  assert.match(controls, /collective-commitments\/action-state/);
+});
+
 test("expiry route is cron-authorized and never claims publication", async () => {
   const route = await source("src/app/api/jobs/collective-commitments-expire/route.ts");
   assert.match(route, /isCronRequestAuthorized/);
