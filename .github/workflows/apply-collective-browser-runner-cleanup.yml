@@ -1,0 +1,82 @@
+name: Apply collective browser exact-run cleanup hardening
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/scripts/patch-collective-browser-runner-cleanup.py"
+      - ".github/workflows/apply-collective-browser-runner-cleanup.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-collective-browser-exact-run-cleanup-20260727
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-commitments-adversarial-browser-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
+      EXPECTED_PRODUCT_BASE: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-browser-cleanup-patch-artifacts
+
+    steps:
+      - name: Validate exact execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_BRANCH"
+
+      - name: Check out exact pull-request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Apply and publish exact-run cleanup patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          test "$(git merge-base "$EXPECTED_PRODUCT_BASE" HEAD)" = "$EXPECTED_PRODUCT_BASE"
+          cp .github/scripts/patch-collective-browser-runner-cleanup.py \
+            "$RUNNER_TEMP/patch-collective-browser-runner-cleanup.py"
+          python3 "$RUNNER_TEMP/patch-collective-browser-runner-cleanup.py"
+          node --check .github/scripts/collective-commitments-adversarial-browser-qa.mjs
+          grep -Fq 'waitUntil: "commit"' .github/scripts/collective-commitments-adversarial-browser-qa.mjs
+          grep -Fq 'like("title", `${TITLE_PREFIX}${runTag}]%`)' \
+            .github/scripts/collective-commitments-adversarial-browser-qa.mjs
+          grep -Fq '.from("profiles").delete().in("id", userIds)' \
+            .github/scripts/collective-commitments-adversarial-browser-qa.mjs
+
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git rm .github/scripts/patch-collective-browser-runner-cleanup.py
+          git add .github/scripts/collective-commitments-adversarial-browser-qa.mjs
+          git diff --cached --check
+          git commit -m "Harden collective browser navigation and exact cleanup"
+          git push origin HEAD:"$EXPECTED_BRANCH"
+          printf '%s\n' \
+            "qa_head=$(git rev-parse HEAD)" \
+            "navigation_wait=commit" \
+            "exact_run_discovery=PASS" \
+            "profile_before_auth_cleanup=PASS" \
+            "production_changed=NO" > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload patch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-browser-cleanup-patch-${{ github.run_id }}
+          path: collective-browser-cleanup-patch-artifacts
+          if-no-files-found: warn
+          retention-days: 14
