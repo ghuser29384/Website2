@@ -1,0 +1,201 @@
+name: Verify promoted Walkthrough in production
+
+on:
+  push:
+    branches:
+      - ops/verify-walkthrough-production-20260727
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-walkthrough-production-20260727
+  cancel-in-progress: true
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact production source commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run public production Walkthrough smoke
+        shell: bash
+        run: |
+          mkdir -p production-walkthrough-smoke
+          node --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+
+          const productionOrigin = "https://www.moraltrade.org";
+          const sourceCommit = "aeb02620b0a59958237b0d95b162924aaccca598";
+          const browser = await chromium.launch({ headless: true });
+
+          async function waitForHeading(page, name) {
+            await page.getByRole("heading", { name }).waitFor({ timeout: 20_000 });
+          }
+
+          async function assertContains(page, text) {
+            await page.getByText(text, { exact: false }).first().waitFor({ timeout: 20_000 });
+          }
+
+          const desktopContext = await browser.newContext({
+            viewport: { width: 1280, height: 720 },
+          });
+          const desktop = await desktopContext.newPage();
+
+          await desktop.goto(`${productionOrigin}/?production_walkthrough_smoke=20260727`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          });
+          await desktop.waitForURL(/\/walkthrough(?:\?|$)/, { timeout: 20_000 });
+          await waitForHeading(desktop, "What do you value?");
+
+          if (await desktop.getByRole("button", { name: "Skip walkthrough" }).count()) {
+            throw new Error("The promoted first-time walkthrough exposes a Skip control.");
+          }
+
+          await desktop.getByRole("tab", { name: /Redirect/i }).click();
+          await waitForHeading(desktop, "Two political donations. Almost no shared impact.");
+          await desktop.getByRole("button", { name: "Redirect the matched $20" }).click();
+          await waitForHeading(desktop, "The matched money now creates shared impact.");
+          await desktop.getByRole("button", { name: "See how one $10 can go further" }).click();
+          await waitForHeading(desktop, "The $10 redirect is already scheduled.");
+          await assertContains(desktop, "Moral Trade notifies users now");
+          await assertContains(
+            desktop,
+            "Without an accepted and completed trade, the donation proceeds automatically.",
+          );
+
+          const coalitionStart = desktop.getByRole("button", {
+            name: "See a notified user start a coalition",
+          });
+          await coalitionStart.waitFor({ timeout: 20_000 });
+          await desktop.waitForTimeout(700);
+
+          const actionBox = await coalitionStart.boundingBox();
+          const panelBox = await desktop.locator(".experience").boundingBox();
+          const viewport = desktop.viewportSize();
+          if (!actionBox || !panelBox || !viewport) {
+            throw new Error("Could not measure the production coalition action and panel.");
+          }
+
+          const insideViewport =
+            actionBox.x >= 0 &&
+            actionBox.y >= 0 &&
+            actionBox.x + actionBox.width <= viewport.width &&
+            actionBox.y + actionBox.height <= viewport.height;
+          const insidePanel =
+            actionBox.x >= panelBox.x &&
+            actionBox.y >= panelBox.y &&
+            actionBox.x + actionBox.width <= panelBox.x + panelBox.width &&
+            actionBox.y + actionBox.height <= panelBox.y + panelBox.height;
+
+          if (!insideViewport || !insidePanel) {
+            throw new Error(
+              `Production coalition action is clipped: ${JSON.stringify({ actionBox, panelBox, viewport })}`,
+            );
+          }
+
+          await desktop.screenshot({
+            path: "production-walkthrough-smoke/desktop-scheduled-redirect.png",
+            fullPage: false,
+            animations: "disabled",
+          });
+
+          await coalitionStart.click();
+          await waitForHeading(desktop, "A notified user finds 99 close matches.");
+          await desktop.getByRole("button", { name: "Form the 100-person coalition" }).click();
+          await waitForHeading(desktop, "The coalition becomes one offer.");
+          await desktop.getByRole("button", { name: "Accept the group trade" }).click();
+          await waitForHeading(desktop, "100 members complete 2.1 days each.");
+          await desktop.getByRole("button", { name: /Pre-agree the destination/ }).click();
+          await desktop
+            .getByRole("button", { name: "Release $10 to the pre-agreed destination" })
+            .click();
+          await waitForHeading(
+            desktop,
+            "One $10 bought 30 person-weeks of environmental action.",
+          );
+          await assertContains(desktop, "pre-agreed future-focused destination");
+
+          await desktop.screenshot({
+            path: "production-walkthrough-smoke/desktop-complete.png",
+            fullPage: false,
+            animations: "disabled",
+          });
+
+          const mobileContext = await browser.newContext({
+            viewport: { width: 390, height: 844 },
+          });
+          const mobile = await mobileContext.newPage();
+          await mobile.goto(`${productionOrigin}/walkthrough`, {
+            waitUntil: "domcontentloaded",
+            timeout: 30_000,
+          });
+          await waitForHeading(mobile, "What do you value?");
+          await mobile.getByRole("tab", { name: /Redirect/i }).click();
+          await mobile.getByRole("button", { name: "Redirect the matched $20" }).click();
+          await mobile.getByRole("button", { name: "See how one $10 can go further" }).click();
+          await waitForHeading(mobile, "The $10 redirect is already scheduled.");
+          await assertContains(mobile, "Moral Trade notifies users now");
+          const mobileCoalitionStart = mobile.getByRole("button", {
+            name: "See a notified user start a coalition",
+          });
+          await mobileCoalitionStart.scrollIntoViewIfNeeded();
+          await mobileCoalitionStart.waitFor({ state: "visible", timeout: 20_000 });
+          await mobile.screenshot({
+            path: "production-walkthrough-smoke/mobile-scheduled-redirect.png",
+            fullPage: true,
+            animations: "disabled",
+          });
+
+          const result = {
+            checkedAt: new Date().toISOString(),
+            productionOrigin,
+            sourceCommit,
+            finalDesktopUrl: desktop.url(),
+            finalMobileUrl: mobile.url(),
+            firstVisitRedirectedToWalkthrough: true,
+            skipControlAbsent: true,
+            notificationSemanticsPresent: true,
+            automaticFallbackPresent: true,
+            fullCoalitionFlowCompleted: true,
+            coalitionActionInsideViewport: insideViewport,
+            coalitionActionInsidePanel: insidePanel,
+            desktopGeometry: { actionBox, panelBox, viewport },
+            mobileScheduledRedirectVisible: true,
+          };
+          await fs.writeFile(
+            "production-walkthrough-smoke/result.json",
+            `${JSON.stringify(result, null, 2)}\n`,
+            "utf8",
+          );
+          console.log(JSON.stringify(result, null, 2));
+
+          await mobileContext.close();
+          await desktopContext.close();
+          await browser.close();
+          NODE
+
+      - name: Upload production smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-walkthrough-smoke-aeb0262
+          path: production-walkthrough-smoke
+          if-no-files-found: error
+          retention-days: 7
