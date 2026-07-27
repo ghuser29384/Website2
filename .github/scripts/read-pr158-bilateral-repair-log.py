@@ -6,7 +6,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89884673480
+JOB_ID = 89885255073
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -72,9 +72,9 @@ def main() -> int:
             line,
         )
     ]
-    index = markers[-1] if markers else max(0, len(lines) - 180)
-    start = max(0, index - 180)
-    end = min(len(lines), index + 220)
+    index = markers[-1] if markers else max(0, len(lines) - 240)
+    start = max(0, index - 240)
+    end = min(len(lines), index + 260)
     print("SANITIZED_BILATERAL_REPAIR_FAILURE_BEGIN")
     print("\n".join(lines[start:end]))
     print("SANITIZED_BILATERAL_REPAIR_FAILURE_END")
