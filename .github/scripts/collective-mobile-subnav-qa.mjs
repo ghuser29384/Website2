@@ -20,6 +20,16 @@ const audit = {
   viewports: [],
 };
 
+function isExpectedAbortedPrefetch(request) {
+  const failure = request.failure()?.errorText ?? "";
+  if (failure !== "net::ERR_ABORTED") return false;
+  try {
+    return new URL(request.url()).searchParams.has("_rsc");
+  } catch {
+    return false;
+  }
+}
+
 let browser;
 try {
   browser = await chromium.launch({ headless: true });
@@ -34,6 +44,7 @@ try {
     const consoleErrors = [];
     const pageErrors = [];
     const failedRequests = [];
+    const ignoredPrefetchAborts = [];
     const errorResponses = [];
 
     page.on("console", (message) => {
@@ -42,9 +53,13 @@ try {
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("requestfailed", (request) => {
       const url = request.url();
-      if (url.startsWith(baseUrl)) {
-        failedRequests.push(`${request.method()} ${url}: ${request.failure()?.errorText ?? "failed"}`);
+      if (!url.startsWith(baseUrl)) return;
+      const detail = `${request.method()} ${url}: ${request.failure()?.errorText ?? "failed"}`;
+      if (isExpectedAbortedPrefetch(request)) {
+        ignoredPrefetchAborts.push(detail);
+        return;
       }
+      failedRequests.push(detail);
     });
     page.on("response", (response) => {
       if (response.url().startsWith(baseUrl) && response.status() >= 400) {
@@ -150,6 +165,7 @@ try {
       consoleErrors,
       pageErrors,
       failedRequests,
+      ignoredPrefetchAborts,
       errorResponses,
     });
     await context.close();
