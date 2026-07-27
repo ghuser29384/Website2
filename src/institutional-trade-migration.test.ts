@@ -148,7 +148,9 @@ test("pool approval, financial reservation, contributions, anchors, underwriting
 
 test("integration configuration rejects embedded secrets and webhooks use an event allowlist", () => {
   expectAll([
-    /institutional_json_contains_secret/i,
+    /institutional_json_contains_secret\(payload jsonb\)/i,
+    /jsonb_each\(payload\) as entry\(key,value\)/i,
+    /jsonb_array_elements\(payload\) as element\(value\)/i,
     /institutional_validate_integration_configuration/i,
     /Integration configuration must not embed secrets; use a credential reference/i,
     /institutional_supported_webhook_events/i,

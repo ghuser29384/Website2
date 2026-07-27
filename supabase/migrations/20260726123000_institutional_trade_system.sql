@@ -771,20 +771,20 @@ begin
 end $$;
 create trigger institutional_framework_terms_immutable before update on public.institutional_framework_agreements for each row execute function public.institutional_lock_framework();
 
-create or replace function public.institutional_json_contains_secret(value jsonb)
+create or replace function public.institutional_json_contains_secret(payload jsonb)
 returns boolean language plpgsql immutable set search_path=pg_catalog,public as $$
 declare item record; scalar text;
 begin
- if value is null then return false; end if;
- if jsonb_typeof(value)='object' then
-  for item in select key,value as nested from jsonb_each(value) loop
+ if payload is null then return false; end if;
+ if jsonb_typeof(payload)='object' then
+  for item in select entry.key,entry.value as nested from jsonb_each(payload) as entry(key,value) loop
    if lower(item.key) ~ '(secret|password|passwd|token|api[_-]?key|private[_-]?key|authorization|credential)' then return true; end if;
    if public.institutional_json_contains_secret(item.nested) then return true; end if;
   end loop;
- elsif jsonb_typeof(value)='array' then
-  for item in select value as nested from jsonb_array_elements(value) loop if public.institutional_json_contains_secret(item.nested) then return true; end if; end loop;
- elsif jsonb_typeof(value)='string' then
-  scalar:=trim(both '"' from value::text);
+ elsif jsonb_typeof(payload)='array' then
+  for item in select element.value as nested from jsonb_array_elements(payload) as element(value) loop if public.institutional_json_contains_secret(item.nested) then return true; end if; end loop;
+ elsif jsonb_typeof(payload)='string' then
+  scalar:=trim(both '"' from payload::text);
   if scalar ~* '(^|[[:space:]])(bearer[[:space:]]+[a-z0-9._~-]{12,}|sk_(live|test)_[a-z0-9]{12,}|whsec_[a-z0-9]{12,}|-----begin [a-z ]*private key-----|gh[pousr]_[a-z0-9]{20,})' then return true; end if;
  end if;
  return false;
