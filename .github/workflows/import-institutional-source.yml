@@ -34,8 +34,8 @@ jobs:
             echo "Patch already consumed; nothing to import."
             exit 0
           fi
-          if (( ${#parts[@]} != 21 )); then
-            echo "Expected exactly 21 patch parts; found ${#parts[@]}. Waiting for the complete patch."
+          if (( ${#parts[@]} != 12 )); then
+            echo "Expected exactly twelve patch parts; found ${#parts[@]}. Waiting for the complete patch."
             exit 0
           fi
           cat "${parts[@]}" | base64 --decode | xz --decompress --stdout | git apply --binary --index -
