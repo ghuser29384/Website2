@@ -9,6 +9,7 @@ on:
       - ".github/workflows/collective-commitments-adversarial-browser-qa.yml"
       - "src/collective-commitments-wiring.test.ts"
       - "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql"
+      - "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql"
 
 permissions:
   contents: write
@@ -24,7 +25,7 @@ jobs:
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'qa/collective-commitments-adversarial-browser-20260727'
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 75
     env:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       EXPECTED_PRODUCT_HEAD: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
@@ -45,9 +46,12 @@ jobs:
       COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "1"
       TRADE_DONATION_POOL_ENABLED: "false"
       TRADE_DONATION_POOL_MODE: disabled
-      REPAIR_MIGRATION_VERSION: "20260727030000"
-      REPAIR_MIGRATION_NAME: fix_collective_manifest_jsonb_alias
-      REPAIR_MIGRATION_SHA256: 14b16e3bef4a4572b036175c420f89bbbf7046ba258b70f9ad1fd1af9109a07a
+      ALIAS_REPAIR_VERSION: "20260727030000"
+      ALIAS_REPAIR_NAME: fix_collective_manifest_jsonb_alias
+      ALIAS_REPAIR_SHA256: 14b16e3bef4a4572b036175c420f89bbbf7046ba258b70f9ad1fd1af9109a07a
+      MATERIALIZED_REPAIR_VERSION: "20260727043000"
+      MATERIALIZED_REPAIR_NAME: fix_collective_manifest_materialized_rows
+      MATERIALIZED_REPAIR_SHA256: 25db69d65b79e36221b3d5250ae4b223521ca34e4e171ef611d527e422f7a8b8
       REGRESSION_SHA256: fd98292913b82153ddce3f50285d532282b51539849da42dc5ce6daadf6b7c15
       ARTIFACT_DIR: ${{ github.workspace }}/collective-commitments-browser-qa-artifacts
       BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/collective-commitments-browser-qa-artifacts
@@ -83,7 +87,8 @@ jobs:
             '.github/scripts/collective-commitments-adversarial-browser-qa.mjs' \
             '.github/workflows/collective-commitments-adversarial-browser-qa.yml' \
             'src/collective-commitments-wiring.test.ts' \
-            'supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql' | sort)"
+            'supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql' \
+            'supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql' | sort)"
           if [[ "$changed" != "$expected" ]]; then
             echo "Unexpected QA-branch diff:" >&2
             printf '%s\n' "$changed" >&2
@@ -93,6 +98,8 @@ jobs:
           cp src/collective-commitments-wiring.test.ts "$RUNNER_TEMP/collective-commitments-wiring.test.ts"
           cp supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql \
             "$RUNNER_TEMP/20260727030000_fix_collective_manifest_jsonb_alias.sql"
+          cp supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql \
+            "$RUNNER_TEMP/20260727043000_fix_collective_manifest_materialized_rows.sql"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -156,15 +163,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Apply exact forward repair to MoralTrade QA
+      - name: Verify prior alias repair and apply exact materialized-row repair to MoralTrade QA
         shell: bash
         run: |
           set -euo pipefail
-          migration="supabase/migrations/${REPAIR_MIGRATION_VERSION}_${REPAIR_MIGRATION_NAME}.sql"
-          echo "${REPAIR_MIGRATION_SHA256}  ${migration}" | sha256sum --check --strict
 
-          preflight="$ARTIFACT_DIR/repair-preflight.txt"
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
+          apply_guarded_migration() {
+            local version="$1"
+            local name="$2"
+            local digest="$3"
+            local label="$4"
+            local migration="supabase/migrations/${version}_${name}.sql"
+            local preflight="$ARTIFACT_DIR/${label}-preflight.txt"
+            local apply_file="$RUNNER_TEMP/${label}-atomic.sql"
+
+            echo "${digest}  ${migration}" | sha256sum --check --strict
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL > "$preflight"
           select case
             when current_database() <> 'postgres' then 'FAIL:database'
             when not exists (
@@ -174,53 +188,62 @@ jobs:
             when to_regprocedure('public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)') is null then 'FAIL:activation_rpc_missing'
             when exists (
               select 1 from supabase_migrations.schema_migrations
-              where version='${REPAIR_MIGRATION_VERSION}'
+              where version='${version}'
             ) then 'ALREADY_APPLIED'
             else 'PASS'
           end;
           SQL
-          preflight_result="$(tr -d '[:space:]' < "$preflight")"
-          if [[ "$preflight_result" == "PASS" ]]; then
-            apply_file="$RUNNER_TEMP/collective-manifest-repair-atomic.sql"
-            python3 - "$migration" "$apply_file" <<'PY'
+            local result
+            result="$(tr -d '[:space:]' < "$preflight")"
+            if [[ "$result" == "PASS" ]]; then
+              python3 - "$migration" "$apply_file" <<'PY'
           from pathlib import Path
           import sys
 
-          source = Path(sys.argv[1]).read_text().splitlines()
-          begins = [i for i, line in enumerate(source) if line.strip().lower() == "begin;"]
-          commits = [i for i, line in enumerate(source) if line.strip().lower() == "commit;"]
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          begins = [i for i, line in enumerate(lines) if line.strip().lower() == "begin;"]
+          commits = [i for i, line in enumerate(lines) if line.strip().lower() == "commit;"]
           if len(begins) != 1 or len(commits) != 1 or begins[0] >= commits[0]:
-              raise SystemExit(f"Unexpected repair transaction boundaries: begin={begins}, commit={commits}")
-          body = [line for i, line in enumerate(source) if i not in {begins[0], commits[0]}]
+              raise SystemExit(f"Unexpected migration transaction boundaries: begin={begins}, commit={commits}")
+          body = [line for i, line in enumerate(lines) if i not in {begins[0], commits[0]}]
           Path(sys.argv[2]).write_text("\n".join(body) + "\n")
           PY
-            cat >> "$apply_file" <<SQL
+              cat >> "$apply_file" <<SQL
           insert into supabase_migrations.schema_migrations (
             version, statements, name, created_by, idempotency_key
           ) values (
-            '${REPAIR_MIGRATION_VERSION}',
-            array['Guarded collective manifest alias repair; sha256 ${REPAIR_MIGRATION_SHA256}'],
-            '${REPAIR_MIGRATION_NAME}',
+            '${version}',
+            array['Guarded ${label}; sha256 ${digest}'],
+            '${name}',
             'github-actions-collective-adversarial-qa',
-            'collective-${REPAIR_MIGRATION_VERSION}-${REPAIR_MIGRATION_SHA256}'
+            'collective-${version}-${digest}'
           );
           SQL
-            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-              --single-transaction --file "$apply_file" \
-              2>&1 | tee "$ARTIFACT_DIR/repair-apply.log"
-          elif [[ "$preflight_result" == "ALREADY_APPLIED" ]]; then
-            installed="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL
+              psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --single-transaction --file "$apply_file" \
+                2>&1 | tee "$ARTIFACT_DIR/${label}-apply.log"
+            elif [[ "$result" == "ALREADY_APPLIED" ]]; then
+              local installed
+              installed="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<SQL
           select statements[1]
           from supabase_migrations.schema_migrations
-          where version='${REPAIR_MIGRATION_VERSION}' and name='${REPAIR_MIGRATION_NAME}';
+          where version='${version}' and name='${name}';
           SQL
           )"
-            grep -Fq "sha256 ${REPAIR_MIGRATION_SHA256}" <<< "$installed"
-            printf 'Already applied with exact digest.\n' | tee "$ARTIFACT_DIR/repair-apply.log"
-          else
-            echo "Repair preflight failed: $preflight_result" >&2
-            exit 1
-          fi
+              grep -Fq "sha256 ${digest}" <<< "$installed"
+              printf 'Already applied with exact digest.\n' | tee "$ARTIFACT_DIR/${label}-apply.log"
+            else
+              echo "${label} preflight failed: $result" >&2
+              exit 1
+            fi
+          }
+
+          apply_guarded_migration \
+            "$ALIAS_REPAIR_VERSION" "$ALIAS_REPAIR_NAME" "$ALIAS_REPAIR_SHA256" \
+            "collective-manifest-alias-repair"
+          apply_guarded_migration \
+            "$MATERIALIZED_REPAIR_VERSION" "$MATERIALIZED_REPAIR_NAME" "$MATERIALIZED_REPAIR_SHA256" \
+            "collective-manifest-materialized-rows-repair"
 
       - name: Run complete transactional database regression
         shell: bash
@@ -249,8 +272,16 @@ jobs:
           select case
             when pg_get_functiondef(
               'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)'::regprocedure
-            ) !~* 'jsonb_array_elements\(p_manifest\)[[:space:]]+(as[[:space:]]+)?manifest\(entry\)'
-              then 'FAIL:scalar_jsonb_alias_missing'
+            ) !~* 'with[[:space:]]+signature_rows[[:space:]]+as[[:space:]]+materialized'
+              then 'FAIL:signature_rows_materialization_missing'
+            when pg_get_functiondef(
+              'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)'::regprocedure
+            ) !~* 'select[[:space:]]+jsonb_array_elements\(p_manifest\)[[:space:]]+as[[:space:]]+manifest_entry'
+              then 'FAIL:manifest_rows_materialization_missing'
+            when pg_get_functiondef(
+              'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)'::regprocedure
+            ) ~* 'full[[:space:]]+join[[:space:]]+jsonb_array_elements\(p_manifest\)'
+              then 'FAIL:direct_srf_full_join_remains'
             when has_table_privilege('authenticated', 'public.collective_identity_credentials', 'select') then 'FAIL:credential_select'
             when has_table_privilege('authenticated', 'public.collective_commitment_private_signatures', 'select') then 'FAIL:private_select'
             when has_table_privilege('authenticated', 'public.collective_commitment_keys', 'select') then 'FAIL:key_select'
@@ -330,11 +361,14 @@ jobs:
           cp "$RUNNER_TEMP/collective-commitments-wiring.test.ts" src/collective-commitments-wiring.test.ts
           cp "$RUNNER_TEMP/20260727030000_fix_collective_manifest_jsonb_alias.sql" \
             supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql
+          cp "$RUNNER_TEMP/20260727043000_fix_collective_manifest_materialized_rows.sql" \
+            supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql
           git add \
             src/collective-commitments-wiring.test.ts \
-            supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql
+            supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql \
+            supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql
           git diff --cached --check
-          git commit -m "Fix collective reveal-manifest JSONB alias"
+          git commit -m "Fix collective reveal-manifest validation"
           git push origin HEAD:"$PRODUCT_BRANCH"
           echo "FINAL_PRODUCT_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
@@ -346,7 +380,8 @@ jobs:
           product_head_before=${EXPECTED_PRODUCT_HEAD}
           product_head_after=${FINAL_PRODUCT_HEAD}
           qa_project=${EXPECTED_QA_REF}
-          repair_migration_version=${REPAIR_MIGRATION_VERSION}
+          alias_repair_migration_version=${ALIAS_REPAIR_VERSION}
+          materialized_rows_repair_migration_version=${MATERIALIZED_REPAIR_VERSION}
           database_regression=PASS
           authenticated_browser_qa=PASS
           duplicate_human=PASS
