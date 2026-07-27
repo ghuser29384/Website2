@@ -50,3 +50,5 @@ jobs:
           git add .github/importer-diagnostic.txt
           git commit -m "Record latest institutional importer diagnostic"
           git push origin HEAD:feat/institutional-trade-system
+
+# Refresh after the transport-path exclusion repair.
