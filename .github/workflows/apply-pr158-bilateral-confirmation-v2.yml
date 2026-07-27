@@ -1,0 +1,316 @@
+name: Apply PR 158 bilateral confirmation repair v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-pr158-bilateral-confirmation-v2.yml"
+      - ".github/scripts/apply-pr158-bilateral-confirmation.py"
+      - ".github/scripts/generate-pr158-confirm-closed-offer-compatibility.py"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: pr158-bilateral-confirmation-product-patch
+  cancel-in-progress: false
+
+jobs:
+  patch-test-push:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-bilateral-confirmation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_PR158_HEAD: 4ca0bb452179684476a69af5dd320d91dda0879e
+      COMPAT_MIGRATION_VERSION: "20260727040500"
+      COMPAT_MIGRATION_NAME: allow_legacy_agreement_confirmation_after_offer_close
+
+    steps:
+      - name: Check out temporary repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve and correct deterministic generators
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply-pr158-bilateral-confirmation.py \
+            "$RUNNER_TEMP/apply-pr158-bilateral-confirmation.py"
+          cp .github/scripts/generate-pr158-confirm-closed-offer-compatibility.py \
+            "$RUNNER_TEMP/generate-pr158-confirm-closed-offer-compatibility.py"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("/home/runner/work/_temp/apply-pr158-bilateral-confirmation.py")
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              "  owner_id uuid;\n  responder_id uuid;\n":
+                  "  owner_profile_id uuid;\n  responder_profile_id uuid;\n",
+              "  select id into owner_id\n": "  select id into owner_profile_id\n",
+              "  select id into responder_id\n": "  select id into responder_profile_id\n",
+              "    and owner_id = owner_id;\n": "    and owner_id = owner_profile_id;\n",
+              "  if owner_id is null or responder_id is null or fixture_count <> 1 then\n":
+                  "  if owner_profile_id is null or responder_profile_id is null or fixture_count <> 1 then\n",
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f"Expected one SQL guard fragment: {old!r}")
+              source = source.replace(old, new, 1)
+          path.write_text(source, encoding="utf-8")
+          PY
+
+      - name: Wait for the first guarded patch run to finish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 100); do
+            body="$RUNNER_TEMP/runs.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/pr158-bilateral-confirmation-20260727&event=pull_request&per_page=100" \
+              --output "$body"
+            active="$(jq '[.workflow_runs[] | select(.name == "Apply PR 158 bilateral confirmation repair" and (.status == "queued" or .status == "in_progress" or .status == "pending"))] | length' "$body")"
+            if [[ "$active" = "0" ]]; then
+              break
+            fi
+            echo "The first guarded patch run is still active; waiting (attempt $attempt/100)."
+            sleep 12
+          done
+
+      - name: Inspect current PR 158 head and decide whether repair is already present
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git checkout -B agent/dynamic-marketplace-clearing-rounds \
+            origin/agent/dynamic-marketplace-clearing-rounds
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$EXPECTED_PR158_HEAD" ]] \
+             && [[ -f src/app/deals/dealroom-confirmation.test.ts ]] \
+             && [[ -f supabase/tests/marketplace_bilateral_confirmation.sql ]] \
+             && grep -Fq 'confirm_agreement_version_v2' src/app/actions.ts \
+             && grep -Fq 'Confirm current frozen version' 'src/app/deals/[agreementId]/dealroom-main-sections.tsx'; then
+            echo "ALREADY_PATCHED=1" >> "$GITHUB_ENV"
+            echo "FINAL_SHA=$actual" >> "$GITHUB_ENV"
+            echo "The first guarded workflow already pushed the tested repair at $actual."
+            exit 0
+          fi
+          if [[ "$actual" != "$EXPECTED_PR158_HEAD" ]]; then
+            echo "Refusing unexpected PR #158 head $actual." >&2
+            exit 1
+          fi
+          echo "ALREADY_PATCHED=0" >> "$GITHUB_ENV"
+
+      - name: Apply product action, dealroom control, and regressions
+        if: env.ALREADY_PATCHED == '0'
+        run: python3 "$RUNNER_TEMP/apply-pr158-bilateral-confirmation.py"
+
+      - name: Set up Node.js
+        if: env.ALREADY_PATCHED == '0'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run focused tests, lint, production build, and whitespace checks
+        if: env.ALREADY_PATCHED == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            src/app/deals/dealroom-confirmation.test.ts \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            src/app/offers/dynamic-marketplace.test.ts \
+            src/lib/marketplace-clearing-round.test.ts \
+            src/lib/marketplace-offer-families.test.ts
+          npx eslint \
+            src/app/actions.ts \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            src/app/deals/dealroom-confirmation.test.ts
+          npm run build
+          git diff --check
+
+      - name: Validate exact QA target and install PostgreSQL client
+        if: env.ALREADY_PATCHED == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${QA_SUPABASE_DB_URL:-}" ]]; then
+            echo "Missing QA_SUPABASE_DB_URL." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected QA database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected QA database connection parameters.")
+          PY
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Run live bilateral confirmation regression and classify compatibility
+        if: env.ALREADY_PATCHED == '0'
+        id: live
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/bilateral-confirmation-regression.txt"
+          set +e
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_bilateral_confirmation.sql \
+            > "$output" 2>&1
+          status=$?
+          set -e
+          cat "$output"
+          if [[ "$status" = "0" ]] \
+             && grep -Fq "PASS: first confirmation stays proposed, duplicate is idempotent, and second distinct confirmation activates" "$output"; then
+            echo "NEEDS_COMPAT_MIGRATION=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if grep -Fq "The offer is no longer eligible for this non-financial agreement." "$output"; then
+            echo "NEEDS_COMPAT_MIGRATION=1" >> "$GITHUB_ENV"
+            echo "The canonical confirmation RPC needs the narrow matched/closed legacy-offer compatibility repair."
+            exit 0
+          fi
+          echo "The live bilateral confirmation regression failed for an unclassified reason." >&2
+          exit "$status"
+
+      - name: Generate and apply narrow confirmation compatibility migration to QA
+        if: env.ALREADY_PATCHED == '0' && env.NEEDS_COMPAT_MIGRATION == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$RUNNER_TEMP/generate-pr158-confirm-closed-offer-compatibility.py"
+          migration="supabase/migrations/${COMPAT_MIGRATION_VERSION}_${COMPAT_MIGRATION_NAME}.sql"
+          migration_sha="$(sha256sum "$migration" | cut -d' ' -f1)"
+          echo "COMPAT_MIGRATION_SHA=$migration_sha" >> "$GITHUB_ENV"
+
+          preflight="$RUNNER_TEMP/compat-preflight.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<SQL > "$preflight"
+          select case
+            when exists (
+              select 1 from supabase_migrations.schema_migrations
+              where version='${COMPAT_MIGRATION_VERSION}'
+            ) then 'FAIL:migration_already_recorded'
+            when to_regprocedure('public.confirm_agreement_version_v2(uuid,uuid,uuid)') is null then 'FAIL:canonical_rpc_missing'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$preflight")" = "PASS"
+
+          apply_file="$RUNNER_TEMP/apply-compat.sql"
+          cat "$migration" > "$apply_file"
+          cat >> "$apply_file" <<SQL
+
+          insert into supabase_migrations.schema_migrations (
+            version, statements, name, created_by, idempotency_key
+          ) values (
+            '${COMPAT_MIGRATION_VERSION}',
+            array['Applied from guarded PR #158 bilateral confirmation repair; sha256 ${migration_sha}'],
+            '${COMPAT_MIGRATION_NAME}',
+            'github-actions-pr158-bilateral-confirmation',
+            'pr158-${COMPAT_MIGRATION_VERSION}-${migration_sha}'
+          );
+          SQL
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --single-transaction --file "$apply_file"
+
+      - name: Require the live regression to pass after any compatibility repair
+        if: env.ALREADY_PATCHED == '0' && env.NEEDS_COMPAT_MIGRATION == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/bilateral-confirmation-regression-after-compat.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_bilateral_confirmation.sql \
+            | tee "$output"
+          grep -Fq \
+            "PASS: first confirmation stays proposed, duplicate is idempotent, and second distinct confirmation activates" \
+            "$output"
+
+      - name: Verify rollback left only the exact clean synthetic fixture
+        if: env.ALREADY_PATCHED == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/final-state.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and fingerprint='qa-pr-158-marketplace-fixture-v1'
+                and status='open'
+                and workflow_status='published'
+                and closed_at is null
+                and deleted_at is null
+            ) then 'FAIL:offer'
+            when exists (select 1 from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:interests'
+            when exists (select 1 from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:guest_interests'
+            when exists (select 1 from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:agreements'
+            when exists (select 1 from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:threads'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+
+      - name: Commit and push the tested PR 158 product repair
+        if: env.ALREADY_PATCHED == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/app/actions.ts \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            src/app/deals/dealroom-confirmation.test.ts \
+            supabase/tests/marketplace_bilateral_confirmation.sql
+          if [[ -f "supabase/migrations/${COMPAT_MIGRATION_VERSION}_${COMPAT_MIGRATION_NAME}.sql" ]]; then
+            git add "supabase/migrations/${COMPAT_MIGRATION_VERSION}_${COMPAT_MIGRATION_NAME}.sql"
+          fi
+          git commit -m "Use bilateral frozen-version confirmation in dealroom"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
+          echo "FINAL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Record sanitized result
+        shell: bash
+        run: |
+          {
+            echo "previous_head=${EXPECTED_PR158_HEAD}"
+            echo "final_head=${FINAL_SHA}"
+            echo "qa_project=${EXPECTED_QA_REF}"
+            echo "already_patched=${ALREADY_PATCHED}"
+            echo "compatibility_migration=${NEEDS_COMPAT_MIGRATION:-not-needed-or-prior-run}"
+            echo "source_regression=PASS"
+            echo "live_bilateral_confirmation_regression=PASS"
+            echo "production_build=PASS"
+            echo "qa_fixture_clean=PASS"
+          } > pr158-bilateral-confirmation-v2-result.txt
+
+      - name: Upload sanitized result
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-bilateral-confirmation-v2-${{ github.run_id }}
+          path: pr158-bilateral-confirmation-v2-result.txt
+          if-no-files-found: error
+          retention-days: 14
