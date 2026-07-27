@@ -39,7 +39,15 @@ jobs:
         run: |
           set -euo pipefail
           payload_tgz="$RUNNER_TEMP/create-adapter-product.tar.gz"
-          base64 --decode .github/create-adapter-payload/product.b64 > "$payload_tgz"
+          SOURCE=.github/create-adapter-payload/product.b64 OUTPUT="$payload_tgz" python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          source = Path(os.environ["SOURCE"]).read_bytes()
+          payload = source if source.startswith(b"\x1f\x8b") else base64.b64decode(source)
+          Path(os.environ["OUTPUT"]).write_bytes(payload)
+          PY
           echo "${PAYLOAD_TGZ_SHA256}  ${payload_tgz}" | sha256sum --check --strict
 
           PAYLOAD_TGZ="$payload_tgz" python3 - <<'PY'
