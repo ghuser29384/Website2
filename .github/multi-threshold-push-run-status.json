@@ -5,6 +5,7 @@
   "workflowRef": "ghuser29384/Website2/.github/workflows/multi-threshold-authenticated-browser-qa.yml@refs/heads/qa/multi-threshold-authenticated-browser-20260727",
   "triggerCommit": "bc4abd4a9ea889f71d0d244133589d78a7604ff9",
   "productHead": "94d76c8bdc835a1aec7d61663d105e1f193a0b9d",
-  "status": "started",
-  "startedAt": "2026-07-27T04:54:29.288439+00:00"
+  "status": "failure",
+  "startedAt": "2026-07-27T04:54:29.288439+00:00",
+  "completedAt": "2026-07-27T04:57:43.875885+00:00"
 }
