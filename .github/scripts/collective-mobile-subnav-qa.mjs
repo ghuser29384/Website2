@@ -86,39 +86,84 @@ try {
     const nav = page.getByRole("navigation", { name: "Collective commitments" });
     await nav.waitFor({ state: "visible", timeout: 30_000 });
 
-    const metrics = await nav.evaluate((element) => {
+    const diagnostics = await nav.evaluate((element) => {
       const links = Array.from(element.querySelectorAll("a"));
       const navRect = element.getBoundingClientRect();
       const documentElement = document.documentElement;
       const computed = getComputedStyle(element);
-      return {
-        viewportWidth: window.innerWidth,
-        documentScrollWidth: documentElement.scrollWidth,
-        documentClientWidth: documentElement.clientWidth,
-        navClientWidth: element.clientWidth,
-        navScrollWidth: element.scrollWidth,
-        navLeft: navRect.left,
-        navRight: navRect.right,
-        display: computed.display,
-        flexWrap: computed.flexWrap,
-        overflowX: computed.overflowX,
-        whiteSpace: computed.whiteSpace,
-        links: links.map((link) => {
-          const rect = link.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const overflowingElements = Array.from(document.body.querySelectorAll("*"))
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
           return {
-            text: link.textContent?.trim() ?? "",
+            tag: node.tagName.toLowerCase(),
+            className: typeof node.className === "string" ? node.className : "",
+            text: (node.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 120),
             left: rect.left,
             right: rect.right,
-            top: rect.top,
-            bottom: rect.bottom,
             width: rect.width,
-            height: rect.height,
-            visible: rect.width > 0 && rect.height > 0,
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
           };
-        }),
+        })
+        .filter((item) => item.left < -1 || item.right > viewportWidth + 1)
+        .sort((a, b) => b.right - a.right)
+        .slice(0, 30);
+
+      return {
+        metrics: {
+          viewportWidth,
+          documentScrollWidth: documentElement.scrollWidth,
+          documentClientWidth: documentElement.clientWidth,
+          navClientWidth: element.clientWidth,
+          navScrollWidth: element.scrollWidth,
+          navLeft: navRect.left,
+          navRight: navRect.right,
+          display: computed.display,
+          flexWrap: computed.flexWrap,
+          overflowX: computed.overflowX,
+          whiteSpace: computed.whiteSpace,
+          links: links.map((link) => {
+            const rect = link.getBoundingClientRect();
+            return {
+              text: link.textContent?.trim() ?? "",
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+              bottom: rect.bottom,
+              width: rect.width,
+              height: rect.height,
+              visible: rect.width > 0 && rect.height > 0,
+            };
+          }),
+        },
+        overflowingElements,
       };
     });
 
+    await page.screenshot({
+      path: path.join(artifactDir, `${viewport.name}-viewport.png`),
+      fullPage: false,
+    });
+    await page.screenshot({
+      path: path.join(artifactDir, `${viewport.name}-full-page.png`),
+      fullPage: true,
+    });
+
+    const record = {
+      ...viewport,
+      outcome: "measured",
+      metrics: diagnostics.metrics,
+      overflowingElements: diagnostics.overflowingElements,
+      consoleErrors,
+      pageErrors,
+      failedRequests,
+      ignoredPrefetchAborts,
+      errorResponses,
+    };
+    audit.viewports.push(record);
+
+    const metrics = diagnostics.metrics;
     assert.deepEqual(
       metrics.links.map((link) => link.text),
       ["Collective commitments", "Create", "Identity verification"],
@@ -149,25 +194,7 @@ try {
     assert.deepEqual(failedRequests, [], `${viewport.name}: same-origin request failures detected.`);
     assert.deepEqual(errorResponses, [], `${viewport.name}: same-origin HTTP errors detected.`);
 
-    await page.screenshot({
-      path: path.join(artifactDir, `${viewport.name}-viewport.png`),
-      fullPage: false,
-    });
-    await page.screenshot({
-      path: path.join(artifactDir, `${viewport.name}-full-page.png`),
-      fullPage: true,
-    });
-
-    audit.viewports.push({
-      ...viewport,
-      outcome: "pass",
-      metrics,
-      consoleErrors,
-      pageErrors,
-      failedRequests,
-      ignoredPrefetchAborts,
-      errorResponses,
-    });
+    record.outcome = "pass";
     await context.close();
   }
 
