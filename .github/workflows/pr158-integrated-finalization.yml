@@ -1,0 +1,67 @@
+name: PR 158 integrated finalization
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-integrated-finalization.yml"
+      - ".github/scripts/run-pr158-integrated-finalization.sh"
+      - ".github/scripts/apply-pr158-integrated-lint-fixes.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr158-integrated-finalization
+  cancel-in-progress: false
+
+jobs:
+  finalize-integrated-candidate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-sync-main-release-validation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out temporary orchestration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve guarded runner and lint patch outside the worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/run-pr158-integrated-finalization.sh \
+            "$RUNNER_TEMP/run-pr158-integrated-finalization.sh"
+          cp .github/scripts/apply-pr158-integrated-lint-fixes.py \
+            "$RUNNER_TEMP/apply-pr158-integrated-lint-fixes.py"
+          chmod +x "$RUNNER_TEMP/run-pr158-integrated-finalization.sh"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Merge current main, repair baseline lint, validate, compile migrations, and push
+        shell: bash
+        run: "$RUNNER_TEMP/run-pr158-integrated-finalization.sh"
+
+      - name: Upload integrated finalization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-finalization-${{ github.run_id }}
+          path: integrated-final-evidence
+          if-no-files-found: warn
+          retention-days: 14
