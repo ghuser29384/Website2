@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SOURCE_BRANCH = "qa/multi-threshold-browser-script-source-20260727";
 const SOURCE_PATH = ".github/scripts/multi-threshold-authenticated-browser-qa.mjs";
@@ -34,7 +33,7 @@ if (source.split(oldHelper).length !== 2) {
 }
 
 const repaired = source.replace(oldHelper, newHelper);
-const directory = mkdtempSync(path.join(tmpdir(), "moraltrade-multi-threshold-qa-"));
-const target = path.join(directory, "multi-threshold-authenticated-browser-qa.mjs");
+const wrapperDirectory = path.dirname(fileURLToPath(import.meta.url));
+const target = path.join(wrapperDirectory, ".multi-threshold-authenticated-browser-qa.executed.mjs");
 writeFileSync(target, repaired, "utf8");
-await import(pathToFileURL(target).href);
+await import(`${pathToFileURL(target).href}?run=${Date.now()}`);
