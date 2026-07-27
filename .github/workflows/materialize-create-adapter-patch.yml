@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/materialize-create-adapter-patch-20260727
+  pull_request:
+    branches:
+      - feature/mpgf-multi-threshold-failure-bonus-editor-20260726
 
 permissions:
   contents: write
@@ -16,7 +19,8 @@ jobs:
   materialize:
     if: >-
       github.repository == 'ghuser29384/Website2' &&
-      github.ref == 'refs/heads/ops/materialize-create-adapter-patch-20260727'
+      (github.ref == 'refs/heads/ops/materialize-create-adapter-patch-20260727' ||
+       github.event.pull_request.head.ref == 'ops/materialize-create-adapter-patch-20260727')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
