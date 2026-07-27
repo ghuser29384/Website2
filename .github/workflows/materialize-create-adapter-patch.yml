@@ -44,8 +44,11 @@ jobs:
           test -s /tmp/create-adapter.patch
 
       - name: Materialize exactly one product commit
+        id: materialize
+        continue-on-error: true
         shell: bash
         run: |
+          exec > >(tee /tmp/materialization.log) 2>&1
           set -euo pipefail
           git fetch --no-tags origin "$EXPECTED_BASE"
           git checkout --detach "$EXPECTED_BASE"
@@ -97,7 +100,8 @@ jobs:
           git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
           git rev-parse HEAD | tee /tmp/product-sha.txt
 
-      - name: Upload materialization evidence
+      - name: Upload materialization evidence and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: moral-trade-create-adapter-materialization-${{ github.run_id }}
@@ -105,4 +109,14 @@ jobs:
             /tmp/product-sha.txt
             /tmp/expected-files.txt
             /tmp/actual-files.txt
+            /tmp/materialization.log
+          if-no-files-found: warn
           retention-days: 14
+
+      - name: Report materialization failure
+        if: steps.materialize.outcome != 'success'
+        shell: bash
+        run: |
+          echo 'Materialization failed. Last 160 diagnostic lines:'
+          tail -n 160 /tmp/materialization.log || true
+          exit 1
