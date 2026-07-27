@@ -1,0 +1,125 @@
+name: Correct Donation Redirect notification semantics v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: correct-donation-redirect-notification-semantics-v2
+  cancel-in-progress: true
+
+jobs:
+  correct-verify-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact walkthrough branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/donation-redirect-group-buying-walkthrough-20260726
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Apply the exact semantic correction
+        run: python3 scripts/correct-donation-redirect-notification-semantics.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused source and first-visit regressions
+        run: >-
+          node --import tsx --test
+          src/walkthrough-donation-redirect-group-buying.test.ts
+          src/walkthrough-production-shell.test.ts
+          src/proxy.test.ts
+
+      - name: Lint the changed TypeScript and TSX surface
+        run: >-
+          npx eslint
+          src/components/walkthrough/immersive-walkthrough.tsx
+          src/walkthrough-donation-redirect-group-buying.test.ts
+          tests/walkthrough.spec.ts
+
+      - name: Build the corrected candidate
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete walkthrough browser suite
+        run: npx playwright test tests/walkthrough.spec.ts --reporter=line
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Start local app for review render
+        shell: bash
+        run: |
+          npm run dev -- -H 127.0.0.1 -p 3210 > /tmp/moraltrade-notification-render.log 2>&1 &
+          echo $! > /tmp/moraltrade-notification-render.pid
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail http://127.0.0.1:3210/walkthrough >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/moraltrade-notification-render.log
+          exit 1
+
+      - name: Render the corrected notification screen
+        shell: bash
+        run: |
+          mkdir -p walkthrough-notification-render
+          node --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+
+          const browser = await chromium.launch({ headless: true });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+          await page.goto("http://127.0.0.1:3210/walkthrough", { waitUntil: "domcontentloaded" });
+          await page.getByRole("heading", { name: "What do you value?" }).waitFor();
+          await page.getByRole("tab", { name: /Redirect/i }).click();
+          await page.getByRole("button", { name: "Redirect the matched $20" }).click();
+          await page.getByRole("button", { name: "See how one $10 can go further" }).click();
+          await page.getByRole("heading", {
+            name: "The $10 is scheduled to be donated in 7 days.",
+          }).waitFor();
+          await page.screenshot({
+            path: "walkthrough-notification-render/corrected-donation-redirect-notification.png",
+            fullPage: true,
+            animations: "disabled",
+          });
+          await browser.close();
+          NODE
+
+      - name: Upload corrected render
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-donation-redirect-notification-render-v2
+          path: walkthrough-notification-render
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Commit only the corrected product and test files
+        shell: bash
+        run: |
+          rm -rf walkthrough-notification-render
+          rm scripts/correct-donation-redirect-notification-semantics.py
+          rm .github/workflows/correct-donation-redirect-notification-semantics-v2.yml
+          git add -A
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Clarify Donation Redirect notifications and user proposals"
+          git push origin HEAD
