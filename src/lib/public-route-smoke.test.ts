@@ -4657,9 +4657,11 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(createRoute, /CreateRouteChooser/);
   assert.match(createRoute, /Choose a concrete coordination route/);
   assert.match(createRoute, /No funds move/);
+  assert.match(newTradePage, /CreateInterfaceFrame/);
+  assert.match(newTradePage, /moral-trade-create\/index\.html/);
   assert.match(newTradePage, /TradeDraftSignInGate/);
   assert.match(newTradePage, /returnTo=\{returnTo\}/);
-  assert.match(newTradePage, /title: "Create a trade"/);
+  assert.match(newTradePage, /title: "Create"/);
   assert.match(newOffsetPage, /TradeDraftSignInGate/);
   assert.match(newOffsetPage, /getReviewedMarketplaceSeedTemplate/);
   assert.match(newOffsetPage, /Template applied/);
