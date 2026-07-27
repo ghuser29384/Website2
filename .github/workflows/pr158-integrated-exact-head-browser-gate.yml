@@ -1,0 +1,81 @@
+name: PR 158 integrated exact-head browser gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-integrated-exact-head-browser-gate.yml"
+      - ".github/scripts/run-pr158-integrated-exact-head-browser-gate.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr158-integrated-exact-head-browser-gate
+  cancel-in-progress: false
+
+jobs:
+  browser-gate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-integrated-exact-head-qa-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out temporary QA branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve guarded browser runner outside the worktree
+        run: |
+          cp .github/scripts/run-pr158-integrated-exact-head-browser-gate.sh \
+            "$RUNNER_TEMP/run-pr158-integrated-exact-head-browser-gate.sh"
+          chmod +x "$RUNNER_TEMP/run-pr158-integrated-exact-head-browser-gate.sh"
+
+      - name: Check out exact integrated PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: 7df17c6bdd626083f0c68e785237c680dd44e6c3
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies, Chromium, and PostgreSQL client
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Run exact-head regressions, desktop QA, mobile QA, cleanup, and bypass revocation
+        shell: bash
+        run: "$RUNNER_TEMP/run-pr158-integrated-exact-head-browser-gate.sh"
+
+      - name: Upload complete desktop and mobile evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-exact-head-browser-${{ github.run_id }}
+          path: integrated-browser-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload exact-deployment and clean-state proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-exact-head-final-state-${{ github.run_id }}
+          path: integrated-browser-final-state
+          if-no-files-found: warn
+          retention-days: 14
