@@ -1,5 +1,766 @@
 Authenticated Home Feed bundle verification failed.
-staging_sha=2056aa3f54356c0744fd10847c1cdfca05eded22
+staging_sha=baa349fce582448442aa67dd6bce7e9d21f377ad
 base_sha=eebf509a970cb69f0586dd990987b486f7db1584
-recorded_at=2026-07-27T08:44:32Z
+recorded_at=2026-07-27T08:54:58Z
+
+===== /tmp/bundle-integrity.log =====
+Archive:  /tmp/home-feed-bundle.zip
+    testing: moraltrade-home-authenticated-feed-eebf509a/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/returning-home.append.css   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply-home-feed-patch.py   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/returning-homepage.spec.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/package.json   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/pareto-recommendation-wiring.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/home-page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/live-now-a1-response.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/home-feed-contract.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/route.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/README.md   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply.sh   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/verify.sh   OK
+No errors detected in compressed data of /tmp/home-feed-bundle.zip.
+
+===== /tmp/apply.log =====
+Applied authenticated Home Feed patch.
+ M package.json
+ M public/moral-trade-live-now.js
+ M src/app/api/live-now-a1/route.ts
+ M src/app/page.tsx
+ M src/components/home/home-page.tsx
+ M src/components/home/returning-home.module.css
+ M src/lib/pareto-feed-runtime.ts
+ M src/pareto-recommendation-wiring.test.ts
+ M tests/returning-homepage.spec.ts
+?? src/home-feed-contract.test.ts
+?? src/lib/home-feed-snapshot.test.ts
+?? src/lib/home-feed-snapshot.ts
+?? src/lib/live-now-a1-response.ts
+
+===== /tmp/changed-paths.diff =====
+
+===== /tmp/npm-ci-exact.log =====
+
+added 365 packages in 8s
+
+===== /tmp/playwright-install.log =====
+Installing dependencies...
+Switching to root user to install dependencies...
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+Hit:6 https://packages.microsoft.com/repos/azure-cli noble InRelease
+Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:8 https://dl.google.com/linux/chrome-stable/deb stable InRelease [2548 B]
+Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [237 kB]
+Get:10 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [11.7 kB]
+Get:11 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [203 kB]
+Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1141 kB]
+Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [276 kB]
+Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [180 kB]
+Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1676 kB]
+Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [333 kB]
+Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1348 kB]
+Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [302 kB]
+Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [45.4 kB]
+Get:21 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [12.1 kB]
+Get:22 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+Get:23 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5760 B]
+Get:24 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [32.5 kB]
+Get:25 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [885 kB]
+Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [196 kB]
+Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.3 kB]
+Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1197 kB]
+Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [238 kB]
+Get:31 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+Get:32 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1248 kB]
+Get:33 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [284 kB]
+Get:34 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [40.3 kB]
+Get:35 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [10.4 kB]
+Get:36 https://dl.google.com/linux/chrome-stable/deb stable/main amd64 Packages [1425 B]
+Fetched 10.8 MB in 1s (7864 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+libasound2t64 set to manually installed.
+libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+libatk-bridge2.0-0t64 set to manually installed.
+libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+libatk1.0-0t64 set to manually installed.
+libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+libatspi2.0-0t64 set to manually installed.
+libcairo2 is already the newest version (1.18.0-3build1).
+libcairo2 set to manually installed.
+libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+libcups2t64 set to manually installed.
+libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+libdbus-1-3 set to manually installed.
+libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+libdrm2 set to manually installed.
+libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.2).
+libgbm1 set to manually installed.
+libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.8).
+libglib2.0-0t64 set to manually installed.
+libnspr4 is already the newest version (2:4.35-1.1build1).
+libnspr4 set to manually installed.
+libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+libnss3 set to manually installed.
+libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+libpango-1.0-0 set to manually installed.
+libx11-6 is already the newest version (2:1.8.7-1build1).
+libx11-6 set to manually installed.
+libxcb1 is already the newest version (1.15-1ubuntu2).
+libxcb1 set to manually installed.
+libxcomposite1 is already the newest version (1:0.4.5-1build3).
+libxcomposite1 set to manually installed.
+libxdamage1 is already the newest version (1:1.1.6-1build1).
+libxdamage1 set to manually installed.
+libxext6 is already the newest version (2:1.3.4-1build2).
+libxext6 set to manually installed.
+libxfixes3 is already the newest version (1:6.0.0-2build1).
+libxfixes3 set to manually installed.
+libxkbcommon0 is already the newest version (1.6.0-1build1).
+libxkbcommon0 set to manually installed.
+libxrandr2 is already the newest version (2:1.5.2-2build1).
+libxrandr2 set to manually installed.
+xvfb is already the newest version (2:21.1.12-1ubuntu1.6).
+fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+libfontconfig1 set to manually installed.
+libfreetype6 is already the newest version (2.13.2+dfsg-1ubuntu0.1).
+libfreetype6 set to manually installed.
+fonts-liberation is already the newest version (1:2.1.5-3).
+fonts-liberation set to manually installed.
+The following additional packages will be installed:
+  xfonts-encodings xfonts-utils
+Recommended packages:
+  fonts-ipafont-mincho fonts-tlwg-loma
+The following NEW packages will be installed:
+  fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+  fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+  xfonts-utils
+0 upgraded, 9 newly installed, 0 to remove and 66 not upgraded.
+Need to get 21.1 MB of archives.
+After this operation, 79.5 MB of additional disk space will be used.
+Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+Get:4 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+Get:7 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+Get:9 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+Get:10 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+Fetched 21.1 MB in 0s (51.7 MB/s)
+Selecting previously unselected package fonts-ipafont-gothic.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 202954 files and directories currently installed.)
+Preparing to unpack .../0-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+Selecting previously unselected package fonts-freefont-ttf.
+Preparing to unpack .../1-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+Selecting previously unselected package fonts-tlwg-loma-otf.
+Preparing to unpack .../2-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+Selecting previously unselected package fonts-unifont.
+Preparing to unpack .../3-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+Unpacking fonts-unifont (1:15.1.01-1build1) ...
+Selecting previously unselected package fonts-wqy-zenhei.
+Preparing to unpack .../4-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+Selecting previously unselected package xfonts-encodings.
+Preparing to unpack .../5-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+Selecting previously unselected package xfonts-utils.
+Preparing to unpack .../6-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+Unpacking xfonts-utils (1:7.7+6build3) ...
+Selecting previously unselected package xfonts-cyrillic.
+Preparing to unpack .../7-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+Selecting previously unselected package xfonts-scalable.
+Preparing to unpack .../8-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+Setting up fonts-wqy-zenhei (0.9.45-8) ...
+Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+Setting up fonts-unifont (1:15.1.01-1build1) ...
+Setting up xfonts-utils (1:7.7+6build3) ...
+Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+Setting up xfonts-scalable (1:1.0.3-1.3) ...
+Processing triggers for man-db (2.12.0-4build2) ...
+Not building database; man-db/auto-update is not 'true'.
+Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+Downloading Chrome for Testing 148.0.7778.96 (playwright chromium v1223) from https://cdn.playwright.dev/builds/cft/148.0.7778.96/linux64/chrome-linux64.zip
+|                                                                                |   0% of 175.4 MiB
+|■■■■■■■■                                                                        |  10% of 175.4 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 175.4 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 175.4 MiB
+Chrome for Testing 148.0.7778.96 (playwright chromium v1223) downloaded to /home/runner/.cache/ms-playwright/chromium-1223
+Downloading FFmpeg (playwright ffmpeg v1011) from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+|                                                                                |   0% of 2.3 MiB
+|■■■■■■■■                                                                        |  10% of 2.3 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+FFmpeg (playwright ffmpeg v1011) downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+Downloading Chrome Headless Shell 148.0.7778.96 (playwright chromium-headless-shell v1223) from https://cdn.playwright.dev/builds/cft/148.0.7778.96/linux64/chrome-headless-shell-linux64.zip
+|                                                                                |   0% of 113.2 MiB
+|■■■■■■■■                                                                        |  10% of 113.2 MiB
+|■■■■■■■■■■■■■■■■                                                                |  20% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 113.2 MiB
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 113.2 MiB
+Chrome Headless Shell 148.0.7778.96 (playwright chromium-headless-shell v1223) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1223
+
+===== /tmp/verify-exact.log =====
+  ...
+# Subtest: unknown planned-donation state and encrypted cause sentinels remain unknown
+ok 687 - unknown planned-donation state and encrypted cause sentinels remain unknown
+  ---
+  duration_ms: 0.14285
+  ...
+# Subtest: unknown durations fail the horizon cap while quarter and year boundaries remain usable
+ok 688 - unknown durations fail the horizon cap while quarter and year boundaries remain usable
+  ---
+  duration_ms: 0.496549
+  ...
+# Subtest: conservative preference rejects a source explicitly marked balanced
+ok 689 - conservative preference rejects a source explicitly marked balanced
+  ---
+  duration_ms: 0.266918
+  ...
+# Subtest: calibration stops after five answered live format comparisons
+ok 690 - calibration stops after five answered live format comparisons
+  ---
+  duration_ms: 0.467363
+  ...
+# Subtest: unsupported free-text hard constraints are not collected or treated as enforced
+ok 691 - unsupported free-text hard constraints are not collected or treated as enforced
+  ---
+  duration_ms: 0.306338
+  ...
+# Subtest: feasibility is checked before the composition pool is bounded
+ok 692 - feasibility is checked before the composition pool is bounded
+  ---
+  duration_ms: 0.901182
+  ...
+# Subtest: a globally dominant thirteenth feasible source is retained
+ok 693 - a globally dominant thirteenth feasible source is retained
+  ---
+  duration_ms: 2.202713
+  ...
+# Subtest: equal-component routes with a higher burden are dominated
+ok 694 - equal-component routes with a higher burden are dominated
+  ---
+  duration_ms: 0.499492
+  ...
+# Subtest: exposes Feed and Discover as the first marketplace navigation entries
+ok 695 - exposes Feed and Discover as the first marketplace navigation entries
+  ---
+  duration_ms: 1.814295
+  ...
+# Subtest: links to Feed and Discover from the marketplace footer group
+ok 696 - links to Feed and Discover from the marketplace footer group
+  ---
+  duration_ms: 0.294344
+  ...
+# Subtest: links to Trade controls without adding another primary navigation item
+ok 697 - links to Trade controls without adding another primary navigation item
+  ---
+  duration_ms: 0.226042
+  ...
+# Subtest: makes all ten coordination and safety controls discoverable in site search
+ok 698 - makes all ten coordination and safety controls discoverable in site search
+  ---
+  duration_ms: 0.31772
+  ...
+# Subtest: classifies only fully accepted dossiers as accepted
+ok 699 - classifies only fully accepted dossiers as accepted
+  ---
+  duration_ms: 1.117695
+  ...
+# Subtest: applies cause and review-state constraints before ranking
+ok 700 - applies cause and review-state constraints before ranking
+  ---
+  duration_ms: 71.023012
+  ...
+# Subtest: fails closed when an evidence query contains unsupported amount constraints
+ok 701 - fails closed when an evidence query contains unsupported amount constraints
+  ---
+  duration_ms: 4.416888
+  ...
+# Subtest: supports an explicit challenges-first ordering without discarding matching records
+ok 702 - supports an explicit challenges-first ordering without discarding matching records
+  ---
+  duration_ms: 12.999577
+  ...
+# Subtest: enables the ambiguity fallback in production
+ok 703 - enables the ambiguity fallback in production
+  ---
+  duration_ms: 1.195819
+  ...
+# Subtest: keeps non-production environments opt-in
+ok 704 - keeps non-production environments opt-in
+  ---
+  duration_ms: 0.213305
+  ...
+# Subtest: honors the explicit production disable override
+ok 705 - honors the explicit production disable override
+  ---
+  duration_ms: 0.18234
+  ...
+# Subtest: parses the verified civic budget and deadline example without clarification
+ok 706 - parses the verified civic budget and deadline example without clarification
+  ---
+  duration_ms: 15.51039
+  ...
+# Subtest: does not treat a broad but usable cause search as ambiguous
+ok 707 - does not treat a broad but usable cause search as ambiguous
+  ---
+  duration_ms: 5.436938
+  ...
+# Subtest: asks one material clarification for a standalone amount while preserving other facets
+ok 708 - asks one material clarification for a standalone amount while preserving other facets
+  ---
+  duration_ms: 2.362152
+  ...
+# Subtest: applies a clarification answer while preserving parsed constraints
+ok 709 - applies a clarification answer while preserving parsed constraints
+  ---
+  duration_ms: 3.027669
+  ...
+# Subtest: routes global queries to the relevant directory
+ok 710 - routes global queries to the relevant directory
+  ---
+  duration_ms: 9.596698
+  ...
+# Subtest: resolves common aliases and close typos semantically
+ok 711 - resolves common aliases and close typos semantically
+  ---
+  duration_ms: 6.337381
+  ...
+# Subtest: serializes a smart target and parses the facets back
+ok 712 - serializes a smart target and parses the facets back
+  ---
+  duration_ms: 4.902098
+  ...
+# Subtest: enforces inclusive and exclusive money constraints
+ok 713 - enforces inclusive and exclusive money constraints
+  ---
+  duration_ms: 3.500064
+  ...
+# Subtest: enforces deadline boundaries
+ok 714 - enforces deadline boundaries
+  ---
+  duration_ms: 3.571644
+  ...
+# Subtest: uses personal priorities as a bounded fit signal
+ok 715 - uses personal priorities as a bounded fit signal
+  ---
+  duration_ms: 1.400785
+  ...
+# Subtest: detects contradictory amount limits
+ok 716 - detects contradictory amount limits
+  ---
+  duration_ms: 2.064878
+  ...
+# Subtest: asks before moving unsupported wish constraints to the people directory
+ok 717 - asks before moving unsupported wish constraints to the people directory
+  ---
+  duration_ms: 2.913386
+  ...
+# Subtest: asks before applying offer-only amount constraints to people
+ok 718 - asks before applying offer-only amount constraints to people
+  ---
+  duration_ms: 3.348363
+  ...
+# Subtest: does not add a cross-directory clarification to broad Discover searches
+ok 719 - does not add a cross-directory clarification to broad Discover searches
+  ---
+  duration_ms: 5.547295
+  ...
+# Subtest: the threshold radar route preserves the supplied campaign copy
+ok 720 - the threshold radar route preserves the supplied campaign copy
+  ---
+  duration_ms: 1.345978
+  ...
+# Subtest: the threshold radar keeps the target artboard and interactive controls
+ok 721 - the threshold radar keeps the target artboard and interactive controls
+  ---
+  duration_ms: 0.445972
+  ...
+# Subtest: Trade controls exposes all ten selected interactive mechanisms
+ok 722 - Trade controls exposes all ten selected interactive mechanisms
+  ---
+  duration_ms: 1.389686
+  ...
+# Subtest: Trade controls hands preview decisions to existing live workflows
+ok 723 - Trade controls hands preview decisions to existing live workflows
+  ---
+  duration_ms: 0.314598
+  ...
+# Subtest: Trade controls is noindex, contract-backed, responsive, and discoverable
+ok 724 - Trade controls is noindex, contract-backed, responsive, and discoverable
+  ---
+  duration_ms: 0.520004
+  ...
+# Subtest: USD parsing is exact to cents
+ok 725 - USD parsing is exact to cents
+  ---
+  duration_ms: 1.184971
+  ...
+# Subtest: partner metadata is signed and tamper evident
+ok 726 - partner metadata is signed and tamper evident
+  ---
+  duration_ms: 0.821681
+  ...
+# Subtest: Every.org URL freezes amount, recipient, partner ID, and signed metadata
+ok 727 - Every.org URL freezes amount, recipient, partner ID, and signed metadata
+  ---
+  duration_ms: 1.334256
+  ...
+# Subtest: valid AMF webhook is accepted and recipient or amount drift fails closed
+ok 728 - valid AMF webhook is accepted and recipient or amount drift fails closed
+  ---
+  duration_ms: 1.417406
+  ...
+# Subtest: curated target registry includes direct AMF routing
+ok 729 - curated target registry includes direct AMF routing
+  ---
+  duration_ms: 0.256226
+  ...
+# Subtest: connector environments fail closed across the production boundary
+ok 730 - connector environments fail closed across the production boundary
+  ---
+  duration_ms: 0.601793
+  ...
+# Subtest: proposed agreements stop at bilateral confirmation
+ok 731 - proposed agreements stop at bilateral confirmation
+  ---
+  duration_ms: 1.702485
+  ...
+# Subtest: active agreements move to the commitment stage
+ok 732 - active agreements move to the commitment stage
+  ---
+  duration_ms: 0.239057
+  ...
+# Subtest: evidence states stop at evidence review
+ok 733 - evidence states stop at evidence review
+  ---
+  duration_ms: 0.238826
+  ...
+# Subtest: completed agreements fill the whole route
+ok 734 - completed agreements fill the whole route
+  ---
+  duration_ms: 0.247758
+  ...
+# Subtest: ended agreements never imply completion
+ok 735 - ended agreements never imply completion
+  ---
+  duration_ms: 0.214837
+  ...
+# Subtest: typing Animal ranks the shared animal priority categories together
+ok 736 - typing Animal ranks the shared animal priority categories together
+  ---
+  duration_ms: 10.795044
+  ...
+# Subtest: mixed search fields keep cause matches ahead of action matches
+ok 737 - mixed search fields keep cause matches ahead of action matches
+  ---
+  duration_ms: 4.343445
+  ...
+# Subtest: the shared catalog covers every standardized trade-term context
+ok 738 - the shared catalog covers every standardized trade-term context
+  ---
+  duration_ms: 0.443951
+  ...
+# Subtest: website mentions are normalized into safe links without HTML injection
+ok 739 - website mentions are normalized into safe links without HTML injection
+  ---
+  duration_ms: 5.055125
+  ...
+# Subtest: recognized sites expose only curated donation routes after a 500 ms hover
+ok 740 - recognized sites expose only curated donation routes after a 500 ms hover
+  ---
+  duration_ms: 2.199323
+  ...
+# Subtest: autocomplete and date assistance load across Next and legacy shells
+ok 741 - autocomplete and date assistance load across Next and legacy shells
+  ---
+  duration_ms: 0.584693
+  ...
+# Subtest: the composer uses standardized autocomplete contexts and terminology
+ok 742 - the composer uses standardized autocomplete contexts and terminology
+  ---
+  duration_ms: 0.47211
+  ...
+# Subtest: the commitment limit is derived from earlier terms and edited only on request
+ok 743 - the commitment limit is derived from earlier terms and edited only on request
+  ---
+  duration_ms: 0.350175
+  ...
+# Subtest: past dates are blocked in the browser and revalidated on the server
+ok 744 - past dates are blocked in the browser and revalidated on the server
+  ---
+  duration_ms: 26.858065
+  ...
+# Subtest: private drafts use the signed-in RLS client instead of a server-only secret
+ok 745 - private drafts use the signed-in RLS client instead of a server-only secret
+  ---
+  duration_ms: 0.351305
+  ...
+# Subtest: authenticated draft-event policies stay scoped to offers owned by the user
+ok 746 - authenticated draft-event policies stay scoped to offers owned by the user
+  ---
+  duration_ms: 0.174379
+  ...
+# Subtest: invitation secrets are random URL-safe values with one-way lookup hashes
+ok 747 - invitation secrets are random URL-safe values with one-way lookup hashes
+  ---
+  duration_ms: 1.555873
+  ...
+# Subtest: sender token recovery is encrypted and invitation-bound
+ok 748 - sender token recovery is encrypted and invitation-bound
+  ---
+  duration_ms: 2.139203
+  ...
+# Subtest: invitation route and lifecycle helpers recognize only bearer and open states
+ok 749 - invitation route and lifecycle helpers recognize only bearer and open states
+  ---
+  duration_ms: 0.312037
+  ...
+# Subtest: database migration enforces recipient, term, block, lease, and grant boundaries
+ok 750 - database migration enforces recipient, term, block, lease, and grant boundaries
+  ---
+  duration_ms: 0.986936
+  ...
+# Subtest: application routes use transactional RPCs and never query plaintext bearer tokens
+ok 751 - application routes use transactional RPCs and never query plaintext bearer tokens
+  ---
+  duration_ms: 0.735296
+  ...
+# Subtest: donation-backed confirmation is exact-version and transactional
+ok 752 - donation-backed confirmation is exact-version and transactional
+  ---
+  duration_ms: 0.504843
+  ...
+# Subtest: bearer routes are no-store, no-referrer, and excluded from analytics
+ok 753 - bearer routes are no-store, no-referrer, and excluded from analytics
+  ---
+  duration_ms: 0.300465
+  ...
+# Subtest: email delivery uses a lease and stable provider idempotency
+ok 754 - email delivery uses a lease and stable provider idempotency
+  ---
+  duration_ms: 0.325871
+  ...
+# Subtest: the template library exposes direct-use templates without pretending they are live offers
+ok 755 - the template library exposes direct-use templates without pretending they are live offers
+  ---
+  duration_ms: 2.28138
+  ...
+# Subtest: template handoffs open the correct real composer without an anatomy interstitial
+ok 756 - template handoffs open the correct real composer without an anatomy interstitial
+  ---
+  duration_ms: 0.325628
+  ...
+# Subtest: only approved pledge seeds prefill the pledge-only card-stack editor
+ok 757 - only approved pledge seeds prefill the pledge-only card-stack editor
+  ---
+  duration_ms: 0.470358
+  ...
+# Subtest: skill and favor templates prefill their actual private trade scaffold
+ok 758 - skill and favor templates prefill their actual private trade scaffold
+  ---
+  duration_ms: 0.426792
+  ...
+# Subtest: guided matching never contradicts the kind of thing the user wants to move
+ok 759 - guided matching never contradicts the kind of thing the user wants to move
+  ---
+  duration_ms: 0.534361
+  ...
+# Subtest: the donation redirect contract distinguishes cancellation, destinations, and residual funds
+ok 760 - the donation redirect contract distinguishes cancellation, destinations, and residual funds
+  ---
+  duration_ms: 0.353441
+  ...
+# Subtest: skips an allowlisted Moral Trade-only Preview build on website2
+ok 761 - skips an allowlisted Moral Trade-only Preview build on website2
+  ---
+  duration_ms: 44.997915
+  ...
+# Subtest: keeps the authoritative moraltrade-site Preview build
+ok 762 - keeps the authoritative moraltrade-site Preview build
+  ---
+  duration_ms: 33.017198
+  ...
+# Subtest: keeps website2 production builds
+ok 763 - keeps website2 production builds
+  ---
+  duration_ms: 39.850769
+  ...
+# Subtest: keeps website2 main-branch Preview deployments
+ok 764 - keeps website2 main-branch Preview deployments
+  ---
+  duration_ms: 44.940113
+  ...
+# Subtest: keeps unreviewed website2 Preview branches
+ok 765 - keeps unreviewed website2 Preview branches
+  ---
+  duration_ms: 44.668566
+  ...
+# Subtest: fails open when Vercel build metadata is absent
+ok 766 - fails open when Vercel build metadata is absent
+  ---
+  duration_ms: 51.240596
+  ...
+# Subtest: maps walkthrough causes to onboarding cause areas
+ok 767 - maps walkthrough causes to onboarding cause areas
+  ---
+  duration_ms: 1.241649
+  ...
+# Subtest: round-trips a private walkthrough starter profile
+ok 768 - round-trips a private walkthrough starter profile
+  ---
+  duration_ms: 1.642107
+  ...
+# Subtest: parses an already decoded cookie containing a literal percent sign
+ok 769 - parses an already decoded cookie containing a literal percent sign
+  ---
+  duration_ms: 0.296758
+  ...
+# Subtest: query values take precedence over an older cookie draft
+ok 770 - query values take precedence over an older cookie draft
+  ---
+  duration_ms: 0.535924
+  ...
+# Subtest: wish registry example previews respect cause and openness filters
+ok 771 - wish registry example previews respect cause and openness filters
+  ---
+  duration_ms: 29.972229
+  ...
+# Subtest: wish registry example previews stay unfiltered without search inputs
+ok 772 - wish registry example previews stay unfiltered without search inputs
+  ---
+  duration_ms: 2.382087
+  ...
+# Subtest: wish registry overlap markers never echo raw query tokens
+ok 773 - wish registry overlap markers never echo raw query tokens
+  ---
+  duration_ms: 0.347909
+  ...
+# Subtest: wish registry compatibility display uses broad bands instead of exact scores
+ok 774 - wish registry compatibility display uses broad bands instead of exact scores
+  ---
+  duration_ms: 0.253484
+  ...
+# Subtest: public wish registry results omit exact internal ranking scores
+ok 775 - public wish registry results omit exact internal ranking scores
+  ---
+  duration_ms: 0.480604
+  ...
+# Subtest: Complete Profile exposes truthful optional-source states
+ok 776 - Complete Profile exposes truthful optional-source states
+  ---
+  duration_ms: 1.473866
+  ...
+# Subtest: the real X path remains environment-gated and consent-bound
+ok 777 - the real X path remains environment-gated and consent-bound
+  ---
+  duration_ms: 0.456958
+  ...
+# Subtest: the X connector fails closed until every production gate is ready
+ok 778 - the X connector fails closed until every production gate is ready
+  ---
+  duration_ms: 1.307904
+  ...
+# Subtest: the authorization request uses S256 PKCE and only the declared read scopes
+ok 779 - the authorization request uses S256 PKCE and only the declared read scopes
+  ---
+  duration_ms: 0.803679
+  ...
+# Subtest: the token exchange requires the full read-only grant and a refresh token
+ok 780 - the token exchange requires the full read-only grant and a refresh token
+  ---
+  duration_ms: 4.739286
+  ...
+# Subtest: connector return paths stay same-origin
+ok 781 - connector return paths stay same-origin
+  ---
+  duration_ms: 0.27157
+  ...
+# Subtest: confidential-client revocation identifies the app and token
+ok 782 - confidential-client revocation identifies the app and token
+  ---
+  duration_ms: 0.459001
+  ...
+# Subtest: the stored connector row is consent-limited, encrypted, and expires
+ok 783 - the stored connector row is consent-limited, encrypted, and expires
+  ---
+  duration_ms: 2.139698
+  ...
+# Subtest: X profile URLs are normalized without accepting lookalike hosts
+ok 784 - X profile URLs are normalized without accepting lookalike hosts
+  ---
+  duration_ms: 0.218721
+  ...
+1..784
+# tests 784
+# suites 0
+# pass 728
+# fail 56
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 50921.633842
 
