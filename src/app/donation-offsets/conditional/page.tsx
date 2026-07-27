@@ -17,9 +17,9 @@ import {
   CONDITIONAL_REDIRECT_MAX_DEADLINE_MS,
   CONDITIONAL_REDIRECT_MIN_DEADLINE_MS,
 } from "@/lib/payments/conditional-redirect";
+import { loadConditionalRedirectPageData } from "@/lib/payments/conditional-redirect-page-data";
 import { getConditionalPaymentReadiness } from "@/lib/payments/conditional-readiness";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { createServiceClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Conditional donation redirect",
@@ -54,56 +54,22 @@ export default async function ConditionalRedirectPage({
   const setup = queryValue(params.setup);
   const change = queryValue(params.change);
   const readiness = await getConditionalPaymentReadiness();
-  const supabase = createServiceClient() as any;
   const now = await loadRequestTime();
   const nowIso = new Date(now).toISOString();
-  const [
-    { data: destinations },
-    { data: offers },
-    { data: creatorOffers },
-    { data: viewerCandidates },
-    { data: settlementLegs },
-  ] = await Promise.all([
-    supabase
-      .from("conditional_payment_destinations")
-      .select("id, display_name, registered_charity_id")
-      .eq("livemode", readiness.livemode)
-      .eq("status", "active")
-      .order("display_name"),
-    supabase
-      .from("conditional_redirect_offers")
-      .select("*, fallback:conditional_payment_destinations!fallback_destination_id(display_name), matched:conditional_payment_destinations!matched_destination_id(display_name)")
-      .in("status", ["open", "arbitrating"])
-      .gt("deadline_at", nowIso)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("conditional_redirect_offers")
-      .select("*, fallback:conditional_payment_destinations!fallback_destination_id(display_name), matched:conditional_payment_destinations!matched_destination_id(display_name)")
-      .eq("creator_profile_id", viewer.authUser.id)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("conditional_redirect_candidates")
-      .select("*, offer:conditional_redirect_offers!offer_id(*, fallback:conditional_payment_destinations!fallback_destination_id(display_name), matched:conditional_payment_destinations!matched_destination_id(display_name))")
-      .eq("matcher_profile_id", viewer.authUser.id)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("conditional_redirect_settlement_legs")
-      .select("offer_id, participant_role, status, receipt_url, amount_cents")
-      .eq("profile_id", viewer.authUser.id)
-      .order("created_at", { ascending: false })
-      .limit(24),
-  ]);
-  const destinationRows = (destinations ?? []) as Array<Record<string, any>>;
-  const offerRows = (offers ?? []) as Array<Record<string, any>>;
-  const creatorOfferRows = (creatorOffers ?? []) as Array<Record<string, any>>;
-  const candidateRows = (viewerCandidates ?? []) as Array<Record<string, any>>;
+  const pageData = await loadConditionalRedirectPageData({
+    livemode: readiness.livemode,
+    nowIso,
+    viewerId: viewer.authUser.id,
+  });
+  const destinationRows = pageData.destinations;
+  const offerRows = pageData.offers;
+  const creatorOfferRows = pageData.creatorOffers;
+  const candidateRows = pageData.viewerCandidates;
   const candidateByOfferId = new Map(
     candidateRows.map((candidate) => [String(candidate.offer_id), candidate]),
   );
   const legByOfferId = new Map(
-    ((settlementLegs ?? []) as Array<Record<string, any>>).map((leg) => [
+    pageData.settlementLegs.map((leg) => [
       String(leg.offer_id),
       leg,
     ]),
@@ -156,6 +122,12 @@ export default async function ConditionalRedirectPage({
         />
       </header>
       <main id="main-content" tabIndex={-1}>
+        {!pageData.available ? (
+          <div className="status-banner status-banner-error" role="status">
+            Conditional donation authorizations are temporarily unavailable. No payment
+            authorization can be created or charged from this page. Please try again later.
+          </div>
+        ) : null}
         {error ? <div className="status-banner status-banner-error">{error}</div> : null}
         {setup === "success" ? (
           <div className="status-banner">
@@ -222,7 +194,11 @@ export default async function ConditionalRedirectPage({
               <input name="consent" type="checkbox" required />
               <span>I authorize the stated future charge. No money is held now. If the matched branch cannot complete, successful charges are refunded; a definitive decline requires my action.</span>
             </label>
-            <button className="button button-primary" type="submit" disabled={!readiness.canCreateMandates}>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={!pageData.available || !readiness.canCreateMandates}
+            >
               Authorize and publish
             </button>
           </form>
