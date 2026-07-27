@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - tmp/render-donation-redirect-walkthrough-20260727
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: read
@@ -16,6 +23,8 @@ jobs:
     steps:
       - name: Check out exact walkthrough candidate
         uses: actions/checkout@v4
+        with:
+          ref: tmp/render-donation-redirect-walkthrough-20260727
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
