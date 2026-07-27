@@ -1,5 +1,7 @@
 name: Multi-threshold exact release gates
 
+# Exact release gates already passed in run 30234552074. This trusted workflow now
+# executes the authenticated desktop/mobile evidence sequence on the same product SHA.
 on:
   pull_request:
     branches:
@@ -11,49 +13,87 @@ permissions:
   contents: read
 
 concurrency:
-  group: multi-threshold-exact-release-gates
+  group: multi-threshold-trusted-browser-qa
   cancel-in-progress: false
 
 jobs:
-  exact-release-gates:
+  authenticated-browser-qa:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'qa/multi-threshold-exact-release-gates-20260727'
     runs-on: ubuntu-24.04
-    timeout-minutes: 80
+    timeout-minutes: 55
     env:
-      EXPECTED_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
-      INTEGRATION_BASE: 227bfed97372979d5860f37342e84bdc6041ccd9
-      ARTIFACT_DIR: ${{ github.workspace }}/multi-threshold-exact-release-gates
+      EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+      EXPECTED_SCRIPT_BLOB: e4c3e28751eee741527d761e778e71d136f50d8b
+      QA_SCRIPT_BRANCH: qa/multi-threshold-authenticated-browser-20260727
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/multi-threshold-browser-qa-artifacts
 
     steps:
-      - name: Validate exact execution target
+      - name: Validate exact target and required secrets
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
           test "$GITHUB_HEAD_REF" = "qa/multi-threshold-exact-release-gates-20260727"
+          test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
+            test -n "${!name:-}"
+          done
 
-      - name: Check out exact repaired product commit
+      - name: Check out exact product commit
         uses: actions/checkout@v4
         with:
           ref: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
           fetch-depth: 0
 
-      - name: Prove source identity
+      - name: Prove source identity and materialize reviewed QA script
         shell: bash
         run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          set -euxo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_HEAD"
           test -z "$(git status --porcelain)"
-          mkdir -p "$ARTIFACT_DIR"
+          git fetch --no-tags origin "$QA_SCRIPT_BRANCH"
+          mkdir -p .github/scripts "$BROWSER_QA_ARTIFACT_DIR"
+          git show FETCH_HEAD:.github/scripts/multi-threshold-authenticated-browser-qa.mjs \
+            > .github/scripts/multi-threshold-authenticated-browser-qa.mjs
+          test "$(git hash-object .github/scripts/multi-threshold-authenticated-browser-qa.mjs)" = "$EXPECTED_SCRIPT_BLOB"
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/scripts/multi-threshold-authenticated-browser-qa.mjs")
+          source = path.read_text()
+          old = '''function spinbutton(page, name) {
+  return page.getByRole("spinbutton", { name, exact: true });
+}'''
+          new = '''function spinbutton(page, name) {
+  return page.getByRole("spinbutton", { name: new RegExp(`^${name}`) });
+}'''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one exact spinbutton helper, found {source.count(old)}")
+          path.write_text(source.replace(old, new, 1))
+          PY
+          node --check .github/scripts/multi-threshold-authenticated-browser-qa.mjs
+          cp .github/scripts/multi-threshold-authenticated-browser-qa.mjs \
+            "$BROWSER_QA_ARTIFACT_DIR/executed-browser-script.mjs"
           {
-            echo "expected_head=$EXPECTED_HEAD"
-            echo "actual_head=$(git rev-parse HEAD)"
-            echo "parent=$(git rev-parse HEAD^)"
-            echo "grandparent=$(git rev-parse HEAD^^)"
-            echo "integration_base=$INTEGRATION_BASE"
-          } | tee "$ARTIFACT_DIR/source-identity.txt"
+            echo "product_head=$EXPECTED_PRODUCT_HEAD"
+            echo "source_script_blob=$EXPECTED_SCRIPT_BLOB"
+            echo "qa_script_branch=$QA_SCRIPT_BRANCH"
+            echo "locator_repair=currency-prefix-safe spinbutton accessible-name prefix"
+          } > "$BROWSER_QA_ARTIFACT_DIR/source-identity.txt"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -64,72 +104,88 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Run complete repository tests
+      - name: Run focused multi-threshold regressions
         shell: bash
         run: |
           set -o pipefail
-          npm test 2>&1 | tee "$ARTIFACT_DIR/npm-test.log"
+          node --import tsx --test \
+            src/lib/mpgf/failure-bonus-success-premium.test.ts \
+            src/lib/mpgf/failure-bonus-success-premium-integration.test.ts \
+            src/lib/mpgf/failure-bonus-threshold-editor.test.ts \
+            src/lib/mpgf/failure-bonus-operator.test.ts \
+            src/lib/mpgf/failure-bonus-multi-threshold-integration.test.ts \
+            src/lib/mpgf/public-goods-refund-bonus-non-mvp.test.ts \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/focused-tests.log"
 
-      - name: Run complete lint gate
+      - name: Build exact release candidate against isolated QA configuration
         shell: bash
         run: |
           set -o pipefail
-          npm run lint 2>&1 | tee "$ARTIFACT_DIR/npm-lint.log"
+          npm run build 2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/build.log"
 
-      - name: Validate isolated-QA build configuration
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact release candidate locally
         shell: bash
-        env:
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
-            test -n "${!name:-}"
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
+            > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
           done
+          if [[ "$ready" != "1" ]]; then
+            cat "$BROWSER_QA_ARTIFACT_DIR/server.log" >&2
+            exit 1
+          fi
 
-      - name: Run production build
-        shell: bash
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
-          SITE_URL: http://127.0.0.1:3000
-          VERCEL_ENV: preview
-          NEXT_PUBLIC_VERCEL_ENV: preview
-          TRADE_DONATION_POOL_ENABLED: "false"
-          TRADE_DONATION_POOL_MODE: disabled
-        run: |
-          set -o pipefail
-          npm run build 2>&1 | tee "$ARTIFACT_DIR/npm-build.log"
+      - name: Run authenticated desktop and mobile creator workflow
+        run: node .github/scripts/multi-threshold-authenticated-browser-qa.mjs
 
-      - name: Run requested whitespace gate
+      - name: Verify audit and server trust boundaries
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-worktree.log"
-          git diff --check "$INTEGRATION_BASE" "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-feature-range.log"
-          git diff --check "$EXPECTED_HEAD^" "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-latest-commit.log"
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.productHead == "94d76c8bdc835a1aec7d61663d105e1f193a0b9d"' "$audit" >/dev/null
+          jq -e '.browserOperations.addedThresholdCount == 3' "$audit" >/dev/null
+          jq -e '.browserOperations.peakThresholdCount == 4' "$audit" >/dev/null
+          jq -e '.browserOperations.reorderRoundTrip == true' "$audit" >/dev/null
+          jq -e '(.browserOperations.finalThresholdIds | length) == 3' "$audit" >/dev/null
+          jq -e '(.database.pendingQuotes | length) == 3' "$audit" >/dev/null
+          jq -e '(.approval.approvedQuotes | length) == 3' "$audit" >/dev/null
+          jq -e '.acceptance.firstAcceptedPledgeAt != null' "$audit" >/dev/null
+          jq -e '.acceptance.rejectedMutation.code == "23514"' "$audit" >/dev/null
+          jq -e '.cleanup.proposalId != null and (.cleanup.quoteIds | length) == 3 and .cleanup.pledgeId != null' "$audit" >/dev/null
+          if grep -E \
+            'Missing SUPABASE_SERVICE_ROLE_KEY|permission denied for table|Could not save MPGF pool proposal|Could not approve the complete failure-bonus schedule|Reserve status .* does not permit posted accounting entries' \
+            "$BROWSER_QA_ARTIFACT_DIR/server.log"; then
+            echo "Detected a prohibited runtime failure in the exact browser sequence." >&2
+            exit 1
+          fi
 
-      - name: Record passing summary
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > "$ARTIFACT_DIR/summary.txt" <<SUMMARY
-          exact_head=$EXPECTED_HEAD
-          npm_test=passed
-          npm_lint=passed
-          npm_build=passed
-          git_diff_check_worktree=passed
-          git_diff_check_feature_range=passed
-          git_diff_check_latest_commit=passed
-          SUMMARY
-
-      - name: Upload exact-head release evidence
+      - name: Upload authenticated QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: multi-threshold-exact-release-gates-${{ github.run_id }}
-          path: multi-threshold-exact-release-gates
+          name: multi-threshold-authenticated-browser-qa-${{ github.run_id }}
+          path: multi-threshold-browser-qa-artifacts
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Stop local application
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APP_PID:-}" ]]; then
+            kill "$APP_PID" 2>/dev/null || true
+          fi
