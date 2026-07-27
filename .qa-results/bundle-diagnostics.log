@@ -1,5 +1,5 @@
-staging_sha=bee1101912bedecf2327c3992681cca5505a6dc5
-recorded_at=2026-07-27T08:46:37Z
+staging_sha=d1befa46fa5a01a7d4e3765c6093c97d42f9db63
+recorded_at=2026-07-27T08:48:53Z
 
  4000 .qa/home-authenticated-feed-bundle/part-00
  4000 .qa/home-authenticated-feed-bundle/part-01
@@ -9,8 +9,9 @@ recorded_at=2026-07-27T08:46:37Z
  4000 .qa/home-authenticated-feed-bundle/part-05
  4000 .qa/home-authenticated-feed-bundle/part-06
  4000 .qa/home-authenticated-feed-bundle/part-07
- 3574 .qa/home-authenticated-feed-bundle/part-08
-35574 total
+ 1792 .qa/home-authenticated-feed-bundle/part-080
+ 1792 .qa/home-authenticated-feed-bundle/part-081
+35584 total
 
 c42a62530ce7746398e9df6a1353df540ec2bd11523dc828e41b88b756e1d627  .qa/home-authenticated-feed-bundle/part-00
 1cabea33b52158959218841f56c4fe3a8e49225c065e891b51de1254d2e45981  .qa/home-authenticated-feed-bundle/part-01
@@ -20,9 +21,10 @@ c42a62530ce7746398e9df6a1353df540ec2bd11523dc828e41b88b756e1d627  .qa/home-authe
 9c1d72ac072483f7902372edbaf2bfd22bf0a1c94b1893b77bc2aff574a258f6  .qa/home-authenticated-feed-bundle/part-05
 ba15f2f7c6a2ec9c525805dcf85fe55353f44df6d2bb3f3f23c6f570e0a06f35  .qa/home-authenticated-feed-bundle/part-06
 f32ce33bae687735c1ff9c783e7d5ea9ec8f9643f00ed70a12a734eefa299aa6  .qa/home-authenticated-feed-bundle/part-07
-e319b7259223b89bf51cb91fc6558496fc9d21835655b1f832d9a984ff050ede  .qa/home-authenticated-feed-bundle/part-08
+3e7b130e08ef112ee413366b69431d50ce9407d830656e2ba1fbac291e4c9797  .qa/home-authenticated-feed-bundle/part-080
+1610540b253e81e9ea813753a9b75d1a8acb01d5e5b528533ab6c6dd5cb8097e  .qa/home-authenticated-feed-bundle/part-081
 
-combined_base64_bytes=35574
-cccb3fbeb33f76aa10a6d4774c8a9cd9966d5a940bf5871c7ca512b773c875ae  /tmp/home-feed-bundle.b64
-decoded_zip_bytes=26680
-3c8c2e7e19e3d6926939bf33216b342f25143ce3608f3169777d4dfe7940e31f  /tmp/home-feed-bundle.zip
+combined_base64_bytes=35584
+cfb408e37ed0dc12383cd6790696c924765d0dfef2dc7ad04cfddd670da6cc87  /tmp/home-feed-bundle.b64
+decoded_zip_bytes=26688
+45fbc35e462c65c9b53785cdec2b6510576fc560bd5ee7bd2d6c1c5026d2c133  /tmp/home-feed-bundle.zip
