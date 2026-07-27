@@ -1,6 +1,5 @@
 name: Multi-threshold exact release gates
 
-# Temporarily repurposed to publish the deterministic SQL repair exposed by isolated QA.
 on:
   pull_request:
     branches:
@@ -9,20 +8,23 @@ on:
       - ".github/workflows/multi-threshold-exact-release-gates.yml"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: multi-threshold-exact-release-gates
+  cancel-in-progress: false
 
 jobs:
-  publish-sql-alias-repair:
+  exact-release-gates:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'qa/multi-threshold-exact-release-gates-20260727'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 80
     env:
-      EXPECTED_HEAD: 3359135612d8335b98a643bc7d65c8e4616551f8
-      EXPECTED_MIGRATION_BLOB: c5a8a57197a12671970a3f85257c32b3dc64c9ba
-      PRODUCT_BRANCH: feature/mpgf-multi-threshold-failure-bonus-editor-20260726
-      MIGRATION_PATH: supabase/migrations/20260726170500_mpgf_multi_threshold_failure_bonus_editor.sql
+      EXPECTED_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+      INTEGRATION_BASE: 227bfed97372979d5860f37342e84bdc6041ccd9
+      ARTIFACT_DIR: ${{ github.workspace }}/multi-threshold-exact-release-gates
 
     steps:
       - name: Validate exact execution target
@@ -32,88 +34,102 @@ jobs:
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
           test "$GITHUB_HEAD_REF" = "qa/multi-threshold-exact-release-gates-20260727"
 
-      - name: Check out exact product branch
+      - name: Check out exact repaired product commit
         uses: actions/checkout@v4
         with:
-          ref: feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+          ref: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
           fetch-depth: 0
 
-      - name: Verify exact SQL repair target
+      - name: Prove source identity
         shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
-          test "$(git hash-object "$MIGRATION_PATH")" = "$EXPECTED_MIGRATION_BLOB"
           test -z "$(git status --porcelain)"
+          mkdir -p "$ARTIFACT_DIR"
+          {
+            echo "expected_head=$EXPECTED_HEAD"
+            echo "actual_head=$(git rev-parse HEAD)"
+            echo "parent=$(git rev-parse HEAD^)"
+            echo "grandparent=$(git rev-parse HEAD^^)"
+            echo "integration_base=$INTEGRATION_BASE"
+          } | tee "$ARTIFACT_DIR/source-identity.txt"
 
-      - name: Qualify premium-quote references inside the approval RPC
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository tests
         shell: bash
         run: |
-          set -euxo pipefail
-          python - <<'PY'
-          from pathlib import Path
+          set -o pipefail
+          npm test 2>&1 | tee "$ARTIFACT_DIR/npm-test.log"
 
-          path = Path("supabase/migrations/20260726170500_mpgf_multi_threshold_failure_bonus_editor.sql")
-          source = path.read_text()
-          replacements = [
-              (
-                  """    from public.mpgf_failure_bonus_premium_quotes
-    where pool_proposal_id = proposal_row.id
-      and status = 'pending_review'
-  ) <> threshold_count then""",
-                  """    from public.mpgf_failure_bonus_premium_quotes pending_quote
-    where pending_quote.pool_proposal_id = proposal_row.id
-      and pending_quote.status = 'pending_review'
-  ) <> threshold_count then""",
-              ),
-              (
-                  """    from public.mpgf_failure_bonus_premium_quotes
-    where pool_proposal_id = proposal_row.id
-      and threshold_index = (threshold_item ->> 'thresholdIndex')::integer
-      and status = 'pending_review'
-    for update;""",
-                  """    from public.mpgf_failure_bonus_premium_quotes quote_candidate
-    where quote_candidate.pool_proposal_id = proposal_row.id
-      and quote_candidate.threshold_index = (threshold_item ->> 'thresholdIndex')::integer
-      and quote_candidate.status = 'pending_review'
-    for update;""",
-              ),
-              (
-                  """  update public.mpgf_failure_bonus_premium_quotes
-  set status = 'approved',
-      provisional = false,
-      rationale = operator_rationale,
-      approved_by = reviewer_id_input,
-      approved_at = approved_timestamp
-  where pool_proposal_id = proposal_row.id
-    and status = 'pending_review';""",
-                  """  update public.mpgf_failure_bonus_premium_quotes approved_quote
-  set status = 'approved',
-      provisional = false,
-      rationale = operator_rationale,
-      approved_by = reviewer_id_input,
-      approved_at = approved_timestamp
-  where approved_quote.pool_proposal_id = proposal_row.id
-    and approved_quote.status = 'pending_review';""",
-              ),
-          ]
-          for old, new in replacements:
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f"Expected one exact SQL repair target, found {count}: {old.splitlines()[0]}")
-              source = source.replace(old, new, 1)
-          path.write_text(source)
-          PY
-          test "$(git diff --name-only)" = "$MIGRATION_PATH"
-          git diff --check
-          grep -n "pending_quote.pool_proposal_id\|quote_candidate.pool_proposal_id\|approved_quote.pool_proposal_id" "$MIGRATION_PATH"
-
-      - name: Commit and publish the SQL repair
+      - name: Run complete lint gate
         shell: bash
         run: |
-          set -euxo pipefail
-          git config user.name "Moral Trade release automation"
-          git config user.email "actions@users.noreply.github.com"
-          git add "$MIGRATION_PATH"
-          git commit -m "Qualify failure-bonus approval quote references"
-          git push origin "HEAD:${PRODUCT_BRANCH}"
+          set -o pipefail
+          npm run lint 2>&1 | tee "$ARTIFACT_DIR/npm-lint.log"
+
+      - name: Validate isolated-QA build configuration
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            test -n "${!name:-}"
+          done
+
+      - name: Run production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          SITE_URL: http://127.0.0.1:3000
+          VERCEL_ENV: preview
+          NEXT_PUBLIC_VERCEL_ENV: preview
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$ARTIFACT_DIR/npm-build.log"
+
+      - name: Run requested whitespace gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-worktree.log"
+          git diff --check "$INTEGRATION_BASE" "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-feature-range.log"
+          git diff --check "$EXPECTED_HEAD^" "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-latest-commit.log"
+
+      - name: Record passing summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$ARTIFACT_DIR/summary.txt" <<SUMMARY
+          exact_head=$EXPECTED_HEAD
+          npm_test=passed
+          npm_lint=passed
+          npm_build=passed
+          git_diff_check_worktree=passed
+          git_diff_check_feature_range=passed
+          git_diff_check_latest_commit=passed
+          SUMMARY
+
+      - name: Upload exact-head release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-threshold-exact-release-gates-${{ github.run_id }}
+          path: multi-threshold-exact-release-gates
+          if-no-files-found: warn
+          retention-days: 14
