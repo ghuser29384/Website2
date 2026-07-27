@@ -1,0 +1,26 @@
+name: Export walkthrough HTML
+
+on:
+  push:
+    branches:
+      - tmp/export-walkthrough-html-20260727
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy exact HTML
+        run: |
+          mkdir -p exported-walkthrough
+          cp public/moral-trade-interactive-walkthroughs.html exported-walkthrough/moral-trade-interactive-walkthroughs.html
+          sha256sum exported-walkthrough/moral-trade-interactive-walkthroughs.html > exported-walkthrough/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-updated-walkthrough-html
+          path: exported-walkthrough
+          if-no-files-found: error
+          retention-days: 1
