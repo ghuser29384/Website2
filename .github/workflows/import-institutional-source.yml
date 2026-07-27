@@ -126,6 +126,14 @@ jobs:
           git add -A
 
           actual_tree="$(git write-tree)"
+          {
+            echo "expected_tree=$EXPECTED_TREE_SHA"
+            echo "actual_tree=$actual_tree"
+          } > /tmp/institutional-tree-shas.txt
+          git diff --cached --binary > /tmp/institutional-staged.diff
+          git ls-files -s > /tmp/institutional-index.txt
+          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/institutional-imported-tree.tar.gz .
+
           if [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then
             echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2
             echo "Staged paths:" >&2
@@ -139,3 +147,18 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Implement institutional trade system integrity and QA"
           git push origin HEAD:feat/institutional-trade-system
+
+      - name: Upload importer verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: institutional-import-verification-${{ github.run_id }}
+          path: |
+            /tmp/institutional-patch.b64
+            /tmp/institutional.patch
+            /tmp/institutional-tree-shas.txt
+            /tmp/institutional-staged.diff
+            /tmp/institutional-index.txt
+            /tmp/institutional-imported-tree.tar.gz
+          if-no-files-found: warn
+          retention-days: 2
