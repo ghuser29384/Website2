@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 
 import {
-  EMPTY_COLLECTIVE_ACTION_STATE,
   signCollectiveCommitmentAction,
   withdrawCollectiveCommitmentAction,
 } from "@/app/collective-commitments/actions";
+import { EMPTY_COLLECTIVE_ACTION_STATE } from "@/lib/collective-commitments/action-state";
 import type { CollectiveCommitmentDetail, CollectiveIdentityCredential } from "@/lib/collective-commitments/types";
 
 import { CollectiveSubmitButton } from "./submit-button";
