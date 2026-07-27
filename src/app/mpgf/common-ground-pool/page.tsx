@@ -47,7 +47,7 @@ export default async function CommonGroundPoolPage() {
           <Breadcrumbs
             items={[
               { href: "/mpgf", label: "Public Goods Fund" },
-              { label: "Common Ground Pool" },
+              { href: COMMON_GROUND_POOL_ROUTE, label: "Common Ground Pool" },
             ]}
           />
           <div className={styles.heroGrid}>
