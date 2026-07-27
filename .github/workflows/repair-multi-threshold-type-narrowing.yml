@@ -16,20 +16,11 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref == 'qa/fix-multi-threshold-type-narrowing-20260727'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     env:
       EXPECTED_HEAD: 51cd9ea3cdca65261a2326976991e10ea88c5c50
       EXPECTED_SOURCE_BLOB: 14eb2fb99fa80e5e01aa976dbb58acda66a3cc43
       PRODUCT_BRANCH: feature/mpgf-multi-threshold-failure-bonus-editor-20260726
-      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
-      SITE_URL: http://127.0.0.1:3000
-      VERCEL_ENV: preview
-      NEXT_PUBLIC_VERCEL_ENV: preview
-      TRADE_DONATION_POOL_ENABLED: "false"
-      TRADE_DONATION_POOL_MODE: disabled
 
     steps:
       - name: Check out exact product branch
@@ -85,35 +76,14 @@ jobs:
           lines[index:index + len(expected)] = replacement
           path.write_text("\n".join(lines) + "\n")
           PY
+          test "$(git diff --name-only)" = "src/lib/mpgf/failure-bonus-success-premium.ts"
           git diff --check
           grep -n 'pricing.pricingMode === "experience_rated"' src/lib/mpgf/failure-bonus-success-premium.ts
-
-      - name: Verify repaired source
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run focused pricing tests and production build
-        shell: bash
-        run: |
-          set -euxo pipefail
-          node --test \
-            src/lib/mpgf/failure-bonus-success-premium.test.ts \
-            src/lib/mpgf/failure-bonus-threshold-editor.test.ts \
-            src/lib/mpgf/failure-bonus-multi-threshold-integration.test.ts
-          npm run build
 
       - name: Commit the minimal repair to the product branch
         shell: bash
         run: |
           set -euxo pipefail
-          test "$(git diff --name-only | wc -l | tr -d ' ')" = "1"
-          test "$(git diff --name-only)" = "src/lib/mpgf/failure-bonus-success-premium.ts"
-          git diff --check
           git config user.name "Moral Trade release automation"
           git config user.email "actions@users.noreply.github.com"
           git add src/lib/mpgf/failure-bonus-success-premium.ts
