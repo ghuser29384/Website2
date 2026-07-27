@@ -25,7 +25,7 @@ jobs:
     env:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
-      EXPECTED_STAGING_PARENT: 50a13f840412884a125c9c33053f6b524d613c26
+      EXPECTED_PRODUCT_BASE: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
       ARTIFACT_DIR: ${{ github.workspace }}/collective-server-action-fix-artifacts
 
     steps:
@@ -47,10 +47,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$ARTIFACT_DIR"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_STAGING_PARENT"
+          test "$(git merge-base "$EXPECTED_PRODUCT_BASE" HEAD)" = "$EXPECTED_PRODUCT_BASE"
           cp .github/scripts/patch-collective-server-action-state.py \
             "$RUNNER_TEMP/patch-collective-server-action-state.py"
-          python3 "$RUNNER_TEMP/patch-collective-server-action-state.py"
+          python3 "$RUNNER_TEMP/patch-collective-server-action-state.py" \
+            2>&1 | tee "$ARTIFACT_DIR/patch.log"
 
           grep -Fq '"use server";' src/app/collective-commitments/actions.ts
           if grep -Eq 'export[[:space:]]+(const|let|var|class)[[:space:]]+' \
