@@ -1,6 +1,9 @@
 export const FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION =
   "mpgf_failure_bonus_success_premium_v0_1" as const;
 
+export const FAILURE_BONUS_ELIGIBILITY_POLICY_VERSION =
+  "mpgf_failure_bonus_eligibility_v0_1" as const;
+
 export const PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY = {
   successProbabilityBps: 7_500,
   expectedEligibleFailureFillBps: 4_000,
@@ -11,10 +14,30 @@ export const PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY = {
 const BASIS_POINTS = 10_000;
 const BASIS_POINTS_BIGINT = BigInt(BASIS_POINTS);
 const MAX_SUPPORTED_BASIS_POINTS = 1_000_000;
+const MAX_SAFE_CENTS = Number.MAX_SAFE_INTEGER;
+
+export const FAILURE_BONUS_PROVISIONAL_UNDERWRITING_BOUNDS = {
+  maximumSuccessProbabilityBps:
+    PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.successProbabilityBps,
+  minimumExpectedEligibleFailureFillBps:
+    PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expectedEligibleFailureFillBps,
+  maximumExpectedEligibleFailureFillBps: BASIS_POINTS,
+} as const;
 
 export type FailureBonusSuccessPremiumPayer =
   | "pool_creator_or_sponsor"
   | "contributors_pro_rata";
+
+export interface FailureBonusEligibilityPolicy {
+  policyVersion: typeof FAILURE_BONUS_ELIGIBILITY_POLICY_VERSION;
+  contributorIdentityRule: "verified_unique_person";
+  contributionTimingRule: "captured_before_deadline";
+  relatedPartyRule: "exclude_creator_and_related_parties";
+  paymentIntegrityRule: "exclude_duplicate_reversed_disputed_or_fraudulent";
+  bonusBasis: "eligible_contribution";
+  maxParticipants: number;
+  maxBonusPerParticipantCents: number;
+}
 
 export interface FailureBonusSuccessPremiumPricingAssumptions {
   successProbabilityBps: number;
@@ -60,6 +83,8 @@ export interface FailureBonusThresholdPremiumQuote {
   provisional: boolean;
   rationale: string;
   assumptions?: FailureBonusSuccessPremiumPricingAssumptions;
+  incrementalFailureBonusExposureCents?: number;
+  maximumFailureBonusExposureCents?: number;
 }
 
 export interface FailureBonusSuccessPremiumScheduleQuote {
@@ -67,6 +92,7 @@ export interface FailureBonusSuccessPremiumScheduleQuote {
   premiumPayer: FailureBonusSuccessPremiumPayer;
   premiumIncludedInNetRecipientThreshold: false;
   thresholds: FailureBonusThresholdPremiumQuote[];
+  eligibilityPolicy?: FailureBonusEligibilityPolicy;
 }
 
 function requireSafeInteger(value: number, label: string, minimum: number, maximum = Number.MAX_SAFE_INTEGER) {
@@ -90,6 +116,91 @@ export function buildProvisionalFailureBonusSuccessPremiumAssumptions(
     ...PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY,
     failureBonusRateBps,
   };
+}
+
+
+export function buildFailureBonusEligibilityPolicy({
+  maxParticipants,
+  maxBonusPerParticipantCents,
+}: {
+  maxParticipants: number;
+  maxBonusPerParticipantCents: number;
+}): FailureBonusEligibilityPolicy {
+  requireSafeInteger(maxParticipants, "Maximum eligible participants", 1);
+  requireSafeInteger(
+    maxBonusPerParticipantCents,
+    "Maximum failure bonus per participant",
+    1,
+    MAX_SAFE_CENTS,
+  );
+
+  const aggregateCap = BigInt(maxParticipants) * BigInt(maxBonusPerParticipantCents);
+  if (aggregateCap > BigInt(MAX_SAFE_CENTS)) {
+    throw new Error("The participant cap multiplied by the per-person cap exceeds exact-cent limits.");
+  }
+
+  return {
+    policyVersion: FAILURE_BONUS_ELIGIBILITY_POLICY_VERSION,
+    contributorIdentityRule: "verified_unique_person",
+    contributionTimingRule: "captured_before_deadline",
+    relatedPartyRule: "exclude_creator_and_related_parties",
+    paymentIntegrityRule: "exclude_duplicate_reversed_disputed_or_fraudulent",
+    bonusBasis: "eligible_contribution",
+    maxParticipants,
+    maxBonusPerParticipantCents,
+  };
+}
+
+export function isCurrentFailureBonusEligibilityPolicy(
+  value: unknown,
+): value is FailureBonusEligibilityPolicy {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Partial<FailureBonusEligibilityPolicy>;
+
+  try {
+    const expected = buildFailureBonusEligibilityPolicy({
+      maxParticipants: Number(candidate.maxParticipants),
+      maxBonusPerParticipantCents: Number(candidate.maxBonusPerParticipantCents),
+    });
+    return Object.entries(expected).every(
+      ([key, expectedValue]) => candidate[key as keyof FailureBonusEligibilityPolicy] === expectedValue,
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function usesPermittedProvisionalFailureBonusPricingPolicy(
+  assumptions: FailureBonusSuccessPremiumPricingAssumptions,
+): boolean {
+  return (
+    Number.isSafeInteger(assumptions.successProbabilityBps) &&
+    assumptions.successProbabilityBps >= 1 &&
+    assumptions.successProbabilityBps <=
+      FAILURE_BONUS_PROVISIONAL_UNDERWRITING_BOUNDS.maximumSuccessProbabilityBps &&
+    Number.isSafeInteger(assumptions.failureBonusRateBps) &&
+    assumptions.failureBonusRateBps >= 1 &&
+    assumptions.failureBonusRateBps <= BASIS_POINTS &&
+    Number.isSafeInteger(assumptions.expectedEligibleFailureFillBps) &&
+    assumptions.expectedEligibleFailureFillBps >=
+      FAILURE_BONUS_PROVISIONAL_UNDERWRITING_BOUNDS.minimumExpectedEligibleFailureFillBps &&
+    assumptions.expectedEligibleFailureFillBps <=
+      FAILURE_BONUS_PROVISIONAL_UNDERWRITING_BOUNDS.maximumExpectedEligibleFailureFillBps &&
+    assumptions.expenseLoadBps ===
+      PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.expenseLoadBps &&
+    assumptions.reserveRiskMarginBps ===
+      PROVISIONAL_FAILURE_BONUS_SUCCESS_PREMIUM_POLICY.reserveRiskMarginBps
+  );
+}
+
+export function assertPermittedProvisionalFailureBonusPricingPolicy(
+  assumptions: FailureBonusSuccessPremiumPricingAssumptions,
+) {
+  if (!usesPermittedProvisionalFailureBonusPricingPolicy(assumptions)) {
+    throw new Error(
+      "Each provisional tranche must use platform loads, a success estimate no higher than 75%, and an eligible failure-fill estimate no lower than 40%.",
+    );
+  }
 }
 
 export function usesCurrentProvisionalFailureBonusPricingPolicy(
@@ -128,6 +239,35 @@ export function calculateSuccessPremiumCents(netRecipientCents: number, premiumR
     ceilDivide(BigInt(netRecipientCents) * BigInt(premiumRateBps), BASIS_POINTS_BIGINT),
     "Success premium",
   );
+}
+
+export function calculateMaximumFailureBonusExposureCents({
+  netRecipientAmountCents,
+  failureBonusRateBps,
+  eligibilityPolicy,
+}: {
+  netRecipientAmountCents: number;
+  failureBonusRateBps: number;
+  eligibilityPolicy?: FailureBonusEligibilityPolicy;
+}) {
+  const uncappedExposureCents = calculateSuccessPremiumCents(
+    netRecipientAmountCents,
+    failureBonusRateBps,
+  );
+
+  if (!eligibilityPolicy) {
+    return uncappedExposureCents;
+  }
+  if (!isCurrentFailureBonusEligibilityPolicy(eligibilityPolicy)) {
+    throw new Error("Failure-bonus eligibility policy is missing, stale, or malformed.");
+  }
+
+  const aggregateCapCents = toSafeNumber(
+    BigInt(eligibilityPolicy.maxParticipants) *
+      BigInt(eligibilityPolicy.maxBonusPerParticipantCents),
+    "Aggregate failure-bonus cap",
+  );
+  return Math.min(uncappedExposureCents, aggregateCapCents);
 }
 
 export function calculateExperienceRatedSuccessPremiumBps(
@@ -198,11 +338,16 @@ export function quoteFailureBonusSuccessPremiumSchedule({
   thresholds,
   defaultPricing,
   premiumPayer,
+  eligibilityPolicy,
 }: {
   thresholds: readonly FailureBonusThresholdPremiumInput[];
   defaultPricing: FailureBonusSuccessPremiumPricing;
   premiumPayer: FailureBonusSuccessPremiumPayer;
+  eligibilityPolicy?: FailureBonusEligibilityPolicy;
 }): FailureBonusSuccessPremiumScheduleQuote {
+  if (eligibilityPolicy && !isCurrentFailureBonusEligibilityPolicy(eligibilityPolicy)) {
+    throw new Error("Failure-bonus eligibility policy is missing, stale, or malformed.");
+  }
   if (thresholds.length === 0 || thresholds.length > 10) {
     throw new Error("A success-premium schedule must contain between 1 and 10 thresholds.");
   }
@@ -210,6 +355,7 @@ export function quoteFailureBonusSuccessPremiumSchedule({
   const ordered = [...thresholds].sort((left, right) => left.thresholdIndex - right.thresholdIndex);
   let previousThresholdCents = 0;
   let cumulativeSuccessPremiumCents = 0;
+  let cumulativeFailureBonusExposureCents = 0;
 
   const quotes = ordered.map((threshold, position) => {
     requireStableText(threshold.thresholdId, "Threshold id");
@@ -235,6 +381,23 @@ export function quoteFailureBonusSuccessPremiumSchedule({
       pricing.premiumRateBps,
     );
     cumulativeSuccessPremiumCents += successPremiumCents;
+    const maximumFailureBonusExposureCents =
+      pricing.pricingMode === "experience_rated"
+        ? calculateMaximumFailureBonusExposureCents({
+            netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
+            failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
+            eligibilityPolicy,
+          })
+        : undefined;
+    const incrementalFailureBonusExposureCents =
+      maximumFailureBonusExposureCents == null
+        ? undefined
+        : maximumFailureBonusExposureCents - cumulativeFailureBonusExposureCents;
+    if (incrementalFailureBonusExposureCents != null && incrementalFailureBonusExposureCents < 0) {
+      throw new Error("Cumulative failure-bonus exposure cannot decrease across thresholds.");
+    }
+    cumulativeFailureBonusExposureCents =
+      maximumFailureBonusExposureCents ?? cumulativeFailureBonusExposureCents;
     previousThresholdCents = threshold.cumulativeNetRecipientThresholdCents;
 
     return {
@@ -252,7 +415,13 @@ export function quoteFailureBonusSuccessPremiumSchedule({
       pricingMode: pricing.pricingMode,
       provisional: pricing.provisional,
       rationale: pricing.rationale,
-      ...(pricing.pricingMode === "experience_rated" ? { assumptions: pricing.assumptions } : {}),
+      ...(pricing.pricingMode === "experience_rated"
+        ? {
+            assumptions: pricing.assumptions,
+            incrementalFailureBonusExposureCents,
+            maximumFailureBonusExposureCents,
+          }
+        : {}),
     };
   });
 
@@ -261,7 +430,22 @@ export function quoteFailureBonusSuccessPremiumSchedule({
     premiumPayer,
     premiumIncludedInNetRecipientThreshold: false,
     thresholds: quotes,
+    ...(eligibilityPolicy ? { eligibilityPolicy } : {}),
   };
+}
+
+export function getHighestClearedThresholdIndex(
+  schedule: FailureBonusSuccessPremiumScheduleQuote,
+  netRecipientCents: number,
+) {
+  requireSafeInteger(netRecipientCents, "Net recipient amount", 0);
+
+  let clearedThresholdIndex = 0;
+  for (const threshold of schedule.thresholds) {
+    if (threshold.cumulativeNetRecipientThresholdCents > netRecipientCents) break;
+    clearedThresholdIndex = threshold.thresholdIndex;
+  }
+  return clearedThresholdIndex;
 }
 
 export function getSuccessPremiumDueForClearedThreshold(

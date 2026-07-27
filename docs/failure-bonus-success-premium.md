@@ -67,7 +67,7 @@ gross success requirement = net recipient threshold + success premium
 
 For multiple cumulative thresholds, each incremental tranche is priced once. Clearing threshold 2 charges the premium for tranche 1 plus the incremental amount between thresholds 1 and 2. It does not charge the threshold-1 amount twice. A tranche that does not clear owes no premium.
 
-The pricing engine and premium-quote schema support one to ten cumulative thresholds. The current proposal form and existing `mpgf_pool_proposals` authoring path still persist the site's pre-existing single scalar threshold; this patch does not misrepresent that form as a complete multi-threshold editor. Wiring the full one-to-ten-threshold authoring and settlement workflow is a separate release step.
+The proposal form, persistence layer, operator queue, database constraints, approval RPC, and simulation settlement now support one to ten cumulative thresholds. All thresholds share one pool-wide failure-bonus formula and eligibility policy, while each incremental tranche may use a different conservative success-probability and expected-failure-fill estimate. The legacy scalar threshold remains a compatibility mirror of threshold 1. See `docs/failure-bonus-multi-threshold-editor.md` for the complete contract.
 
 ## Threshold presentation
 
@@ -86,12 +86,16 @@ Reserve accounting is append-only. A qualifying failure debit reduces cash and t
 ## Files
 
 - `src/lib/mpgf/failure-bonus-success-premium.ts`: versioned pricing and multi-threshold schedule logic.
-- `src/components/mpgf/mpgf-console.tsx`: proposal inputs, quote preview, fixed creator-or-sponsor payer rule, and disclosure.
+- `src/components/mpgf/mpgf-console.tsx`: one-to-ten-threshold editor, exact schedule preview, fixed creator-or-sponsor payer rule, and disclosure.
+- `src/lib/mpgf/failure-bonus-threshold-editor.ts`: exact input parsing, editor operations, schedule construction, and server-side schedule validation.
+- `src/lib/mpgf/failure-bonus-operator.ts`: validated pending-schedule operator queue.
 - `src/lib/mpgf/persistence.ts`: server-side recomputation and tamper rejection.
 - `src/lib/mpgf/public-goods-refund-bonus-non-mvp.ts`: simulation settlement outputs and reserve ledger events.
 - `src/app/labs/moral-public-goods/[poolSlug]/moral-public-goods-labs-client.tsx`: participant-facing Labs disclosure.
 - `supabase/migrations/20260726140000_mpgf_failure_bonus_success_premium_reserve.sql`: proposal columns, versioned quotes, common-reserve metadata, append-only ledger, solvency enforcement, and aggregate disclosure view.
-- `supabase/tests/mpgf_failure_bonus_success_premium_reserve.sql`: transactional database invariant test.
+- `supabase/migrations/20260726170500_mpgf_multi_threshold_failure_bonus_editor.sql`: one-to-ten schedule validation, quote synchronization, atomic approval, and post-pledge immutability.
+- `supabase/tests/mpgf_failure_bonus_success_premium_reserve.sql`: transactional reserve invariant test.
+- `supabase/tests/mpgf_multi_threshold_failure_bonus_editor.sql`: transactional multi-threshold editor and atomic-approval regression.
 
 ## Production gates
 
