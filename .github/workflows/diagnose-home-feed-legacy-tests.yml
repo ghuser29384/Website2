@@ -1,0 +1,43 @@
+name: Diagnose legacy Home screenshot tests
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: ${{ !contains(github.event.head_commit.message, '[legacy-test-diagnostic-complete]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate the two newly obsolete screenshot-contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa-results
+          {
+            echo "staging_sha=${GITHUB_SHA}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            for phrase in \
+              "the returning homepage keeps the action-first screenshot contract" \
+              "returning homepage keeps the screenshot match facts explicit and bounded"; do
+              echo "===== ${phrase} ====="
+              grep -R -n -F -B 35 -A 100 --include='*.test.ts' --include='*.spec.ts' "${phrase}" src tests || true
+              echo
+            done
+          } > .qa-results/legacy-home-test-context.log
+      - name: Commit diagnostic context
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/legacy-home-test-context.log
+          git commit -m "Record legacy Home test context [legacy-test-diagnostic-complete] [verification-failure]"
+          git push origin HEAD:refs/heads/qa/home-authenticated-feed-20260727
