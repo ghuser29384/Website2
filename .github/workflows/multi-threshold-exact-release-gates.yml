@@ -1,0 +1,134 @@
+name: Multi-threshold exact release gates
+
+on:
+  pull_request:
+    branches:
+      - feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+    paths:
+      - ".github/workflows/multi-threshold-exact-release-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multi-threshold-exact-release-gates
+  cancel-in-progress: false
+
+jobs:
+  exact-release-gates:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'qa/multi-threshold-exact-release-gates-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      EXPECTED_HEAD: 3359135612d8335b98a643bc7d65c8e4616551f8
+      ARTIFACT_DIR: ${{ github.workspace }}/multi-threshold-exact-release-gates
+
+    steps:
+      - name: Validate exact execution target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "qa/multi-threshold-exact-release-gates-20260727"
+
+      - name: Check out exact repaired product commit
+        uses: actions/checkout@v4
+        with:
+          ref: 3359135612d8335b98a643bc7d65c8e4616551f8
+          fetch-depth: 0
+
+      - name: Prove source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          mkdir -p "$ARTIFACT_DIR"
+          {
+            echo "expected_head=$EXPECTED_HEAD"
+            echo "actual_head=$(git rev-parse HEAD)"
+            echo "parent=$(git rev-parse HEAD^)"
+            echo "grandparent=$(git rev-parse HEAD^^)"
+          } | tee "$ARTIFACT_DIR/source-identity.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$ARTIFACT_DIR/npm-test.log"
+
+      - name: Run complete lint gate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee "$ARTIFACT_DIR/npm-lint.log"
+
+      - name: Validate isolated-QA build configuration
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            test -n "${!name:-}"
+          done
+
+      - name: Run production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          SITE_URL: http://127.0.0.1:3000
+          VERCEL_ENV: preview
+          NEXT_PUBLIC_VERCEL_ENV: preview
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$ARTIFACT_DIR/npm-build.log"
+
+      - name: Run whitespace gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-worktree.log"
+          git diff --check 227bfed97372979d5860f37342e84bdc6041ccd9 "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-feature-range.log"
+          git diff --check "$EXPECTED_HEAD^" "$EXPECTED_HEAD" 2>&1 | tee "$ARTIFACT_DIR/git-diff-check-repair-commit.log"
+          test -z "$(git status --porcelain)"
+
+      - name: Record passing summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$ARTIFACT_DIR/summary.txt" <<SUMMARY
+          exact_head=$EXPECTED_HEAD
+          npm_test=passed
+          npm_lint=passed
+          npm_build=passed
+          git_diff_check_worktree=passed
+          git_diff_check_feature_range=passed
+          git_diff_check_repair_commit=passed
+          SUMMARY
+
+      - name: Upload exact-head release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-threshold-exact-release-gates-${{ github.run_id }}
+          path: multi-threshold-exact-release-gates
+          if-no-files-found: warn
+          retention-days: 14
