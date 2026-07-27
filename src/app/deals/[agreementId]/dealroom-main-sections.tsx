@@ -111,10 +111,9 @@ export function DealroomMainSections({
           <p className="eyebrow">Negotiation controls</p>
           <h2 id="decision-heading">Counteroffer or confirm the current terms</h2>
           <p>
-            Counteroffers remain explicit events. The existing status action lets one
-            participant activate a proposed agreement; it does not claim a separate
-            bilateral confirmation record. Either party can still use the recorded exit
-            conditions.
+            Counteroffers remain explicit events. Each participant must separately
+            confirm the same frozen agreement version; one person cannot activate the
+            agreement alone. Either party can still use the recorded exit conditions.
           </p>
         </div>
         <div className={styles.decisionGrid}>
