@@ -1,0 +1,83 @@
+name: PR 212 individual-capacity QA controller
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-individual-capacity-qa-controller.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cancel stale institutional QA runs and record exact-head state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+
+          current_head="$(gh api repos/${GITHUB_REPOSITORY}/pulls/212 --jq .head.sha)"
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow "$TARGET_WORKFLOW" \
+            --branch "$TARGET_BRANCH" \
+            --limit 50 \
+            --json databaseId,headSha,status,conclusion,createdAt,event,url \
+            > /tmp/runs-before.json
+
+          jq -r --arg head "$current_head" '.[] | select(.headSha != $head and (.status == "queued" or .status == "in_progress" or .status == "requested" or .status == "waiting" or .status == "pending")) | .databaseId' /tmp/runs-before.json \
+            | while read -r run_id; do
+                [[ -n "$run_id" ]] || continue
+                gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
+              done
+
+          for attempt in $(seq 1 30); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 50 \
+              --json databaseId,headSha,status,conclusion,createdAt,event,url \
+              > /tmp/runs-after.json
+            stale_active="$(jq --arg head "$current_head" '[.[] | select(.headSha != $head and (.status == "queued" or .status == "in_progress" or .status == "requested" or .status == "waiting" or .status == "pending"))] | length' /tmp/runs-after.json)"
+            [[ "$stale_active" == "0" ]] && break
+            sleep 10
+          done
+
+          current_runs="$(jq --arg head "$current_head" '[.[] | select(.headSha == $head)] | length' /tmp/runs-after.json)"
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg current_head "$current_head" \
+            --arg target_branch "$TARGET_BRANCH" \
+            --argjson current_runs "$current_runs" \
+            --slurpfile before /tmp/runs-before.json \
+            --slurpfile after /tmp/runs-after.json \
+            '{generated_at:$generated_at,current_head:$current_head,target_branch:$target_branch,current_head_run_count:$current_runs,runs_before:$before[0],runs_after:$after[0]}' \
+            > ops/pr212-individual-capacity-qa-controller-report.json
+
+          if [[ "$current_runs" == "0" ]]; then
+            echo "No exact-head institutional QA run exists for $current_head." >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-individual-capacity-qa-controller-report.json
+          git commit -m "Record PR 212 exact-head QA run state"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
