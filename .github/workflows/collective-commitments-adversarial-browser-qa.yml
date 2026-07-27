@@ -27,8 +27,8 @@ jobs:
       EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
       EXPECTED_PRODUCT_HEAD: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
       PRODUCT_BRANCH: feature/collective-identity-threshold-commitments-20260726
-      PAYLOAD_B64_SHA256: e4fcdf88778c0f0236de2ed03ba8dca971412af7a430d4363c65d85a8228571e
-      PAYLOAD_TGZ_SHA256: 2893358867c4bc267022f82165d541884eb9dbeb474d60f55e20c48bf349f4e4
+      PAYLOAD_B64_SHA256: af955fd2e424417ec9f3f9e8f9c1e8818956d5246b6ffbc23db26425fce46527
+      PAYLOAD_TGZ_SHA256: 2d3bdca9ca64dd5883e1df403743d00a4feab523e303f93a5f76799322e8feb6
       ARTIFACT_DIR: ${{ github.workspace }}/collective-final-materialization-artifacts
 
     steps:
