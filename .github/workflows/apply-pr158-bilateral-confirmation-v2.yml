@@ -1,0 +1,154 @@
+name: Apply PR 158 bilateral confirmation repair v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-pr158-bilateral-confirmation-v2.yml"
+      - ".github/scripts/apply-pr158-bilateral-confirmation.py"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-pr158-bilateral-confirmation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out temporary repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve and harden the reviewed repair script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply-pr158-bilateral-confirmation.py "$RUNNER_TEMP/apply-pr158-bilateral-confirmation.py"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path.home().parent / "_temp" / "apply-pr158-bilateral-confirmation.py"
+          # GitHub-hosted RUNNER_TEMP is not guaranteed to be derivable from HOME;
+          # use the environment-provided path when available.
+          import os
+          path = Path(os.environ["RUNNER_TEMP"]) / "apply-pr158-bilateral-confirmation.py"
+          source = path.read_text(encoding="utf-8")
+          old = '''dealroom = replace_once(
+              dealroom,
+              '                  ? "Confirm only after both parties have reviewed the latest saved terms and the evidence rule."\\n',
+              '                  ? "Each participant must confirm the same frozen version. One confirmation records consent; two distinct confirmations activate the agreement."\\n',
+              "dealroom proposed-state explanation",
+          )'''
+          new = '''dealroom = replace_once(
+              dealroom,
+              '"Confirm only after both parties have reviewed the latest saved terms and the evidence rule."',
+              '"Each participant must confirm the same frozen version. One confirmation records consent; two distinct confirmations activate the agreement."',
+              "dealroom proposed-state explanation",
+          )'''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one brittle copy-replacement block; found {source.count(old)}.")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Check out and guard exact PR 158 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git checkout -B agent/dynamic-marketplace-clearing-rounds origin/agent/dynamic-marketplace-clearing-rounds
+          actual="$(git rev-parse HEAD)"
+          expected="4ca0bb452179684476a69af5dd320d91dda0879e"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Refusing moved PR #158 head. Expected $expected, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Apply canonical bilateral confirmation repair
+        run: python3 "$RUNNER_TEMP/apply-pr158-bilateral-confirmation.py"
+
+      - name: Normalize SQL regression variable names
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/tests/marketplace_bilateral_confirmation.sql")
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              "  owner_id uuid;\n  responder_id uuid;":
+                  "  owner_profile_id uuid;\n  responder_profile_id uuid;",
+              "select id into owner_id\n  from public.profiles":
+                  "select id into owner_profile_id\n  from public.profiles",
+              "select id into responder_id\n  from public.profiles":
+                  "select id into responder_profile_id\n  from public.profiles",
+              "if owner_id is null or responder_id is null then":
+                  "if owner_profile_id is null or responder_profile_id is null then",
+              "      and owner_id = owner_id\n":
+                  "      and owner_id = owner_profile_id\n",
+              "    responder_id,\n    'QA Counterparty',":
+                  "    responder_profile_id,\n    'QA Counterparty',",
+              "perform set_config('request.jwt.claim.sub', owner_id::text, true);":
+                  "perform set_config('request.jwt.claim.sub', owner_profile_id::text, true);",
+              "jsonb_build_object('sub', owner_id::text, 'role', 'authenticated')::text,":
+                  "jsonb_build_object('sub', owner_profile_id::text, 'role', 'authenticated')::text,",
+              "    owner_id,\n    agreement_id_value,":
+                  "    owner_profile_id,\n    agreement_id_value,",
+              "    responder_id,\n    agreement_id_value,":
+                  "    responder_profile_id,\n    agreement_id_value,",
+          }
+          for old, new in replacements.items():
+              if old not in source:
+                  raise SystemExit(f"Expected SQL regression marker not found: {old}")
+              source = source.replace(old, new)
+          path.write_text(source, encoding="utf-8")
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run focused tests, lint, build, and whitespace checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            src/app/offers/dynamic-marketplace.test.ts \
+            src/lib/marketplace-clearing-round.test.ts \
+            src/lib/marketplace-offer-families.test.ts
+          npx eslint \
+            src/app/core-trade-actions-base.ts \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts'
+          npm run build
+          git diff --check
+
+      - name: Commit and push only the tested product repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/app/core-trade-actions-base.ts \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            supabase/migrations/20260727042000_allow_closed_marketplace_offer_bilateral_confirmation.sql \
+            supabase/tests/marketplace_bilateral_confirmation.sql
+          git commit -m "Wire dealroom into bilateral agreement confirmation"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
+          echo "FINAL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Report tested repair commit
+        run: echo "Pushed tested PR #158 bilateral-confirmation repair at $FINAL_SHA"
