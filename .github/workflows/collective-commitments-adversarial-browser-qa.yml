@@ -1,30 +1,35 @@
-name: Export exact collective QA branch source
+name: Materialize final collective adversarial QA candidate
 
 on:
   pull_request:
     branches:
       - feature/collective-identity-threshold-commitments-20260726
     paths:
+      - ".github/collective-final-payload/**"
       - ".github/workflows/collective-commitments-adversarial-browser-qa.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: export-exact-collective-qa-source-20260727
+  group: materialize-final-collective-adversarial-qa-20260727
   cancel-in-progress: false
 
 jobs:
-  export:
+  materialize:
     if: >-
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'qa/collective-commitments-adversarial-browser-20260727'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
-      EXPECTED_PRODUCT_BASE: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
+      EXPECTED_PRODUCT_HEAD: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
+      PRODUCT_BRANCH: feature/collective-identity-threshold-commitments-20260726
+      PAYLOAD_B64_SHA256: e4fcdf88778c0f0236de2ed03ba8dca971412af7a430d4363c65d85a8228571e
+      PAYLOAD_TGZ_SHA256: 2893358867c4bc267022f82165d541884eb9dbeb474d60f55e20c48bf349f4e4
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-final-materialization-artifacts
 
     steps:
       - name: Validate exact execution boundary
@@ -40,30 +45,114 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Verify ancestry and package source
+      - name: Reconstruct and validate immutable final payload
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git merge-base "$EXPECTED_PRODUCT_BASE" HEAD)" = "$EXPECTED_PRODUCT_BASE"
-          archive="$RUNNER_TEMP/collective-qa-source.tar.gz"
-          tar \
-            --exclude=.git \
-            --exclude=node_modules \
-            --exclude=.next \
-            --exclude=test-results \
-            --exclude=collective-qa-source.tar.gz \
-            -czf "$archive" .
-          cp "$archive" collective-qa-source.tar.gz
-          sha256sum collective-qa-source.tar.gz > collective-qa-source.sha256
-          git rev-parse HEAD > collective-qa-source-head.txt
+          mkdir -p "$ARTIFACT_DIR"
+          b64="$RUNNER_TEMP/collective-final.b64"
+          tgz="$RUNNER_TEMP/collective-final.tar.gz"
+          cat .github/collective-final-payload/part-* > "$b64"
+          echo "${PAYLOAD_B64_SHA256}  ${b64}" | sha256sum --check --strict
+          base64 --decode "$b64" > "$tgz"
+          echo "${PAYLOAD_TGZ_SHA256}  ${tgz}" | sha256sum --check --strict
 
-      - name: Upload exact source
+          PAYLOAD="$tgz" python3 - <<'PY' | tee "$ARTIFACT_DIR/payload-manifest.json"
+          import hashlib
+          import json
+          import os
+          import tarfile
+          from pathlib import PurePosixPath
+
+          expected = [
+              ".github/scripts/collective-commitments-adversarial-browser-qa.mjs",
+              ".github/workflows/collective-commitments-adversarial-browser-qa.yml",
+              "src/app/collective-commitments/actions.ts",
+              "src/collective-commitments-wiring.test.ts",
+              "src/components/collective-commitments/collective-commitment-form.tsx",
+              "src/components/collective-commitments/collective-signature-controls.tsx",
+              "src/lib/collective-commitments/action-state.ts",
+              "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql",
+              "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql",
+              "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql",
+              "supabase/tests/collective_identity_threshold_commitments.sql",
+          ]
+          with tarfile.open(os.environ["PAYLOAD"], "r:gz") as archive:
+              members = archive.getmembers()
+              names = [member.name for member in members]
+              if names != expected:
+                  raise SystemExit(f"Unexpected payload members: {names!r}")
+              hashes = {}
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or ".." in path.parts:
+                      raise SystemExit(f"Unsafe payload member: {member.name}")
+                  stream = archive.extractfile(member)
+                  if stream is None:
+                      raise SystemExit(f"Missing payload body: {member.name}")
+                  hashes[member.name] = hashlib.sha256(stream.read()).hexdigest()
+          print(json.dumps({"members": names, "sha256": hashes}, indent=2))
+          PY
+          cp "$tgz" "$RUNNER_TEMP/collective-final.validated.tar.gz"
+
+      - name: Replace QA branch with one exact candidate commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_head="$(git rev-parse HEAD)"
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          git fetch origin "$PRODUCT_BRANCH" "$EXPECTED_BRANCH"
+          product_head="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+          if [[ "$product_head" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_HEAD, found $product_head." >&2
+            exit 1
+          fi
+
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git reset --hard "$EXPECTED_PRODUCT_HEAD"
+          git clean -fdx
+          tar -xzf "$RUNNER_TEMP/collective-final.validated.tar.gz" -C "$GITHUB_WORKSPACE"
+
+          expected="$(printf '%s\n' \
+            '.github/scripts/collective-commitments-adversarial-browser-qa.mjs' \
+            '.github/workflows/collective-commitments-adversarial-browser-qa.yml' \
+            'src/app/collective-commitments/actions.ts' \
+            'src/collective-commitments-wiring.test.ts' \
+            'src/components/collective-commitments/collective-commitment-form.tsx' \
+            'src/components/collective-commitments/collective-signature-controls.tsx' \
+            'src/lib/collective-commitments/action-state.ts' \
+            'supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql' \
+            'supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql' \
+            'supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql' \
+            'supabase/tests/collective_identity_threshold_commitments.sql' | sort)"
+          git add --all
+          staged="$(git diff --cached --name-only | sort)"
+          if [[ "$staged" != "$expected" ]]; then
+            echo "Unexpected materialized diff:" >&2
+            printf '%s\n' "$staged" >&2
+            exit 1
+          fi
+          git diff --cached --check
+          git commit -m "Run final collective commitments adversarial QA"
+          final_head="$(git rev-parse HEAD)"
+          git push --force-with-lease="refs/heads/${EXPECTED_BRANCH}:${current_head}" \
+            origin "HEAD:${EXPECTED_BRANCH}"
+
+          printf '%s\n' \
+            "source_head=${current_head}" \
+            "product_base=${EXPECTED_PRODUCT_HEAD}" \
+            "qa_head=${final_head}" \
+            "payload_b64_sha256=${PAYLOAD_B64_SHA256}" \
+            "payload_tgz_sha256=${PAYLOAD_TGZ_SHA256}" \
+            "candidate_files=11" \
+            "production_changed=NO" > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload materialization evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: collective-qa-source-${{ github.run_id }}
-          path: |
-            collective-qa-source.tar.gz
-            collective-qa-source.sha256
-            collective-qa-source-head.txt
-          if-no-files-found: error
-          retention-days: 2
+          name: collective-final-materialization-${{ github.run_id }}
+          path: collective-final-materialization-artifacts
+          if-no-files-found: warn
+          retention-days: 14
