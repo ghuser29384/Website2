@@ -22,8 +22,8 @@
     display: none;
   }
 
-  .responsiveShell :global(.mt-footer-mark) {
-    display: none;
+  .responsiveShell.responsiveShell :global(.mt-footer-mark) {
+    display: none !important;
   }
 
   .responsiveSubnav {
