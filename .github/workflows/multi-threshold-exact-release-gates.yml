@@ -1,5 +1,6 @@
 name: Multi-threshold exact release gates
 
+# Trusted authenticated-browser trigger 2026-07-27T03:46Z.
 # Exact release gates already passed in run 30234552074. This trusted workflow now
 # executes the authenticated desktop/mobile evidence sequence on the same product SHA.
 on:
