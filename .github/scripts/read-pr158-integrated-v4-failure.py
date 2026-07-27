@@ -6,7 +6,7 @@ import re
 import urllib.error
 import urllib.request
 
-JOB_ID = 89940128199
+JOB_ID = 89942754250
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -21,7 +21,7 @@ def download(repo: str, token: str) -> str:
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "moraltrade-pr158-integrated-v5-log-reader",
+            "User-Agent": "moraltrade-pr158-pg17-install-log-reader",
         },
     )
     opener = urllib.request.build_opener(NoRedirect)
@@ -37,7 +37,7 @@ def download(repo: str, token: str) -> str:
         with urllib.request.urlopen(
             urllib.request.Request(
                 location,
-                headers={"User-Agent": "moraltrade-pr158-integrated-v5-log-reader"},
+                headers={"User-Agent": "moraltrade-pr158-pg17-install-log-reader"},
             ),
             timeout=30,
         ) as redirected:
@@ -64,16 +64,16 @@ def main() -> int:
         index
         for index, line in enumerate(lines)
         if re.search(
-            r"(?i)(PASS:|FAIL:|ERROR:|pg_dump|server version|SystemExit|Traceback|top-level transaction|Process completed with exit code)",
+            r"(?i)(postgresql-client-17|Unable to locate package|Package .* has no installation candidate|E:|ERROR:|Process completed with exit code)",
             line,
         )
     ]
-    index = markers[-1] if markers else max(0, len(lines) - 300)
-    start = max(0, index - 260)
-    end = min(len(lines), index + 320)
-    print("SANITIZED_INTEGRATED_V5_FAILURE_BEGIN")
+    index = markers[-1] if markers else max(0, len(lines) - 220)
+    start = max(0, index - 180)
+    end = min(len(lines), index + 220)
+    print("SANITIZED_PG17_INSTALL_FAILURE_BEGIN")
     print("\n".join(lines[start:end]))
-    print("SANITIZED_INTEGRATED_V5_FAILURE_END")
+    print("SANITIZED_PG17_INSTALL_FAILURE_END")
     return 0
 
 
