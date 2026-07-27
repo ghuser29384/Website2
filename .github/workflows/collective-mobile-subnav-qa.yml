@@ -1,0 +1,236 @@
+name: Collective Commitments mobile subnavigation QA
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/scripts/collective-mobile-subnav-qa.mjs"
+      - ".github/workflows/collective-mobile-subnav-qa.yml"
+      - "src/collective-commitments-mobile-subnav.test.ts"
+      - "src/components/collective-commitments/collective-commitment-shell.tsx"
+      - "src/components/collective-commitments/collective-commitments-mobile.module.css"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: collective-mobile-subnav-qa-20260727
+  cancel-in-progress: false
+
+jobs:
+  render-test-and-publish:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-mobile-subnav-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_PRODUCT_HEAD: 3228deff118e5b6d049a859a12261c76b501b871
+      PRODUCT_BRANCH: feature/collective-identity-threshold-commitments-20260726
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/collective-mobile-subnav-artifacts
+      COLLECTIVE_COMMITMENTS_ENABLED: "true"
+      COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "60"
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+
+    steps:
+      - name: Validate exact repository, branch, and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "qa/collective-mobile-subnav-20260727"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out exact QA head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact product ancestry and QA-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$PRODUCT_BRANCH"
+          product_head="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+          if [[ "$product_head" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_HEAD, found $product_head." >&2
+            exit 1
+          fi
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/collective-mobile-subnav-qa.mjs' \
+            '.github/workflows/collective-mobile-subnav-qa.yml' \
+            'src/collective-commitments-mobile-subnav.test.ts' \
+            'src/components/collective-commitments/collective-commitment-shell.tsx' \
+            'src/components/collective-commitments/collective-commitments-mobile.module.css' | sort)"
+          if [[ "$changed" != "$expected" ]]; then
+            echo "Unexpected QA branch diff:" >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+
+          mkdir -p "$BROWSER_QA_ARTIFACT_DIR"
+          cp src/collective-commitments-mobile-subnav.test.ts "$RUNNER_TEMP/collective-commitments-mobile-subnav.test.ts"
+          cp src/components/collective-commitments/collective-commitment-shell.tsx "$RUNNER_TEMP/collective-commitment-shell.tsx"
+          cp src/components/collective-commitments/collective-commitments-mobile.module.css "$RUNNER_TEMP/collective-commitments-mobile.module.css"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and run focused source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test src/collective-commitments-mobile-subnav.test.ts \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/source-test.log"
+          npx eslint \
+            .github/scripts/collective-mobile-subnav-qa.mjs \
+            src/collective-commitments-mobile-subnav.test.ts \
+            src/components/collective-commitments/collective-commitment-shell.tsx \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/eslint.log"
+          git diff --check
+
+      - name: Generate isolated local encryption key
+        shell: bash
+        run: |
+          set -euo pipefail
+          master_key="$(openssl rand -base64 32 | tr -d '\n')"
+          echo "::add-mask::$master_key"
+          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+
+      - name: Build exact candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/build.log"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact candidate locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
+            > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/collective-commitments >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            cat "$BROWSER_QA_ARTIFACT_DIR/server.log" >&2
+            exit 1
+          fi
+
+      - name: Render and verify 390x844 and 320x568
+        run: node .github/scripts/collective-mobile-subnav-qa.mjs
+
+      - name: Verify rendered evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.viewports | length == 2' "$audit" >/dev/null
+          jq -e '.viewports | all(.outcome == "pass")' "$audit" >/dev/null
+          jq -e '.viewports | all(.metrics.navScrollWidth <= .metrics.navClientWidth + 1)' "$audit" >/dev/null
+          jq -e '.viewports | all(.metrics.documentScrollWidth <= .metrics.viewportWidth + 1)' "$audit" >/dev/null
+          jq -e '.viewports | all(.metrics.links | length == 3)' "$audit" >/dev/null
+          test -s "$BROWSER_QA_ARTIFACT_DIR/mobile-390x844-viewport.png"
+          test -s "$BROWSER_QA_ARTIFACT_DIR/mobile-320x568-viewport.png"
+
+      - name: Publish tested product repair to PR 233 branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$PRODUCT_BRANCH"
+          remote_head="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+          if [[ "$remote_head" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_HEAD, found $remote_head." >&2
+            exit 1
+          fi
+
+          git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+          cp "$RUNNER_TEMP/collective-commitments-mobile-subnav.test.ts" \
+            src/collective-commitments-mobile-subnav.test.ts
+          cp "$RUNNER_TEMP/collective-commitment-shell.tsx" \
+            src/components/collective-commitments/collective-commitment-shell.tsx
+          cp "$RUNNER_TEMP/collective-commitments-mobile.module.css" \
+            src/components/collective-commitments/collective-commitments-mobile.module.css
+          git add \
+            src/collective-commitments-mobile-subnav.test.ts \
+            src/components/collective-commitments/collective-commitment-shell.tsx \
+            src/components/collective-commitments/collective-commitments-mobile.module.css
+          git diff --cached --check
+          git commit -m "Fix Collective Commitments mobile subnavigation"
+          git push origin HEAD:"$PRODUCT_BRANCH"
+          final_head="$(git rev-parse HEAD)"
+          echo "FINAL_PRODUCT_HEAD=$final_head" >> "$GITHUB_ENV"
+          gh pr comment 233 --repo "$EXPECTED_REPOSITORY" --body "Rendered mobile feature-review defect repaired and gated. Exact pre-fix product head: \`${EXPECTED_PRODUCT_HEAD}\`. Tested product head: \`${final_head}\`. Both \`390×844\` and \`320×568\` show all three Collective Commitments navigation links without page or subnavigation horizontal overflow. Production remains unchanged. Evidence: workflow run \`${GITHUB_RUN_ID}\`."
+
+      - name: Record successful result
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$BROWSER_QA_ARTIFACT_DIR/result.txt" <<RESULT
+          product_head_before=${EXPECTED_PRODUCT_HEAD}
+          product_head_after=${FINAL_PRODUCT_HEAD}
+          source_contract=PASS
+          build=PASS
+          mobile_390x844=PASS
+          mobile_320x568=PASS
+          all_three_links_visible=PASS
+          subnavigation_horizontal_overflow=NONE
+          page_horizontal_overflow=NONE
+          production_changed=NO
+          RESULT
+
+      - name: Upload rendered QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-mobile-subnav-qa-${{ github.run_id }}
+          path: collective-mobile-subnav-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local application
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APP_PID:-}" ]]; then
+            kill "$APP_PID" 2>/dev/null || true
+          fi
