@@ -1,0 +1,117 @@
+name: PR 158 integrated finalization v3
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-integrated-finalization-v3.yml"
+      - ".github/scripts/run-pr158-integrated-finalization-v2.sh"
+      - ".github/scripts/apply-pr158-integrated-lint-fixes.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr158-integrated-finalization-v3
+  cancel-in-progress: false
+
+jobs:
+  finalize-integrated-candidate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-sync-main-release-validation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out temporary orchestration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve and normalize the guarded finalization runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/run-pr158-integrated-finalization-v2.sh \
+            "$RUNNER_TEMP/run-pr158-integrated-finalization-v3.sh"
+          cp .github/scripts/apply-pr158-integrated-lint-fixes.py \
+            "$RUNNER_TEMP/apply-pr158-integrated-lint-fixes.py"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "run-pr158-integrated-finalization-v3.sh"
+          source = path.read_text(encoding="utf-8")
+          old = '''def errors(path: Path):
+              result = []
+              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  value = line.strip()
+                  if "error TS" not in value:
+                      continue
+                  value = re.sub(r"^.*?/(src/)", r"\\1", value)
+                  result.append(value)
+              return sorted(set(result))
+          '''
+          new = '''def errors(path: Path):
+              result = []
+              pattern = re.compile(
+                  r"(?P<path>src/[^\\n(]+)\\((?P<line>\\d+),(?P<column>\\d+)\\): error (?P<code>TS\\d+):"
+              )
+              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  value = line.strip()
+                  if "error TS" not in value:
+                      continue
+                  value = re.sub(r"^.*?/(src/)", r"\\1", value)
+                  match = pattern.search(value)
+                  if match:
+                      result.append(
+                          f"{match.group('path')}({match.group('line')},{match.group('column')}): {match.group('code')}"
+                      )
+                  else:
+                      result.append(value)
+              return sorted(set(result))
+          '''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one TypeScript normalization block; found {source.count(old)}.")
+          source = source.replace(old, new, 1)
+          source = source.replace(
+              'EVIDENCE_DIR="$GITHUB_WORKSPACE/integrated-final-v2-evidence"',
+              'EVIDENCE_DIR="$GITHUB_WORKSPACE/integrated-final-v3-evidence"',
+              1,
+          )
+          source = source.replace(
+              'Path(os.environ["GITHUB_WORKSPACE"]) / "integrated-final-v2-evidence"',
+              'Path(os.environ["GITHUB_WORKSPACE"]) / "integrated-final-v3-evidence"',
+              1,
+          )
+          path.write_text(source, encoding="utf-8")
+          PY
+          chmod +x "$RUNNER_TEMP/run-pr158-integrated-finalization-v3.sh"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Merge, compare baselines, validate, compile migrations, and push
+        shell: bash
+        run: "$RUNNER_TEMP/run-pr158-integrated-finalization-v3.sh"
+
+      - name: Upload integrated finalization v3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-finalization-v3-${{ github.run_id }}
+          path: integrated-final-v3-evidence
+          if-no-files-found: warn
+          retention-days: 14
