@@ -1,9 +1,9 @@
 # Clean authenticated Trade Feed verification
 
 - Result: **PASS**
-- Candidate: `71480c03739f063a9725a4eb5c15e507b2cd0617`
+- Candidate: `378bfc688e4815decebd14948ec7de5c211522ea`
 - Baseline: `c42d07797554958074945547ec121ab922cebc61`
-- Recorded: `2026-07-27T13:41:27Z`
+- Recorded: `2026-07-27T14:06:06Z`
 
 | Gate | Status |
 |---|---:|
@@ -44,27 +44,27 @@ TAP version 13
 # Subtest: the delivered Trade builder removes the screenshot demo sidebar before first render
 ok 1 - the delivered Trade builder removes the screenshot demo sidebar before first render
   ---
-  duration_ms: 1.475114
+  duration_ms: 1.804801
   ...
 # Subtest: Trade reads the one authenticated Feed snapshot and never creates a second exposure
 ok 2 - Trade reads the one authenticated Feed snapshot and never creates a second exposure
   ---
-  duration_ms: 0.329848
+  duration_ms: 1.05396
   ...
 # Subtest: Trade and Feed DOM nodes preserve exact Feed item and receipt identity
 ok 3 - Trade and Feed DOM nodes preserve exact Feed item and receipt identity
   ---
-  duration_ms: 0.980587
+  duration_ms: 0.322877
   ...
 # Subtest: malformed, signed-out, incomplete, unavailable, and zero-data states fail closed
 ok 4 - malformed, signed-out, incomplete, unavailable, and zero-data states fail closed
   ---
-  duration_ms: 0.44838
+  duration_ms: 0.406274
   ...
 # Subtest: the responsive Trade surface stays within narrow mobile bounds
 ok 5 - the responsive Trade surface stays within narrow mobile bounds
   ---
-  duration_ms: 0.254527
+  duration_ms: 0.28771
   ...
 1..5
 # tests 5
@@ -74,7 +74,7 @@ ok 5 - the responsive Trade surface stays within narrow mobile bounds
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 326.660861
+# duration_ms 349.850076
 ```
 
 ## focused-lint
@@ -210,7 +210,7 @@ ok 5 - the responsive Trade surface stays within narrow mobile bounds
 
 Running 5 tests using 1 worker
 ·····
-  5 passed (9.9s)
+  5 passed (10.4s)
 ```
 
 ## diff-check
