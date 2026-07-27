@@ -1,9 +1,13 @@
 name: Verify promoted Walkthrough in production
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/verify-walkthrough-production-20260727
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: read
@@ -20,6 +24,8 @@ jobs:
     steps:
       - name: Check out exact production source commit
         uses: actions/checkout@v4
+        with:
+          ref: ops/verify-walkthrough-production-20260727
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
