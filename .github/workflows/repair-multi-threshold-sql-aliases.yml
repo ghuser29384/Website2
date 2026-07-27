@@ -1,5 +1,6 @@
 name: Repair multi-threshold SQL aliases
 
+# Trigger the exact isolated-QA regression repair from a trusted repository write.
 on:
   pull_request:
     branches:
