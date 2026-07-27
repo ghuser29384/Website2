@@ -7,7 +7,11 @@ on:
     paths:
       - ".github/scripts/collective-commitments-adversarial-browser-qa.mjs"
       - ".github/workflows/collective-commitments-adversarial-browser-qa.yml"
+      - "src/app/collective-commitments/actions.ts"
       - "src/collective-commitments-wiring.test.ts"
+      - "src/components/collective-commitments/collective-commitment-form.tsx"
+      - "src/components/collective-commitments/collective-signature-controls.tsx"
+      - "src/lib/collective-commitments/action-state.ts"
       - "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql"
       - "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql"
       - "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql"
@@ -91,7 +95,11 @@ jobs:
           expected="$(printf '%s\n' \
             '.github/scripts/collective-commitments-adversarial-browser-qa.mjs' \
             '.github/workflows/collective-commitments-adversarial-browser-qa.yml' \
+            'src/app/collective-commitments/actions.ts' \
             'src/collective-commitments-wiring.test.ts' \
+            'src/components/collective-commitments/collective-commitment-form.tsx' \
+            'src/components/collective-commitments/collective-signature-controls.tsx' \
+            'src/lib/collective-commitments/action-state.ts' \
             'supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql' \
             'supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql' \
             'supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql' \
@@ -102,7 +110,14 @@ jobs:
             exit 1
           fi
           mkdir -p "$ARTIFACT_DIR"
+          cp src/app/collective-commitments/actions.ts "$RUNNER_TEMP/collective-commitments-actions.ts"
           cp src/collective-commitments-wiring.test.ts "$RUNNER_TEMP/collective-commitments-wiring.test.ts"
+          cp src/components/collective-commitments/collective-commitment-form.tsx \
+            "$RUNNER_TEMP/collective-commitment-form.tsx"
+          cp src/components/collective-commitments/collective-signature-controls.tsx \
+            "$RUNNER_TEMP/collective-signature-controls.tsx"
+          cp src/lib/collective-commitments/action-state.ts \
+            "$RUNNER_TEMP/collective-commitment-action-state.ts"
           cp supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql \
             "$RUNNER_TEMP/20260727030000_fix_collective_manifest_jsonb_alias.sql"
           cp supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql \
@@ -130,6 +145,7 @@ jobs:
           npx eslint \
             .github/scripts/collective-commitments-adversarial-browser-qa.mjs \
             src/collective-commitments-wiring.test.ts \
+            src/lib/collective-commitments/action-state.ts \
             src/lib/collective-commitments/config.ts \
             src/lib/collective-commitments/crypto.ts \
             src/lib/collective-commitments/service.ts \
@@ -376,7 +392,15 @@ jobs:
             exit 1
           fi
           git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+          cp "$RUNNER_TEMP/collective-commitments-actions.ts" \
+            src/app/collective-commitments/actions.ts
           cp "$RUNNER_TEMP/collective-commitments-wiring.test.ts" src/collective-commitments-wiring.test.ts
+          cp "$RUNNER_TEMP/collective-commitment-form.tsx" \
+            src/components/collective-commitments/collective-commitment-form.tsx
+          cp "$RUNNER_TEMP/collective-signature-controls.tsx" \
+            src/components/collective-commitments/collective-signature-controls.tsx
+          cp "$RUNNER_TEMP/collective-commitment-action-state.ts" \
+            src/lib/collective-commitments/action-state.ts
           cp "$RUNNER_TEMP/20260727030000_fix_collective_manifest_jsonb_alias.sql" \
             supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql
           cp "$RUNNER_TEMP/20260727043000_fix_collective_manifest_materialized_rows.sql" \
@@ -386,13 +410,17 @@ jobs:
           cp "$RUNNER_TEMP/collective_identity_threshold_commitments.sql" \
             supabase/tests/collective_identity_threshold_commitments.sql
           git add \
+            src/app/collective-commitments/actions.ts \
             src/collective-commitments-wiring.test.ts \
+            src/components/collective-commitments/collective-commitment-form.tsx \
+            src/components/collective-commitments/collective-signature-controls.tsx \
+            src/lib/collective-commitments/action-state.ts \
             supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql \
             supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql \
             supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql \
             supabase/tests/collective_identity_threshold_commitments.sql
           git diff --cached --check
-          git commit -m "Fix collective reveal-manifest validation"
+          git commit -m "Fix collective activation and server-action runtime"
           git push origin HEAD:"$PRODUCT_BRANCH"
           echo "FINAL_PRODUCT_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
@@ -408,6 +436,7 @@ jobs:
           materialized_rows_repair_migration_version=${MATERIALIZED_REPAIR_VERSION}
           typed_recordset_repair_migration_version=${TYPED_RECORDSET_REPAIR_VERSION}
           database_regression=PASS
+          server_action_runtime=PASS
           authenticated_browser_qa=PASS
           duplicate_human=PASS
           simultaneous_final_signatures=PASS
