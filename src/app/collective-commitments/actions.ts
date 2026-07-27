@@ -123,19 +123,11 @@ export async function signCollectiveCommitmentAction(
       throw new Error("Accept the high-risk participation acknowledgment before signing.");
     }
 
-    const result = await signCollectiveCommitment({
+    await signCollectiveCommitment({
       commitmentId,
       profileId: viewer.profile.id,
       publishAffiliation: checked(formData, "publish_affiliation"),
     });
-
-    revalidatePath("/collective-commitments");
-    revalidatePath(`/collective-commitments/${commitmentId}`);
-    return {
-      ok: true,
-      message: result.message,
-      commitmentId,
-    };
   } catch (error) {
     return {
       ok: false,
@@ -143,6 +135,10 @@ export async function signCollectiveCommitmentAction(
       commitmentId,
     };
   }
+
+  revalidatePath("/collective-commitments");
+  revalidatePath(`/collective-commitments/${commitmentId}`);
+  redirect(`/collective-commitments/${commitmentId}`);
 }
 
 export async function withdrawCollectiveCommitmentAction(
@@ -153,13 +149,10 @@ export async function withdrawCollectiveCommitmentAction(
 
   try {
     const viewer = await requireViewer();
-    const message = await withdrawCollectiveCommitmentSignature({
+    await withdrawCollectiveCommitmentSignature({
       commitmentId,
       profileId: viewer.profile.id,
     });
-    revalidatePath("/collective-commitments");
-    revalidatePath(`/collective-commitments/${commitmentId}`);
-    return { ok: true, message, commitmentId };
   } catch (error) {
     return {
       ok: false,
@@ -167,4 +160,8 @@ export async function withdrawCollectiveCommitmentAction(
       commitmentId,
     };
   }
+
+  revalidatePath("/collective-commitments");
+  revalidatePath(`/collective-commitments/${commitmentId}`);
+  redirect(`/collective-commitments/${commitmentId}`);
 }
