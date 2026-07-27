@@ -1,0 +1,3 @@
+Exact product: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+QA project: hvmxfjjbdcgjjudmthdz
+Purpose: authenticated desktop/mobile creator, atomic approval, accepted-pledge immutability, and exact cleanup evidence.
