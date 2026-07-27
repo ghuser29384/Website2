@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 55
     env:
       EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
-      EXPECTED_WRAPPER_BLOB: 68e2422f9de1a982b39ed609634ff7283c4fecdc
+      EXPECTED_WRAPPER_BLOB: 3fc8677f1fb7370a23d18bed7916b32424b9e16d
       QA_BRANCH: qa/multi-threshold-authenticated-browser-20260727
       RUN_STATUS_PATH: .github/multi-threshold-push-run-status.json
       QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
