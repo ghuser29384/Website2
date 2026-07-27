@@ -1,0 +1,59 @@
+name: Export collective commitments source
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/export-collective-commitments-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/export-collective-commitments-source-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PRODUCT_HEAD: 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8
+    steps:
+      - name: Check out temporary export branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_PRODUCT_HEAD" HEAD
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD)"
+          test "$changed" = ".github/workflows/export-collective-commitments-source.yml"
+
+      - name: Package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            --exclude=.github/workflows/export-collective-commitments-source.yml \
+            -czf collective-commitments-source.tar.gz .
+          sha256sum collective-commitments-source.tar.gz > collective-commitments-source.sha256
+          printf 'product_head=%s\n' "$EXPECTED_PRODUCT_HEAD" > collective-commitments-source.txt
+
+      - name: Upload exact source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-commitments-source-${{ github.run_id }}
+          path: |
+            collective-commitments-source.tar.gz
+            collective-commitments-source.sha256
+            collective-commitments-source.txt
+          if-no-files-found: error
+          retention-days: 2
