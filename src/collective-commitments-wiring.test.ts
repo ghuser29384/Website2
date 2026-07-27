@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+// Guarded QA synchronization marker; assertion semantics are unchanged.
 const migrationPath = "supabase/migrations/20260726171000_collective_identity_threshold_commitments.sql";
+const manifestAliasRepairPath =
+  "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql";
+const manifestMaterializedRowsRepairPath =
+  "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql";
+const manifestTypedRecordsetRepairPath =
+  "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql";
 
 async function source(path: string) {
   return readFile(path, "utf8");
@@ -29,6 +36,42 @@ test("database activation enforces an exact MAC-backed manifest before publicati
   assert.match(migration, /delete from public\.collective_commitment_private_signatures/);
   assert.match(migration, /delete from public\.collective_commitment_keys/);
   assert.match(migration, /set status = 'active'/);
+});
+
+test("forward manifest repair keeps JSONB entries scalar through full joins", async () => {
+  const repair = await source(manifestAliasRepairPath);
+  assert.match(repair, /jsonb_array_elements\(p_manifest\) as manifest\(entry\)/);
+  assert.doesNotMatch(repair, /jsonb_array_elements\(p_manifest\) entry/);
+  assert.match(repair, /entry->>'revealNonce'/);
+  assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
+  assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
+});
+
+test("materialized-row repair prefilters signatures before exactness checks", async () => {
+  const repair = await source(manifestMaterializedRowsRepairPath);
+  assert.match(repair, /with manifest_rows as materialized/);
+  assert.match(repair, /select jsonb_array_elements\(p_manifest\) as manifest_entry/);
+  assert.match(repair, /with signature_rows as materialized/);
+  assert.match(repair, /where commitment_id = p_commitment_id/);
+  assert.match(repair, /full join manifest_rows manifest/);
+  assert.match(repair, /manifest\.manifest_entry->>'revealNonce'/);
+  assert.doesNotMatch(repair, /full join jsonb_array_elements\(p_manifest\)/);
+  assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
+  assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
+});
+
+test("final manifest repair uses an explicitly typed recordset inside full joins", async () => {
+  const repair = await source(manifestTypedRecordsetRepairPath);
+  assert.match(repair, /jsonb_to_recordset\(p_manifest\) as manifest_record/);
+  assert.match(repair, /"signatureId" text/);
+  assert.match(repair, /manifest\.signature_id::uuid = signature\.id/);
+  assert.match(repair, /manifest\.reveal_nonce is distinct from signature\.reveal_nonce/);
+  assert.doesNotMatch(repair, /manifest(?:\.manifest_entry)?->>/);
+  assert.doesNotMatch(repair, /full join jsonb_array_elements\(p_manifest\)/);
+  assert.match(repair, /with signature_rows as materialized/);
+  assert.match(repair, /where commitment_id = p_commitment_id/);
+  assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
+  assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
 });
 
 test("sensitive tables and mutation RPCs are service-role only", async () => {
@@ -79,6 +122,36 @@ test("rendered flow requires publication and high-risk acknowledgments", async (
   assert.match(controls, /publish_affiliation/);
   assert.match(actions, /Accept the high-risk proposition acknowledgment/);
   assert.match(actions, /verified real name will be public/);
+});
+
+test("server-action modules export only async actions at runtime", async () => {
+  const [actions, state, form, controls] = await Promise.all([
+    source("src/app/collective-commitments/actions.ts"),
+    source("src/lib/collective-commitments/action-state.ts"),
+    source("src/components/collective-commitments/collective-commitment-form.tsx"),
+    source("src/components/collective-commitments/collective-signature-controls.tsx"),
+  ]);
+  assert.match(actions, /^"use server";/);
+  assert.match(actions, /import type \{ CollectiveCommitmentActionState \}/);
+  assert.doesNotMatch(actions, /export\s+(?:const|let|var|class)\s+/);
+  assert.doesNotMatch(actions, /EMPTY_COLLECTIVE_ACTION_STATE/);
+  assert.match(state, /export const EMPTY_COLLECTIVE_ACTION_STATE/);
+  assert.match(form, /collective-commitments\/action-state/);
+  assert.match(controls, /collective-commitments\/action-state/);
+});
+
+test("successful collective mutations redirect from server actions", async () => {
+  const [actions, form, controls] = await Promise.all([
+    source("src/app/collective-commitments/actions.ts"),
+    source("src/components/collective-commitments/collective-commitment-form.tsx"),
+    source("src/components/collective-commitments/collective-signature-controls.tsx"),
+  ]);
+  assert.match(actions, /import \{ redirect \} from "next\/navigation"/);
+  assert.match(actions, /redirect\(`\/collective-commitments\/\$\{commitmentId\}`\)/);
+  assert.match(actions, /mutation=signature-recorded/);
+  assert.match(actions, /mutation=signature-withdrawn/);
+  assert.doesNotMatch(form, /useRouter|router\.push|useEffect/);
+  assert.doesNotMatch(controls, /useRouter|router\.refresh|useEffect/);
 });
 
 test("expiry route is cron-authorized and never claims publication", async () => {
