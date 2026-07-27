@@ -3,10 +3,8 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  createCollectiveCommitmentAction,
-  EMPTY_COLLECTIVE_ACTION_STATE,
-} from "@/app/collective-commitments/actions";
+import { createCollectiveCommitmentAction } from "@/app/collective-commitments/actions";
+import { EMPTY_COLLECTIVE_ACTION_STATE } from "@/lib/collective-commitments/action-state";
 import {
   COLLECTIVE_PROPOSITION_TYPE_META,
   COLLECTIVE_PROPOSITION_TYPES,
