@@ -1,0 +1,65 @@
+name: PR 212 test failure extractor
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-test-failure-extractor.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: "30270105060"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract complete-test failure context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > /tmp/pr212-run.log
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          lines = Path('/tmp/pr212-run.log').read_text(errors='replace').splitlines()
+          patterns = re.compile(r'(not ok|assertionerror|npm error|npm err|test failed|tests failed|# fail|\bfail(?:ed|ure)?\b|\berror:|uncaught|expected:|actual:)', re.I)
+          selected = set()
+          for index, line in enumerate(lines):
+              if patterns.search(line):
+                  selected.update(range(max(0, index - 10), min(len(lines), index + 16)))
+
+          marker_indexes = [i for i, line in enumerate(lines) if 'Run complete test suite' in line or 'Run npm test' in line]
+          if marker_indexes:
+              start = marker_indexes[-1]
+              selected.update(range(start, min(len(lines), start + 1400)))
+
+          ordered = sorted(selected)
+          chunks = []
+          previous = None
+          for index in ordered:
+              if previous is not None and index > previous + 1:
+                  chunks.append('--- omitted ---')
+              chunks.append(f'{index + 1}: {lines[index]}')
+              previous = index
+
+          Path('ops/pr212-test-failure-context.txt').write_text('\n'.join(chunks) + '\n')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-test-failure-context.txt
+          git commit -m "Record PR 212 full-test failure context"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
