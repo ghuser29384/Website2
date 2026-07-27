@@ -7,6 +7,7 @@ PATH = Path(".github/scripts/pr158-two-account-browser-qa.mjs")
 START_MARKER = 'await recordCheck("dealroom term diff and persisted revision"'
 PAGE_MARKER = "const page = owner.page;"
 CHANGE_MARKER = 'await expect(page.getByText("1 unpublished change")).toBeVisible();'
+PROPOSED_MARKER = 'await expect(page.getByText("Proposed revision")).toBeVisible();'
 
 
 def main() -> None:
@@ -44,12 +45,12 @@ def main() -> None:
 
     change_indexes = [
         i
-        for i in range(page_index + 1, min(len(lines), page_index + 100))
+        for i in range(page_index + 1, min(len(lines), page_index + 120))
         if CHANGE_MARKER in lines[i]
     ]
-    if not change_indexes:
+    if len(change_indexes) != 1:
         raise RuntimeError(
-            "No unpublished-change assertion was found after the revision-block page marker."
+            f"Expected one unpublished-change assertion after the revision-block page marker; found {len(change_indexes)}."
         )
     change_index = change_indexes[0]
     change_indent = lines[change_index][
@@ -63,16 +64,45 @@ def main() -> None:
         f"{change_indent}await expect(page.getByText(pendingLabel)).toBeVisible();\n",
     ]
 
+    proposed_indexes = [
+        i
+        for i in range(page_index + 1, min(len(lines), page_index + 140))
+        if PROPOSED_MARKER in lines[i]
+    ]
+    if len(proposed_indexes) != 1:
+        raise RuntimeError(
+            f"Expected one Proposed revision assertion after the revision-block page marker; found {len(proposed_indexes)}."
+        )
+    proposed_index = proposed_indexes[0]
+    proposed_indent = lines[proposed_index][
+        : len(lines[proposed_index]) - len(lines[proposed_index].lstrip())
+    ]
+    lines[proposed_index : proposed_index + 1] = [
+        f'{proposed_indent}const proposedRevisionLabels = page.getByText("Proposed revision", {{\n',
+        f"{proposed_indent}  exact: true,\n",
+        f"{proposed_indent}}});\n",
+        f"{proposed_indent}await expect(proposedRevisionLabels).toHaveCount(expectedChangeCount);\n",
+        f"{proposed_indent}await expect(proposedRevisionLabels.first()).toBeVisible();\n",
+    ]
+
     patched = "".join(lines)
     if patched.count("const counterfactual = page.getByLabel") != 1:
         raise RuntimeError("Counterfactual-field patch was not applied exactly once.")
     if patched.count("const pendingLabel =") != 1:
         raise RuntimeError("Dynamic unpublished-change assertion was not applied exactly once.")
+    if patched.count("const proposedRevisionLabels =") != 1:
+        raise RuntimeError("Proposed-revision locator patch was not applied exactly once.")
+    if patched.count("toHaveCount(expectedChangeCount)") != 1:
+        raise RuntimeError("Expected-count assertion was not applied exactly once.")
     if CHANGE_MARKER in patched:
         raise RuntimeError("The stale one-change assertion remains after patching.")
+    if PROPOSED_MARKER in patched:
+        raise RuntimeError("The stale strict Proposed revision assertion remains after patching.")
 
     PATH.write_text(patched, encoding="utf-8")
-    print("Patched the reviewed PR #158 browser runner for required dealroom terms.")
+    print(
+        "Patched the reviewed PR #158 browser runner for required dealroom terms and non-unique Proposed revision labels."
+    )
 
 
 if __name__ == "__main__":
