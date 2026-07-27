@@ -1,0 +1,58 @@
+name: Inspect PR 158 dealroom term versioning
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/inspect-pr158-term-versioning.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-pr158-bilateral-confirmation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact repaired PR 158 head
+        uses: actions/checkout@v4
+        with:
+          ref: 48fd07a1aa48c10753757c18e9372c8df143c9b2
+          fetch-depth: 1
+
+      - name: Capture term-version write and read paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=pr158-term-versioning.txt
+          {
+            echo '=== saveAgreementTermsAction ==='
+            line="$(grep -n '^export async function saveAgreementTermsAction' src/app/actions.ts | head -n1 | cut -d: -f1)"
+            test -n "$line"
+            start=$(( line > 30 ? line - 30 : 1 ))
+            end=$(( line + 300 ))
+            sed -n "${start},${end}p" src/app/actions.ts
+
+            echo '=== getAgreementForUser ==='
+            line="$(grep -n '^export async function getAgreementForUser' src/lib/app-data.ts | head -n1 | cut -d: -f1)"
+            test -n "$line"
+            start=$(( line > 30 ? line - 30 : 1 ))
+            end=$(( line + 380 ))
+            sed -n "${start},${end}p" src/lib/app-data.ts
+
+            echo '=== current_version_id references in PR files ==='
+            grep -R -n --include='*.ts' --include='*.tsx' 'current_version_id' \
+              src/app/deals src/components/marketplace src/app/actions.ts src/lib/app-data.ts || true
+          } > "$output"
+
+      - name: Upload term-version inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-term-versioning-${{ github.run_id }}
+          path: pr158-term-versioning.txt
+          if-no-files-found: error
+          retention-days: 1
