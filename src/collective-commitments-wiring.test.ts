@@ -140,6 +140,16 @@ test("server-action modules export only async actions at runtime", async () => {
   assert.match(controls, /collective-commitments\/action-state/);
 });
 
+test("successful collective creation redirects from the server action", async () => {
+  const [actions, form] = await Promise.all([
+    source("src/app/collective-commitments/actions.ts"),
+    source("src/components/collective-commitments/collective-commitment-form.tsx"),
+  ]);
+  assert.match(actions, /import \{ redirect \} from "next\/navigation"/);
+  assert.match(actions, /redirect\(`\/collective-commitments\/\$\{commitmentId\}`\)/);
+  assert.doesNotMatch(form, /useRouter|router\.push|useEffect/);
+});
+
 test("expiry route is cron-authorized and never claims publication", async () => {
   const route = await source("src/app/api/jobs/collective-commitments-expire/route.ts");
   assert.match(route, /isCronRequestAuthorized/);
