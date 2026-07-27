@@ -1,0 +1,132 @@
+name: Prepare institutional QA runner
+
+on:
+  push:
+    branches:
+      - feat/institutional-trade-system
+    paths:
+      - .github/workflows/prepare-institutional-qa-runner.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-institutional-qa-runner
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create a push-triggered exact copy with fixed QA inputs
+        shell: bash
+        env:
+          QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+          BRANCH: feat/institutional-trade-system
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path('.github/workflows/institutional-trade-qa.yml')
+          target = Path('.github/workflows/institutional-trade-qa-run.yml')
+          text = source.read_text(encoding='utf-8')
+          lines = text.splitlines()
+
+          inputs = {}
+          in_dispatch = False
+          in_inputs = False
+          current = None
+          for raw in lines:
+              stripped = raw.strip()
+              indent = len(raw) - len(raw.lstrip(' '))
+              if indent == 2 and stripped == 'workflow_dispatch:':
+                  in_dispatch = True
+                  in_inputs = False
+                  current = None
+                  continue
+              if in_dispatch and indent == 4 and stripped == 'inputs:':
+                  in_inputs = True
+                  continue
+              if in_dispatch and indent <= 2 and stripped and stripped != 'workflow_dispatch:':
+                  in_dispatch = False
+                  in_inputs = False
+                  current = None
+              if not in_inputs:
+                  continue
+              if indent == 6 and stripped.endswith(':'):
+                  current = stripped[:-1]
+                  inputs[current] = {}
+                  continue
+              if current and indent >= 8 and ':' in stripped:
+                  key, value = stripped.split(':', 1)
+                  inputs[current][key.strip()] = value.strip().strip('"\'')
+
+          qa_ref = os.environ['QA_PROJECT_REF']
+          replacements = {}
+          for name, metadata in inputs.items():
+              lowered = name.lower()
+              default = metadata.get('default')
+              kind = metadata.get('type', 'string')
+              required = metadata.get('required', '').lower() == 'true'
+              if 'sha' in lowered or 'head' in lowered or 'commit' in lowered:
+                  replacements[name] = 'github.sha'
+              elif 'confirm' in lowered or ('project' in lowered and 'ref' in lowered) or lowered in {'target', 'qa_ref'}:
+                  replacements[name] = json.dumps(qa_ref)
+              elif default not in (None, ''):
+                  if kind == 'boolean':
+                      replacements[name] = default.lower()
+                  else:
+                      replacements[name] = json.dumps(default)
+              elif required:
+                  raise SystemExit(f'Cannot safely infer required workflow input: {name}')
+              else:
+                  replacements[name] = "''"
+
+          for name, replacement in replacements.items():
+              text = text.replace(f'github.event.inputs.{name}', replacement)
+              text = text.replace(f'inputs.{name}', replacement)
+
+          unresolved = sorted(set(re.findall(r'(?:github\.event\.)?inputs\.([A-Za-z0-9_-]+)', text)))
+          if unresolved:
+              raise SystemExit(f'Unresolved workflow inputs: {unresolved}')
+
+          lines = text.splitlines()
+          start = next(i for i, line in enumerate(lines) if line == 'on:')
+          end = start + 1
+          while end < len(lines):
+              line = lines[end]
+              if line and not line.startswith(' ') and not line.startswith('#'):
+                  break
+              end += 1
+
+          trigger = [
+              'on:',
+              '  push:',
+              '    branches:',
+              '      - feat/institutional-trade-system',
+              '    paths:',
+              '      - .github/institutional-qa-trigger',
+              '',
+          ]
+          lines[start:end] = trigger
+          if lines and lines[0].startswith('name:'):
+              lines[0] = 'name: Institutional trade QA one shot'
+
+          target.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/prepare-institutional-qa-runner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Prepare push-triggered institutional QA runner"
+          git push origin HEAD:"$BRANCH"
