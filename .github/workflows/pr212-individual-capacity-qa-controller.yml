@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
+  actions: read
   contents: write
   pull-requests: read
 
 jobs:
   control:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: feat/institutional-trade-system
@@ -26,60 +26,65 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cancel stale institutional QA runs and record exact-head state
+      - name: Poll the exact PR head to a terminal QA state
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ops
 
           current_head="$(gh api repos/${GITHUB_REPOSITORY}/pulls/212 --jq .head.sha)"
-          gh run list \
-            --repo "$GITHUB_REPOSITORY" \
-            --workflow "$TARGET_WORKFLOW" \
-            --branch "$TARGET_BRANCH" \
-            --limit 50 \
-            --json databaseId,headSha,status,conclusion,createdAt,event,url \
-            > /tmp/runs-before.json
+          run_id=""
+          run_status=""
+          run_conclusion=""
 
-          jq -r --arg head "$current_head" '.[] | select(.headSha != $head and (.status == "queued" or .status == "in_progress" or .status == "requested" or .status == "waiting" or .status == "pending")) | .databaseId' /tmp/runs-before.json \
-            | while read -r run_id; do
-                [[ -n "$run_id" ]] || continue
-                gh run cancel "$run_id" --repo "$GITHUB_REPOSITORY" || true
-              done
-
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 100); do
             gh run list \
               --repo "$GITHUB_REPOSITORY" \
               --workflow "$TARGET_WORKFLOW" \
               --branch "$TARGET_BRANCH" \
               --limit 50 \
               --json databaseId,headSha,status,conclusion,createdAt,event,url \
-              > /tmp/runs-after.json
-            stale_active="$(jq --arg head "$current_head" '[.[] | select(.headSha != $head and (.status == "queued" or .status == "in_progress" or .status == "requested" or .status == "waiting" or .status == "pending"))] | length' /tmp/runs-after.json)"
-            [[ "$stale_active" == "0" ]] && break
-            sleep 10
+              > /tmp/pr212-runs.json
+
+            run_id="$(jq -r --arg head "$current_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/pr212-runs.json)"
+            run_status="$(jq -r --arg head "$current_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/pr212-runs.json)"
+            run_conclusion="$(jq -r --arg head "$current_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/pr212-runs.json)"
+
+            if [[ -n "$run_id" && "$run_status" == "completed" ]]; then
+              break
+            fi
+            sleep 12
           done
 
-          current_runs="$(jq --arg head "$current_head" '[.[] | select(.headSha == $head)] | length' /tmp/runs-after.json)"
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/pr212-jobs.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/pr212-run.json
+          else
+            printf '%s\n' '{}' > /tmp/pr212-run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/pr212-jobs.json
+          fi
+
           jq -n \
             --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg current_head "$current_head" \
             --arg target_branch "$TARGET_BRANCH" \
-            --argjson current_runs "$current_runs" \
-            --slurpfile before /tmp/runs-before.json \
-            --slurpfile after /tmp/runs-after.json \
-            '{generated_at:$generated_at,current_head:$current_head,target_branch:$target_branch,current_head_run_count:$current_runs,runs_before:$before[0],runs_after:$after[0]}' \
+            --arg target_workflow "$TARGET_WORKFLOW" \
+            --arg run_id "$run_id" \
+            --arg run_status "$run_status" \
+            --arg run_conclusion "$run_conclusion" \
+            --slurpfile runs /tmp/pr212-runs.json \
+            --slurpfile run /tmp/pr212-run.json \
+            --slurpfile jobs /tmp/pr212-jobs.json \
+            '{generated_at:$generated_at,current_head:$current_head,target_branch:$target_branch,target_workflow:$target_workflow,selected_run_id:$run_id,selected_run_status:$run_status,selected_run_conclusion:$run_conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs}' \
             > ops/pr212-individual-capacity-qa-controller-report.json
-
-          if [[ "$current_runs" == "0" ]]; then
-            echo "No exact-head institutional QA run exists for $current_head." >&2
-            exit 1
-          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ops/pr212-individual-capacity-qa-controller-report.json
-          git commit -m "Record PR 212 exact-head QA run state"
+          git commit -m "Record PR 212 exact-head terminal QA state"
           git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
 
-# Poll exact-head retry b70e3af8415c6ffa1c88055c308e3442cdbb4035.
+          if [[ -z "$run_id" || "$run_status" != "completed" ]]; then
+            echo "Exact-head QA run did not reach a terminal state within the polling window." >&2
+            exit 1
+          fi
