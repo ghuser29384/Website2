@@ -9,6 +9,7 @@ import {
   rankConditionalRedirectCandidates,
   validateConditionalRedirectTerms,
 } from "./conditional-redirect";
+import { loadConditionalRedirectPageData } from "./conditional-redirect-page-data";
 
 const now = Date.parse("2026-07-23T12:00:00.000Z");
 
@@ -182,4 +183,49 @@ test("the feature is discoverable and exposes recovery, withdrawal, and local de
   assert.match(deadlineField, /toLocaleString/);
   assert.match(deadlineField, /seven days in your local/);
   assert.match(offsetsPage, /href="\/donation-offsets\/conditional"/);
+});
+
+test("conditional donation data fails closed when the service client is unavailable", async () => {
+  let warning = "";
+  const pageData = await loadConditionalRedirectPageData(
+    {
+      livemode: true,
+      nowIso: "2026-07-23T12:00:00.000Z",
+      viewerId: "viewer-1",
+    },
+    {
+      createClient: () => {
+        throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+      },
+      warn: (message, details) => {
+        warning = `${message}: ${details.message}`;
+      },
+    },
+  );
+
+  assert.deepEqual(pageData, {
+    available: false,
+    destinations: [],
+    offers: [],
+    creatorOffers: [],
+    viewerCandidates: [],
+    settlementLegs: [],
+  });
+  assert.match(warning, /Missing SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("the conditional donation page renders and enforces the unavailable state", () => {
+  const page = readFileSync(
+    "src/app/donation-offsets/conditional/page.tsx",
+    "utf8",
+  );
+  assert.match(page, /loadConditionalRedirectPageData/);
+  assert.match(
+    page,
+    /Conditional donation authorizations are temporarily unavailable/,
+  );
+  assert.match(
+    page,
+    /disabled=\{!pageData\.available \|\| !readiness\.canCreateMandates\}/,
+  );
 });
