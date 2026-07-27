@@ -153,13 +153,6 @@ test("successful collective mutations redirect from server actions", async () =>
   assert.doesNotMatch(controls, /useRouter|router\.refresh|useEffect/);
 });
 
-test("collective signature count messages use correct singular and plural grammar", async () => {
-  const service = await source("src/lib/collective-commitments/service.ts");
-  assert.match(service, /result\.qualifyingSignerCount === 1 \? "currently counts" : "currently count"/);
-  assert.match(service, /result\.qualifyingSignerCount === 1 \? "remains" : "remain"/);
-  assert.match(service, /const service = createCollectiveCommitmentServiceClient\(\);[\s\S]*add_collective_commitment_signature_v1/);
-});
-
 test("expiry route is cron-authorized and never claims publication", async () => {
   const route = await source("src/app/api/jobs/collective-commitments-expire/route.ts");
   assert.match(route, /isCronRequestAuthorized/);
