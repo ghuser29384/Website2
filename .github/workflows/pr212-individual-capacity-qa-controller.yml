@@ -88,3 +88,5 @@ jobs:
             echo "Exact-head QA run did not reach a terminal state within the polling window." >&2
             exit 1
           fi
+
+# Poll the read-only institutional view-grant repair head.
