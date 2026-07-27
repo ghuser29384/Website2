@@ -16,6 +16,33 @@ create table public.institutional_organizations (
 );
 create trigger institutional_organizations_updated_at before update on public.institutional_organizations for each row execute function public.institutional_set_updated_at();
 
+-- Independent people opt in explicitly. Ordinary personal Moral Trade users are
+-- not made discoverable in the institutional system merely because they have an
+-- account.
+create table public.institutional_individual_profiles (
+ profile_id uuid primary key references public.profiles(id) on delete cascade,
+ status text not null default 'active' check(status in ('active','paused','archived')),
+ headline text not null default '', summary text not null default '', participation_roles text[] not null default '{}',
+ visibility text not null default 'private' check(visibility in ('private','verified_only','public')),
+ verification_status text not null default 'unverified' check(verification_status in ('unverified','pending','verified','rejected','expired','revoked')),
+ created_at timestamptz not null default timezone('utc',now()), updated_at timestamptz not null default timezone('utc',now())
+);
+create trigger institutional_individual_profiles_updated_at before update on public.institutional_individual_profiles for each row execute function public.institutional_set_updated_at();
+
+create or replace function public.institutional_protect_individual_verification()
+returns trigger language plpgsql set search_path=pg_catalog as $$
+begin
+ if auth.uid() is not null and auth.uid()=new.profile_id then
+  if tg_op='INSERT' and new.verification_status<>'unverified' then
+   raise exception 'An individual cannot self-verify institutional identity or qualifications.' using errcode='42501';
+  elsif tg_op='UPDATE' and new.verification_status is distinct from old.verification_status then
+   raise exception 'Individual verification status may be changed only by an authorized reviewer.' using errcode='42501';
+  end if;
+ end if;
+ return new;
+end $$;
+create trigger institutional_individual_verification_guard before insert or update on public.institutional_individual_profiles for each row execute function public.institutional_protect_individual_verification();
+
 create table public.institutional_legal_entities (
  id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.institutional_organizations(id) on delete cascade,
  legal_name text not null, entity_type text not null, jurisdiction text, registration_number text, registered_address jsonb not null default '{}',
@@ -125,7 +152,10 @@ create table public.institutional_matches (
 create trigger institutional_matches_updated_at before update on public.institutional_matches for each row execute function public.institutional_set_updated_at();
 
 create table public.institutional_deals (
- id uuid primary key default gen_random_uuid(), lead_organization_id uuid not null references public.institutional_organizations(id) on delete restrict, lead_program_id uuid,
+ id uuid primary key default gen_random_uuid(),
+ lead_capacity text not null default 'organization' check(lead_capacity in ('organization','individual')),
+ lead_profile_id uuid references public.profiles(id) on delete restrict,
+ lead_organization_id uuid references public.institutional_organizations(id) on delete restrict, lead_program_id uuid,
  legal_counterparty_id uuid references public.institutional_legal_entities(id) on delete restrict, source_match_id uuid references public.institutional_matches(id) on delete set null,
  created_by uuid not null references public.profiles(id) on delete restrict, title text not null, summary text not null default '',
  deal_type text not null check(deal_type in ('bilateral_trade','multi_party_exchange','institutional_secondment','funding_redirect','consortium','moral_public_good_pool')),
@@ -134,23 +164,57 @@ create table public.institutional_deals (
  visibility text not null default 'parties_only' check(visibility in ('public','verified_only','network_only','invited_only','parties_only','operator_only')),
  selected_proposal_version_id uuid, selected_terms_hash text check(selected_terms_hash is null or selected_terms_hash ~ '^[0-9a-f]{64}$'), signed_at timestamptz,
  completed_at timestamptz, terminated_at timestamptz, created_at timestamptz not null default timezone('utc',now()), updated_at timestamptz not null default timezone('utc',now()),
- foreign key(lead_program_id,lead_organization_id) references public.institutional_programs(id,organization_id) on delete restrict, unique(id,lead_organization_id,lead_program_id)
+ foreign key(lead_program_id,lead_organization_id) references public.institutional_programs(id,organization_id) on delete restrict,
+ check(
+  (lead_capacity='organization' and lead_organization_id is not null and lead_profile_id is null)
+  or
+  (lead_capacity='individual' and lead_profile_id is not null and lead_organization_id is null and lead_program_id is null and legal_counterparty_id is null)
+ )
 );
 create trigger institutional_deals_updated_at before update on public.institutional_deals for each row execute function public.institutional_set_updated_at();
 
 create table public.institutional_deal_parties (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
- organization_id uuid not null references public.institutional_organizations(id) on delete restrict, program_id uuid,
+ party_capacity text not null default 'organization' check(party_capacity in ('organization','individual','service_provider','verifier')),
+ profile_id uuid references public.profiles(id) on delete restrict,
+ organization_id uuid references public.institutional_organizations(id) on delete restrict, program_id uuid,
  legal_entity_id uuid references public.institutional_legal_entities(id) on delete restrict, party_role text not null,
  representative_profile_id uuid references public.profiles(id) on delete set null,
- authority_status text not null default 'unverified' check(authority_status in ('unverified','pending','verified_for_scope','revoked')),
+ authority_status text not null default 'unverified' check(authority_status in ('unverified','pending','verified_for_scope','self_authorized','revoked')),
  approval_status text not null default 'pending' check(approval_status in ('pending','approved','rejected','withdrawn','not_required')),
  consent_status text not null default 'not_required' check(consent_status in ('pending','affirmed','declined','withdrawn','not_required')),
  joined_at timestamptz, left_at timestamptz, created_at timestamptz not null default timezone('utc',now()), updated_at timestamptz not null default timezone('utc',now()),
  foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict,
- unique(deal_id,organization_id,program_id), unique(id,deal_id)
+ check(
+  (party_capacity='organization' and organization_id is not null and profile_id is null)
+  or
+  (party_capacity in ('individual','service_provider','verifier') and profile_id is not null and organization_id is null and program_id is null and legal_entity_id is null)
+ ),
+ check(representative_profile_id is null or party_capacity='organization' or representative_profile_id=profile_id),
+ unique(id,deal_id)
 );
+create unique index institutional_deal_parties_org_program_unique on public.institutional_deal_parties(deal_id,organization_id,program_id)
+ where party_capacity='organization' and program_id is not null;
+create unique index institutional_deal_parties_org_wide_unique on public.institutional_deal_parties(deal_id,organization_id)
+ where party_capacity='organization' and program_id is null;
+create unique index institutional_deal_parties_profile_unique on public.institutional_deal_parties(deal_id,party_capacity,profile_id)
+ where party_capacity in ('individual','service_provider','verifier');
 create trigger institutional_deal_parties_updated_at before update on public.institutional_deal_parties for each row execute function public.institutional_set_updated_at();
+
+create or replace function public.institutional_validate_party_capacity()
+returns trigger language plpgsql set search_path=pg_catalog as $$
+begin
+ if new.party_capacity<>'organization' then
+  if new.authority_status not in('self_authorized','revoked') then
+   raise exception 'A personal-capacity party uses self authority, not delegated organizational authority.' using errcode='23514';
+  end if;
+  if new.approval_status<>'not_required' then
+   raise exception 'Organizational approval cannot be required or substituted for a personal-capacity party.' using errcode='23514';
+  end if;
+ end if;
+ return new;
+end $$;
+create trigger institutional_deal_party_capacity_guard before insert or update on public.institutional_deal_parties for each row execute function public.institutional_validate_party_capacity();
 
 create table public.institutional_deal_room_members (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
@@ -204,13 +268,15 @@ alter table public.institutional_deals add constraint institutional_deals_select
 
 create table public.institutional_counterfactual_baselines (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade, proposal_version_id uuid,
- party_id uuid not null, organization_id uuid not null references public.institutional_organizations(id) on delete restrict, program_id uuid,
+ party_id uuid not null, profile_id uuid references public.profiles(id) on delete restrict,
+ organization_id uuid references public.institutional_organizations(id) on delete restrict, program_id uuid,
  statement text not null, confidence text not null default 'moderate' check(confidence in ('low','moderate','high')), evidence_references jsonb not null default '[]',
  status text not null default 'draft' check(status in ('draft','locked','superseded','expired')), created_by uuid not null references public.profiles(id) on delete restrict,
  locked_at timestamptz, expires_at timestamptz, created_at timestamptz not null default timezone('utc',now()), updated_at timestamptz not null default timezone('utc',now()),
  foreign key(party_id,deal_id) references public.institutional_deal_parties(id,deal_id) on delete cascade,
  foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict,
  foreign key(proposal_version_id,deal_id) references public.institutional_proposal_versions(id,deal_id) on delete restrict,
+ check((profile_id is not null and organization_id is null and program_id is null) or (profile_id is null and organization_id is not null)),
  unique(deal_id,party_id,proposal_version_id)
 );
 create trigger institutional_counterfactual_baselines_updated_at before update on public.institutional_counterfactual_baselines for each row execute function public.institutional_set_updated_at();
@@ -270,12 +336,19 @@ create trigger institutional_individual_consents_updated_at before update on pub
 create table public.institutional_signatures (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
  proposal_version_id uuid not null, terms_hash text not null, party_id uuid not null,
- organization_id uuid not null references public.institutional_organizations(id) on delete restrict, program_id uuid,
- signer_profile_id uuid not null references public.profiles(id) on delete restrict, authority_grant_id uuid not null references public.institutional_authority_grants(id) on delete restrict,
+ party_capacity text not null check(party_capacity in ('organization','individual','service_provider','verifier')),
+ profile_id uuid references public.profiles(id) on delete restrict,
+ organization_id uuid references public.institutional_organizations(id) on delete restrict, program_id uuid,
+ signer_profile_id uuid not null references public.profiles(id) on delete restrict, authority_grant_id uuid references public.institutional_authority_grants(id) on delete restrict,
  signature_method text not null default 'authenticated_aal2', signed_at timestamptz not null default timezone('utc',now()), certificate jsonb not null default '{}',
  foreign key(proposal_version_id,deal_id,terms_hash) references public.institutional_proposal_versions(id,deal_id,terms_hash) on delete restrict,
  foreign key(party_id,deal_id) references public.institutional_deal_parties(id,deal_id) on delete restrict,
  foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict,
+ check(
+  (party_capacity='organization' and organization_id is not null and profile_id is null and authority_grant_id is not null)
+  or
+  (party_capacity in ('individual','service_provider','verifier') and profile_id is not null and organization_id is null and program_id is null and authority_grant_id is null and signer_profile_id=profile_id)
+ ),
  unique(deal_id,proposal_version_id,terms_hash,party_id)
 );
 
@@ -534,12 +607,14 @@ begin
  if tg_table_name='institutional_counterfactual_baselines' then
   select * into party_row from public.institutional_deal_parties where id=new.party_id;
   if not found or party_row.deal_id<>new.deal_id then raise exception 'Baseline party must belong to the same deal.' using errcode='23514'; end if;
-  if party_row.organization_id<>new.organization_id or party_row.program_id is distinct from new.program_id then
-   raise exception 'Baseline organization/program scope must exactly match the deal party.' using errcode='23514';
+  if party_row.profile_id is distinct from new.profile_id
+     or party_row.organization_id is distinct from new.organization_id
+     or party_row.program_id is distinct from new.program_id then
+   raise exception 'Baseline profile or organization/program scope must exactly match the deal party.' using errcode='23514';
   end if;
  elsif tg_table_name='institutional_approvals' then
-  if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=new.deal_id and p.organization_id=new.organization_id and p.program_id is not distinct from new.program_id) then
-   raise exception 'Approval organization/program scope must exactly match a deal party.' using errcode='23514';
+  if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=new.deal_id and p.party_capacity='organization' and p.organization_id=new.organization_id and p.program_id is not distinct from new.program_id) then
+   raise exception 'Approval organization/program scope must exactly match an organization deal party.' using errcode='23514';
   end if;
   if new.authority_grant_id is not null and not exists(
    select 1 from public.institutional_authority_grants g where g.id=new.authority_grant_id and g.organization_id=new.organization_id
@@ -587,7 +662,8 @@ create or replace function public.institutional_lock_signed_deal()
 returns trigger language plpgsql set search_path=pg_catalog as $$
 begin
  if (old.signed_at is not null or exists(select 1 from public.institutional_signatures s where s.deal_id=old.id)) and (
-  new.lead_organization_id<>old.lead_organization_id or new.lead_program_id is distinct from old.lead_program_id or
+  new.lead_capacity<>old.lead_capacity or new.lead_profile_id is distinct from old.lead_profile_id or
+  new.lead_organization_id is distinct from old.lead_organization_id or new.lead_program_id is distinct from old.lead_program_id or
   new.legal_counterparty_id is distinct from old.legal_counterparty_id or new.deal_type<>old.deal_type or new.classification<>old.classification or
   new.selected_proposal_version_id is distinct from old.selected_proposal_version_id or new.selected_terms_hash is distinct from old.selected_terms_hash or
   new.title<>old.title or new.summary<>old.summary
@@ -598,14 +674,21 @@ create trigger institutional_signed_deal_immutable before update on public.insti
 
 create or replace function public.institutional_validate_room_member()
 returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare party_row public.institutional_deal_parties;
 begin
  if new.verifier_assignment_id is not null and not exists(
   select 1 from public.institutional_verifier_assignments a where a.id=new.verifier_assignment_id and a.deal_id=new.deal_id
    and a.verifier_profile_id=new.profile_id and a.status='accepted' and a.accepted_at is not null
  ) then raise exception 'Independent verifier must accept the assignment before confidential deal-room access.' using errcode='42501'; end if;
- if new.party_id is not null and not exists(
-  select 1 from public.institutional_deal_parties p where p.id=new.party_id and p.deal_id=new.deal_id and (new.organization_id is null or p.organization_id=new.organization_id)
- ) then raise exception 'Deal-room party must belong to the same deal and organization.' using errcode='23514'; end if;
+ if new.party_id is not null then
+  select * into party_row from public.institutional_deal_parties where id=new.party_id and deal_id=new.deal_id;
+  if not found then raise exception 'Deal-room party must belong to the same deal.' using errcode='23514'; end if;
+  if party_row.party_capacity='organization' then
+   if new.organization_id is distinct from party_row.organization_id then raise exception 'Organization deal-room membership must use the exact party organization.' using errcode='23514'; end if;
+  elsif new.profile_id<>party_row.profile_id or new.organization_id is not null then
+   raise exception 'Personal-capacity deal-room membership must belong to that exact person and cannot inherit an organization.' using errcode='23514';
+  end if;
+ end if;
  return new;
 end $$;
 create trigger institutional_room_member_relationship before insert or update on public.institutional_deal_room_members for each row execute function public.institutional_validate_room_member();
@@ -623,6 +706,38 @@ begin
  return new;
 end $$;
 create constraint trigger institutional_dependency_no_cycle after insert or update on public.institutional_obligation_dependencies deferrable initially immediate for each row execute function public.institutional_prevent_dependency_cycle();
+
+create or replace function public.institutional_validate_obligation_party()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare obligor public.institutional_deal_parties;
+begin
+ select * into obligor from public.institutional_deal_parties where id=new.obligor_party_id and deal_id=new.deal_id;
+ if not found then raise exception 'Obligor party must belong to the same deal.' using errcode='23514'; end if;
+ if obligor.party_capacity in('individual','service_provider','verifier') then
+  if new.individual_profile_id is null then new.individual_profile_id:=obligor.profile_id; end if;
+  if new.individual_profile_id is distinct from obligor.profile_id then
+   raise exception 'A personal-capacity obligation cannot name or bind a different individual.' using errcode='23514';
+  end if;
+ end if;
+ return new;
+end $$;
+create trigger institutional_obligation_party_relationship before insert or update on public.institutional_obligations for each row execute function public.institutional_validate_obligation_party();
+
+create or replace function public.institutional_validate_signature_party()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare party_row public.institutional_deal_parties;
+begin
+ select * into party_row from public.institutional_deal_parties where id=new.party_id and deal_id=new.deal_id;
+ if not found then raise exception 'Signature party must belong to the same deal.' using errcode='23514'; end if;
+ if party_row.party_capacity is distinct from new.party_capacity
+    or party_row.profile_id is distinct from new.profile_id
+    or party_row.organization_id is distinct from new.organization_id
+    or party_row.program_id is distinct from new.program_id then
+  raise exception 'Signature capacity and scope must exactly match the signed deal party.' using errcode='23514';
+ end if;
+ return new;
+end $$;
+create trigger institutional_signature_party_relationship before insert or update on public.institutional_signatures for each row execute function public.institutional_validate_signature_party();
 
 create or replace function public.institutional_validate_consent()
 returns trigger language plpgsql set search_path=pg_catalog,public as $$
@@ -708,8 +823,8 @@ begin
  select * into pool_row from public.institutional_pool_terms where deal_id=new.deal_id;
  if not found then raise exception 'Pool terms do not exist for the deal.' using errcode='23503'; end if;
  if new.terms_hash<>pool_row.terms_hash then raise exception 'Pool record is not bound to the current exact terms.' using errcode='23514'; end if;
- if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=new.deal_id and p.organization_id=new.organization_id and p.program_id is not distinct from new.program_id) then
-  raise exception 'Pool organization/program is not an eligible exact-scope deal party.' using errcode='23514';
+ if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=new.deal_id and p.party_capacity='organization' and p.organization_id=new.organization_id and p.program_id is not distinct from new.program_id) then
+  raise exception 'Pool organization/program is not an eligible exact-scope organization deal party.' using errcode='23514';
  end if;
  if tg_table_name='institutional_pool_contributions' and new.status in('committed','paid') then
   if new.budget_reservation_id is null or new.finance_authority_grant_id is null or new.committed_by is null then
@@ -773,8 +888,23 @@ $$;
 
 create or replace function public.can_read_institutional_deal(target_deal_id uuid)
 returns boolean language sql stable security definer set search_path=pg_catalog,public as $$
- select exists(select 1 from public.institutional_deal_room_members m where m.deal_id=target_deal_id and m.profile_id=auth.uid() and m.revoked_at is null)
- or exists(select 1 from public.institutional_deals d where d.id=target_deal_id and d.visibility='public')
+ select auth.uid() is not null and (
+  exists(select 1 from public.institutional_deal_room_members m where m.deal_id=target_deal_id and m.profile_id=auth.uid() and m.revoked_at is null)
+  or exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.party_capacity in('individual','service_provider','verifier') and p.profile_id=auth.uid())
+  or exists(select 1 from public.institutional_deals d where d.id=target_deal_id and d.visibility='public')
+ )
+$$;
+
+create or replace function public.can_act_for_institutional_party(target_party_id uuid,target_permission text default 'deal:manage')
+returns boolean language sql stable security definer set search_path=pg_catalog,public as $$
+ select auth.uid() is not null and exists(
+  select 1 from public.institutional_deal_parties p
+  where p.id=target_party_id and (
+   (p.party_capacity in('individual','service_provider','verifier') and p.profile_id=auth.uid())
+   or
+   (p.party_capacity='organization' and public.has_institutional_permission(p.organization_id,p.program_id,target_permission,null))
+  )
+ )
 $$;
 
 create or replace function public.assert_institutional_aal2()
@@ -786,15 +916,28 @@ end $$;
 
 create or replace function public.select_institutional_proposal_version(target_deal_id uuid,target_proposal_version_id uuid,target_organization_id uuid,target_program_id uuid)
 returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
-declare proposal_row public.institutional_proposal_versions;
+declare proposal_row public.institutional_proposal_versions; authority_basis text;
 begin
  perform public.assert_institutional_aal2();
- if not public.has_institutional_permission(target_organization_id,target_program_id,'deal:manage',null)
-    and not public.has_institutional_permission(target_organization_id,target_program_id,'deal:approve',null) then
-  raise exception 'Exact-scope deal management or approval authority is required.' using errcode='42501';
- end if;
- if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.organization_id=target_organization_id and p.program_id is not distinct from target_program_id) then
-  raise exception 'Organization/program scope is not an exact party to this deal.' using errcode='42501';
+ if target_organization_id is null then
+  if target_program_id is not null then raise exception 'Personal capacity cannot inherit an organization program.' using errcode='23514'; end if;
+  if not exists(
+   select 1 from public.institutional_deals d
+   where d.id=target_deal_id and d.lead_capacity='individual' and d.lead_profile_id=auth.uid()
+  ) or not exists(
+   select 1 from public.institutional_deal_parties p
+   where p.deal_id=target_deal_id and p.party_capacity in('individual','service_provider','verifier') and p.profile_id=auth.uid()
+  ) then raise exception 'Only the personal-capacity deal lead may select exact terms without organizational authority.' using errcode='42501'; end if;
+  authority_basis:='Self authority in personal capacity';
+ else
+  if not public.has_institutional_permission(target_organization_id,target_program_id,'deal:manage',null)
+     and not public.has_institutional_permission(target_organization_id,target_program_id,'deal:approve',null) then
+   raise exception 'Exact-scope deal management or approval authority is required.' using errcode='42501';
+  end if;
+  if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.party_capacity='organization' and p.organization_id=target_organization_id and p.program_id is not distinct from target_program_id) then
+   raise exception 'Organization/program scope is not an exact organization party to this deal.' using errcode='42501';
+  end if;
+  authority_basis:='Exact-scope authority grant';
  end if;
  if exists(select 1 from public.institutional_signatures s where s.deal_id=target_deal_id) then
   raise exception 'Selected exact terms cannot change after any party has signed.' using errcode='55000';
@@ -806,8 +949,27 @@ begin
  update public.institutional_deals set selected_proposal_version_id=target_proposal_version_id,selected_terms_hash=proposal_row.terms_hash,
   stage=case when stage in('draft','exploratory','authorized_for_negotiation') then 'proposed' else stage end where id=target_deal_id;
  insert into public.institutional_audit_events(deal_id,actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,new_state)
- values(target_deal_id,auth.uid(),target_organization_id,target_program_id,'proposal.selected','proposal_version',target_proposal_version_id,'Exact-scope authority grant',jsonb_build_object('terms_hash',proposal_row.terms_hash));
+ values(target_deal_id,auth.uid(),target_organization_id,target_program_id,'proposal.selected','proposal_version',target_proposal_version_id,authority_basis,jsonb_build_object('terms_hash',proposal_row.terms_hash));
  return target_proposal_version_id;
+end $$;
+
+create or replace function public.accept_institutional_deal_party(target_party_id uuid)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare party_row public.institutional_deal_parties;
+begin
+ perform public.assert_institutional_aal2();
+ select * into party_row from public.institutional_deal_parties where id=target_party_id for update;
+ if not found or party_row.party_capacity not in('individual','service_provider','verifier') or party_row.profile_id<>auth.uid() then
+  raise exception 'Only the named personal-capacity participant may accept this deal-party invitation.' using errcode='42501';
+ end if;
+ insert into public.institutional_individual_profiles(profile_id,status)
+ values(auth.uid(),'active') on conflict(profile_id) do update set status='active',updated_at=timezone('utc',now());
+ update public.institutional_deal_parties set joined_at=coalesce(joined_at,timezone('utc',now())),left_at=null,
+  authority_status='self_authorized',approval_status='not_required' where id=target_party_id;
+ insert into public.institutional_deal_room_members(deal_id,profile_id,party_id,organization_id,access_scope,can_post,added_by)
+ values(party_row.deal_id,auth.uid(),party_row.id,null,'all_parties',true,auth.uid())
+ on conflict(deal_id,profile_id,access_scope) do update set party_id=excluded.party_id,organization_id=null,revoked_at=null,can_post=true;
+ return target_party_id;
 end $$;
 
 create or replace function public.request_institutional_individual_consent(target_deal_id uuid,target_obligation_id uuid)
@@ -869,7 +1031,7 @@ end $$;
 
 create or replace function public.sign_institutional_deal(target_deal_id uuid,target_party_id uuid,target_authority_grant_id uuid,target_expected_terms_hash text)
 returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
-declare deal_row public.institutional_deals; party_row public.institutional_deal_parties; signature_id uuid;
+declare deal_row public.institutional_deals; party_row public.institutional_deal_parties; signature_id uuid; authority_basis text;
 begin
  perform public.assert_institutional_aal2();
  select * into deal_row from public.institutional_deals where id=target_deal_id for update;
@@ -877,10 +1039,23 @@ begin
  if target_expected_terms_hash is null or target_expected_terms_hash<>deal_row.selected_terms_hash then raise exception 'Signature request is stale because the selected exact terms changed.' using errcode='23514'; end if;
  select * into party_row from public.institutional_deal_parties where id=target_party_id and deal_id=target_deal_id;
  if not found then raise exception 'Signing party does not belong to the deal.' using errcode='23514'; end if;
- if not exists(select 1 from public.institutional_authority_grants g where g.id=target_authority_grant_id and g.profile_id=auth.uid()
-  and g.organization_id=party_row.organization_id and g.program_id is not distinct from party_row.program_id and 'deal:sign'=any(g.permissions)
-  and g.revoked_at is null and g.valid_from<=timezone('utc',now()) and (g.valid_until is null or g.valid_until>timezone('utc',now()))) then
-  raise exception 'Exact-scope signing authority is required.' using errcode='42501';
+ if party_row.joined_at is null or party_row.left_at is not null then raise exception 'The signing party has not accepted active participation in this deal.' using errcode='42501'; end if;
+ if party_row.party_capacity='organization' then
+  if target_authority_grant_id is null or not exists(select 1 from public.institutional_authority_grants g where g.id=target_authority_grant_id and g.profile_id=auth.uid()
+   and g.organization_id=party_row.organization_id and g.program_id is not distinct from party_row.program_id and 'deal:sign'=any(g.permissions)
+   and g.revoked_at is null and g.valid_from<=timezone('utc',now()) and (g.valid_until is null or g.valid_until>timezone('utc',now()))) then
+   raise exception 'Exact-scope signing authority is required.' using errcode='42501';
+  end if;
+  if not exists(select 1 from public.institutional_approvals a where a.deal_id=target_deal_id and a.proposal_version_id=deal_row.selected_proposal_version_id
+   and a.organization_id=party_row.organization_id and a.program_id is not distinct from party_row.program_id and a.decision='approve') then
+   raise exception 'Required exact-scope organizational approval is incomplete.' using errcode='42501';
+  end if;
+  authority_basis:='Exact-scope delegated organizational signing authority';
+ else
+  if party_row.profile_id<>auth.uid() then raise exception 'A personal-capacity party may bind only themselves.' using errcode='42501'; end if;
+  if party_row.authority_status<>'self_authorized' then raise exception 'Personal-capacity self authority is not active.' using errcode='42501'; end if;
+  if target_authority_grant_id is not null then raise exception 'Personal capacity cannot inherit delegated organizational signing authority.' using errcode='23514'; end if;
+  authority_basis:='Self authority in personal capacity';
  end if;
  if exists(select 1 from public.institutional_obligations o where o.deal_id=target_deal_id and o.proposal_version_id=deal_row.selected_proposal_version_id
   and o.individual_consent_required and not exists(select 1 from public.institutional_individual_consents c where c.obligation_id=o.id
@@ -888,15 +1063,12 @@ begin
    and c.terms_hash=deal_row.selected_terms_hash and c.decision='affirmed')) then
   raise exception 'Every named individual must affirmatively consent to the selected exact terms; generic approval cannot substitute.' using errcode='42501';
  end if;
- if not exists(select 1 from public.institutional_approvals a where a.deal_id=target_deal_id and a.proposal_version_id=deal_row.selected_proposal_version_id
-  and a.organization_id=party_row.organization_id and a.program_id is not distinct from party_row.program_id and a.decision='approve') then
-  raise exception 'Required exact-scope organizational approval is incomplete.' using errcode='42501';
- end if;
- insert into public.institutional_signatures(deal_id,proposal_version_id,terms_hash,party_id,organization_id,program_id,signer_profile_id,authority_grant_id,certificate)
- values(target_deal_id,deal_row.selected_proposal_version_id,deal_row.selected_terms_hash,target_party_id,party_row.organization_id,party_row.program_id,auth.uid(),target_authority_grant_id,jsonb_build_object('aal','aal2','signed_at',timezone('utc',now())))
+ insert into public.institutional_signatures(deal_id,proposal_version_id,terms_hash,party_id,party_capacity,profile_id,organization_id,program_id,signer_profile_id,authority_grant_id,certificate)
+ values(target_deal_id,deal_row.selected_proposal_version_id,deal_row.selected_terms_hash,target_party_id,party_row.party_capacity,party_row.profile_id,party_row.organization_id,party_row.program_id,auth.uid(),target_authority_grant_id,
+  jsonb_build_object('aal','aal2','signed_at',timezone('utc',now()),'authority_basis',authority_basis))
  on conflict(deal_id,proposal_version_id,terms_hash,party_id) do nothing returning id into signature_id;
  if signature_id is null then select id into signature_id from public.institutional_signatures where deal_id=target_deal_id and proposal_version_id=deal_row.selected_proposal_version_id and terms_hash=deal_row.selected_terms_hash and party_id=target_party_id; end if;
- if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.joined_at is not null and not exists(
+ if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.joined_at is not null and p.left_at is null and not exists(
   select 1 from public.institutional_signatures s where s.deal_id=target_deal_id and s.proposal_version_id=deal_row.selected_proposal_version_id and s.terms_hash=deal_row.selected_terms_hash and s.party_id=p.id
  )) then update public.institutional_deals set stage='signed',signed_at=coalesce(signed_at,timezone('utc',now())) where id=target_deal_id; end if;
  return signature_id;
@@ -1090,14 +1262,21 @@ $$;
 
 create or replace function public.can_manage_institutional_deal(target_deal_id uuid)
 returns boolean language sql stable security definer set search_path=pg_catalog,public as $$
- select auth.uid() is not null and exists(
-  select 1
-  from public.institutional_deal_parties p
-  where p.deal_id=target_deal_id
-    and (
-      public.has_institutional_permission(p.organization_id,p.program_id,'deal:manage',null)
-      or public.has_institutional_permission(p.organization_id,p.program_id,'deal:approve',null)
-    )
+ select auth.uid() is not null and (
+  exists(
+   select 1 from public.institutional_deals d
+   join public.institutional_individual_profiles i on i.profile_id=d.lead_profile_id and i.status='active'
+   where d.id=target_deal_id and d.lead_capacity='individual' and d.lead_profile_id=auth.uid()
+  )
+  or exists(
+   select 1 from public.institutional_deals d
+   join public.institutional_deal_parties p on p.deal_id=d.id
+   where d.id=target_deal_id and d.lead_capacity='organization' and p.party_capacity='organization'
+     and (
+       public.has_institutional_permission(p.organization_id,p.program_id,'deal:manage',null)
+       or public.has_institutional_permission(p.organization_id,p.program_id,'deal:approve',null)
+     )
+  )
  )
 $$;
 
@@ -1318,6 +1497,15 @@ begin
  end loop;
 end $$;
 
+-- Independent participation is self-managed and opt-in. A public individual
+-- profile may be read, but ordinary user profiles are never implicitly exposed.
+create policy institutional_individual_profiles_select on public.institutional_individual_profiles for select to authenticated using(
+ profile_id=auth.uid() or (visibility='public' and status='active')
+);
+create policy institutional_individual_profiles_insert on public.institutional_individual_profiles for insert to authenticated with check(profile_id=auth.uid());
+create policy institutional_individual_profiles_update on public.institutional_individual_profiles for update to authenticated using(profile_id=auth.uid()) with check(profile_id=auth.uid());
+create policy institutional_individual_profiles_delete on public.institutional_individual_profiles for delete to authenticated using(profile_id=auth.uid());
+
 -- Public directory and member-scoped organization records.
 create policy institutional_organizations_select on public.institutional_organizations for select using(
  (status='active' and public_profile_enabled) or public.is_institutional_organization_member(id)
@@ -1370,21 +1558,34 @@ create policy institutional_matches_select on public.institutional_matches for s
 -- a public deal, or the named individual/verifier’s own pending record.
 create policy institutional_deals_select on public.institutional_deals for select using(public.can_read_institutional_deal(id));
 create policy institutional_deals_insert on public.institutional_deals for insert to authenticated with check(
- created_by=auth.uid() and public.has_institutional_permission(lead_organization_id,lead_program_id,'deal:manage',null)
+ created_by=auth.uid() and (
+  (
+   lead_capacity='individual' and lead_profile_id=auth.uid()
+   and exists(select 1 from public.institutional_individual_profiles i where i.profile_id=auth.uid() and i.status='active')
+  )
+  or
+  (lead_capacity='organization' and public.has_institutional_permission(lead_organization_id,lead_program_id,'deal:manage',null))
+ )
 );
 create policy institutional_deals_update on public.institutional_deals for update to authenticated using(public.can_manage_institutional_deal(id)) with check(public.can_manage_institutional_deal(id));
 
 create policy institutional_deal_parties_select on public.institutional_deal_parties for select to authenticated using(public.can_read_institutional_deal(deal_id));
-create policy institutional_deal_parties_write on public.institutional_deal_parties for all to authenticated using(
- public.can_manage_institutional_deal(deal_id)
-) with check(
+create policy institutional_deal_parties_insert on public.institutional_deal_parties for insert to authenticated with check(
  public.can_manage_institutional_deal(deal_id)
  or exists(
   select 1 from public.institutional_deals d
-  where d.id=deal_id and d.created_by=auth.uid() and d.lead_organization_id=organization_id
-    and d.lead_program_id is not distinct from program_id
+  where d.id=deal_id and d.created_by=auth.uid() and (
+   (d.lead_capacity='organization' and party_capacity='organization' and d.lead_organization_id=organization_id and d.lead_program_id is not distinct from program_id)
+   or
+   (d.lead_capacity='individual' and party_capacity='individual' and d.lead_profile_id=profile_id and profile_id=auth.uid())
+  )
  )
 );
+create policy institutional_deal_parties_update on public.institutional_deal_parties for update to authenticated
+ using(public.can_manage_institutional_deal(deal_id))
+ with check(public.can_manage_institutional_deal(deal_id));
+create policy institutional_deal_parties_delete on public.institutional_deal_parties for delete to authenticated
+ using(public.can_manage_institutional_deal(deal_id));
 create policy institutional_deal_room_members_select on public.institutional_deal_room_members for select to authenticated using(profile_id=auth.uid() or public.can_read_institutional_deal(deal_id));
 create policy institutional_deal_room_members_write on public.institutional_deal_room_members for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_deal_messages_select on public.institutional_deal_messages for select to authenticated using(public.can_read_institutional_deal(deal_id));
@@ -1410,7 +1611,11 @@ begin
 end $$;
 
 create policy institutional_proposal_versions_write on public.institutional_proposal_versions for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
-create policy institutional_counterfactual_baselines_write on public.institutional_counterfactual_baselines for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
+create policy institutional_counterfactual_baselines_write on public.institutional_counterfactual_baselines for all to authenticated using(
+ public.can_manage_institutional_deal(deal_id) or profile_id=auth.uid()
+) with check(
+ public.can_manage_institutional_deal(deal_id) or profile_id=auth.uid()
+);
 create policy institutional_obligations_write on public.institutional_obligations for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_obligation_dependencies_write on public.institutional_obligation_dependencies for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_approvals_insert on public.institutional_approvals for insert to authenticated with check(public.can_manage_institutional_deal(deal_id));
@@ -1508,6 +1713,7 @@ grant select on public.institutional_public_organizations,public.institutional_p
 
 revoke all on function public.decide_institutional_approval(uuid,text,uuid,text) from public;
 revoke all on function public.select_institutional_proposal_version(uuid,uuid,uuid,uuid) from public;
+revoke all on function public.accept_institutional_deal_party(uuid) from public;
 revoke all on function public.request_institutional_individual_consent(uuid,uuid) from public;
 revoke all on function public.decide_institutional_individual_consent(uuid,text,text) from public;
 revoke all on function public.accept_institutional_verifier_assignment(uuid,text,text) from public;
@@ -1523,6 +1729,7 @@ revoke all on function public.transition_institutional_deal_stage(uuid,text) fro
 
 grant execute on function public.decide_institutional_approval(uuid,text,uuid,text) to authenticated;
 grant execute on function public.select_institutional_proposal_version(uuid,uuid,uuid,uuid) to authenticated;
+grant execute on function public.accept_institutional_deal_party(uuid) to authenticated;
 grant execute on function public.request_institutional_individual_consent(uuid,uuid) to authenticated;
 grant execute on function public.decide_institutional_individual_consent(uuid,text,text) to authenticated;
 grant execute on function public.accept_institutional_verifier_assignment(uuid,text,text) to authenticated;
@@ -1536,6 +1743,8 @@ grant execute on function public.cast_institutional_pool_vote(uuid,uuid,uuid,tex
 grant execute on function public.activate_institutional_pool(uuid,uuid,uuid,uuid) to authenticated;
 grant execute on function public.transition_institutional_deal_stage(uuid,text) to authenticated;
 
+comment on table public.institutional_individual_profiles is 'Explicit opt-in for independent institutional participation; it does not grant or imply authority over any organization.';
+comment on table public.institutional_deal_parties is 'A party is either an exact organization/program scope or a named person acting only in personal capacity; the two authority paths do not inherit from each other.';
 comment on table public.institutional_individual_consents is 'Named-person consent bound to one consent-required obligation and one immutable exact proposal hash; organizational approvals cannot satisfy this record.';
 comment on table public.institutional_signatures is 'Immutable signatures bound to the selected proposal version and exact terms hash.';
 comment on table public.institutional_pool_contributions is 'Pool contribution lifecycle; committed states require both independent pool approval and an exact-scope financial reservation.';

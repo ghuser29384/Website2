@@ -213,6 +213,15 @@ async function createFixture() {
     });
   }
 
+  await insertOne("institutional_individual_profiles", {
+    profile_id: named.id,
+    status: "active",
+    headline: "Independent grantmaker",
+    summary: "Synthetic opted-in individual institutional participant.",
+    participation_roles: ["grantmaker", "researcher"],
+    visibility: "private",
+  });
+
   const leadGrant = await insertOne("institutional_authority_grants", {
     organization_id: orgA.id,
     program_id: programA.id,
@@ -510,6 +519,69 @@ async function createFixture() {
     created_by: lead.id,
   });
 
+  const personalDeal = await insertOne("institutional_deals", {
+    lead_capacity: "individual",
+    lead_profile_id: named.id,
+    lead_organization_id: null,
+    lead_program_id: null,
+    legal_counterparty_id: null,
+    created_by: named.id,
+    title: `QA independent grantmaker trade ${suffix}`,
+    summary: "Synthetic personal-capacity deal that must not inherit organizational authority.",
+    deal_type: "bilateral_trade",
+    classification: "mixed_moral_trade",
+    stage: "draft",
+    visibility: "parties_only",
+  });
+  createdDealIds.push(personalDeal.id);
+  const personalParty = await insertOne("institutional_deal_parties", {
+    deal_id: personalDeal.id,
+    party_capacity: "individual",
+    profile_id: named.id,
+    organization_id: null,
+    program_id: null,
+    legal_entity_id: null,
+    party_role: "independent_grantmaker",
+    representative_profile_id: named.id,
+    authority_status: "self_authorized",
+    approval_status: "not_required",
+    consent_status: "not_required",
+    joined_at: new Date().toISOString(),
+  });
+  await insertOne("institutional_deal_room_members", {
+    deal_id: personalDeal.id,
+    profile_id: named.id,
+    party_id: personalParty.id,
+    organization_id: null,
+    access_scope: "all_parties",
+    can_post: true,
+    added_by: named.id,
+  });
+  const personalProposal = await insertOne("institutional_proposal_versions", {
+    deal_id: personalDeal.id,
+    version: 1,
+    title: "Independent research commitment",
+    summary: "The individual commits only their own work under exact terms.",
+    terms: { service: { profile_id: named.id, activity: "research", hours: 20 }, acting_capacity: "individual" },
+    terms_hash: zeroHash,
+    status: "draft",
+    created_by: named.id,
+  });
+  const personalObligation = await insertOne("institutional_obligations", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligor_party_id: personalParty.id,
+    beneficiary_party_id: null,
+    resource_type: "research",
+    title: "Complete independent research work",
+    description: "Twenty hours of work controlled by the individual alone.",
+    quantity: 20,
+    unit: "hours",
+    individual_consent_required: false,
+    individual_profile_id: named.id,
+    created_by: named.id,
+  });
+
   return {
     runId,
     suffix,
@@ -544,6 +616,10 @@ async function createFixture() {
     budgetAccountA,
     budgetAccountB,
     integration,
+    personalDeal,
+    personalParty,
+    personalProposal,
+    personalObligation,
     reservationA: null,
     reservationB: null,
     contributionA: null,
@@ -556,6 +632,97 @@ async function establishAal2Clients(value) {
   for (const role of ["lead", "finance", "named", "verifier", "outsider"]) {
     value.clients[role] = await makeAal2Client(value[role]);
   }
+}
+
+async function personalCapacityChecks(value) {
+  const dealResult = await admin.from("institutional_deals").select("*").eq("id", value.personalDeal.id).single();
+  if (dealResult.error) throw dealResult.error;
+  assert.equal(dealResult.data.lead_capacity, "individual");
+  assert.equal(dealResult.data.lead_profile_id, value.named.id);
+  assert.equal(dealResult.data.lead_organization_id, null);
+  assert.equal(dealResult.data.lead_program_id, null);
+  assert.equal(dealResult.data.legal_counterparty_id, null);
+
+  const partyResult = await admin.from("institutional_deal_parties").select("*").eq("id", value.personalParty.id).single();
+  if (partyResult.error) throw partyResult.error;
+  assert.equal(partyResult.data.party_capacity, "individual");
+  assert.equal(partyResult.data.profile_id, value.named.id);
+  assert.equal(partyResult.data.organization_id, null);
+  assert.equal(partyResult.data.program_id, null);
+  assert.equal(partyResult.data.authority_status, "self_authorized");
+  assert.equal(partyResult.data.approval_status, "not_required");
+  record("Individual party and deal lead require no organization or program", "passed");
+
+  assert.equal(value.personalObligation.individual_profile_id, value.named.id);
+  record("Individual binds their own labor under self authority", "passed");
+
+  await expectDatabaseFailure(
+    "Individual cannot bind another person",
+    () => admin.from("institutional_obligations").insert({
+      deal_id: value.personalDeal.id,
+      proposal_version_id: value.personalProposal.id,
+      obligor_party_id: value.personalParty.id,
+      resource_type: "research",
+      title: "Invalid attempt to bind another person",
+      individual_consent_required: true,
+      individual_profile_id: value.outsider.id,
+      created_by: value.named.id,
+    }),
+    /cannot name or bind a different individual/i,
+  );
+
+  await expectDatabaseFailure(
+    "Individual cannot represent an organization without authority",
+    () => value.clients.named.from("institutional_deals").insert({
+      lead_capacity: "organization",
+      lead_profile_id: null,
+      lead_organization_id: value.orgA.id,
+      lead_program_id: value.programA.id,
+      legal_counterparty_id: null,
+      created_by: value.named.id,
+      title: `Invalid unauthorized organization representation ${value.suffix}`,
+      summary: "An independent individual cannot silently adopt another organization's authority.",
+      deal_type: "bilateral_trade",
+      classification: "unclassified",
+      stage: "draft",
+      visibility: "parties_only",
+    }),
+    /(row-level security|permission|authority)/i,
+  );
+
+  await expectRpcFailure(
+    "Organization membership does not leak into another person's personal-capacity deal",
+    () => value.clients.finance.rpc("select_institutional_proposal_version", {
+      target_deal_id: value.personalDeal.id,
+      target_proposal_version_id: value.personalProposal.id,
+      target_organization_id: null,
+      target_program_id: null,
+    }),
+    /only the personal-capacity deal lead/i,
+  );
+
+  const selected = await value.clients.named.rpc("select_institutional_proposal_version", {
+    target_deal_id: value.personalDeal.id,
+    target_proposal_version_id: value.personalProposal.id,
+    target_organization_id: null,
+    target_program_id: null,
+  });
+  if (selected.error) throw selected.error;
+  record("Personal lead selects exact terms without delegated organizational authority", "passed");
+
+  await expectDatabaseFailure(
+    "Individual cannot create an organization-only budget without an organization",
+    () => value.clients.named.from("institutional_budget_accounts").insert({
+      organization_id: null,
+      program_id: null,
+      name: "Invalid personal institutional budget",
+      currency: "usd",
+      authorized_cents: 100,
+      status: "active",
+      created_by: value.named.id,
+    }),
+    /(null value|row-level security|organization_id)/i,
+  );
 }
 
 async function relationshipAndDatabaseNegativeChecks(value) {
@@ -898,6 +1065,53 @@ async function browserFlow(value) {
     observePage(namedPage, "named-mobile");
     await login(namedPage, value.named, consentHref);
     await ensureMfa(namedPage, value.named);
+
+    await namedPage.goto(`${baseUrl}/institutions/individual`);
+    const personalWorkspaceText = await namedPage.locator("body").innerText();
+    assert.match(personalWorkspaceText, /Acting as: Personal \/ independent/i);
+    assert.match(personalWorkspaceText, /Opportunities[\s\S]*Matches[\s\S]*Deals[\s\S]*Obligations[\s\S]*Evidence[\s\S]*Consent and verification/i);
+    assert.doesNotMatch(personalWorkspaceText, /\bMandates\b|\bApprovals\b|\bFunds\b|\bIntegrations\b/i);
+    const mobileOverflow = await namedPage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(mobileOverflow <= 1, `Individual mobile workspace has horizontal overflow: ${mobileOverflow}px.`);
+    await screenshot(namedPage, "individual-reduced-workspace-mobile");
+
+    const namedDesktopPage = await namedContext.newPage();
+    observePage(namedDesktopPage, "named-desktop");
+    await namedDesktopPage.setViewportSize({ width: 1440, height: 1000 });
+    await namedDesktopPage.goto(`${baseUrl}/institutions/individual`);
+    const desktopWorkspaceText = await namedDesktopPage.locator("body").innerText();
+    assert.match(desktopWorkspaceText, /Acting as: Personal \/ independent/i);
+    assert.match(desktopWorkspaceText, /Opportunities[\s\S]*Matches[\s\S]*Deals[\s\S]*Obligations[\s\S]*Evidence[\s\S]*Consent and verification/i);
+    assert.doesNotMatch(desktopWorkspaceText, /\bMandates\b|\bApprovals\b|\bFunds\b|\bIntegrations\b/i);
+    const desktopOverflow = await namedDesktopPage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(desktopOverflow <= 1, `Individual desktop workspace has horizontal overflow: ${desktopOverflow}px.`);
+    await screenshot(namedDesktopPage, "individual-reduced-workspace-desktop");
+    await namedDesktopPage.close();
+    record("Desktop/mobile individual navigation omits organization-only controls", "passed");
+
+    const forbiddenOrganizationResponse = await namedPage.goto(`${baseUrl}/institutions/${value.orgA.id}`);
+    assert.ok([200, 404].includes(forbiddenOrganizationResponse?.status() ?? 0));
+    const forbiddenOrganizationText = await namedPage.locator("body").innerText();
+    assert.doesNotMatch(forbiddenOrganizationText, /Open workspace|Create a program|Create a commitment account|Enterprise integrations/i);
+    record("Individual direct access to another organization's controls is denied", "passed");
+
+    await namedPage.goto(`${baseUrl}/institutions/${value.orgB.id}`);
+    const organizationWorkspaceText = await namedPage.locator("body").innerText();
+    assert.match(organizationWorkspaceText, /Mandates/i);
+    assert.match(organizationWorkspaceText, /Funds/i);
+    assert.match(organizationWorkspaceText, /Enterprise integrations/i);
+    record("Organization member can switch to exact organization capacity without authority leakage", "passed");
+
+    await namedPage.goto(`${baseUrl}/institutions/individual/deals/${value.personalDeal.id}`);
+    const personalDealText = await namedPage.locator("body").innerText();
+    assert.match(personalDealText, /Sign for myself/i);
+    assert.doesNotMatch(personalDealText, /Reserve financial capacity|Enterprise integrations|Request organizational approval/i);
+    const personalSignForm = namedPage.locator("form").filter({ has: namedPage.getByRole("button", { name: "Sign for myself" }) }).first();
+    await personalSignForm.getByRole("button", { name: "Sign for myself" }).click();
+    await namedPage.waitForLoadState("networkidle");
+    assert.match(await namedPage.locator("body").innerText(), /Signature recorded|Signed/i);
+    record("Individual signs exact terms for themselves without an authority grant", "passed");
+
     await namedPage.goto(`${baseUrl}${consentHref}`);
     const consentForm = namedPage.locator("form").filter({ has: namedPage.getByRole("button", { name: "Record my decision" }) }).first();
     await consentForm.locator('textarea[name="decisionNote"]').fill("I voluntarily affirm these exact terms for QA.");
@@ -1156,6 +1370,7 @@ async function verifyZeroSyntheticResidue() {
   const residue = {};
   residue.institutional_deals = await countByIds("institutional_deals", "id", createdDealIds);
   residue.institutional_organizations = await countByIds("institutional_organizations", "id", createdOrganizationIds);
+  residue.institutional_individual_profiles = await countByIds("institutional_individual_profiles", "profile_id", createdUserIds);
   residue.profiles = await countByIds("profiles", "id", createdUserIds);
   for (const table of dealScopedTables) {
     if (table === "institutional_audit_events") {
@@ -1182,6 +1397,7 @@ let failure;
 try {
   fixture = await createFixture();
   await establishAal2Clients(fixture);
+  await personalCapacityChecks(fixture);
   await relationshipAndDatabaseNegativeChecks(fixture);
   await authenticatedNegativeChecksBeforeSelection(fixture);
   await browserFlow(fixture);

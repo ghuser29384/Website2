@@ -66,18 +66,27 @@ export async function loadInstitutionalWorkspace(organizationId: string) {
   };
 }
 
-export async function loadInstitutionalDeal(organizationId: string, dealId: string) {
+export async function loadInstitutionalDeal(organizationId: string, dealId: string, viewerProfileId: string) {
   const client = (await createClient()) as any;
+  const membershipResult = await client
+    .from("institutional_memberships")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("profile_id", viewerProfileId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipResult.error || !membershipResult.data) return null;
+
   const dealResult = await client.from("institutional_deals").select("*").eq("id", dealId).maybeSingle();
   if (dealResult.error || !dealResult.data) return null;
   const deal = dealResult.data as InstitutionalRow;
   const [organizationResult, programsResult, partiesResult, roomMembersResult, profilesResult, authorityGrantsResult, proposalsResult, baselinesResult, obligationsResult, dependenciesResult, approvalsResult, consentsResult, signaturesResult, milestonesResult, assignmentsResult, requirementsResult, submissionsResult, risksResult, reservationsResult, accountsResult, poolResult, contributionsResult, anchorsResult, underwritingsResult, votesResult, disputesResult, auditResult] = await Promise.all([
     client.from("institutional_organizations").select("*").eq("id", organizationId).maybeSingle(),
-    client.from("institutional_programs").select("*").in("organization_id", [deal.lead_organization_id, organizationId]),
+    client.from("institutional_programs").select("*").in("organization_id", [...new Set([deal.lead_organization_id, organizationId].filter(Boolean))]),
     client.from("institutional_deal_parties").select("*").eq("deal_id", dealId).order("created_at"),
     client.from("institutional_deal_room_members").select("*").eq("deal_id", dealId),
     client.from("profiles").select("id,display_name,email").limit(500),
-    client.from("institutional_authority_grants").select("*").eq("organization_id", organizationId).eq("status", "active").order("created_at", { ascending: false }),
+    client.from("institutional_authority_grants").select("*").eq("organization_id", organizationId).is("revoked_at", null).order("created_at", { ascending: false }),
     client.from("institutional_proposal_versions").select("*").eq("deal_id", dealId).order("version", { ascending: false }),
     client.from("institutional_counterfactual_baselines").select("*").eq("deal_id", dealId).order("created_at"),
     client.from("institutional_obligations").select("*").eq("deal_id", dealId).order("created_at"),
@@ -101,6 +110,8 @@ export async function loadInstitutionalDeal(organizationId: string, dealId: stri
     client.from("institutional_audit_events").select("*").eq("deal_id", dealId).order("occurred_at", { ascending: false }).limit(100),
   ]);
   if (organizationResult.error || !organizationResult.data) return null;
+  const organizationIsParty = rows(partiesResult.data).some((party) => party.party_capacity === "organization" && party.organization_id === organizationId);
+  if (!organizationIsParty) return null;
   return {
     organization: organizationResult.data as InstitutionalRow,
     deal,
@@ -133,11 +144,112 @@ export async function loadInstitutionalDeal(organizationId: string, dealId: stri
   };
 }
 
+export async function loadIndividualInstitutionalWorkspace(profileId: string) {
+  const client = (await createClient()) as any;
+  const [participationResult, opportunitiesResult, partiesResult, consentsResult, assignmentsResult, submissionsResult] = await Promise.all([
+    client.from("institutional_individual_profiles").select("*").eq("profile_id", profileId).maybeSingle(),
+    client.from("institutional_public_opportunities").select("*").order("published_at", { ascending: false }).limit(50),
+    client.from("institutional_deal_parties").select("*").eq("profile_id", profileId).order("created_at", { ascending: false }),
+    client.from("institutional_individual_consents").select("*").eq("individual_profile_id", profileId).order("created_at", { ascending: false }),
+    client.from("institutional_verifier_assignments").select("*").eq("verifier_profile_id", profileId).order("created_at", { ascending: false }),
+    client.from("institutional_evidence_submissions").select("*").eq("submitted_by", profileId).order("created_at", { ascending: false }).limit(100),
+  ]);
+  for (const [result, context] of [
+    [participationResult, "individual participation"], [opportunitiesResult, "public opportunities"], [partiesResult, "personal deal parties"],
+    [consentsResult, "personal consents"], [assignmentsResult, "verifier assignments"], [submissionsResult, "personal evidence"],
+  ] as const) assertNoError(result.error, `Load institutional ${context}`);
+
+  const parties = rows(partiesResult.data);
+  const dealIds = [...new Set(parties.map((party) => String(party.deal_id)).filter(Boolean))];
+  const partyIds = [...new Set(parties.map((party) => String(party.id)).filter(Boolean))];
+  const dealsResult = dealIds.length
+    ? await client.from("institutional_deals").select("*").in("id", dealIds).order("updated_at", { ascending: false })
+    : { data: [], error: null };
+  const obligationsResult = partyIds.length
+    ? await client.from("institutional_obligations").select("*").or(`obligor_party_id.in.(${partyIds.join(",")}),beneficiary_party_id.in.(${partyIds.join(",")})`).order("created_at", { ascending: false })
+    : { data: [], error: null };
+  assertNoError(dealsResult.error, "Load personal institutional deals");
+  assertNoError(obligationsResult.error, "Load personal institutional obligations");
+
+  return {
+    participation: participationResult.data as InstitutionalRow | null,
+    opportunities: rows(opportunitiesResult.data),
+    parties,
+    deals: rows(dealsResult.data),
+    obligations: rows(obligationsResult.data),
+    consents: rows(consentsResult.data),
+    verifierAssignments: rows(assignmentsResult.data),
+    evidenceSubmissions: rows(submissionsResult.data),
+  };
+}
+
+export async function loadIndividualInstitutionalDeal(profileId: string, dealId: string) {
+  const client = (await createClient()) as any;
+  const dealResult = await client.from("institutional_deals").select("*").eq("id", dealId).maybeSingle();
+  if (dealResult.error || !dealResult.data) return null;
+  const deal = dealResult.data as InstitutionalRow;
+  const partiesResult = await client.from("institutional_deal_parties").select("*").eq("deal_id", dealId).order("created_at");
+  assertNoError(partiesResult.error, "Load personal institutional deal parties");
+  const parties = rows(partiesResult.data);
+  const personalParty = parties.find((party) => party.profile_id === profileId && party.party_capacity !== "organization");
+  if (!personalParty && deal.lead_profile_id !== profileId) return null;
+
+  const organizationIds = [...new Set(parties.map((party) => String(party.organization_id ?? "")).filter(Boolean))];
+  const [organizationsResult, programsResult, roomMembersResult, profilesResult, proposalsResult, baselinesResult, obligationsResult, dependenciesResult, consentsResult, signaturesResult, milestonesResult, assignmentsResult, requirementsResult, submissionsResult, disputesResult, auditResult] = await Promise.all([
+    organizationIds.length ? client.from("institutional_organizations").select("*").in("id", organizationIds) : Promise.resolve({ data: [], error: null }),
+    organizationIds.length ? client.from("institutional_programs").select("*").in("organization_id", organizationIds) : Promise.resolve({ data: [], error: null }),
+    client.from("institutional_deal_room_members").select("*").eq("deal_id", dealId),
+    client.from("profiles").select("id,display_name,email").limit(500),
+    client.from("institutional_proposal_versions").select("*").eq("deal_id", dealId).order("version", { ascending: false }),
+    client.from("institutional_counterfactual_baselines").select("*").eq("deal_id", dealId).order("created_at"),
+    client.from("institutional_obligations").select("*").eq("deal_id", dealId).order("created_at"),
+    client.from("institutional_obligation_dependencies").select("*").eq("deal_id", dealId),
+    client.from("institutional_individual_consents").select("*").eq("deal_id", dealId).order("created_at"),
+    client.from("institutional_signatures").select("*").eq("deal_id", dealId).order("signed_at"),
+    client.from("institutional_milestones").select("*").eq("deal_id", dealId).order("due_at"),
+    client.from("institutional_verifier_assignments").select("*").eq("deal_id", dealId).order("created_at"),
+    client.from("institutional_evidence_requirements").select("*").eq("deal_id", dealId).order("created_at"),
+    client.from("institutional_evidence_submissions").select("*").eq("deal_id", dealId).order("created_at", { ascending: false }),
+    client.from("institutional_disputes").select("*").eq("deal_id", dealId).order("created_at", { ascending: false }),
+    client.from("institutional_audit_events").select("*").eq("deal_id", dealId).order("occurred_at", { ascending: false }).limit(100),
+  ]);
+  for (const [result, context] of [
+    [organizationsResult, "counterparty organizations"], [programsResult, "counterparty programs"], [roomMembersResult, "deal-room members"],
+    [profilesResult, "profiles"], [proposalsResult, "proposals"], [baselinesResult, "baselines"], [obligationsResult, "obligations"],
+    [dependenciesResult, "dependencies"], [consentsResult, "consents"], [signaturesResult, "signatures"], [milestonesResult, "milestones"],
+    [assignmentsResult, "verifier assignments"], [requirementsResult, "evidence requirements"], [submissionsResult, "evidence submissions"],
+    [disputesResult, "disputes"], [auditResult, "audit events"],
+  ] as const) assertNoError(result.error, `Load personal institutional ${context}`);
+
+  return {
+    deal,
+    personalParty,
+    canManage: deal.lead_profile_id === profileId && deal.lead_capacity !== "organization",
+    organizations: rows(organizationsResult.data),
+    programs: rows(programsResult.data),
+    parties,
+    roomMembers: rows(roomMembersResult.data),
+    profiles: rows(profilesResult.data),
+    proposals: rows(proposalsResult.data),
+    baselines: rows(baselinesResult.data),
+    obligations: rows(obligationsResult.data),
+    dependencies: rows(dependenciesResult.data),
+    consents: rows(consentsResult.data),
+    signatures: rows(signaturesResult.data),
+    milestones: rows(milestonesResult.data),
+    verifierAssignments: rows(assignmentsResult.data),
+    evidenceRequirements: rows(requirementsResult.data),
+    evidenceSubmissions: rows(submissionsResult.data),
+    disputes: rows(disputesResult.data),
+    auditEvents: rows(auditResult.data),
+  };
+}
+
 export async function loadInstitutionalVerifierAssignment(assignmentId: string) {
   const client = (await createClient()) as any;
   const assignmentResult = await client.from("institutional_verifier_assignments").select("*").eq("id", assignmentId).maybeSingle();
   if (assignmentResult.error || !assignmentResult.data) notFound();
-  const dealResult = await client.from("institutional_deals").select("id,title,summary,lead_organization_id").eq("id", assignmentResult.data.deal_id).maybeSingle();
+  const dealResult = await client.from("institutional_deals").select("id,title,summary,lead_capacity,lead_profile_id,lead_organization_id").eq("id", assignmentResult.data.deal_id).maybeSingle();
   return { assignment: assignmentResult.data as InstitutionalRow, deal: dealResult.data as InstitutionalRow | null };
 }
 

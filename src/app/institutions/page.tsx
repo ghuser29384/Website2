@@ -19,7 +19,7 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Institutional Moral Trade",
-  description: "Verified organizations, programs, institutional opportunities, confidential matching, and governed multi-party moral trades.",
+  description: "Verified organizations and opted-in independent participants can enter governed institutional moral trades without conflating personal and organizational authority.",
 };
 
 export default async function InstitutionsPage() {
@@ -41,14 +41,15 @@ export default async function InstitutionsPage() {
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <h1>Institutional moral trade</h1>
-            <p>Foundations, research organizations, grantmakers, companies, programs, and fiscal sponsors can identify opposite bottlenecks, negotiate privately, collect exact-scope approvals, sign immutable terms, and verify performance without pretending their moral views share one platform-defined score.</p>
+            <p>Foundations, research organizations, grantmakers, companies, and opted-in independent donors or professionals can negotiate governed trades. Personal and organizational authority stay separate: a person can bind only themselves unless they deliberately switch into a verified organization context.</p>
             <div className={styles.heroActions}>
-              {viewer ? <Link className={styles.primaryButton} href="/institutions/new">Create or claim an organization</Link> : <Link className={styles.primaryButton} href="/login?returnTo=%2Finstitutions%2Fnew">Sign in to represent an organization</Link>}
+              {viewer ? <Link className={styles.primaryButton} href="/institutions/individual">Participate independently</Link> : <Link className={styles.primaryButton} href="/login?returnTo=%2Finstitutions%2Findividual">Sign in to participate</Link>}
+              {viewer ? <Link className={styles.secondaryButton} href="/institutions/new">Create or claim an organization</Link> : <Link className={styles.secondaryButton} href="/login?returnTo=%2Finstitutions%2Fnew">Represent an organization</Link>}
               <Link className={styles.secondaryButton} href="/what-is-moral-trade">How moral trade works</Link>
             </div>
           </div>
           <aside className={styles.heroAside}>
-            <div className={styles.principle}><span>01</span><div><strong>People authenticate; organizations do not share passwords</strong><p>Every action records the human actor, represented organization, exact program, authority basis, and time.</p></div></div>
+            <div className={styles.principle}><span>01</span><div><strong>Acting capacity is explicit</strong><p>Every consequential action states whether the person acts independently, for an organization, or as an accepted verifier.</p></div></div>
             <div className={styles.principle}><span>02</span><div><strong>Verification is fact-specific</strong><p>Domain control, legal identity, representative identity, authority, and payment readiness remain distinct claims.</p></div></div>
             <div className={styles.principle}><span>03</span><div><strong>Binding activity is private by default</strong><p>Public profiles support discovery; negotiation, reservation terms, approvals, and evidence remain access-controlled.</p></div></div>
           </aside>

@@ -11,6 +11,7 @@ function expectAll(patterns: RegExp[], context: string) {
 test("institutional schema separates people, organizations, programs, legal entities, authority, and exact parties", () => {
   expectAll([
     /create table public\.institutional_organizations/i,
+    /create table public\.institutional_individual_profiles/i,
     /create table public\.institutional_legal_entities/i,
     /create table public\.institutional_programs/i,
     /create table public\.institutional_memberships/i,
@@ -20,16 +21,53 @@ test("institutional schema separates people, organizations, programs, legal enti
   ], "identity and authority model");
 });
 
-test("baselines and approvals are exact organization/program scoped", () => {
+test("baselines and approvals are exact personal or organization/program scoped", () => {
   expectAll([
     /institutional_validate_exact_scope/i,
-    /Baseline organization\/program scope must exactly match the deal party/i,
-    /Approval organization\/program scope must exactly match a deal party/i,
+    /Baseline profile or organization\/program scope must exactly match the deal party/i,
+    /Approval organization\/program scope must exactly match an organization deal party/i,
     /Approval authority grant must exactly match organization, program, and decision maker/i,
     /create trigger institutional_baseline_exact_scope/i,
     /create trigger institutional_approval_exact_scope/i,
     /decide_institutional_approval[\s\S]*Exact-scope approval authority is required/i,
   ], "exact-scope guards");
+});
+
+
+test("individual deal leads and parties do not require an organization or program", () => {
+  expectAll([
+    /lead_capacity text not null default 'organization'/i,
+    /lead_profile_id uuid references public\.profiles/i,
+    /lead_capacity='individual' and lead_profile_id is not null/i,
+    /lead_organization_id is null and lead_program_id is null and legal_counterparty_id is null/i,
+    /party_capacity text not null default 'organization'/i,
+    /profile_id uuid references public\.profiles/i,
+    /party_capacity in \('individual','service_provider','verifier'\) and profile_id is not null/i,
+    /organization_id is null and program_id is null and legal_entity_id is null/i,
+    /A personal-capacity party uses self authority, not delegated organizational authority/i,
+    /An individual cannot self-verify institutional identity or qualifications/i,
+    /Individual verification status may be changed only by an authorized reviewer/i,
+    /Only the named personal-capacity participant may accept this deal-party invitation/i,
+    /create policy institutional_deal_parties_insert[\s\S]*lead_capacity='individual' and party_capacity='individual'[\s\S]*lead_profile_id=profile_id and profile_id=auth\.uid\(\)/i,
+    /create policy institutional_deal_parties_update[\s\S]*using\(public\.can_manage_institutional_deal\(deal_id\)\)/i,
+    /create policy institutional_deal_parties_delete[\s\S]*using\(public\.can_manage_institutional_deal\(deal_id\)\)/i,
+    /A personal-capacity obligation cannot name or bind a different individual/i,
+    /Personal-capacity self authority is not active/i,
+    /Signature capacity and scope must exactly match the signed deal party/i,
+  ], "personal-capacity model");
+});
+
+test("organization-only administration remains organization scoped", () => {
+  expectAll([
+    /create table public\.institutional_mandates \([\s\S]*organization_id uuid not null/i,
+    /create table public\.institutional_authority_grants \([\s\S]*organization_id uuid not null/i,
+    /create table public\.institutional_approval_policies \([\s\S]*organization_id uuid not null/i,
+    /create table public\.institutional_budget_accounts \([\s\S]*organization_id uuid not null/i,
+    /create table public\.institutional_integrations \([\s\S]*organization_id uuid not null/i,
+    /institutional_mandates_write[\s\S]*has_institutional_permission\(organization_id,program_id,'mandate:manage'/i,
+    /institutional_budget_accounts_write[\s\S]*'finance:manage'/i,
+    /institutional_integrations_write[\s\S]*'integration:manage'/i,
+  ], "organization-only controls");
 });
 
 test("proposal, party, obligation, milestone, verifier, and evidence relationships fail closed", () => {
@@ -44,6 +82,8 @@ test("proposal, party, obligation, milestone, verifier, and evidence relationshi
     /foreign key\(requirement_id,deal_id,proposal_version_id,obligation_id,milestone_id\) references public\.institutional_evidence_requirements/i,
     /institutional_room_verifier_assignment_fk/i,
     /institutional_prevent_dependency_cycle/i,
+    /institutional_obligation_party_relationship/i,
+    /institutional_signature_party_relationship/i,
     /institutional_dispute_events_select[\s\S]*d\.id=dispute_id[\s\S]*can_read_institutional_deal\(d\.deal_id\)/i,
   ], "relationship guards");
 });

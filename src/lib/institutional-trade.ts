@@ -1,5 +1,72 @@
 import { createHash } from "node:crypto";
 
+export const INSTITUTIONAL_PARTY_CAPACITIES = [
+  "organization",
+  "individual",
+  "service_provider",
+  "verifier",
+] as const;
+
+export type InstitutionalPartyCapacity = (typeof INSTITUTIONAL_PARTY_CAPACITIES)[number];
+
+export const PERSONAL_INSTITUTIONAL_PARTY_CAPACITIES = [
+  "individual",
+  "service_provider",
+  "verifier",
+] as const satisfies readonly InstitutionalPartyCapacity[];
+
+export const ORGANIZATION_INSTITUTIONAL_NAV = [
+  "Overview",
+  "Programs",
+  "Mandates",
+  "Opportunities",
+  "Matches",
+  "Deal rooms",
+  "Approvals",
+  "Commitments",
+  "Evidence",
+  "Funds",
+  "Reports",
+  "Team",
+  "Verification",
+  "Audit",
+  "Integrations",
+] as const;
+
+export const INDIVIDUAL_INSTITUTIONAL_NAV = [
+  "Opportunities",
+  "Matches",
+  "Deals",
+  "Obligations",
+  "Evidence",
+  "Consent and verification",
+] as const;
+
+export function isPersonalInstitutionalCapacity(value: unknown): value is Exclude<InstitutionalPartyCapacity, "organization"> {
+  return PERSONAL_INSTITUTIONAL_PARTY_CAPACITIES.includes(value as Exclude<InstitutionalPartyCapacity, "organization">);
+}
+
+export function institutionalIndividualDealHref(dealId: string) {
+  return `/institutions/individual/deals/${dealId}`;
+}
+
+export function institutionalOrganizationDealHref(organizationId: string, dealId: string) {
+  return `/institutions/${organizationId}/deals/${dealId}`;
+}
+
+export function institutionalDealHref(deal: { id: string; lead_capacity?: unknown; lead_organization_id?: unknown }) {
+  return isPersonalInstitutionalCapacity(deal.lead_capacity)
+    ? institutionalIndividualDealHref(deal.id)
+    : institutionalOrganizationDealHref(String(deal.lead_organization_id), deal.id);
+}
+
+export function canBindInstitutionalPartyAsSelf(
+  actorProfileId: string,
+  party: { party_capacity?: unknown; profile_id?: unknown },
+) {
+  return isPersonalInstitutionalCapacity(party.party_capacity) && String(party.profile_id ?? "") === actorProfileId;
+}
+
 export const INSTITUTIONAL_PERMISSIONS = [
   "organization:manage",
   "program:manage",
@@ -21,6 +88,21 @@ export const INSTITUTIONAL_PERMISSIONS = [
 ] as const;
 
 export type InstitutionalPermission = (typeof INSTITUTIONAL_PERMISSIONS)[number];
+
+export const INSTITUTIONAL_RESOURCE_TYPES = [
+  "funding",
+  "staff_time",
+  "staff_secondment",
+  "grantmaking_capacity",
+  "research",
+  "operations",
+  "data",
+  "compute",
+  "infrastructure",
+  "distribution",
+  "introductions",
+  "other",
+] as const;
 
 export const INSTITUTIONAL_RISK_CATEGORIES = [
   "authority",

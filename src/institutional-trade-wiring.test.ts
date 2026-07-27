@@ -6,6 +6,9 @@ const actions = readFileSync("src/app/institutions/actions.ts", "utf8");
 const dealPage = readFileSync("src/app/institutions/[organizationId]/deals/[dealId]/page.tsx", "utf8");
 const consentPage = readFileSync("src/app/institutions/consents/[consentId]/page.tsx", "utf8");
 const verifierPage = readFileSync("src/app/institutions/verifier-assignments/[assignmentId]/page.tsx", "utf8");
+const individualPage = readFileSync("src/app/institutions/individual/page.tsx", "utf8");
+const individualDealPage = readFileSync("src/app/institutions/individual/deals/[dealId]/page.tsx", "utf8");
+const organizationPage = readFileSync("src/app/institutions/[organizationId]/page.tsx", "utf8");
 const data = readFileSync("src/lib/institutional-data.ts", "utf8");
 const webhooks = readFileSync("src/lib/institutional-webhooks.ts", "utf8");
 const qaWorkflow = readFileSync(".github/workflows/institutional-trade-qa.yml", "utf8");
@@ -42,6 +45,7 @@ test("server actions use atomic RPCs for critical transitions", () => {
     /request_institutional_individual_consent/,
     /decide_institutional_individual_consent/,
     /accept_institutional_verifier_assignment/,
+    /accept_institutional_deal_party/,
     /sign_institutional_deal/,
     /target_expected_terms_hash/,
     /record_institutional_pool_approval/,
@@ -52,6 +56,62 @@ test("server actions use atomic RPCs for critical transitions", () => {
     /cast_institutional_pool_vote/,
     /activate_institutional_pool/,
   ], "atomic actions");
+});
+
+
+test("independent participants get a reduced self-authority interface without organization administration", () => {
+  expectAll(individualPage, [
+    /Acting as: Personal \/ independent/,
+    /INDIVIDUAL_INSTITUTIONAL_NAV/,
+    /enable_individual_participation/,
+    /actingCapacity" type="hidden" value="individual"/,
+    /Opportunities/,
+    /Matches/,
+    /Deals/,
+    /Obligations/,
+    /Evidence/,
+    /Consent and verification/,
+  ], "individual workspace");
+  expectAll(individualDealPage, [
+    /loadIndividualInstitutionalDeal/,
+    /Independent deal workspace/,
+    /"Parties", "Proposals", "Baselines", "Obligations", "Evidence", "Consent and verification"/,
+    /accept_deal_party/,
+    /Sign for myself/,
+    /expectedTermsHash/,
+    /personal signature applies only/i,
+  ], "individual deal room");
+  for (const forbidden of [
+    "Create a commitment account",
+    "Enterprise integrations",
+    "Active authority grants",
+    "Create a program mandate",
+  ]) {
+    assert.doesNotMatch(individualPage, new RegExp(forbidden, "i"), `individual page must omit ${forbidden}`);
+    assert.doesNotMatch(individualDealPage, new RegExp(forbidden, "i"), `individual deal page must omit ${forbidden}`);
+  }
+  expectAll(organizationPage, [
+    /ORGANIZATION_INSTITUTIONAL_NAV/,
+    /Switch to personal capacity/,
+    /Create a commitment account/,
+    /Enterprise integrations/,
+  ], "organization workspace");
+});
+
+test("server actions branch by acting capacity and hard-gate organization-only controls", () => {
+  expectAll(actions, [
+    /const selectedCapacity = actingCapacity\(formData\)/,
+    /lead_profile_id: viewer\.authUser\.id/,
+    /lead_organization_id: null/,
+    /authority_status: "self_authorized"/,
+    /approval_status: "not_required"/,
+    /requireOrganizationActingContext/,
+    /Switch to the organization workspace before using organization-only controls/,
+    /The active organization context does not match the organization being represented/,
+    /requireDealManagementActingContext/,
+    /A personal-capacity party cannot inherit an organization, program, or legal entity/,
+    /target_authority_grant_id: uuid\(formData, "authorityGrantId"\)/,
+  ], "capacity branching");
 });
 
 test("integration configuration and webhook destinations are validated before insertion", () => {
@@ -80,6 +140,15 @@ test("QA workflow is isolated, generates types, runs database checks, full code 
 
 test("five-participant QA names all required negative cases and verifies zero synthetic residue", () => {
   for (const phrase of [
+    "Individual party and deal lead require no organization or program",
+    "Individual binds their own labor under self authority",
+    "Individual cannot bind another person",
+    "Individual cannot represent an organization without authority",
+    "Organization membership does not leak",
+    "Individual cannot create an organization-only budget",
+    "individual navigation omits organization-only controls",
+    "Individual direct access to another organization's controls is denied",
+    "Individual signs exact terms for themselves without an authority grant",
     "wrong-program",
     "cross-deal proposal",
     "invalid party",
