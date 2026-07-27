@@ -1,0 +1,24 @@
+name: Cancel duplicate PR 158 bilateral gate v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cancel-obsolete-pr158-bilateral-gate-v2.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr158-bilateral-confirmation-exact-head-gate-v2
+  cancel-in-progress: true
+
+jobs:
+  cancel-duplicate-run:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-bilateral-confirmation-gate-20260727'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Duplicate v2 gate cancelled; a corrected browser-only rerun will be authoritative."
