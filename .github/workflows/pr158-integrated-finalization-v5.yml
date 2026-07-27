@@ -137,6 +137,29 @@ jobs:
               raise SystemExit(f"Expected one corrected version-list marker; found {source.count(marker)}.")
           source = source.replace(marker, scanner, 1)
 
+          before_dump = '''pg_dump "$PROD_SUPABASE_DB_URL" --schema-only --no-owner --no-privileges --schema=public \\
+            > "$EVIDENCE_DIR/production-schema-before.raw.sql"
+          '''
+          before_supabase = '''supabase db dump \\
+            --db-url "$PROD_SUPABASE_DB_URL" \\
+            --schema public \\
+            --file "$EVIDENCE_DIR/production-schema-before.raw.sql"
+          '''
+          after_dump = '''pg_dump "$PROD_SUPABASE_DB_URL" --schema-only --no-owner --no-privileges --schema=public \\
+            > "$EVIDENCE_DIR/production-schema-after.raw.sql"
+          '''
+          after_supabase = '''supabase db dump \\
+            --db-url "$PROD_SUPABASE_DB_URL" \\
+            --schema public \\
+            --file "$EVIDENCE_DIR/production-schema-after.raw.sql"
+          '''
+          if source.count(before_dump) != 1 or source.count(after_dump) != 1:
+              raise SystemExit(
+                  f"Expected one before and one after pg_dump block; found before={source.count(before_dump)} after={source.count(after_dump)}."
+              )
+          source = source.replace(before_dump, before_supabase, 1)
+          source = source.replace(after_dump, after_supabase, 1)
+
           source = source.replace(
               'EVIDENCE_DIR="$GITHUB_WORKSPACE/integrated-final-v2-evidence"',
               'EVIDENCE_DIR="$GITHUB_WORKSPACE/integrated-final-v5-evidence"',
@@ -157,14 +180,16 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install PostgreSQL 17 client
-        shell: bash
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Install PostgreSQL client
         run: |
-          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes postgresql-client-17
-          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
-          /usr/lib/postgresql/17/bin/pg_dump --version | grep -F "17."
+          sudo apt-get install --yes postgresql-client
 
       - name: Merge, compare baselines, validate, compile migrations, and push
         shell: bash
