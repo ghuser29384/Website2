@@ -1,0 +1,1 @@
+Rerun guarded production database credential rotation preflight after the required temporary repository secrets were added.
