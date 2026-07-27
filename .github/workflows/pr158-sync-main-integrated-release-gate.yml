@@ -1,0 +1,829 @@
+name: PR 158 synchronize main and integrated release gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-sync-main-integrated-release-gate.yml"
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr158-sync-main-integrated-release-gate
+  cancel-in-progress: false
+
+jobs:
+  integrate-test-push:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-sync-main-release-validation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PR_BRANCH: agent/dynamic-marketplace-clearing-rounds
+      EXPECTED_PR_HEAD: 5d14b8bdde08d7e8880109741b6c3a75bc308728
+      EXPECTED_MAIN_SHA: c42d07797554958074945547ec121ab922cebc61
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    outputs:
+      integrated_sha: ${{ steps.push.outputs.integrated_sha }}
+      main_sha: ${{ steps.push.outputs.main_sha }}
+      previous_pr_sha: ${{ steps.push.outputs.previous_pr_sha }}
+
+    steps:
+      - name: Check out temporary orchestration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact repository, refs, and production connection boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "ops/pr158-sync-main-release-validation-20260727"
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["PROD_SUPABASE_DB_URL"])
+          if "jnpoxvalyjtdghnperyu" not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL whose user does not contain the production project ref.")
+          if parsed.hostname != "aws-1-us-west-2.pooler.supabase.com":
+              raise SystemExit("Refusing an unexpected production pooler host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected production database connection parameters.")
+          PY
+
+      - name: Fetch and guard current main and PR 158 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$PR_BRANCH"
+          actual_main="$(git rev-parse origin/main)"
+          actual_pr="$(git rev-parse "origin/$PR_BRANCH")"
+          if [[ "$actual_main" != "$EXPECTED_MAIN_SHA" ]]; then
+            echo "Refusing moved main. Expected $EXPECTED_MAIN_SHA, found $actual_main." >&2
+            exit 1
+          fi
+          if [[ "$actual_pr" != "$EXPECTED_PR_HEAD" ]]; then
+            echo "Refusing moved PR #158 head. Expected $EXPECTED_PR_HEAD, found $actual_pr." >&2
+            exit 1
+          fi
+          missing_main_commits="$(git rev-list --count "$EXPECTED_PR_HEAD..$EXPECTED_MAIN_SHA")"
+          if [[ "$missing_main_commits" != "8" ]]; then
+            echo "Expected exactly eight main commits absent from PR #158; found $missing_main_commits." >&2
+            exit 1
+          fi
+
+      - name: Create current-main baseline worktree and exact integrated merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git worktree add "$RUNNER_TEMP/main-baseline" "$EXPECTED_MAIN_SHA"
+          git checkout -B "$PR_BRANCH" "origin/$PR_BRANCH"
+          git merge --no-ff --no-edit "$EXPECTED_MAIN_SHA"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_MAIN_SHA"
+          echo "LOCAL_INTEGRATED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git diff --check "$EXPECTED_PR_HEAD" HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Run the full suite on current main and capture its failures
+        id: main_suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/release-gate-evidence"
+          cd "$RUNNER_TEMP/main-baseline"
+          npm ci > "$GITHUB_WORKSPACE/release-gate-evidence/main-npm-ci.log" 2>&1
+          set +e
+          npm test > "$GITHUB_WORKSPACE/release-gate-evidence/main-full-suite.log" 2>&1
+          status=$?
+          set -e
+          echo "$status" > "$GITHUB_WORKSPACE/release-gate-evidence/main-full-suite.status"
+          echo "main_status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 120 "$GITHUB_WORKSPACE/release-gate-evidence/main-full-suite.log" || true
+
+      - name: Run the full suite on the exact integrated candidate
+        id: candidate_suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$GITHUB_WORKSPACE"
+          npm ci > release-gate-evidence/candidate-npm-ci.log 2>&1
+          set +e
+          npm test > release-gate-evidence/candidate-full-suite.log 2>&1
+          status=$?
+          set -e
+          echo "$status" > release-gate-evidence/candidate-full-suite.status
+          echo "candidate_status=$status" >> "$GITHUB_OUTPUT"
+          tail -n 160 release-gate-evidence/candidate-full-suite.log || true
+
+      - name: Compare full-suite failures with current main and reject candidate failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          evidence = Path("release-gate-evidence")
+
+          def read_status(name: str) -> int:
+              return int((evidence / f"{name}-full-suite.status").read_text().strip())
+
+          def extract(path: Path) -> list[str]:
+              lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+              failures: list[str] = []
+              for line in lines:
+                  stripped = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+                  if re.match(r"^(?:not ok\s+\d+\s+-|✖\s+|FAIL\s+)", stripped):
+                      failures.append(stripped)
+              return sorted(set(failures))
+
+          main_status = read_status("main")
+          candidate_status = read_status("candidate")
+          main_failures = extract(evidence / "main-full-suite.log")
+          candidate_failures = extract(evidence / "candidate-full-suite.log")
+          candidate_only = sorted(set(candidate_failures) - set(main_failures))
+
+          payload = {
+              "main_sha": "c42d07797554958074945547ec121ab922cebc61",
+              "previous_pr_sha": "5d14b8bdde08d7e8880109741b6c3a75bc308728",
+              "integrated_sha": __import__("os").environ["LOCAL_INTEGRATED_SHA"],
+              "main_status": main_status,
+              "candidate_status": candidate_status,
+              "main_failures": main_failures,
+              "candidate_failures": candidate_failures,
+              "candidate_only_failures": candidate_only,
+          }
+          (evidence / "full-suite-comparison.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+          )
+          lines = [
+              "# Full-suite comparison: current main versus integrated PR #158",
+              "",
+              f"- Current main status: `{main_status}`",
+              f"- Integrated candidate status: `{candidate_status}`",
+              f"- Current-main failure signatures: `{len(main_failures)}`",
+              f"- Integrated-candidate failure signatures: `{len(candidate_failures)}`",
+              f"- Candidate-only failure signatures: `{len(candidate_only)}`",
+          ]
+          if main_failures:
+              lines.extend(["", "## Current-main failures", ""] + [f"- `{item}`" for item in main_failures])
+          if candidate_failures:
+              lines.extend(["", "## Integrated-candidate failures", ""] + [f"- `{item}`" for item in candidate_failures])
+          (evidence / "full-suite-comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+
+          if candidate_status != 0:
+              raise SystemExit("The exact integrated candidate has full-suite failures; refusing to push it.")
+          PY
+
+      - name: Run focused marketplace and bilateral-confirmation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            src/app/offers/dynamic-marketplace.test.ts \
+            src/lib/marketplace-clearing-round.test.ts \
+            src/lib/marketplace-offer-families.test.ts \
+            | tee release-gate-evidence/focused-tests.log
+
+      - name: Run full lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee release-gate-evidence/full-lint.log
+
+      - name: Run standalone TypeScript check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee release-gate-evidence/typescript.log
+
+      - name: Run production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee release-gate-evidence/production-build.log
+          git diff --check "$EXPECTED_PR_HEAD" HEAD
+
+      - name: Compile all five PR migrations against the live production schema and roll back
+        shell: bash
+        run: |
+          set -euo pipefail
+          migrations=(
+            supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql
+            supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql
+            supabase/migrations/20260726164500_fix_atomic_acceptance_core_internal_write.sql
+            supabase/migrations/20260726165500_close_offer_on_atomic_acceptance.sql
+            supabase/migrations/20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql
+          )
+          versions=(
+            20260726143000
+            20260726163500
+            20260726164500
+            20260726165500
+            20260727050000
+          )
+          for migration in "${migrations[@]}"; do
+            test -f "$migration"
+            if grep -Ein '^[[:space:]]*(begin|commit|rollback)[[:space:]]*;' "$migration"; then
+              echo "Migration contains its own transaction boundary: $migration" >&2
+              exit 1
+            fi
+            if grep -Ein 'create[[:space:]]+index[[:space:]]+concurrently' "$migration"; then
+              echo "Migration contains CREATE INDEX CONCURRENTLY and cannot be compiled in the rollback transaction: $migration" >&2
+              exit 1
+            fi
+          done
+
+          version_list="'$(IFS="','"; echo "${versions[*]}")'"
+          existing="$(psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version in (${version_list});")"
+          test "$(tr -d '[:space:]' <<< "$existing")" = "0"
+
+          pg_dump "$PROD_SUPABASE_DB_URL" \
+            --schema-only --no-owner --no-privileges --schema=public \
+            > release-gate-evidence/production-schema-before.raw.sql
+          sed -E '/^\\(un)?restrict /d' release-gate-evidence/production-schema-before.raw.sql \
+            > release-gate-evidence/production-schema-before.sql
+
+          compile="$RUNNER_TEMP/compile-pr158-migrations.sql"
+          {
+            echo '\set ON_ERROR_STOP on'
+            echo 'begin;'
+            echo "set local lock_timeout = '3s';"
+            echo "set local statement_timeout = '90s';"
+            echo "set local idle_in_transaction_session_timeout = '120s';"
+            for migration in "${migrations[@]}"; do
+              echo "-- BEGIN $migration"
+              cat "$migration"
+              echo "-- END $migration"
+            done
+            cat <<'SQL'
+          do $verify$
+          begin
+            if not exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='agreements' and column_name='completion_state'
+            ) then
+              raise exception 'completion_state was not compiled into agreements';
+            end if;
+            if to_regclass('public.agreement_evidence_items') is null then
+              raise exception 'agreement_evidence_items was not created';
+            end if;
+            if to_regclass('public.agreement_review_cases') is null then
+              raise exception 'agreement_review_cases was not created';
+            end if;
+            if to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then
+              raise exception 'accept_marketplace_interest_v1 was not created';
+            end if;
+            if to_regprocedure('public.accept_marketplace_guest_interest_v1(uuid,uuid,text)') is null then
+              raise exception 'accept_marketplace_guest_interest_v1 was not created';
+            end if;
+            if to_regprocedure('public.confirm_agreement_version_v2(uuid,uuid,uuid)') is null then
+              raise exception 'confirm_agreement_version_v2 is missing';
+            end if;
+            if position(
+              'offer_row.status::text = ''matched''' in
+              pg_get_functiondef('public.confirm_agreement_version_v2(uuid,uuid,uuid)'::regprocedure)
+            ) = 0 then
+              raise exception 'confirm_agreement_version_v2 lacks the matched-offer compatibility path';
+            end if;
+          end;
+          $verify$;
+          rollback;
+          SQL
+          } > "$compile"
+
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$compile" 2>&1 | tee release-gate-evidence/production-migration-rollback-compile.log
+
+          pg_dump "$PROD_SUPABASE_DB_URL" \
+            --schema-only --no-owner --no-privileges --schema=public \
+            > release-gate-evidence/production-schema-after.raw.sql
+          sed -E '/^\\(un)?restrict /d' release-gate-evidence/production-schema-after.raw.sql \
+            > release-gate-evidence/production-schema-after.sql
+          diff -u \
+            release-gate-evidence/production-schema-before.sql \
+            release-gate-evidence/production-schema-after.sql \
+            > release-gate-evidence/production-schema-post-rollback.diff
+
+          existing_after="$(psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version in (${version_list});")"
+          test "$(tr -d '[:space:]' <<< "$existing_after")" = "0"
+          echo "PASS: all five PR migrations compiled in order against production and the transaction rolled back without schema residue." \
+            | tee release-gate-evidence/production-migration-rollback-result.txt
+
+      - name: Prepare migration-before-application deployment ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-gate-evidence/migration-before-application-release-order.md <<EOF
+          # PR #158 migration-before-application release order
+
+          Exact integrated candidate: \`${LOCAL_INTEGRATED_SHA}\`
+
+          ## Hard ordering
+
+          1. Freeze production application deployment at the currently running revision.
+          2. Apply these production migrations, in this exact order, from the exact integrated candidate:
+             1. \`20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql\`
+             2. \`20260726163500_fix_atomic_acceptance_core_version_linking.sql\`
+             3. \`20260726164500_fix_atomic_acceptance_core_internal_write.sql\`
+             4. \`20260726165500_close_offer_on_atomic_acceptance.sql\`
+             5. \`20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql\`
+          3. Verify all five migration-history rows, \`completion_state\`, the evidence/review tables, both atomic acceptance RPCs, and the closed-offer bilateral-confirmation path.
+          4. Only after database verification, merge/deploy exact application candidate \`${LOCAL_INTEGRATED_SHA}\`.
+          5. Run signed-out and authenticated production smoke checks for offers, response acceptance, commitments, and the dealroom.
+          6. If any migration or verification fails, roll back/stop before application deployment. Do not merge the PR.
+
+          This gate compiled all five migrations against the current production schema inside one transaction and rolled that transaction back. It did not apply production migrations or deploy application code.
+          EOF
+          cat release-gate-evidence/migration-before-application-release-order.md
+
+      - name: Reconfirm refs did not move during integration gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$PR_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "origin/$PR_BRANCH")" = "$EXPECTED_PR_HEAD"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+
+      - name: Push the exact tested integrated merge commit to PR 158
+        id: push
+        shell: bash
+        run: |
+          set -euo pipefail
+          integrated_sha="$(git rev-parse HEAD)"
+          test "$integrated_sha" = "$LOCAL_INTEGRATED_SHA"
+          git push origin HEAD:"$PR_BRANCH"
+          echo "integrated_sha=$integrated_sha" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$EXPECTED_MAIN_SHA" >> "$GITHUB_OUTPUT"
+          echo "previous_pr_sha=$EXPECTED_PR_HEAD" >> "$GITHUB_OUTPUT"
+          {
+            echo "integrated_sha=$integrated_sha"
+            echo "main_sha=$EXPECTED_MAIN_SHA"
+            echo "previous_pr_sha=$EXPECTED_PR_HEAD"
+          } > release-gate-evidence/integrated-candidate.txt
+
+      - name: Upload integration, test, migration-compile, and release-order evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-release-gate-${{ github.run_id }}
+          path: release-gate-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+  exact-head-browser-gate:
+    needs: integrate-test-push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      INTEGRATED_SHA: ${{ needs.integrate-test-push.outputs.integrated_sha }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      WEBSITE2_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+      MORALTRADE_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+
+    steps:
+      - name: Check out exact integrated PR 158 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATED_SHA }}
+          fetch-depth: 0
+
+      - name: Validate exact candidate, QA target, and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$INTEGRATED_SHA"
+          test "$(git rev-parse HEAD)" = "$INTEGRATED_SHA"
+          git merge-base --is-ancestor c42d07797554958074945547ec121ab922cebc61 HEAD
+          for name in QA_TEST_PASSWORD QA_SUPABASE_DB_URL VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required secret: $name" >&2
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing database URL outside MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected QA database host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected QA database connection parameters.")
+          PY
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies, Chromium, and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Re-run rollback-isolated acceptance and bilateral-confirmation database regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p exact-head-evidence
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_interest_acceptance_atomicity.sql \
+            | tee exact-head-evidence/marketplace-interest-acceptance-atomicity.log
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/marketplace_bilateral_confirmation.sql \
+            | tee exact-head-evidence/marketplace-bilateral-confirmation.log
+
+      - name: Locate and wait for both exact-head Vercel Preview deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          wait_for_project() {
+            local project_id="$1"
+            local label="$2"
+            local id_var="$3"
+            local url_var="$4"
+            local deployments="$RUNNER_TEMP/${project_id}-deployments.json"
+            local deployment_id=""
+            local deployment_url=""
+            local state=""
+
+            for attempt in $(seq 1 140); do
+              curl --fail-with-body --silent --show-error \
+                --header "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v6/deployments?projectId=${project_id}&teamId=${VERCEL_TEAM_ID}&limit=100" \
+                --output "$deployments"
+              deployment_id="$(jq -r --arg sha "$INTEGRATED_SHA" \
+                '.deployments[] | select(.meta.githubCommitSha == $sha) | (.uid // .id)' \
+                "$deployments" | head -n1)"
+              deployment_url="$(jq -r --arg sha "$INTEGRATED_SHA" \
+                '.deployments[] | select(.meta.githubCommitSha == $sha) | .url' \
+                "$deployments" | head -n1)"
+              state="$(jq -r --arg sha "$INTEGRATED_SHA" \
+                '.deployments[] | select(.meta.githubCommitSha == $sha) | (.readyState // .state)' \
+                "$deployments" | head -n1)"
+              if [[ -n "$deployment_id" && "$state" = "READY" ]]; then
+                echo "$label: READY at $INTEGRATED_SHA"
+                echo "${id_var}=${deployment_id}" >> "$GITHUB_ENV"
+                echo "${url_var}=https://${deployment_url}" >> "$GITHUB_ENV"
+                return 0
+              fi
+              if [[ "$state" = "ERROR" || "$state" = "CANCELED" ]]; then
+                echo "$label exact-head deployment reached terminal state $state." >&2
+                return 1
+              fi
+              echo "$label exact-head deployment state=${state:-not-found}; waiting (attempt $attempt/140)."
+              sleep 15
+            done
+            echo "$label exact-head deployment did not become READY within 35 minutes." >&2
+            return 1
+          }
+
+          wait_for_project "$WEBSITE2_PROJECT_ID" website2 WEBSITE2_DEPLOYMENT_ID WEBSITE2_PREVIEW_URL
+          wait_for_project "$MORALTRADE_PROJECT_ID" moraltrade-site MORALTRADE_DEPLOYMENT_ID MORALTRADE_PREVIEW_URL
+
+      - name: Restore and patch the previously reviewed two-account Playwright runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/pull/219/head:refs/remotes/origin/pr219-head
+          test "$(git rev-parse refs/remotes/origin/pr219-head)" = "6c01bf1dba452b002a6dd79a21dc62362ec04858"
+          mkdir -p .github/scripts
+          git show refs/remotes/origin/pr219-head:.github/scripts/pr158-two-account-browser-qa.mjs \
+            > .github/scripts/pr158-two-account-browser-qa.mjs
+          git show refs/remotes/origin/pr219-head:.github/scripts/run-pr158-two-account-browser-qa.mjs \
+            > .github/scripts/run-pr158-two-account-browser-qa.mjs
+          test "$(git hash-object .github/scripts/pr158-two-account-browser-qa.mjs)" = \
+            "20ef6ac29ffce2c93a29aeb59dd471132e601a37"
+          test "$(git hash-object .github/scripts/run-pr158-two-account-browser-qa.mjs)" = \
+            "9768b4953032128fcbed22bd3a5d9f92404b52ae"
+
+          git fetch origin \
+            ops/pr158-final-isolated-qa-20260726 \
+            ops/pr158-bilateral-confirmation-gate-20260727
+          git show origin/ops/pr158-final-isolated-qa-20260726:.github/scripts/patch-pr158-browser-runner.py \
+            > "$RUNNER_TEMP/patch-pr158-browser-runner.py"
+          git show origin/ops/pr158-bilateral-confirmation-gate-20260727:.github/scripts/patch-pr158-browser-runner-diagnostics.py \
+            > "$RUNNER_TEMP/patch-pr158-browser-runner-diagnostics.py"
+          test "$(git hash-object "$RUNNER_TEMP/patch-pr158-browser-runner.py")" = \
+            "cc8b3e28b4cc0823e6e51d3d5d0f1b7581909d62"
+          test "$(git hash-object "$RUNNER_TEMP/patch-pr158-browser-runner-diagnostics.py")" = \
+            "87fe9e91ffab891db71aadd7443411983fed13e6"
+          python3 "$RUNNER_TEMP/patch-pr158-browser-runner.py"
+          python3 "$RUNNER_TEMP/patch-pr158-browser-runner-diagnostics.py"
+          node --check .github/scripts/pr158-two-account-browser-qa.mjs
+          node --check .github/scripts/run-pr158-two-account-browser-qa.mjs
+
+      - name: Create guarded exact-fixture reset script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/reset-pr158-fixture.sql" <<'SQL'
+          begin;
+          do $guard$
+          declare
+            fixture_count integer;
+            qa_profile_count integer;
+          begin
+            select count(*) into fixture_count
+            from public.offers o
+            join public.profiles p on p.id=o.owner_id
+            where o.id='10000000-0000-4000-8000-000000000158'::uuid
+              and o.fingerprint='qa-pr-158-marketplace-fixture-v1'
+              and p.email='qa-market-owner@example.com';
+            select count(*) into qa_profile_count
+            from public.profiles
+            where email in ('qa-market-owner@example.com','qa-market-responder@example.com');
+            if fixture_count <> 1 or qa_profile_count <> 2 then
+              raise exception 'Refusing reset outside the exact MoralTrade QA fixture.';
+            end if;
+          end;
+          $guard$;
+
+          delete from public.offer_comments where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_counterproposals where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_review_events where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.trade_invitations where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.offer_carts where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.offer_recommendations
+          where source_offer_id='10000000-0000-4000-8000-000000000158'::uuid
+             or recommended_offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.performance_bonds where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.donation_offset_matches where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.fallback_livestream_evidence_routes where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.financial_commitment_reservations where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid;
+          delete from public.email_outbox
+          where profile_id in (
+              select id from public.profiles
+              where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+            )
+             or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com');
+          update public.offers
+          set status='open', workflow_status='published', closed_at=null, deleted_at=null, updated_at=now()
+          where id='10000000-0000-4000-8000-000000000158'::uuid;
+          commit;
+          SQL
+
+      - name: Establish a quiet clean fixture precondition
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+          previous=""
+          stable=0
+          for attempt in $(seq 1 24); do
+            current="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select concat_ws('|',
+            extract(epoch from updated_at)::bigint,
+            status::text,
+            workflow_status,
+            (select count(*) from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid),
+            (select count(*) from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid)
+          )
+          from public.offers
+          where id='10000000-0000-4000-8000-000000000158'::uuid;
+          SQL
+          )"
+            if [[ "$current" = "$previous" && "$current" == *"|open|published|0|0" ]]; then
+              stable=$((stable + 1))
+            else
+              stable=0
+            fi
+            previous="$current"
+            if [[ "$stable" -ge 3 ]]; then break; fi
+            sleep 10
+          done
+          test "$stable" -ge 3
+
+      - name: Create temporary Vercel automation bypasses
+        id: protection
+        shell: bash
+        run: |
+          set -euo pipefail
+          bypass_secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$bypass_secret"
+          echo "TEMP_VERCEL_BYPASS_SECRET=$bypass_secret" >> "$GITHUB_ENV"
+          payload="$RUNNER_TEMP/protection-generate.json"
+          jq -n --arg secret "$bypass_secret" --arg note "Temporary integrated PR #158 exact-head QA" \
+            '{generate: {secret: $secret, note: $note}}' > "$payload"
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            curl --fail-with-body --silent --show-error --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null
+          done
+
+      - name: Run complete 1440 by 900 desktop two-account suite
+        id: desktop
+        continue-on-error: true
+        shell: bash
+        env:
+          BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/exact-head-browser-evidence/desktop-1440x900
+          GITHUB_RUN_ID: ${{ github.run_id }}-desktop
+        run: node .github/scripts/run-pr158-two-account-browser-qa.mjs
+
+      - name: Reset exact fixture between viewport suites
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+
+      - name: Transform reviewed runner into complete 390 by 844 suite
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/pr158-two-account-browser-qa.mjs')
+          source = path.read_text(encoding='utf-8')
+          old = 'viewport: { width: 1440, height: 900 }'
+          if source.count(old) < 4:
+              raise SystemExit(f'Expected at least four desktop viewport declarations; found {source.count(old)}.')
+          source = source.replace(old, 'viewport: { width: 390, height: 844 }')
+          replacements = {
+              'website2-desktop-public': 'website2-mobile-full-public',
+              'moraltrade-desktop-public': 'moraltrade-mobile-full-public',
+              'moraltrade-desktop-responder': 'moraltrade-mobile-full-responder',
+              'moraltrade-desktop-owner': 'moraltrade-mobile-full-owner',
+              'desktop public marketplace, search, constraints, selectors, and single-page bounds':
+                'mobile full public marketplace, search, constraints, selectors, and single-page bounds',
+              'desktop dealroom': 'mobile full dealroom',
+          }
+          for before, after in replacements.items():
+              source = source.replace(before, after)
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/pr158-two-account-browser-qa.mjs
+
+      - name: Run complete 390 by 844 mobile two-account suite
+        id: mobile
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/exact-head-browser-evidence/mobile-390x844
+          GITHUB_RUN_ID: ${{ github.run_id }}-mobile
+        run: node .github/scripts/run-pr158-two-account-browser-qa.mjs
+
+      - name: Upload desktop and mobile exact-head browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-exact-head-browser-${{ github.run_id }}
+          path: exact-head-browser-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Reset only the exact synthetic transaction state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/reset-pr158-fixture.sql" ]]; then
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --file "$RUNNER_TEMP/reset-pr158-fixture.sql"
+          fi
+
+      - name: Verify clean final QA state and write exact deployment proof
+        id: clean
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/final-state.txt"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' > "$result"
+          select case
+            when not exists (
+              select 1 from public.offers
+              where id='10000000-0000-4000-8000-000000000158'::uuid
+                and fingerprint='qa-pr-158-marketplace-fixture-v1'
+                and status='open' and workflow_status='published'
+                and closed_at is null and deleted_at is null
+            ) then 'FAIL:offer'
+            when exists (select 1 from public.interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:interests'
+            when exists (select 1 from public.guest_interests where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:guest_interests'
+            when exists (select 1 from public.agreements where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:agreements'
+            when exists (select 1 from public.trade_threads where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:threads'
+            when exists (select 1 from public.trade_counterproposals where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:counterproposals'
+            when exists (select 1 from public.offer_comments where offer_id='10000000-0000-4000-8000-000000000158'::uuid) then 'FAIL:comments'
+            when exists (
+              select 1 from public.email_outbox
+              where profile_id in (
+                select id from public.profiles
+                where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+              )
+                 or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+            ) then 'FAIL:outbox'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$result")" = "PASS"
+          {
+            echo "integrated_sha=${INTEGRATED_SHA}"
+            echo "website2_deployment=${WEBSITE2_DEPLOYMENT_ID}"
+            echo "website2_preview=${WEBSITE2_PREVIEW_URL}"
+            echo "moraltrade_deployment=${MORALTRADE_DEPLOYMENT_ID}"
+            echo "moraltrade_preview=${MORALTRADE_PREVIEW_URL}"
+            echo "desktop_outcome=${{ steps.desktop.outcome }}"
+            echo "mobile_outcome=${{ steps.mobile.outcome }}"
+            echo "final_synthetic_state=clean"
+          } > exact-head-evidence/exact-head-final-state.txt
+
+      - name: Upload final clean-state and exact-deployment proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-exact-head-final-state-${{ github.run_id }}
+          path: exact-head-evidence
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Revoke temporary Vercel automation bypasses
+        id: revoke
+        if: always() && steps.protection.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${TEMP_VERCEL_BYPASS_SECRET:-}"
+          payload="$RUNNER_TEMP/protection-revoke.json"
+          jq -n --arg secret "$TEMP_VERCEL_BYPASS_SECRET" \
+            '{revoke: {secret: $secret, regenerate: false}}' > "$payload"
+          cleanup_failed=0
+          for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
+            if ! curl --fail-with-body --silent --show-error --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+              --output /dev/null; then
+              cleanup_failed=1
+            fi
+          done
+          test "$cleanup_failed" = "0"
+
+      - name: Enforce exact-head desktop, mobile, cleanup, and bypass outcomes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "integrated_sha=$INTEGRATED_SHA"
+          echo "desktop=${{ steps.desktop.outcome }}"
+          echo "mobile=${{ steps.mobile.outcome }}"
+          echo "clean=${{ steps.clean.outcome }}"
+          echo "revoke=${{ steps.revoke.outcome }}"
+          test "${{ steps.desktop.outcome }}" = "success"
+          test "${{ steps.mobile.outcome }}" = "success"
+          test "${{ steps.clean.outcome }}" = "success"
+          test "${{ steps.revoke.outcome }}" = "success"
