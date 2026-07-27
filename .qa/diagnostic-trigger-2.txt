@@ -1,1 +1,1 @@
-Re-run staged bundle checksum diagnostics after replacing the final chunk.
+Re-run staged bundle checksum diagnostics after splitting and replacing the final chunk.
