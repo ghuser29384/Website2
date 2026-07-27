@@ -507,7 +507,10 @@ async function createCommitmentThroughBrowser(session, {
     await page.getByLabel(/threshold and identity controls do not remove retaliation/i).check();
   }
   await Promise.all([
-    page.waitForURL(/\/collective-commitments\/[0-9a-f-]+$/i, { timeout: 30_000 }),
+    page.waitForURL(/\/collective-commitments\/[0-9a-f-]+$/i, {
+      timeout: 30_000,
+      waitUntil: "commit",
+    }),
     page.getByRole("button", { name: "Create collective commitment" }).click(),
   ]);
   const commitmentId = new URL(page.url()).pathname.split("/").filter(Boolean).at(-1);
@@ -783,10 +786,23 @@ async function writeAudit() {
 }
 
 async function cleanup() {
+  const userIds = createdUsers.map((user) => user.id);
+  if (userIds.length) {
+    const { data: discovered, error } = await admin
+      .from("collective_commitments")
+      .select("id")
+      .in("creator_id", userIds)
+      .like("title", `${TITLE_PREFIX}${runTag}]%`);
+    if (error) throw new Error(error.message);
+    for (const row of discovered ?? []) {
+      if (!createdCommitmentIds.includes(row.id)) createdCommitmentIds.push(row.id);
+    }
+  }
+
   const result = {
     commitmentIds: [...createdCommitmentIds],
     credentialIds: [...createdCredentialIds],
-    userIds: createdUsers.map((user) => user.id),
+    userIds,
     deleted: {},
     remaining: {},
   };
@@ -797,6 +813,10 @@ async function cleanup() {
   if (createdCredentialIds.length) {
     const { error } = await admin.from("collective_identity_credentials").delete().in("id", createdCredentialIds);
     if (error) result.deleted.credentialsError = error.message;
+  }
+  if (userIds.length) {
+    const { error } = await admin.from("profiles").delete().in("id", userIds);
+    if (error) result.deleted.profilesError = error.message;
   }
   for (const user of [...createdUsers].reverse()) {
     const { error } = await admin.auth.admin.deleteUser(user.id);
