@@ -1,0 +1,133 @@
+name: Render Donation Redirect walkthrough
+
+on:
+  push:
+    branches:
+      - tmp/render-donation-redirect-walkthrough-20260727
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact walkthrough candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start local app
+        shell: bash
+        run: |
+          npm run dev -- -H 127.0.0.1 -p 3210 > /tmp/moraltrade-render-server.log 2>&1 &
+          echo $! > /tmp/moraltrade-render-server.pid
+          for attempt in $(seq 1 120); do
+            if curl --silent --fail http://127.0.0.1:3210/walkthrough >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/moraltrade-render-server.log
+          exit 1
+
+      - name: Capture desktop and mobile walkthrough states
+        shell: bash
+        run: |
+          mkdir -p walkthrough-renders
+          node --input-type=module <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+
+          const baseURL = "http://127.0.0.1:3210";
+          const browser = await chromium.launch({ headless: true });
+
+          async function openRedirect(page) {
+            await page.goto(`${baseURL}/walkthrough`, { waitUntil: "domcontentloaded" });
+            await page.getByRole("heading", { name: "What do you value?" }).waitFor();
+            await page.getByRole("tab", { name: /Redirect/i }).click();
+            await page.getByRole("heading", {
+              name: "Two political donations. Almost no shared impact.",
+            }).waitFor();
+          }
+
+          async function snap(page, filename) {
+            await page.waitForTimeout(180);
+            await page.screenshot({
+              path: `walkthrough-renders/${filename}`,
+              fullPage: true,
+              animations: "disabled",
+            });
+          }
+
+          const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+          await openRedirect(desktop);
+          await snap(desktop, "desktop-01-opposed-donations.png");
+
+          await desktop.getByRole("button", { name: "Redirect the matched $20" }).click();
+          await desktop.getByRole("heading", { name: "The matched money now creates shared impact." }).waitFor();
+          await snap(desktop, "desktop-02-basic-redirect.png");
+
+          await desktop.getByRole("button", { name: "See how one $10 can go further" }).click();
+          await desktop.getByRole("heading", { name: "Before the fallback settles, invite a better proposal." }).waitFor();
+          await snap(desktop, "desktop-03-impact-comparison.png");
+
+          await desktop.getByRole("button", { name: "Notify potential coalition members" }).click();
+          await desktop.getByRole("heading", { name: "One member finds 99 close matches." }).waitFor();
+          await snap(desktop, "desktop-04-coalition-matching.png");
+
+          await desktop.getByRole("button", { name: "Form the 100-person coalition" }).click();
+          await desktop.getByRole("heading", { name: "The coalition becomes one offer." }).waitFor();
+          await snap(desktop, "desktop-05-formal-coalition-offer.png");
+
+          await desktop.getByRole("button", { name: "Accept the group trade" }).click();
+          await desktop.getByRole("heading", { name: "100 members complete 2.1 days each." }).waitFor();
+          await desktop.getByRole("button", { name: /Pre-agree the destination/ }).click();
+          await snap(desktop, "desktop-06-verified-settlement.png");
+
+          await desktop.getByRole("button", { name: "Release $10 to the pre-agreed destination" }).click();
+          await desktop.getByRole("heading", {
+            name: "One $10 bought 30 person-weeks of environmental action.",
+          }).waitFor();
+          await snap(desktop, "desktop-07-amplified-result.png");
+          await desktop.close();
+
+          const mobile = await browser.newPage({ viewport: { width: 390, height: 844 } });
+          await openRedirect(mobile);
+          await mobile.getByRole("button", { name: "Redirect the matched $20" }).click();
+          await mobile.getByRole("button", { name: "See how one $10 can go further" }).click();
+          await mobile.getByRole("heading", { name: "Before the fallback settles, invite a better proposal." }).waitFor();
+          await snap(mobile, "mobile-01-impact-comparison.png");
+
+          await mobile.getByRole("button", { name: "Notify potential coalition members" }).click();
+          await mobile.getByRole("heading", { name: "One member finds 99 close matches." }).waitFor();
+          await snap(mobile, "mobile-02-coalition-matching.png");
+          await mobile.close();
+
+          await fs.writeFile(
+            "walkthrough-renders/README.txt",
+            "Rendered from PR #229 head c8b03be1c89ac788700b9dd881ba1d7c441050b4 at 1440x900 desktop and 390x844 mobile.\n",
+            "utf8",
+          );
+          await browser.close();
+          NODE
+
+      - name: Upload walkthrough renders
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-redirect-walkthrough-renders
+          path: walkthrough-renders
+          if-no-files-found: error
+          retention-days: 3
