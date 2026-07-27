@@ -8,13 +8,30 @@ START_MARKER = 'await recordCheck("dealroom term diff and persisted revision"'
 PAGE_MARKER = "const page = owner.page;"
 CHANGE_MARKER = 'await expect(page.getByText("1 unpublished change")).toBeVisible();'
 PROPOSED_MARKER = 'await expect(page.getByText("Proposed revision")).toBeVisible();'
+STATUS_START_MARKER = '  await recordCheck("dealroom status control", async () => {'
+OWNER_SCREENSHOT_MARKER = '  await owner.screenshot("dealroom-final");'
+RESPONDER_START_MARKER = (
+    '  await recordCheck("responder can access the same agreement and history", async () => {'
+)
+MOBILE_PUBLIC_MARKER = "  const mobilePublic = await makeSession(browser, {"
 
 
-def replace_once(source: str, old: str, new: str, label: str) -> str:
-    count = source.count(old)
-    if count != 1:
-        raise RuntimeError(f"Expected one {label}; found {count}.")
-    return source.replace(old, new, 1)
+def replace_exact_block(
+    source: str,
+    *,
+    start_marker: str,
+    end_marker: str,
+    replacement: str,
+    label: str,
+) -> str:
+    starts = [index for index in range(len(source)) if source.startswith(start_marker, index)]
+    if len(starts) != 1:
+        raise RuntimeError(f"Expected one {label} start marker; found {len(starts)}.")
+    start = starts[0]
+    end = source.find(end_marker, start + len(start_marker))
+    if end < 0:
+        raise RuntimeError(f"Missing {label} end marker.")
+    return source[:start] + replacement + source[end:]
 
 
 def main() -> None:
@@ -94,73 +111,58 @@ def main() -> None:
 
     patched = "".join(lines)
 
-    old_confirmation_flow = '''  await recordCheck("dealroom status control", async () => {
+    owner_confirmation = '''  await recordCheck("owner confirmation persists without unilateral activation", async () => {
     const page = owner.page;
-    const activate = page.getByRole("button", { name: "Record confirmation and activate" });
-    if (await activate.count()) {
-      await activate.click();
-      await expect(page.getByText("Agreement is active.")).toBeVisible({ timeout: 30_000 });
-      return "Proposed agreement was activated through the recorded status control.";
-    }
-    await expect(page.getByText("Agreement is active.")).toBeVisible();
-    return "Agreement was already active and the active status control state rendered.";
-  });
-
-  await owner.screenshot("dealroom-final");
-
-  await recordCheck("responder can access the same agreement and history", async () => {
-    const page = responder.page;
-    await page.goto("/commitments", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Global health for Animal welfare" })).toBeVisible();
-    await page.getByRole("link", { name: "Open dealroom" }).first().click();
-    await expect(page.getByText(revisionMarker, { exact: false })).toBeVisible();
-    await expect(page.getByText(counterofferSummary, { exact: true })).toBeVisible();
-    await expect(page.getByText("Agreement is active.")).toBeVisible();
-    return "Both synthetic accounts can access the same persisted dealroom record.";
-  });
-'''
-    new_confirmation_flow = '''  await recordCheck("owner confirmation waits for the responder", async () => {
-    const page = owner.page;
-    const confirm = page.getByRole("button", { name: "Record confirmation and activate" });
-    await expect(confirm).toBeVisible();
-    await confirm.click();
+    const reviewed = page.getByRole("checkbox", {
+      name: /I reviewed this frozen version/i,
+    });
+    await reviewed.check();
+    await page.getByRole("button", { name: "Confirm current frozen version" }).click();
     await expect(
-      page.getByText(/Both participants must confirm the same frozen agreement version before activation/),
+      page.getByText(
+        "Your confirmation was recorded. The agreement remains proposed until the other participant confirms.",
+        { exact: true },
+      ),
     ).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText("Terms are still proposed.")).toBeVisible();
-    return "The owner's confirmation was recorded without prematurely activating the agreement.";
+    await expect(page.getByText("Agreement is active.", { exact: true })).toHaveCount(0);
+    return "The first distinct confirmation persisted and did not activate the agreement unilaterally.";
   });
 
-  await owner.screenshot("dealroom-owner-confirmed");
+'''
+    patched = replace_exact_block(
+        patched,
+        start_marker=STATUS_START_MARKER,
+        end_marker=OWNER_SCREENSHOT_MARKER,
+        replacement=owner_confirmation,
+        label="owner status-control block",
+    )
 
-  await recordCheck("responder confirms the same agreement and activates it", async () => {
+    responder_confirmation = '''  await recordCheck("responder confirms the same frozen version and activates", async () => {
     const page = responder.page;
     await page.goto("/commitments", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Global health for Animal welfare" })).toBeVisible();
     await page.getByRole("link", { name: "Open dealroom" }).first().click();
     await expect(page.getByText(revisionMarker, { exact: false })).toBeVisible();
     await expect(page.getByText(counterofferSummary, { exact: true })).toBeVisible();
-    const confirm = page.getByRole("button", { name: "Record confirmation and activate" });
-    await expect(confirm).toBeVisible();
-    await confirm.click();
-    await expect(page.getByText("Agreement is active.")).toBeVisible({ timeout: 30_000 });
-    await responder.screenshot("dealroom-responder-activated");
-    return "The responder confirmed the same frozen version and the agreement became active.";
+    const reviewed = page.getByRole("checkbox", {
+      name: /I reviewed this frozen version/i,
+    });
+    await reviewed.check();
+    await page.getByRole("button", { name: "Confirm current frozen version" }).click();
+    await expect(page.getByText("Agreement is active.", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("button", { name: "Confirm current frozen version" })).toHaveCount(0);
+    return "The second distinct participant confirmed the same frozen version and activated the shared agreement.";
   });
 
-  await recordCheck("owner sees the bilaterally activated agreement", async () => {
-    const page = owner.page;
-    await page.goto(dealroomPath, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Agreement is active.")).toBeVisible();
-    await owner.screenshot("dealroom-final");
-    return "Both synthetic accounts see the same active agreement after bilateral confirmation.";
-  });
 '''
-    patched = replace_once(
+    patched = replace_exact_block(
         patched,
-        old_confirmation_flow,
-        new_confirmation_flow,
-        "legacy one-participant activation flow",
+        start_marker=RESPONDER_START_MARKER,
+        end_marker=MOBILE_PUBLIC_MARKER,
+        replacement=responder_confirmation,
+        label="responder agreement-access block",
     )
 
     if patched.count("const counterfactual = page.getByLabel") != 1:
@@ -171,20 +173,18 @@ def main() -> None:
         raise RuntimeError("Proposed-revision locator patch was not applied exactly once.")
     if patched.count("toHaveCount(expectedChangeCount)") != 1:
         raise RuntimeError("Expected-count assertion was not applied exactly once.")
-    if patched.count('recordCheck("owner confirmation waits for the responder"') != 1:
-        raise RuntimeError("Owner-confirmation check was not applied exactly once.")
-    if patched.count('recordCheck("responder confirms the same agreement and activates it"') != 1:
-        raise RuntimeError("Responder-confirmation check was not applied exactly once.")
+    if patched.count('name: "Confirm current frozen version"') < 3:
+        raise RuntimeError("Canonical confirmation controls were not patched into both participant checks.")
+    if "Record confirmation and activate" in patched:
+        raise RuntimeError("The obsolete unilateral-activation control remains in the QA runner.")
     if CHANGE_MARKER in patched:
         raise RuntimeError("The stale one-change assertion remains after patching.")
     if PROPOSED_MARKER in patched:
         raise RuntimeError("The stale strict Proposed revision assertion remains after patching.")
-    if 'recordCheck("dealroom status control"' in patched:
-        raise RuntimeError("The stale one-participant activation check remains after patching.")
 
     PATH.write_text(patched, encoding="utf-8")
     print(
-        "Patched the reviewed PR #158 browser runner for required dealroom terms, non-unique Proposed revision labels, and bilateral confirmation."
+        "Patched the reviewed PR #158 browser runner for required dealroom terms, exact diff counts, and two-party frozen-version confirmation."
     )
 
 
