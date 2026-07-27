@@ -1,16 +1,46 @@
 {
-  "generated_at": "2026-07-27T10:06:35Z",
-  "current_head": "b70e3af8415c6ffa1c88055c308e3442cdbb4035",
+  "generated_at": "2026-07-27T12:59:24Z",
+  "current_head": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
   "target_branch": "feat/institutional-trade-system",
-  "current_head_run_count": 1,
-  "runs_before": [
+  "target_workflow": "institutional-trade-qa.yml",
+  "selected_run_id": "30268047525",
+  "selected_run_status": "completed",
+  "selected_run_conclusion": "failure",
+  "runs": [
     {
-      "conclusion": "",
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:56:55Z",
+      "databaseId": 30268047525,
+      "event": "push",
+      "headSha": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30268047525"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:54:04Z",
+      "databaseId": 30267842072,
+      "event": "push",
+      "headSha": "c83d9119673a94b516309fdfafd4a5c83a37ac25",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30267842072"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:52:29Z",
+      "databaseId": 30267729446,
+      "event": "push",
+      "headSha": "101bb28ad1130c5a431662194662583445847386",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30267729446"
+    },
+    {
+      "conclusion": "failure",
       "createdAt": "2026-07-27T10:05:34Z",
       "databaseId": 30256659202,
       "event": "push",
       "headSha": "b70e3af8415c6ffa1c88055c308e3442cdbb4035",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/ghuser29384/Website2/actions/runs/30256659202"
     },
     {
@@ -59,60 +89,474 @@
       "url": "https://github.com/ghuser29384/Website2/actions/runs/30245614588"
     }
   ],
-  "runs_after": [
-    {
-      "conclusion": "",
-      "createdAt": "2026-07-27T10:05:34Z",
-      "databaseId": 30256659202,
-      "event": "push",
-      "headSha": "b70e3af8415c6ffa1c88055c308e3442cdbb4035",
-      "status": "in_progress",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256659202"
+  "run": {
+    "id": 30268047525,
+    "name": "Institutional trade QA",
+    "node_id": "WFR_kwLOR8Oun88AAAAHDB3ApQ",
+    "head_branch": "feat/institutional-trade-system",
+    "head_sha": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+    "path": ".github/workflows/institutional-trade-qa.yml",
+    "display_title": "Gate institutional lint against exact QA baseline",
+    "run_number": 9,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "failure",
+    "workflow_id": 321200203,
+    "check_suite_id": 82019640627,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATGMBlMw",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30268047525",
+    "pull_requests": [
+      {
+        "url": "https://api.github.com/repos/ghuser29384/Website2/pulls/212",
+        "id": 4136208817,
+        "number": 212,
+        "head": {
+          "ref": "feat/institutional-trade-system",
+          "sha": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+          "repo": {
+            "id": 1204006559,
+            "url": "https://api.github.com/repos/ghuser29384/Website2",
+            "name": "Website2"
+          }
+        },
+        "base": {
+          "ref": "main",
+          "sha": "bb32b5c5a58442f97bef642be58ed01a57f0d91b",
+          "repo": {
+            "id": 1204006559,
+            "url": "https://api.github.com/repos/ghuser29384/Website2",
+            "name": "Website2"
+          }
+        }
+      }
+    ],
+    "created_at": "2026-07-27T12:56:55Z",
+    "updated_at": "2026-07-27T12:58:21Z",
+    "actor": {
+      "login": "ghuser29384",
+      "id": 262476329,
+      "node_id": "U_kgDOD6USKQ",
+      "avatar_url": "https://avatars.githubusercontent.com/u/262476329?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/ghuser29384",
+      "html_url": "https://github.com/ghuser29384",
+      "followers_url": "https://api.github.com/users/ghuser29384/followers",
+      "following_url": "https://api.github.com/users/ghuser29384/following{/other_user}",
+      "gists_url": "https://api.github.com/users/ghuser29384/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/ghuser29384/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/ghuser29384/subscriptions",
+      "organizations_url": "https://api.github.com/users/ghuser29384/orgs",
+      "repos_url": "https://api.github.com/users/ghuser29384/repos",
+      "events_url": "https://api.github.com/users/ghuser29384/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/ghuser29384/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
     },
-    {
-      "conclusion": "failure",
-      "createdAt": "2026-07-27T09:58:24Z",
-      "databaseId": 30256160223,
-      "event": "push",
-      "headSha": "87f5e368fd997adc327a274da5d4761b53bfcb10",
-      "status": "completed",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256160223"
+    "run_attempt": 1,
+    "referenced_workflows": [],
+    "run_started_at": "2026-07-27T12:56:55Z",
+    "triggering_actor": {
+      "login": "ghuser29384",
+      "id": 262476329,
+      "node_id": "U_kgDOD6USKQ",
+      "avatar_url": "https://avatars.githubusercontent.com/u/262476329?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/ghuser29384",
+      "html_url": "https://github.com/ghuser29384",
+      "followers_url": "https://api.github.com/users/ghuser29384/followers",
+      "following_url": "https://api.github.com/users/ghuser29384/following{/other_user}",
+      "gists_url": "https://api.github.com/users/ghuser29384/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/ghuser29384/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/ghuser29384/subscriptions",
+      "organizations_url": "https://api.github.com/users/ghuser29384/orgs",
+      "repos_url": "https://api.github.com/users/ghuser29384/repos",
+      "events_url": "https://api.github.com/users/ghuser29384/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/ghuser29384/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false
     },
-    {
-      "conclusion": "failure",
-      "createdAt": "2026-07-27T09:58:07Z",
-      "databaseId": 30256140756,
-      "event": "push",
-      "headSha": "492977650ac8ac0d21d4395e65697d8e284717ca",
-      "status": "completed",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256140756"
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82019640627",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525/rerun",
+    "previous_attempt_url": null,
+    "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/321200203",
+    "head_commit": {
+      "id": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+      "tree_id": "9000ce053cdeed30d7c58b62773d37f51a431085",
+      "message": "Gate institutional lint against exact QA baseline",
+      "timestamp": "2026-07-27T12:56:52Z",
+      "author": {
+        "name": "ghuser29384",
+        "email": "262476329+ghuser29384@users.noreply.github.com"
+      },
+      "committer": {
+        "name": "ghuser29384",
+        "email": "262476329+ghuser29384@users.noreply.github.com"
+      }
     },
-    {
-      "conclusion": "failure",
-      "createdAt": "2026-07-27T09:56:04Z",
-      "databaseId": 30256001850,
-      "event": "push",
-      "headSha": "5df88758dd747be2a48c4280aa8b20ad0b720643",
-      "status": "completed",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256001850"
+    "repository": {
+      "id": 1204006559,
+      "node_id": "R_kgDOR8Ounw",
+      "name": "Website2",
+      "full_name": "ghuser29384/Website2",
+      "private": false,
+      "owner": {
+        "login": "ghuser29384",
+        "id": 262476329,
+        "node_id": "U_kgDOD6USKQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/262476329?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/ghuser29384",
+        "html_url": "https://github.com/ghuser29384",
+        "followers_url": "https://api.github.com/users/ghuser29384/followers",
+        "following_url": "https://api.github.com/users/ghuser29384/following{/other_user}",
+        "gists_url": "https://api.github.com/users/ghuser29384/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/ghuser29384/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/ghuser29384/subscriptions",
+        "organizations_url": "https://api.github.com/users/ghuser29384/orgs",
+        "repos_url": "https://api.github.com/users/ghuser29384/repos",
+        "events_url": "https://api.github.com/users/ghuser29384/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/ghuser29384/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/ghuser29384/Website2",
+      "description": null,
+      "fork": false,
+      "url": "https://api.github.com/repos/ghuser29384/Website2",
+      "forks_url": "https://api.github.com/repos/ghuser29384/Website2/forks",
+      "keys_url": "https://api.github.com/repos/ghuser29384/Website2/keys{/key_id}",
+      "collaborators_url": "https://api.github.com/repos/ghuser29384/Website2/collaborators{/collaborator}",
+      "teams_url": "https://api.github.com/repos/ghuser29384/Website2/teams",
+      "hooks_url": "https://api.github.com/repos/ghuser29384/Website2/hooks",
+      "issue_events_url": "https://api.github.com/repos/ghuser29384/Website2/issues/events{/number}",
+      "events_url": "https://api.github.com/repos/ghuser29384/Website2/events",
+      "assignees_url": "https://api.github.com/repos/ghuser29384/Website2/assignees{/user}",
+      "branches_url": "https://api.github.com/repos/ghuser29384/Website2/branches{/branch}",
+      "tags_url": "https://api.github.com/repos/ghuser29384/Website2/tags",
+      "blobs_url": "https://api.github.com/repos/ghuser29384/Website2/git/blobs{/sha}",
+      "git_tags_url": "https://api.github.com/repos/ghuser29384/Website2/git/tags{/sha}",
+      "git_refs_url": "https://api.github.com/repos/ghuser29384/Website2/git/refs{/sha}",
+      "trees_url": "https://api.github.com/repos/ghuser29384/Website2/git/trees{/sha}",
+      "statuses_url": "https://api.github.com/repos/ghuser29384/Website2/statuses/{sha}",
+      "languages_url": "https://api.github.com/repos/ghuser29384/Website2/languages",
+      "stargazers_url": "https://api.github.com/repos/ghuser29384/Website2/stargazers",
+      "contributors_url": "https://api.github.com/repos/ghuser29384/Website2/contributors",
+      "subscribers_url": "https://api.github.com/repos/ghuser29384/Website2/subscribers",
+      "subscription_url": "https://api.github.com/repos/ghuser29384/Website2/subscription",
+      "commits_url": "https://api.github.com/repos/ghuser29384/Website2/commits{/sha}",
+      "git_commits_url": "https://api.github.com/repos/ghuser29384/Website2/git/commits{/sha}",
+      "comments_url": "https://api.github.com/repos/ghuser29384/Website2/comments{/number}",
+      "issue_comment_url": "https://api.github.com/repos/ghuser29384/Website2/issues/comments{/number}",
+      "contents_url": "https://api.github.com/repos/ghuser29384/Website2/contents/{+path}",
+      "compare_url": "https://api.github.com/repos/ghuser29384/Website2/compare/{base}...{head}",
+      "merges_url": "https://api.github.com/repos/ghuser29384/Website2/merges",
+      "archive_url": "https://api.github.com/repos/ghuser29384/Website2/{archive_format}{/ref}",
+      "downloads_url": "https://api.github.com/repos/ghuser29384/Website2/downloads",
+      "issues_url": "https://api.github.com/repos/ghuser29384/Website2/issues{/number}",
+      "pulls_url": "https://api.github.com/repos/ghuser29384/Website2/pulls{/number}",
+      "milestones_url": "https://api.github.com/repos/ghuser29384/Website2/milestones{/number}",
+      "notifications_url": "https://api.github.com/repos/ghuser29384/Website2/notifications{?since,all,participating}",
+      "labels_url": "https://api.github.com/repos/ghuser29384/Website2/labels{/name}",
+      "releases_url": "https://api.github.com/repos/ghuser29384/Website2/releases{/id}",
+      "deployments_url": "https://api.github.com/repos/ghuser29384/Website2/deployments"
     },
+    "head_repository": {
+      "id": 1204006559,
+      "node_id": "R_kgDOR8Ounw",
+      "name": "Website2",
+      "full_name": "ghuser29384/Website2",
+      "private": false,
+      "owner": {
+        "login": "ghuser29384",
+        "id": 262476329,
+        "node_id": "U_kgDOD6USKQ",
+        "avatar_url": "https://avatars.githubusercontent.com/u/262476329?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/ghuser29384",
+        "html_url": "https://github.com/ghuser29384",
+        "followers_url": "https://api.github.com/users/ghuser29384/followers",
+        "following_url": "https://api.github.com/users/ghuser29384/following{/other_user}",
+        "gists_url": "https://api.github.com/users/ghuser29384/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/ghuser29384/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/ghuser29384/subscriptions",
+        "organizations_url": "https://api.github.com/users/ghuser29384/orgs",
+        "repos_url": "https://api.github.com/users/ghuser29384/repos",
+        "events_url": "https://api.github.com/users/ghuser29384/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/ghuser29384/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/ghuser29384/Website2",
+      "description": null,
+      "fork": false,
+      "url": "https://api.github.com/repos/ghuser29384/Website2",
+      "forks_url": "https://api.github.com/repos/ghuser29384/Website2/forks",
+      "keys_url": "https://api.github.com/repos/ghuser29384/Website2/keys{/key_id}",
+      "collaborators_url": "https://api.github.com/repos/ghuser29384/Website2/collaborators{/collaborator}",
+      "teams_url": "https://api.github.com/repos/ghuser29384/Website2/teams",
+      "hooks_url": "https://api.github.com/repos/ghuser29384/Website2/hooks",
+      "issue_events_url": "https://api.github.com/repos/ghuser29384/Website2/issues/events{/number}",
+      "events_url": "https://api.github.com/repos/ghuser29384/Website2/events",
+      "assignees_url": "https://api.github.com/repos/ghuser29384/Website2/assignees{/user}",
+      "branches_url": "https://api.github.com/repos/ghuser29384/Website2/branches{/branch}",
+      "tags_url": "https://api.github.com/repos/ghuser29384/Website2/tags",
+      "blobs_url": "https://api.github.com/repos/ghuser29384/Website2/git/blobs{/sha}",
+      "git_tags_url": "https://api.github.com/repos/ghuser29384/Website2/git/tags{/sha}",
+      "git_refs_url": "https://api.github.com/repos/ghuser29384/Website2/git/refs{/sha}",
+      "trees_url": "https://api.github.com/repos/ghuser29384/Website2/git/trees{/sha}",
+      "statuses_url": "https://api.github.com/repos/ghuser29384/Website2/statuses/{sha}",
+      "languages_url": "https://api.github.com/repos/ghuser29384/Website2/languages",
+      "stargazers_url": "https://api.github.com/repos/ghuser29384/Website2/stargazers",
+      "contributors_url": "https://api.github.com/repos/ghuser29384/Website2/contributors",
+      "subscribers_url": "https://api.github.com/repos/ghuser29384/Website2/subscribers",
+      "subscription_url": "https://api.github.com/repos/ghuser29384/Website2/subscription",
+      "commits_url": "https://api.github.com/repos/ghuser29384/Website2/commits{/sha}",
+      "git_commits_url": "https://api.github.com/repos/ghuser29384/Website2/git/commits{/sha}",
+      "comments_url": "https://api.github.com/repos/ghuser29384/Website2/comments{/number}",
+      "issue_comment_url": "https://api.github.com/repos/ghuser29384/Website2/issues/comments{/number}",
+      "contents_url": "https://api.github.com/repos/ghuser29384/Website2/contents/{+path}",
+      "compare_url": "https://api.github.com/repos/ghuser29384/Website2/compare/{base}...{head}",
+      "merges_url": "https://api.github.com/repos/ghuser29384/Website2/merges",
+      "archive_url": "https://api.github.com/repos/ghuser29384/Website2/{archive_format}{/ref}",
+      "downloads_url": "https://api.github.com/repos/ghuser29384/Website2/downloads",
+      "issues_url": "https://api.github.com/repos/ghuser29384/Website2/issues{/number}",
+      "pulls_url": "https://api.github.com/repos/ghuser29384/Website2/pulls{/number}",
+      "milestones_url": "https://api.github.com/repos/ghuser29384/Website2/milestones{/number}",
+      "notifications_url": "https://api.github.com/repos/ghuser29384/Website2/notifications{?since,all,participating}",
+      "labels_url": "https://api.github.com/repos/ghuser29384/Website2/labels{/name}",
+      "releases_url": "https://api.github.com/repos/ghuser29384/Website2/releases{/id}",
+      "deployments_url": "https://api.github.com/repos/ghuser29384/Website2/deployments"
+    }
+  },
+  "jobs": [
     {
-      "conclusion": "failure",
-      "createdAt": "2026-07-27T08:02:28Z",
-      "databaseId": 30248340750,
-      "event": "push",
-      "headSha": "f2a2e0a49392269df09c97ba4b7b410ff8580ee4",
+      "id": 89983407535,
+      "run_id": 30268047525,
+      "workflow_name": "Institutional trade QA",
+      "head_branch": "feat/institutional-trade-system",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30268047525",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR8Oun88AAAAU823Vrw",
+      "head_sha": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/89983407535",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30268047525/job/89983407535",
       "status": "completed",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30248340750"
-    },
-    {
       "conclusion": "failure",
-      "createdAt": "2026-07-27T07:17:28Z",
-      "databaseId": 30245614588,
-      "event": "push",
-      "headSha": "0fa43a320f767ab407e08f1410796098969e03a2",
-      "status": "completed",
-      "url": "https://github.com/ghuser29384/Website2/actions/runs/30245614588"
+      "created_at": "2026-07-27T12:56:55Z",
+      "started_at": "2026-07-27T12:56:58Z",
+      "completed_at": "2026-07-27T12:58:21Z",
+      "name": "verify",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-07-27T12:56:59Z",
+          "completed_at": "2026-07-27T12:57:01Z"
+        },
+        {
+          "name": "Check out exact branch commit",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-07-27T12:57:01Z",
+          "completed_at": "2026-07-27T12:57:06Z"
+        },
+        {
+          "name": "Set up Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-07-27T12:57:06Z",
+          "completed_at": "2026-07-27T12:57:10Z"
+        },
+        {
+          "name": "Install dependencies with transient-registry retry",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-07-27T12:57:10Z",
+          "completed_at": "2026-07-27T12:57:25Z"
+        },
+        {
+          "name": "Install browser and PostgreSQL tooling",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-07-27T12:57:25Z",
+          "completed_at": "2026-07-27T12:57:58Z"
+        },
+        {
+          "name": "Set up Supabase CLI",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-07-27T12:57:58Z",
+          "completed_at": "2026-07-27T12:58:00Z"
+        },
+        {
+          "name": "Validate isolated QA configuration",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-07-27T12:58:00Z",
+          "completed_at": "2026-07-27T12:58:00Z"
+        },
+        {
+          "name": "Run source-contract integrity tests before database mutation",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-07-27T12:58:00Z",
+          "completed_at": "2026-07-27T12:58:01Z"
+        },
+        {
+          "name": "Compile and apply institutional migration atomically to isolated QA",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-07-27T12:58:01Z",
+          "completed_at": "2026-07-27T12:58:02Z"
+        },
+        {
+          "name": "Generate exact QA database types",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-07-27T12:58:02Z",
+          "completed_at": "2026-07-27T12:58:15Z"
+        },
+        {
+          "name": "Run differential Supabase lint, foreign-key indexes, grants, and forced-RLS inventory",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 11,
+          "started_at": "2026-07-27T12:58:15Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Run complete test suite",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 12,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Type-check generated QA schema",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 13,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Run full ESLint",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 14,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Build production application",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 15,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Start QA-backed production server",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 16,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Run authenticated five-participant browser, RPC, and database suite",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 17,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Confirm no synthetic email-pattern residue",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Stop local server",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:16Z"
+        },
+        {
+          "name": "Upload institutional QA evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-07-27T12:58:16Z",
+          "completed_at": "2026-07-27T12:58:17Z"
+        },
+        {
+          "name": "Post Set up Supabase CLI",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 38,
+          "started_at": "2026-07-27T12:58:17Z",
+          "completed_at": "2026-07-27T12:58:17Z"
+        },
+        {
+          "name": "Post Set up Node.js",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 39,
+          "started_at": "2026-07-27T12:58:17Z",
+          "completed_at": "2026-07-27T12:58:17Z"
+        },
+        {
+          "name": "Post Check out exact branch commit",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 40,
+          "started_at": "2026-07-27T12:58:17Z",
+          "completed_at": "2026-07-27T12:58:17Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 41,
+          "started_at": "2026-07-27T12:58:17Z",
+          "completed_at": "2026-07-27T12:58:18Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/89983407535",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000004843,
+      "runner_name": "GitHub Actions 1000004843",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
     }
   ]
 }
