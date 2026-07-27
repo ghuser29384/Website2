@@ -56,20 +56,20 @@ jobs:
           path = Path("src/lib/mpgf/failure-bonus-success-premium.ts")
           source = path.read_text()
           old = '''    const maximumFailureBonusExposureCents = pricing.assumptions
+            ? calculateMaximumFailureBonusExposureCents({
+                netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
+                failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
+                eligibilityPolicy,
+              })
+            : undefined;'''
+          new = '''    const maximumFailureBonusExposureCents =
+            pricing.pricingMode === "experience_rated"
               ? calculateMaximumFailureBonusExposureCents({
                   netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
                   failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
                   eligibilityPolicy,
                 })
               : undefined;'''
-          new = '''    const maximumFailureBonusExposureCents =
-              pricing.pricingMode === "experience_rated"
-                ? calculateMaximumFailureBonusExposureCents({
-                    netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
-                    failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
-                    eligibilityPolicy,
-                  })
-                : undefined;'''
           if source.count(old) != 1:
               raise SystemExit(f"Expected one exact repair target, found {source.count(old)}")
           path.write_text(source.replace(old, new, 1))
