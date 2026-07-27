@@ -1463,8 +1463,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/sponsor-pools/[poolId]/deposits/route.ts", /recordMpgfPublicGoodsSponsorPoolDeposit/],
     ["src/app/api/mpgf/trade-surplus/commit/route.ts", /commitMpgfPublicGoodsTradeSurplus/],
     ["src/app/api/mpgf/trade-surplus/settle/route.ts", /settleMpgfPublicGoodsTradeSurplus/],
-    ["src/app/api/mpgf/governance/ballots/route.ts", /createMpgfPublicGoodsGovernanceBallot/],
-    ["src/app/api/mpgf/governance/results/route.ts", /getMpgfPublicGoodsGovernanceResultsApi/],
+    ["src/app/api/mpgf/governance/ballots/route.ts", /submitMpgfPhaseOneBallot/],
+    ["src/app/api/mpgf/governance/results/route.ts", /loadMpgfPhaseOneGovernanceState/],
     ["src/app/api/mpgf/challenges/route.ts", /createMpgfPublicGoodsChallenge/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
@@ -4052,7 +4052,7 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
     assert.match(governancePage, expected);
   }
 
-  assert.match(governanceRoute, /getMpgfPublicGoodsGovernanceApi/);
+  assert.match(governanceRoute, /loadMpgfPhaseOneGovernanceState/);
   assert.match(mpgfHubPage, /\/mpgf\/governance/);
   assert.match(roundPage, /\/mpgf\/governance/);
   assert.match(realMoneyTermsPage, /AML\/KYC and sanctions checks are production gates/);

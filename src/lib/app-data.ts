@@ -1,4 +1,4 @@
-import type { User } from "@supabase/supabase-js";
+import { isAuthSessionMissingError, type User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
 import {
@@ -1006,7 +1006,7 @@ export async function getViewer() {
       console.warn("[supabase] Auth resolution timed out; rendering signed-out state.", {
         timeoutMs: AUTH_RESOLUTION_TIMEOUT_MS,
       });
-    } else {
+    } else if (!isAuthSessionMissingError(authError)) {
       logSupabaseError("Failed to resolve authenticated user", authError);
     }
     return null;

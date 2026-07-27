@@ -18,13 +18,13 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("a first human homepage visit redirects once to the walkthrough", () => {
+test("a first human homepage visit redirects to the mandatory walkthrough", () => {
   const response = proxy(makeRequest("/?utm_source=invite"));
 
   assert.equal(response.status, 307);
   assert.equal(
     response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite&first_visit=1",
+    "https://moraltrade.org/walkthrough?utm_source=invite",
   );
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
   assert.equal(response.headers.get("cache-control"), "private, no-store");
