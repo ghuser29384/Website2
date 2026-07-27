@@ -1,0 +1,308 @@
+name: PR 158 synchronize main integrated continuation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pr158-sync-main-integrated-continuation.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr158-sync-main-integrated-continuation
+  cancel-in-progress: false
+
+jobs:
+  integrate-validate-push:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-sync-main-release-validation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PR_BRANCH: agent/dynamic-marketplace-clearing-rounds
+      EXPECTED_PR_HEAD: 5d14b8bdde08d7e8880109741b6c3a75bc308728
+      EXPECTED_MAIN_SHA: c42d07797554958074945547ec121ab922cebc61
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out temporary continuation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact refs and database boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "ops/pr158-sync-main-release-validation-20260727"
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          parsed = urlparse(os.environ["PROD_SUPABASE_DB_URL"])
+          if "jnpoxvalyjtdghnperyu" not in (parsed.username or ""):
+              raise SystemExit("Refusing non-production database user.")
+          if parsed.hostname != "aws-1-us-west-2.pooler.supabase.com":
+              raise SystemExit("Refusing unexpected production pooler host.")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected production database connection parameters.")
+          PY
+          git fetch origin main "$PR_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "origin/$PR_BRANCH")" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-list --count "$EXPECTED_PR_HEAD..$EXPECTED_MAIN_SHA")" = "8"
+
+      - name: Create exact integrated merge candidate and current-main baseline worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git worktree add "$RUNNER_TEMP/main-baseline" "$EXPECTED_MAIN_SHA"
+          git checkout -B "$PR_BRANCH" "origin/$PR_BRANCH"
+          git merge --no-ff --no-edit "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_MAIN_SHA"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          echo "INTEGRATED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          mkdir -p integrated-release-evidence
+          git diff --check "$EXPECTED_PR_HEAD" HEAD
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Re-run full suites and require normalized failure parity with current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/main-baseline"
+          npm ci > "$GITHUB_WORKSPACE/integrated-release-evidence/main-npm-ci.log" 2>&1
+          set +e
+          npm test > "$GITHUB_WORKSPACE/integrated-release-evidence/main-full-suite.log" 2>&1
+          main_status=$?
+          set -e
+
+          cd "$GITHUB_WORKSPACE"
+          npm ci > integrated-release-evidence/candidate-npm-ci.log 2>&1
+          set +e
+          npm test > integrated-release-evidence/candidate-full-suite.log 2>&1
+          candidate_status=$?
+          set -e
+
+          echo "$main_status" > integrated-release-evidence/main-full-suite.status
+          echo "$candidate_status" > integrated-release-evidence/candidate-full-suite.status
+
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path("integrated-release-evidence")
+          def extract(path: Path):
+              result = []
+              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  value = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+                  if re.match(r"^(?:not ok\s+\d+\s+-|✖\s+|FAIL\s+)", value):
+                      value = re.sub(r"\s*\([0-9.]+ms\)\s*$", "", value)
+                      result.append(value)
+              return sorted(set(result))
+
+          main_status = int((root / "main-full-suite.status").read_text().strip())
+          candidate_status = int((root / "candidate-full-suite.status").read_text().strip())
+          main_failures = extract(root / "main-full-suite.log")
+          candidate_failures = extract(root / "candidate-full-suite.log")
+          candidate_only = sorted(set(candidate_failures) - set(main_failures))
+          main_only = sorted(set(main_failures) - set(candidate_failures))
+          result = {
+              "main_sha": os.environ["EXPECTED_MAIN_SHA"],
+              "previous_pr_sha": os.environ["EXPECTED_PR_HEAD"],
+              "integrated_sha": os.environ["INTEGRATED_SHA"],
+              "main_status": main_status,
+              "candidate_status": candidate_status,
+              "main_failures": main_failures,
+              "candidate_failures": candidate_failures,
+              "candidate_only_failures": candidate_only,
+              "main_only_failures": main_only,
+          }
+          (root / "normalized-full-suite-comparison.json").write_text(
+              json.dumps(result, indent=2) + "\n", encoding="utf-8"
+          )
+          summary = [
+              "# Normalized full-suite comparison",
+              "",
+              f"- Current main exit status: `{main_status}`",
+              f"- Integrated candidate exit status: `{candidate_status}`",
+              f"- Current-main normalized failures: `{len(main_failures)}`",
+              f"- Integrated normalized failures: `{len(candidate_failures)}`",
+              f"- Candidate-only normalized failures: `{len(candidate_only)}`",
+              f"- Main-only normalized failures: `{len(main_only)}`",
+          ]
+          (root / "normalized-full-suite-comparison.md").write_text(
+              "\n".join(summary) + "\n", encoding="utf-8"
+          )
+          print("\n".join(summary))
+          if candidate_only or main_only:
+              raise SystemExit("The integrated candidate does not have the same normalized full-suite failure set as current main.")
+          if candidate_status != main_status:
+              raise SystemExit("The integrated candidate and current main have different full-suite exit statuses.")
+          PY
+
+      - name: Run focused marketplace and bilateral-confirmation tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            src/app/offers/dynamic-marketplace.test.ts \
+            src/lib/marketplace-clearing-round.test.ts \
+            src/lib/marketplace-offer-families.test.ts \
+            | tee integrated-release-evidence/focused-tests.log
+
+      - name: Run full lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee integrated-release-evidence/full-lint.log
+
+      - name: Run standalone TypeScript check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee integrated-release-evidence/typescript.log
+
+      - name: Run production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee integrated-release-evidence/production-build.log
+          git diff --check "$EXPECTED_PR_HEAD" HEAD
+
+      - name: Compile all five PR migrations against production inside a rollback transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          migrations=(
+            supabase/migrations/20260726143000_restore_agreement_completion_contract_and_atomic_acceptance.sql
+            supabase/migrations/20260726163500_fix_atomic_acceptance_core_version_linking.sql
+            supabase/migrations/20260726164500_fix_atomic_acceptance_core_internal_write.sql
+            supabase/migrations/20260726165500_close_offer_on_atomic_acceptance.sql
+            supabase/migrations/20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql
+          )
+          versions=(20260726143000 20260726163500 20260726164500 20260726165500 20260727050000)
+          for migration in "${migrations[@]}"; do
+            test -f "$migration"
+            ! grep -Ein '^[[:space:]]*(begin|commit|rollback)[[:space:]]*;' "$migration"
+            ! grep -Ein 'create[[:space:]]+index[[:space:]]+concurrently' "$migration"
+          done
+          version_list="'$(IFS="','"; echo "${versions[*]}")'"
+          before_count="$(psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --command "select count(*) from supabase_migrations.schema_migrations where version in (${version_list});")"
+          test "$(tr -d '[:space:]' <<< "$before_count")" = "0"
+
+          pg_dump "$PROD_SUPABASE_DB_URL" --schema-only --no-owner --no-privileges --schema=public \
+            > integrated-release-evidence/production-schema-before.raw.sql
+          sed -E '/^\\(un)?restrict /d' integrated-release-evidence/production-schema-before.raw.sql \
+            > integrated-release-evidence/production-schema-before.sql
+
+          compile="$RUNNER_TEMP/compile-pr158-migrations.sql"
+          {
+            echo '\set ON_ERROR_STOP on'
+            echo 'begin;'
+            echo "set local lock_timeout = '3s';"
+            echo "set local statement_timeout = '90s';"
+            echo "set local idle_in_transaction_session_timeout = '120s';"
+            for migration in "${migrations[@]}"; do
+              echo "-- BEGIN $migration"
+              cat "$migration"
+              echo "-- END $migration"
+            done
+            cat <<'SQL'
+          do $verify$
+          begin
+            if not exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='agreements' and column_name='completion_state'
+            ) then raise exception 'completion_state missing after compile'; end if;
+            if to_regclass('public.agreement_evidence_items') is null then raise exception 'agreement_evidence_items missing'; end if;
+            if to_regclass('public.agreement_review_cases') is null then raise exception 'agreement_review_cases missing'; end if;
+            if to_regprocedure('public.accept_marketplace_interest_v1(uuid,uuid,text,text,text)') is null then raise exception 'member acceptance RPC missing'; end if;
+            if to_regprocedure('public.accept_marketplace_guest_interest_v1(uuid,uuid,text)') is null then raise exception 'guest acceptance RPC missing'; end if;
+            if position(
+              'offer_row.status::text = ''matched''' in
+              pg_get_functiondef('public.confirm_agreement_version_v2(uuid,uuid,uuid)'::regprocedure)
+            ) = 0 then raise exception 'closed-offer confirmation path missing'; end if;
+          end;
+          $verify$;
+          rollback;
+          SQL
+          } > "$compile"
+          psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$compile" \
+            2>&1 | tee integrated-release-evidence/production-migration-rollback-compile.log
+
+          pg_dump "$PROD_SUPABASE_DB_URL" --schema-only --no-owner --no-privileges --schema=public \
+            > integrated-release-evidence/production-schema-after.raw.sql
+          sed -E '/^\\(un)?restrict /d' integrated-release-evidence/production-schema-after.raw.sql \
+            > integrated-release-evidence/production-schema-after.sql
+          diff -u integrated-release-evidence/production-schema-before.sql integrated-release-evidence/production-schema-after.sql \
+            > integrated-release-evidence/production-schema-post-rollback.diff
+          after_count="$(psql "$PROD_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --command "select count(*) from supabase_migrations.schema_migrations where version in (${version_list});")"
+          test "$(tr -d '[:space:]' <<< "$after_count")" = "0"
+          echo "PASS: five ordered migrations compiled against production and rolled back without schema residue." \
+            | tee integrated-release-evidence/production-migration-rollback-result.txt
+
+      - name: Prepare migration-before-application release ordering
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > integrated-release-evidence/migration-before-application-release-order.md <<EOF
+          # PR #158 migration-before-application release order
+
+          Exact integrated candidate: \`${INTEGRATED_SHA}\`
+
+          1. Freeze application deployment at the current production revision.
+          2. Apply, in order, \`20260726143000\`, \`20260726163500\`, \`20260726164500\`, \`20260726165500\`, and \`20260727050000\` from exact candidate \`${INTEGRATED_SHA}\`.
+          3. Verify all five migration-history rows, agreement completion fields, evidence/review tables, both atomic acceptance RPCs, and the matched/closed-offer bilateral-confirmation path.
+          4. Only after database verification, merge and deploy exact application candidate \`${INTEGRATED_SHA}\`.
+          5. Run signed-out and authenticated production smoke checks for offers, response acceptance, commitments, and the dealroom.
+          6. If any migration or verification fails, stop before application deployment and do not merge.
+
+          This gate only compiled the migrations in a transaction that was rolled back. It did not apply production migrations or deploy application code.
+          EOF
+          cat integrated-release-evidence/migration-before-application-release-order.md
+
+      - name: Reconfirm refs and push exact tested integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$PR_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "origin/$PR_BRANCH")" = "$EXPECTED_PR_HEAD"
+          test "$(git rev-parse HEAD)" = "$INTEGRATED_SHA"
+          git push origin HEAD:"$PR_BRANCH"
+          {
+            echo "integrated_sha=$INTEGRATED_SHA"
+            echo "main_sha=$EXPECTED_MAIN_SHA"
+            echo "previous_pr_sha=$EXPECTED_PR_HEAD"
+          } > integrated-release-evidence/integrated-candidate.txt
+
+      - name: Upload integrated validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-integrated-continuation-${{ github.run_id }}
+          path: integrated-release-evidence
+          if-no-files-found: warn
+          retention-days: 14
