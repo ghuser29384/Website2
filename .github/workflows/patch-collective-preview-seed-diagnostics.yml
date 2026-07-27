@@ -1,0 +1,51 @@
+name: Patch collective preview seed diagnostics
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/patch-collective-preview-seed-diagnostics.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-collective-preview-seed-diagnostics-20260727
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/enable-collective-preview-review-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Add failure-safe seed logging and retire patcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/seed-collective-preview-review-fixtures.yml')
+          text = path.read_text()
+          old = '''          node --input-type=module <<'NODE'\n'''
+          new = '''          mkdir -p "$ARTIFACT_DIR"\n          node --input-type=module <<'NODE' 2>&1 | tee "$ARTIFACT_DIR/seed.log"\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one seed command, found {text.count(old)}')
+          text = text.replace(old, new)
+          text = text.replace('          if-no-files-found: error\n', '          if-no-files-found: warn\n')
+          path.write_text(text)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/seed-collective-preview-review-fixtures.yml
+          git rm .github/workflows/patch-collective-preview-seed-diagnostics.yml
+          git diff --cached --check
+          git commit -m "Capture collective preview fixture seed failures"
+          git push origin HEAD:ops/enable-collective-preview-review-20260727
