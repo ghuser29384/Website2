@@ -37,13 +37,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          archive="$RUNNER_TEMP/collective-commitments-source.tar.gz"
           tar \
             --exclude=.git \
             --exclude=node_modules \
             --exclude=.next \
             --exclude=output \
             --exclude=.github/workflows/export-collective-commitments-source.yml \
-            -czf collective-commitments-source.tar.gz .
+            -czf "$archive" .
+          cp "$archive" collective-commitments-source.tar.gz
           sha256sum collective-commitments-source.tar.gz > collective-commitments-source.sha256
           printf 'product_head=%s\n' "$EXPECTED_PRODUCT_HEAD" > collective-commitments-source.txt
 
