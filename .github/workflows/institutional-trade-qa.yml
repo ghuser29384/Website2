@@ -1,0 +1,323 @@
+name: Institutional trade QA
+
+on:
+  push:
+    branches:
+      - feat/institutional-trade-system
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: "Enter hvmxfjjbdcgjjudmthdz to confirm the isolated QA target"
+        required: true
+        default: hvmxfjjbdcgjjudmthdz
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: institutional-trade-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event_name == 'push' || inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+      CRON_SECRET: qa-institutional-cron-not-production
+
+    steps:
+      - name: Check out exact branch commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then
+              exit 0
+            fi
+            if (( attempt == 4 )); then
+              echo "npm ci failed after four attempts." >&2
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "npm ci attempt $attempt failed; retrying after ${delay}s in case of a transient registry 5xx." >&2
+            sleep "$delay"
+          done
+
+      - name: Install browser and PostgreSQL tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client jq
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Validate isolated QA configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_DB_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required QA secret: $name" >&2
+              exit 1
+            fi
+          done
+          if [[ "$QA_PROJECT_REF" != "hvmxfjjbdcgjjudmthdz" ]]; then
+            echo "Unexpected QA project ref; refusing to continue." >&2
+            exit 1
+          fi
+          if [[ "$QA_SUPABASE_DB_URL" != *"hvmxfjjbdcgjjudmthdz"* ]]; then
+            echo "QA_SUPABASE_DB_URL does not target the isolated MoralTrade QA project." >&2
+            exit 1
+          fi
+          if [[ "$QA_SUPABASE_DB_URL" == *"jnpoxvalyjtdghnperyu"* ]]; then
+            echo "Production database URL detected; refusing to run against production." >&2
+            exit 1
+          fi
+          if (( ${#QA_TEST_PASSWORD} < 14 )); then
+            echo "QA_TEST_PASSWORD must contain at least 14 characters." >&2
+            exit 1
+          fi
+
+      - name: Run source-contract integrity tests before database mutation
+        run: |
+          node --import tsx --test \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Compile and apply institutional migration atomically to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p institutional-qa-artifacts
+          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          sha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256
+          present="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select to_regclass('public.institutional_organizations') is not null")"
+          if [[ "$present" == "t" ]]; then
+            echo "Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration."
+          else
+            echo "Compiling every migration statement inside a rollback-only transaction."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \i $migration
+          rollback;
+          SQL
+            echo "Applying the migration in one transaction to isolated QA only."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$migration"
+          fi
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt
+          do $$
+          declare required text;
+          begin
+            foreach required in array array[
+              'institutional_organizations','institutional_programs','institutional_authority_grants',
+              'institutional_deals','institutional_deal_parties','institutional_proposal_versions',
+              'institutional_counterfactual_baselines','institutional_obligations','institutional_obligation_dependencies',
+              'institutional_approvals','institutional_individual_consents','institutional_signatures',
+              'institutional_budget_accounts','institutional_budget_reservations','institutional_milestones',
+              'institutional_verifier_assignments','institutional_evidence_requirements','institutional_evidence_submissions',
+              'institutional_pool_terms','institutional_pool_contributions','institutional_pool_anchors',
+              'institutional_pool_underwritings','institutional_pool_votes','institutional_integrations',
+              'institutional_webhooks','institutional_audit_events'
+            ] loop
+              if to_regclass('public.' || required) is null then
+                raise exception 'Missing institutional relation: %', required;
+              end if;
+            end loop;
+          end;
+          $$;
+          select n.nspname as schema_name,c.relname as relation_name,c.relkind
+          from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relname like 'institutional_%'
+          order by c.relname;
+          SQL
+
+      - name: Generate exact QA database types
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p institutional-qa-artifacts
+          supabase gen types typescript --db-url "$QA_SUPABASE_DB_URL" --schema public > institutional-qa-artifacts/database.types.ts
+          test -s institutional-qa-artifacts/database.types.ts
+          cp institutional-qa-artifacts/database.types.ts src/lib/supabase/database.types.ts
+          sha256sum institutional-qa-artifacts/database.types.ts | tee institutional-qa-artifacts/database.types.sha256
+
+      - name: Run Supabase lint, foreign-key indexes, grants, and forced-RLS inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p institutional-qa-artifacts
+          supabase db lint --db-url "$QA_SUPABASE_DB_URL" --level warning 2>&1 | tee institutional-qa-artifacts/supabase-db-lint.txt
+
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/security-and-performance-inventory.txt
+          \echo '=== FORCED RLS ==='
+          select c.relname,
+                 c.relrowsecurity as rls_enabled,
+                 c.relforcerowsecurity as rls_forced,
+                 count(p.policyname) as policy_count
+          from pg_class c
+          join pg_namespace n on n.oid=c.relnamespace
+          left join pg_policies p on p.schemaname=n.nspname and p.tablename=c.relname
+          where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%'
+          group by c.relname,c.relrowsecurity,c.relforcerowsecurity
+          order by c.relname;
+
+          \echo '=== FOREIGN KEYS WITHOUT A COVERING INDEX ==='
+          with institutional_foreign_keys as (
+            select con.oid,con.conname,con.conrelid,con.conkey,c.relname
+            from pg_constraint con
+            join pg_class c on c.oid=con.conrelid
+            join pg_namespace n on n.oid=c.relnamespace
+            where con.contype='f' and n.nspname='public' and c.relname like 'institutional_%'
+          )
+          select relname,conname
+          from institutional_foreign_keys fk
+          where not exists (
+            select 1 from pg_index i
+            where i.indrelid=fk.conrelid and i.indisvalid and i.indisready
+              and (i.indkey::smallint[] @> fk.conkey)
+          )
+          order by relname,conname;
+
+          \echo '=== TABLE GRANTS ==='
+          select grantee,table_name,string_agg(privilege_type,',' order by privilege_type) as privileges
+          from information_schema.role_table_grants
+          where table_schema='public' and table_name like 'institutional_%'
+          group by grantee,table_name
+          order by grantee,table_name;
+
+          \echo '=== FUNCTION EXECUTE GRANTS ==='
+          select grantee,routine_name,string_agg(privilege_type,',' order by privilege_type) as privileges
+          from information_schema.role_routine_grants
+          where routine_schema='public' and routine_name like '%institutional%'
+          group by grantee,routine_name
+          order by grantee,routine_name;
+          SQL
+
+          missing_rls="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%' and (not c.relrowsecurity or not c.relforcerowsecurity)")"
+          if [[ "$missing_rls" != "0" ]]; then
+            echo "$missing_rls institutional tables lack forced RLS." >&2
+            exit 1
+          fi
+
+          missing_fk_indexes="$(psql "$QA_SUPABASE_DB_URL" -Atqc "with f as (select con.conrelid,con.conkey from pg_constraint con join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace where con.contype='f' and n.nspname='public' and c.relname like 'institutional_%') select count(*) from f where not exists (select 1 from pg_index i where i.indrelid=f.conrelid and i.indisvalid and i.indisready and i.indkey::smallint[] @> f.conkey)")"
+          if [[ "$missing_fk_indexes" != "0" ]]; then
+            echo "$missing_fk_indexes institutional foreign keys lack a covering index." >&2
+            exit 1
+          fi
+
+          anon_table_writes="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from information_schema.role_table_grants where table_schema='public' and table_name like 'institutional_%' and grantee='anon' and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE','TRIGGER','REFERENCES')")"
+          if [[ "$anon_table_writes" != "0" ]]; then
+            echo "Unexpected direct anon institutional table write grants: $anon_table_writes" >&2
+            exit 1
+          fi
+
+          authenticated_tables_without_forced_rls="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(distinct g.table_name) from information_schema.role_table_grants g left join pg_class c on c.relname=g.table_name left join pg_namespace n on n.oid=c.relnamespace and n.nspname=g.table_schema where g.table_schema='public' and g.table_name like 'institutional_%' and g.grantee='authenticated' and g.privilege_type in ('INSERT','UPDATE','DELETE') and (c.oid is null or not c.relrowsecurity or not c.relforcerowsecurity)")"
+          if [[ "$authenticated_tables_without_forced_rls" != "0" ]]; then
+            echo "Authenticated institutional writes exist outside forced-RLS tables: $authenticated_tables_without_forced_rls" >&2
+            exit 1
+          fi
+
+      - name: Run complete test suite
+        run: npm test
+
+      - name: Type-check generated QA schema
+        run: npx tsc --noEmit
+
+      - name: Run full ESLint
+        run: npm run lint
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Start QA-backed production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- --hostname 127.0.0.1 --port 3000 > institutional-server.log 2>&1 &
+          echo $! > institutional-server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/institutions >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat institutional-server.log >&2
+          exit 1
+
+      - name: Run authenticated five-participant browser, RPC, and database suite
+        shell: bash
+        run: node .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Confirm no synthetic email-pattern residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p institutional-qa-artifacts
+          pattern="institutional-${GITHUB_RUN_ID}-%@example.test"
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$pattern" -P pager=off <<'SQL' | tee institutional-qa-artifacts/post-suite-residue.txt
+          select 'auth.users' as relation,count(*) as residue from auth.users where lower(email) like lower(:'email_pattern')
+          union all
+          select 'public.profiles',count(*) from public.profiles where lower(email) like lower(:'email_pattern');
+          SQL
+          residue="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select (select count(*) from auth.users where lower(email) like lower('$pattern')) + (select count(*) from public.profiles where lower(email) like lower('$pattern'))")"
+          if [[ "$residue" != "0" ]]; then
+            echo "Synthetic institutional QA identity residue remains: $residue" >&2
+            exit 1
+          fi
+
+      - name: Stop local server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f institutional-server.pid ]]; then
+            kill "$(cat institutional-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload institutional QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: institutional-trade-qa-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            institutional-qa-artifacts
+            institutional-e2e-evidence
+            institutional-server.log
+          if-no-files-found: warn
+          retention-days: 14
