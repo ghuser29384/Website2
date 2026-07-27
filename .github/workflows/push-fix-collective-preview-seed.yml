@@ -1,0 +1,64 @@
+name: Push-fix collective preview seed
+
+on:
+  push:
+    branches:
+      - ops/enable-collective-preview-review-20260727
+    paths:
+      - ".github/workflows/push-fix-collective-preview-seed.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: push-fix-collective-preview-seed-20260727
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Export the generated key in the same seeding step
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head="$(git rev-parse HEAD)"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/seed-collective-preview-review-fixtures.yml')
+          text = path.read_text()
+          old = '''          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+
+          node --input-type=module <<'NODE'
+'''
+          new = '''          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+          export COLLECTIVE_COMMITMENT_MASTER_KEY="$master_key"
+
+          node --input-type=module <<'NODE'
+'''
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one key-to-node boundary, found {text.count(old)}')
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/seed-collective-preview-review-fixtures.yml
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Master-key export already present."
+            exit 0
+          fi
+          git commit -m "Export generated key during collective Preview seeding"
+          git push --force-with-lease="refs/heads/ops/enable-collective-preview-review-20260727:${expected_head}" \
+            origin HEAD:ops/enable-collective-preview-review-20260727
