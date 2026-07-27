@@ -1,0 +1,84 @@
+name: Diagnose static Trade feed surface
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: ${{ contains(github.event.head_commit.message, '[run-static-trade-diagnostic]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode the preserved Live shell and locate the hard-coded cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa-results
+          node <<'NODE' > .qa-results/static-trade-feed-context.log
+          const { readFileSync } = require('node:fs');
+          const { gunzipSync } = require('node:zlib');
+          const names = [
+            '0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'
+          ];
+          const encoded = names
+            .map((name) => readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8'))
+            .join('');
+          const source = gunzipSync(Buffer.from(encoded, 'base64')).toString('utf8');
+          const targets = [
+            'POTENTIAL MATCHES',
+            'Potential matches',
+            'Alex R.',
+            'Sam G.',
+            'Riley P.',
+            'Replaced 10 car trips',
+            'Counteroffer from Mina',
+            'function nowFocus(){',
+            'function nowTrade(){',
+            '#trade',
+            'trade:'
+          ];
+          console.log(`decoded_bytes=${Buffer.byteLength(source)}`);
+          console.log('now_functions:');
+          for (const match of source.matchAll(/function\s+(now[A-Za-z0-9_$]+)\s*\(/g)) {
+            console.log(`  ${match[1]} @ ${match.index}`);
+          }
+          console.log();
+          for (const target of targets) {
+            console.log(`===== ${target} =====`);
+            let start = 0;
+            let found = 0;
+            while (found < 8) {
+              const index = source.indexOf(target, start);
+              if (index < 0) break;
+              found += 1;
+              console.log(`match_${found}_index=${index}`);
+              console.log(source.slice(Math.max(0, index - 1800), Math.min(source.length, index + target.length + 3200)));
+              console.log();
+              start = index + target.length;
+            }
+            if (!found) console.log('not found');
+            console.log();
+          }
+          console.log('===== live html bootstrap/script context =====');
+          const html = readFileSync('public/moral-trade-live.html', 'utf8');
+          for (const target of ['/api/live-now', 'moral-trade-live-now.js', '__MT_LIVE_NOW_BOOTSTRAP__']) {
+            const index = html.indexOf(target);
+            console.log(`--- ${target} @ ${index} ---`);
+            console.log(index >= 0 ? html.slice(Math.max(0, index - 1800), index + target.length + 3200) : 'not found');
+          }
+          NODE
+          git rm .github/workflows/diagnose-static-trade-feed.yml
+      - name: Publish diagnostic context
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/static-trade-feed-context.log
+          git commit -m "Record static Trade feed context [static-trade-diagnostic-complete] [verification-failure]"
+          git push origin HEAD:refs/heads/qa/home-authenticated-feed-20260727
