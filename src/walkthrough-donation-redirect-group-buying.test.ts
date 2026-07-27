@@ -19,7 +19,12 @@ for (const [name, source] of [
     assert.match(source, /Redirect the matched \$20/);
     assert.match(source, /100 × 2\.1 days/);
     assert.match(source, /210 person-days · 30 person-weeks/);
-    assert.match(source, /One member finds 99 close matches/);
+    assert.match(source, /Redirect scheduled · users notified/);
+    assert.match(source, /The \$10 is scheduled to be donated in 7 days/);
+    assert.match(source, /Moral Trade notifies users/);
+    assert.match(source, /See a notified user start a coalition/);
+    assert.match(source, /A notified user finds 99 close matches/);
+    assert.doesNotMatch(source, /invite a better proposal|Notify potential coalition members/);
     assert.match(source, /Future flourishing/);
     assert.match(source, /60 \/ 100/);
     assert.match(source, /Existential risk/);

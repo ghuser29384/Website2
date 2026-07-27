@@ -120,9 +120,15 @@ test("Crowd and Redirect preserve the requested copy, coalition trade, and routi
   await expect(page.getByText("100 × 2.1 days")).toBeVisible();
   await expect(page.getByText("210 person-days · 30 person-weeks")).toBeVisible();
   await expect(page.getByText("1 × 10 weeks")).toBeVisible();
-  await page.getByRole("button", { name: "Notify potential coalition members" }).click();
+  await expect(
+    page.getByRole("heading", { name: "The $10 is scheduled to be donated in 7 days." }),
+  ).toBeVisible();
+  await expect(page.getByText(/Moral Trade notifies users/)).toBeVisible();
+  await page.getByRole("button", { name: "See a notified user start a coalition" }).click();
 
-  await expect(page.getByRole("heading", { name: "One member finds 99 close matches." })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "A notified user finds 99 close matches." }),
+  ).toBeVisible();
   await expect(page.getByText("Future flourishing")).toBeVisible();
   await expect(page.getByText("60 / 100")).toBeVisible();
   await expect(page.getByText("Existential risk")).toBeVisible();

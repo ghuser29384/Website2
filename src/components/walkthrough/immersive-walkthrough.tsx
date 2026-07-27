@@ -818,30 +818,31 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
         <div className="mtw-scene mtw-redirect-comparison-scene">
           <StepMark current={2} total={7} />
           <div className="mtw-scene-head">
-            <div className="mtw-scene-prompt">Different causes · different bottlenecks</div>
+            <div className="mtw-scene-prompt">Redirect scheduled · users notified</div>
             <h1 className="mtw-scene-title" tabIndex={-1}>
-              Before the fallback settles, invite a better proposal.
+              The $10 is scheduled to be donated in 7 days.
             </h1>
             <p className="mtw-scene-line">
-              The Republican&apos;s $10 will go to environmental protection in 7 days unless a trade
-              she values more is accepted and completed.
+              Moral Trade notifies users that the Republican environmentalist&apos;s $10 is scheduled
+              to go to an environmental protection organization. They can propose a moral trade she
+              judges an even better use of the same $10; otherwise, the donation proceeds automatically.
             </p>
           </div>
           <div className="mtw-impact-options" aria-label="Compare uses of ten dollars">
             <article className="mtw-impact-option">
-              <span>Fallback donation</span>
+              <span>Scheduled redirect</span>
               <strong>$10</strong>
               <b>Environmental organization</b>
-              <small>Useful, but no exchange.</small>
+              <small>Automatically donated if no better accepted trade is completed.</small>
             </article>
             <article className="mtw-impact-option">
-              <span>One-to-one trade</span>
+              <span>One-to-one proposal</span>
               <strong>1 × 10 weeks</strong>
               <b>10 person-weeks</b>
               <small>One person avoids buying single-use plastic bags.</small>
             </article>
             <article className="mtw-impact-option is-group-buy">
-              <span>Group-buy moral trade</span>
+              <span>Group-buy proposal</span>
               <strong>100 × 2.1 days</strong>
               <b>210 person-days · 30 person-weeks</b>
               <small>Equivalent to 30 people for one week.</small>
@@ -851,7 +852,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
             In this example, the environmentalist prefers the verified 210 person-days to the $10
             fallback donation.
           </p>
-          <PrimaryAction onClick={() => setStep(3)}>Notify potential coalition members</PrimaryAction>
+          <PrimaryAction onClick={() => setStep(3)}>See a notified user start a coalition</PrimaryAction>
         </div>
       );
     }
@@ -862,12 +863,12 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           <StepMark current={3} total={7} />
           <div className="mtw-coalition-layout">
             <div>
-              <div className="mtw-scene-prompt">7-day better-match window</div>
+              <div className="mtw-scene-prompt">Platform notification · 7 days remaining</div>
               <h1 className="mtw-scene-title" tabIndex={-1}>
-                One member finds 99 close matches.
+                A notified user finds 99 close matches.
               </h1>
               <p className="mtw-scene-line">
-                Moral Trade searches for people whose priorities are as similar as possible and
+                She uses Moral Trade to find 99 users whose priorities are as similar as possible and
                 whose small actions can add up.
               </p>
               <PrimaryAction onClick={() => setStep(4)}>Form the 100-person coalition</PrimaryAction>
