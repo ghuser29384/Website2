@@ -1,0 +1,48 @@
+name: Export collective commitments source
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/export-collective-commitments-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/export-collective-commitments-source-20260726'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact product base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8 HEAD
+          changed="$(git diff --name-only 053ed422da9c5cf8c03b1c24c1bb7f2af81386e8...HEAD)"
+          test "$changed" = ".github/workflows/export-collective-commitments-source.yml"
+      - name: Package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/collective-commitments-source.tar.gz"
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            -czf "$archive" .
+          cp "$archive" collective-commitments-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: collective-commitments-source-${{ github.run_id }}
+          path: collective-commitments-source.tar.gz
+          if-no-files-found: error
+          retention-days: 2
