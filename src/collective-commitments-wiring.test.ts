@@ -140,14 +140,24 @@ test("server-action modules export only async actions at runtime", async () => {
   assert.match(controls, /collective-commitments\/action-state/);
 });
 
-test("successful collective creation redirects from the server action", async () => {
-  const [actions, form] = await Promise.all([
+test("successful collective mutations redirect from server actions", async () => {
+  const [actions, form, controls] = await Promise.all([
     source("src/app/collective-commitments/actions.ts"),
     source("src/components/collective-commitments/collective-commitment-form.tsx"),
+    source("src/components/collective-commitments/collective-signature-controls.tsx"),
   ]);
   assert.match(actions, /import \{ redirect \} from "next\/navigation"/);
-  assert.match(actions, /redirect\(`\/collective-commitments\/\$\{commitmentId\}`\)/);
+  const redirects = actions.match(/redirect\(`\/collective-commitments\/\$\{commitmentId\}`\)/g) ?? [];
+  assert.equal(redirects.length, 3);
   assert.doesNotMatch(form, /useRouter|router\.push|useEffect/);
+  assert.doesNotMatch(controls, /useRouter|router\.refresh|useEffect/);
+});
+
+test("collective signature count messages use correct singular and plural grammar", async () => {
+  const service = await source("src/lib/collective-commitments/service.ts");
+  assert.match(service, /result\.qualifyingSignerCount === 1 \? "currently counts" : "currently count"/);
+  assert.match(service, /result\.qualifyingSignerCount === 1 \? "remains" : "remain"/);
+  assert.match(service, /const service = createCollectiveCommitmentServiceClient\(\);[\s\S]*add_collective_commitment_signature_v1/);
 });
 
 test("expiry route is cron-authorized and never claims publication", async () => {
