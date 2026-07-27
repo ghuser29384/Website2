@@ -1,3 +1,4 @@
+.responsiveShell,
 .responsiveSubnav {
   min-width: 0;
 }
@@ -17,6 +18,14 @@
 }
 
 @media (max-width: 360px) {
+  .responsiveShell :global(.mt-site-topbar) :global(.mt-wordmark-label) {
+    display: none;
+  }
+
+  .responsiveShell :global(.mt-footer-mark) {
+    display: none;
+  }
+
   .responsiveSubnav {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
