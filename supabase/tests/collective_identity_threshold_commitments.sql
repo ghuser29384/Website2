@@ -4,6 +4,7 @@ begin;
 set local client_min_messages = notice;
 
 do $test$
+#variable_conflict use_variable
 declare
   creator_profile_id uuid;
   commitment_id uuid := gen_random_uuid();
