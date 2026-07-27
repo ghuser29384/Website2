@@ -16,7 +16,7 @@ export function CollectiveCommitmentShell({
   viewerPresent: boolean;
 }) {
   return (
-    <div className={`page-shell ${styles.shell}`}>
+    <div className={`page-shell ${styles.shell} ${mobileStyles.responsiveShell}`}>
       <header className={styles.header}>
         <SiteTopbar
           brandHref="/"
