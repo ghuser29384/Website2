@@ -1,0 +1,1 @@
+This branch contains only the temporary guarded workflow used to synchronize current main into PR #158 and validate the exact integrated candidate. It must be closed without merging after the gate completes.
