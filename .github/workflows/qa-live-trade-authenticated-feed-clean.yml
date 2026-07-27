@@ -70,7 +70,10 @@ jobs:
           printf '%s\n' "$CANDIDATE_SHA" > "$LOGS/candidate-sha.txt"
           printf '%s\n' "$BASELINE_SHA" > "$LOGS/baseline-sha.txt"
 
-          node --check candidate/public/moral-trade-live-trade-feed.js >"$LOGS/javascript-syntax.log" 2>&1
+          {
+            node --check candidate/public/moral-trade-live-trade-feed.js
+            node --check candidate/public/moral-trade-requester-identity.js
+          } >"$LOGS/javascript-syntax.log" 2>&1
           JS_STATUS=$?
 
           (
@@ -95,6 +98,9 @@ jobs:
           import re
           import sys
 
+          def normalize_failure(name):
+              return re.sub(r"/(?:baseline|candidate)/", "/checkout/", name)
+
           def parse(path):
               failures = []
               plan = None
@@ -103,7 +109,7 @@ jobs:
                       line = raw.rstrip("\n")
                       match = re.match(r"^not ok \d+ - (.*?)(?: #.*)?$", line)
                       if match:
-                          failures.append(match.group(1).strip())
+                          failures.append(normalize_failure(match.group(1).strip()))
                       plan_match = re.match(r"^1\.\.(\d+)$", line)
                       if plan_match:
                           plan = int(plan_match.group(1))
