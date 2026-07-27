@@ -22,17 +22,62 @@ if (actualBlob !== EXPECTED_SOURCE_BLOB) {
   throw new Error(`Refusing unexpected QA script blob: ${actualBlob}`);
 }
 
-const oldHelper = `function spinbutton(page, name) {
+const oldSpinbuttonHelper = `function spinbutton(page, name) {
   return page.getByRole("spinbutton", { name, exact: true });
 }`;
-const newHelper = `function spinbutton(page, name) {
+const newSpinbuttonHelper = `function spinbutton(page, name) {
   return page.getByRole("spinbutton", { name: new RegExp(\`^\${name}\`) });
 }`;
-if (source.split(oldHelper).length !== 2) {
+if (source.split(oldSpinbuttonHelper).length !== 2) {
   throw new Error("Expected one exact spinbutton helper in the reviewed QA script.");
 }
 
-const repaired = source.replace(oldHelper, newHelper);
+const oldThresholdFill = [
+  "async function fillThresholdCard(page, index, { amount, successProbability, failureFill }) {",
+  "  const card = thresholdCards(page).nth(index - 1);",
+  "  await card",
+  "    .getByRole(\"textbox\", {",
+  "      name: `Threshold ${index} cumulative net recipient amount`,",
+  "      exact: true,",
+  "    })",
+  "    .fill(amount);",
+  "  await card",
+  "    .getByRole(\"textbox\", {",
+  "      name: `Threshold ${index} estimated success probability`,",
+  "      exact: true,",
+  "    })",
+  "    .fill(successProbability);",
+  "  await card",
+  "    .getByRole(\"textbox\", {",
+  "      name: `Threshold ${index} expected eligible balance at failure`,",
+  "      exact: true,",
+  "    })",
+  "    .fill(failureFill);",
+  "}",
+].join("\n");
+const newThresholdFill = [
+  "function thresholdTextbox(card, name) {",
+  "  return card.getByRole(\"textbox\", { name: new RegExp(`^${name}`) });",
+  "}",
+  "",
+  "async function fillThresholdCard(page, index, { amount, successProbability, failureFill }) {",
+  "  const card = thresholdCards(page).nth(index - 1);",
+  "  await thresholdTextbox(card, `Threshold ${index} cumulative net recipient amount`).fill(amount);",
+  "  await thresholdTextbox(card, `Threshold ${index} estimated success probability`).fill(",
+  "    successProbability,",
+  "  );",
+  "  await thresholdTextbox(card, `Threshold ${index} expected eligible balance at failure`).fill(",
+  "    failureFill,",
+  "  );",
+  "}",
+].join("\n");
+if (source.split(oldThresholdFill).length !== 2) {
+  throw new Error("Expected one exact threshold-card textbox block in the reviewed QA script.");
+}
+
+const repaired = source
+  .replace(oldSpinbuttonHelper, newSpinbuttonHelper)
+  .replace(oldThresholdFill, newThresholdFill);
 const wrapperDirectory = path.dirname(fileURLToPath(import.meta.url));
 const target = path.join(wrapperDirectory, ".multi-threshold-authenticated-browser-qa.executed.mjs");
 writeFileSync(target, repaired, "utf8");
