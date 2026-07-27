@@ -1,9 +1,7 @@
 import Link from "next/link";
 
-import {
-  addAgreementEventAction,
-  updateAgreementStatusAction,
-} from "@/app/actions";
+import { addAgreementEventAction } from "@/app/actions";
+import { confirmAgreementVersionAction } from "@/app/core-trade-actions";
 import {
   DealroomTermsEditor,
   type DealroomTerms,
@@ -35,6 +33,10 @@ export function DealroomMainSections({
   returnTo,
   stages,
 }: DealroomMainSectionsProps) {
+  const currentVersionId = (
+    agreement as DealroomAgreement & { current_version_id?: string | null }
+  ).current_version_id ?? null;
+
   return (
     <>
       <section className="section section-white" aria-labelledby="lifecycle-heading">
@@ -163,25 +165,41 @@ export function DealroomMainSections({
             </h3>
             <p>
               {agreement.status === "proposed"
-                ? "Confirm only after both parties have reviewed the latest saved terms and the evidence rule."
+                ? "Each participant must confirm the same frozen version. One confirmation records consent; two distinct confirmations activate the agreement."
                 : agreement.status === "active"
                   ? "Use the full agreement record to submit evidence, open a review case, or change status."
                   : "The complete agreement record retains evidence, review, payment, and challenge controls."}
             </p>
             {agreement.status === "proposed" ? (
-              <form action={updateAgreementStatusAction}>
-                <input name="agreement_id" type="hidden" value={agreement.id} />
-                <input name="return_to" type="hidden" value={returnTo} />
-                <input name="status" type="hidden" value="active" />
-                <input
-                  name="summary"
-                  type="hidden"
-                  value="One participant activated the current dealroom terms"
-                />
-                <button className="button button-primary" type="submit">
-                  Record confirmation and activate
-                </button>
-              </form>
+              currentVersionId ? (
+                <form action={confirmAgreementVersionAction} className="stack-form">
+                  <input name="agreement_id" type="hidden" value={agreement.id} />
+                  <input
+                    name="agreement_version_id"
+                    type="hidden"
+                    value={currentVersionId}
+                  />
+                  <input name="return_to" type="hidden" value={returnTo} />
+                  <label className="field">
+                    <span>Confirmation</span>
+                    <span>
+                      <input name="terms_reviewed" required type="checkbox" /> I reviewed
+                      this frozen version. The first distinct confirmation records consent;
+                      the second activates the agreement.
+                    </span>
+                  </label>
+                  <button className="button button-primary" type="submit">
+                    Confirm current frozen version
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  className="button button-secondary"
+                  href={`/trade-agreements/${agreement.id}`}
+                >
+                  Review missing frozen version
+                </Link>
+              )
             ) : (
               <Link
                 className="button button-secondary"

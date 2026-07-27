@@ -128,7 +128,10 @@ test("private commitments enter a dealroom with real term and event actions", ()
   assert.match(dealroomPage, /DealroomTermsEditor/);
   assert.match(dealroomPage, /action=\{addAgreementEventAction\}/);
   assert.match(dealroomPage, /value="counterproposal"/);
-  assert.match(dealroomPage, /action=\{updateAgreementStatusAction\}/);
+  assert.match(dealroomPage, /action=\{confirmAgreementVersionAction\}/);
+  assert.match(dealroomPage, /name="agreement_version_id"/);
+  assert.match(dealroomPage, /name="terms_reviewed"/);
+  assert.doesNotMatch(dealroomPage, /updateAgreementStatusAction/);
   assert.match(dealroomPage, /What changed, when, and why/);
 });
 

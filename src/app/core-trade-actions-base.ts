@@ -1097,13 +1097,19 @@ export async function withdrawTradeResponseAction(formData: FormData) {
 export async function confirmAgreementVersionAction(formData: FormData) {
   const agreementId = read(formData, "agreement_id");
   const agreementVersionId = read(formData, "agreement_version_id");
-  const returnTo = `/trade-agreements/${agreementId}`;
+  const returnTo = safeInternalPath(
+    read(formData, "return_to"),
+    `/trade-agreements/${agreementId}`,
+  );
   const viewer = await requireViewer(returnTo);
   const supabase = createServiceClient() as any;
 
   try {
     if (!agreementVersionId) {
       throw new Error("The exact frozen version you reviewed is required.");
+    }
+    if (!readCheckbox(formData, "terms_reviewed")) {
+      throw new Error("Review and accept the complete frozen terms first.");
     }
     const { data, error } = await supabase.rpc("confirm_agreement_version_v2", {
       p_actor_id: viewer.authUser.id,
@@ -1113,6 +1119,9 @@ export async function confirmAgreementVersionAction(formData: FormData) {
     if (error) throw new Error(error.message);
     const result = (data ?? {}) as { active?: boolean };
     revalidatePath("/offers");
+    revalidatePath("/commitments");
+    revalidatePath(`/deals/${agreementId}`);
+    revalidatePath(`/trade-agreements/${agreementId}`);
     revalidatePath(returnTo);
     redirectWithMessage(
       returnTo,
