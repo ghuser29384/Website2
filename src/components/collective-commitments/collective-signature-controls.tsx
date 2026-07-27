@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 
 import {
   signCollectiveCommitmentAction,
@@ -21,7 +20,6 @@ export function CollectiveSignatureControls({
   commitment: CollectiveCommitmentDetail;
   credential: CollectiveIdentityCredential | null;
 }) {
-  const router = useRouter();
   const [signState, signAction] = useActionState(
     signCollectiveCommitmentAction,
     EMPTY_COLLECTIVE_ACTION_STATE,
@@ -30,10 +28,6 @@ export function CollectiveSignatureControls({
     withdrawCollectiveCommitmentAction,
     EMPTY_COLLECTIVE_ACTION_STATE,
   );
-
-  useEffect(() => {
-    if (signState.message || withdrawState.message) router.refresh();
-  }, [router, signState.message, withdrawState.message]);
 
   if (commitment.viewerHasSigned) {
     return (
