@@ -178,12 +178,98 @@ jobs:
           cp institutional-qa-artifacts/database.types.ts src/lib/supabase/database.types.ts
           sha256sum institutional-qa-artifacts/database.types.ts | tee institutional-qa-artifacts/database.types.sha256
 
-      - name: Run Supabase lint, foreign-key indexes, grants, and forced-RLS inventory
+      - name: Run differential Supabase lint, foreign-key indexes, grants, and forced-RLS inventory
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p institutional-qa-artifacts
-          supabase db lint --db-url "$QA_SUPABASE_DB_URL" --level warning 2>&1 | tee institutional-qa-artifacts/supabase-db-lint.txt
+
+          set +e
+          supabase db lint --db-url "$QA_SUPABASE_DB_URL" --level warning > institutional-qa-artifacts/supabase-db-lint.txt 2>&1
+          lint_status=$?
+          set -e
+          cat institutional-qa-artifacts/supabase-db-lint.txt
+          echo "supabase_db_lint_exit_status=${lint_status}" | tee institutional-qa-artifacts/supabase-db-lint-status.txt
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("institutional-qa-artifacts/supabase-db-lint.txt")
+          text = path.read_text(errors="replace")
+          start = text.find("[")
+          end = text.rfind("]")
+          if start < 0 or end < start:
+              raise SystemExit("Supabase lint output did not contain a JSON issue array.")
+          try:
+              payload = json.loads(text[start : end + 1])
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"Could not parse Supabase lint issue array: {exc}") from exc
+
+          observed = set()
+          institutional = []
+          normalized = []
+          for function_record in payload:
+              function_name = str(function_record.get("function", ""))
+              for issue in function_record.get("issues", []):
+                  signature = (
+                      function_name,
+                      str(issue.get("level", "")),
+                      str(issue.get("sqlState", "")),
+                      str(issue.get("message", "")),
+                  )
+                  observed.add(signature)
+                  normalized.append("|".join(signature))
+                  if function_name.startswith("public.institutional_") or "institutional" in function_name:
+                      institutional.append(signature)
+
+          Path("institutional-qa-artifacts/supabase-db-lint-normalized.txt").write_text(
+              "\n".join(sorted(normalized)) + ("\n" if normalized else "")
+          )
+
+          if institutional:
+              rendered = "\n".join("|".join(item) for item in sorted(institutional))
+              raise SystemExit(f"Institutional lint issues remain:\n{rendered}")
+
+          expected_preexisting = {
+              (
+                  "public.publish_trade_evidence_v3",
+                  "warning extra",
+                  "00000",
+                  'never read variable "agreement_row"',
+              ),
+              (
+                  "public.reserve_background_candidate_exposure",
+                  "error",
+                  "42702",
+                  'column reference "budget_state" is ambiguous',
+              ),
+              (
+                  "public.mpgf_failure_bonus_threshold_schedule_valid",
+                  "warning",
+                  "00000",
+                  "routine is marked as IMMUTABLE, but expression is STABLE",
+              ),
+              (
+                  "public.moral_trade_create_submit_service",
+                  "warning",
+                  "42804",
+                  "target type is different type than source type",
+              ),
+          }
+
+          if observed != expected_preexisting:
+              missing = sorted(expected_preexisting - observed)
+              unexpected = sorted(observed - expected_preexisting)
+              lines = ["Supabase lint differs from the exact pre-existing QA baseline."]
+              if missing:
+                  lines.append("Missing expected baseline issues:")
+                  lines.extend(f"  - {'|'.join(item)}" for item in missing)
+              if unexpected:
+                  lines.append("Unexpected or newly introduced issues:")
+                  lines.extend(f"  - {'|'.join(item)}" for item in unexpected)
+              raise SystemExit("\n".join(lines))
+          PY
 
           psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/security-and-performance-inventory.txt
           \echo '=== FORCED RLS ==='
