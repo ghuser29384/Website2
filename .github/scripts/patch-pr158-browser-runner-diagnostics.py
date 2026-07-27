@@ -70,9 +70,21 @@ def main() -> None:
       }
 
       for (const error of item.failedRequests) {
+        let pathname = "";
+        try {
+          pathname = new URL(error.url).pathname;
+        } catch {
+          // An invalid application URL is unexpected below.
+        }
         const isNavigationCancellation =
           error.failure === "net::ERR_ABORTED" &&
-          ["fetch", "ping"].includes(error.resourceType);
+          (
+            ["fetch", "ping"].includes(error.resourceType) ||
+            (
+              error.resourceType === "script" &&
+              pathname.startsWith("/_next/static/chunks/app/")
+            )
+          );
         (isNavigationCancellation ? knownDiagnostics : unexpectedDiagnostics).push(
           `${item.label} request: ${JSON.stringify(error)}`,
         );
@@ -145,7 +157,7 @@ def main() -> None:
     WRAPPER_PATH.write_text(wrapper, encoding="utf-8")
 
     print(
-        "Removed the redundant post-activation mobile-public check, classified known diagnostics, and retained the reviewed wrapper's other stability patches."
+        "Removed the redundant post-activation mobile-public check, classified navigation cancellations including aborted Next.js route chunks, and retained the reviewed wrapper's other stability patches."
     )
 
 
