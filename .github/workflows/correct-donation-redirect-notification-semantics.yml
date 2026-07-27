@@ -1,16 +1,18 @@
 name: Correct Donation Redirect notification semantics
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/donation-redirect-group-buying-walkthrough-20260726
+      - main
+    types:
+      - synchronize
 
 permissions:
   contents: write
 
 concurrency:
   group: correct-donation-redirect-notification-semantics
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   correct-verify-and-render:
