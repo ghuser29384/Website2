@@ -1,0 +1,325 @@
+Run: 30256160223
+
+=== ERROR CONTEXT ===
+732-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0297900Z ^[[36;1mset -euo pipefail^[[0m
+733-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0298392Z ^[[36;1mfor name in QA_SUPABASE_DB_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do^[[0m
+734-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0298930Z ^[[36;1m  if [[ -z "${!name:-}" ]]; then^[[0m
+735-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0299256Z ^[[36;1m    echo "Missing required QA secret: $name" >&2^[[0m
+736-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0299560Z ^[[36;1m    exit 1^[[0m
+737-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0299766Z ^[[36;1m  fi^[[0m
+738-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0299961Z ^[[36;1mdone^[[0m
+739-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0300241Z ^[[36;1mif [[ "$QA_PROJECT_REF" != "hvmxfjjbdcgjjudmthdz" ]]; then^[[0m
+740:verify	Validate isolated QA configuration	2026-07-27T10:00:03.0300658Z ^[[36;1m  echo "Unexpected QA project ref; refusing to continue." >&2^[[0m
+741-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0301249Z ^[[36;1m  exit 1^[[0m
+742-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0301473Z ^[[36;1mfi^[[0m
+743-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0301766Z ^[[36;1mif [[ "$QA_SUPABASE_DB_URL" != *"hvmxfjjbdcgjjudmthdz"* ]]; then^[[0m
+744-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0302245Z ^[[36;1m  echo "QA_SUPABASE_DB_URL does not target the isolated MoralTrade QA project." >&2^[[0m
+745-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0302683Z ^[[36;1m  exit 1^[[0m
+746-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0302890Z ^[[36;1mfi^[[0m
+747-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0303165Z ^[[36;1mif [[ "$QA_SUPABASE_DB_URL" == *"jnpoxvalyjtdghnperyu"* ]]; then^[[0m
+748:verify	Validate isolated QA configuration	2026-07-27T10:00:03.0303657Z ^[[36;1m  echo "Production database URL detected; refusing to run against production." >&2^[[0m
+749-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0304061Z ^[[36;1m  exit 1^[[0m
+750-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0304255Z ^[[36;1mfi^[[0m
+751-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0304494Z ^[[36;1mif (( ${#QA_TEST_PASSWORD} < 14 )); then^[[0m
+752-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0304881Z ^[[36;1m  echo "QA_TEST_PASSWORD must contain at least 14 characters." >&2^[[0m
+753-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0305230Z ^[[36;1m  exit 1^[[0m
+754-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0305420Z ^[[36;1mfi^[[0m
+755-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0331542Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+756-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0332022Z env:
+757-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0332246Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+758-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0332953Z   QA_SUPABASE_DB_URL: ***
+759-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0333294Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+760-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0333826Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+761-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0335151Z   SUPABASE_SERVICE_ROLE_KEY: ***
+762-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0335475Z   QA_TEST_PASSWORD: ***
+763-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0335725Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+764-verify	Validate isolated QA configuration	2026-07-27T10:00:03.0336019Z   SITE_URL: http://127.0.0.1:3000
+--
+797-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.0446538Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+798-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.0446912Z   CRON_SECRET: qa-institutional-cron-not-production
+799-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.0447241Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+800-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.0447521Z ##[endgroup]
+801-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5892325Z ✔ individual and professional parties are valid without an organization, program, or legal entity (2.368979ms)
+802-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5923291Z ✔ a deal lead is explicitly either an individual or an organization (0.649769ms)
+803-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5926609Z ✔ server actions require an explicit acting context and do not inherit organization authority in personal capacity (0.702959ms)
+804-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5928410Z ✔ an individual can bind only themselves and resources they personally control (0.94972ms)
+805:verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5929879Z ✔ generic organization approval cannot replace exact named-person consent (0.789249ms)
+806-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5931614Z ✔ organization-only administration remains hard-gated at schema, action, loader, and route layers (2.667448ms)
+807-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5933099Z ✔ the individual interface is reduced on desktop and mobile (2.453539ms)
+808:verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5934581Z ✔ independent verification cannot be self-issued (0.34103ms)
+809-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.5935884Z ✔ organization members can switch capacities without leaking delegated authority into personal actions (1.395131ms)
+810-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6249253Z ✔ institutional schema separates people, organizations, programs, legal entities, authority, and exact parties (1.447526ms)
+811-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6293203Z ✔ baselines and approvals are exact personal or organization/program scoped (0.966253ms)
+812-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6313229Z ✔ individual deal leads and parties do not require an organization or program (1.61543ms)
+813-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6339724Z ✔ organization-only administration remains organization scoped (3.661551ms)
+814-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6342178Z ✔ proposal, party, obligation, milestone, verifier, and evidence relationships fail closed (1.741648ms)
+815-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6344109Z ✔ selected and signed terms are immutable and signatures require the current exact hash (1.795321ms)
+816:verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6346050Z ✔ named-person consent is a separate exact-term record and cannot be replaced by approval (0.793404ms)
+817-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6347902Z ✔ verifiers receive confidential access only after accepting their assignment (1.237411ms)
+818-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6350165Z ✔ pool approval, financial reservation, contributions, anchors, underwriting, votes, and activation are distinct atomic gates (2.904767ms)
+819-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6352846Z ✔ integration configuration rejects embedded secrets and webhooks use an event allowlist (1.423507ms)
+820-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6354740Z ✔ all institutional base tables use forced RLS, generated FK indexes, and restricted grants (2.195409ms)
+821-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6356899Z ✔ deal room renders exact-scope baselines, immutable terms, consent, signatures, evidence, and pool governance (1.455241ms)
+822-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6358836Z ✔ named-person and verifier decision surfaces use separate authenticated actions (0.331036ms)
+823-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6360327Z ✔ server actions use atomic RPCs for critical transitions (0.486157ms)
+824-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6362364Z ✔ independent participants get a reduced self-authority interface without organization administration (0.751843ms)
+825-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6364273Z ✔ server actions branch by acting capacity and hard-gate organization-only controls (0.318067ms)
+826-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6368474Z ✔ integration configuration and webhook destinations are validated before insertion (0.217015ms)
+827-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6370682Z ✔ confidential loaders query through user RLS while the operator Deal Desk uses the service role after separate access checks (1.525796ms)
+828-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6373850Z ✔ QA workflow is isolated, generates types, runs database checks, full code gates, browser QA, and cleanup evidence (0.249526ms)
+829-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.6375839Z ✔ five-participant QA names all required negative cases and verifies zero synthetic residue (1.070744ms)
+830-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.9782564Z ✔ stable institutional hashes ignore object insertion order (1.966268ms)
+831-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.9808112Z ✔ deal transitions fail closed (0.257059ms)
+832-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:03.9844350Z ✔ money parsing remains exact to cents (0.901494ms)
+--
+846-verify	Run source-contract integrity tests before database mutation	2026-07-27T10:00:04.0120606Z ℹ duration_ms 930.478581
+847-verify	Compile and apply institutional migration atomically to isolated QA	﻿2026-07-27T10:00:04.0450490Z ##[group]Run set -euo pipefail
+848-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451079Z ^[[36;1mset -euo pipefail^[[0m
+849-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451483Z ^[[36;1mmkdir -p institutional-qa-artifacts^[[0m
+850-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451931Z ^[[36;1mmigration=supabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+851-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0452535Z ^[[36;1msha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256^[[0m
+852-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0453233Z ^[[36;1mpresent="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select to_regclass('public.institutional_organizations') is not null")"^[[0m
+853-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0453769Z ^[[36;1mif [[ "$present" == "t" ]]; then^[[0m
+854:verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0454330Z ^[[36;1m  echo "Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration."^[[0m
+855-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0454875Z ^[[36;1melse^[[0m
+856-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0455220Z ^[[36;1m  echo "Compiling every migration statement inside a rollback-only transaction."^[[0m
+857-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0455706Z ^[[36;1m  psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL^[[0m
+858-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456065Z ^[[36;1mbegin;^[[0m
+859-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456275Z ^[[36;1m\i $migration^[[0m
+860-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456493Z ^[[36;1mrollback;^[[0m
+861-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456692Z ^[[36;1mSQL^[[0m
+862-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457001Z ^[[36;1m  echo "Applying the migration in one transaction to isolated QA only."^[[0m
+863-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457519Z ^[[36;1m  psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$migration"^[[0m
+864-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457924Z ^[[36;1mfi^[[0m
+865-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0458411Z ^[[36;1mpsql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt^[[0m
+866-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0458984Z ^[[36;1mdo $$^[[0m
+867-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459193Z ^[[36;1mdeclare required text;^[[0m
+868-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459440Z ^[[36;1mbegin^[[0m
+869-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459659Z ^[[36;1m  foreach required in array array[^[[0m
+870-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0460231Z ^[[36;1m    'institutional_organizations','institutional_individual_profiles','institutional_programs','institutional_authority_grants',^[[0m
+--
+903-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502259Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+904-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502574Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+905-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502880Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+906-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503252Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+907-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503625Z   CRON_SECRET: qa-institutional-cron-not-production
+908-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503950Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+909-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0504216Z ##[endgroup]
+910-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0587496Z 8600731fa7911ce313da50438bad86941d746f16c5ded3d665d87f95ee234287  supabase/migrations/20260726123000_institutional_trade_system.sql
+911:verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.3688295Z Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration.
+912:verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5730412Z ERROR:  Missing institutional relation: institutional_individual_profiles
+913-verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5731630Z CONTEXT:  PL/pgSQL function inline_code_block line 16 at RAISE
+914:verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5755567Z ##[error]Process completed with exit code 3.
+915-verify	Confirm no synthetic email-pattern residue	﻿2026-07-27T10:00:04.5834286Z ##[group]Run set -euo pipefail
+916-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5834638Z ^[[36;1mset -euo pipefail^[[0m
+917-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5834948Z ^[[36;1mmkdir -p institutional-qa-artifacts^[[0m
+918-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5835325Z ^[[36;1mpattern="institutional-${GITHUB_RUN_ID}-%@example.test"^[[0m
+919-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5836015Z ^[[36;1mpsql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$pattern" -P pager=off <<'SQL' | tee institutional-qa-artifacts/post-suite-residue.txt^[[0m
+920-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5836859Z ^[[36;1mselect 'auth.users' as relation,count(*) as residue from auth.users where lower(email) like lower(:'email_pattern')^[[0m
+921-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5837359Z ^[[36;1munion all^[[0m
+922-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5837793Z ^[[36;1mselect 'public.profiles',count(*) from public.profiles where lower(email) like lower(:'email_pattern');^[[0m
+923-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5838263Z ^[[36;1mSQL^[[0m
+924-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5838965Z ^[[36;1mresidue="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select (select count(*) from auth.users where lower(email) like lower('$pattern')) + (select count(*) from public.profiles where lower(email) like lower('$pattern'))")"^[[0m
+925-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5839794Z ^[[36;1mif [[ "$residue" != "0" ]]; then^[[0m
+926-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840198Z ^[[36;1m  echo "Synthetic institutional QA identity residue remains: $residue" >&2^[[0m
+927-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840586Z ^[[36;1m  exit 1^[[0m
+928-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840794Z ^[[36;1mfi^[[0m
+929-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5867020Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+930-verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5867370Z env:
+
+=== MIGRATION STEP TAIL ===
+verify	Compile and apply institutional migration atomically to isolated QA	﻿2026-07-27T10:00:04.0450490Z ##[group]Run set -euo pipefail
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451079Z ^[[36;1mset -euo pipefail^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451483Z ^[[36;1mmkdir -p institutional-qa-artifacts^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0451931Z ^[[36;1mmigration=supabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0452535Z ^[[36;1msha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0453233Z ^[[36;1mpresent="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select to_regclass('public.institutional_organizations') is not null")"^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0453769Z ^[[36;1mif [[ "$present" == "t" ]]; then^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0454330Z ^[[36;1m  echo "Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration."^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0454875Z ^[[36;1melse^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0455220Z ^[[36;1m  echo "Compiling every migration statement inside a rollback-only transaction."^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0455706Z ^[[36;1m  psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456065Z ^[[36;1mbegin;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456275Z ^[[36;1m\i $migration^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456493Z ^[[36;1mrollback;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0456692Z ^[[36;1mSQL^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457001Z ^[[36;1m  echo "Applying the migration in one transaction to isolated QA only."^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457519Z ^[[36;1m  psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$migration"^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0457924Z ^[[36;1mfi^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0458411Z ^[[36;1mpsql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0458984Z ^[[36;1mdo $$^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459193Z ^[[36;1mdeclare required text;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459440Z ^[[36;1mbegin^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0459659Z ^[[36;1m  foreach required in array array[^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0460231Z ^[[36;1m    'institutional_organizations','institutional_individual_profiles','institutional_programs','institutional_authority_grants',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0461625Z ^[[36;1m    'institutional_deals','institutional_deal_parties','institutional_proposal_versions',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0462306Z ^[[36;1m    'institutional_counterfactual_baselines','institutional_obligations','institutional_obligation_dependencies',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0462995Z ^[[36;1m    'institutional_approvals','institutional_individual_consents','institutional_signatures',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0463616Z ^[[36;1m    'institutional_budget_accounts','institutional_budget_reservations','institutional_milestones',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0464324Z ^[[36;1m    'institutional_verifier_assignments','institutional_evidence_requirements','institutional_evidence_submissions',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0465012Z ^[[36;1m    'institutional_pool_terms','institutional_pool_contributions','institutional_pool_anchors',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0465671Z ^[[36;1m    'institutional_pool_underwritings','institutional_pool_votes','institutional_integrations',^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0466193Z ^[[36;1m    'institutional_webhooks','institutional_audit_events'^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0466513Z ^[[36;1m  ] loop^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0466774Z ^[[36;1m    if to_regclass('public.' || required) is null then^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0467189Z ^[[36;1m      raise exception 'Missing institutional relation: %', required;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0467538Z ^[[36;1m    end if;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0467755Z ^[[36;1m  end loop;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0467952Z ^[[36;1mend;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0468141Z ^[[36;1m$$;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0468452Z ^[[36;1mselect n.nspname as schema_name,c.relname as relation_name,c.relkind^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0468897Z ^[[36;1mfrom pg_class c join pg_namespace n on n.oid=c.relnamespace^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0469338Z ^[[36;1mwhere n.nspname='public' and c.relname like 'institutional_%'^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0469690Z ^[[36;1morder by c.relname;^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0470104Z ^[[36;1mSQL^[[0m
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0496768Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0497128Z env:
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0497350Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0498087Z   QA_SUPABASE_DB_URL: ***
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0498436Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0498953Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0500270Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0500579Z   QA_TEST_PASSWORD: ***
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0500848Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0501419Z   SITE_URL: http://127.0.0.1:3000
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0501696Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0501969Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502259Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502574Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0502880Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503252Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503625Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0503950Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0504216Z ##[endgroup]
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.0587496Z 8600731fa7911ce313da50438bad86941d746f16c5ded3d665d87f95ee234287  supabase/migrations/20260726123000_institutional_trade_system.sql
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.3688295Z Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration.
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5730412Z ERROR:  Missing institutional relation: institutional_individual_profiles
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5731630Z CONTEXT:  PL/pgSQL function inline_code_block line 16 at RAISE
+verify	Compile and apply institutional migration atomically to isolated QA	2026-07-27T10:00:04.5755567Z ##[error]Process completed with exit code 3.
+verify	Confirm no synthetic email-pattern residue	﻿2026-07-27T10:00:04.5834286Z ##[group]Run set -euo pipefail
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5834638Z ^[[36;1mset -euo pipefail^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5834948Z ^[[36;1mmkdir -p institutional-qa-artifacts^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5835325Z ^[[36;1mpattern="institutional-${GITHUB_RUN_ID}-%@example.test"^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5836015Z ^[[36;1mpsql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v email_pattern="$pattern" -P pager=off <<'SQL' | tee institutional-qa-artifacts/post-suite-residue.txt^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5836859Z ^[[36;1mselect 'auth.users' as relation,count(*) as residue from auth.users where lower(email) like lower(:'email_pattern')^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5837359Z ^[[36;1munion all^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5837793Z ^[[36;1mselect 'public.profiles',count(*) from public.profiles where lower(email) like lower(:'email_pattern');^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5838263Z ^[[36;1mSQL^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5838965Z ^[[36;1mresidue="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select (select count(*) from auth.users where lower(email) like lower('$pattern')) + (select count(*) from public.profiles where lower(email) like lower('$pattern'))")"^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5839794Z ^[[36;1mif [[ "$residue" != "0" ]]; then^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840198Z ^[[36;1m  echo "Synthetic institutional QA identity residue remains: $residue" >&2^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840586Z ^[[36;1m  exit 1^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5840794Z ^[[36;1mfi^[[0m
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5867020Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5867370Z env:
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5867587Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5868329Z   QA_SUPABASE_DB_URL: ***
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5868686Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5869210Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5870549Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5870870Z   QA_TEST_PASSWORD: ***
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5871233Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5871529Z   SITE_URL: http://127.0.0.1:3000
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5871821Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5872092Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5872526Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5872827Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5873126Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5873491Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5873856Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5874187Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.5874467Z ##[endgroup]
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7813624Z     relation     | residue 
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7814291Z -----------------+---------
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7814824Z  auth.users      |       0
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7815371Z  public.profiles |       0
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7815870Z (2 rows)
+verify	Confirm no synthetic email-pattern residue	2026-07-27T10:00:04.7816229Z 
+verify	Stop local server	﻿2026-07-27T10:00:04.9587739Z ##[group]Run if [[ -f institutional-server.pid ]]; then
+verify	Stop local server	2026-07-27T10:00:04.9588249Z ^[[36;1mif [[ -f institutional-server.pid ]]; then^[[0m
+verify	Stop local server	2026-07-27T10:00:04.9588743Z ^[[36;1m  kill "$(cat institutional-server.pid)" 2>/dev/null || true^[[0m
+verify	Stop local server	2026-07-27T10:00:04.9589146Z ^[[36;1mfi^[[0m
+verify	Stop local server	2026-07-27T10:00:04.9619003Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Stop local server	2026-07-27T10:00:04.9619420Z env:
+verify	Stop local server	2026-07-27T10:00:04.9619685Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Stop local server	2026-07-27T10:00:04.9620548Z   QA_SUPABASE_DB_URL: ***
+verify	Stop local server	2026-07-27T10:00:04.9621177Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Stop local server	2026-07-27T10:00:04.9621814Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Stop local server	2026-07-27T10:00:04.9623393Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Stop local server	2026-07-27T10:00:04.9623762Z   QA_TEST_PASSWORD: ***
+verify	Stop local server	2026-07-27T10:00:04.9624071Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Stop local server	2026-07-27T10:00:04.9624433Z   SITE_URL: http://127.0.0.1:3000
+verify	Stop local server	2026-07-27T10:00:04.9624738Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Stop local server	2026-07-27T10:00:04.9625139Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Stop local server	2026-07-27T10:00:04.9625490Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Stop local server	2026-07-27T10:00:04.9625837Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Stop local server	2026-07-27T10:00:04.9626209Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Stop local server	2026-07-27T10:00:04.9626659Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Stop local server	2026-07-27T10:00:04.9627109Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Stop local server	2026-07-27T10:00:04.9627499Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Stop local server	2026-07-27T10:00:04.9627801Z ##[endgroup]
+verify	Upload institutional QA evidence	﻿2026-07-27T10:00:04.9714215Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9715377Z ##[group]Run actions/upload-artifact@v4
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9715650Z with:
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9716022Z   name: institutional-trade-qa-87f5e368fd997adc327a274da5d4761b53bfcb10-30256160223
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9716632Z   path: institutional-qa-artifacts
+verify	Upload institutional QA evidence	institutional-e2e-evidence
+verify	Upload institutional QA evidence	institutional-server.log
+verify	Upload institutional QA evidence	
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9717088Z   if-no-files-found: warn
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9717321Z   retention-days: 14
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9717550Z   compression-level: 6
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9717775Z   overwrite: false
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9718008Z   include-hidden-files: false
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9718237Z env:
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9718442Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9719172Z   QA_SUPABASE_DB_URL: ***
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9719505Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9720020Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9721806Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9722189Z   QA_TEST_PASSWORD: ***
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9722493Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9722829Z   SITE_URL: http://127.0.0.1:3000
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9723213Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9723490Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9723936Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9724237Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9724548Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9724922Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9725297Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9725637Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Upload institutional QA evidence	2026-07-27T10:00:04.9725907Z ##[endgroup]
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1442518Z (node:3651) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1443327Z (Use `node --trace-deprecation ...` to show where the warning was created)
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1517348Z Multiple search paths detected. Calculating the least common ancestor of all paths
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1520070Z The least common ancestor is /home/runner/work/Website2/Website2. This will be the root directory of the artifact
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1521412Z With the provided path, there will be 3 files uploaded
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1529162Z Artifact name is valid!
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.1530807Z Root directory input is valid!
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.4415249Z Beginning upload of artifact content to blob storage
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.4621387Z (node:3651) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.6952689Z Uploaded bytes 824
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.7575373Z Finished uploading artifact content to blob storage!
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.7576239Z SHA256 digest of uploaded artifact zip is 24c7a9ac9d24248cbebc5281b7cba5969736227a66ef5c1722af9eb12cffe768
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.7579197Z Finalizing artifact upload
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.9652114Z Artifact institutional-trade-qa-87f5e368fd997adc327a274da5d4761b53bfcb10-30256160223.zip successfully finalized. Artifact ID 8648999381
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.9653654Z Artifact institutional-trade-qa-87f5e368fd997adc327a274da5d4761b53bfcb10-30256160223 has been successfully uploaded! Final size is 824 bytes. Artifact ID is 8648999381
+verify	Upload institutional QA evidence	2026-07-27T10:00:05.9659024Z Artifact download URL: https://github.com/ghuser29384/Website2/actions/runs/30256160223/artifacts/8648999381
+verify	Post Set up Supabase CLI	﻿2026-07-27T10:00:05.9841466Z Post job cleanup.
+verify	Post Check out exact branch commit	﻿2026-07-27T10:00:05.9907767Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+verify	Post Check out exact branch commit	2026-07-27T10:00:05.9908942Z Post job cleanup.
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0784062Z [command]/usr/bin/git version
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0833329Z git version 2.54.0
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0882052Z Temporarily overriding HOME='/home/runner/work/_temp/2c2b0438-e9f6-4b06-aa4c-963420aed095' before making global git config changes
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0883157Z Adding repository directory to the temporary git global config as a safe directory
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0892609Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Website2/Website2
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0932946Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.0967425Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1186613Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1214373Z http.https://github.com/.extraheader
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1225640Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1255921Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1470687Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+verify	Post Check out exact branch commit	2026-07-27T10:00:06.1503615Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+verify	Complete job	﻿2026-07-27T10:00:06.1873267Z Cleaning up orphan processes
+verify	Complete job	2026-07-27T10:00:06.2074236Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
