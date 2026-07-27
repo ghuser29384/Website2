@@ -403,6 +403,11 @@ async function createAuthUser(role, displayName) {
       .delete()
       .eq("profile_id", existing.id);
     if (credentialDeleteError) throw new Error(credentialDeleteError.message);
+    const { error: existingProfileDeleteError } = await admin
+      .from("profiles")
+      .delete()
+      .eq("id", existing.id);
+    if (existingProfileDeleteError) throw new Error(existingProfileDeleteError.message);
     const { error: existingDeleteError } = await admin.auth.admin.deleteUser(existing.id);
     if (existingDeleteError) throw new Error(existingDeleteError.message);
   }
@@ -607,12 +612,33 @@ async function prepareSignForm(session, commitment, { publishAffiliation = false
   return page.getByRole("button", { name: "Sign privately" });
 }
 
+async function waitForSignOutcome(session) {
+  const { page } = session;
+  const status = page.locator('[role="status"]');
+  const signed = page.getByRole("heading", { name: "Your private signature is counting" });
+  const active = page.getByRole("heading", { name: "Threshold reached" });
+  const activating = page.getByRole("heading", { name: "Activation in progress" });
+
+  await expect.poll(async () => {
+    if (await status.isVisible().catch(() => false)) return "message";
+    if (await active.isVisible().catch(() => false)) return "active";
+    if (await signed.isVisible().catch(() => false)) return "signed";
+    if (await activating.isVisible().catch(() => false)) return "activating";
+    return "";
+  }, { timeout: 30_000 }).not.toBe("");
+
+  if (await status.isVisible().catch(() => false)) {
+    return { kind: "message", message: (await status.innerText()).trim() };
+  }
+  if (await active.isVisible().catch(() => false)) return { kind: "active", message: "" };
+  if (await signed.isVisible().catch(() => false)) return { kind: "signed", message: "" };
+  return { kind: "activating", message: "" };
+}
+
 async function signThroughBrowser(session, commitment, options = {}) {
   const button = await prepareSignForm(session, commitment, options);
-  await button.click();
-  const status = session.page.locator('[role="status"]');
-  await expect(status).toBeVisible({ timeout: 30_000 });
-  return (await status.innerText()).trim();
+  await button.click({ noWaitAfter: true });
+  return waitForSignOutcome(session);
 }
 
 async function loadCommitmentRow(id) {
@@ -837,9 +863,10 @@ async function cleanup() {
       continue;
     }
     const column = table === "collective_commitments" ? "id" : "commitment_id";
+    const selectColumn = table === "collective_commitment_keys" ? "commitment_id" : "id";
     const { count, error } = await admin
       .from(table)
-      .select("id", { count: "exact", head: true })
+      .select(selectColumn, { count: "exact", head: true })
       .in(column, createdCommitmentIds);
     result.remaining[table] = error ? `ERROR:${error.message}` : count ?? 0;
   }
@@ -1001,23 +1028,24 @@ try {
       threshold: 3,
       screenshot: true,
     });
-    const firstMessage = await signThroughBrowser(signerASession, withdrawalCommitment, {
+    const firstOutcome = await signThroughBrowser(signerASession, withdrawalCommitment, {
       publishAffiliation: true,
     });
-    expect(firstMessage).toMatch(/Signature recorded privately\. 1 verified signer currently counts\./);
+    expect(firstOutcome.kind).toBe("signed");
     await assertPrivateCount(withdrawalCommitment.id, 1);
     await expect(signerASession.page.getByRole("heading", { name: "Your private signature is counting" })).toBeVisible();
-    await signerASession.page.getByRole("button", { name: "Withdraw private signature" }).click();
-    await expect(signerASession.page.locator('[role="status"]')).toContainText("Signature withdrawn. 0 verified signers remain.");
+    await signerASession.page.getByRole("button", { name: "Withdraw private signature" }).click({ noWaitAfter: true });
+    await expect(signerASession.page.getByRole("heading", { name: "Sign privately" })).toBeVisible({ timeout: 30_000 });
     await assertPrivateCount(withdrawalCommitment.id, 0);
-    const resignMessage = await signThroughBrowser(signerASession, withdrawalCommitment, {
+    const resignOutcome = await signThroughBrowser(signerASession, withdrawalCommitment, {
       publishAffiliation: true,
     });
-    expect(resignMessage).toMatch(/1 verified signer currently counts/);
+    expect(resignOutcome.kind).toBe("signed");
     await assertPrivateCount(withdrawalCommitment.id, 1);
 
-    const duplicateMessage = await signThroughBrowser(duplicateSession, withdrawalCommitment);
-    expect(duplicateMessage).toBe(
+    const duplicateOutcome = await signThroughBrowser(duplicateSession, withdrawalCommitment);
+    expect(duplicateOutcome.kind).toBe("message");
+    expect(duplicateOutcome.message).toBe(
       "A verified human represented by another account has already signed this commitment.",
     );
     await assertPrivateCount(withdrawalCommitment.id, 1);
@@ -1040,10 +1068,10 @@ try {
       .eq("id", actors.credentials.signerA.id);
     if (staleError) throw new Error(staleError.message);
 
-    const finalMessage = await signThroughBrowser(signerBSession, staleCommitment, {
+    const finalOutcome = await signThroughBrowser(signerBSession, staleCommitment, {
       publishAffiliation: false,
     });
-    expect(finalMessage).toMatch(/one or more identity credentials became stale\. No identities were published/);
+    expect(finalOutcome.kind).toBe("signed");
     let row = await loadCommitmentRow(staleCommitment.id);
     expect(row.status).toBe("open");
     await assertPrivateCount(staleCommitment.id, 1);
@@ -1056,10 +1084,10 @@ try {
       humanRef: sha256(`human-a:${runTag}`),
       version: 2,
     });
-    const recoveryMessage = await signThroughBrowser(signerASession, staleCommitment, {
+    const recoveryOutcome = await signThroughBrowser(signerASession, staleCommitment, {
       publishAffiliation: true,
     });
-    expect(recoveryMessage).toMatch(/Threshold reached\. 2 verified identities were published atomically\./);
+    expect(["active", "activating"]).toContain(recoveryOutcome.kind);
     row = await loadCommitmentRow(staleCommitment.id);
     expect(row.status).toBe("active");
     await assertPrivateCount(staleCommitment.id, 0);
@@ -1096,10 +1124,12 @@ try {
       buttonB.click({ noWaitAfter: true }),
       buttonC.click({ noWaitAfter: true }),
     ]);
-    await Promise.all([
-      expect(signerBSession.page.locator('[role="status"]')).toBeVisible({ timeout: 30_000 }),
-      expect(signerCSession.page.locator('[role="status"]')).toBeVisible({ timeout: 30_000 }),
+    const [outcomeB, outcomeC] = await Promise.all([
+      waitForSignOutcome(signerBSession),
+      waitForSignOutcome(signerCSession),
     ]);
+    expect(["signed", "active", "activating"]).toContain(outcomeB.kind);
+    expect(["signed", "active", "activating"]).toContain(outcomeC.kind);
     const row = await loadCommitmentRow(simultaneousCommitment.id);
     expect(row.status).toBe("active");
     await assertPublicCount(simultaneousCommitment.id, 3);

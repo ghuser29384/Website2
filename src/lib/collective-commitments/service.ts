@@ -475,6 +475,7 @@ export async function signCollectiveCommitment(input: {
     identityCommitment,
   };
   const encrypted = encryptSignaturePayload(input.commitmentId, dataKey, payload);
+  const service = createCollectiveCommitmentServiceClient();
 
   const addResult = await service.rpc("add_collective_commitment_signature_v1", {
     p_commitment_id: input.commitmentId,
