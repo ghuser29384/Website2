@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-07-27T10:02:08Z",
+  "current_head": "87f5e368fd997adc327a274da5d4761b53bfcb10",
+  "target_branch": "feat/institutional-trade-system",
+  "current_head_run_count": 1,
+  "runs_before": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:24Z",
+      "databaseId": 30256160223,
+      "event": "push",
+      "headSha": "87f5e368fd997adc327a274da5d4761b53bfcb10",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256160223"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:07Z",
+      "databaseId": 30256140756,
+      "event": "push",
+      "headSha": "492977650ac8ac0d21d4395e65697d8e284717ca",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256140756"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:56:04Z",
+      "databaseId": 30256001850,
+      "event": "push",
+      "headSha": "5df88758dd747be2a48c4280aa8b20ad0b720643",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256001850"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T08:02:28Z",
+      "databaseId": 30248340750,
+      "event": "push",
+      "headSha": "f2a2e0a49392269df09c97ba4b7b410ff8580ee4",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30248340750"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T07:17:28Z",
+      "databaseId": 30245614588,
+      "event": "push",
+      "headSha": "0fa43a320f767ab407e08f1410796098969e03a2",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30245614588"
+    }
+  ],
+  "runs_after": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:24Z",
+      "databaseId": 30256160223,
+      "event": "push",
+      "headSha": "87f5e368fd997adc327a274da5d4761b53bfcb10",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256160223"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:07Z",
+      "databaseId": 30256140756,
+      "event": "push",
+      "headSha": "492977650ac8ac0d21d4395e65697d8e284717ca",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256140756"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:56:04Z",
+      "databaseId": 30256001850,
+      "event": "push",
+      "headSha": "5df88758dd747be2a48c4280aa8b20ad0b720643",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256001850"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T08:02:28Z",
+      "databaseId": 30248340750,
+      "event": "push",
+      "headSha": "f2a2e0a49392269df09c97ba4b7b410ff8580ee4",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30248340750"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T07:17:28Z",
+      "databaseId": 30245614588,
+      "event": "push",
+      "headSha": "0fa43a320f767ab407e08f1410796098969e03a2",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30245614588"
+    }
+  ]
+}
