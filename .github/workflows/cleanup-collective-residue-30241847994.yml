@@ -1,0 +1,179 @@
+name: Clean exact collective QA residue 30241847994
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-identity-threshold-commitments-20260726
+    paths:
+      - ".github/workflows/cleanup-collective-residue-30241847994.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-collective-residue-30241847994
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-commitments-adversarial-browser-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_BRANCH: qa/collective-commitments-adversarial-browser-20260727
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      USER_ID: 8e54418e-6700-4373-839a-bce0d0530174
+      USER_EMAIL: qa-collective-adversarial-30241847994-creator@example.com
+      COMMITMENT_ID: 66ab6871-195f-4af9-ae47-c16f1e07a009
+      EXPECTED_TITLE_PREFIX: "[QA collective adversarial 30241847994]"
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-residue-cleanup-artifacts
+
+    steps:
+      - name: Validate exact execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_BRANCH"
+          test "$QA_SUPABASE_URL" = "https://${EXPECTED_QA_REF}.supabase.co"
+          test -n "$QA_SUPABASE_DB_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+
+      - uses: actions/checkout@v4
+
+      - name: Validate exact QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside exact MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Inspect and delete exact public-schema residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --set user_id="$USER_ID" \
+            --set user_email="$USER_EMAIL" \
+            --set commitment_id="$COMMITMENT_ID" \
+            --set title_prefix="$EXPECTED_TITLE_PREFIX" <<'SQL' \
+            2>&1 | tee "$ARTIFACT_DIR/public-cleanup.log"
+          begin;
+
+          do $guard$
+          declare
+            unexpected integer;
+          begin
+            select count(*) into unexpected
+            from public.collective_commitments
+            where id = :'commitment_id'::uuid
+              and (
+                creator_id <> :'user_id'::uuid
+                or title not like :'title_prefix' || '%'
+              );
+            if unexpected <> 0 then
+              raise exception 'Refusing unexpected commitment identity or title';
+            end if;
+
+            select count(*) into unexpected
+            from public.profiles
+            where id = :'user_id'::uuid
+              and email is distinct from :'user_email';
+            if unexpected <> 0 then
+              raise exception 'Refusing unexpected profile email';
+            end if;
+          end
+          $guard$;
+
+          delete from public.collective_commitments
+          where id = :'commitment_id'::uuid
+            and creator_id = :'user_id'::uuid
+            and title like :'title_prefix' || '%';
+
+          delete from public.collective_identity_credentials
+          where profile_id = :'user_id'::uuid
+            and provider = 'qa-synthetic-operator';
+
+          delete from public.profiles
+          where id = :'user_id'::uuid
+            and email = :'user_email';
+
+          commit;
+          SQL
+
+      - name: Delete exact synthetic Auth user
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error \
+            --output "$ARTIFACT_DIR/auth-delete-response.json" \
+            --write-out '%{http_code}' \
+            --request DELETE \
+            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            "${QA_SUPABASE_URL}/auth/v1/admin/users/${USER_ID}")"
+          if [[ "$status" != "200" && "$status" != "204" && "$status" != "404" ]]; then
+            cat "$ARTIFACT_DIR/auth-delete-response.json" >&2
+            echo "Unexpected Auth Admin status: $status" >&2
+            exit 1
+          fi
+          printf '%s\n' "$status" > "$ARTIFACT_DIR/auth-delete-status.txt"
+
+      - name: Verify exact zero residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --set user_id="$USER_ID" \
+            --set user_email="$USER_EMAIL" \
+            --set commitment_id="$COMMITMENT_ID" <<'SQL'
+          select case
+            when exists (select 1 from public.collective_commitments where id = :'commitment_id'::uuid) then 'FAIL:commitment'
+            when exists (select 1 from public.collective_commitment_keys where commitment_id = :'commitment_id'::uuid) then 'FAIL:key'
+            when exists (select 1 from public.collective_commitment_private_signatures where commitment_id = :'commitment_id'::uuid) then 'FAIL:private_signature'
+            when exists (select 1 from public.collective_commitment_public_signers where commitment_id = :'commitment_id'::uuid) then 'FAIL:public_signer'
+            when exists (select 1 from public.collective_commitment_receipts where commitment_id = :'commitment_id'::uuid) then 'FAIL:receipt'
+            when exists (select 1 from public.collective_commitment_events where commitment_id = :'commitment_id'::uuid) then 'FAIL:event'
+            when exists (select 1 from public.collective_identity_credentials where profile_id = :'user_id'::uuid) then 'FAIL:credential'
+            when exists (select 1 from public.profiles where id = :'user_id'::uuid or email = :'user_email') then 'FAIL:profile'
+            when exists (select 1 from auth.users where id = :'user_id'::uuid or email = :'user_email') then 'FAIL:auth_user'
+            else 'PASS'
+          end;
+          SQL
+          )"
+          test "$(tr -d '[:space:]' <<< "$result")" = "PASS"
+          printf '%s\n' \
+            "qa_project=${EXPECTED_QA_REF}" \
+            "source_run=30241847994" \
+            "commitment_id=${COMMITMENT_ID}" \
+            "user_id=${USER_ID}" \
+            "zero_residue=PASS" \
+            "production_changed=NO" > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-residue-cleanup-30241847994-${{ github.run_id }}
+          path: collective-residue-cleanup-artifacts
+          if-no-files-found: warn
+          retention-days: 14
