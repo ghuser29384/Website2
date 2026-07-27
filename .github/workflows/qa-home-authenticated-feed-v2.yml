@@ -1,0 +1,443 @@
+name: Verify authenticated Home Feed candidate
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qa-home-authenticated-feed-20260727-v2
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    if: ${{ !contains(github.event.head_commit.message, '[verification-failure]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BRANCH: qa/home-authenticated-feed-20260727
+      BASE_SHA: eebf509a970cb69f0586dd990987b486f7db1584
+      BUNDLE_SHA256: ed4c7c637288e9e7e0123503648ef9a7dbc02fdf3d9c506cc986ed8d1d0f6d08
+      BUNDLE_DIR: /tmp/home-feed-bundle/moraltrade-home-authenticated-feed-eebf509a
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Reconstruct the reviewed bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/home-feed-bundle
+          cat .qa/home-authenticated-feed-bundle/part-* > /tmp/home-feed-bundle.b64
+          base64 --decode /tmp/home-feed-bundle.b64 > /tmp/home-feed-bundle.zip
+          echo "${BUNDLE_SHA256}  /tmp/home-feed-bundle.zip" | sha256sum -c -
+          unzip -q /tmp/home-feed-bundle.zip -d /tmp/home-feed-bundle
+          chmod +x "${BUNDLE_DIR}/apply.sh" "${BUNDLE_DIR}/verify.sh"
+          unzip -t /tmp/home-feed-bundle.zip | tee /tmp/bundle-integrity.log
+
+      - name: Create the TAP baseline comparator
+        shell: bash
+        run: |
+          cat > /tmp/compare-tap.py <<'PY'
+          from __future__ import annotations
+          from collections import Counter
+          from pathlib import Path
+          import re
+          import sys
+
+          baseline_log, baseline_status_path, candidate_log, candidate_status_path, report_path = map(Path, sys.argv[1:])
+
+          def status(path: Path) -> int:
+              return int(path.read_text(encoding="utf-8").strip())
+
+          def parse(path: Path):
+              text = path.read_text(encoding="utf-8", errors="replace")
+              failures = Counter()
+              for line in text.splitlines():
+                  match = re.match(r"^\s*not ok\s+\d+\s+-\s+(.+?)\s*$", line)
+                  if match:
+                      failures[match.group(1)] += 1
+              fail_counts = [int(value) for value in re.findall(r"^# fail\s+(\d+)\s*$", text, re.MULTILINE)]
+              test_counts = [int(value) for value in re.findall(r"^# tests\s+(\d+)\s*$", text, re.MULTILINE)]
+              return failures, fail_counts[-1] if fail_counts else None, test_counts[-1] if test_counts else None
+
+          baseline_status = status(baseline_status_path)
+          candidate_status = status(candidate_status_path)
+          baseline_failures, baseline_fail_count, baseline_test_count = parse(baseline_log)
+          candidate_failures, candidate_fail_count, candidate_test_count = parse(candidate_log)
+          unexpected = candidate_failures - baseline_failures
+          resolved = baseline_failures - candidate_failures
+
+          lines = [
+              f"baseline_status={baseline_status}",
+              f"candidate_status={candidate_status}",
+              f"baseline_test_count={baseline_test_count}",
+              f"candidate_test_count={candidate_test_count}",
+              f"baseline_fail_count={baseline_fail_count}",
+              f"candidate_fail_count={candidate_fail_count}",
+              f"unexpected_failure_count={sum(unexpected.values())}",
+              f"resolved_baseline_failure_count={sum(resolved.values())}",
+          ]
+          if unexpected:
+              lines.append("unexpected_failures:")
+              lines.extend(f"  {count}x {name}" for name, count in sorted(unexpected.items()))
+          if resolved:
+              lines.append("resolved_baseline_failures:")
+              lines.extend(f"  {count}x {name}" for name, count in sorted(resolved.items()))
+          report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(report_path.read_text(encoding="utf-8"))
+
+          if unexpected:
+              raise SystemExit("candidate introduced failing subtests absent from its baseline")
+          if candidate_status != 0 and (candidate_fail_count is None or candidate_fail_count == 0):
+              raise SystemExit("candidate failed outside the established npm-test baseline")
+          if baseline_status == 0 and candidate_status != 0:
+              raise SystemExit("candidate failed although its baseline passed")
+          if candidate_fail_count is not None and candidate_fail_count != sum(candidate_failures.values()):
+              raise SystemExit("candidate TAP summary did not match parsed failing subtests")
+          PY
+
+      - name: Restore the exact reviewed base and measure its test baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git reset --hard "${BASE_SHA}"
+          git clean -fdx
+          test "$(git rev-parse HEAD)" = "${BASE_SHA}"
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm-ci-baseline-exact.log
+          set +e
+          npm test 2>&1 | tee /tmp/test-baseline-exact.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "${status}" > /tmp/test-baseline-exact.status
+
+      - name: Apply the bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${BUNDLE_DIR}/apply.sh" "${GITHUB_WORKSPACE}" 2>&1 | tee /tmp/apply.log
+
+      - name: Replace obsolete fixture-only Home assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = [
+              (
+                  Path("src/lib/action-first-positioning.test.ts"),
+                  '''test("the returning homepage keeps the action-first screenshot contract", () => {
+            assert.doesNotMatch(home, /A trade worth considering\./);
+            assert.match(home, /href="\/offers\?view=templates"/);
+            assert.match(home, /Offer a trade/);
+            assert.match(home, /Offer this trade/);
+            assert.match(home, /Verifiable financial contribution/);
+            assert.match(home, /Proof method/);
+          });''',
+                  '''test("the returning homepage keeps action-first controls tied to the authenticated Feed", () => {
+            assert.doesNotMatch(home, /A trade worth considering\./);
+            assert.match(home, /href="\/offers\?view=templates"/);
+            assert.match(home, /Offer a trade/);
+            assert.match(home, /href=\{recommendation\.href\}/);
+            assert.match(home, /recommendation\.ctaLabel/);
+            assert.match(home, /Open full Feed/);
+            assert.match(home, /Offer another trade/);
+            assert.match(home, /No generic or demo records are substituted/);
+          });''',
+              ),
+              (
+                  Path("src/lib/public-route-smoke.test.ts"),
+                  '''test("returning homepage keeps the screenshot match facts explicit and bounded", () => {
+            const pageSource = readRepoFile("src/app/page.tsx");
+            const homeSource = readRepoFile("src/components/home/home-page.tsx");
+
+            assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
+            assert.match(homeSource, /11 completed/);
+            assert.match(homeSource, /96% on-time verification/);
+            assert.match(homeSource, /Jul 23, 2026/);
+            assert.match(homeSource, /7 days left/);
+            assert.match(homeSource, /setRemainingMatches/);
+            assert.match(homeSource, /Math\.max\(0, count - 1\)/);
+            assert.equal(homeSource.includes("total value traded"), false);
+            assert.equal(homeSource.includes("registered users"), false);
+          });''',
+                  '''test("returning homepage derives match facts from the authenticated Feed snapshot", () => {
+            const pageSource = readRepoFile("src/app/page.tsx");
+            const homeSource = readRepoFile("src/components/home/home-page.tsx");
+            const snapshotSource = readRepoFile("src/lib/home-feed-snapshot.ts");
+
+            assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
+            assert.match(pageSource, /getLiveNowA1Response/);
+            assert.match(pageSource, /projectHomeFeedSnapshot/);
+            assert.match(pageSource, /exposureLimit: 1/);
+            assert.match(homeSource, /data-feed-item-id/);
+            assert.match(homeSource, /data-feed-item-key/);
+            assert.match(homeSource, /data-exposure-request-id/);
+            assert.match(snapshotSource, /feedItemKey: `\$\{type\}:\$\{id\}`/);
+            assert.match(
+              snapshotSource,
+              /exposureRequestId: identifier\(item\.exposureRequestId\) \?\? fallbackRequestId/,
+            );
+            assert.doesNotMatch(
+              homeSource,
+              /11 completed|96% on-time verification|Jul 23, 2026|7 days left|setRemainingMatches/,
+            );
+            assert.match(homeSource, /No generic or demo records are substituted/);
+            assert.equal(homeSource.includes("total value traded"), false);
+            assert.equal(homeSource.includes("registered users"), false);
+          });''',
+              ),
+          ]
+
+          for path, old, new in replacements:
+              text = path.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"expected legacy assertion block missing from {path}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Require the exact intended changed-file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/expected-paths.txt <<'EOF'
+          package.json
+          public/moral-trade-live-now.js
+          src/app/api/live-now-a1/route.ts
+          src/app/page.tsx
+          src/components/home/home-page.tsx
+          src/components/home/returning-home.module.css
+          src/home-feed-contract.test.ts
+          src/lib/action-first-positioning.test.ts
+          src/lib/home-feed-snapshot.test.ts
+          src/lib/home-feed-snapshot.ts
+          src/lib/live-now-a1-response.ts
+          src/lib/pareto-feed-runtime.ts
+          src/lib/public-route-smoke.test.ts
+          src/pareto-recommendation-wiring.test.ts
+          tests/returning-homepage.spec.ts
+          EOF
+          {
+            git diff --name-only
+            git ls-files --others --exclude-standard
+          } | LC_ALL=C sort -u > /tmp/actual-paths.txt
+          LC_ALL=C sort -o /tmp/expected-paths.txt /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt | tee /tmp/changed-paths.diff
+          git diff --check
+
+      - name: Install patched dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm-ci-exact.log
+          npx playwright install --with-deps chromium 2>&1 | tee /tmp/playwright-install.log
+
+      - name: Run patch-specific tests and the supplied verify.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:pareto 2>&1 | tee /tmp/verify-pareto-exact.log
+          set +e
+          "${BUNDLE_DIR}/verify.sh" "${GITHUB_WORKSPACE}" 2>&1 | tee /tmp/verify-exact.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "${status}" > /tmp/verify-exact.status
+          python /tmp/compare-tap.py \
+            /tmp/test-baseline-exact.log \
+            /tmp/test-baseline-exact.status \
+            /tmp/verify-exact.log \
+            /tmp/verify-exact.status \
+            /tmp/exact-baseline-comparison.txt
+
+      - name: Complete the exact-base gates after the established full-suite baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee /tmp/lint-exact.log
+          npm run build 2>&1 | tee /tmp/build-exact.log
+          npx playwright test tests/returning-homepage.spec.ts 2>&1 | tee /tmp/playwright-exact.log
+
+      - name: Commit the exact-base implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            package.json \
+            public/moral-trade-live-now.js \
+            src/app/api/live-now-a1/route.ts \
+            src/app/page.tsx \
+            src/components/home/home-page.tsx \
+            src/components/home/returning-home.module.css \
+            src/home-feed-contract.test.ts \
+            src/lib/action-first-positioning.test.ts \
+            src/lib/home-feed-snapshot.test.ts \
+            src/lib/home-feed-snapshot.ts \
+            src/lib/live-now-a1-response.ts \
+            src/lib/pareto-feed-runtime.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/pareto-recommendation-wiring.test.ts \
+            tests/returning-homepage.spec.ts
+          git diff --cached --check
+          git commit -m "Use the authenticated Feed snapshot on Home"
+          git show --stat --oneline HEAD | tee /tmp/implementation-commit.txt
+
+      - name: Measure the current-main full-suite baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          rm -rf /tmp/home-feed-main-baseline
+          git worktree add --detach /tmp/home-feed-main-baseline origin/main
+          pushd /tmp/home-feed-main-baseline
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm-ci-baseline-main.log
+          set +e
+          npm test 2>&1 | tee /tmp/test-baseline-main.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "${status}" > /tmp/test-baseline-main.status
+          popd
+          git worktree remove --force /tmp/home-feed-main-baseline
+
+      - name: Rebase the verified commit onto current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rebase origin/main 2>&1 | tee /tmp/rebase.log
+          git merge-base --is-ancestor origin/main HEAD
+          test "$(git rev-list --count origin/main..HEAD)" = "1"
+          npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm-ci-rebased.log
+
+      - name: Re-run the supplied verification on the rebased candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run verify:pareto 2>&1 | tee /tmp/verify-pareto-rebased.log
+          set +e
+          "${BUNDLE_DIR}/verify.sh" "${GITHUB_WORKSPACE}" 2>&1 | tee /tmp/verify-rebased.log
+          status=${PIPESTATUS[0]}
+          set -e
+          echo "${status}" > /tmp/verify-rebased.status
+          python /tmp/compare-tap.py \
+            /tmp/test-baseline-main.log \
+            /tmp/test-baseline-main.status \
+            /tmp/verify-rebased.log \
+            /tmp/verify-rebased.status \
+            /tmp/rebased-baseline-comparison.txt
+
+      - name: Complete the rebased gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee /tmp/lint-rebased.log
+          npm run build 2>&1 | tee /tmp/build-rebased.log
+          npx playwright test tests/returning-homepage.spec.ts 2>&1 | tee /tmp/playwright-rebased.log
+          git diff --exit-code
+          git diff --cached --exit-code
+          git rev-parse HEAD | tee /tmp/final-head-sha.txt
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-authenticated-feed-verification-v2
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            /tmp/bundle-integrity.log
+            /tmp/test-baseline-exact.log
+            /tmp/test-baseline-exact.status
+            /tmp/apply.log
+            /tmp/changed-paths.diff
+            /tmp/verify-pareto-exact.log
+            /tmp/verify-exact.log
+            /tmp/verify-exact.status
+            /tmp/exact-baseline-comparison.txt
+            /tmp/lint-exact.log
+            /tmp/build-exact.log
+            /tmp/playwright-exact.log
+            /tmp/implementation-commit.txt
+            /tmp/test-baseline-main.log
+            /tmp/test-baseline-main.status
+            /tmp/rebase.log
+            /tmp/verify-pareto-rebased.log
+            /tmp/verify-rebased.log
+            /tmp/verify-rebased.status
+            /tmp/rebased-baseline-comparison.txt
+            /tmp/lint-rebased.log
+            /tmp/build-rebased.log
+            /tmp/playwright-rebased.log
+            /tmp/final-head-sha.txt
+
+      - name: Publish the verified candidate branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease="refs/heads/${BRANCH}:${GITHUB_SHA}" \
+            origin \
+            "HEAD:refs/heads/${BRANCH}"
+
+      - name: Persist failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/home-feed-failure
+          {
+            echo "Authenticated Home Feed v2 verification failed."
+            echo "staging_sha=${GITHUB_SHA}"
+            echo "base_sha=${BASE_SHA}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            for log in \
+              /tmp/bundle-integrity.log \
+              /tmp/test-baseline-exact.status \
+              /tmp/apply.log \
+              /tmp/changed-paths.diff \
+              /tmp/verify-pareto-exact.log \
+              /tmp/verify-exact.status \
+              /tmp/exact-baseline-comparison.txt \
+              /tmp/verify-exact.log \
+              /tmp/lint-exact.log \
+              /tmp/build-exact.log \
+              /tmp/playwright-exact.log \
+              /tmp/implementation-commit.txt \
+              /tmp/test-baseline-main.status \
+              /tmp/rebase.log \
+              /tmp/verify-pareto-rebased.log \
+              /tmp/verify-rebased.status \
+              /tmp/rebased-baseline-comparison.txt \
+              /tmp/verify-rebased.log \
+              /tmp/lint-rebased.log \
+              /tmp/build-rebased.log \
+              /tmp/playwright-rebased.log; do
+              if test -f "${log}"; then
+                echo "===== ${log} ====="
+                tail -n 1200 "${log}"
+                echo
+              fi
+            done
+          } > /tmp/home-feed-failure/home-feed-verification-v2.log
+
+          git reset --hard "${GITHUB_SHA}"
+          git clean -fdx
+          mkdir -p .qa-results
+          cp /tmp/home-feed-failure/home-feed-verification-v2.log .qa-results/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/home-feed-verification-v2.log
+          git commit -m "Record authenticated Home Feed v2 verification failure [verification-failure]"
+          git push origin "HEAD:refs/heads/${BRANCH}"
