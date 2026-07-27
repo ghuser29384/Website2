@@ -157,10 +157,14 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install PostgreSQL client
+      - name: Install PostgreSQL 17 client
+        shell: bash
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes postgresql-client
+          sudo apt-get install --yes postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/17/bin/pg_dump --version | grep -F "17."
 
       - name: Merge, compare baselines, validate, compile migrations, and push
         shell: bash
