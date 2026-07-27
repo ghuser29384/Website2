@@ -109,14 +109,7 @@ function CommentNode({ comment, offerId, returnTo, viewerId }: CommentNodeProps)
 
 export function CommentThread({ comments, offerId, returnTo, viewerId }: CommentThreadProps) {
   if (!comments.length) {
-    return (
-      <div className="empty-state">
-        <div>
-          <strong>No public comments yet.</strong>
-          <p>Use comments for clarifications, objections, and structured follow-up.</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

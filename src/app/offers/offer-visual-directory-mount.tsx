@@ -104,8 +104,6 @@ export function OfferVisualDirectoryMount() {
 
   useEffect(() => {
     if (!queryState.shouldShow) {
-      setEntries([]);
-      setHost(null);
       return;
     }
 
@@ -114,7 +112,6 @@ export function OfferVisualDirectoryMount() {
     portalHost.id = HOST_ID;
     portalHost.className = styles.portalHost;
     portalHost.dataset.visualOfferDirectory = "true";
-    setHost(portalHost);
 
     const controller = new AbortController();
     let payload: OfferPlaneResponse | null = null;
@@ -172,7 +169,11 @@ export function OfferVisualDirectoryMount() {
 
     const observer = new MutationObserver(syncDirectory);
     observer.observe(document.body, { childList: true, subtree: true });
-    const frame = window.requestAnimationFrame(syncDirectory);
+    const frame = window.requestAnimationFrame(() => {
+      setEntries([]);
+      setHost(portalHost);
+      syncDirectory();
+    });
 
     fetch("/api/offers/plane", {
       cache: "no-store",
@@ -196,8 +197,6 @@ export function OfferVisualDirectoryMount() {
       window.cancelAnimationFrame(frame);
       restoreDirectory();
       portalHost.remove();
-      setEntries([]);
-      setHost(null);
     };
   }, [queryState.key, queryState.shouldShow]);
 

@@ -14,6 +14,7 @@ import "./activation-critical.css";
 import "./home-process-polish.css";
 import "./home-mode-hover-colors.css";
 import "./search-bar-polish.css";
+import "./dynamic-marketplace-cleanup.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
