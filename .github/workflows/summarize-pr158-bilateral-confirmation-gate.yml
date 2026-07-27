@@ -1,0 +1,173 @@
+name: Summarize PR 158 bilateral confirmation gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/summarize-pr158-bilateral-confirmation-gate.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  summarize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/pr158-bilateral-confirmation-gate-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: PR 158 bilateral confirmation exact-head gate
+
+    steps:
+      - name: Wait for the exact-head gate to finish
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 380); do
+            body="$RUNNER_TEMP/runs.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/pr158-bilateral-confirmation-gate-20260727&event=pull_request&per_page=100" \
+              --output "$body"
+            run_id="$(jq -r --arg name "$TARGET_WORKFLOW" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .id // empty' \
+              "$body")"
+            status="$(jq -r --arg name "$TARGET_WORKFLOW" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .status // empty' \
+              "$body")"
+            conclusion="$(jq -r --arg name "$TARGET_WORKFLOW" \
+              '[.workflow_runs[] | select(.name == $name)] | sort_by(.run_number) | last | .conclusion // empty' \
+              "$body")"
+            if [[ -n "$run_id" && "$status" = "completed" ]]; then
+              echo "TARGET_RUN_ID=$run_id" >> "$GITHUB_ENV"
+              echo "TARGET_CONCLUSION=$conclusion" >> "$GITHUB_ENV"
+              break
+            fi
+            echo "Exact-head gate status=${status:-not-found}; waiting (attempt $attempt/380)."
+            sleep 15
+          done
+          test -n "${run_id:-}"
+          test "$status" = "completed"
+
+      - name: Download gate artifacts and logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gate-downloads gate-artifacts
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/artifacts?per_page=100" \
+            --output "$RUNNER_TEMP/artifacts.json"
+          jq -r '.artifacts[] | [.id, .name] | @tsv' "$RUNNER_TEMP/artifacts.json" \
+            | while IFS=$'\t' read -r artifact_id artifact_name; do
+                curl --fail-with-body --silent --show-error --location \
+                  --header "Authorization: Bearer $GH_TOKEN" \
+                  --header "Accept: application/vnd.github+json" \
+                  "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" \
+                  --output "gate-downloads/${artifact_name}.zip"
+                mkdir -p "gate-artifacts/${artifact_name}"
+                unzip -q "gate-downloads/${artifact_name}.zip" -d "gate-artifacts/${artifact_name}"
+              done
+          curl --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$TARGET_RUN_ID/logs" \
+            --output gate-downloads/workflow-logs.zip
+          mkdir -p gate-artifacts/workflow-logs
+          unzip -q gate-downloads/workflow-logs.zip -d gate-artifacts/workflow-logs
+
+      - name: Build sanitized result summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path("gate-artifacts")
+          reports = sorted(root.rglob("report.json"))
+          states = sorted(root.rglob("pr158-bilateral-confirmation-final-state.txt"))
+          lines = [
+              "## PR #158 bilateral-confirmation exact-head gate",
+              "",
+              f"- Workflow run: `{os.environ['TARGET_RUN_ID']}`",
+              f"- Workflow conclusion: **{os.environ['TARGET_CONCLUSION']}**",
+          ]
+
+          for report_path in reports:
+              report = json.loads(report_path.read_text(encoding="utf-8"))
+              viewport = "mobile 390×844" if "mobile-390x844" in str(report_path) else "desktop 1440×900"
+              lines.extend([
+                  f"- {viewport}: **{report.get('outcome', 'unknown')}**",
+                  f"  - agreement: `{report.get('agreementId') or 'not-created'}`",
+              ])
+              failure = report.get("failure")
+              if failure:
+                  failure = re.sub(r"(?i)(postgres(?:ql)?://)\S+", r"\1[REDACTED]", str(failure))
+                  lines.append(f"  - failure: `{failure[:1000]}`")
+              failed_checks = [c for c in report.get("checks", []) if c.get("outcome") != "pass"]
+              for check in failed_checks:
+                  lines.append(f"  - failed check: **{check.get('name')}** — `{str(check.get('detail'))[:1000]}`")
+              diagnostics = report.get("diagnostics", [])
+              total_console = sum(len(item.get("consoleErrors", [])) for item in diagnostics)
+              total_page = sum(len(item.get("pageErrors", [])) for item in diagnostics)
+              total_requests = sum(len(item.get("failedRequests", [])) for item in diagnostics)
+              total_bad = sum(len(item.get("badResponses", [])) for item in diagnostics)
+              lines.append(
+                  f"  - application diagnostics: console={total_console}, page={total_page}, failed_requests={total_requests}, http_4xx_5xx={total_bad}"
+              )
+
+          if states:
+              lines.extend(["", "### Final exact-fixture state", "", "```text"])
+              lines.extend(states[-1].read_text(encoding="utf-8").strip().splitlines())
+              lines.append("```")
+
+          log_text = "\n".join(
+              path.read_text(encoding="utf-8", errors="replace")
+              for path in root.rglob("*.txt")
+              if "workflow-logs" in str(path)
+          )
+          named_errors = {
+              "Missing SUPABASE_SERVICE_ROLE_KEY": "Missing SUPABASE_SERVICE_ROLE_KEY" in log_text,
+              "permission denied for table email_outbox": "permission denied for table email_outbox" in log_text,
+          }
+          lines.extend(["", "### Named error scan", ""])
+          for label, found in named_errors.items():
+              lines.append(f"- `{label}`: {'FOUND' if found else 'not found in workflow logs'}")
+
+          Path("pr158-bilateral-confirmation-gate-summary.md").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          PY
+          cat pr158-bilateral-confirmation-gate-summary.md
+
+      - name: Comment sanitized result on PR 158
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -Rs '{body: .}' < pr158-bilateral-confirmation-gate-summary.md > "$RUNNER_TEMP/comment.json"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/comment.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/158/comments" \
+            --output /dev/null
+
+      - name: Upload result summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr158-bilateral-confirmation-gate-summary-${{ github.run_id }}
+          path: pr158-bilateral-confirmation-gate-summary.md
+          if-no-files-found: error
+          retention-days: 14
