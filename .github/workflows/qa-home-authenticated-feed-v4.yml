@@ -1,0 +1,109 @@
+name: Verify authenticated Home Feed candidate v4
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+
+permissions:
+  contents: write
+
+concurrency:
+  group: qa-home-authenticated-feed-20260727-v4
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    if: ${{ !contains(github.event.head_commit.message, '[verification-failure]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BRANCH: qa/home-authenticated-feed-20260727
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply, verify, commit, rebase, and re-verify
+        shell: bash
+        run: |
+          chmod +x .qa/home-feed-v4/run.sh
+          .qa/home-feed-v4/run.sh
+
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-authenticated-feed-verification-v4
+          if-no-files-found: ignore
+          retention-days: 14
+          path: /tmp/home-feed-v4-logs
+
+      - name: Publish verified branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push \
+            --force-with-lease="refs/heads/${BRANCH}:${GITHUB_SHA}" \
+            origin \
+            "HEAD:refs/heads/${BRANCH}"
+
+      - name: Persist concise failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/home-feed-v4-failure
+          {
+            echo "Authenticated Home Feed v4 verification failed."
+            echo "staging_sha=${GITHUB_SHA}"
+            echo "recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            for log in \
+              bundle-integrity.log \
+              test-baseline-exact.status \
+              lint-baseline-exact.status \
+              apply.log \
+              changed-paths.diff \
+              verify-pareto-exact.log \
+              verify-exact.status \
+              exact-baseline-comparison.txt \
+              lint-exact.status \
+              exact-lint-comparison.txt \
+              build-exact.log \
+              playwright-exact.log \
+              implementation-commit.txt \
+              test-baseline-main.status \
+              lint-baseline-main.status \
+              rebase.log \
+              verify-pareto-rebased.log \
+              verify-rebased.status \
+              rebased-baseline-comparison.txt \
+              lint-rebased.status \
+              rebased-lint-comparison.txt \
+              build-rebased.log \
+              playwright-rebased.log; do
+              path="/tmp/home-feed-v4-logs/${log}"
+              if test -f "${path}"; then
+                echo "===== ${log} ====="
+                tail -n 1200 "${path}"
+                echo
+              fi
+            done
+          } > /tmp/home-feed-v4-failure/home-feed-verification-v4.log
+
+          git reset --hard "${GITHUB_SHA}"
+          git clean -fdx
+          mkdir -p .qa-results
+          cp /tmp/home-feed-v4-failure/home-feed-verification-v4.log .qa-results/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/home-feed-verification-v4.log
+          git commit -m "Record authenticated Home Feed v4 verification failure [verification-failure]"
+          git push origin "HEAD:refs/heads/${BRANCH}"
