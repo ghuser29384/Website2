@@ -54,25 +54,36 @@ jobs:
           from pathlib import Path
 
           path = Path("src/lib/mpgf/failure-bonus-success-premium.ts")
-          source = path.read_text()
-          old = '''    const maximumFailureBonusExposureCents = pricing.assumptions
-            ? calculateMaximumFailureBonusExposureCents({
-                netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
-                failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
-                eligibilityPolicy,
-              })
-            : undefined;'''
-          new = '''    const maximumFailureBonusExposureCents =
-            pricing.pricingMode === "experience_rated"
-              ? calculateMaximumFailureBonusExposureCents({
-                  netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,
-                  failureBonusRateBps: pricing.assumptions.failureBonusRateBps,
-                  eligibilityPolicy,
-                })
-              : undefined;'''
-          if source.count(old) != 1:
-              raise SystemExit(f"Expected one exact repair target, found {source.count(old)}")
-          path.write_text(source.replace(old, new, 1))
+          lines = path.read_text().splitlines()
+          expected = [
+              "const maximumFailureBonusExposureCents = pricing.assumptions",
+              "? calculateMaximumFailureBonusExposureCents({",
+              "netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,",
+              "failureBonusRateBps: pricing.assumptions.failureBonusRateBps,",
+              "eligibilityPolicy,",
+              "})",
+              ": undefined;",
+          ]
+          matches = [
+              index
+              for index in range(0, len(lines) - len(expected) + 1)
+              if [line.strip() for line in lines[index:index + len(expected)]] == expected
+          ]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one exact seven-line repair target, found {len(matches)}")
+          index = matches[0]
+          replacement = [
+              "    const maximumFailureBonusExposureCents =",
+              '      pricing.pricingMode === "experience_rated"',
+              "        ? calculateMaximumFailureBonusExposureCents({",
+              "            netRecipientAmountCents: threshold.cumulativeNetRecipientThresholdCents,",
+              "            failureBonusRateBps: pricing.assumptions.failureBonusRateBps,",
+              "            eligibilityPolicy,",
+              "          })",
+              "        : undefined;",
+          ]
+          lines[index:index + len(expected)] = replacement
+          path.write_text("\n".join(lines) + "\n")
           PY
           git diff --check
           grep -n 'pricing.pricingMode === "experience_rated"' src/lib/mpgf/failure-bonus-success-premium.ts
