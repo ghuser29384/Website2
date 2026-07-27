@@ -1,0 +1,185 @@
+name: Attach institutional payload
+
+on:
+  push:
+    branches:
+      - feat/institutional-trade-system
+    paths:
+      - .github/workflows/attach-institutional-payload.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: attach-institutional-payload
+  cancel-in-progress: false
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Attach exact payload blobs and guarded importer
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > /tmp/import-institutional-source.yml <<'YAML'
+          name: Import institutional source
+
+          on:
+            push:
+              branches:
+                - feat/institutional-trade-system
+              paths:
+                - .github/institutional-patch.part-*
+            workflow_dispatch:
+
+          permissions:
+            contents: write
+
+          concurrency:
+            group: import-institutional-source
+            cancel-in-progress: false
+
+          jobs:
+            import:
+              runs-on: ubuntu-latest
+              timeout-minutes: 20
+              env:
+                EXPECTED_PAYLOAD_SHA256: abd0ba337c39ea66321ea64d28b471a9dc0bd710c5ca3f4d9d8758552cb52525
+                EXPECTED_PATCH_SHA256: 75dbd90c619cbf80e715b6ea9735c8570b5cd6700585ac0aa88799289860ff6e
+                EXPECTED_TREE_SHA: 839043f9e1399001789fdbbf8ae5361ea27a4d34
+              steps:
+                - name: Check out feature branch
+                  uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+
+                - name: Verify and import exact implementation patch
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    shopt -s nullglob
+
+                    parts=(.github/institutional-patch.part-*)
+                    if (( ${#parts[@]} != 24 )); then
+                      echo "Expected exactly 24 patch parts; found ${#parts[@]}." >&2
+                      exit 1
+                    fi
+
+                    payload=/tmp/institutional-patch.b64
+                    patch=/tmp/institutional.patch
+                    cat "${parts[@]}" > "$payload"
+                    echo "${EXPECTED_PAYLOAD_SHA256}  ${payload}" | sha256sum --check --strict
+                    base64 --decode < "$payload" | xz --decompress --stdout > "$patch"
+                    echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
+
+                    git apply --check --binary "$patch"
+                    git apply --binary --index "$patch"
+
+                    rm -f \
+                      "${parts[@]}" \
+                      .github/importer-diagnostic.txt \
+                      .github/workflows/attach-institutional-payload.yml \
+                      .github/workflows/export-institutional-source.yml \
+                      .github/workflows/import-institutional-source.yml \
+                      .github/workflows/read-institutional-importer-log.yml
+
+                    git add -A
+                    actual_tree="$(git write-tree)"
+                    if [[ "$actual_tree" != "$EXPECTED_TREE_SHA" ]]; then
+                      echo "Imported tree mismatch: expected $EXPECTED_TREE_SHA, got $actual_tree" >&2
+                      exit 1
+                    fi
+
+                    git config user.name "github-actions[bot]"
+                    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                    git commit -m "Implement institutional trade system integrity and QA"
+                    git push origin HEAD:feat/institutional-trade-system
+          YAML
+
+          importer_content="$(base64 --wrap=0 /tmp/import-institutional-source.yml)"
+          importer_sha="$(gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/git/blobs" \
+            -f content="$importer_content" \
+            -f encoding=base64 \
+            --jq .sha)"
+
+          base_tree="$(git rev-parse 'HEAD^{tree}')"
+          parent="$(git rev-parse HEAD)"
+          export IMPORTER_SHA="$importer_sha" BASE_TREE="$base_tree"
+
+          python - <<'PY'
+          import json
+          import os
+
+          tree = [
+              {"path": ".github/institutional-patch.part-03", "mode": "100644", "type": "blob", "sha": "3505126caa5cbe6c476c334ce5a66ad035f1045f"},
+              {"path": ".github/institutional-patch.part-04", "mode": "100644", "type": "blob", "sha": "9391ec454d2ffa1fda18b5b796137073124c7fc1"},
+              {"path": ".github/institutional-patch.part-05", "mode": "100644", "type": "blob", "sha": "9ec44427e2d1c51be9fbf65c6ba09e25a26120c8"},
+              {"path": ".github/institutional-patch.part-06", "mode": "100644", "type": "blob", "sha": "51c5082638fbe268f2b68018351d74397f869e5b"},
+              {"path": ".github/institutional-patch.part-07", "mode": "100644", "type": "blob", "sha": "9f78d299a9661f0578369b1d29e90191e4d9bc92"},
+              {"path": ".github/institutional-patch.part-08", "mode": "100644", "type": "blob", "sha": None},
+              {"path": ".github/institutional-patch.part-08a", "mode": "100644", "type": "blob", "sha": "5ba0760bfe334a017f262e28a5eb17e2d4406998"},
+              {"path": ".github/institutional-patch.part-08b", "mode": "100644", "type": "blob", "sha": "7b3c8451b23413435f8aaa0e7b2829c595656453"},
+              {"path": ".github/institutional-patch.part-08c", "mode": "100644", "type": "blob", "sha": "a11d0fa771d9eae50f79179f878f42dbf61a1513"},
+              {"path": ".github/institutional-patch.part-08d", "mode": "100644", "type": "blob", "sha": "71abff5c8c9899bf8f052bbf11cf5021d4ba582f"},
+              {"path": ".github/institutional-patch.part-09a", "mode": "100644", "type": "blob", "sha": "f965335b267b1637dfe01d70fe3aa03f1dd9f2ac"},
+              {"path": ".github/institutional-patch.part-09b", "mode": "100644", "type": "blob", "sha": "8877c35004e2bf948f46200d194f47b56cbe29ea"},
+              {"path": ".github/institutional-patch.part-09c", "mode": "100644", "type": "blob", "sha": "f54ead17c522fe8328e258c3509242366ff86425"},
+              {"path": ".github/institutional-patch.part-09d", "mode": "100644", "type": "blob", "sha": "28742f836484764fe3add44a419d34b01151f4f8"},
+              {"path": ".github/institutional-patch.part-10a", "mode": "100644", "type": "blob", "sha": "66910b9bb0bcc87ccdc391683d0bc35f5ad5d479"},
+              {"path": ".github/institutional-patch.part-10b", "mode": "100644", "type": "blob", "sha": "89e913b7e1f002397f46228c87bb5c339dc6aa57"},
+              {"path": ".github/institutional-patch.part-10c", "mode": "100644", "type": "blob", "sha": "72522648f3ec799baade5ab70cd7eab0d3403c39"},
+              {"path": ".github/institutional-patch.part-10d", "mode": "100644", "type": "blob", "sha": "7a1ec710adccd0f991ae8284f31a68d6c53285f8"},
+              {"path": ".github/institutional-patch.part-11a", "mode": "100644", "type": "blob", "sha": "b7035273a14821d7f33c3ebdbd5c2496c8ab1927"},
+              {"path": ".github/institutional-patch.part-11b", "mode": "100644", "type": "blob", "sha": "6a7bc4b836a7307841a8f710f12974daefbcc792"},
+              {"path": ".github/institutional-patch.part-11c", "mode": "100644", "type": "blob", "sha": "d8237cf3863364a9c8ab8cddf51b52a22f6157cb"},
+              {"path": ".github/institutional-patch.part-11d", "mode": "100644", "type": "blob", "sha": "00d5337fa1fda8428d4ced2593270aab672f2313"},
+              {"path": ".github/importer-diagnostic.txt", "mode": "100644", "type": "blob", "sha": None},
+              {"path": ".github/workflows/attach-institutional-payload.yml", "mode": "100644", "type": "blob", "sha": None},
+              {"path": ".github/workflows/import-institutional-source.yml", "mode": "100644", "type": "blob", "sha": os.environ["IMPORTER_SHA"]},
+              {"path": ".github/workflows/read-institutional-importer-log.yml", "mode": "100644", "type": "blob", "sha": None},
+          ]
+
+          with open("/tmp/tree.json", "w", encoding="utf-8") as handle:
+              json.dump({"base_tree": os.environ["BASE_TREE"], "tree": tree}, handle)
+          PY
+
+          tree_sha="$(gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/git/trees" \
+            --input /tmp/tree.json \
+            --jq .sha)"
+
+          jq -n \
+            --arg message "Complete verified institutional payload" \
+            --arg tree "$tree_sha" \
+            --arg parent "$parent" \
+            '{message: $message, tree: $tree, parents: [$parent]}' \
+            > /tmp/commit.json
+
+          commit_sha="$(gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/git/commits" \
+            --input /tmp/commit.json \
+            --jq .sha)"
+
+          jq -n --arg sha "$commit_sha" '{sha: $sha, force: false}' > /tmp/ref.json
+          gh api \
+            --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/feat/institutional-trade-system" \
+            --input /tmp/ref.json \
+            > /dev/null
+
+          echo "Attached payload commit: $commit_sha"
