@@ -71,6 +71,50 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$ARTIFACT_DIR"
+
+          commitment_guard="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --set user_id="$USER_ID" \
+            --set commitment_id="$COMMITMENT_ID" \
+            --set title_prefix="$EXPECTED_TITLE_PREFIX" <<'SQL'
+          select case
+            when not exists (
+              select 1 from public.collective_commitments
+              where id = :'commitment_id'::uuid
+            ) then 'ABSENT'
+            when exists (
+              select 1 from public.collective_commitments
+              where id = :'commitment_id'::uuid
+                and creator_id = :'user_id'::uuid
+                and title like :'title_prefix' || '%'
+            ) then 'MATCH'
+            else 'MISMATCH'
+          end;
+          SQL
+          )"
+          commitment_guard="$(tr -d '[:space:]' <<< "$commitment_guard")"
+          test "$commitment_guard" = "MATCH" || test "$commitment_guard" = "ABSENT"
+
+          profile_guard="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --set user_id="$USER_ID" \
+            --set user_email="$USER_EMAIL" <<'SQL'
+          select case
+            when not exists (
+              select 1 from public.profiles where id = :'user_id'::uuid
+            ) then 'ABSENT'
+            when exists (
+              select 1 from public.profiles
+              where id = :'user_id'::uuid and email = :'user_email'
+            ) then 'MATCH'
+            else 'MISMATCH'
+          end;
+          SQL
+          )"
+          profile_guard="$(tr -d '[:space:]' <<< "$profile_guard")"
+          test "$profile_guard" = "MATCH" || test "$profile_guard" = "ABSENT"
+
+          printf 'commitment_guard=%s\nprofile_guard=%s\n' \
+            "$commitment_guard" "$profile_guard" | tee "$ARTIFACT_DIR/preflight.txt"
+
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
             --set user_id="$USER_ID" \
             --set user_email="$USER_EMAIL" \
@@ -78,31 +122,6 @@ jobs:
             --set title_prefix="$EXPECTED_TITLE_PREFIX" <<'SQL' \
             2>&1 | tee "$ARTIFACT_DIR/public-cleanup.log"
           begin;
-
-          do $guard$
-          declare
-            unexpected integer;
-          begin
-            select count(*) into unexpected
-            from public.collective_commitments
-            where id = :'commitment_id'::uuid
-              and (
-                creator_id <> :'user_id'::uuid
-                or title not like :'title_prefix' || '%'
-              );
-            if unexpected <> 0 then
-              raise exception 'Refusing unexpected commitment identity or title';
-            end if;
-
-            select count(*) into unexpected
-            from public.profiles
-            where id = :'user_id'::uuid
-              and email is distinct from :'user_email';
-            if unexpected <> 0 then
-              raise exception 'Refusing unexpected profile email';
-            end if;
-          end
-          $guard$;
 
           delete from public.collective_commitments
           where id = :'commitment_id'::uuid
