@@ -1,0 +1,206 @@
+staging_sha=80f83e9abb8cfef2fff57f566994279cde812337
+recorded_at=2026-07-27T09:07:52Z
+
+===== the returning homepage keeps the action-first screenshot contract =====
+src/lib/action-first-positioning.test.ts-24-);
+src/lib/action-first-positioning.test.ts-25-
+src/lib/action-first-positioning.test.ts-26-const primaryAcquisitionCopy = [
+src/lib/action-first-positioning.test.ts-27-  home,
+src/lib/action-first-positioning.test.ts-28-  start,
+src/lib/action-first-positioning.test.ts-29-  offers,
+src/lib/action-first-positioning.test.ts-30-  status,
+src/lib/action-first-positioning.test.ts-31-  cohort,
+src/lib/action-first-positioning.test.ts-32-  onboarding,
+src/lib/action-first-positioning.test.ts-33-  visitorPaths,
+src/lib/action-first-positioning.test.ts-34-].join("\n");
+src/lib/action-first-positioning.test.ts-35-
+src/lib/action-first-positioning.test.ts-36-test("primary acquisition routes lead with real actions instead of pilot language", () => {
+src/lib/action-first-positioning.test.ts-37-  assert.doesNotMatch(primaryAcquisitionCopy, /\bprototype\b/i);
+src/lib/action-first-positioning.test.ts-38-  assert.doesNotMatch(primaryAcquisitionCopy, /founding-user pilot/i);
+src/lib/action-first-positioning.test.ts-39-  assert.doesNotMatch(
+src/lib/action-first-positioning.test.ts-40-    primaryAcquisitionCopy,
+src/lib/action-first-positioning.test.ts-41-    /inspect (?:an |the |one )?(?:complete )?(?:worked )?example/i,
+src/lib/action-first-positioning.test.ts-42-  );
+src/lib/action-first-positioning.test.ts-43-  assert.match(site, /href: "\/start",\s*label: "Get started"/);
+src/lib/action-first-positioning.test.ts-44-  assert.match(site, /href: "\/donate", label: "Fund"/);
+src/lib/action-first-positioning.test.ts-45-  assert.match(site, /href: "\/offers\?view=live", label: "Explore trades"/);
+src/lib/action-first-positioning.test.ts-46-  assert.match(start, /Make a financial contribution/);
+src/lib/action-first-positioning.test.ts-47-  assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
+src/lib/action-first-positioning.test.ts-48-});
+src/lib/action-first-positioning.test.ts-49-
+src/lib/action-first-positioning.test.ts-50-test("the financial action has a real external payment handoff and explicit boundaries", () => {
+src/lib/action-first-positioning.test.ts-51-  assert.match(donate, /EveryOrgDonateButton/);
+src/lib/action-first-positioning.test.ts-52-  assert.match(donate, /The payment happens off-site/);
+src/lib/action-first-positioning.test.ts-53-  assert.match(donate, /Moral Trade does not hold donations, provide escrow/);
+src/lib/action-first-positioning.test.ts-54-  assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
+src/lib/action-first-positioning.test.ts-55-  assert.match(donateButton, /everyDotOrgDonateButton/);
+src/lib/action-first-positioning.test.ts-56-  assert.match(start, /No platform custody/);
+src/lib/action-first-positioning.test.ts-57-});
+src/lib/action-first-positioning.test.ts-58-
+src/lib/action-first-positioning.test.ts:59:test("the returning homepage keeps the action-first screenshot contract", () => {
+src/lib/action-first-positioning.test.ts-60-  assert.doesNotMatch(home, /A trade worth considering\./);
+src/lib/action-first-positioning.test.ts-61-  assert.match(home, /href="\/offers\?view=templates"/);
+src/lib/action-first-positioning.test.ts-62-  assert.match(home, /Offer a trade/);
+src/lib/action-first-positioning.test.ts-63-  assert.match(home, /Offer this trade/);
+src/lib/action-first-positioning.test.ts-64-  assert.match(home, /Verifiable financial contribution/);
+src/lib/action-first-positioning.test.ts-65-  assert.match(home, /Proof method/);
+src/lib/action-first-positioning.test.ts-66-});
+src/lib/action-first-positioning.test.ts-67-
+src/lib/action-first-positioning.test.ts-68-test("examples remain available only as a secondary learning resource", () => {
+src/lib/action-first-positioning.test.ts-69-  assert.doesNotMatch(primaryAcquisitionCopy, /\/worked-examples/);
+src/lib/action-first-positioning.test.ts-70-  assert.doesNotMatch(notFound, /\/worked-examples|View examples/);
+src/lib/action-first-positioning.test.ts-71-  assert.doesNotMatch(offers, /CANONICAL_WORKED_CASE_OFFERS|view=examples|Inspect example/);
+src/lib/action-first-positioning.test.ts-72-  assert.match(notFound, /href="\/offers\?view=live"/);
+src/lib/action-first-positioning.test.ts-73-  assert.match(notFound, /href="\/donate"/);
+src/lib/action-first-positioning.test.ts-74-  assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);
+src/lib/action-first-positioning.test.ts-75-  assert.doesNotMatch(routeBaseline, /"path": "\/worked-examples"/);
+src/lib/action-first-positioning.test.ts-76-  assert.doesNotMatch(routeBaseline, /"path": "\/trust"/);
+src/lib/action-first-positioning.test.ts-77-  assert.match(routeBaseline, /"path": "\/donate"/);
+src/lib/action-first-positioning.test.ts-78-  assert.match(routeBaseline, /"path": "\/start"/);
+src/lib/action-first-positioning.test.ts-79-  assert.match(routeBaseline, /"path": "\/offers\?view=live"/);
+src/lib/action-first-positioning.test.ts-80-});
+src/lib/action-first-positioning.test.ts-81-
+src/lib/action-first-positioning.test.ts-82-test("the unscoped marketplace route defaults to live participant records", () => {
+src/lib/action-first-positioning.test.ts-83-  assert.match(marketplaceProxy, /searchParams\.has\("view"\)/);
+src/lib/action-first-positioning.test.ts-84-  assert.match(marketplaceProxy, /searchParams\.set\("view", "live"\)/);
+src/lib/action-first-positioning.test.ts-85-  assert.match(marketplaceProxy, /NextResponse\.redirect\(liveDirectoryUrl\)/);
+src/lib/action-first-positioning.test.ts-86-});
+
+===== returning homepage keeps the screenshot match facts explicit and bounded =====
+src/lib/public-route-smoke.test.ts-606-    "C. Pure opposed-cause trade",
+src/lib/public-route-smoke.test.ts-607-    "D. Intrapersonal trade",
+src/lib/public-route-smoke.test.ts-608-    "E. Bargained coordination",
+src/lib/public-route-smoke.test.ts-609-    "F. Lottery-mediated trade",
+src/lib/public-route-smoke.test.ts-610-    "G. Side-payment trade",
+src/lib/public-route-smoke.test.ts-611-    "H. Market-mediated trade",
+src/lib/public-route-smoke.test.ts-612-  ]) {
+src/lib/public-route-smoke.test.ts-613-    assert.match(animationSource, new RegExp(label.replace(/[.]/g, "\\.")));
+src/lib/public-route-smoke.test.ts-614-  }
+src/lib/public-route-smoke.test.ts-615-
+src/lib/public-route-smoke.test.ts-616-  assert.match(animationSource, /moral-animation-frame-\$\{card\.scene\}/);
+src/lib/public-route-smoke.test.ts-617-
+src/lib/public-route-smoke.test.ts-618-  for (const scene of [
+src/lib/public-route-smoke.test.ts-619-    "reciprocal",
+src/lib/public-route-smoke.test.ts-620-    "prudential",
+src/lib/public-route-smoke.test.ts-621-    "pure",
+src/lib/public-route-smoke.test.ts-622-    "intrapersonal",
+src/lib/public-route-smoke.test.ts-623-    "bargained",
+src/lib/public-route-smoke.test.ts-624-    "lottery",
+src/lib/public-route-smoke.test.ts-625-    "sidePayment",
+src/lib/public-route-smoke.test.ts-626-    "market",
+src/lib/public-route-smoke.test.ts-627-  ]) {
+src/lib/public-route-smoke.test.ts-628-    assert.match(animationSource, new RegExp(`scene: "${scene}"`));
+src/lib/public-route-smoke.test.ts-629-  }
+src/lib/public-route-smoke.test.ts-630-
+src/lib/public-route-smoke.test.ts-631-  assert.match(globalCss, /\.moral-animation-grid/);
+src/lib/public-route-smoke.test.ts-632-  assert.match(globalCss, /\.moral-animation-pause-input:checked/);
+src/lib/public-route-smoke.test.ts-633-  assert.match(globalCss, /@media \(prefers-reduced-motion: reduce\)/);
+src/lib/public-route-smoke.test.ts-634-  assert.match(globalCss, /@media \(max-width: 760px\)/);
+src/lib/public-route-smoke.test.ts-635-  assert.match(globalCss, /--mt-orange/);
+src/lib/public-route-smoke.test.ts-636-  assert.match(globalCss, /--mt-green/);
+src/lib/public-route-smoke.test.ts-637-  assert.match(globalCss, /--mt-sky/);
+src/lib/public-route-smoke.test.ts-638-  assert.match(globalCss, /--mt-purple/);
+src/lib/public-route-smoke.test.ts-639-});
+src/lib/public-route-smoke.test.ts-640-
+src/lib/public-route-smoke.test.ts:641:test("returning homepage keeps the screenshot match facts explicit and bounded", () => {
+src/lib/public-route-smoke.test.ts-642-  const pageSource = readRepoFile("src/app/page.tsx");
+src/lib/public-route-smoke.test.ts-643-  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+src/lib/public-route-smoke.test.ts-644-
+src/lib/public-route-smoke.test.ts-645-  assert.doesNotMatch(pageSource, /getMarketplaceOverview|buildMarketplaceSurface|listOpenOffersPage/);
+src/lib/public-route-smoke.test.ts-646-  assert.match(homeSource, /11 completed/);
+src/lib/public-route-smoke.test.ts-647-  assert.match(homeSource, /96% on-time verification/);
+src/lib/public-route-smoke.test.ts-648-  assert.match(homeSource, /Jul 23, 2026/);
+src/lib/public-route-smoke.test.ts-649-  assert.match(homeSource, /7 days left/);
+src/lib/public-route-smoke.test.ts-650-  assert.match(homeSource, /setRemainingMatches/);
+src/lib/public-route-smoke.test.ts-651-  assert.match(homeSource, /Math\.max\(0, count - 1\)/);
+src/lib/public-route-smoke.test.ts-652-  assert.equal(homeSource.includes("total value traded"), false);
+src/lib/public-route-smoke.test.ts-653-  assert.equal(homeSource.includes("registered users"), false);
+src/lib/public-route-smoke.test.ts-654-});
+src/lib/public-route-smoke.test.ts-655-
+src/lib/public-route-smoke.test.ts-656-test("people directory hides empty social proof and sorts by reviewable records", () => {
+src/lib/public-route-smoke.test.ts-657-  const peoplePage = readRepoFile("src/app/people/page.tsx");
+src/lib/public-route-smoke.test.ts-658-  const profilePage = readRepoFile("src/app/people/[profileId]/page.tsx");
+src/lib/public-route-smoke.test.ts-659-  const appDataSource = readRepoFile("src/lib/app-data.ts");
+src/lib/public-route-smoke.test.ts-660-  const publicProfileTrustSource = readRepoFile("src/lib/public-profile-trust.ts");
+src/lib/public-route-smoke.test.ts-661-
+src/lib/public-route-smoke.test.ts-662-  assert.match(peoplePage, /Reviewed records/);
+src/lib/public-route-smoke.test.ts-663-  assert.match(peoplePage, /Open offers/);
+src/lib/public-route-smoke.test.ts-664-  assert.match(peoplePage, /Newest opt-ins/);
+src/lib/public-route-smoke.test.ts-665-  assert.match(peoplePage, /Empty follower, karma, and comment metrics stay hidden/);
+src/lib/public-route-smoke.test.ts-666-  assert.equal(peoplePage.includes("Counterparty interest"), false);
+src/lib/public-route-smoke.test.ts-667-  assert.equal(peoplePage.includes("Reviewer karma"), false);
+src/lib/public-route-smoke.test.ts-668-  assert.equal(peoplePage.includes("Public discussion"), false);
+src/lib/public-route-smoke.test.ts-669-  assert.match(appDataSource, /export type PeopleSort = "reviewed" \| "offers" \| "newest"/);
+src/lib/public-route-smoke.test.ts-670-  assert.equal(appDataSource.includes('sort === "followers"'), false);
+src/lib/public-route-smoke.test.ts-671-  assert.equal(appDataSource.includes('sort === "karma"'), false);
+src/lib/public-route-smoke.test.ts-672-  assert.equal(appDataSource.includes('sort === "comments"'), false);
+src/lib/public-route-smoke.test.ts-673-  assert.match(profilePage, /Trust signals appear here only after this member publishes reviewable records/);
+src/lib/public-route-smoke.test.ts-674-  assert.match(profilePage, /offer\.commentCount > 0/);
+src/lib/public-route-smoke.test.ts-675-  assert.match(profilePage, /offer\.recommendationCount > 0/);
+src/lib/public-route-smoke.test.ts-676-  assert.match(publicProfileTrustSource, /reviewable records are not public yet/);
+src/lib/public-route-smoke.test.ts-677-});
+src/lib/public-route-smoke.test.ts-678-
+src/lib/public-route-smoke.test.ts-679-test("MPGF signed-out manual evidence copy and controls are gated", () => {
+src/lib/public-route-smoke.test.ts-680-  const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
+src/lib/public-route-smoke.test.ts-681-
+src/lib/public-route-smoke.test.ts-682-  assert.match(consoleSource, /Manual evidence submission is available after sign-in\./);
+src/lib/public-route-smoke.test.ts-683-  assert.equal(consoleSource.includes("Manual evidence submission is enabled"), false);
+src/lib/public-route-smoke.test.ts-684-  assert.match(consoleSource, /disabled=\{!viewerPresent\}/);
+src/lib/public-route-smoke.test.ts-685-  assert.match(consoleSource, /if \(!viewerPresent\)/);
+src/lib/public-route-smoke.test.ts-686-});
+src/lib/public-route-smoke.test.ts-687-
+src/lib/public-route-smoke.test.ts-688-test("background networking and reasoning routes are distinct resilient public routes", () => {
+src/lib/public-route-smoke.test.ts-689-  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+src/lib/public-route-smoke.test.ts-690-  const reasoningCenterPage = readRepoFile("src/app/reasoning-center/page.tsx");
+src/lib/public-route-smoke.test.ts-691-  const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
+src/lib/public-route-smoke.test.ts-692-  const globalCss = readRepoFile("src/app/globals.css");
+src/lib/public-route-smoke.test.ts-693-  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+src/lib/public-route-smoke.test.ts-694-
+src/lib/public-route-smoke.test.ts-695-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_BACKGROUND_HERO/);
+src/lib/public-route-smoke.test.ts-696-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_PROMISE/);
+src/lib/public-route-smoke.test.ts-697-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_SAFETY_CARDS/);
+src/lib/public-route-smoke.test.ts-698-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS/);
+src/lib/public-route-smoke.test.ts-699-  assert.match(backgroundPage, /BACKGROUND_PUBLIC_NOT_THIS/);
+src/lib/public-route-smoke.test.ts-700-  assert.match(backgroundPage, /background-technical-details/);
+src/lib/public-route-smoke.test.ts-701-  assert.match(backgroundPage, /\/api\/background\/source-connections\/:id\/summary-draft/);
+src/lib/public-route-smoke.test.ts-702-  assert.match(backgroundPage, /\/api\/background\/source-connections\/:id\/approve/);
+src/lib/public-route-smoke.test.ts-703-  assert.match(backgroundPage, /\/api\/background\/profile\/recompute/);
+src/lib/public-route-smoke.test.ts-704-  assert.match(backgroundPage, /getMoralTradeMatchSignalContract/);
+src/lib/public-route-smoke.test.ts-705-  assert.match(backgroundPage, /validateMoralTradeMatchSignalContract/);
+src/lib/public-route-smoke.test.ts-706-  assert.match(backgroundPage, /validateMoralTradeMatchSignal/);
+src/lib/public-route-smoke.test.ts-707-  assert.match(backgroundPage, /getBackgroundAiShadowContract/);
+src/lib/public-route-smoke.test.ts-708-  assert.match(backgroundPage, /validateBackgroundAiShadowContract/);
+src/lib/public-route-smoke.test.ts-709-  assert.match(backgroundPage, /getBackgroundCapabilityGateContract/);
+src/lib/public-route-smoke.test.ts-710-  assert.match(backgroundPage, /validateBackgroundCapabilityGateContract/);
+src/lib/public-route-smoke.test.ts-711-  assert.match(backgroundPage, /getBackgroundRlsAuditContract/);
+src/lib/public-route-smoke.test.ts-712-  assert.match(backgroundPage, /validateBackgroundRlsAuditContract/);
+src/lib/public-route-smoke.test.ts-713-  assert.match(backgroundPage, /Match signal contract/);
+src/lib/public-route-smoke.test.ts-714-  assert.match(backgroundPage, /Suggestions explain public compatibility without revealing private wishes/);
+src/lib/public-route-smoke.test.ts-715-  assert.match(backgroundPage, /matchSignalContract\.sampleSignal/);
+src/lib/public-route-smoke.test.ts-716-  assert.match(backgroundPage, /participantExplanation\.headline/);
+src/lib/public-route-smoke.test.ts-717-  assert.match(backgroundPage, /participantExplanation\.redactionNotice/);
+src/lib/public-route-smoke.test.ts-718-  assert.match(backgroundPage, /matchSignalContract\.redactedFields/);
+src/lib/public-route-smoke.test.ts-719-  assert.match(backgroundPage, /AI shadow mode/);
+src/lib/public-route-smoke.test.ts-720-  assert.match(backgroundPage, /Open shadow contract/);
+src/lib/public-route-smoke.test.ts-721-  assert.match(backgroundPage, /\/api\/moral-trade\/ai-shadow\/contract/);
+src/lib/public-route-smoke.test.ts-722-  assert.match(backgroundPage, /aiShadowContract\.sampleReadyEvaluation/);
+src/lib/public-route-smoke.test.ts-723-  assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
+src/lib/public-route-smoke.test.ts-724-  assert.match(backgroundPage, /Capability gates/);
+src/lib/public-route-smoke.test.ts-725-  assert.match(backgroundPage, /Open gate contract/);
+src/lib/public-route-smoke.test.ts-726-  assert.match(backgroundPage, /Private-overlap checks are currently a disabled design lane/);
+src/lib/public-route-smoke.test.ts-727-  assert.match(backgroundPage, /Current phase artifact/);
+src/lib/public-route-smoke.test.ts-728-  assert.match(backgroundPage, /validateBackgroundPhaseGateBundle/);
+src/lib/public-route-smoke.test.ts-729-  assert.match(backgroundPage, /Private overlap contract/);
+src/lib/public-route-smoke.test.ts-730-  assert.match(backgroundPage, /capabilityGateContract\.gates/);
+src/lib/public-route-smoke.test.ts-731-  assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
+src/lib/public-route-smoke.test.ts-732-  assert.match(backgroundPage, /\/api\/moral-trade\/background-capability-gates\/contract/);
+src/lib/public-route-smoke.test.ts-733-  assert.match(backgroundPage, /\/api\/moral-trade\/private-overlap\/contract/);
+src/lib/public-route-smoke.test.ts-734-  assert.match(backgroundPage, /RLS and encryption audit/);
+src/lib/public-route-smoke.test.ts-735-  assert.match(backgroundPage, /Open RLS contract/);
+src/lib/public-route-smoke.test.ts-736-  assert.match(backgroundPage, /rlsAuditContract\.tableRequirements/);
+src/lib/public-route-smoke.test.ts-737-  assert.match(backgroundPage, /\/api\/moral-trade\/background-rls-audit\/contract/);
+src/lib/public-route-smoke.test.ts-738-  assert.match(backgroundPage, /Cohort pilot packs/);
+src/lib/public-route-smoke.test.ts-739-  assert.match(backgroundPage, /Donor circles/);
+src/lib/public-route-smoke.test.ts-740-  assert.match(backgroundPage, /Reading groups/);
+src/lib/public-route-smoke.test.ts-741-  assert.match(backgroundPage, /Organization cohorts/);
+
