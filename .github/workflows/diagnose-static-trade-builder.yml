@@ -1,0 +1,71 @@
+name: Diagnose static Trade builder
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: ${{ contains(github.event.head_commit.message, '[run-trade-builder-diagnostic]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode and extract the Trade builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa-results
+          node <<'NODE' > .qa-results/static-trade-builder-context.log
+          const { readFileSync } = require('node:fs');
+          const { gunzipSync } = require('node:zlib');
+          const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
+          const source = gunzipSync(Buffer.from(names.map((name) => readFileSync(`public/mt-live-0d0e0f03-${name}.txt`, 'utf8')).join(''), 'base64')).toString('utf8');
+          const target = source.indexOf('Potential matches');
+          console.log(`target=${target}`);
+          const declarations = [...source.matchAll(/function\s+([A-Za-z0-9_$]+)\s*\([^)]*\)\s*\{/g)]
+            .map((m) => ({ name: m[1], index: m.index }));
+          const before = declarations.filter((item) => item.index < target).slice(-12);
+          const after = declarations.filter((item) => item.index > target).slice(0, 8);
+          console.log('functions_before:');
+          before.forEach((item) => console.log(`${item.index} ${item.name}`));
+          console.log('functions_after:');
+          after.forEach((item) => console.log(`${item.index} ${item.name}`));
+          const owner = before[before.length - 1];
+          const next = after[0];
+          console.log(`owner=${owner?.name}@${owner?.index}`);
+          console.log(`next=${next?.name}@${next?.index}`);
+          console.log('===== owner function =====');
+          console.log(source.slice(owner.index, next.index));
+          console.log('===== tradePage function =====');
+          const trade = declarations.find((item) => item.name === 'tradePage');
+          const tradeNext = declarations.find((item) => trade && item.index > trade.index);
+          console.log(source.slice(trade.index, tradeNext?.index ?? trade.index + 10000));
+          console.log('===== app event bindings for trade/build =====');
+          for (const token of ['data-trade', 'data-build', 'tradePage()', 'state.trade', 'state.build']) {
+            console.log(`--- ${token} ---`);
+            let start = 0;
+            let count = 0;
+            while (count < 12) {
+              const index = source.indexOf(token, start);
+              if (index < 0) break;
+              console.log(source.slice(Math.max(0, index - 900), Math.min(source.length, index + token.length + 1800)));
+              console.log();
+              start = index + token.length;
+              count += 1;
+            }
+          }
+          NODE
+          git rm .github/workflows/diagnose-static-trade-builder.yml
+      - name: Publish context
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/static-trade-builder-context.log
+          git commit -m "Record static Trade builder context [trade-builder-diagnostic-complete] [verification-failure]"
+          git push origin HEAD:refs/heads/qa/home-authenticated-feed-20260727
