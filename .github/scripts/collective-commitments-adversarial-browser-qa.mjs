@@ -2,19 +2,17 @@
 
 import { chromium, expect } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
-import { createHash, randomUUID } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  hkdfSync,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-
-import {
-  createAccountToken,
-  createHumanToken,
-  createIdentityCommitment,
-  createRevealNonce,
-  deriveRevealMacKey,
-  encryptSignaturePayload,
-  unwrapCommitmentDataKey,
-} from "../../src/lib/collective-commitments/crypto.ts";
 
 const REQUIRED_QA_REF = "hvmxfjjbdcgjjudmthdz";
 const USER_PREFIX = "qa-collective-adversarial-";
@@ -60,6 +58,119 @@ const artifactDir = path.resolve(
   process.env.BROWSER_QA_ARTIFACT_DIR || "collective-commitments-browser-qa-artifacts",
 );
 const runTag = String(process.env.GITHUB_RUN_ID || Date.now());
+
+const encodedMasterKey = required("COLLECTIVE_COMMITMENT_MASTER_KEY");
+const collectiveMasterKey = Buffer.from(encodedMasterKey, "base64");
+if (collectiveMasterKey.length !== 32) {
+  throw new Error("COLLECTIVE_COMMITMENT_MASTER_KEY must decode to exactly 32 bytes.");
+}
+
+const AES_GCM_ALGORITHM = "aes-256-gcm";
+const AES_GCM_IV_BYTES = 12;
+
+function hmacSha256Hex(key, value) {
+  return createHmac("sha256", key).update(value, "utf8").digest("hex");
+}
+
+function decryptBytes(key, payload, aad) {
+  const decipher = createDecipheriv(
+    AES_GCM_ALGORITHM,
+    key,
+    Buffer.from(payload.ivBase64, "base64"),
+  );
+  decipher.setAAD(aad);
+  decipher.setAuthTag(Buffer.from(payload.tagBase64, "base64"));
+  return Buffer.concat([
+    decipher.update(Buffer.from(payload.ciphertextBase64, "base64")),
+    decipher.final(),
+  ]);
+}
+
+function encryptBytes(key, plaintext, aad) {
+  const iv = randomBytes(AES_GCM_IV_BYTES);
+  const cipher = createCipheriv(AES_GCM_ALGORITHM, key, iv);
+  cipher.setAAD(aad);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    ciphertextBase64: ciphertext.toString("base64"),
+    ivBase64: iv.toString("base64"),
+    tagBase64: tag.toString("base64"),
+  };
+}
+
+function deriveKey(dataKey, purpose) {
+  return Buffer.from(
+    hkdfSync(
+      "sha256",
+      dataKey,
+      Buffer.from("moral-trade-collective-commitments-v1", "utf8"),
+      Buffer.from(purpose, "utf8"),
+      32,
+    ),
+  );
+}
+
+function deriveSignatureEncryptionKey(dataKey) {
+  return deriveKey(dataKey, "signature-encryption");
+}
+
+function deriveAccountTokenKey(dataKey) {
+  return deriveKey(dataKey, "account-token");
+}
+
+function deriveHumanTokenKey(dataKey) {
+  return deriveKey(dataKey, "human-token");
+}
+
+function deriveRevealMacKey(dataKey) {
+  return deriveKey(dataKey, "reveal-manifest-mac");
+}
+
+function unwrapCommitmentDataKey(commitmentId, payload) {
+  return decryptBytes(
+    collectiveMasterKey,
+    payload,
+    Buffer.from(`collective-commitment-key:${commitmentId}`, "utf8"),
+  );
+}
+
+function createAccountToken(dataKey, profileId) {
+  return hmacSha256Hex(deriveAccountTokenKey(dataKey), profileId);
+}
+
+function createHumanToken(dataKey, humanUniquenessRefHash) {
+  return hmacSha256Hex(deriveHumanTokenKey(dataKey), humanUniquenessRefHash);
+}
+
+function createRevealNonce() {
+  return randomBytes(24).toString("hex");
+}
+
+function canonicalRevealString({ verifiedRealName, verifiedAffiliation, revealNonce }) {
+  return [verifiedRealName.trim(), verifiedAffiliation?.trim() ?? "", revealNonce].join("\n");
+}
+
+function createIdentityCommitment(dataKey, input) {
+  return hmacSha256Hex(deriveRevealMacKey(dataKey), canonicalRevealString(input));
+}
+
+function encryptSignaturePayload(commitmentId, dataKey, payload) {
+  return encryptBytes(
+    deriveSignatureEncryptionKey(dataKey),
+    Buffer.from(JSON.stringify(payload), "utf8"),
+    Buffer.from(`collective-signature:${commitmentId}`, "utf8"),
+  );
+}
+
+function decryptSignaturePayload(commitmentId, dataKey, payload) {
+  const plaintext = decryptBytes(
+    deriveSignatureEncryptionKey(dataKey),
+    payload,
+    Buffer.from(`collective-signature:${commitmentId}`, "utf8"),
+  );
+  return JSON.parse(plaintext.toString("utf8"));
+}
 
 if (new URL(qaURL).hostname !== `${REQUIRED_QA_REF}.supabase.co`) {
   throw new Error(`Refusing non-QA Supabase target: ${qaURL}`);
@@ -537,7 +648,6 @@ async function readManifestForExistingSignatures(commitmentId) {
     .order("signed_at")
     .order("id");
   if (error) throw new Error(error.message);
-  const { decryptSignaturePayload } = await import("../../src/lib/collective-commitments/crypto.ts");
   const manifest = signatures.map((signature) => {
     const payload = decryptSignaturePayload(commitmentId, dataKey, {
       ciphertextBase64: signature.encrypted_identity_payload,
@@ -665,6 +775,7 @@ async function cleanup() {
 }
 
 await mkdir(artifactDir, { recursive: true });
+await writeAudit();
 
 try {
   await recordCheck("create isolated verified identities", async () => {
@@ -1117,7 +1228,12 @@ try {
     audit.cleanupError = cleanError(error);
     process.exitCode = 1;
   }
-  await writeAudit();
+  try {
+    await writeAudit();
+  } catch (error) {
+    console.error(`Could not write final QA audit: ${cleanError(error)}`);
+    process.exitCode = 1;
+  }
 }
 
 if (audit.outcome !== "pass") {
