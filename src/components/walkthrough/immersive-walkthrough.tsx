@@ -820,12 +820,12 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           <div className="mtw-scene-head">
             <div className="mtw-scene-prompt">Redirect scheduled · users notified</div>
             <h1 className="mtw-scene-title" tabIndex={-1}>
-              The $10 is scheduled to be donated in 7 days.
+              The $10 redirect is already scheduled.
             </h1>
             <p className="mtw-scene-line">
-              Moral Trade notifies users that the Republican environmentalist&apos;s $10 is scheduled
-              to go to an environmental protection organization. They can propose a moral trade she
-              judges an even better use of the same $10; otherwise, the donation proceeds automatically.
+              In 7 days, the Republican environmentalist&apos;s $10 goes to an environmental protection
+              organization. Moral Trade notifies users now; they may propose a trade she values more
+              for the same $10. Without an accepted and completed trade, the donation proceeds automatically.
             </p>
           </div>
           <div className="mtw-impact-options" aria-label="Compare uses of ten dollars">
@@ -833,7 +833,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
               <span>Scheduled redirect</span>
               <strong>$10</strong>
               <b>Environmental organization</b>
-              <small>Automatically donated if no better accepted trade is completed.</small>
+              <small>Donated automatically in 7 days unless an accepted trade is completed.</small>
             </article>
             <article className="mtw-impact-option">
               <span>One-to-one proposal</span>
@@ -849,8 +849,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
             </article>
           </div>
           <p className="mtw-example-note">
-            In this example, the environmentalist prefers the verified 210 person-days to the $10
-            fallback donation.
+            Here, she prefers 210 verified person-days to the scheduled $10 donation.
           </p>
           <PrimaryAction onClick={() => setStep(3)}>See a notified user start a coalition</PrimaryAction>
         </div>
@@ -920,8 +919,8 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
             </article>
           </div>
           <p className="mtw-fallback-note">
-            If the coalition does not form or complete, the $10 follows its environmental fallback
-            after the 7-day window.
+            If the coalition does not form or complete, the scheduled environmental donation proceeds
+            after 7 days.
           </p>
           <PrimaryAction onClick={() => setStep(5)}>Accept the group trade</PrimaryAction>
         </div>
@@ -998,7 +997,7 @@ export function ImmersiveWalkthrough({ tradeCreateHref }: { tradeCreateHref: str
           </p>
           <p className="mtw-example-note">
             Money moved where it was scarcer; small actions moved where they were cheaper. Both
-            sides prefer this outcome to the 7-day fallback.
+            sides prefer this outcome to the scheduled donation.
           </p>
           <ConversionDeck
             primary="join"

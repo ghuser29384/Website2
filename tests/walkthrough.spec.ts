@@ -90,6 +90,7 @@ test("Make the trade stays fully visible on a wide, short screen", async ({ page
 });
 
 test("Crowd and Redirect preserve the requested copy, coalition trade, and routing", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
@@ -121,10 +122,20 @@ test("Crowd and Redirect preserve the requested copy, coalition trade, and routi
   await expect(page.getByText("210 person-days · 30 person-weeks")).toBeVisible();
   await expect(page.getByText("1 × 10 weeks")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "The $10 is scheduled to be donated in 7 days." }),
+    page.getByRole("heading", { name: "The $10 redirect is already scheduled." }),
   ).toBeVisible();
-  await expect(page.getByText(/Moral Trade notifies users/)).toBeVisible();
-  await page.getByRole("button", { name: "See a notified user start a coalition" }).click();
+  await expect(page.getByText(/Moral Trade notifies users now/)).toBeVisible();
+  await expect(
+    page.getByText(/Without an accepted and completed trade, the donation proceeds automatically/),
+  ).toBeVisible();
+  const coalitionStart = page.getByRole("button", {
+    name: "See a notified user start a coalition",
+  });
+  await expect(coalitionStart).toBeVisible();
+  await page.waitForTimeout(700);
+  await expectFullyInViewport(page, coalitionStart);
+  await expectFullyInside(coalitionStart, page.locator(".experience"));
+  await coalitionStart.click();
 
   await expect(
     page.getByRole("heading", { name: "A notified user finds 99 close matches." }),

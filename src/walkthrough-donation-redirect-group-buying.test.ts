@@ -10,6 +10,10 @@ const fallback = readFileSync(
   new URL("./components/walkthrough/immersive-walkthrough.tsx", import.meta.url),
   "utf8",
 );
+const fallbackStyles = readFileSync(
+  new URL("./app/walkthrough/walkthrough.css", import.meta.url),
+  "utf8",
+);
 
 for (const [name, source] of [
   ["standalone production walkthrough", standalone],
@@ -20,8 +24,10 @@ for (const [name, source] of [
     assert.match(source, /100 × 2\.1 days/);
     assert.match(source, /210 person-days · 30 person-weeks/);
     assert.match(source, /Redirect scheduled · users notified/);
-    assert.match(source, /The \$10 is scheduled to be donated in 7 days/);
-    assert.match(source, /Moral Trade notifies users/);
+    assert.match(source, /The \$10 redirect is already scheduled/);
+    assert.match(source, /Moral Trade notifies users now/);
+    assert.match(source, /Without an accepted and completed trade, the donation proceeds automatically/);
+    assert.match(source, /scheduled environmental donation proceeds/);
     assert.match(source, /See a notified user start a coalition/);
     assert.match(source, /A notified user finds 99 close matches/);
     assert.doesNotMatch(source, /invite a better proposal|Notify potential coalition members/);
@@ -35,3 +41,9 @@ for (const [name, source] of [
     assert.match(source, /One \$10 bought 30 person-weeks of environmental action/);
   });
 }
+
+
+test("Donation Redirect keeps the scheduled notification screen in a compact responsive layout", () => {
+  assert.match(standalone, /Donation Redirect scheduled-notification reflow/);
+  assert.match(fallbackStyles, /Donation Redirect scheduled-notification reflow/);
+});

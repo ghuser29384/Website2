@@ -1957,3 +1957,142 @@
     font-size: 46px;
   }
 }
+
+/* Donation Redirect scheduled-notification reflow. */
+.mtw-redirect-comparison-scene {
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
+  grid-template-areas:
+    "redirect-head redirect-options"
+    "redirect-note redirect-options"
+    "redirect-action redirect-options";
+  align-items: start;
+  column-gap: clamp(30px, 4vw, 64px);
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-head {
+  grid-area: redirect-head;
+  width: 100%;
+  max-width: 540px;
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-title {
+  max-width: 10ch;
+  font-size: clamp(48px, 5.2vw, 72px);
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-line {
+  max-width: 520px;
+  margin-top: 18px;
+  font-size: clamp(17px, 1.55vw, 21px);
+  line-height: 1.28;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-options {
+  grid-area: redirect-options;
+  width: 100%;
+  margin-top: 0;
+  grid-template-columns: 1fr;
+  align-self: center;
+  gap: 10px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option {
+  min-height: 0;
+  padding: 15px 17px;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas:
+    "impact-label impact-label"
+    "impact-amount impact-result"
+    "impact-detail impact-detail";
+  align-items: end;
+  gap: 5px 16px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option.is-group-buy {
+  transform: none;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > span {
+  grid-area: impact-label;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > strong {
+  grid-area: impact-amount;
+  margin: 0;
+  font-size: clamp(28px, 2.6vw, 40px);
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > b {
+  grid-area: impact-result;
+  align-self: end;
+  font-size: 16px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > small {
+  grid-area: impact-detail;
+}
+
+.mtw-redirect-comparison-scene > .mtw-example-note {
+  grid-area: redirect-note;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 16px;
+}
+
+.mtw-redirect-comparison-scene > .mtw-primary-action {
+  grid-area: redirect-action;
+  margin-top: 18px;
+}
+
+@media (max-width: 1100px) {
+  .mtw-experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .mtw-redirect-comparison-scene {
+    position: relative;
+    min-height: 980px;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "redirect-head"
+      "redirect-options"
+      "redirect-note"
+      "redirect-action";
+    align-content: start;
+    row-gap: 0;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-impact-options {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 740px) {
+  .mtw-redirect-comparison-scene {
+    min-height: 1280px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-scene-title {
+    max-width: 11ch;
+    font-size: 40px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-scene-line {
+    font-size: 17px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-impact-option {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "impact-label"
+      "impact-amount"
+      "impact-result"
+      "impact-detail";
+    align-items: start;
+  }
+
+  .mtw-redirect-comparison-scene > .mtw-primary-action {
+    width: 100%;
+  }
+}

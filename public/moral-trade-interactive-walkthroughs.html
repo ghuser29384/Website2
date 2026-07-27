@@ -1938,6 +1938,146 @@
   }
 }
 
+
+/* Donation Redirect scheduled-notification reflow. */
+.redirect-comparison-scene {
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
+  grid-template-areas:
+    "redirect-head redirect-options"
+    "redirect-note redirect-options"
+    "redirect-action redirect-options";
+  align-items: start;
+  column-gap: clamp(30px, 4vw, 64px);
+}
+
+.redirect-comparison-scene .scene-head {
+  grid-area: redirect-head;
+  width: 100%;
+  max-width: 540px;
+}
+
+.redirect-comparison-scene .scene-title {
+  max-width: 10ch;
+  font-size: clamp(48px, 5.2vw, 72px);
+}
+
+.redirect-comparison-scene .scene-line {
+  max-width: 520px;
+  margin-top: 18px;
+  font-size: clamp(17px, 1.55vw, 21px);
+  line-height: 1.28;
+}
+
+.redirect-comparison-scene .impact-options {
+  grid-area: redirect-options;
+  width: 100%;
+  margin-top: 0;
+  grid-template-columns: 1fr;
+  align-self: center;
+  gap: 10px;
+}
+
+.redirect-comparison-scene .impact-option {
+  min-height: 0;
+  padding: 15px 17px;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas:
+    "impact-label impact-label"
+    "impact-amount impact-result"
+    "impact-detail impact-detail";
+  align-items: end;
+  gap: 5px 16px;
+}
+
+.redirect-comparison-scene .impact-option.is-group-buy {
+  transform: none;
+}
+
+.redirect-comparison-scene .impact-option > span {
+  grid-area: impact-label;
+}
+
+.redirect-comparison-scene .impact-option > strong {
+  grid-area: impact-amount;
+  margin: 0;
+  font-size: clamp(28px, 2.6vw, 40px);
+}
+
+.redirect-comparison-scene .impact-option > b {
+  grid-area: impact-result;
+  align-self: end;
+  font-size: 16px;
+}
+
+.redirect-comparison-scene .impact-option > small {
+  grid-area: impact-detail;
+}
+
+.redirect-comparison-scene > .example-note {
+  grid-area: redirect-note;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 16px;
+}
+
+.redirect-comparison-scene > .primary-action {
+  grid-area: redirect-action;
+  margin-top: 18px;
+}
+
+@media (max-width: 1100px) {
+  .experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .redirect-comparison-scene {
+    position: relative;
+    min-height: 980px;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "redirect-head"
+      "redirect-options"
+      "redirect-note"
+      "redirect-action";
+    align-content: start;
+    row-gap: 0;
+  }
+
+  .redirect-comparison-scene .impact-options {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 740px) {
+  .redirect-comparison-scene {
+    min-height: 1280px;
+  }
+
+  .redirect-comparison-scene .scene-title {
+    max-width: 11ch;
+    font-size: 40px;
+  }
+
+  .redirect-comparison-scene .scene-line {
+    font-size: 17px;
+  }
+
+  .redirect-comparison-scene .impact-option {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "impact-label"
+      "impact-amount"
+      "impact-result"
+      "impact-detail";
+    align-items: start;
+  }
+
+  .redirect-comparison-scene > .primary-action {
+    width: 100%;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -2364,7 +2504,7 @@
       }
 
       if (state.step === 2) {
-        stage.innerHTML = `<div class="scene redirect-comparison-scene">${stepMark(2, 7)}<div class="scene-head"><div class="scene-prompt">Redirect scheduled · users notified</div><h1 class="scene-title">The $10 is scheduled to be donated in 7 days.</h1><p class="scene-line">Moral Trade notifies users that the Republican environmentalist's $10 is scheduled to go to an environmental protection organization. They can propose a moral trade she judges an even better use of the same $10; otherwise, the donation proceeds automatically.</p></div><div class="impact-options" aria-label="Compare uses of ten dollars"><article class="impact-option"><span>Scheduled redirect</span><strong>$10</strong><b>Environmental organization</b><small>Automatically donated if no better accepted trade is completed.</small></article><article class="impact-option"><span>One-to-one proposal</span><strong>1 × 10 weeks</strong><b>10 person-weeks</b><small>One person avoids buying single-use plastic bags.</small></article><article class="impact-option is-group-buy"><span>Group-buy proposal</span><strong>100 × 2.1 days</strong><b>210 person-days · 30 person-weeks</b><small>Equivalent to 30 people for one week.</small></article></div><p class="example-note">In this example, the environmentalist prefers the verified 210 person-days to the $10 fallback donation.</p><button class="primary-action" type="button" data-action="notify-coalition"><span>See a notified user start a coalition</span><span aria-hidden="true">→</span></button></div>`;
+        stage.innerHTML = `<div class="scene redirect-comparison-scene">${stepMark(2, 7)}<div class="scene-head"><div class="scene-prompt">Redirect scheduled · users notified</div><h1 class="scene-title">The $10 redirect is already scheduled.</h1><p class="scene-line">In 7 days, the Republican environmentalist's $10 goes to an environmental protection organization. Moral Trade notifies users now; they may propose a trade she values more for the same $10. Without an accepted and completed trade, the donation proceeds automatically.</p></div><div class="impact-options" aria-label="Compare uses of ten dollars"><article class="impact-option"><span>Scheduled redirect</span><strong>$10</strong><b>Environmental organization</b><small>Donated automatically in 7 days unless an accepted trade is completed.</small></article><article class="impact-option"><span>One-to-one proposal</span><strong>1 × 10 weeks</strong><b>10 person-weeks</b><small>One person avoids buying single-use plastic bags.</small></article><article class="impact-option is-group-buy"><span>Group-buy proposal</span><strong>100 × 2.1 days</strong><b>210 person-days · 30 person-weeks</b><small>Equivalent to 30 people for one week.</small></article></div><p class="example-note">Here, she prefers 210 verified person-days to the scheduled $10 donation.</p><button class="primary-action" type="button" data-action="notify-coalition"><span>See a notified user start a coalition</span><span aria-hidden="true">→</span></button></div>`;
         return;
       }
 
@@ -2374,7 +2514,7 @@
       }
 
       if (state.step === 4) {
-        stage.innerHTML = `<div class="scene group-deal-scene">${stepMark(4, 7)}<div class="scene-head"><div class="scene-prompt">A coalition can trade as one counterparty</div><h1 class="scene-title">The coalition becomes one offer.</h1></div><div class="group-deal-board"><article class="group-deal-card"><span>Environmentalist Republican gives</span><strong>$10 coalition payment</strong><small>Released only after the group's verified completion.</small></article><div class="group-deal-arrow" aria-hidden="true">↔</div><article class="group-deal-card is-coalition"><span>100-person coalition gives</span><strong>210 person-days without buying single-use plastic bags</strong><small>Each member commits 2.1 days.</small></article></div><p class="fallback-note">If the coalition does not form or complete, the $10 follows its environmental fallback after the 7-day window.</p><button class="primary-action" type="button" data-action="accept-group-trade"><span>Accept the group trade</span><span aria-hidden="true">→</span></button></div>`;
+        stage.innerHTML = `<div class="scene group-deal-scene">${stepMark(4, 7)}<div class="scene-head"><div class="scene-prompt">A coalition can trade as one counterparty</div><h1 class="scene-title">The coalition becomes one offer.</h1></div><div class="group-deal-board"><article class="group-deal-card"><span>Environmentalist Republican gives</span><strong>$10 coalition payment</strong><small>Released only after the group's verified completion.</small></article><div class="group-deal-arrow" aria-hidden="true">↔</div><article class="group-deal-card is-coalition"><span>100-person coalition gives</span><strong>210 person-days without buying single-use plastic bags</strong><small>Each member commits 2.1 days.</small></article></div><p class="fallback-note">If the coalition does not form or complete, the scheduled environmental donation proceeds after 7 days.</p><button class="primary-action" type="button" data-action="accept-group-trade"><span>Accept the group trade</span><span aria-hidden="true">→</span></button></div>`;
         return;
       }
 
@@ -2391,7 +2531,7 @@
       const coalitionSettlement = state.coalitionRule === "vote"
         ? "A one-member-one-vote decision now allocates the coalition's $10."
         : "The coalition's $10 goes to its pre-agreed future-focused destination.";
-      stage.innerHTML = `<div class="scene success-scene redirect-amplified-success">${stepMark(6, 7)}${burstMarkup(32)}<div class="success-copy"><div class="scene-prompt">Donation redirected · impact amplified</div><h1 class="scene-title">One $10 bought 30 person-weeks of environmental action.</h1><p class="scene-line">The environmentalist gets 210 verified person-days. The coalition gets the same $10 for its shared priorities. ${coalitionSettlement}</p><p class="example-note">Money moved where it was scarcer; small actions moved where they were cheaper. Both sides prefer this outcome to the 7-day fallback.</p>${conversionDeck("join", { create: "Offer", chip: "Leverage $1", chipAction: "open-crowd" })}</div></div>`;
+      stage.innerHTML = `<div class="scene success-scene redirect-amplified-success">${stepMark(6, 7)}${burstMarkup(32)}<div class="success-copy"><div class="scene-prompt">Donation redirected · impact amplified</div><h1 class="scene-title">One $10 bought 30 person-weeks of environmental action.</h1><p class="scene-line">The environmentalist gets 210 verified person-days. The coalition gets the same $10 for its shared priorities. ${coalitionSettlement}</p><p class="example-note">Money moved where it was scarcer; small actions moved where they were cheaper. Both sides prefer this outcome to the scheduled donation.</p>${conversionDeck("join", { create: "Offer", chip: "Leverage $1", chipAction: "open-crowd" })}</div></div>`;
     }
 
     function equalizerMarkup() {
