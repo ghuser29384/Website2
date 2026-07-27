@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+// Connector-authored synchronization commit: no assertion semantics are changed.
 const migrationPath = "supabase/migrations/20260726171000_collective_identity_threshold_commitments.sql";
 const manifestAliasRepairPath =
   "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql";
