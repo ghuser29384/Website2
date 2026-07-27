@@ -9,7 +9,7 @@ on:
       - ".github/workflows/multi-threshold-authenticated-browser-qa.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: multi-threshold-authenticated-browser-qa
@@ -23,6 +23,8 @@ jobs:
     env:
       EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
       EXPECTED_WRAPPER_BLOB: 2ba7f05f07f4c2e0e48449361a91f39e9c373dde
+      QA_BRANCH: qa/multi-threshold-authenticated-browser-20260727
+      RUN_STATUS_PATH: .github/multi-threshold-push-run-status.json
       QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
@@ -62,16 +64,40 @@ jobs:
           git merge-base --is-ancestor "$EXPECTED_PRODUCT_HEAD" HEAD
           test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
           changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
-          expected="$(printf '%s\n' \
-            '.github/scripts/multi-threshold-authenticated-browser-qa.mjs' \
-            '.github/workflows/multi-threshold-authenticated-browser-qa.yml' | sort)"
-          if [[ "$changed" != "$expected" ]]; then
-            echo "Trusted QA branch contains unexpected changes:" >&2
-            printf '%s\n' "$changed" >&2
-            exit 1
-          fi
+          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^\.github/(scripts/multi-threshold-authenticated-browser-qa\.mjs|workflows/multi-threshold-authenticated-browser-qa\.yml|multi-threshold-push-run-status\.json)$' || true)"
+          test -z "$unexpected"
+          printf '%s\n' "$changed" | grep -Fx '.github/scripts/multi-threshold-authenticated-browser-qa.mjs'
+          printf '%s\n' "$changed" | grep -Fx '.github/workflows/multi-threshold-authenticated-browser-qa.yml'
           test "$(git hash-object .github/scripts/multi-threshold-authenticated-browser-qa.mjs)" = "$EXPECTED_WRAPPER_BLOB"
           node --check .github/scripts/multi-threshold-authenticated-browser-qa.mjs
+
+      - name: Publish observable run identity
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          payload = {
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "workflow": os.environ["GITHUB_WORKFLOW"],
+              "workflowRef": os.environ.get("GITHUB_WORKFLOW_REF"),
+              "triggerCommit": os.environ["GITHUB_SHA"],
+              "productHead": os.environ["EXPECTED_PRODUCT_HEAD"],
+              "status": "started",
+              "startedAt": datetime.now(timezone.utc).isoformat(),
+          }
+          Path(os.environ["RUN_STATUS_PATH"]).write_text(json.dumps(payload, indent=2) + "\n")
+          PY
+          git config user.name "Moral Trade QA automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add "$RUN_STATUS_PATH"
+          git commit -m "Record multi-threshold browser QA run $GITHUB_RUN_ID"
+          git push origin "HEAD:${QA_BRANCH}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -171,3 +197,26 @@ jobs:
           if [[ -n "${APP_PID:-}" ]]; then
             kill "$APP_PID" 2>/dev/null || true
           fi
+
+      - name: Publish final run status
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euxo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path(os.environ["RUN_STATUS_PATH"])
+          payload = json.loads(path.read_text())
+          payload["status"] = os.environ["JOB_STATUS"]
+          payload["completedAt"] = datetime.now(timezone.utc).isoformat()
+          path.write_text(json.dumps(payload, indent=2) + "\n")
+          PY
+          git add "$RUN_STATUS_PATH"
+          git commit -m "Record multi-threshold browser QA result $GITHUB_RUN_ID" || true
+          git push origin "HEAD:${QA_BRANCH}"
