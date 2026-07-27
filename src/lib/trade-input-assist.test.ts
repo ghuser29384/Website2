@@ -28,12 +28,22 @@ const migrationSource = readRepoFile(
 );
 
 interface AssistApi {
+  autoResolveDelayMs: number;
+  composeCommitmentSuggestions(
+    query: string,
+    options?: { topicHint?: string },
+  ): Array<{ label: string; score: number; topic: string }>;
   extractWebsiteMentions(value: string): Array<{ href: string; text: string }>;
   findDonationRoute(href: string): Record<string, unknown> | null;
   rankSuggestions(
     context: string,
     query: string,
+    options?: { topicHint?: string },
   ): Array<{ label: string; score: number }>;
+  resolveCanonicalMatch(
+    context: string,
+    query: string,
+  ): { canonicalValue: string; label: string } | null;
 }
 
 async function loadAssistApi() {
@@ -93,6 +103,154 @@ test("mixed search fields keep cause matches ahead of action matches", async () 
   );
 });
 
+test("natural-language research offers compose topic-specific commitments", async () => {
+  const assist = await loadAssistApi();
+  const labels = Array.from(
+    assist.rankSuggestions(
+      "commitments",
+      "I'll do wild-animal-suffering research",
+    ),
+    (entry) => entry.label,
+  );
+
+  assert.deepEqual(labels.slice(0, 4), [
+    "Research wild animal suffering for fixed hours",
+    "Complete a defined wild animal suffering research deliverable",
+    "Complete a wild animal suffering literature review",
+    "Publish a wild animal suffering research output",
+  ]);
+});
+
+test("the compositional matcher understands new topics and misspelled action words", async () => {
+  const assist = await loadAssistApi();
+  const labels = Array.from(
+    assist.rankSuggestions(
+      "commitments",
+      "I'll do insect consciousness reserch",
+    ),
+    (entry) => entry.label,
+  );
+
+  assert.deepEqual(labels.slice(0, 4), [
+    "Research insect consciousness for fixed hours",
+    "Complete a defined insect consciousness research deliverable",
+    "Complete an insect consciousness literature review",
+    "Publish an insect consciousness research output",
+  ]);
+});
+
+test("a selected priority supplies the topic when the action text omits it", async () => {
+  const assist = await loadAssistApi();
+  const labels = Array.from(
+    assist.rankSuggestions("commitments", "literature review", {
+      topicHint: "Wild animal suffering",
+    }),
+    (entry) => entry.label,
+  );
+
+  assert.equal(labels[0], "Complete a wild animal suffering literature review");
+  assert.ok(labels.includes("Research wild animal suffering for fixed hours"));
+});
+
+test("compositional commitments cover common action families without pre-enumerating topics", async () => {
+  const assist = await loadAssistApi();
+  const examples = [
+    ["write", "I will write a climate change brief", /climate change/i],
+    ["build", "Build an insect consciousness tool", /insect consciousness/i],
+    ["volunteer", "Volunteer for global health", /global health/i],
+    ["teach", "Teach AI safety", /ai safety/i],
+    ["outreach", "Do outreach about global poverty", /global poverty/i],
+    ["translate", "Translate a factory farming report", /factory farming/i],
+    ["donate", "Donate to mental health", /mental health/i],
+  ] as const;
+
+  for (const [intent, query, expectedTopic] of examples) {
+    const suggestions = assist.composeCommitmentSuggestions(query);
+    assert.ok(suggestions.length >= 2, `${intent} should produce bounded options`);
+    assert.match(suggestions[0]?.label ?? "", expectedTopic, intent);
+  }
+});
+
+test("confident typos resolve to a unique canonical value while ambiguity stays reviewable", async () => {
+  const assist = await loadAssistApi();
+
+  assert.equal(
+    assist.resolveCanonicalMatch("priorities", "Global povertyefgef")?.label,
+    "Global poverty",
+  );
+  assert.equal(
+    assist.resolveCanonicalMatch("priorities", "Gloabl poverty")?.label,
+    "Global poverty",
+  );
+  assert.equal(
+    assist.resolveCanonicalMatch("recipients", "Globla poverty")?.label,
+    "Global poverty",
+  );
+  assert.equal(assist.resolveCanonicalMatch("priorities", "Animal"), null);
+  assert.equal(
+    assist.resolveCanonicalMatch(
+      "commitments",
+      "I will write a careful memo for a new topic",
+    ),
+    null,
+  );
+});
+
+test("insertions, deletions, and transpositions resolve across every canonical label", async () => {
+  const assist = await loadAssistApi();
+  const contexts = [
+    "priorities",
+    "commitments",
+    "evidence",
+    "durations",
+    "baselines",
+    "exits",
+    "organizations",
+  ];
+  let mutationCount = 0;
+
+  for (const context of contexts) {
+    for (const entry of catalog[context]) {
+      const label = String(entry.label);
+      const match = /[A-Za-z]{2,}/.exec(label);
+      assert.ok(match, `test fixture needs a mutable word: ${label}`);
+      const start = match.index;
+      const word = match[0];
+      const index = Math.min(2, word.length - 2);
+      const variants = [
+        `${label.slice(0, start + index)}x${label.slice(start + index)}`,
+        `${label.slice(0, start + index)}${label.slice(start + index + 1)}`,
+        `${label.slice(0, start + index)}${word[index + 1]}${word[index]}${label.slice(
+          start + index + 2,
+        )}`,
+      ];
+
+      for (const variant of variants) {
+        mutationCount += 1;
+        assert.equal(
+          assist.resolveCanonicalMatch(context, variant)?.label,
+          label,
+          `${context}: ${variant}`,
+        );
+      }
+    }
+  }
+  assert.equal(mutationCount, 165);
+});
+
+test("automatic resolution is delayed, undoable, and IME-safe", async () => {
+  const assist = await loadAssistApi();
+
+  assert.equal(assist.autoResolveDelayMs, 650);
+  assert.match(assistSource, /Changed “\$\{previousValue\}” to “\$\{canonicalValue\}”/);
+  assert.match(assistSource, /undo\.textContent = "Undo"/);
+  assert.match(assistSource, /ignoredCorrectionKeys/);
+  assert.match(assistSource, /correctionElementKey/);
+  assert.match(assistSource, /compositionstart/);
+  assert.match(assistSource, /compositionend/);
+  assert.match(assistSource, /ignoredCorrectionValues/);
+});
+
 test("the shared catalog covers every standardized trade-term context", () => {
   for (const key of [
     "priorities",
@@ -105,6 +263,7 @@ test("the shared catalog covers every standardized trade-term context", () => {
   ]) {
     assert.ok(catalog[key]?.length, `${key} should contain standardized suggestions`);
   }
+  assert.ok(catalog.commitmentIntents?.length >= 8);
 });
 
 test("website mentions are normalized into safe links without HTML injection", async () => {
