@@ -1,0 +1,44 @@
+name: PR 212 QA log diagnostic
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-qa-log-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: "30256160223"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Capture filtered and tail diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > /tmp/pr212-qa.log
+          {
+            echo "Run: $RUN_ID"
+            echo
+            echo "=== ERROR CONTEXT ==="
+            grep -n -B 8 -A 16 -E 'ERROR:|FATAL:|psql:|Process completed with exit code|violates|already exists|syntax error|cannot|refusing' /tmp/pr212-qa.log || true
+            echo
+            echo "=== MIGRATION STEP TAIL ==="
+            awk '/Compile and apply institutional migration atomically to isolated QA/{capture=1} capture{print}' /tmp/pr212-qa.log | tail -n 500
+          } > ops/pr212-qa-migration-failure.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-qa-migration-failure.txt
+          git commit -m "Record PR 212 QA migration failure"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
