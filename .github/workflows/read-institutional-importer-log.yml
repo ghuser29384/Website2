@@ -1,0 +1,40 @@
+name: Read institutional importer log
+
+on:
+  push:
+    branches:
+      - feat/institutional-trade-system
+    paths:
+      - .github/workflows/read-institutional-importer-log.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  read-log:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      IMPORT_RUN_ID: "30236319107"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Save failed importer log excerpt
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$IMPORT_RUN_ID" --repo "$GITHUB_REPOSITORY" --log > /tmp/importer.log
+          {
+            echo "Importer run: $IMPORT_RUN_ID"
+            echo
+            tail -n 240 /tmp/importer.log
+          } > .github/importer-diagnostic.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/importer-diagnostic.txt
+          git commit -m "Record temporary importer diagnostic"
+          git push origin HEAD:feat/institutional-trade-system
