@@ -35,6 +35,23 @@ jobs:
       - name: Apply compact scheduled-redirect reflow
         run: python3 scripts/tighten-donation-redirect-notification-screen.py
 
+      - name: Normalize generated text file endings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for name in [
+              "public/moral-trade-interactive-walkthroughs.html",
+              "src/app/walkthrough/walkthrough.css",
+              "src/components/walkthrough/immersive-walkthrough.tsx",
+              "src/walkthrough-donation-redirect-group-buying.test.ts",
+              "tests/walkthrough.spec.ts",
+          ]:
+              path = Path(name)
+              path.write_text(path.read_text(encoding="utf-8").rstrip() + "\n", encoding="utf-8")
+          PY
+
       - name: Install dependencies
         run: npm ci
 
