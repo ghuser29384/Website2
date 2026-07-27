@@ -1,0 +1,91 @@
+name: Finalize PR 158 bilateral migration ordering v3
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/finalize-pr158-bilateral-migration-order-v3.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-pr158-bilateral-confirmation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out temporary branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out and guard exact PR 158 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git checkout -B agent/dynamic-marketplace-clearing-rounds origin/agent/dynamic-marketplace-clearing-rounds
+          actual="$(git rev-parse HEAD)"
+          expected="145d3daec4333c7a9606e7d28a08b1305d812e18"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Refusing moved PR #158 head. Expected $expected, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Move migration beyond the current QA migration frontier
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="supabase/migrations/20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          new="supabase/migrations/20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          test -f "$old"
+          test ! -e "$new"
+          git mv "$old" "$new"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts")
+          source = path.read_text(encoding="utf-8")
+          old = "20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          new = "20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one old migration filename reference; found {source.count(old)}.")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          ! grep -R -n "20260727043000_allow_closed_marketplace_offer_bilateral_confirmation" \
+            src supabase .github/workflows/dynamic-marketplace-qa.yml
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '202607270*_*.sql' -printf '%f\n' | sort | tail -n1)" = \
+            "20260727050000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Re-run exact affected test and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts'
+          npm run build
+
+      - name: Commit and push ordered migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A -- \
+            supabase/migrations \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts'
+          git diff --cached --check
+          git commit -m "Move bilateral confirmation migration beyond QA frontier"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
