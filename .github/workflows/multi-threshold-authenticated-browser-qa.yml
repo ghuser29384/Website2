@@ -1,0 +1,170 @@
+name: Multi-threshold authenticated browser QA
+
+on:
+  pull_request:
+    branches:
+      - feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+    paths:
+      - ".github/scripts/multi-threshold-authenticated-browser-qa.mjs"
+      - ".github/workflows/multi-threshold-authenticated-browser-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multi-threshold-authenticated-browser-qa
+  cancel-in-progress: false
+
+jobs:
+  authenticated-browser-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/multi-threshold-authenticated-browser-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/multi-threshold-browser-qa-artifacts
+
+    steps:
+      - name: Validate exact target and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test "$GITHUB_HEAD_REF" = "qa/multi-threshold-authenticated-browser-20260727"
+          test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
+            test -n "${!name:-}"
+          done
+
+      - name: Check out temporary QA branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the exact product commit under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_PRODUCT_HEAD" HEAD
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/multi-threshold-authenticated-browser-qa.mjs' \
+            '.github/workflows/multi-threshold-authenticated-browser-qa.yml' | sort)"
+          if [[ "$changed" != "$expected" ]]; then
+            echo "Temporary QA branch contains unexpected changes:" >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+          node --check .github/scripts/multi-threshold-authenticated-browser-qa.mjs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install repository dependencies
+        run: npm ci
+
+      - name: Run focused multi-threshold regressions
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$BROWSER_QA_ARTIFACT_DIR"
+          node --import tsx --test \
+            src/lib/mpgf/failure-bonus-success-premium.test.ts \
+            src/lib/mpgf/failure-bonus-success-premium-integration.test.ts \
+            src/lib/mpgf/failure-bonus-threshold-editor.test.ts \
+            src/lib/mpgf/failure-bonus-operator.test.ts \
+            src/lib/mpgf/failure-bonus-multi-threshold-integration.test.ts \
+            src/lib/mpgf/public-goods-refund-bonus-non-mvp.test.ts \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/focused-tests.log"
+
+      - name: Build exact release candidate against isolated QA configuration
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/build.log"
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact release candidate locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
+            > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            cat "$BROWSER_QA_ARTIFACT_DIR/server.log" >&2
+            exit 1
+          fi
+
+      - name: Run authenticated desktop and mobile creator workflow
+        run: node .github/scripts/multi-threshold-authenticated-browser-qa.mjs
+
+      - name: Verify audit and server trust boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.browserOperations.addedThresholdCount == 3' "$audit" >/dev/null
+          jq -e '.browserOperations.peakThresholdCount == 4' "$audit" >/dev/null
+          jq -e '.browserOperations.reorderRoundTrip == true' "$audit" >/dev/null
+          jq -e '(.browserOperations.finalThresholdIds | length) == 3' "$audit" >/dev/null
+          jq -e '(.database.pendingQuotes | length) == 3' "$audit" >/dev/null
+          jq -e '(.approval.approvedQuotes | length) == 3' "$audit" >/dev/null
+          jq -e '.acceptance.firstAcceptedPledgeAt != null' "$audit" >/dev/null
+          jq -e '.acceptance.rejectedMutation.code == "23514"' "$audit" >/dev/null
+          jq -e '.cleanup.proposalId != null and (.cleanup.quoteIds | length) == 3 and .cleanup.pledgeId != null' "$audit" >/dev/null
+
+          if grep -E \
+            'Missing SUPABASE_SERVICE_ROLE_KEY|permission denied for table|Could not save MPGF pool proposal|Could not approve the complete failure-bonus schedule|Reserve status .* does not permit posted accounting entries' \
+            "$BROWSER_QA_ARTIFACT_DIR/server.log"; then
+            echo "Detected a prohibited runtime failure in the exact browser sequence." >&2
+            exit 1
+          fi
+
+      - name: Upload authenticated QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-threshold-authenticated-browser-qa-${{ github.run_id }}
+          path: multi-threshold-browser-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local application
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APP_PID:-}" ]]; then
+            kill "$APP_PID" 2>/dev/null || true
+          fi
