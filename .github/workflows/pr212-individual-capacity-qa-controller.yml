@@ -81,3 +81,5 @@ jobs:
           git add ops/pr212-individual-capacity-qa-controller-report.json
           git commit -m "Record PR 212 exact-head QA run state"
           git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
+
+# Poll exact-head retry b70e3af8415c6ffa1c88055c308e3442cdbb4035.
