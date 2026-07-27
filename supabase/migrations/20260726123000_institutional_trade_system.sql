@@ -1709,7 +1709,20 @@ begin
   execute format('grant all on table %I.%I to service_role',relation.schema_name,relation.relation_name);
  end loop;
 end $$;
-grant select on public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
+-- The directory views are simple and therefore automatically updatable. Supabase
+-- default privileges can otherwise expose INSERT/UPDATE/DELETE through the views,
+-- bypassing the intended base-table action and policy boundaries. Make every
+-- institutional view security-invoker and revoke all client privileges before
+-- restoring SELECT only on the three deliberately public directory views.
+alter view public.institutional_public_organizations set (security_invoker=true);
+alter view public.institutional_public_programs set (security_invoker=true);
+alter view public.institutional_public_opportunities set (security_invoker=true);
+alter view public.institutional_track_record set (security_invoker=true);
+revoke all on table public.institutional_public_organizations from public,anon,authenticated;
+revoke all on table public.institutional_public_programs from public,anon,authenticated;
+revoke all on table public.institutional_public_opportunities from public,anon,authenticated;
+revoke all on table public.institutional_track_record from public,anon,authenticated;
+grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
 
 revoke all on function public.decide_institutional_approval(uuid,text,uuid,text) from public;
 revoke all on function public.select_institutional_proposal_version(uuid,uuid,uuid,uuid) from public;

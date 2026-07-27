@@ -170,7 +170,21 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     /create index if not exists %I on %I\.%I/i,
     /revoke all on table %I\.%I from anon/i,
     /grant select,insert,update,delete on table %I\.%I to authenticated/i,
+    /alter view public\.institutional_public_organizations set \(security_invoker=true\)/i,
+    /alter view public\.institutional_public_programs set \(security_invoker=true\)/i,
+    /alter view public\.institutional_public_opportunities set \(security_invoker=true\)/i,
+    /alter view public\.institutional_track_record set \(security_invoker=true\)/i,
+    /revoke all on table public\.institutional_public_organizations from public,anon,authenticated/i,
+    /revoke all on table public\.institutional_public_programs from public,anon,authenticated/i,
+    /revoke all on table public\.institutional_public_opportunities from public,anon,authenticated/i,
+    /revoke all on table public\.institutional_track_record from public,anon,authenticated/i,
+    /grant select on table public\.institutional_public_organizations,public\.institutional_public_programs,public\.institutional_public_opportunities to anon,authenticated/i,
     /revoke all on function public\.sign_institutional_deal/i,
     /grant execute on function public\.sign_institutional_deal/i,
   ], "RLS and grants");
+  assert.doesNotMatch(
+    migration,
+    /grant\s+select\s+on\s+table\s+[^;]*institutional_track_record[^;]*to\s+(?:anon|authenticated)/i,
+    "institutional_track_record must remain server-side without direct client SELECT grants",
+  );
 });
