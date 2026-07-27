@@ -1,0 +1,104 @@
+name: Materialize reviewed Moral Trade Create adapter patch
+
+on:
+  push:
+    branches:
+      - ops/materialize-create-adapter-patch-20260727
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-create-adapter-patch-20260727
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/ops/materialize-create-adapter-patch-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_BASE: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
+      PRODUCT_BRANCH: feature/moral-trade-create-interface-adapter-20260727
+      PATCH_SHA256: e16c01bff929c2c3ad052b3fb3de25f7388843960e773820e42bd03708c7d756
+
+    steps:
+      - name: Check out temporary operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and verify reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/create-adapter-patch/chunk-*.txt | tr -d '\n' | base64 --decode > /tmp/create-adapter.patch.xz
+          echo "$PATCH_SHA256  /tmp/create-adapter.patch.xz" | sha256sum --check --strict
+          xz --decompress --stdout /tmp/create-adapter.patch.xz > /tmp/create-adapter.patch
+          test -s /tmp/create-adapter.patch
+
+      - name: Materialize exactly one product commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$EXPECTED_BASE"
+          git checkout --detach "$EXPECTED_BASE"
+          git apply --index --binary /tmp/create-adapter.patch
+
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/moral-trade-create-adapter-gates.yml
+          docs/moral-trade-create-interface-adapter.md
+          public/moral-trade-create/index.html
+          src/app/api/create/publish/route.ts
+          src/app/create/submissions/[submissionId]/page.tsx
+          src/app/trades/new/page.tsx
+          src/components/create/create-interface-frame.tsx
+          src/lib/create-interface/formula.test.ts
+          src/lib/create-interface/formula.ts
+          src/lib/create-interface/persistence.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/types.ts
+          src/lib/create-interface/validation.test.ts
+          src/lib/create-interface/validation.ts
+          src/lib/public-route-smoke.test.ts
+          supabase/migrations/20260727041000_moral_trade_create_interface_adapter.sql
+          supabase/migrations/20260727042000_moral_trade_create_adapter_offer_mode_fix.sql
+          supabase/migrations/20260727043000_moral_trade_create_service_rpc_hardening.sql
+          supabase/migrations/20260727044000_moral_trade_create_adapter_idempotency_guard.sql
+          supabase/tests/moral_trade_create_interface_adapter.sql
+          EOF
+          sed -i 's/^          //' /tmp/expected-files.txt
+          git diff --cached --name-only "$EXPECTED_BASE" | LC_ALL=C sort > /tmp/actual-files.txt
+          LC_ALL=C sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          test "$(wc -l < /tmp/actual-files.txt)" -eq 20
+          git diff --cached --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Implement interface-preserving Moral Trade Create adapter'
+
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_BASE"
+          test "$(git rev-list --count "$EXPECTED_BASE"..HEAD)" -eq 1
+          test -z "$(git status --porcelain)"
+
+          remote_sha="$(git ls-remote --heads origin "refs/heads/$PRODUCT_BRANCH" | cut -f1)"
+          if [[ -n "$remote_sha" && "$remote_sha" != "$EXPECTED_BASE" ]]; then
+            echo "Refusing to overwrite product branch at unexpected SHA: $remote_sha" >&2
+            exit 1
+          fi
+
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          git rev-parse HEAD | tee /tmp/product-sha.txt
+
+      - name: Upload materialization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: moral-trade-create-adapter-materialization-${{ github.run_id }}
+          path: |
+            /tmp/product-sha.txt
+            /tmp/expected-files.txt
+            /tmp/actual-files.txt
+          retention-days: 14
