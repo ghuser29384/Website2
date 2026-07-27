@@ -187,4 +187,9 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     /grant\s+select\s+on\s+table\s+[^;]*institutional_track_record[^;]*to\s+(?:anon|authenticated)/i,
     "institutional_track_record must remain server-side without direct client SELECT grants",
   );
+  assert.doesNotMatch(
+    migration,
+    /grant\s+[^;]*(?:all|insert|update|delete|truncate|references|trigger)[^;]*\s+on\s+table\s+[^;]*institutional_(?:public_organizations|public_programs|public_opportunities|track_record)[^;]*\s+to\s+(?:public|anon|authenticated)/i,
+    "institutional views must never receive direct client write grants",
+  );
 });
