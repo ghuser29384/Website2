@@ -1,1 +1,1 @@
-Re-run staged bundle checksum diagnostics after splitting and replacing the final chunk.
+Final staged bundle checksum verification after correcting the split tail byte.
